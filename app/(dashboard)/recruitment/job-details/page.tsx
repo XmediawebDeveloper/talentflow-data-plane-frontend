@@ -6,13 +6,10 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import JobDetailView from '@/components/JobDetailView';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
-import ArchiveJobModal from '@/components/ArchiveJobModal';
-import DisableJobModal from '@/components/DisableJobModal';
 import { Job } from '@/lib/types/types';
 import { jdService, JDResponse, JDUsageStatus } from '@/lib/services/jdService';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import { getJDUsageModules, type JDUsageModule } from '@/lib/utils/jdUsageModules';
-import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import { toast } from 'sonner';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -58,10 +55,6 @@ function JobDetailsContent() {
   const searchParams = useSearchParams();
   const jobId = searchParams.get('id');
   const fromAiInterview = searchParams.get('from') === 'ai-interview';
-  /* Opened from the assessment creation flow's View JD dialog ("Open full JD
-     page"), which anchors the breadcrumb to that flow instead of resetting to
-     the Job Descriptions trail. Same mechanism as `from=ai-interview`. */
-  const fromAssessment = searchParams.get('from') === 'assessment';
   const tabParam = searchParams.get('tab') as 'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | 'ai-interview-results' | null;
   const actionParam = searchParams.get('action') as 'ai-talent-match' | 'score-resumes' | 'invite-assessment' | 'assessment-status' | 'create-ai-interview' | 'invite-ai-interview' | 'ai-interview-status' | null;
 
@@ -420,33 +413,13 @@ function JobDetailsContent() {
     }
   };
 
-  /* Archiving asks first, exactly as it does on the Job Openings list — the
-     same `ArchiveJobModal`, so the consequences a recruiter reads do not depend
-     on which screen they started from. `handleArchive` is what
-     `JobDetailView` receives, so it can only ever open the confirm. */
-  const [archiveDialog, setArchiveDialog] = useState<{
-    open: boolean;
-    job: Job | null;
-    busy: boolean;
-  }>({ open: false, job: null, busy: false });
-
-  const handleArchive = (job: Job) => {
-    setArchiveDialog({ open: true, job, busy: false });
-  };
-
-  const confirmArchive = async () => {
-    const job = archiveDialog.job;
-    if (!job) return;
-    setArchiveDialog(prev => ({ ...prev, busy: true }));
+  const handleArchive = async (job: Job) => {
     try {
       await jdService.updateStatus(job.id, 'archived');
       toast.success(`"${job.title}" has been archived`);
-      setArchiveDialog({ open: false, job: null, busy: false });
       fetchJobDetails();
     } catch (error) {
       toast.error('Failed to archive job');
-      /* Left open on failure — closing it would look like the archive worked. */
-      setArchiveDialog(prev => ({ ...prev, busy: false }));
     }
   };
 
@@ -520,48 +493,64 @@ function JobDetailsContent() {
         { label: 'Select Job Description', href: '/recruitment/ai-interviews/jd-selection' },
         { label: job.title || 'Job Details' },
       ]
-    : fromAssessment
-    ? /* The assessment flow's own trail, with this JD as its leaf — the same
-         shape as the AI Interview case above, and the same labels the flow
-         itself prints for its steps. The Configure crumb carries the jd_id so
-         it returns to this JD's configure step rather than to the picker. */
-      [
-        { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Assessments', href: '/recruitment/assessments' },
-        { label: 'Select Job Description', href: '/recruitment/assessments/create?step=select-jd' },
-        ...(jobId
-          ? [{
-              label: 'Configure Assessment',
-              href: `/recruitment/assessments/create?step=configure&jd_id=${encodeURIComponent(jobId)}`,
-            }]
-          : []),
-        { label: job.title || 'Job Details' },
-      ]
     : undefined;
 
   return (
     <div className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
       {/* Disable Confirmation Modal */}
-      {/* Disable confirm — the shared component. This page used to render its
-          own header-bar modal that never named the JD being disabled. */}
-      <DisableJobModal
-        isOpen={showDisableModal}
-        jobTitle={jobToDisable?.title ?? ''}
-        onConfirm={confirmDisable}
-        onCancel={() => {
-          setShowDisableModal(false);
-          setJobToDisable(null);
-        }}
-      />
-
-      {/* Archive confirm — the same component the Job Openings list renders. */}
-      <ArchiveJobModal
-        isOpen={archiveDialog.open}
-        jobLabel={archiveDialog.job ? formatJobVersionLabel(archiveDialog.job) : ''}
-        isLoading={archiveDialog.busy}
-        onConfirm={confirmArchive}
-        onCancel={() => setArchiveDialog({ open: false, job: null, busy: false })}
-      />
+      {showDisableModal && (
+        <div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full max-h-[90dvh] flex flex-col border border-gray-300 dark:border-slate-700">
+            <div className="flex items-center justify-between px-4 sm:px-5 py-3 border-b border-gray-200 dark:border-slate-700 shrink-0">
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50">
+                Disable Job Description?
+              </h3>
+              <button
+                onClick={() => {
+                  setShowDisableModal(false);
+                  setJobToDisable(null);
+                }}
+                className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded transition-colors"
+                aria-label="Close"
+              >
+                <svg className="w-5 h-5 text-gray-500 dark:text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 overflow-y-auto px-4 sm:px-5 py-4">
+              <p className="text-sm text-gray-700 dark:text-slate-300 mb-3">
+                If you disable this JD, it will be removed from:
+              </p>
+              <ul className="list-disc list-inside text-sm text-gray-700 dark:text-slate-300 mb-4 space-y-1.5">
+                <li>Resume Scoring</li>
+                <li>Assessment Generation</li>
+                <li>AI Talent Match</li>
+              </ul>
+              <p className="text-xs text-gray-600 dark:text-slate-400">
+                You can re-enable this JD later if needed.
+              </p>
+            </div>
+            <div className="flex flex-col sm:flex-row gap-2 sm:justify-end px-4 sm:px-5 py-3 border-t border-gray-200 dark:border-slate-700 shrink-0">
+              <button
+                onClick={() => {
+                  setShowDisableModal(false);
+                  setJobToDisable(null);
+                }}
+                className="px-4 py-2 bg-gray-100 dark:bg-slate-800 text-sm text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-200 dark:hover:bg-slate-700 transition-colors font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={confirmDisable}
+                className="px-4 py-2 bg-red-600 text-sm text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+              >
+                Yes, Disable
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       <JDEditBlockedModal
         open={!!editBlock}

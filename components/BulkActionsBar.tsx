@@ -1,6 +1,6 @@
 'use client'
 
-import { FolderInput, FolderRoot, ChevronRight, Download, Trash2, ClipboardList, ClipboardCheck, Archive, ArchiveRestore, Sparkles, Brain } from 'lucide-react';
+import { FolderInput, FolderRoot, ChevronRight, Download, Trash2, Target, ClipboardCheck, Archive, ArchiveRestore, Sparkles, Brain } from 'lucide-react';
 import { Folder } from '@/lib/types/types';
 import { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -397,7 +397,7 @@ export default function BulkActionsBar({
               className={actionBtn}
               aria-label="Score Resume" title="Score Resume"
             >
-              <ClipboardList className="w-3.5 h-3.5" />
+              <Target className="w-3.5 h-3.5" />
               <span className="hidden xl:inline">Score Resume</span>
               <span className="xl:hidden">Score</span>
             </button>
@@ -409,7 +409,7 @@ export default function BulkActionsBar({
               className={actionBtn}
               aria-label="Resume Scoring" title="Resume Scoring"
             >
-              <ClipboardList className="w-3.5 h-3.5" />
+              <Target className="w-3.5 h-3.5" />
               <span className="hidden xl:inline">Resume Scoring</span>
               <span className="xl:hidden">Score</span>
             </button>

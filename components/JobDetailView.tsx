@@ -1,8 +1,8 @@
 'use client'
 
-import { ArrowLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Zap, ClipboardList, Video } from 'lucide-react';
+import { ArrowLeft, ChevronRight, MapPin, Calendar, Target, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, FileText, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, Search, Paperclip, Loader2, AlertCircle, Zap, ClipboardList } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { Job } from '@/lib/types/types';
 import type { User, Tenant } from '@/lib/types/tenant';
 import ReactMarkdown from 'react-markdown';
@@ -10,11 +10,10 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { jdService, JDLineageVersion, JDUsageStatus } from '@/lib/services/jdService';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
-import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
 import { Tooltip } from '@/components/ui/tooltip';
 import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
-import AITalentMatchConfirmModal from './AITalentMatchConfirmModal';
+import ConfirmationDialog from './ConfirmationDialog';
 import ResumeUploadModal from './ResumeUploadModal';
 import ResumeVersionsModal from './ResumeVersionsModal';
 import { resumeService } from '@/lib/services/resumeService';
@@ -471,63 +470,8 @@ interface JobDetailViewProps {
   totalCount?: number;
 }
 
-/**
- * The id a scored-resume row is addressed by. The API has shipped both spellings
- * over time, so every lookup goes through this rather than picking one and
- * silently missing the rows that use the other.
- */
-const scoredResumeId = (row: any): string | null => row?.resumeId || row?.resume_id || null;
-
-/* The header's icon-only actions share one shape, so the three read as a set
-   rather than as three buttons that happen to sit together. `w-9 h-9` gives a
-   36px hit target on the same visual line as the 40px pills beside them; only
-   the hover accent differs per action. */
-const JOB_ICON_ACTION_BASE =
-  'w-9 h-9 flex items-center justify-center rounded-lg border transition-all flex-shrink-0 bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-700';
-
-/* Each action's colour is STATIC — carried by the idle icon, not revealed on
-   hover. With the captions gone the colour is half of what identifies the
-   button, so hiding it until the pointer arrives left three identical grey
-   squares to choose between.
-   Hover now only deepens the same hue, which is what a hover should do:
-   confirm the target, not introduce it.
-
-   The three hues are the ones this app already uses for these actions — blue
-   for edit, the red `Ban` of the job list's Disable row, and the shared
-   `--menu-icon-archive` token — rather than a palette invented here. */
-const JOB_ICON_ACTION_EDIT =
-  'text-brand-blue hover:bg-brand-blue/10 hover:border-brand-blue/40';
-const JOB_ICON_ACTION_DISABLE =
-  'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:border-red-300 dark:hover:border-red-500/40';
-const JOB_ICON_ACTION_ARCHIVE =
-  'text-menu-icon-archive hover:bg-brand-orange/10 hover:border-brand-orange/40';
-
-/**
- * A scored-resume row, filled out for `CandidateScoringDetailPage`.
- *
- * Extracted because three places open that view — clicking a row, the
- * Previous/Next pager inside it, and the URL restore below — and two of them
- * were carrying their own copy of this fallback list. A candidate restored from
- * the URL has to arrive in exactly the shape a clicked one does, or the page
- * renders with holes where a click would have filled them.
- */
-const toCandidateDetail = (row: any) => ({
-  ...row,
-  candidateName: row.candidateName || 'Unknown',
-  email: row.email || '',
-  phone: row.phone || '',
-  matchStatus: row.matchStatus || 'No Match',
-  scorePercentage: row.scorePercentage || 0,
-  scoredDate: row.scoredDate || new Date().toISOString(),
-  scoredBy: row.scoredBy || 'System',
-  matchedSkills: row.matchedSkills || row.technicalSkills || row.skills || [],
-  missingSkills: row.missingSkills || [],
-});
-
 export default function JobDetailView({ job, onBack, onEdit, editDisabled = false, editDisabledReason, resumes = [], onScoreResumes, onNavigateToAITalentMatch, onDisable, onEnable, onArchive, onUnarchive, onDelete, onViewAssessmentResult, onRepublish, isTenantAdmin = false, user, tenant, breadcrumbItems, initialTab, initialAction, prevId, nextId, currentIndex, totalCount }: JobDetailViewProps) {
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
   const { available: aiTalentMatchAvailable } = usePlanFeature('ai_talent_match');
   const { hasPlanFeature } = usePlanFeatures();
   const { startScoringJob, updateItemStatus, setMainPanelOpen } = useScoringProgress();
@@ -563,32 +507,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const niceToHaveSkills = job.niceToHaveSkills || [];
   const mustHaveComments = job.mustHaveComments || [];
   const niceToHaveComments = job.niceToHaveComments || [];
-  /* ---- The two sticky layers on this page ----------------------------------
-     The breadcrumb pins at top-0 (z-30) and the tab bar pins below it (z-20).
-     The tab bar's offset used to be a hardcoded `top-[52px]`, a guess at the
-     breadcrumb's height that the breadcrumb outgrew the moment it started
-     carrying the RecordPager — 34px buttons inside py-2, and a row that wraps
-     onto a second line when space is tight. Once the bar is taller than the
-     offset it covers the top of the PINNED tab bar, and being the higher layer
-     it takes the clicks: pressing a tab hit the "Job Descriptions" crumb behind
-     it and navigated to the job list instead of switching tabs.
-
-     So the offset is measured rather than assumed, and re-measured whenever the
-     bar changes size (the wrap is a resize, not a re-render). `PageBreadcrumb`
-     hands back the bar element for exactly this — see its `barRef` docs for why
-     a wrapper div is not an option. */
-  const breadcrumbBarRef = useRef<HTMLElement | null>(null);
-  const [tabBarTop, setTabBarTop] = useState(52);
-  useEffect(() => {
-    const bar = breadcrumbBarRef.current;
-    if (!bar || typeof ResizeObserver === 'undefined') return;
-    const measure = () => setTabBarTop(bar.getBoundingClientRect().height);
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(bar);
-    return () => observer.disconnect();
-  }, []);
-
   const jobBreadcrumbItems = breadcrumbItems ?? [
     { label: 'Dashboard', href: '/dashboard' },
     { label: 'Job Descriptions', href: '/recruitment/job-openings' },
@@ -745,11 +663,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // Scored resumes state
   const [scoredResumes, setScoredResumes] = useState<any[]>([]);
   const [loadingScoredResumes, setLoadingScoredResumes] = useState(false);
-  /* `loadingScoredResumes` starts false and only goes true once the fetch is
-     under way, so it cannot tell "not started" from "finished". The URL restore
-     below needs that difference — an empty `scoredResumes` means "still coming"
-     before the first fetch settles and "there are none" after it. */
-  const [scoredResumesLoaded, setScoredResumesLoaded] = useState(false);
   const [scoredResumesStats, setScoredResumesStats] = useState({
     total: 0,
     exactMatch: 0,
@@ -1383,7 +1296,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       setScoredResumesStats({ total: 0, exactMatch: 0, partialMatch: 0, noMatch: 0 });
     } finally {
       setLoadingScoredResumes(false);
-      setScoredResumesLoaded(true);
     }
   };
 
@@ -1565,65 +1477,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   };
 
   const [activeTab, setActiveTab] = useState<'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | 'ai-interview-results'>(initialTab || 'overview');
-
-  /* ---- Where you are, kept in the URL -------------------------------------
-     The open tab and the open candidate are both React state, so a refresh used
-     to drop the recruiter back on Overview having lost whichever candidate they
-     were reading. Both now live in the query string (`?tab=`, `?resume=`), which
-     the page reads back into `initialTab` and the restore below.
-
-     `?resume=` names a row that is not loaded yet at mount — `fetchScoredResumes`
-     has to answer first. So the id read off the URL is held HERE until a row
-     matches it, and the writer below treats a pending id exactly like an open
-     one. Without that, the writer would see "no candidate open", strip the param
-     as stale, and delete the very thing the restore was waiting for. */
-  const [pendingResumeId, setPendingResumeId] = useState<string | null>(
-    () => searchParams.get('resume'),
-  );
-
-  useEffect(() => {
-    if (!pendingResumeId || viewingScoredResume) return;
-    if (!scoredResumesLoaded) return; // rows still coming — decide nothing yet
-    const row = scoredResumes.find((r: any) => scoredResumeId(r) === pendingResumeId);
-    if (row) setViewingScoredResume(toCandidateDetail(row));
-    /* Cleared either way. On a hit it hands over to `viewingScoredResume`; on a
-       miss (a resume deleted since the link was shared) it gives up, which is
-       what releases the gate below so the JD page renders instead of waiting
-       forever on a candidate that is never coming. */
-    setPendingResumeId(null);
-  }, [pendingResumeId, viewingScoredResume, scoredResumes, scoredResumesLoaded]);
-
-  /* ONE effect writes both params. Two would each build their next URL from the
-     same `searchParams` snapshot, so whichever ran second would silently undo
-     the other's change in any tick where both moved.
-
-     `replace`, not `push`: switching tab or opening a candidate is not a step
-     the Back button should have to walk through. `scroll: false` because the App
-     Router otherwise jumps to the top of the page on every one of these.
-
-     Overview and "no candidate open" clear their params rather than writing
-     `?tab=overview` or an empty value, so a plain URL keeps meaning the default
-     and shared links stay clean. Pressing Back out of a candidate clears
-     `?resume=` and cannot bounce straight back in: `pendingResumeId` is already
-     null by then, so the restore above has nothing left to act on. */
-  useEffect(() => {
-    const openResume = viewingScoredResume
-      ? scoredResumeId(viewingScoredResume)
-      : pendingResumeId;
-    if (
-      (searchParams.get('tab') || 'overview') === activeTab &&
-      searchParams.get('resume') === openResume
-    ) {
-      return;
-    }
-    const next = new URLSearchParams(searchParams.toString());
-    if (activeTab === 'overview') next.delete('tab');
-    else next.set('tab', activeTab);
-    if (openResume) next.set('resume', openResume);
-    else next.delete('resume');
-    const query = next.toString();
-    router.replace(`${pathname}${query ? `?${query}` : ''}`, { scroll: false });
-  }, [activeTab, viewingScoredResume, pendingResumeId, searchParams, pathname, router]);
   const overviewSectionRef = useRef<HTMLDivElement | null>(null);
   const scoredResumesSectionRef = useRef<HTMLDivElement | null>(null);
   const aiInterviewResultsSectionRef = useRef<HTMLDivElement | null>(null);
@@ -2001,23 +1854,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     );
   }
 
-  /* A refresh on a candidate URL is still resolving: `?resume=` named a row that
-     `fetchScoredResumes` has not answered for yet. Hold on a spinner rather than
-     painting the JD page underneath — that page is not where the recruiter was,
-     and rendering it for the half-second the fetch takes read as the app
-     bouncing them back before snapping forward again.
-
-     This cannot hang: the restore above clears `pendingResumeId` as soon as the
-     rows land, whether or not one of them matched. */
-  if (pendingResumeId && !viewingScoredResume) {
-    return (
-      <main className="flex-1 flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-800 dark:text-slate-200" />
-        <span className="ml-3 text-gray-600 dark:text-slate-400">Loading...</span>
-      </main>
-    );
-  }
-
   // Candidate detail from the AI Interview Result tab — rendered inline so the
   // drill-down never leaves this page. Prev/Next step through the same list the
   // candidate was opened from.
@@ -2048,13 +1884,22 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
   // Show CandidateScoringDetailPage when viewing a scored resume (same as ResumeScoringPage)
   if (viewingScoredResume) {
-    const _scoredIdx = scoredResumes.findIndex(
-      (r: any) => scoredResumeId(r) === scoredResumeId(viewingScoredResume),
-    );
+    const _scoredIdx = scoredResumes.findIndex((r: any) => (r.resumeId || r.resume_id) === (viewingScoredResume.resumeId || viewingScoredResume.resume_id));
     const _goToScoredCandidate = (idx: number) => {
       const r = scoredResumes[idx];
       if (!r) return;
-      setViewingScoredResume(toCandidateDetail(r));
+      setViewingScoredResume({
+        ...r,
+        candidateName: r.candidateName || 'Unknown',
+        email: r.email || '',
+        phone: r.phone || '',
+        matchStatus: r.matchStatus || 'No Match',
+        scorePercentage: r.scorePercentage || 0,
+        scoredDate: r.scoredDate || new Date().toISOString(),
+        scoredBy: r.scoredBy || 'System',
+        matchedSkills: r.matchedSkills || r.technicalSkills || r.skills || [],
+        missingSkills: r.missingSkills || [],
+      });
     };
     return (
       <CandidateScoringDetailPage
@@ -2273,7 +2118,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           card's full height to travel within. Nested inside a wrapper div it
           was boxed to its own height and could never actually stick. */}
       <PageBreadcrumb
-        barRef={breadcrumbBarRef}
         items={jobBreadcrumbItems}
         className="mb-3"
         // Previous / Next rides inside the breadcrumb bar instead of sitting on
@@ -2567,66 +2411,30 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 disabled and the reason is a hover tooltip instead of a
                 post-click modal. The tooltip's handlers sit on the wrapper, not
                 the button, so they still fire over a disabled control. */}
-            {/* Edit / Disable / Archive, icon-only.
-                Every one of them carries an `aria-label` AND a `title`: with the
-                caption gone the icon is the only thing naming the action, so a
-                screen reader and a hover both have to be able to recover it.
-
-                Disable and Archive are new HERE — their handlers existed and the
-                host had always passed `onDisable` / `onArchive`, but this page
-                rendered no control for either, so the only way to reach them was
-                the job list's row menu. The host gates both on permission by
-                passing `undefined`, which is why the render test is simply
-                whether the prop is there. */}
-            {job.status === 'Published' && (
-              <div className="flex items-center gap-2">
-                {onEdit && (
-                  editDisabled ? (
-                    <Tooltip content={editDisabledReason} position="bottom">
-                      <button
-                        type="button"
-                        disabled
-                        aria-disabled="true"
-                        className={`${JOB_ICON_ACTION_BASE} !bg-gray-50 dark:!bg-slate-800 text-gray-400 dark:text-slate-500 !border-gray-200 dark:!border-slate-700 cursor-not-allowed`}
-                        aria-label={editDisabledReason || 'Editing is not available for this JD'}
-                      >
-                        <Edit className="w-4 h-4" />
-                      </button>
-                    </Tooltip>
-                  ) : (
-                    <button
-                      onClick={handleEdit}
-                      className={`${JOB_ICON_ACTION_BASE} ${JOB_ICON_ACTION_EDIT}`}
-                      aria-label="Edit this JD" title="Edit this JD"
-                    >
-                      <Edit className="w-4 h-4" />
-                    </button>
-                  )
-                )}
-
-                {/* Orange on hover, matching the job list's Disable menu item —
-                    it takes the JD out of service, so it should not look like
-                    the neutral pair either side of it. */}
-                {onDisable && (
+            {job.status === 'Published' && onEdit && (
+              editDisabled ? (
+                <Tooltip content={editDisabledReason} position="bottom">
                   <button
-                    onClick={handleDisable}
-                    className={`${JOB_ICON_ACTION_BASE} ${JOB_ICON_ACTION_DISABLE}`}
-                    aria-label="Disable this JD" title="Disable this JD"
+                    type="button"
+                    disabled
+                    aria-disabled="true"
+                    className="px-4 py-2 bg-gray-50 dark:bg-slate-800 text-gray-400 dark:text-slate-500 border border-gray-200 dark:border-slate-700 rounded-lg cursor-not-allowed flex items-center gap-2"
+                    aria-label={editDisabledReason || 'Editing is not available for this JD'}
                   >
-                    <Ban className="w-4 h-4" />
+                    <Edit className="w-4 h-4" />
+                    <span className="font-medium">Edit</span>
                   </button>
-                )}
-
-                {onArchive && (
-                  <button
-                    onClick={handleArchive}
-                    className={`${JOB_ICON_ACTION_BASE} ${JOB_ICON_ACTION_ARCHIVE}`}
-                    aria-label="Archive this JD" title="Archive this JD"
-                  >
-                    <Archive className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
+                </Tooltip>
+              ) : (
+                <button
+                  onClick={handleEdit}
+                  className="px-4 py-2 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-all flex items-center gap-2"
+                  aria-label="Edit this JD" title="Edit this JD"
+                >
+                  <Edit className="w-4 h-4" />
+                  <span className="font-medium">Edit</span>
+                </button>
+              )
             )}
 
             {/* JD15: Action Buttons - For Disabled jobs */}
@@ -2675,23 +2483,16 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       </div>
 
       {/* Tab Navigation */}
-      <div
-        style={{ top: tabBarTop }}
-        className="sticky z-20 mb-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5"
-      >
+      <div className="sticky top-[52px] z-20 mb-5 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
         <div className="flex items-center border-b border-gray-200 dark:border-slate-700 overflow-x-auto">
           <button
             onClick={() => setActiveTab('overview')}
-            className={`px-4 py-2.5 text-sm transition-colors relative flex items-center gap-2 whitespace-nowrap rounded-t-[11px] ${
+            className={`px-4 py-2.5 text-sm transition-colors relative whitespace-nowrap rounded-t-[11px] ${
               activeTab === 'overview'
                 ? 'text-blue-600 bg-blue-50'
                 : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
             }`}
           >
-            {/* Tab icons carry no colour of their own — lucide draws in
-                `currentColor`, so each one inherits its tab's active, idle or
-                disabled text colour and cannot fall out of step with it. */}
-            <FileText className="w-4 h-4" />
             Overview
             {activeTab === 'overview' && (
               <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
@@ -2706,7 +2507,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
-              <Users className="w-4 h-4" />
               AI Talent Match Results
               <span className={`px-2 py-0.5 rounded-full text-xs ${
                 activeTab === 'ai-talent-match'
@@ -2729,7 +2529,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
-              <ClipboardList className="w-4 h-4" />
               Scored Resumes
               <span className={`px-2 py-0.5 rounded-full text-xs ${
                 activeTab === 'scored-resumes'
@@ -2767,7 +2566,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
-              <BarChart3 className="w-4 h-4" />
               Assessments Results
               <span className={`px-2 py-0.5 rounded-full text-xs ${
                 activeTab === 'assessment-results'
@@ -2803,7 +2601,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                     : 'text-gray-600 dark:text-slate-400 hover:text-gray-900 dark:hover:text-slate-50 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}
             >
-              <MessageSquare className="w-4 h-4" />
               AI Interview Result
               <span className={`px-2 py-0.5 rounded-full text-xs ${
                 activeTab === 'ai-interview-results'
@@ -3143,7 +2940,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               {/* 2. AI Talent Match */}
               {permissions.canRunAiMatch && aiTalentMatchAvailable && (
                 <QuickActionRow
-                  icon={<Users className="w-4 h-4" />}
+                  icon={<Brain className="w-4 h-4" />}
                   label="AI Talent Match"
                   onClick={handleAITalentMatch}
                   disabled={!features.ai_talent_match || job.status === 'Disabled'}
@@ -3158,7 +2955,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               {/* 3. Score Resumes */}
               {permissions.canRunScoring && hasPlanFeature('resume_scoring') && (
                 <QuickActionRow
-                  icon={<ClipboardList className="w-4 h-4" />}
+                  icon={<Target className="w-4 h-4" />}
                   label="Score Resumes"
                   onClick={() => setShowSelectSourceModal(true)}
                   disabled={job.status === 'Disabled'}
@@ -3172,7 +2969,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             {(permissions.canCreateAssessments || permissions.canViewAssessments) && hasPlanFeature('assessment') && (
               <div className="pt-4 mt-4 border-t border-gray-100 dark:border-slate-800">
                 <QuickActionHeader
-                  icon={<BarChart3 className="w-4 h-4" />}
+                  icon={<ClipboardList className="w-4 h-4" />}
                   title="Assessment"
                   accent="cyan"
                   open={openActionGroups.assessment}
@@ -3268,7 +3065,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             {(permissions.canCreateAIInterviews || permissions.canShareAIInterviews || permissions.canViewAIInterviews) && hasPlanFeature('ai_interview') && (
               <div className="pt-4 mt-4 border-t border-gray-100 dark:border-slate-800">
                 <QuickActionHeader
-                  icon={<Video className="w-4 h-4" />}
+                  icon={<Brain className="w-4 h-4" />}
                   title="AI Interview"
                   accent="orange"
                   open={openActionGroups.aiInterview}
@@ -3415,7 +3212,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   </button>
                 </div>
                 <div className="bg-gray-200 dark:bg-slate-800 rounded-full h-2">
-                  <div className="bg-brand-orange h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.partialMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
+                  <div className="bg-yellow-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.partialMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
                 </div>
               </div>
               <div>
@@ -3462,7 +3259,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               )}
               {scoredResumesStats.partialMatch > 0 && (
                 <div className="flex gap-3">
-                  <div className="w-2 h-2 bg-brand-orange rounded-full mt-1.5 flex-shrink-0"></div>
+                  <div className="w-2 h-2 bg-yellow-500 rounded-full mt-1.5 flex-shrink-0"></div>
                   <div>
                     <div className="text-sm text-gray-900 dark:text-slate-50">{scoredResumesStats.partialMatch} partial match(es) found</div>
                     <div className="text-xs text-gray-500 dark:text-slate-500">Candidates with potential identified</div>
@@ -3509,7 +3306,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           ) : scoredResumes.length === 0 ? (
             <TabEmptyState
               icon={Users}
-              imageSrc="/scored-resumes-empty-state.webp"
+              imageSrc="/scored-resumes-empty-state.png"
               imageAlt="Scored resumes illustration"
               title="No Scored Resumes"
               description="Score resumes against this job description to see the candidates here."
@@ -3518,7 +3315,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   onClick={() => setShowSelectSourceModal(true)}
                   className={TAB_EMPTY_ACTION_CLASS}
                 >
-                  <ClipboardList className="w-4 h-4" />
+                  <Target className="w-4 h-4" />
                   Score Resumes
                 </button>
               ) : undefined}
@@ -3555,7 +3352,20 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               onViewCandidate={(resume) => {
                 // Pass resume directly - data already formatted by fetchScoredResumes
                 // CandidateScoringDetailPage handles the same format as ResumeScoringPage
-                setViewingScoredResume(toCandidateDetail(resume));
+                setViewingScoredResume({
+                  ...resume,
+                  // Ensure required fields have fallbacks
+                  candidateName: resume.candidateName || 'Unknown',
+                  email: resume.email || '',
+                  phone: resume.phone || '',
+                  matchStatus: resume.matchStatus || 'No Match',
+                  scorePercentage: resume.scorePercentage || 0,
+                  scoredDate: resume.scoredDate || new Date().toISOString(),
+                  scoredBy: resume.scoredBy || 'System',
+                  // Use existing matchedSkills/missingSkills or fall back to skills/gaps
+                  matchedSkills: resume.matchedSkills || resume.technicalSkills || resume.skills || [],
+                  missingSkills: resume.missingSkills || [],
+                });
               }}
             />
           )}
@@ -4003,9 +3813,14 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
       {/* Confirm before running AI Talent Match. No is the do-nothing path —
           the panel never mounts, so no run starts and no units are spent. */}
-      <AITalentMatchConfirmModal
+      <ConfirmationDialog
         isOpen={showAIMatchConfirm}
-        jobTitle={formatJobVersionLabel(job)}
+        type="info"
+        icon={FileText}
+        title="Find matching candidates from the Resume Database?"
+        message={`AI Talent Match will scan your resume database against "${job.title}" and rank the closest candidates.`}
+        confirmText="Yes"
+        cancelText="No"
         onConfirm={confirmAITalentMatch}
         onCancel={() => setShowAIMatchConfirm(false)}
       />
@@ -4241,7 +4056,7 @@ function AIMatchTabContent({
     return (
       <TabEmptyState
         icon={Brain}
-        imageSrc="/ai-talent-match-empty-state.webp"
+        imageSrc="/ai-talent-match-empty-state.png"
         imageAlt="AI talent match illustration"
         title="No AI Talent Match Results"
         description="Run an AI Talent Match session to find the best candidates for this role."
@@ -4292,7 +4107,7 @@ function AIMatchTabContent({
               onClick={() => onScoreSelected(selectedCandidates)}
               className="px-3 sm:px-4 py-2 bg-brand-orange hover:bg-brand-orange-deep text-white rounded-lg text-xs sm:text-sm shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 font-medium"
             >
-              <ClipboardList className="w-3 h-3 sm:w-4 sm:h-4" />
+              <Target className="w-3 h-3 sm:w-4 sm:h-4" />
               Score ({selectedIds.size})
             </button>
           )}

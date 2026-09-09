@@ -1,15 +1,13 @@
 'use client'
 
-import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList } from 'lucide-react';
+import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Job } from '@/lib/types/types';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
-import ArchiveJobModal from '@/components/ArchiveJobModal';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import {
@@ -18,13 +16,13 @@ import {
   formatLastUpdated,
   getCreationMethodConfig,
   getDisplayStatus,
+  mapJDStatus,
   matchesStatusFilter,
   getPublishedJobs,
   getStatusConfig,
   collapseToLatestVersions,
   groupByLineage,
   sortJobs,
-  formatJobVersionLabel,
 } from '@/lib/utils/jobOpeningDisplay';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
@@ -37,7 +35,7 @@ import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import AITalentMatchConfirmModal from '@/components/AITalentMatchConfirmModal';
+import ConfirmationDialog from '@/components/ConfirmationDialog';
 /* Radix menu rather than the hand-rolled absolute dropdown the job rows use:
    the version table sits inside an overflow-x-auto shell, which would clip an
    absolutely positioned menu — Radix portals it out of the scroll container. */
@@ -96,34 +94,11 @@ interface JobsListingProps {
   // Unlike a status deep-link this also clears the restored search/status/page, so
   // "all jobs" really means all of them.
   forceListView?: boolean;
-  /* Where the Config button goes. Undefined hides it — that is the permission
-     gate, same as the master-data links it replaced. It used to open an inline
-     panel of three links out to three near-identical pages; those three are now
-     sections of one Configuration page, so this is a plain link. */
-  configHref?: string;
+  // Quick links to master-data screens — surfaced on this page instead of the sidebar
+  masterDataLinks?: { id: string; label: string; href: string; icon: LucideIcon }[];
 }
 
-/**
- * The version count that sits under a stat tile's number.
- *
- * Every tile carries two populations, and collapsing them into one is what made
- * the tiles disagree with the list: a job republished twice is ONE job and THREE
- * versions. The headline number stays the JOB count — the same figure the rows
- * and the "of N jobs" badge show — and this pill carries the versions behind
- * it, rather than competing with it.
- *
- * Styled as the house grey pill (`bg-gray-100 / text-gray-600 / ring-gray-200`,
- * with the slate dark pairing), the same token the AI Interview, Assessment and
- * Talent Match views use for a neutral metadata chip — written out rather than
- * abstracted because that is how every other caller carries it.
- */
-const StatVersions = ({ count }: { count: number }) => (
-  <span className="mt-1.5 inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200 dark:ring-slate-700">
-    {count} {count === 1 ? 'version' : 'versions'}
-  </span>
-);
-
-export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onScoreResumes, onUpdateJobStatus, onEditJob, versionStatusOverrides, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, forceListView, configHref }: JobsListingProps) {
+export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onScoreResumes, onUpdateJobStatus, onEditJob, versionStatusOverrides, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, forceListView, masterDataLinks }: JobsListingProps) {
   const dialog = useGlobalDialog();
   const router = useRouter();
   const { isTenantAdmin, user } = useAuth();
@@ -192,10 +167,22 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
      applicant counts, all from the shared hook so the Apply to Job dialog opens
      the same history from the same endpoints. */
   const versionLineage = useJobVersionLineage();
-  /* No lineage is fetched to answer a status pill any more. The pill reads the
-     job's representative row, which the list already has, so selecting one
-     costs zero requests — where it used to fire one per job on the page. The
-     history is still fetched on demand by "View Versions" below. */
+  /* One target per job: the lineage key, and the id to fetch that lineage by.
+     Memoised on `jobs` so the effect below is not handed a fresh array on every
+     render — `groupByLineage` builds a new Map each call. */
+  const lineageFilterTargets = useMemo(
+    () => Array.from(groupByLineage(jobs).entries(), ([key, bucket]) => ({ key, jobId: bucket[0].id })),
+    [jobs],
+  );
+  /* The status pills answer from the version history as well as the main table,
+     so that history has to be loaded for every job — but ONLY once a pill is
+     actually selected. All Jobs needs none of it and pays nothing: no requests
+     fire until the user picks Published, Draft, Disabled or Archived. */
+  const { ensureFilterLineages } = versionLineage;
+  useEffect(() => {
+    if (statusFilter === 'all') return;
+    ensureFilterLineages(lineageFilterTargets);
+  }, [statusFilter, lineageFilterTargets, ensureFilterLineages]);
   const toggleVersions = versionLineage.toggle;
 
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
@@ -218,15 +205,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
     const job = aiMatchConfirmJob;
     setAiMatchConfirmJob(null);
     if (job) onAIMatch?.(job);
-  };
-  /* Same one-function rule as requestAIMatch above, for the same reason: the
-     menu close and the confirmation open are a single state update, so the
-     three-dot menu can never be caught still painted while the "Disable Job
-     Description?" dialog is coming up. Every Disable Job trigger — grid card,
-     list row and the expanded version rows — goes through here. */
-  const requestDisableJob = (job: Job) => {
-    setActiveDropdown(null);
-    onDisableJob?.(job);
   };
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   
@@ -284,6 +262,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   }, [listScrollRequest, pageView, statusFilter]);
 
   // Show/hide the Experience/Education/Industry quick-links group.
+  const [showConfig, setShowConfig] = useState(false);
 
   // Persist this list's view state (filters / search / sort / pagination / view
   // toggles) so returning from a job-details page restores it. Declared after the
@@ -443,34 +422,71 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
            matchesApplicants && matchesCreationMethod;
   });
 
-  /* ── One row per job, not one per version ─────────────────────
+  /* ── One row per job, not one per version ─────────────────────────────
      Every version of a JD is its own row in the API response (its own id,
      sharing the lineage's human-readable `job_id`), so a job republished twice
      arrived here three times and the list read as duplicates.
+
+     Collapsed AFTER filtering rather than before, deliberately: with a status
+     filter on, the representative is the newest version that PASSED the filter,
+     so filtering to Published still shows a job whose newest version happens to
+     be a draft. Collapsing first would have made the whole job vanish.
 
      Keyed on `job_id` because that is what the lineage shares; rows without one
      (drafts that never got an ID) fall back to their own id and so stay
      individual. "Latest" is the highest version_number present — read from the
      data, never assumed to be first or last in the response.
 
-     ── A job's status is its LATEST version's status ──────────────────
-     Collapse FIRST, then apply the pill to the one row that represents the job.
-     That is the same rule `getPublishedJobs` uses for the stat tiles, so the
-     tile and the list it opens can no longer disagree — the Published tile
-     reading 83 while the pill showed "85 of 132" was these two steps running in
-     the opposite order.
+     One row per JOB under every filter, status pills included: a pill selects
+     which JOBS to show, and the version that matched it stands for the job. The
+     representative being the newest version that PASSED is what makes the row's
+     own badge agree with the pill you clicked — under Archived you see the
+     archived version, not the draft that happens to be newer.
 
-     The previous order (filter, then collapse, then fall back to the fetched
-     version history) kept a job under any pill ANY of its versions matched. A
-     published v2 under a re-drafted v3 therefore counted as both published and
-     draft, so the pills summed past the total, and the count drifted upward as
-     the per-job lineage requests landed. A job being re-drafted over a
-     published version now appears under Draft only — the state it is actually
-     in — and the tiles' "N versions" half is what surfaces the published
-     version still sitting underneath it. */
+     ── Two sources, one answer ─────────────────────────────────────────────
+     A status pill is answered from the main table's rows AND from the View
+     Versions history, because the list endpoint does not necessarily send every
+     version: a job whose only archived version is v1 can arrive here as its
+     latest row alone, and the Archived pill would never see it. So when no row
+     in a group carries the status, its lineage is consulted too, and a matching
+     version there is rendered as a row built from the group's own row — the same
+     stand-in the version table itself builds (spread the job, point it at the
+     version's id/title/status/number). */
   const statusSelectedJobs = statusFilter === 'all'
     ? collapseToLatestVersions(criteriaMatchedJobs)
-    : collapseToLatestVersions(criteriaMatchedJobs).filter(job => matchesStatusFilter(job, statusFilter));
+    : Array.from(groupByLineage(criteriaMatchedJobs).entries(), ([key, bucket]) => {
+      /* bucket is newest-version-first (groupByLineage sorts it), so the first
+         row that matches IS the newest matching version. */
+      const matchedRow = bucket.find(row => matchesStatusFilter(row, statusFilter));
+      if (matchedRow) return matchedRow;
+
+      /* Nothing in the main table matched. Ask the version history — undefined
+         means it has not loaded yet, and the group simply drops out until it
+         does rather than flashing in with the wrong badge. */
+      const lineage = versionLineage.filterLineages[key];
+      if (!lineage) return null;
+
+      const base = bucket[0];
+      const matchedVersion = lineage
+        .map(version => ({
+          version,
+          /* The lineage carries the raw DB status ('published'); matchesStatusFilter
+             speaks the Job type's capitalised form, and needs current_version to
+             tell Published from Republished. */
+          asJob: {
+            ...base,
+            id: version.id,
+            title: version.title || base.title,
+            status: mapJDStatus(version.status || ''),
+            currentVersion: version.current_version ?? base.currentVersion,
+            versionNumber: version.version_number ?? base.versionNumber,
+          } as Job,
+        }))
+        .filter(({ asJob }) => matchesStatusFilter(asJob, statusFilter))
+        .sort((a, b) => (b.version.version_number ?? 1) - (a.version.version_number ?? 1))[0];
+
+      return matchedVersion ? matchedVersion.asJob : null;
+    }).filter((row): row is Job => row !== null);
 
   const dedupedJobs = statusSelectedJobs;
 
@@ -531,24 +547,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
     setShowBulkActions(false);
   };
 
-  /* Bulk archive is the one archive path that does NOT go through
-     `onArchiveJob` — it drives `onUpdateJobStatus` per id — so it would have
-     slipped past the confirm the parent wired to that prop. It opens the same
-     `ArchiveJobModal` itself, in its plural wording, rather than being the one
-     way to archive without being asked. */
-  const [bulkArchiveOpen, setBulkArchiveOpen] = useState(false);
-
   const handleBulkArchive = () => {
-    if (!onUpdateJobStatus || selectedJobs.size === 0) return;
-    setBulkArchiveOpen(true);
-  };
-
-  const confirmBulkArchive = () => {
     if (!onUpdateJobStatus) return;
     selectedJobs.forEach(jobId => {
       onUpdateJobStatus(jobId, 'Archived');
     });
-    setBulkArchiveOpen(false);
     setSelectedJobs(new Set());
     setShowBulkActions(false);
   };
@@ -640,48 +643,20 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   const uniqueIndustries = Array.from(new Set(jobs.map(job => job.industry_type).filter(Boolean)));
 
   // Calculate stats
-  /* Every tile carries TWO numbers about ONE set of jobs:
+  /* Counted over `distinctJobs`, not raw `jobs` — one entry per job, matching
+     the list. Counting versions made the cards read higher than the rows
+     underneath them the moment anything was republished.
 
-       jobs     — one per lineage, whose status is read from its LATEST version.
-                  The same figure the rows below and the "of N jobs" badge show.
-       versions — how many saved versions those same jobs are made of. A job
-                  republished twice is 1 job and 3 versions.
-
-     Both must describe the SAME lineages or the pair is nonsense. `versionsOf`
-     therefore selects whole lineages on their representative — the identical
-     test the job count uses — and sums their sizes.
-
-     It replaces a per-ROW status count (`jobs.filter(matchesStatusFilter(...))`)
-     that was wrong in both directions at once: it EXCLUDED the published and
-     draft versions of an archived job, so it under-reported that job's history,
-     and it INCLUDED archived versions belonging to jobs whose latest version is
-     published — jobs that the Archived pill does not list at all. "3 jobs,
-     7 versions" over a list of 3 rows was that: the 7 spanned more lineages
-     than the 3 it sat beside.
-
-     Caveat worth knowing: `jobs` is the list response, which does not
-     necessarily carry every version of every lineage — "View Versions" fetches
-     the authoritative history per job from the lineage endpoint. So this counts
-     the versions the page HAS, and an expanded row may show more.
-
-     Published's job count goes through the shared `getPublishedJobs`, the same
+     Published goes through the shared `getPublishedJobs`, which is the same
      call the Apply to Job dialog counts and lists from — so that dialog cannot
      report a different number of published jobs from this card. */
-  const versionsOf = (isCounted: (representative: Job) => boolean) =>
-    Array.from(allVersionGroups.values())
-      .filter(bucket => isCounted(bucket[0]))
-      .reduce((sum, bucket) => sum + bucket.length, 0);
   const stats = {
     total: distinctJobs.length,
     published: getPublishedJobs(jobs).length,
     draft: distinctJobs.filter(j => j.status === 'Draft').length,
     closed: distinctJobs.filter(j => j.status === 'Closed').length,
     archived: distinctJobs.filter(j => j.status === 'Archived').length,
-    totalApplicants: distinctJobs.reduce((sum, j) => sum + (j.applicants || 0), 0),
-    totalVersions: jobs.length,
-    publishedVersions: versionsOf(j => j.status === 'Published'),
-    draftVersions: versionsOf(j => j.status === 'Draft'),
-    archivedVersions: versionsOf(j => j.status === 'Archived'),
+    totalApplicants: distinctJobs.reduce((sum, j) => sum + (j.applicants || 0), 0)
   };
 
   const activeFiltersCount = search.activeFilterCount;
@@ -805,17 +780,23 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   <span>Job publishing limit reached ({quotaInfo.used}/{quotaInfo.limit}). <a href="/subscription/current-plan" className="underline font-medium">Upgrade your plan</a></span>
                 </div>
               )}
-              {(configHref || onCreateNew) && (
+              {(masterDataLinks?.length || onCreateNew) && (
                 <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
-                  {configHref && (
-                    <Link
-                      href={configHref}
-                      className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-medium transition-all sm:w-auto bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue"
+                  {masterDataLinks && masterDataLinks.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowConfig(!showConfig)}
+                      aria-expanded={showConfig}
+                      className={`inline-flex w-full items-center justify-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-medium transition-all sm:w-auto ${
+                        showConfig
+                          ? 'bg-brand-blue text-white border-brand-blue shadow-md shadow-brand-blue/25'
+                          : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue'
+                      }`}
                     >
                       <Settings className="w-4 h-4" />
                       Config
-                      <ArrowUpRight className="w-4 h-4" />
-                    </Link>
+                      <ChevronDown className={`w-4 h-4 transition-transform ${showConfig ? 'rotate-180' : ''}`} />
+                    </button>
                   )}
                   {onCreateNew && (
                     <button
@@ -831,6 +812,30 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
             </div>
           </div>
 
+          {/* Config Panel (collapsible) - Experience/Education/Industry quick links */}
+          {showConfig && masterDataLinks && masterDataLinks.length > 0 && (
+            <div className="mb-5 flex justify-end">
+              <div className="grid w-full grid-cols-1 gap-2.5 sm:w-auto sm:grid-cols-3 sm:gap-3">
+                {masterDataLinks.map((link) => {
+                  const Icon = link.icon;
+                  return (
+                    <Link
+                      key={link.id}
+                      href={link.href}
+                      className="group flex items-center gap-2.5 rounded-xl border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 shadow-sm transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/40 hover:shadow-md sm:min-w-48"
+                    >
+                      <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 dark:bg-brand-blue/20 dark:ring-brand-blue/30">
+                        <Icon className="h-4 w-4" />
+                      </span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-gray-800 dark:text-slate-200 group-hover:text-brand-blue">{link.label}</span>
+                      <ArrowUpRight className="h-4 w-4 shrink-0 text-gray-300 dark:text-slate-500 transition-colors group-hover:text-brand-blue" />
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <ModuleInfoBanner
             icon={<FileText className="h-4 w-4" />}
             title="AI-Powered Job Descriptions"
@@ -838,18 +843,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
           />
 
           <StatsCardGrid>
-            <StatsCard tone="neutral" active={isOverviewCardActive('all')} showClickArrow icon={Briefcase} label="Total Jobs" value={stats.total} sparkline={false} onClick={() => openListView('all')}>
-              <StatVersions count={stats.totalVersions} />
-            </StatsCard>
-            <StatsCard tone="neutral" active={isOverviewCardActive('published')} showClickArrow icon={CheckCircle2} label="Published" value={stats.published} sparkline={false} onClick={() => openListView('published')}>
-              <StatVersions count={stats.publishedVersions} />
-            </StatsCard>
-            <StatsCard tone="neutral" active={isOverviewCardActive('draft')} showClickArrow icon={FileText} label="Drafts" value={stats.draft} sparkline={false} onClick={() => openListView('draft')}>
-              <StatVersions count={stats.draftVersions} />
-            </StatsCard>
-            <StatsCard tone="neutral" active={isOverviewCardActive('archived')} showClickArrow icon={Archive} label="Archived" value={stats.archived} sparkline={false} onClick={() => openListView('archived')}>
-              <StatVersions count={stats.archivedVersions} />
-            </StatsCard>
+            <StatsCard tone="neutral" active={isOverviewCardActive('all')} showClickArrow icon={Briefcase} label="Total Jobs" value={stats.total} sparkline={false} onClick={() => openListView('all')} />
+            <StatsCard tone="neutral" active={isOverviewCardActive('published')} showClickArrow icon={CheckCircle2} label="Published" value={stats.published} sparkline={false} onClick={() => openListView('published')} />
+            <StatsCard tone="neutral" active={isOverviewCardActive('draft')} showClickArrow icon={FileText} label="Drafts" value={stats.draft} sparkline={false} onClick={() => openListView('draft')} />
+            <StatsCard tone="neutral" active={isOverviewCardActive('archived')} showClickArrow icon={Archive} label="Archived" value={stats.archived} sparkline={false} onClick={() => openListView('archived')} />
           </StatsCardGrid>
 
 
@@ -1190,7 +1187,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 return (
                   <div
                     key={job.id}
-                    className={`relative bg-white rounded-xl border transition-[transform,box-shadow,border-color] duration-150 cursor-pointer ${activeDropdown === job.id ? 'z-30' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
+                    className={`relative bg-white rounded-xl border transition-all duration-150 cursor-pointer ${activeDropdown === job.id ? 'z-[9999]' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
                     onClick={() => job.status.toLowerCase() === 'draft' && onEditJob ? onEditJob(job) : onViewJob(job)}
                   >
                     {/* Card Header */}
@@ -1231,15 +1228,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                       </div>
                       <div className="flex items-center gap-2 mb-2">
                         {job.job_id && (
-                          <JobIdBadge>{job.job_id}</JobIdBadge>
+                          <span className="px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-md text-xs font-bold font-mono border border-brand-blue/20">
+                            {job.job_id}
+                          </span>
                         )}
-                        {/* Two lines on a card, one line in a row - a card
-                            gives the name its own width, a row shares it. Full
-                            name on hover either way. */}
-                        <h3
-                          className="text-sm sm:text-base font-medium text-gray-900 line-clamp-2 min-w-0"
-                          title={job.title}
-                        >
+                        <h3 className="text-sm sm:text-base font-medium text-gray-900 line-clamp-2">
                           {job.title}
                         </h3>
                       </div>
@@ -1360,7 +1353,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                             <MoreVertical className="w-4 h-4 text-gray-600" />
                           </button>
                           {activeDropdown === job.id && (
-                            <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-40">
+                            <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999]">
                               {/* View Applicants - Hide for Draft */}
                               {job.status.toLowerCase() !== 'draft' && (
                                 <button
@@ -1397,7 +1390,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   }}
                                   className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                                 >
-                                  <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+                                  <Target className="w-4 h-4 text-menu-icon-score" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
                                 </button>
                               )}
@@ -1406,7 +1399,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    requestDisableJob(job);
+                                    onDisableJob(job);
+                                    setActiveDropdown(null);
                                   }}
                                   className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-orange-700 hover:bg-orange-50"
                                 >
@@ -1504,7 +1498,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 return (
                   <div
                     key={job.id}
-                    className={`relative bg-white rounded-xl border transition-[transform,box-shadow,border-color] duration-150 cursor-pointer p-4 ${activeDropdown === job.id ? 'z-30' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
+                    className={`relative bg-white rounded-xl border transition-all duration-150 cursor-pointer p-4 ${activeDropdown === job.id ? 'z-[9999]' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
                     onClick={() => job.status.toLowerCase() === 'draft' && onEditJob ? onEditJob(job) : onViewJob(job)}
                   >
                     <div className="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
@@ -1574,7 +1568,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                             <MoreVertical className="w-3.5 h-3.5 text-gray-600" />
                           </button>
                           {activeDropdown === job.id && (
-                            <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-40">
+                            <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-[9999]">
                               {/* View Applicants - Hide for Draft */}
                               {job.status.toLowerCase() !== 'draft' && (
                                 <button
@@ -1611,7 +1605,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                   }}
                                   className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                 >
-                                  <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+                                  <Target className="w-4 h-4 text-menu-icon-score" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
                                 </button>
                               )}
@@ -1620,7 +1614,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    requestDisableJob(job);
+                                    onDisableJob(job);
+                                    setActiveDropdown(null);
                                   }}
                                   className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50"
                                 >
@@ -1780,13 +1775,13 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                 )}
                                 {onScoreResumes && !['draft', 'disabled', 'archived'].includes(versionJob.status.toLowerCase()) && (
                                   <DropdownMenuItem onSelect={() => onScoreResumes(versionJob)} className={viewVersionsMenuItemClass}>
-                                    <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+                                    <Target className="w-4 h-4 text-menu-icon-score" />
                                     <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
                                   </DropdownMenuItem>
                                 )}
                                 {/* Disable Job for Published */}
                                 {versionJob.status === 'Published' && onDisableJob && (
-                                  <DropdownMenuItem onSelect={() => requestDisableJob(versionJob)} className={viewVersionsMenuItemOrangeClass}>
+                                  <DropdownMenuItem onSelect={() => onDisableJob(versionJob)} className={viewVersionsMenuItemOrangeClass}>
                                     <Ban className="w-4 h-4" />
                                     <span className={MENU_ITEM_SCALE_CLASS}>Disable Job</span>
                                   </DropdownMenuItem>
@@ -1961,17 +1956,14 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       {/* Confirm before running AI Talent Match — same copy, layout and
           Yes/No behavior as the Job Details page's AI Talent Match confirm.
           No is the do-nothing path: closing this never calls onAIMatch. */}
-      <ArchiveJobModal
-        isOpen={bulkArchiveOpen}
-        count={selectedJobs.size}
-        jobLabel={`${selectedJobs.size} job description${selectedJobs.size === 1 ? '' : 's'} selected`}
-        onConfirm={confirmBulkArchive}
-        onCancel={() => setBulkArchiveOpen(false)}
-      />
-
-      <AITalentMatchConfirmModal
+      <ConfirmationDialog
         isOpen={!!aiMatchConfirmJob}
-        jobTitle={aiMatchConfirmJob ? formatJobVersionLabel(aiMatchConfirmJob) : ''}
+        type="info"
+        icon={FileText}
+        title="Find matching candidates from the Resume Database?"
+        message={`AI Talent Match will scan your resume database against "${aiMatchConfirmJob?.title}" and rank the closest candidates.`}
+        confirmText="Yes"
+        cancelText="No"
         onConfirm={confirmAIMatch}
         onCancel={() => setAiMatchConfirmJob(null)}
       />

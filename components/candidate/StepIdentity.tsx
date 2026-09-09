@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { ArrowLeft,
+import {
   Shield, Camera, Lock, AlertCircle, Mail, User,
   CheckCircle, RefreshCw, Loader2, ArrowRight, KeyRound,
 } from 'lucide-react';
@@ -1027,9 +1027,8 @@ export default function StepIdentity({
 
       <div className="flex items-center justify-between pt-2">
         <button type="button" onClick={handleGoBackFromPhoto}
-          className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors">
-          <ArrowLeft className="w-4 h-4" />
-          Go Back
+          className="text-sm text-gray-500 hover:text-gray-700 font-medium transition-colors">
+          ← Go Back
         </button>
       </div>
     </div>

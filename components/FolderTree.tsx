@@ -240,14 +240,6 @@ interface FolderTreeProps {
    *  job-details "Select Applicants to Score" popup, where the tree is a filter
    *  and folder management belongs on the My Resumes page. */
   readOnly?: boolean;
-  /** Shows the top "+ New" button (folder creation only) independent of
-   *  `readOnly`, which otherwise also hides the per-row manage menu
-   *  (rename/delete/upload/create-subfolder). Defaults to `!readOnly`, so
-   *  every existing caller is unaffected. A `readOnly` picker that still wants
-   *  to let the user create a top-level folder without exposing rename/
-   *  delete/upload (e.g. the "Select Applicants to Score" popup) passes
-   *  `readOnly` and `allowCreateFolder` together. */
-  allowCreateFolder?: boolean;
 }
 
 export default function FolderTree({
@@ -264,7 +256,6 @@ export default function FolderTree({
   width,
   onWidthChange,
   readOnly = false,
-  allowCreateFolder,
 }: FolderTreeProps) {
   const [expandedFolders, setExpandedFolders] = useState<string[]>(['engineering']);
   const [isCreatingFolder, setIsCreatingFolder] = useState(false);
@@ -860,7 +851,7 @@ export default function FolderTree({
 
       <div className="flex shrink-0 items-center justify-between mt-4 mb-3">
         <h3 className="text-gray-900">My Folders</h3>
-        {(allowCreateFolder ?? !readOnly) && (
+        {!readOnly && (
           <button
             type="button"
             onClick={() => setIsCreatingFolder(true)}

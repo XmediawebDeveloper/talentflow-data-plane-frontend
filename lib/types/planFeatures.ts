@@ -23,8 +23,8 @@ export const FEATURE_QUOTA_MAP: Partial<Record<PlanFeatureKey, string>> = {
 export const PLAN_FEATURE_METADATA: Record<PlanFeatureKey, { name: string; description: string; icon: string }> = {
   seats: { name: 'Seats', description: 'User seats management', icon: 'Users' },
   resume_upload: { name: 'Resume Storage', description: 'Upload and manage resumes', icon: 'Upload' },
-  resume_scoring: { name: 'Resume Scoring', description: 'AI-powered resume scoring', icon: 'ClipboardList' },
-  assessment: { name: 'Assessments', description: 'Create and manage assessments', icon: 'BarChart3' },
+  resume_scoring: { name: 'Resume Scoring', description: 'AI-powered resume scoring', icon: 'Target' },
+  assessment: { name: 'Assessments', description: 'Create and manage assessments', icon: 'ClipboardList' },
   ai_interview: { name: 'AI Interview', description: 'AI-powered interviews', icon: 'Video' },
   api_access: { name: 'API Access', description: 'Platform API access', icon: 'Key' },
   sso: { name: 'SSO', description: 'Single Sign-On integration', icon: 'Shield' },

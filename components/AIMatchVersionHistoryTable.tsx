@@ -3,73 +3,38 @@
 import { Eye, Loader2 } from 'lucide-react';
 import { AIMatchSessionResponse } from '@/lib/services/aiMatchService';
 import { formatIST } from '@/lib/utils/dateUtils';
-/* The app's shared status vocabulary. `getDisplayStatus` is what turns a
-   published JD with a publish counter above 1 into "Republished", and
-   `getStatusConfig` gives that label the same colours every other list uses. */
-import { getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
 
 export interface AIMatchSessionVersion {
-  /**
-   * The most recent run for this JD version — what View opens, and what the
-   * status and match count are read from, since it is the current picture.
-   */
   session: AIMatchSessionResponse;
   versionNumber: number;
-  /** When this JD version was matched for the FIRST time. */
-  firstMatchedAt: string;
-  /** When it was matched most recently. Equal to `firstMatchedAt` after a
-   *  single run. */
-  lastMatchedAt: string;
-  /** How many times this version has been matched. */
-  runCount: number;
+  topScore: number;
+  avgScore: number;
 }
 
+/** Same score a session's candidates are ranked by elsewhere: final_score (0-100) or similarity (0-1) as a fallback. */
+const scoreOf = (result: { final_score?: number; similarity_score: number }): number =>
+  result.final_score != null ? Math.round(result.final_score) : Math.round((result.similarity_score || 0) * 100);
+
 /**
- * One row per JD VERSION, not per match run.
- *
- * There is no version field on a match session, so versions are identified by
- * the JD record a run was made against (`jd_id`) — a republish forks the JD
- * into a new row, so a new id is a new version. Runs against the same version
- * collapse into one row carrying the first and most recent match dates.
- *
- * This used to be one row per RUN, with version numbers assigned by
- * chronological order. Matching the same JD three times therefore produced
- * "v1, v2, v3" — three versions that did not exist — and left the first and
- * last match dates identical on every row, because each row was a single
- * moment in time.
- *
- * Version numbers are still ordinals over the groups (oldest = v1) rather than
- * the JD's own publish counter: the counter is not on the session record, and
- * for the ordinary one-run-per-version case the two agree anyway. Newest first,
- * like every other version list in this app.
+ * Every AI match run for a job is its own immutable session — there is no
+ * version field on the backend record. Version numbers here are assigned by
+ * chronological order (oldest = v1), then the list is shown newest-first so
+ * it reads the same as every other version list in this app.
  */
 export function buildAIMatchVersions(sessions: AIMatchSessionResponse[]): AIMatchSessionVersion[] {
-  const byVersion = new Map<string, AIMatchSessionResponse[]>();
-  for (const session of sessions) {
-    // No `jd_id` (older records) means the run cannot be attributed to a
-    // version — it stays its own row rather than being merged into someone
-    // else's.
-    const key = session.jd_id || session.id;
-    const runs = byVersion.get(key);
-    if (runs) runs.push(session);
-    else byVersion.set(key, [session]);
-  }
-
-  const asTime = (value: string) => new Date(value).getTime();
-
-  return Array.from(byVersion.values())
-    .map((runs) => {
-      const chronological = [...runs].sort((a, b) => asTime(a.created_at) - asTime(b.created_at));
-      const latest = chronological[chronological.length - 1];
+  const chronological = [...sessions].sort(
+    (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+  );
+  return chronological
+    .map((session, index) => {
+      const scores = session.results.map(scoreOf);
       return {
-        session: latest,
-        firstMatchedAt: chronological[0].created_at,
-        lastMatchedAt: latest.created_at,
-        runCount: chronological.length,
+        session,
+        versionNumber: index + 1,
+        topScore: scores.length ? Math.max(...scores) : 0,
+        avgScore: scores.length ? Math.round(scores.reduce((sum, s) => sum + s, 0) / scores.length) : 0,
       };
     })
-    .sort((a, b) => asTime(a.firstMatchedAt) - asTime(b.firstMatchedAt))
-    .map((version, index) => ({ ...version, versionNumber: index + 1 }))
     .reverse();
 }
 
@@ -77,17 +42,6 @@ interface AIMatchVersionHistoryTableProps {
   loading: boolean;
   failed: boolean;
   versions: AIMatchSessionVersion[] | null;
-  /**
-   * The JD behind one session, for the Status column.
-   *
-   * A match session carries its own `status` — that is the state of the MATCH
-   * RUN ('completed'), not of the job description, and the column showed
-   * neither: it read "Latest" or "Previous", derived from the row's position.
-   * The JD's real status lives on the job record, which only the host has, and
-   * each session may belong to a different row in the job's lineage — so the
-   * host resolves it per session rather than passing one status for the table.
-   */
-  resolveJob?: (session: AIMatchSessionResponse) => { status?: string; currentVersion?: number } | undefined;
   onRetry: () => void;
   onViewSession: (session: AIMatchSessionResponse) => void;
 }
@@ -102,7 +56,6 @@ export default function AIMatchVersionHistoryTable({
   loading,
   failed,
   versions,
-  resolveJob,
   onRetry,
   onViewSession,
 }: AIMatchVersionHistoryTableProps) {
@@ -145,63 +98,37 @@ export default function AIMatchVersionHistoryTable({
             <th className="py-2 px-3 font-medium">Version</th>
             <th className="py-2 px-3 font-medium">Status</th>
             <th className="py-2 px-3 font-medium">Match Date</th>
-            <th className="py-2 px-3 font-medium">Last Match Date</th>
             <th className="py-2 px-3 font-medium">Total Matches</th>
+            <th className="py-2 px-3 font-medium">Top Score</th>
+            <th className="py-2 px-3 font-medium">Avg Score</th>
             <th className="py-2 px-3 font-medium text-right">Actions</th>
           </tr>
         </thead>
         <tbody>
-          {versions.map(({ session, versionNumber, firstMatchedAt, lastMatchedAt, runCount }) => {
+          {versions.map(({ session, versionNumber, topScore, avgScore }) => {
             const isLatest = versionNumber === latestVersionNumber;
             return (
               <tr key={session.id} className="border-t border-gray-100 dark:border-slate-800">
-                {/* Latest lives HERE now, beside the version number, exactly as
-                    it does on the Resume Scoring version table. It answers
-                    "which version is this", which is this column's question —
-                    the Status column beside it is now free to answer its own. */}
                 <td className="py-2 px-3 font-medium text-gray-900 dark:text-slate-100 whitespace-nowrap">
-                  <span className="inline-flex items-center gap-1.5">
-                    v{versionNumber}
-                    {isLatest && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-brand-blue text-white text-[10px] font-semibold tracking-wide">
-                        LATEST
-                      </span>
-                    )}
-                  </span>
+                  v{versionNumber}
                 </td>
                 <td className="py-2 px-3">
-                  {(() => {
-                    const job = resolveJob?.(session);
-                    /* No job resolved means the lineage row is not in the
-                       host's list (an archived version it filters out, say).
-                       A dash is honest; guessing "Published" would not be. */
-                    if (!job?.status) {
-                      return <span className="text-gray-400 dark:text-slate-600">—</span>;
-                    }
-                    const label = getDisplayStatus(job.status, job.currentVersion);
-                    const cfg = getStatusConfig(label);
-                    return (
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium border whitespace-nowrap ${cfg.bg} ${cfg.text} ${cfg.border}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-                        {label}
-                      </span>
-                    );
-                  })()}
+                  <span
+                    className={`inline-flex items-center px-2 py-0.5 rounded-full font-medium border whitespace-nowrap ${
+                      isLatest
+                        ? 'bg-green-50 text-green-700 border-green-200'
+                        : 'bg-gray-100 text-gray-600 border-gray-200 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700'
+                    }`}
+                  >
+                    {isLatest ? 'Latest' : 'Previous'}
+                  </span>
                 </td>
-                {/* First ever match against this JD version. */}
                 <td className="py-2 px-3 text-gray-600 dark:text-slate-400 whitespace-nowrap">
-                  {formatIST(firstMatchedAt)}
-                </td>
-                {/* Most recent match against it. Identical to the column before
-                    it until the version has been matched more than once, so the
-                    run count is shown beside it to explain why. */}
-                <td className="py-2 px-3 text-gray-600 dark:text-slate-400 whitespace-nowrap">
-                  {formatIST(lastMatchedAt)}
-                  {runCount > 1 && (
-                    <span className="ml-1.5 text-gray-400 dark:text-slate-600">({runCount} runs)</span>
-                  )}
+                  {formatIST(session.created_at)}
                 </td>
                 <td className="py-2 px-3 text-gray-900 dark:text-slate-100">{session.total_matches}</td>
+                <td className="py-2 px-3 font-medium text-green-700 dark:text-green-400">{topScore}%</td>
+                <td className="py-2 px-3 text-gray-700 dark:text-slate-300">{avgScore}%</td>
                 <td className="py-2 px-3 text-right">
                   <button
                     type="button"

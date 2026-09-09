@@ -9,7 +9,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, Eye, ClipboardList, X, Calendar, User, Mail, FileText, Briefcase } from 'lucide-react';
+import { AlertTriangle, Eye, Target, X, Calendar, User, Mail, FileText, Briefcase } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface ExistingResumeInfo {
@@ -157,7 +157,7 @@ export function DuplicateResumeDetectedModal({
             size="sm"
             className="flex items-center justify-center gap-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 order-1 sm:order-3"
           >
-            <ClipboardList className="w-3.5 h-3.5" />
+            <Target className="w-3.5 h-3.5" />
             Proceed with Scoring
           </Button>
         </DialogFooter>

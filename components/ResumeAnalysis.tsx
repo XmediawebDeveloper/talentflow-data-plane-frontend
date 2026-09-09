@@ -178,8 +178,8 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
     } else if (score >= 70) {
       return { 
         label: 'Partial Match', 
-        color: 'text-brand-orange-deep', 
-        bg: 'bg-brand-orange/10 border-brand-orange/20',
+        color: 'text-gray-900', 
+        bg: 'bg-gray-100 border-gray-300',
         icon: AlertTriangle
       };
     } else {

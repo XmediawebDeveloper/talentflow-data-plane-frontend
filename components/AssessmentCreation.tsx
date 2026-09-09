@@ -1,23 +1,19 @@
 'use client';
 
-import { ArrowRight, Building2, Check, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown } from 'lucide-react';
-import type { AssessmentResponse, HRTopic } from '@/lib/services/assessmentService';
+import { ArrowLeft, Clock, Briefcase, Sliders, Plus, X, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown } from 'lucide-react';
+import type { HRTopic } from '@/lib/services/assessmentService';
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
 import { formatISTDate } from '@/lib/utils/dateUtils';
-import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import { assessmentService, jdService } from '@/lib/services';
 import api from '@/lib/services/api';
 import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { useAuth } from '@/components/providers/AuthProvider';
-import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
+import PageBreadcrumb from '@/components/PageBreadcrumb';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
-import JDFullViewModal from '@/components/jobs/JDFullViewModal';
-import JobIdBadge from '@/components/jobs/JobIdBadge';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import ListPagination from '@/components/ListPagination';
@@ -43,28 +39,6 @@ const COMPILABLE_LANGUAGES = [
   'Go', 'Rust', 'Ruby', 'PHP', 'Kotlin', 'Swift',
 ] as const;
 const COMPILABLE_LANGUAGES_LOWER = new Set(COMPILABLE_LANGUAGES.map(l => l.toLowerCase()));
-/** How many languages one coding round may carry. Declared beside the list it
- *  caps so the two cannot drift; every gate reads this, never a literal. */
-const MAX_CODING_LANGUAGES = 10;
-
-/**
- * The confetti thrown around the published mark on the Publish Assessment
- * page. `x`/`y` are the stroke's centre offset from the mark's own centre and
- * `tilt` its rotation, so the burst is described once here and travels with
- * the mark rather than being pinned to the page.
- *
- * The colours are the brand palette (cyan, orange, teal) plus the green the
- * mark itself carries; the one violet has no brand token, so it takes plain
- * violet-500 rather than a new one being invented for a decoration.
- */
-const PUBLISHED_CONFETTI = [
-  { x: -78, y: -27, tilt: 45, color: 'bg-brand-cyan' },
-  { x: -108, y: 5, tilt: 45, color: 'bg-brand-orange' },
-  { x: -74, y: 30, tilt: -45, color: 'bg-brand-teal' },
-  { x: 64, y: -36, tilt: -45, color: 'bg-green-500' },
-  { x: 108, y: -13, tilt: 45, color: 'bg-violet-500' },
-  { x: 72, y: 19, tilt: 45, color: 'bg-brand-cyan' },
-] as const;
 const filterCompilable = (langs: string[] | undefined | null): string[] => {
   if (!Array.isArray(langs)) return [];
   return langs.filter(l => l && COMPILABLE_LANGUAGES_LOWER.has(String(l).trim().toLowerCase()));
@@ -143,242 +117,6 @@ function AssessmentCreatedLabel({ created }: { created: boolean }) {
       {created && <CheckCircle2 className="w-3 h-3 flex-shrink-0" />}
       {created ? 'Created' : 'Not Created'}
     </span>
-  );
-}
-
-/** The skills popover's width in px — matches `w-64` on the panel itself. */
-const JD_SKILLS_PANEL_WIDTH = 256;
-
-/**
- * A JD skill group's count, with the group's skills behind it.
- *
- * The chips used to be listed under the row outright, both groups at once. On
- * a JD carrying a dozen must-haves that pushed the rest of what this card
- * exists to report — the experience band, the duration it feeds — off the
- * bottom of the sidebar, and the count on the header line was answering a
- * question the chips beneath it had already answered. So the count is all that
- * shows: it is the figure a recruiter checking the extraction scans for, and
- * the skills themselves are one hover (or one tap) away for the times that
- * figure looks wrong.
- *
- * The panel is `fixed` and portalled to <body> rather than opened inside the
- * row: the sidebar is a narrow column with its own scrolling, and an in-row
- * panel would be clipped by it — clipping is not something z-index escapes.
- * It is placed from the trigger's own rect, right-aligned to it, held a margin
- * clear of every viewport edge, and flipped above the chip where the room
- * below runs out, so it stays whole on a phone as much as on a desktop. Its
- * list scrolls at whatever height the room allows, capped, so a long group
- * never grows the panel off-screen.
- *
- * Pointer and keyboard both reach it: hover opens it, a click pins it open
- * (the only route on touch, where there is no hover), Escape or a press
- * outside closes it. A pinned panel survives the pointer leaving; an unpinned
- * one closes on a short delay, which is what lets the pointer cross the gap
- * between chip and panel to scroll the list.
- */
-function JDSkillsReveal({
-  label,
-  skills,
-  chipClassName,
-}: {
-  label: string;
-  skills: string[];
-  /** The row's own count chip classes, so the trigger keeps the group colour. */
-  chipClassName: string;
-}) {
-  /** The open panel's placement, measured off the trigger. Null = closed. */
-  const [placement, setPlacement] = useState<{
-    top: number;
-    bottom: number;
-    right: number;
-    dropUp: boolean;
-    listMaxHeight: number;
-  } | null>(null);
-  /** Set by a click: the panel then stays up until dismissed, not on hover. */
-  const [pinned, setPinned] = useState(false);
-  const triggerRef = useRef<HTMLButtonElement | null>(null);
-  const panelRef = useRef<HTMLDivElement | null>(null);
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const isOpen = placement !== null;
-
-  const cancelClose = useCallback(() => {
-    if (closeTimer.current) {
-      clearTimeout(closeTimer.current);
-      closeTimer.current = null;
-    }
-  }, []);
-
-  const close = useCallback(() => {
-    cancelClose();
-    setPlacement(null);
-    setPinned(false);
-  }, [cancelClose]);
-
-  /* Measured once, at open time: the panel closes on any scroll or resize (see
-     the dismissal effect below), so these viewport coordinates cannot go stale
-     while it is up. */
-  const place = useCallback(() => {
-    const rect = triggerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const gutter = 12;
-    const spaceBelow = window.innerHeight - rect.bottom - gutter;
-    const spaceAbove = rect.top - gutter;
-    /* Below by default; above only where below cannot hold a useful panel and
-       above holds more. 160px is about the panel at its smallest useful size —
-       its header plus a couple of rows of chips. */
-    const dropUp = spaceBelow < 160 && spaceAbove > spaceBelow;
-    /* What is left for the chips once the panel's header and padding are
-       taken, capped so a thirty-skill group scrolls rather than filling the
-       screen, and floored so a cramped viewport still shows a scrollable row
-       or two instead of a sliver. */
-    const room = (dropUp ? spaceAbove : spaceBelow) - 56;
-    setPlacement({
-      top: rect.top,
-      bottom: rect.bottom,
-      right: rect.right,
-      dropUp,
-      listMaxHeight: Math.max(88, Math.min(240, room)),
-    });
-  }, []);
-
-  const scheduleClose = useCallback(() => {
-    cancelClose();
-    closeTimer.current = setTimeout(() => setPlacement(null), 140);
-  }, [cancelClose]);
-
-  useEffect(() => cancelClose, [cancelClose]);
-
-  /**
-   * Dismissal, the same rule the ⋮ menus on the Assessments page follow: a
-   * pointer down anywhere outside, Escape, or the page moving under a panel
-   * that was placed from viewport coordinates.
-   *
-   * The scroll listener is in the capture phase so a scroll inside any
-   * container closes it, not just the window's — with the panel's own list
-   * excluded, because scrolling the skills is the one scroll that must not
-   * dismiss what it is scrolling.
-   */
-  useEffect(() => {
-    if (!isOpen) return;
-
-    const handlePointerDown = (event: PointerEvent) => {
-      const target = event.target as Node | null;
-      if (target && panelRef.current?.contains(target)) return;
-      // The trigger toggles itself; closing here would let its own click
-      // reopen the panel, so it would never appear to shut.
-      if (target && triggerRef.current?.contains(target)) return;
-      close();
-    };
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') close();
-    };
-    const handleScroll = (event: Event) => {
-      const target = event.target as Node | null;
-      if (target && panelRef.current?.contains(target)) return;
-      close();
-    };
-
-    document.addEventListener('pointerdown', handlePointerDown, true);
-    document.addEventListener('keydown', handleKeyDown);
-    window.addEventListener('scroll', handleScroll, true);
-    window.addEventListener('resize', close);
-    window.addEventListener('blur', close);
-
-    return () => {
-      document.removeEventListener('pointerdown', handlePointerDown, true);
-      document.removeEventListener('keydown', handleKeyDown);
-      window.removeEventListener('scroll', handleScroll, true);
-      window.removeEventListener('resize', close);
-      window.removeEventListener('blur', close);
-    };
-  }, [isOpen, close]);
-
-  return (
-    <>
-      <button
-        ref={triggerRef}
-        type="button"
-        aria-expanded={isOpen}
-        aria-label={`${label}: ${skills.length}. Show skills`}
-        title={`Show ${label.toLowerCase()}`}
-        onPointerEnter={(e) => {
-          if (e.pointerType !== 'mouse') return;
-          cancelClose();
-          place();
-        }}
-        onPointerLeave={(e) => {
-          if (e.pointerType !== 'mouse' || pinned) return;
-          scheduleClose();
-        }}
-        onClick={() => {
-          if (pinned) {
-            close();
-            return;
-          }
-          place();
-          setPinned(true);
-        }}
-        className={`${chipClassName} inline-flex items-center gap-1 cursor-pointer transition-shadow hover:shadow-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40`}
-      >
-        {skills.length}
-        <ChevronDown className={`w-3 h-3 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
-      </button>
-
-      {placement && typeof document !== 'undefined' && createPortal(
-        <div
-          ref={panelRef}
-          onPointerEnter={cancelClose}
-          onPointerLeave={(e) => {
-            if (e.pointerType !== 'mouse' || pinned) return;
-            scheduleClose();
-          }}
-          className="fixed z-[9999] w-64 max-w-[calc(100vw-1rem)] bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-xl shadow-brand-blue/10 p-3"
-          style={{
-            top: placement.dropUp ? undefined : placement.bottom + 6,
-            bottom: placement.dropUp
-              ? Math.max(8, window.innerHeight - placement.top + 6)
-              : undefined,
-            /* Right-aligned to the chip, which sits at the sidebar's right
-               edge, and clamped so neither side of the panel leaves the
-               viewport on a narrow screen. */
-            left: Math.max(
-              8,
-              Math.min(
-                placement.right - JD_SKILLS_PANEL_WIDTH,
-                window.innerWidth - JD_SKILLS_PANEL_WIDTH - 8
-              )
-            ),
-          }}
-        >
-          <div className="flex items-start justify-between gap-2">
-            <p className="text-xs font-semibold text-gray-900">
-              {label} ({skills.length})
-            </p>
-            <button
-              type="button"
-              onClick={close}
-              aria-label="Close"
-              className="text-gray-400 hover:text-gray-600 flex-shrink-0"
-            >
-              <X className="h-3.5 w-3.5" />
-            </button>
-          </div>
-          <div className="mt-2 overflow-y-auto" style={{ maxHeight: placement.listMaxHeight }}>
-            <div className="flex flex-wrap gap-1.5">
-              {skills.map(skill => (
-                <span
-                  key={skill}
-                  className="px-2 py-0.5 bg-slate-50 text-gray-600 ring-1 ring-gray-200 rounded-full text-[11px] break-words"
-                >
-                  {skill}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
-    </>
   );
 }
 
@@ -466,28 +204,6 @@ const JDCreation = dynamic(() => import('@/components/JDCreation'), {
 
 // 1:1 JD-Assessment relationship: JDs that already have assessments cannot be selected
 
-/**
- * The record to report after publishing: the publish response where it came
- * back, otherwise the create/update response it followed.
- *
- * Publishing is a SECOND write, and it is the one that settles the fields the
- * Published Assessment page reports. `POST /assessments/{id}/publish` returns
- * the assessment as it now stands — its status, and its `version`, which the
- * backend bumps on a republish that carries real content changes. That reply
- * used to be thrown away, so the page reported the record as it was BEFORE the
- * publish: a republished v3 announced itself as v2, and a create whose reply
- * omitted `version` fell through a `|| 1` and announced v1 whatever the
- * lineage actually held.
- *
- * The fallback is not a formality: it keeps the page reporting the record it
- * has if a publish ever replies with an empty body, rather than blanking the
- * panel over a field it only needed for a badge.
- */
-const publishedRecordOr = (
-  published: AssessmentResponse | null | undefined,
-  fallback: AssessmentResponse,
-): AssessmentResponse => (published?.id ? published : fallback);
-
 interface TopicSettings {
   hr_enabled: boolean;
   hr_scoring_type: 'informational' | 'scored';
@@ -519,12 +235,8 @@ interface AssessmentCreationProps {
   proctoringSettings?: ProctoringSettings | null;
 }
 
-/** The three assessment rounds, by name — each round owns the section of the
- *  same name, which is what the Configure step nests under it. */
-type RoundName = 'HR' | 'Technical' | 'Coding';
-
 interface SectionConfig {
-  name: RoundName;
+  name: 'HR' | 'Technical' | 'Coding';
   percentage: number;
   // The HR section carries full question objects here, Technical/Coding carry plain
   // topic labels - mirroring assessmentService.HRTopic and the backend's List[Any]
@@ -598,7 +310,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const { available: assessmentAvailable } = usePlanFeature('assessment');
 
   // Read initial step from URL, default to 'select-jd'
-  const urlStep = searchParams.get('step') as 'select-jd' | 'configure' | 'publish' | 'preview' | null;
+  const urlStep = searchParams.get('step') as 'select-jd' | 'configure' | 'preview' | null;
   const urlJdId = searchParams.get('jd_id');
   const editAssessmentId = searchParams.get('edit'); // Edit mode: assessment ID to edit
 
@@ -613,31 +325,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   // the real title a moment later.
   const urlJdTitle = searchParams.get('jd_title');
 
-  /* The publish step only reports an assessment published in this session — it
-     holds nothing of its own to rebuild. A reload lands back on
-     `?step=publish` with nothing published, so that URL opens on Configure
-     rather than on a page with nothing to confirm. */
-  const [step, setStepState] = useState<'select-jd' | 'configure' | 'publish' | 'preview'>(
-    urlStep === 'publish' ? 'configure' : urlStep || 'select-jd',
-  );
-  /**
-   * Which rounds have their section card open on the Configure step.
-   *
-   * All three open by default: a recruiter who has just enabled a round wants
-   * to see what they enabled, and collapsing is for getting a long HR question
-   * list out of the way once it is settled. Purely presentational — nothing
-   * saved reads it, and a collapsed section is still part of the assessment.
-   */
-  const [expandedRounds, setExpandedRounds] = useState<Set<RoundName>>(
-    () => new Set<RoundName>(['HR', 'Technical', 'Coding']),
-  );
-  const toggleRoundExpanded = (round: RoundName) =>
-    setExpandedRounds(prev => {
-      const next = new Set(prev);
-      if (next.has(round)) next.delete(round);
-      else next.add(round);
-      return next;
-    });
+  const [step, setStepState] = useState<'select-jd' | 'configure' | 'preview'>(urlStep || 'select-jd');
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [duration, setDuration] = useState(30); // Assessment duration in minutes (15-180)
   const [isEditMode, setIsEditMode] = useState(false);
@@ -670,11 +358,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
    * card Eye's behaviour.
    */
   const [versionHistoryVersion, setVersionHistoryVersion] = useState<number | null>(null);
-  /* The JD whose full-text dialog is open, from the configure step's View JD.
-     Held as id + title rather than as the Job, because the dialog fetches the
-     JD record itself — the title is only what names its header while that
-     request is in flight. */
-  const [jdFullViewFor, setJdFullViewFor] = useState<{ id: string; title: string } | null>(null);
   /* The JD VERSION the recruiter has ticked in the picker — the card's radio
      picks the latest, a Version History row picks an older one. Held with the
      LINEAGE it belongs to rather than as a bare record, because that is what
@@ -696,33 +379,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [lineageAssessments, setLineageAssessments] = useState<Record<string, Record<string, { id: string; createdAt?: string; title?: string }>>>({});
   const [loadingLineageAssessments, setLoadingLineageAssessments] = useState<Record<string, boolean>>({});
 
-  /**
-   * The JD version whose + is mid-action, or null when the picker is idle.
-   *
-   * Held twice on purpose — see `handleCreateForVersion`. The ref is the gate
-   * (synchronous, so a double-click's second press cannot get through); the
-   * state is what the buttons render from, which a ref cannot do because
-   * writing one does not re-render.
-   *
-   * Released when the flow comes BACK to the picker rather than at the end of
-   * the press: a press that succeeds leaves for Configure and takes the picker
-   * with it, so there is nothing to re-enable. `setStep('select-jd')` below is
-   * the one way back — the breadcrumb crumb and the in-page Back control both
-   * go through it — so returning finds the buttons live again.
-   */
-  const [startingAssessmentFor, setStartingAssessmentFor] = useState<string | null>(null);
-  const startingAssessmentRef = useRef<string | null>(null);
-
   // Helper function to update step and URL
-  const setStep = (newStep: 'select-jd' | 'configure' | 'publish' | 'preview', jobId?: string) => {
+  const setStep = (newStep: 'select-jd' | 'configure' | 'preview', jobId?: string) => {
     setStepState(newStep);
-    /* Back on the picker, so the + buttons are live again — including after a
-       press that went nowhere, which is the case that would otherwise leave
-       the whole column inert with no way to un-stick it but a reload. */
-    if (newStep === 'select-jd' && startingAssessmentRef.current !== null) {
-      startingAssessmentRef.current = null;
-      setStartingAssessmentFor(null);
-    }
     const params = new URLSearchParams();
 
     // Origin params ride along on every rewrite. Without this the breadcrumb
@@ -750,111 +409,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     router.replace(`/recruitment/assessments/create${queryString ? `?${queryString}` : ''}`, { scroll: false });
   };
 
-  /**
-   * The assessment once it has actually been published — what turns the
-   * Publish Assessment step from its review state into its published state.
-   *
-   * This replaced a modal that appeared over the Configure step and closed
-   * itself after three seconds. Publishing is the end of the flow and deserves
-   * a page: a timed popup gave the recruiter no time to read what they had
-   * made, no address to return to, and nowhere to go next except away.
-   *
-   * Declared HERE, above the breadcrumb builders that read it, rather than
-   * down with the rest of the Configure step's state: React Compiler stops
-   * optimising a component whose values are used before their declaration, and
-   * the trail's published leaf is named from this record.
-   */
-  const [publishedAssessment, setPublishedAssessment] = useState<any>(null);
-  /**
-   * What the published assessment is CALLED, for the two places that name it:
-   * the Publish step's own panel and that step's breadcrumb leaf.
-   *
-   * One source, so the crumb and the heading under it cannot drift. The
-   * version suffix is stripped the way the assessment details page and the
-   * Assessments list strip it, so one assessment reads identically wherever it
-   * is named; the JD's own "<job> - Assessment" shape stands in for a record
-   * that came back without a title.
-   */
-  const publishedAssessmentName = (): string =>
-    stripVersionFromTitle(publishedAssessment?.title || '')
-    || `${selectedJob?.title || 'Assessment'} - Assessment`;
-
-  /**
-   * The crumb for each STEP of this flow, worded as the step's own page is.
-   *
-   * "Configure Assessment" is the heading of the configure step; "Select Job
-   * Description" is what the first step asks for. A crumb that reads
-   * differently from the page under it is a crumb the reader has to translate.
-   */
-  const STEP_CRUMB_LABEL: Record<'select-jd' | 'configure' | 'publish' | 'preview', string> = {
-    'select-jd': 'Select Job Description',
-    configure: 'Configure Assessment',
-    publish: 'Publish Assessment',
-    preview: 'Assessment Saved',
-  };
-
-  /**
-   * The steps, as the trail behind wherever the user is standing.
-   *
-   * This used to be ONE crumb — "Create Assessment" — on every step, so the
-   * trail said the flow had been entered but never which part of it was on
-   * screen, and advancing from the picker to Configure changed nothing in it.
-   * Each step now names itself, and the steps before it are the path back:
-   *
-   *   Dashboard › Assessments › Select Job Description
-   *   Dashboard › Assessments › Select Job Description › Configure Assessment
-   *   Dashboard › Assessments › <the published assessment>
-   *
-   * The earlier crumbs are `onClick`, not `href`: every step of this flow
-   * lives at the same route (the URL only gains a `step` param, and inline on
-   * the Assessments page it does not even do that), so a link would point at
-   * the page the user is already on. `setStep` is what actually moves between
-   * them, and it is the same call the in-page Back controls make.
-   *
-   * Two of the three states are ONE LEAF rather than a chain, for the same
-   * reason in both cases: the steps behind them cannot usefully be gone back
-   * to.
-   *
-   * EDIT MODE is deep-linked straight to Configure with the assessment already
-   * chosen, so there is no picker step behind it — offering "Select Job
-   * Description" would name a step the user never passed through. Read off the
-   * URL's `edit` param rather than the `isEditMode` state it sets, because the
-   * state lands an effect later and the crumbs would visibly swap under the
-   * user.
-   *
-   * PUBLISHED is past the commit point. The two wizard crumbs used to stay in
-   * the trail, and clickable, after the assessment existed — and neither led
-   * back to the recruiter's work: this JD version now HAS an assessment, so
-   * re-entering Configure hits the one-per-version rule and
-   * `redirectForExistingAssessment` bounces them to the record they are
-   * already looking at. A crumb that silently lands somewhere else is a broken
-   * link, not a path back. The leaf is the assessment ITSELF rather than
-   * "Publish Assessment": what is on screen at that point is a record, not a
-   * step, and every other assessment screen — the details view, Results, All
-   * Assessments — reads `Dashboard › Assessments › <the assessment>`.
-   */
-  const buildStepCrumbs = (): BreadcrumbCrumb[] => {
-    if (editAssessmentId) return [{ label: 'Edit Assessment' }];
-    if (step === 'select-jd') return [{ label: STEP_CRUMB_LABEL['select-jd'] }];
-    if (step === 'publish' || step === 'preview') {
-      /* The step's own label stands in only where there is no record to name —
-         a `?step=publish` URL that survived a reload, which the publish step
-         itself guards against by falling back to Configure. */
-      return [{ label: publishedAssessment ? publishedAssessmentName() : STEP_CRUMB_LABEL[step] }];
-    }
-    /* Configure: the picker behind it is a real path back, since nothing is
-       committed yet and changing the JD is a thing recruiters do.
-         … › Select Job Description › Configure Assessment */
-    return [
-      { label: STEP_CRUMB_LABEL['select-jd'], onClick: () => setStep('select-jd') },
-      { label: STEP_CRUMB_LABEL[step] },
-    ];
-  };
-
   // Breadcrumb trail — Job Details anchored when the flow was entered from a
-  // JD page, otherwise the standard Assessments trail. Both end in the step
-  // chain above, so a step reads the same whichever way the flow was entered.
-  const buildBreadcrumbItems = (): BreadcrumbCrumb[] => {
+  // JD page, otherwise the standard Assessments trail.
+  const buildBreadcrumbItems = (leafLabel: string) => {
     const jdId = selectedJob?.id || preSelectedJobId || urlJdId;
     if (fromJobDetails && jdId) {
       return [
@@ -863,35 +420,18 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         // urlJdTitle before the fetched title: identical text, but available on
         // the very first paint, so the crumb never changes under the user.
         { label: urlJdTitle || selectedJob?.title || 'Job Details', href: returnUrl || `/recruitment/job-details?id=${encodeURIComponent(jdId)}` },
-        ...buildStepCrumbs(),
+        { label: leafLabel },
       ];
     }
     return [
       { label: 'Dashboard', href: '/dashboard' },
-      /* NO "Recruitment" crumb. It used to sit here as a grouping label for
-         the section this flow lives under, and it was wrong twice over.
-
-         A breadcrumb states the path the user actually took, and nobody takes
-         that one: the route in is Dashboard → Assessments → Create Assessment,
-         and there is no Recruitment page to have passed through (which is why
-         the crumb had to be an unclickable label in the first place).
-
-         It also stood alone. The Assessments list this flow opens FROM is
-         `Dashboard › Assessments`, and every other assessment screen — the
-         details view, Results, the result detail page, All Assessments, the
-         HR Question Bank — is `Dashboard › Assessments › <leaf>`. So opening
-         Create grew a crumb in the middle of the trail, and the JD creation
-         page this flow links on to (`?from=assessment`, which builds
-         `Dashboard › Assessments › Create Assessment › …`) dropped it again
-         one click later. The crumb appeared and vanished mid-journey while the
-         user went one level deeper. */
       // onClick, not href: the Assessments page renders this flow INLINE at
       // /recruitment/assessments, so linking to that URL asked Next.js to
       // navigate to the route it is already on — nothing happened, and the
       // crumb looked broken. `onBack` closes the inline view, and on the
       // standalone /assessments/create route it navigates back for real.
       { label: 'Assessments', onClick: onBack },
-      ...buildStepCrumbs(),
+      { label: leafLabel },
     ];
   };
 
@@ -1046,12 +586,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [sections, setSections] = useState<SectionConfig[]>(getInitialSections());
   const [newTopic, setNewTopic] = useState({ section: '' as 'HR' | 'Technical' | 'Coding', value: '' });
   const [isGenerating, setIsGenerating] = useState(false);
-  /* WHICH of the Configure step's two buttons is working. Both run
-     `handleGenerateAssessment`, so `isGenerating` on its own cannot say whether
-     the recruiter pressed Save as Draft or Publish — and each button has to
-     report its own progress rather than both claiming to be saving. */
-  const [generatingAction, setGeneratingAction] = useState<'draft' | 'publish' | null>(null);
   const [generatedAssessment, setGeneratedAssessment] = useState<any>(null);
+  const [showPublishSuccessModal, setShowPublishSuccessModal] = useState(false);
+  const [publishedAssessmentTitle, setPublishedAssessmentTitle] = useState('');
+  const publishedAssessmentRef = useRef<any>(null);
+  const publishSuccessHandledRef = useRef(false);
+  const publishSuccessTimerRef = useRef<number | null>(null);
   const [proctoringEnabled, setProctoringEnabled] = useState(initialProctoringSettings?.proctoring_enabled ?? true);
 
   // Sync proctoringEnabled when settings load async (only before user manually toggles)
@@ -1078,18 +618,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   // Coding confirmation popup state
   const [showCodingConfirm, setShowCodingConfirm] = useState(false);
-  /* The selection as it stood when the picker was opened in 'edit' mode, so
-     Cancel can put it back. The picker's buttons write straight to
-     `selectedCodingLanguages`, which is right for the enable path (nothing is
-     applied until Confirm turns the round on) but wrong for editing a round
-     that is already on - there, a change is live the moment it is clicked, and
-     a Cancel that left it in place would not be a cancel. Null outside edit
-     mode, so the other two paths keep their existing behaviour exactly. */
-  const codingLanguagesBeforeEditRef = useRef<string[] | null>(null);
-  /* 'enable' turns the round on (and restores percentages), 'disable' turns it
-     off, 'edit' only changes the languages of a round that is already on - it
-     must NOT re-run the enable path, which would reset the percentage split. */
-  const [codingPopupMode, setCodingPopupMode] = useState<'enable' | 'disable' | 'edit'>('enable');
+  const [codingPopupMode, setCodingPopupMode] = useState<'enable' | 'disable'>('enable');
   const [selectedCodingLanguages, setSelectedCodingLanguages] = useState<string[]>([]);
   // Tracks how the Coding section ended up enabled so the section header can
   // show a truthful label. "auto" = JD-driven (skills/title detection set it
@@ -1172,10 +701,22 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     });
   };
 
-  /* `selectAllHR` / `deselectAllHR` removed with the All | None shortcuts
-     they were the handlers for - the HR section row now offers Add Quiz and
-     the count only, and questions are picked with their own checkboxes. They
-     had no other caller, so leaving them would have been dead code. */
+  const selectAllHR = () => {
+    const hrSection = sections.find(s => s.name === 'HR');
+    if (!hrSection?.enabled) return;
+
+    if (hrQuestionBank.length > HR_QUESTION_LIMIT) {
+      toast.error(`Maximum ${HR_QUESTION_LIMIT} HR questions allowed. Selecting first ${HR_QUESTION_LIMIT}.`);
+      setSelectedHRQuestions(hrQuestionBank.slice(0, HR_QUESTION_LIMIT).map(q => q.id));
+    } else {
+      setSelectedHRQuestions(hrQuestionBank.map(q => q.id));
+    }
+  };
+  const deselectAllHR = () => {
+    const hrSection = sections.find(s => s.name === 'HR');
+    if (!hrSection?.enabled) return;
+    setSelectedHRQuestions([]);
+  };
 
   const openAddHRQuizModal = () => {
     const hrSection = sections.find(s => s.name === 'HR');
@@ -1363,7 +904,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   // before the router navigates away (selectedJob stays null on this path).
   const existingAssessmentRedirectRef = useRef(false);
 
-
   const redirectForExistingAssessment = (jdIdOverride?: string) => {
     if (existingAssessmentRedirectRef.current) return;
     existingAssessmentRedirectRef.current = true;
@@ -1417,20 +957,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
       if (target?.id) {
         toast.info('An assessment already exists for this job.');
-        /* `from=job-details` means exactly what it says on the details page —
-           "you got here from this JD's page" — and it anchors that page's
-           breadcrumb to `Dashboard › Job Descriptions › <JD>`. It is therefore
-           sent only when the flow really was entered that way.
-
-           Unconditionally, it mislabelled the commonest route to this
-           redirect: the Assessments picker's own + on a JD version that
-           already has an assessment. That recruiter never opened a JD page,
-           and the trail told them they had. Without the param the details page
-           falls back to its own `Dashboard › Assessments › <assessment>`,
-           which is where they actually came from. */
-        router.replace(
-          `/recruitment/assessments/${target.id}${fromJobDetails ? '?from=job-details' : ''}`,
-        );
+        router.replace(`/recruitment/assessments/${target.id}?from=job-details`);
         return;
       }
 
@@ -1562,13 +1089,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     }
 
     setSelectedJob(job);
-    /* `publish` is deliberately NOT restored from the URL.
-       Reloading drops the configure state - percentages, HR selection, coding
-       languages - back to defaults, and re-opening the Publish Assessment
-       review on those defaults would show a live Publish button over settings
-       the recruiter never chose. Landing on Configure is the honest place to
-       be: the job is still selected, and Publish is one click away once the
-       configuration is theirs again. */
     if (urlStep === 'configure' || urlStep === 'preview') {
       setStepState(urlStep);
     } else {
@@ -1688,10 +1208,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
               location: jd.location || '',
               experience: jd.job_level || 'Mid-Level',
               skills: jd.must_have_skills || [],
-              /* Both groups as the JD states them, so a JD reached by id shows
-                 the same skills as one that came through the list mapping. */
-              must_have_skills: jd.must_have_skills || [],
-              nice_to_have_skills: jd.nice_to_have_skills || [],
               /* Its real status, through the shared mapper — the card displays
                  this, and every control on the card is gated on it. The
                  two-way `published ? 'Published' : 'Closed'` this replaced was
@@ -1971,31 +1487,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
    * assessment from v3's skills would be a different job's answer. The record
    * is already fetched by the version panel; before it lands the card's own
    * values stand in, which is what they were before this existed.
-   *
-   * ONE PRESS AT A TIME, across every + on the picker.
-   *
-   * The press is not the small synchronous thing it looks like: it configures
-   * every section from the JD, then `setStep('configure', id)`, which rewrites
-   * the URL through the router. A second press lands while that navigation is
-   * still in flight, and it re-runs the lot — a second router.replace over the
-   * first, which is what shows as the loader appearing twice.
-   *
-   * A press on a DIFFERENT row is the worse case: the two presses race, and
-   * `selectedJob` and the URL's `jd_id` can settle on different versions —
-   * Configure then shows one version while the URL names the other, so a
-   * reload silently swaps the job under the recruiter.
-   *
-   * The ref is what actually holds the gate: it is set in the same tick as the
-   * press, before React has re-rendered anything, so the second press of a
-   * double-click sees it. The state beside it exists for the buttons to read
-   * (`aria-busy` and a spinner on the pressed one, the rest inert), which a ref
-   * cannot drive because writing one does not re-render.
    */
   const handleCreateForVersion = (versionJob: Job) => {
-    if (startingAssessmentRef.current) return;
-    startingAssessmentRef.current = versionJob.id;
-    setStartingAssessmentFor(versionJob.id);
-
     const detail = jdLineage.versionDetails[versionJob.id];
     handleJobSelect(
       detail
@@ -2306,19 +1799,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   // Confirm button handler - works for both enable and disable modes
   const handleConfirmCodingAction = () => {
-    /* Editing an already-enabled round: the languages are already in state,
-       so there is nothing to apply beyond the same non-empty rule. Returning
-       here is what keeps the percentage restore below off this path. */
-    if (codingPopupMode === 'edit') {
-      if (selectedCodingLanguages.length === 0) {
-        toast.warning('Please select at least one programming language');
-        return;
-      }
-      codingLanguagesBeforeEditRef.current = null;
-      setShowCodingConfirm(false);
-      return;
-    }
-
     if (codingPopupMode === 'enable') {
       // Enabling coding - require language selection
       if (selectedCodingLanguages.length === 0) {
@@ -2401,26 +1881,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   };
 
   // Cancel button handler - works for both enable and disable modes
-  /**
-   * Reopen the language picker for a round that is ALREADY on.
-   *
-   * A handler, not an inline arrow inside the section-card renderer: that
-   * renderer is called during render, and taking the snapshot there reads a
-   * ref at render time. Here it runs only on the click, which is when the
-   * snapshot is actually wanted.
-   */
-  const openCodingLanguageEditor = () => {
-    codingLanguagesBeforeEditRef.current = selectedCodingLanguages;
-    setCodingPopupMode('edit');
-    setShowCodingConfirm(true);
-  };
-
   const handleCancelCodingAction = () => {
-    // Editing a live round: put the selection back as it was on open.
-    if (codingPopupMode === 'edit' && codingLanguagesBeforeEditRef.current) {
-      setSelectedCodingLanguages(codingLanguagesBeforeEditRef.current);
-    }
-    codingLanguagesBeforeEditRef.current = null;
+    // Just close the popup without making changes
     setShowCodingConfirm(false);
   };
 
@@ -2485,37 +1947,42 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   };
 
   // Toggle a language in the selection
-  /**
-   * Add or remove ONE language, capped at MAX_CODING_LANGUAGES.
-   *
-   * Appends rather than replaces, so picking a second language keeps the
-   * first; removing is always allowed, so a full selection is never stuck.
-   * The cap is enforced here rather than only in the picker's markup, because
-   * this is the single path every add goes through.
-   */
   const toggleLanguageSelection = (lang: string) => {
-    setSelectedCodingLanguages(prev => {
-      if (prev.includes(lang)) return prev.filter(l => l !== lang);
-      if (prev.length >= MAX_CODING_LANGUAGES) {
-        toast.warning(`You can select up to ${MAX_CODING_LANGUAGES} programming languages.`);
-        return prev;
-      }
-      return [...prev, lang];
-    });
+    setSelectedCodingLanguages(prev =>
+      prev.includes(lang) ? prev.filter(l => l !== lang) : [...prev, lang]
+    );
   };
 
-  /**
-   * Leave the flow for the assessments list, handing the published record to
-   * the host so it closes the creation view and reloads.
-   *
-   * The same call the old modal made when it closed — now on a button the
-   * recruiter presses when they are ready, rather than on a three-second
-   * timer that took the page away mid-sentence.
-   */
-  const goToAssessmentsList = useCallback(() => {
-    if (publishedAssessment) onCreateAssessment(publishedAssessment);
-    else onBack();
-  }, [publishedAssessment, onCreateAssessment, onBack]);
+  const closePublishSuccessModal = useCallback(() => {
+    if (publishSuccessHandledRef.current) return;
+
+    publishSuccessHandledRef.current = true;
+    if (publishSuccessTimerRef.current !== null) {
+      window.clearTimeout(publishSuccessTimerRef.current);
+      publishSuccessTimerRef.current = null;
+    }
+
+    const publishedAssessment = publishedAssessmentRef.current;
+    publishedAssessmentRef.current = null;
+    setShowPublishSuccessModal(false);
+
+    if (publishedAssessment) {
+      onCreateAssessment(publishedAssessment);
+    }
+  }, [onCreateAssessment]);
+
+  useEffect(() => {
+    if (!showPublishSuccessModal) return;
+
+    publishSuccessTimerRef.current = window.setTimeout(closePublishSuccessModal, 3000);
+
+    return () => {
+      if (publishSuccessTimerRef.current !== null) {
+        window.clearTimeout(publishSuccessTimerRef.current);
+        publishSuccessTimerRef.current = null;
+      }
+    };
+  }, [showPublishSuccessModal, closePublishSuccessModal]);
 
   const handleGenerateAssessment = async (saveAsDraft: boolean = false) => {
     // Hard guard for Publish: HR section enabled but no questions picked.
@@ -2529,7 +1996,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     }
 
     setIsGenerating(true);
-    setGeneratingAction(saveAsDraft ? 'draft' : 'publish');
 
     try {
       // Call the real API to create/update assessment
@@ -2589,10 +2055,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
         // If not saving as draft, publish the updated assessment
         if (!saveAsDraft) {
-          resultAssessment = publishedRecordOr(
-            await assessmentService.publish(editingAssessment.id),
-            resultAssessment,
-          );
+          await assessmentService.publish(editingAssessment.id);
         }
       } else {
         // Create new assessment
@@ -2600,10 +2063,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
         // If not saving as draft, publish immediately
         if (!saveAsDraft) {
-          resultAssessment = publishedRecordOr(
-            await assessmentService.publish(resultAssessment.id),
-            resultAssessment,
-          );
+          await assessmentService.publish(resultAssessment.id);
         }
       }
 
@@ -2611,20 +2071,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       const assessmentDefinition = {
         id: resultAssessment.id,
         title: resultAssessment.title,
-        /* Straight off the record the write returned — no `|| 1` behind it.
-           A fabricated 1 is indistinguishable from a real first version, so
-           the page cannot tell the reader "this is v1" from "the API did not
-           say"; without a number the version badge simply does not render. */
-        version: resultAssessment.version,
-        /* The assessment's own id and the JD it is bound to, as the API
-           reports them: the Published Assessment page names all three
-           identities (assessment, job, and the job VERSION the assessment was
-           built against), and every one of them has to come from the record
-           rather than from anything this component assembled. */
-        short_id: resultAssessment.short_id,
-        jd_id: resultAssessment.jd_id,
-        jd_short_id: resultAssessment.jd_short_id,
-        jd_version: resultAssessment.jd_version,
+        version: resultAssessment.version || 1,
         job: selectedJob,
         duration: resultAssessment.duration_minutes,
         sections: sections.filter(section => section.enabled).map(section => ({
@@ -2653,7 +2100,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
       setGeneratedAssessment(assessmentDefinition);
       setIsGenerating(false);
-      setGeneratingAction(null);
 
       // Show success message and redirect. Save-as-Draft used to drop the
       // recruiter on the preview step, but they wanted to go straight back to
@@ -2661,12 +2107,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       // the parent's onCreateAssessment which closes the creation view and
       // reloads the list — that's the expected "I'm done here" behaviour.
       if (!saveAsDraft) {
-        /* On to the Publish Assessment step, which exists only to report this.
-           The record and the step are set together, so that page never renders
-           with nothing to confirm. `resultAssessment.id` rides along so the
-           page's own actions can open the assessment and its invites. */
-        setPublishedAssessment({ ...assessmentDefinition, id: resultAssessment.id });
-        setStep('publish');
+        publishSuccessHandledRef.current = false;
+        publishedAssessmentRef.current = assessmentDefinition;
+        setPublishedAssessmentTitle(assessmentDefinition.title || selectedJob?.title || 'Assessment');
+        setShowPublishSuccessModal(true);
       } else {
         toast.success('Assessment saved as draft. You can publish it later.');
         onCreateAssessment(assessmentDefinition);
@@ -2674,7 +2118,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     } catch (error) {
       console.error('Failed to create/update assessment:', error);
       setIsGenerating(false);
-      setGeneratingAction(null);
       toast.error(`Failed to ${isEditMode ? 'update' : 'create'} assessment: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
@@ -2837,57 +2280,29 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const allJdVersions = localJobs.length > 0 ? localJobs : jobs;
 
   /* ONE ROW PER JOB, not per job version — and the row is that lineage's
-     NEWEST PUBLISHED VERSION THAT DOES NOT ALREADY HAVE AN ASSESSMENT.
+     LATEST LIVE version: the highest-numbered Published or Republished one.
 
-     Two independent tests, applied to every candidate version as the bucket is
-     walked from newest to oldest:
+     A newer version in any other status does not take that place. v3 archived
+     over a published v2 leaves the card reading "v2 · Published", because v2
+     is where the job is still live and v2 is what an assessment would be built
+     against; the same skip covers a v4 draft raised over a published v3. This
+     is a "latest live" rule, not a "highest number" one.
 
-       status      — Published or Republished. A newer version in any other
-                     status does not take the row. v3 archived over a published
-                     v2 leaves the card reading "v2 · Published", because v2 is
-                     where the job is still live and v2 is what an assessment
-                     would be built against; the same skip covers a v4 draft
-                     raised over a published v3. A "latest live" rule, not a
-                     "highest number" one.
-       assessment  — none built against it yet. One assessment per version is
-                     the rule the controls below already enforce, so a
-                     published version that is spoken for cannot be the row a
-                     recruiter is asked to start from; the list moves DOWN to
-                     the next published version instead. Create the assessment
-                     for v3 and this list opens on v2 next time, then v1 —
-                     no refresh beyond the picker's own mount-time fetch.
+     A job with no live version at all — nothing but drafts, or every version
+     archived or disabled — has no row (`buildAssessmentJobList` returns
+     nothing for it). The versions still exist and the job is still reachable
+     from Job Openings; it simply has nothing an assessment could be built
+     against, which is the only question this list answers.
 
-     Falling through a taken version never relaxes the status test: v3 taken
-     with v4 archived above it goes to v2, never up to v4.
+     The skipped versions are not lost: View Versions below lists the entire
+     lineage, newest first — Published, Republished, Disabled, Archived and
+     Draft alike, each showing its real status — and refuses to select the ones
+     that are not live.
 
-     A job with no version passing both — nothing but drafts, every version
-     archived or disabled, or every published version already assessed — has no
-     row (`buildAssessmentJobList` returns nothing for it), and a list left
-     empty that way lands on the picker's existing empty state. The versions
-     still exist and the job is still reachable from Job Openings; it simply
-     has nothing a NEW assessment could be built against, which is the only
-     question this list answers.
-
-     The skipped versions are not lost, and this is what View Versions is for:
-     it lists the entire lineage below, newest first — Published, Republished,
-     Disabled, Archived and Draft alike, the already-assessed ones included,
-     each showing its real status and its existing assessment — and refuses to
-     select only the ones that cannot carry a new one. Nothing about that
-     panel changes here.
-
-     `versionHasAssessment` is the same union — mount-time index plus the lazily
-     fetched per-lineage detail — that the card controls and every history row
-     below are gated on, so the version this list opens on and the version its
-     radio will accept can never disagree. */
-  const availableJobs = buildAssessmentJobList(allJdVersions, version =>
-    versionHasAssessment(lineageKey(version), version.id),
-  );
-  /* Does this recruiter have ANY published version at all? Only the empty
-     state reads it, to tell "you have not published a job yet" apart from "you
-     have, and every published version is already assessed" — two empty lists
-     with opposite ways out. Asked with the SAME status test the list is built
-     from, so the two cannot drift apart on what counts as published. */
-  const hasAnyPublishedVersion = allJdVersions.some(isSelectableVersion);
+     Assessments do not enter into it. Whether a version already has one
+     decides whether a SECOND can be created against it (the one-per-version
+     rule the controls below apply), never whether the version is shown. */
+  const availableJobs = buildAssessmentJobList(allJdVersions);
   const jdSearchQuery = jdSearch.trim().toLowerCase();
   /* The shared matcher: JD number, role, department, location — the same
      fields, and the same separator-insensitive number matching, the Apply to
@@ -2960,7 +2375,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
               className="mb-3"
-              items={buildBreadcrumbItems()}
+              items={buildBreadcrumbItems(isEditMode ? 'Edit Assessment' : 'Create Assessment')}
             />
             <div className="flex items-center justify-center h-64">
               <Loader2 className="h-8 w-8 text-brand-blue animate-spin" />
@@ -2980,7 +2395,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
               className="mb-3"
-              items={buildBreadcrumbItems()}
+              items={buildBreadcrumbItems(isEditMode ? 'Edit Assessment' : 'Create Assessment')}
             />
             <div className="w-full">
           <div className="mb-6 sm:mb-8">
@@ -3292,39 +2707,19 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                               the eye beside it, with the words in its label and
                               tooltip where a screen reader and a hover find
                               them. */}
-                          {/* Inert while any + on the picker is mid-action, and
-                              the pressed one turns its plus into the spinner —
-                              see `handleCreateForVersion`. The pressed button
-                              keeps its live colours so the row the recruiter
-                              acted on is the one that reads as working.
-
-                              Inert too until the eligibility index has landed.
-                              `isLoadingJobs` starts false and is raised by the
-                              mount effect, so the standalone route paints these
-                              rows from its `jobs` prop one frame before anyone
-                              knows which versions already have an assessment —
-                              and `versionHasAssessment` reads an empty set in
-                              that frame, which reports every version as free. A
-                              press landing there would carry a taken version
-                              into Configure, where nothing checks again. */}
                           <button
                             type="button"
-                            disabled={!latestAdd.enabled || !!startingAssessmentFor || !hasLoadedAssessmentEligibility}
-                            aria-busy={startingAssessmentFor === job.id}
+                            disabled={!latestAdd.enabled}
                             onClick={() => latestAdd.enabled && handleCreateForVersion(job)}
                             className={`h-7 w-7 flex items-center justify-center rounded-md ring-1 transition-all flex-shrink-0 ${
-                              latestAdd.enabled && hasLoadedAssessmentEligibility && (!startingAssessmentFor || startingAssessmentFor === job.id)
+                              latestAdd.enabled
                                 ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-white/10'
                                 : ADD_BUTTON_DISABLED
                             }`}
                             aria-label={latestAdd.label}
                             title={latestAdd.label}
                           >
-                            {startingAssessmentFor === job.id ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Plus className="w-3.5 h-3.5" />
-                            )}
+                            <Plus className="w-3.5 h-3.5" />
                           </button>
 
                           {/* A button, not a link: the popup reads a version
@@ -3536,29 +2931,19 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                             );
                             return (
                               <>
-                                {/* Same one-at-a-time gate as the card's +
-                                    above, and the same gate value: a press on
-                                    a version row and a press on a card race
-                                    each other exactly as two presses on one
-                                    button do. */}
                                 <button
                                   type="button"
-                                  disabled={!add.enabled || !!startingAssessmentFor || !hasLoadedAssessmentEligibility}
-                                  aria-busy={startingAssessmentFor === versionJob.id}
+                                  disabled={!add.enabled}
                                   onClick={() => add.enabled && handleCreateForVersion(versionJob)}
                                   className={`h-7 w-7 flex items-center justify-center rounded-md ring-1 transition-all ${
-                                    add.enabled && hasLoadedAssessmentEligibility && (!startingAssessmentFor || startingAssessmentFor === versionJob.id)
+                                    add.enabled
                                       ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-white/10'
                                       : ADD_BUTTON_DISABLED
                                   }`}
                                   aria-label={add.label}
                                   title={add.label}
                                 >
-                                  {startingAssessmentFor === versionJob.id ? (
-                                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  ) : (
-                                    <Plus className="w-3.5 h-3.5" />
-                                  )}
+                                  <Plus className="w-3.5 h-3.5" />
                                 </button>
 
                                 {/* The card's own Eye, on every version row —
@@ -3596,36 +2981,16 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                   );
                 })}
 
-                {/* The empty state this list already had, now told apart into
-                    the TWO ways the list can be empty of jobs, because after
-                    this change they need different advice and the old single
-                    line would be wrong for one of them:
-
-                      no published version anywhere → the original case, and
-                        the original words. Publishing a job is the way out.
-                      published versions exist, all assessed → "publish a Job
-                        first" would be nonsense to a recruiter who has
-                        published several. A NEW VERSION is the way out.
-
-                    `hasAnyPublishedVersion` reads the raw versions through the
-                    same status test the list itself uses, so the two can never
-                    disagree about what "published" means. */}
                 {filteredAvailableJobs.length === 0 && (
                   <div className="text-center py-8 sm:py-12 text-gray-500">
                     <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 opacity-50" />
                     <p className="text-sm sm:text-base">
-                      {availableJobs.length > 0
-                        ? 'No matching job descriptions found'
-                        : hasAnyPublishedVersion
-                          ? 'No jobs available for a new assessment'
-                          : 'No published jobs available'}
+                      {availableJobs.length === 0 ? 'No published jobs available' : 'No matching job descriptions found'}
                     </p>
                     <p className="text-xs sm:text-sm mt-1">
-                      {availableJobs.length > 0
-                        ? 'Try searching with a JD ID like JD-450 or a title like senior python developer'
-                        : hasAnyPublishedVersion
-                          ? 'Every published job version already has an assessment. Publish a new version of a job to create another one.'
-                          : 'Create and publish a Job first to create assessments'}
+                      {availableJobs.length === 0
+                        ? 'Create and publish a Job first to create assessments'
+                        : 'Try searching with a JD ID like JD-450 or a title like senior python developer'}
                     </p>
                     {canCreateJd && availableJobs.length === 0 && (
                       <button
@@ -3729,284 +3094,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     // that state — drafts are explicitly incomplete by design.
     const hasValidHRSelection = !hrEnabled || selectedHRQuestions.length > 0;
 
-    /**
-     * The HR round's SECTION card, rendered INSIDE the HR round block.
-     *
-     * Extracted from the markup so a round block reads as one thing - the
-     * round, then the section it configures - instead of the round toggles
-     * living in one card and the sections they switch on living in another,
-     * which is what the separate Section Distribution card used to be.
-     */
-    const renderHRSectionCard = () => (
-      <div className="p-3 sm:p-4 border border-gray-100 rounded-xl bg-white ring-1 ring-black/[0.02]">
-        {/* No title row. This card is nested inside the HR Round block, whose
-            own row names the round and carries its Question Bank / No Timer
-            chips a few pixels above — an "HR Section" heading with an icon
-            under an "HR Round" heading with an icon labelled the same thing
-            twice. The controls are what this row is for, so they are all that
-            is left in it. */}
-        {/* Add Quiz on the LEFT, the selection controls on the right. The
-            row's one action that ADDS to the bank leads it; the count and the
-            All / None shortcuts act on what is already there, so they sit
-            together at the other end. `justify-between` rather than an
-            `ml-auto` on the right group, so the two ends stay put when the
-            row wraps on a narrow card. */}
-        <div className="flex items-center justify-between flex-wrap gap-2 text-xs mb-3">
-          <button
-            type="button"
-            onClick={openAddHRQuizModal}
-            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 font-medium text-gray-700 transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue flex-shrink-0"
-          >
-            <Plus className="w-3.5 h-3.5" />
-            Add Quiz
-          </button>
-          <span className={selectedHRQuestions.length >= HR_QUESTION_LIMIT ? 'text-brand-orange-deep font-medium' : 'text-gray-500'}>{selectedHRQuestions.length}/{HR_QUESTION_LIMIT} selected (max {HR_QUESTION_LIMIT})</span>
-        </div>
-
-        <div className="space-y-1.5 max-h-72 overflow-y-auto">
-          {hrQuestionBank.length === 0 ? (
-            <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-6 text-center text-sm text-gray-500">
-              No HR questions found. Add one to start building this section.
-            </div>
-          ) : hrQuestionBank.map((q, idx) => {
-            const isSelected = selectedHRQuestions.includes(q.id);
-            return (
-              <div
-                key={q.id}
-                onClick={() => toggleHRQuestion(q.id)}
-                className={`flex cursor-pointer items-center gap-2.5 p-2 rounded-lg transition-all text-xs ${
-                  isSelected
-                    ? 'bg-brand-blue/5 border border-brand-blue/30 ring-1 ring-brand-blue/10'
-                    : 'bg-slate-50 border border-transparent hover:bg-brand-blue/5'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  checked={isSelected}
-                  onChange={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                  readOnly
-                  className="w-4 h-4 rounded border-gray-200 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0 pointer-events-none"
-                />
-                <span className="w-5 h-5 flex items-center justify-center bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded text-[10px] font-medium flex-shrink-0">{idx + 1}</span>
-                <span className={`flex-1 ${isSelected ? 'text-gray-900' : 'text-gray-500'}`}>{q.text}</span>
-                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${
-                  q.type === 'Yes/No' ? 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' : 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20'
-                }`}>{q.type}</span>
-                {/* HR is "No Timer" — per-question time is not surfaced because
-                    the recruiter can't act on it. The bank still stores `time`
-                    because the AI Interview flow reads it; the assessment
-                    section just doesn't display it. */}
-              </div>
-            );
-          })}
-        </div>
-
-        {/* The "synced with the HR Question Bank" note is not repeated here.
-            It now sits immediately after the selected-questions count on the
-            HR Round row above, where the count it qualifies is - and keeping
-            a copy at the foot of this card would state it twice within one
-            round. */}
-      </div>
-    );
-
-    /**
-     * A percentage round's SECTION card - Technical and Coding. One helper
-     * for both, exactly as the map that used to render them was: they differ
-     * only in their icon, their auto/manual note and Coding's step hint.
-     */
-    const renderPercentageSectionCard = (section: typeof sections[number]) => (
-      <div className="p-3 sm:p-4 border border-gray-100 rounded-xl bg-white ring-1 ring-black/[0.02]">
-          {/* No title row, for the same reason as the HR card: this card is
-              nested inside its own round block, whose row already names the
-              round and carries its icon. "Technical Section" under "Technical
-              Round" was the label twice over.
-
-              No per-section total either — the percentage total spans every
-              section, so printing it on each one repeated one number once per
-              enabled round, two cards both reading "Total: 100%" as though
-              each had a total of its own. It is stated once, for all
-              sections, in the distribution bar above.
-
-              What survives is Coding's enablement note, which belongs to this
-              section alone. Rendered only when there is one, so Technical does
-              not carry an empty row. */}
-          {section.name === 'Coding' && codingEnabledSource && (
-            <div className="flex justify-end mb-3">
-              <span className="text-xs text-gray-500">
-                {codingEnabledSource === 'auto' ? 'Auto-enabled (coding required)' : 'Manually enabled'}
-              </span>
-            </div>
-          )}
-
-          {/* The language selection area, on the enabled Coding round.
-              EVERY selected language, wrapped rather than truncated - the round
-              row above can only fit a count, and a one-line summary silently
-              dropped the tail of a long selection. Reopening the picker uses
-              the 'edit' mode, so changing languages on a round that is already
-              on cannot disturb its percentage split. */}
-          {section.name === 'Coding' && (() => {
-            const chosen = filterCompilable(selectedCodingLanguages);
-            const atMax = chosen.length >= MAX_CODING_LANGUAGES;
-            return (
-              <div className="mb-3 sm:mb-4">
-                <div className="flex items-center justify-between gap-2 mb-2">
-                  <label className="text-xs text-gray-600">
-                    Choose your programming language
-                    <span className="ml-2 text-[11px] text-gray-400 font-normal">
-                      {chosen.length}/{MAX_CODING_LANGUAGES} selected
-                      {atMax ? ' — maximum reached' : ''}
-                    </span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={openCodingLanguageEditor}
-                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue flex-shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    {chosen.length > 0 ? 'Change' : 'Select'}
-                  </button>
-                </div>
-                {chosen.length === 0 ? (
-                  <p className="text-xs text-gray-500">
-                    No language selected yet — pick at least one for the coding round.
-                  </p>
-                ) : (
-                  <div className="flex flex-wrap gap-1.5">
-                    {chosen.map(lang => (
-                      <span
-                        key={lang}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-xs"
-                      >
-                        {lang}
-                        <button
-                          type="button"
-                          onClick={() => toggleLanguageSelection(lang)}
-                          className="text-brand-blue/60 hover:text-red-600 transition-colors"
-                          aria-label={`Remove ${lang}`}
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* Percentage Allocation */}
-          <div className="mb-3 sm:mb-4">
-            <label className="text-xs text-gray-600 mb-2 block">
-              Percentage Allocation
-              {section.name === 'Coding' && (
-                <span className="ml-2 text-[11px] text-gray-400 font-normal">
-                  Allowed: 35% / 50% / 75% / 100%
-                </span>
-              )}
-            </label>
-            <div className="flex items-center gap-2 sm:gap-3">
-              <input
-                type="range"
-                min="0"
-                max="100"
-                step={section.name === 'Coding' || sections.some(s => s.name === 'Coding' && s.enabled) ? 1 : 1}
-                value={section.percentage}
-                onChange={(e) => updatePercentage(section.name, Number(e.target.value))}
-                className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-brand-blue"
-              />
-              <div className="flex items-center gap-1">
-                <span className="w-14 px-2 py-1.5 border border-gray-200 bg-slate-50 rounded-lg text-center text-sm text-gray-700 select-none">
-                  {section.percentage}
-                </span>
-                <span className="text-xs sm:text-sm text-gray-600">%</span>
-              </div>
-            </div>
-          </div>
-
-          {/* TOPICS UI — temporarily hidden per product decision.
-              The recruiter no longer adds free-text topics; the LLM
-              uses the JD content alone to generate questions. The
-              backend column (`technical_topics` / `coding_topics`)
-              and the create/update payload still carry topics so
-              re-enabling this UI is a one-block change. Do NOT
-              delete — uncomment when topic input returns. */}
-          {/*
-          <div>
-            <label className="text-xs text-gray-600 mb-2 block">
-              Topics (LLM will generate questions based on these)
-            </label>
-            <div className="flex flex-col sm:flex-row gap-2 mb-2">
-              <input
-                type="text"
-                value={newTopic.section === section.name ? newTopic.value : ''}
-                onChange={(e) => setNewTopic({ section: section.name, value: e.target.value })}
-                onKeyPress={(e) => e.key === 'Enter' && addTopic(section.name)}
-                placeholder={`e.g., ${
-                  section.name === 'HR'
-                    ? 'conflict handling, salary discussion, teamwork'
-                    : section.name === 'Technical'
-                    ? 'domain tools, regulations, workflows'
-                    : 'algorithm type, framework, logic pattern'
-                }`}
-                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-gray-900"
-              />
-              <button
-                onClick={() => addTopic(section.name)}
-                className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center justify-center gap-1 text-sm flex-shrink-0"
-              >
-                <Plus className="w-4 h-4" />
-                <span className="hidden sm:inline">Add Topic</span>
-                <span className="sm:hidden">Add</span>
-              </button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {section.topics.map((topic, idx) => (
-                <span
-                  key={idx}
-                  className="px-2.5 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs flex items-center gap-1.5"
-                >
-                  {topic}
-                  <button onClick={() => removeTopic(section.name, idx)} className="hover:text-brand-blue-2" aria-label="Close">
-                    <X className="w-3 h-3" />
-                  </button>
-                </span>
-              ))}
-              {section.topics.length === 0 && (
-                <span className="text-xs text-gray-400 italic">
-                  No topics added yet. Add topics for AI to generate relevant questions.
-                </span>
-              )}
-            </div>
-          </div>
-          */}
-        </div>
-    );
-
-    /**
-     * The collapse control on a round row. Disabled while the round is off:
-     * there is no section under it to show or hide.
-     */
-    const renderRoundChevron = (round: RoundName, enabled: boolean) => (
-      <button
-        type="button"
-        onClick={() => toggleRoundExpanded(round)}
-        disabled={!enabled}
-        aria-expanded={enabled && expandedRounds.has(round)}
-        aria-label={`${expandedRounds.has(round) ? 'Hide' : 'Show'} the ${round} section`}
-        title={enabled ? `${expandedRounds.has(round) ? 'Hide' : 'Show'} the ${round} section` : undefined}
-        className={`p-1 rounded-md transition-colors ${
-          enabled ? 'text-gray-400 hover:text-gray-600 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'
-        }`}
-      >
-        <ChevronDown
-          className={`w-4 h-4 transition-transform duration-200 ${
-            enabled && expandedRounds.has(round) ? 'rotate-180' : ''
-          }`}
-        />
-      </button>
-    );
-
     return (
       <div className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 relative">
         {/* Auto-saving overlay */}
@@ -4021,20 +3108,16 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-            {/* Every step builds the same trail — see `buildStepCrumbs`. Here
-                that is
-                  Dashboard › Assessments › Select Job Description › Configure Assessment
-                with the picker crumb clickable, so the step behind this one is
-                the way back to it.
-
-                The leaf names the STEP, never the chosen JD. Naming the JD made
-                the crumb read "Assessments › Senior Java Developer" — a trail
-                that says where the recruiter is standing but not what they are
-                doing there, and the job is already named in the heading two
-                lines below. */}
+            {/* A JD is chosen by this step. On the Assessments trail the JD name
+                is the leaf; entered from Job Details the JD already owns its own
+                crumb, so the leaf names the step instead. */}
             <PageBreadcrumb
               className="mb-3"
-              items={buildBreadcrumbItems()}
+              items={buildBreadcrumbItems(
+                fromJobDetails
+                  ? (isEditMode ? 'Edit Assessment' : 'Create Assessment')
+                  : (selectedJob?.title || (isEditMode ? 'Edit Assessment' : 'Create Assessment'))
+              )}
             />
             <div className="w-full">
           <div className="mb-4 sm:mb-6">
@@ -4048,56 +3131,57 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
             {/* Left Column - Main Content */}
             <div className="flex-1 space-y-4 sm:space-y-6">
-              {/* Assessment Rounds - the rounds AND the section each one
-                  configures, in a single card.
-
-                  The sections used to sit in a separate "Section Distribution"
-                  card below this one, so enabling a round here changed
-                  something further down the page that the recruiter then had
-                  to go and find. Each section is now nested under the round
-                  that switches it on, and collapses with it. */}
+              {/* Configure Assessment Rounds */}
               <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-2">
-                    <Sliders className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
-                    <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Assessment Rounds</h3>
-                  </div>
-                  <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium flex-shrink-0 ${
-                    hasAtLeastOneEnabled
-                      ? 'bg-green-50 text-green-700 ring-1 ring-green-200'
-                      : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'
-                  }`}>
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    {enabledSectionsCount} of 3 enabled
-                  </span>
+                <div className="flex items-center gap-2 mb-2">
+                  <Sliders className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+                  <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Configure Assessment Rounds</h3>
                 </div>
                 <p className="text-xs sm:text-sm text-gray-500 mb-3 sm:mb-4">
-                  Choose which rounds to include in this assessment. Disabled rounds will not appear below.
+                  Choose which rounds to include in this assessment. Disabled rounds will not appear in the section distribution.
                 </p>
 
-                {/* Moved here with the sections it describes: it reports the
-                    percentage total, and the sliders that set it now live in
-                    this card. */}
-                {!isPercentageValid && (
-                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-yellow-800">
-                      {!hasAtLeastOneEnabled && (
-                        <p>At least one assessment round must be enabled.</p>
-                      )}
-                      {hasAtLeastOneEnabled && hasZeroPercentageEnabled && (
-                        <p>Enabled rounds cannot have 0% allocation. Disable the round or assign a percentage.</p>
-                      )}
-                      {hasAtLeastOneEnabled && !hasZeroPercentageEnabled && totalPercentage !== 100 && (
-                        <p>Section percentages must total exactly 100% (currently {totalPercentage}%).</p>
-                      )}
+                <div className="space-y-3">
+                  {/* HR Round - Summary (selection is in Section Distribution below) */}
+                  <div className={`p-3 sm:p-4 border rounded-xl transition-all ${hrEnabled ? 'border-brand-blue/30 bg-brand-blue/[0.02]' : 'border-gray-100 bg-slate-50'}`}>
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-start gap-2 sm:gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                          <Users className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+                            <span className="text-sm sm:text-base font-medium text-gray-900">HR Round</span>
+                            <span className="px-1.5 sm:px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs">Question Bank</span>
+                            <span className="px-1.5 sm:px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-xs">No Timer</span>
+                            {!hrEnabled && (
+                              <span className="px-1.5 sm:px-2 py-0.5 bg-slate-200 text-slate-600 rounded text-xs">Disabled</span>
+                            )}
+                          </div>
+                          <p className="text-xs text-gray-500 mt-0.5 leading-snug">
+                            {hrEnabled
+                              ? `${selectedHRQuestions.length} of ${HR_QUESTION_LIMIT} questions selected (max ${HR_QUESTION_LIMIT}) — select questions in Section Distribution below`
+                              : 'Enable HR round to select or manage HR questions.'}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="Toggle HR round"
+                        aria-pressed={hrEnabled}
+                        onClick={handleHRToggle}
+                        className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
+                          hrEnabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'
+                        }`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          hrEnabled ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
+                      </button>
                     </div>
                   </div>
-                )}
 
-                <div className="space-y-3">
-                  {/* Technical Round - its percentage slider is the section
-                      nested directly below the toggle. */}
+                  {/* Technical Round Toggle */}
                   <div className={`p-3 sm:p-4 border rounded-xl transition-all ${sections.find(s => s.name === 'Technical')?.enabled ? 'border-brand-blue/30 bg-brand-blue/[0.02]' : 'border-gray-100 bg-slate-50'}`}>
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-start gap-2 sm:gap-3 min-w-0">
@@ -4111,25 +3195,16 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           <p className="text-xs text-gray-500 mt-0.5 leading-snug">Domain knowledge, technical concepts, and job-specific skills</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <button
-                          onClick={() => handleTechnicalToggle()}
-                          className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${sections.find(s => s.name === 'Technical')?.enabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'}`}
-                        >
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${sections.find(s => s.name === 'Technical')?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                        </button>
-                        {renderRoundChevron('Technical', !!sections.find(s => s.name === 'Technical')?.enabled)}
-                      </div>
+                      <button
+                        onClick={() => handleTechnicalToggle()}
+                        className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${sections.find(s => s.name === 'Technical')?.enabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${sections.find(s => s.name === 'Technical')?.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                      </button>
                     </div>
-                    {(() => {
-                      const technicalSection = sections.find(s => s.name === 'Technical');
-                      if (!technicalSection?.enabled || !expandedRounds.has('Technical')) return null;
-                      return <div className="mt-3">{renderPercentageSectionCard(technicalSection)}</div>;
-                    })()}
                   </div>
 
-                  {/* Coding Round - its percentage slider is the section
-                      nested directly below the toggle. */}
+                  {/* Coding Round Toggle */}
                   {(() => {
                     const codingEnabled = sections.find(s => s.name === 'Coding')?.enabled;
                     const hasExtractedLanguages = jdExtractedLanguages.length > 0;
@@ -4151,166 +3226,32 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                                   <span className="px-1.5 sm:px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-xs">Auto (Not Required)</span>
                                 )}
                               </div>
-                              {/* The message follows the ROUND'S OWN STATE, not
-                                  what the JD happened to detect.
-
-                                  It used to branch on `isAutoEnabled` alone -
-                                  "did the JD name any languages" - so a round
-                                  the recruiter had switched on by hand, with
-                                  languages they had picked themselves, still
-                                  read "No programming languages detected -
-                                  enable manually if needed". The instruction to
-                                  do the thing they had just done, sitting under
-                                  a round that was already on.
-
-                                  Enabled, the languages themselves are the
-                                  message and they are listed in full in the
-                                  section below (`renderPercentageSectionCard`),
-                                  where they wrap rather than truncate. */}
-                              <p className="text-xs text-gray-500 mt-0.5 leading-snug">
+                              <p className="text-xs text-gray-500 mt-0.5 leading-snug truncate">
                                 {(() => {
-                                  // Filtered at render so a non-compilable language that
-                                  // snuck into state from older data (a draft saved before
-                                  // this filter existed) is never displayed.
-                                  if (codingEnabled) {
-                                    const chosen = filterCompilable(selectedCodingLanguages);
-                                    return chosen.length > 0
-                                      ? `${chosen.length} ${chosen.length === 1 ? 'language' : 'languages'} selected`
-                                      : 'Choose your programming language';
-                                  }
-                                  const detected = filterCompilable(jdExtractedLanguages);
-                                  return detected.length > 0
-                                    ? `Detected: ${detected.join(', ')}`
-                                    : 'No programming language detected. Enable manually if needed';
+                                  if (!isAutoEnabled) return 'No programming languages detected — enable manually if needed';
+                                  // Filter at render so any non-compilable language that snuck into
+                                  // state from older data (e.g., a draft saved before this filter
+                                  // existed) doesn't get displayed.
+                                  const visible = filterCompilable(
+                                    selectedCodingLanguages.length > 0 ? selectedCodingLanguages : jdExtractedLanguages
+                                  );
+                                  return visible.length > 0
+                                    ? `Languages: ${visible.join(', ')}`
+                                    : 'No compilable programming languages — enable manually if needed';
                                 })()}
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <button
-                              onClick={() => handleCodingToggle()}
-                              className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${codingEnabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'}`}
-                            >
-                              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${codingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
-                            </button>
-                            {renderRoundChevron('Coding', !!codingEnabled)}
-                          </div>
-                        </div>
-                        {(() => {
-                          const codingSection = sections.find(s => s.name === 'Coding');
-                          if (!codingSection?.enabled || !expandedRounds.has('Coding')) return null;
-                          return <div className="mt-3">{renderPercentageSectionCard(codingSection)}</div>;
-                        })()}
-                      </div>
-                    );
-                  })()}
-
-                  {/* Total Assessment Distribution — the percentage total, stated
-                      ONCE for the whole assessment.
-
-                      Each percentage section used to print "Total: N%" in its own
-                      header, so a recruiter with Technical and Coding both on read
-                      the same number twice, on two cards, as though each section
-                      had a total of its own. The total is a property of the
-                      assessment, not of a section, so it is reported once, here,
-                      with the split that produced it — below the two rounds it
-                      sums, reading back what their sliders were just set to.
-
-                      HR is absent by design, not omission: HR questions are not
-                      timed and carry no percentage, which is what
-                      `getTotalPercentage` has always filtered on. */}
-                  {(() => {
-                    const distribution = sections.filter(s => s.enabled && s.name !== 'HR');
-                    if (distribution.length === 0) return null;
-                    /* The section's own colour, the same one its icon and its
-                       round already carry, so a band in the bar is findable by
-                       the card it came from. */
-                    const barColor = (name: string) => (name === 'Coding' ? 'bg-brand-orange' : 'bg-brand-cyan');
-                    return (
-                      <div className="p-3 sm:p-4 border border-gray-100 rounded-xl bg-white ring-1 ring-black/[0.02]">
-                        <div className="flex items-center justify-between gap-2 mb-2.5">
-                          <div className="flex items-center gap-2">
-                            <Clock className="w-4 h-4 text-brand-blue" />
-                            <h4 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Total Assessment Distribution</h4>
-                          </div>
-                          <span className="text-xs sm:text-sm text-gray-500 flex-shrink-0">
-                            Total:{' '}
-                            <span className={`font-semibold ${isPercentageValid ? 'text-green-600' : 'text-red-500'}`}>
-                              {totalPercentage}%
-                            </span>
-                          </span>
-                        </div>
-                        {/* One track, one band per section. A total under 100
-                            leaves the remainder showing as track, which is the
-                            shortfall the warning above names. */}
-                        <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
-                          {distribution.map(section => (
-                            <div
-                              key={section.name}
-                              style={{ width: `${Math.min(section.percentage, 100)}%` }}
-                              className={`h-full ${barColor(section.name)} transition-all`}
-                            />
-                          ))}
-                        </div>
-                        <div className="mt-2.5 flex flex-wrap items-center gap-x-5 gap-y-1.5">
-                          {distribution.map(section => (
-                            <span key={section.name} className="inline-flex items-center gap-2 text-xs sm:text-sm text-gray-600">
-                              <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${barColor(section.name)}`} />
-                              {section.name} Section
-                              <span className="font-semibold text-gray-900">{section.percentage}%</span>
-                            </span>
-                          ))}
+                          <button
+                            onClick={() => handleCodingToggle()}
+                            className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${codingEnabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'}`}
+                          >
+                            <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${codingEnabled ? 'translate-x-6' : 'translate-x-1'}`} />
+                          </button>
                         </div>
                       </div>
                     );
                   })()}
-
-                  {/* HR Round - its question selection is the section nested
-                      directly below the toggle. */}
-                  <div className={`p-3 sm:p-4 border rounded-xl transition-all ${hrEnabled ? 'border-brand-blue/30 bg-brand-blue/[0.02]' : 'border-gray-100 bg-slate-50'}`}>
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-start gap-2 sm:gap-3 min-w-0">
-                        <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                          <Users className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                            <span className="text-sm sm:text-base font-medium text-gray-900">HR Round</span>
-                            <span className="px-1.5 sm:px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs">Question Bank</span>
-                            <span className="px-1.5 sm:px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-xs">No Timer</span>
-                            {!hrEnabled && (
-                              <span className="px-1.5 sm:px-2 py-0.5 bg-slate-200 text-slate-600 rounded text-xs">Disabled</span>
-                            )}
-                          </div>
-                          <p className="text-xs text-gray-500 mt-0.5 leading-snug">
-                            {hrEnabled
-                              ? `${selectedHRQuestions.length} of ${HR_QUESTION_LIMIT} questions selected (max ${HR_QUESTION_LIMIT})`
-                                + ' — Questions are synced with the HR Question Bank'
-                              : 'Enable HR round to select or manage HR questions.'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-shrink-0">
-                        <button
-                          type="button"
-                          aria-label="Toggle HR round"
-                          aria-pressed={hrEnabled}
-                          onClick={handleHRToggle}
-                          className={`relative inline-flex h-6 w-11 flex-shrink-0 items-center rounded-full transition-colors ${
-                            hrEnabled ? 'bg-brand-blue shadow-sm shadow-brand-blue/25' : 'bg-gray-300'
-                          }`}
-                        >
-                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                            hrEnabled ? 'translate-x-6' : 'translate-x-1'
-                          }`} />
-                        </button>
-                        {renderRoundChevron('HR', hrEnabled)}
-                      </div>
-                    </div>
-                    {hrEnabled && expandedRounds.has('HR') && (
-                      <div className="mt-3">{renderHRSectionCard()}</div>
-                    )}
-                  </div>
                 </div>
 
               </div>
@@ -4376,314 +3317,330 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 </div>
               </div> */}
 
+              {/* Section Distribution */}
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6">
+                <div className="flex items-center justify-between mb-3 sm:mb-4">
+                  <div className="flex items-center gap-2">
+                    <Sliders className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
+                    <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Section Distribution</h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs sm:text-sm text-gray-500">Total:</span>
+                    <span className={`text-xs sm:text-sm font-medium ${isPercentageValid ? 'text-green-600' : 'text-red-600'}`}>
+                      {totalPercentage}%
+                    </span>
+                  </div>
+                </div>
+
+                {!isPercentageValid && (
+                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-yellow-800">
+                      {!hasAtLeastOneEnabled && (
+                        <p>At least one assessment round must be enabled.</p>
+                      )}
+                      {hasAtLeastOneEnabled && hasZeroPercentageEnabled && (
+                        <p>Enabled rounds cannot have 0% allocation. Disable the round or assign a percentage.</p>
+                      )}
+                      {hasAtLeastOneEnabled && !hasZeroPercentageEnabled && totalPercentage !== 100 && (
+                        <p>Section percentages must total exactly 100% (currently {totalPercentage}%).</p>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                <div className="space-y-3 sm:space-y-4">
+                  {/* HR Question Bank Section */}
+                  {(hrQuestionBank.length > 0 || selectedHRQuestions.length > 0 || !!hrSection) && (
+                  <div
+                    aria-disabled={!hrEnabled}
+                    className={`p-3 sm:p-4 border rounded-xl transition-all ${
+                      hrEnabled ? 'border-gray-100 bg-white ring-1 ring-black/[0.02]' : 'border-gray-100 bg-slate-50 opacity-70'
+                    }`}
+                  >
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <Users className="w-4 h-4 text-brand-blue" />
+                        <span className="text-sm sm:text-base font-medium text-gray-900">HR Section</span>
+                        <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs">Question Bank</span>
+                        <span className="px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-xs">No Timer</span>
+                      </div>
+                      <div className="flex items-center gap-2 text-xs">
+                        <button
+                          type="button"
+                          onClick={openAddHRQuizModal}
+                          disabled={!hrEnabled}
+                          className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1.5 font-medium transition-colors ${
+                            hrEnabled
+                              ? 'border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                              : 'border-gray-200 text-gray-400 cursor-not-allowed'
+                          }`}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          Add Quiz
+                        </button>
+                        <span className={`${hrEnabled && selectedHRQuestions.length >= HR_QUESTION_LIMIT ? 'text-brand-orange-deep font-medium' : 'text-gray-500'}`}>{selectedHRQuestions.length}/{HR_QUESTION_LIMIT} selected (max {HR_QUESTION_LIMIT})</span>
+                        <button type="button" onClick={selectAllHR} disabled={!hrEnabled} className={hrEnabled ? 'text-brand-blue hover:text-brand-blue-2 font-medium' : 'text-gray-400 cursor-not-allowed font-medium'}>All</button>
+                        <span className="text-gray-300">|</span>
+                        <button type="button" onClick={deselectAllHR} disabled={!hrEnabled} className={hrEnabled ? 'text-gray-500 hover:text-gray-700 font-medium' : 'text-gray-400 cursor-not-allowed font-medium'}>None</button>
+                      </div>
+                    </div>
+
+                    <div className="space-y-1.5 max-h-72 overflow-y-auto">
+                      {hrQuestionBank.length === 0 ? (
+                        <div className="rounded-xl border border-dashed border-gray-200 bg-slate-50 px-4 py-6 text-center text-sm text-gray-500">
+                          No HR questions found. Add one to start building this section.
+                        </div>
+                      ) : hrQuestionBank.map((q, idx) => {
+                        const isSelected = selectedHRQuestions.includes(q.id);
+                        return (
+                          <div
+                            key={q.id}
+                            onClick={() => hrEnabled && toggleHRQuestion(q.id)}
+                            className={`flex items-center gap-2.5 p-2 rounded-lg transition-all text-xs ${
+                              hrEnabled ? 'cursor-pointer' : 'cursor-not-allowed'
+                            } ${
+                              isSelected
+                                ? 'bg-brand-blue/5 border border-brand-blue/30 ring-1 ring-brand-blue/10'
+                                : hrEnabled
+                                  ? 'bg-slate-50 border border-transparent hover:bg-brand-blue/5'
+                                  : 'bg-slate-50 border border-transparent'
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={(e) => e.stopPropagation()}
+                              onClick={(e) => e.stopPropagation()}
+                              readOnly
+                              className="w-4 h-4 rounded border-gray-200 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0 pointer-events-none"
+                            />
+                            <span className="w-5 h-5 flex items-center justify-center bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded text-[10px] font-medium flex-shrink-0">{idx + 1}</span>
+                            <span className={`flex-1 ${isSelected ? 'text-gray-900' : 'text-gray-500'}`}>{q.text}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${
+                              q.type === 'Yes/No' ? 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' : 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20'
+                            }`}>{q.type}</span>
+                            {/* HR is "No Timer" — per-question time is not surfaced because
+                                the recruiter can't act on it. The bank still stores `time`
+                                because the AI Interview flow reads it; the assessment
+                                section just doesn't display it. */}
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    <div className="mt-2 text-xs text-gray-500">
+                      <span>Questions are synced with the HR Question Bank</span>
+                    </div>
+                  </div>
+                  )}
+
+                  {/* Technical & Coding Sections */}
+                  {sections.filter(s => s.enabled && s.name !== 'HR').map((section) => (
+                    <div key={section.name} className="p-3 sm:p-4 border border-gray-100 rounded-xl bg-white ring-1 ring-black/[0.02]">
+                      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-3 gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {section.name === 'Technical' && <Brain className="w-4 h-4 text-brand-cyan" />}
+                          {section.name === 'Coding' && <Code className="w-4 h-4 text-brand-orange-deep" />}
+                          <span className="text-sm sm:text-base font-medium text-gray-900">{section.name} Section</span>
+                        </div>
+                        {section.name === 'Coding' && codingEnabledSource === 'auto' && (
+                          <span className="text-xs text-gray-500">Auto-enabled (coding required)</span>
+                        )}
+                        {section.name === 'Coding' && codingEnabledSource === 'manual' && (
+                          <span className="text-xs text-gray-500">Manually enabled</span>
+                        )}
+                      </div>
+
+                      {/* Percentage Allocation */}
+                      <div className="mb-3 sm:mb-4">
+                        <label className="text-xs text-gray-600 mb-2 block">
+                          Percentage Allocation
+                          {section.name === 'Coding' && (
+                            <span className="ml-2 text-[11px] text-gray-400 font-normal">
+                              Allowed: 35% / 50% / 75% / 100%
+                            </span>
+                          )}
+                        </label>
+                        <div className="flex items-center gap-2 sm:gap-3">
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            step={section.name === 'Coding' || sections.some(s => s.name === 'Coding' && s.enabled) ? 1 : 1}
+                            value={section.percentage}
+                            onChange={(e) => updatePercentage(section.name, Number(e.target.value))}
+                            className="flex-1 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-brand-blue"
+                          />
+                          <div className="flex items-center gap-1">
+                            <span className="w-14 px-2 py-1.5 border border-gray-200 bg-slate-50 rounded-lg text-center text-sm text-gray-700 select-none">
+                              {section.percentage}
+                            </span>
+                            <span className="text-xs sm:text-sm text-gray-600">%</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* TOPICS UI — temporarily hidden per product decision.
+                          The recruiter no longer adds free-text topics; the LLM
+                          uses the JD content alone to generate questions. The
+                          backend column (`technical_topics` / `coding_topics`)
+                          and the create/update payload still carry topics so
+                          re-enabling this UI is a one-block change. Do NOT
+                          delete — uncomment when topic input returns. */}
+                      {/*
+                      <div>
+                        <label className="text-xs text-gray-600 mb-2 block">
+                          Topics (LLM will generate questions based on these)
+                        </label>
+                        <div className="flex flex-col sm:flex-row gap-2 mb-2">
+                          <input
+                            type="text"
+                            value={newTopic.section === section.name ? newTopic.value : ''}
+                            onChange={(e) => setNewTopic({ section: section.name, value: e.target.value })}
+                            onKeyPress={(e) => e.key === 'Enter' && addTopic(section.name)}
+                            placeholder={`e.g., ${
+                              section.name === 'HR'
+                                ? 'conflict handling, salary discussion, teamwork'
+                                : section.name === 'Technical'
+                                ? 'domain tools, regulations, workflows'
+                                : 'algorithm type, framework, logic pattern'
+                            }`}
+                            className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-gray-900"
+                          />
+                          <button
+                            onClick={() => addTopic(section.name)}
+                            className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center justify-center gap-1 text-sm flex-shrink-0"
+                          >
+                            <Plus className="w-4 h-4" />
+                            <span className="hidden sm:inline">Add Topic</span>
+                            <span className="sm:hidden">Add</span>
+                          </button>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {section.topics.map((topic, idx) => (
+                            <span
+                              key={idx}
+                              className="px-2.5 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs flex items-center gap-1.5"
+                            >
+                              {topic}
+                              <button onClick={() => removeTopic(section.name, idx)} className="hover:text-brand-blue-2" aria-label="Close">
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                          {section.topics.length === 0 && (
+                            <span className="text-xs text-gray-400 italic">
+                              No topics added yet. Add topics for AI to generate relevant questions.
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      */}
+                    </div>
+                  ))}
+                </div>
+
+              </div>
             </div>
 
             {/* Right Column - Sidebar */}
             <div className="w-full lg:w-80 lg:flex-shrink-0 space-y-4">
-              {/**
-               * What the JD itself decided, on a card of its own ABOVE the
-               * duration it feeds.
-               *
-               * This was a sub-panel at the foot of Assessment Duration, which
-               * put the inputs after the figures they produce and buried them
-               * in the card they explain. It reads as one row per detected
-               * fact - what was detected on the left, the value on the right -
-               * so a recruiter checking "did it read my JD correctly" scans one
-               * column rather than a run of key/value pairs in small type.
-               *
-               * Every value is read off the selected JD. Nothing here is
-               * entered or editable: this card reports, it does not configure.
-               */}
-              {selectedJob && (() => {
-                const { min: expMin, max: expMax } = getExperienceRange(selectedJob);
-                const avgExp = expMax > 0 ? (expMin + expMax) / 2 : expMin;
-                /* Read straight off the selected JD, so the card re-derives
-                   whenever the recruiter picks a different one - there is no
-                   copy of these lists held anywhere in this component. */
-                const mustHaveSkills = selectedJob.must_have_skills || [];
-                const niceToHaveSkills = selectedJob.nice_to_have_skills || [];
-                let level = 'Entry';
-                if (avgExp > 10) level = 'Expert';
-                else if (avgExp > 7) level = 'Senior';
-                else if (avgExp > 4) level = 'Mid';
-                else if (avgExp > 2) level = 'Junior';
-                /* The JD's own page, the same target the breadcrumb's Job
-                   Details crumb and the existing-assessment fallback use, so
-                   "View JD" opens what every other route to this JD opens. */
-                const jdId = selectedJob.id || preSelectedJobId || urlJdId;
-
-                /* One row per detected fact. Built from a list so a row cannot
-                   drift from its neighbours, and each carries the brand colour
-                   its subject already uses elsewhere on this page. A fact the
-                   JD does not carry is dropped rather than shown empty -
-                   `industry_type` is optional on a JD. */
-                const facts: Array<{
-                  label: string;
-                  value: string;
-                  Icon: typeof Briefcase;
-                  tile: string;
-                  iconColor: string;
-                  chip: string;
-                  /** A skills row carries the skills themselves under its
-                   *  header line; the single-value rows leave this unset. */
-                  items?: string[];
-                }> = [];
-                if (selectedJob.industry_type) {
-                  facts.push({
-                    label: 'Industry',
-                    value: selectedJob.industry_type,
-                    Icon: Building2,
-                    tile: 'bg-brand-cyan/10 ring-1 ring-brand-cyan/15',
-                    iconColor: 'text-brand-cyan',
-                    chip: 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20',
-                  });
-                }
-                facts.push({
-                  label: 'Experience',
-                  value: `${expMin}-${expMax} yrs (${level})`,
-                  Icon: Briefcase,
-                  tile: 'bg-brand-blue/10 ring-1 ring-brand-blue/15',
-                  iconColor: 'text-brand-blue',
-                  chip: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20',
-                });
-                /* The JD's two skill groups, each its own row and each naming
-                   its own skills. They were one "Skills" row reporting a single
-                   count, which could not say which group a skill belonged to -
-                   and `Job.skills` it counted is must-have only, so the
-                   nice-to-haves were not merely unlabelled but absent.
-                   Both rows are always shown, including when a group is empty:
-                   "the JD lists none" is the answer a recruiter checking the
-                   extraction came for, and a row that vanishes cannot give it. */
-                facts.push({
-                  label: 'Must Have Skills',
-                  value: String(mustHaveSkills.length),
-                  items: mustHaveSkills,
-                  Icon: Star,
-                  tile: 'bg-brand-orange/10 ring-1 ring-brand-orange/15',
-                  iconColor: 'text-brand-orange-deep',
-                  chip: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
-                });
-                facts.push({
-                  label: 'Nice to Have Skills',
-                  value: String(niceToHaveSkills.length),
-                  items: niceToHaveSkills,
-                  Icon: Star,
-                  tile: 'bg-brand-teal/10 ring-1 ring-brand-teal/15',
-                  iconColor: 'text-brand-teal',
-                  chip: 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20',
-                });
-
-                return (
-                  <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
-                    {/* Title on the left with the mark that says these values
-                        were derived rather than typed; the way to the JD they
-                        came from on the right. */}
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <Sparkles className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                        <h4 className="font-medium text-gray-900 text-sm tracking-tight truncate">Auto-calculated from JD</h4>
-                      </div>
-                      {/* Opens the JD in a dialog over this step rather than
-                          routing to its page: reading the JD is a check made
-                          WHILE configuring, and leaving the flow to make it
-                          drops every choice on this screen. The JD's page is
-                          still one click away from inside the dialog. */}
-                      {jdId && (
-                        <button
-                          type="button"
-                          onClick={() => setJdFullViewFor({ id: jdId, title: selectedJob.title })}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-brand-blue/20 bg-white px-2.5 py-1 text-xs font-medium text-brand-blue transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/40 flex-shrink-0"
-                        >
-                          View JD
-                          <FileText className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-                    <p className="mt-1.5 text-xs text-gray-500 leading-snug">
-                      Based on the job description, the following details are detected:
-                    </p>
-
-                    <div className="mt-3 space-y-2">
-                      {facts.map(fact => (
-                        <div
-                          key={fact.label}
-                          className="p-2 border border-gray-100 rounded-xl bg-white ring-1 ring-black/[0.02]"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${fact.tile}`}>
-                              <fact.Icon className={`w-4 h-4 ${fact.iconColor}`} />
-                            </div>
-                            <span className="min-w-0 flex-1 text-xs text-gray-600 truncate">{fact.label}</span>
-                            {/* The value as a chip, so the detected figure is
-                                the thing the eye lands on down the right
-                                edge. On a skills row that chip is also the way
-                                in to the skills themselves — see
-                                `JDSkillsReveal` for why they are behind it
-                                rather than listed under the row. */}
-                            {fact.items && fact.items.length > 0 ? (
-                              <JDSkillsReveal
-                                label={fact.label}
-                                skills={fact.items}
-                                chipClassName={`flex-shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold ${fact.chip}`}
-                              />
-                            ) : (
-                              <span className={`flex-shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold ${fact.chip}`}>
-                                {fact.value}
-                              </span>
-                            )}
+              {/* Assessment Duration - Fixed 30 min for Technical + Coding */}
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock className="w-5 h-5 text-brand-blue" />
+                  <h4 className="font-medium text-gray-900 text-sm tracking-tight">Assessment Duration</h4>
+                </div>
+                <span className="text-xs text-gray-500 block mb-3">Fixed at 30 minutes</span>
+                <div className="bg-slate-50 rounded-xl p-3 space-y-2">
+                  {(() => {
+                    const techSection = sections.find(s => s.name === 'Technical');
+                    const codeSection = sections.find(s => s.name === 'Coding');
+                    const techMin = techSection?.enabled ? Math.round(30 * (techSection.percentage / 100)) : 0;
+                    const codeMin = codeSection?.enabled ? 30 - techMin : 0;
+                    return (
+                      <>
+                        {techSection?.enabled && (
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-600">Technical ({techSection.percentage}%)</span>
+                            <span className="font-medium text-gray-900">{techMin} min</span>
                           </div>
-                          {/* An empty skills group says so in the row itself.
-                              A 0 chip with nothing behind it reads as a value
-                              still loading, and "the JD lists none" is exactly
-                              the answer a recruiter checking the extraction
-                              came for. Populated groups say nothing here —
-                              their skills are behind the count. */}
-                          {fact.items && fact.items.length === 0 && (
-                            <div className="mt-2 pl-11">
-                              <p className="text-[11px] text-gray-500">None listed on this JD.</p>
+                        )}
+                        {codeSection?.enabled && (
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-gray-600">Coding ({codeSection.percentage}%)</span>
+                            <span className="font-medium text-gray-900">{codeMin} min</span>
+                          </div>
+                        )}
+                        <div className="border-t border-gray-200 pt-2 flex items-center justify-between text-xs font-semibold">
+                          <span className="text-gray-700">Total Duration</span>
+                          <span className="text-gray-900">30 min</span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+                {/* Skill & Experience based calculation info */}
+                {selectedJob && (() => {
+                  const { min: expMin, max: expMax } = getExperienceRange(selectedJob);
+                  const avgExp = expMax > 0 ? (expMin + expMax) / 2 : expMin;
+                  const skillCount = selectedJob.skills?.length || 0;
+                  let level = 'Entry';
+                  if (avgExp > 10) level = 'Expert';
+                  else if (avgExp > 7) level = 'Senior';
+                  else if (avgExp > 4) level = 'Mid';
+                  else if (avgExp > 2) level = 'Junior';
+
+                  const techSection = sections.find(s => s.name === 'Technical');
+                  const codeSection = sections.find(s => s.name === 'Coding');
+
+                  return (
+                    <div className="mt-3 bg-gray-50 border border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10 rounded-xl p-3">
+                      <p className="text-xs font-medium text-brand-blue mb-2">Auto-calculated from JD:</p>
+                      <div className="space-y-1.5 text-[11px]">
+                        <div className="flex items-center justify-between text-brand-blue/80">
+                          <span>Experience</span>
+                          <span className="font-semibold">{expMin}-{expMax} yrs ({level})</span>
+                        </div>
+                        <div className="flex items-center justify-between text-brand-blue/80">
+                          <span>Skills</span>
+                          <span className="font-semibold">{skillCount} {skillCount >= 8 ? '(broad)' : skillCount <= 3 ? '(deep)' : '(balanced)'}</span>
+                        </div>
+                        <div className="border-t border-brand-blue/15 pt-1.5 space-y-1">
+                          <div className="flex items-center justify-between text-brand-blue">
+                            <span>Technical</span>
+                            <span className="font-semibold">{techSection?.percentage || 0}% → {Math.round(30 * ((techSection?.percentage || 0) / 100))}m</span>
+                          </div>
+                          {codeSection?.enabled && (
+                            <div className="flex items-center justify-between text-brand-blue">
+                              <span>Coding</span>
+                              <span className="font-semibold">{codeSection.percentage}% → {30 - Math.round(30 * ((techSection?.percentage || 0) / 100))}m</span>
                             </div>
                           )}
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Assessment Duration - Fixed 30 min for Technical + Coding */}
-              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
-                {/* Header. The icon leads, and the heading with its "Fixed at
-                    30 minutes" stacks beside it, so the two lines read as one
-                    title block instead of the note sitting under the full-width
-                    row the icon and heading used to make. */}
-                <div className="flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                    <Clock className="w-5 h-5 text-brand-blue" />
-                  </div>
-                  <div className="min-w-0">
-                    <h4 className="font-medium text-gray-900 text-sm tracking-tight">Assessment Duration</h4>
-                    <span className="text-xs text-gray-500 block">Fixed at 30 minutes</span>
-                  </div>
-                </div>
-
-                {/* The two figures for the assessment as a whole, side by side
-                    and split by a rule. They were a stat grid on the Summary
-                    card below and the last row of this card's own breakdown -
-                    the same "Total Duration" reported twice on one sidebar. It
-                    is stated once, here, at the size a headline figure earns,
-                    with the per-round breakdown under it. */}
-                {/* Uneven columns on purpose: the total carries a unit and the
-                    section count is a single digit, so the rule sits off-centre
-                    where the wider figure needs the room. The rule is a border
-                    on the second cell, so it spans the figures and stops inside
-                    the panel's padding rather than cutting it edge to edge. */}
-                <div className="mt-3 grid grid-cols-[1.3fr_1fr] bg-slate-50 rounded-xl p-3 sm:p-4">
-                  <div className="min-w-0 pr-3">
-                    <div className="text-xs text-gray-500 mb-1">Total Duration</div>
-                    <div className="text-2xl sm:text-3xl font-semibold text-gray-900 tracking-tight">{duration} min</div>
-                  </div>
-                  <div className="min-w-0 pl-4 border-l border-gray-200">
-                    <div className="text-xs text-gray-500 mb-1">Sections</div>
-                    <div className="text-xl sm:text-2xl font-semibold text-gray-900 tracking-tight">{enabledSectionsCount}</div>
-                  </div>
-                </div>
-
-                {(() => {
-                  const techSection = sections.find(s => s.name === 'Technical');
-                  const codeSection = sections.find(s => s.name === 'Coding');
-                  const techMin = techSection?.enabled ? Math.round(30 * (techSection.percentage / 100)) : 0;
-                  const codeMin = codeSection?.enabled ? 30 - techMin : 0;
-                  if (!techSection?.enabled && !codeSection?.enabled) return null;
-                  /**
-                   * One row per timed round, a card each rather than two lines
-                   * in a shared panel: the round's own icon and colour, its
-                   * name and minutes on the first line, and the share those
-                   * minutes came from as a bar under them.
-                   *
-                   * The icon, tile and bar colours are the round's own, the
-                   * same ones its card in Assessment Rounds carries, so a row
-                   * here is matched to the round it reports by colour alone.
-                   * Both rows are the same shape, so one helper draws them.
-                   */
-                  const renderDurationRow = (row: {
-                    name: string;
-                    percentage: number;
-                    minutes: number;
-                    Icon: typeof Brain;
-                    tile: string;
-                    iconColor: string;
-                    bar: string;
-                  }) => (
-                    <div
-                      key={row.name}
-                      className="flex items-center gap-3 p-2 border border-gray-100 rounded-xl bg-white ring-1 ring-black/[0.02]"
-                    >
-                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${row.tile}`}>
-                        <row.Icon className={`w-4 h-4 ${row.iconColor}`} />
                       </div>
-                      {/* Two stacked columns rather than one: what the round IS
-                          on the left (its name, then its share as a track), what
-                          it COMES TO on the right (its minutes, then its share
-                          as a figure). Both columns run two lines of the same
-                          height - the track is centred in a text-line-high box
-                          rather than sized to itself - so line one reads across
-                          as "Technical … 20 min" and line two as "bar … 65%". */}
-                      <div className="min-w-0 flex-1">
-                        <div className="text-xs text-gray-600 truncate">{row.name} ({row.percentage}%)</div>
-                        <div className="mt-1.5 flex h-4 items-center">
-                          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                            <div
-                              style={{ width: `${Math.min(row.percentage, 100)}%` }}
-                              className={`h-full ${row.bar} transition-all`}
-                            />
-                          </div>
-                        </div>
-                      </div>
-                      <div className="flex-shrink-0 text-right">
-                        <div className="text-xs font-medium text-gray-900">{row.minutes} min</div>
-                        <div className="mt-1.5 h-4 text-xs text-gray-500">{row.percentage}%</div>
-                      </div>
-                    </div>
-                  );
-                  return (
-                    <div className="mt-3 space-y-2">
-                      {techSection?.enabled && renderDurationRow({
-                        name: 'Technical',
-                        percentage: techSection.percentage,
-                        minutes: techMin,
-                        Icon: Brain,
-                        tile: 'bg-brand-cyan/10 ring-1 ring-brand-cyan/15',
-                        iconColor: 'text-brand-cyan',
-                        bar: 'bg-brand-cyan',
-                      })}
-                      {codeSection?.enabled && renderDurationRow({
-                        name: 'Coding',
-                        percentage: codeSection.percentage,
-                        minutes: codeMin,
-                        Icon: Code,
-                        tile: 'bg-brand-orange/10 ring-1 ring-brand-orange/15',
-                        iconColor: 'text-brand-orange-deep',
-                        bar: 'bg-brand-orange',
-                      })}
                     </div>
                   );
                 })()}
-                {/* The card's closing note, on a panel with the icon that
-                    marks it as an aside rather than as loose text hanging off
-                    the bottom edge. Same words, same colours. */}
-                <div className="mt-3 bg-slate-50 rounded-xl p-3 flex items-start gap-2">
-                  <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-gray-500 leading-snug">
-                    HR questions (from Question Bank) are separate and not timed.
-                  </p>
-                </div>
+                <p className="text-[11px] text-gray-500 mt-2 leading-snug">
+                  HR questions (from Question Bank) are separate and not timed.
+                </p>
               </div>
 
-              {/* Actions. The Total Duration / Sections pair that used to head
-                  this card now sits in Assessment Duration above, where the
-                  figures it reports are set — so this card is the two buttons
-                  that end the step and nothing else. */}
+              {/* Summary */}
               <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 mb-3 sm:mb-4">
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">Total Duration</div>
+                    <div className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">{duration} min</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-500 mb-1">Sections</div>
+                    <div className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">{enabledSectionsCount}</div>
+                  </div>
+                </div>
+
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-2">
                   <button
@@ -4691,14 +3648,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     disabled={!isPercentageValid || isGenerating}
                     className="flex-1 px-3 sm:px-4 py-2 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
                   >
-                    {generatingAction === 'draft' ? 'Saving...' : 'Save as Draft'}
+                    {isGenerating ? 'Saving...' : 'Save as Draft'}
                   </button>
-                  {/* Publish from here: the assessment is created and made
-                      live by this button, and the Publish Assessment STEP that
-                      follows reports it. Because the work happens here, the
-                      button carries its own progress — otherwise a recruiter
-                      would press it and watch nothing happen while the create
-                      and publish calls run. The same two gates still apply. */}
                   <button
                     onClick={() => handleGenerateAssessment(false)}
                     disabled={!isPercentageValid || !hasValidHRSelection || isGenerating}
@@ -4711,17 +3662,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     }
                     className="flex-1 px-3 sm:px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 text-sm"
                   >
-                    {generatingAction === 'publish' ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Publishing...
-                      </>
-                    ) : (
-                      <>
-                        <CheckCircle2 className="w-4 h-4" />
-                        Publish
-                      </>
-                    )}
+                    <CheckCircle2 className="w-4 h-4" />
+                    {isGenerating ? 'Publishing...' : 'Publish'}
                   </button>
                 </div>
               </div>
@@ -4743,14 +3685,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">
                       {codingPopupMode === 'disable'
                         ? 'Disable Coding Round?'
-                        : codingPopupMode === 'edit'
-                        ? 'Choose your programming language'
                         : 'Enable Coding Round'}
                     </h3>
                     <p className={`text-xs sm:text-sm ${codingPopupMode === 'disable' ? 'text-red-700' : 'text-brand-blue'}`}>
                       {codingPopupMode === 'disable'
                         ? 'This will remove the coding assessment'
-                        : `Select up to ${MAX_CODING_LANGUAGES} programming languages for the assessment`}
+                        : 'Select programming languages for the assessment'}
                     </p>
                   </div>
                 </div>
@@ -4774,8 +3714,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 ) : (
                   <>
                     <p className="text-sm sm:text-base text-gray-600 mb-4">
-                      Please select at least one programming language for the coding assessment
-                      {' '}(maximum {MAX_CODING_LANGUAGES}).
+                      Please select at least one programming language for the coding assessment.
                     </p>
                     {/* Language Selection */}
                     <div className="mb-4">
@@ -4784,40 +3723,26 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                       </label>
                       <div className="border border-gray-200 rounded-xl p-3 max-h-40 overflow-y-auto">
                         <div className="flex flex-wrap gap-2">
-                          {programmingLanguages.map(lang => {
-                            const isSelected = selectedCodingLanguages.includes(lang);
-                            /* At the cap, the unpicked languages go inert - the
-                               picked ones never do, or a full selection could
-                               not be changed, only abandoned. */
-                            const blocked = !isSelected && selectedCodingLanguages.length >= MAX_CODING_LANGUAGES;
-                            return (
-                              <button
-                                key={lang}
-                                onClick={() => toggleLanguageSelection(lang)}
-                                disabled={blocked}
-                                title={blocked ? `Maximum ${MAX_CODING_LANGUAGES} languages selected` : undefined}
-                                className={`px-3 py-1.5 rounded-full text-sm transition-all ${
-                                  isSelected
-                                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
-                                    : blocked
-                                    ? 'bg-slate-50 text-gray-400 cursor-not-allowed'
-                                    : 'bg-slate-100 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
-                                }`}
-                              >
-                                {lang}
-                              </button>
-                            );
-                          })}
+                          {programmingLanguages.map(lang => (
+                            <button
+                              key={lang}
+                              onClick={() => toggleLanguageSelection(lang)}
+                              className={`px-3 py-1.5 rounded-full text-sm transition-all ${
+                                selectedCodingLanguages.includes(lang)
+                                  ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                                  : 'bg-slate-100 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
+                              }`}
+                            >
+                              {lang}
+                            </button>
+                          ))}
                         </div>
                       </div>
                       {selectedCodingLanguages.length > 0 && (
                         <div className="mt-3">
                           <div className="flex items-center justify-between mb-1.5">
                             <span className="text-xs font-medium text-gray-700">
-                              Selected ({selectedCodingLanguages.length}/{MAX_CODING_LANGUAGES})
-                              {selectedCodingLanguages.length >= MAX_CODING_LANGUAGES && (
-                                <span className="ml-1.5 font-normal text-brand-orange-deep">maximum reached</span>
-                              )}
+                              Selected ({selectedCodingLanguages.length})
                             </span>
                             <button
                               type="button"
@@ -4862,18 +3787,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 </button>
                 <button
                   onClick={handleConfirmCodingAction}
-                  disabled={codingPopupMode !== 'disable' && selectedCodingLanguages.length === 0}
+                  disabled={codingPopupMode === 'enable' && selectedCodingLanguages.length === 0}
                   className={`flex-1 px-4 py-2 rounded-lg text-sm transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed ${
                     codingPopupMode === 'disable'
                       ? 'bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-500/25 ring-1 ring-white/10'
                       : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                   }`}
                 >
-                  {codingPopupMode === 'disable'
-                    ? 'Yes, Disable'
-                    : codingPopupMode === 'edit'
-                    ? 'Save Languages'
-                    : 'Enable Coding'}
+                  {codingPopupMode === 'disable' ? 'Yes, Disable' : 'Enable Coding'}
                 </button>
               </div>
             </div>
@@ -4917,217 +3838,56 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           </div>
         )}
 
-        {/* The publish confirmation is no longer a modal here — Publish runs
-            from this step's own button and hands the flow to
-            `step === 'publish'`, which reports the result on a page of its
-            own. */}
-        {renderAddHRQuizModal()}
-
-        {/* The selected JD in full, opened by "View JD" on the
-            Auto-calculated card. The route to the JD's own page it replaced is
-            offered from inside the dialog. */}
-        {jdFullViewFor && (
-          <JDFullViewModal
-            jdId={jdFullViewFor.id}
-            jdTitle={jdFullViewFor.title}
-            onClose={() => setJdFullViewFor(null)}
-            /* `from=assessment` keeps the JD page's breadcrumb on this flow —
-               Dashboard › Assessments › Select Job Description › Configure
-               Assessment › <JD> — instead of resetting to the Job Descriptions
-               trail, which would name a path the recruiter never took.
-
-               Not sent when the flow was ENTERED from a JD page: the trail is
-               already anchored to that JD (see `buildBreadcrumbItems`), and
-               this link goes to the very page that anchor points at, so the
-               JD page's own default trail is the correct one there. */
-            onOpenFullPage={() =>
-              router.push(
-                `/recruitment/job-details?id=${encodeURIComponent(jdFullViewFor.id)}${
-                  fromJobDetails ? '' : '&from=assessment'
-                }`,
-              )
-            }
-          />
-        )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  /**
-   * Step 3: PUBLISH ASSESSMENT — a page, not a dialog.
-   *
-   * The confirmation used to be a modal over the Configure step that closed
-   * itself after three seconds, taking the page away mid-sentence. It is the
-   * end of the flow, so it gets a page of its own: what was published, named,
-   * and the ways on from there, left up at the recruiter's pace.
-   *
-   * ONE state. The step is only ever reached by publishing (Configure's
-   * Publish button, which sets `publishedAssessment` and this step together),
-   * so it always has a record to report — and the guard below is what keeps
-   * that true, since a `?step=publish` URL survives a reload while the record
-   * does not. Anything else that once lived here, a pre-publish review of the
-   * configuration included, now belongs to the Configure step it was read off.
-   */
-  if (step === 'publish' && publishedAssessment) {
-    /* The same name this step's breadcrumb leaf carries — see
-       `publishedAssessmentName`. It was built here from `title` unstripped,
-       so a v3 assessment announced itself as "… - Version 3" on the panel
-       while every list naming it had dropped the suffix. */
-    const assessmentName = publishedAssessmentName();
-
-    /* The JOB this assessment was published for, and WHICH VERSION of it.
-       The published record is asked first — `jd_short_id` and `jd_version` are
-       the backend's own record of the binding — and the selected JD answers
-       for whatever the record leaves out. `selectedJob` is the exact JD
-       version the recruiter picked, and its `versionNumber` is the lineage
-       version that every JD badge on every other page shows, so the number
-       here matches the v6 they were just looking at. */
-    const jobIdForPublished = publishedAssessment.jd_short_id || selectedJob?.job_id || '';
-    const jobVersionForPublished = publishedAssessment.jd_version ?? selectedJob?.versionNumber;
-
-    return (
-      <div className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
-        <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-            <PageBreadcrumb className="mb-3" items={buildBreadcrumbItems()} />
-
-            {/* PUBLISHED. One centred column on the page's own white surface —
-                no card of its own, because a bordered panel inside the page
-                panel drew a second frame around the same content. Mark,
-                headline, the thing that was published named on a panel of its
-                own, then the ways on from here. */}
-            <div className="py-4 sm:py-6 text-center">
-              {/* The mark: a solid green disc inside its own halo, drawn as a
-                  ring so the halo cannot drift out of register with the disc,
-                  with the confetti thrown clear of both. The whole burst is
-                  scaled down rather than re-laid-out on a narrow screen, so
-                  the strokes keep their distance from the mark. */}
-              <div className="relative mx-auto mb-4 sm:mb-5 h-[84px] w-[84px] scale-[0.85] sm:scale-100">
-                {PUBLISHED_CONFETTI.map(piece => (
-                  <span
-                    key={`${piece.x},${piece.y}`}
-                    aria-hidden="true"
-                    className={`absolute left-1/2 top-1/2 h-[3px] w-[13px] rounded-full ${piece.color}`}
-                    style={{
-                      transform: `translate(calc(-50% + ${piece.x}px), calc(-50% + ${piece.y}px)) rotate(${piece.tilt}deg)`,
-                    }}
-                  />
-                ))}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="flex h-[50px] w-[50px] items-center justify-center rounded-full bg-green-500 ring-[17px] ring-green-50">
-                    <Check className="h-7 w-7 text-white" strokeWidth={3} />
-                  </div>
-                </div>
-              </div>
-
-              <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight mb-2 sm:mb-3">
-                Assessment Published!
-              </h2>
-              <p className="text-sm sm:text-base text-gray-600 mb-4 sm:mb-5">
-                Your assessment has been successfully published and is now live.
-              </p>
-
-              {/* Narrower than the page it sits on: the name reads as one
-                  line of a form rather than a band across a 1400px card, and
-                  the buttons below line up under it. */}
-              <div className="mx-auto mb-5 sm:mb-6 w-full max-w-3xl bg-slate-50 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] px-4 sm:px-5 py-3 sm:py-3.5 flex items-start gap-3 sm:gap-4 text-left">
-                <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                  <FileText className="w-5 h-5 text-brand-blue" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="text-xs sm:text-sm text-gray-500">Assessment</div>
-                  <div className="text-sm sm:text-base font-semibold text-gray-900 break-words">
-                    {assessmentName}
-                  </div>
-                  {/* WHAT WAS PUBLISHED, AND AGAINST WHAT.
-                      Three separate identities, each named so it cannot be
-                      read as another: the job, the job VERSION the assessment
-                      was built against, and the assessment's own version. The
-                      row carried one bare `v1` chip, which said none of that —
-                      and a lone "v1" beside a job the recruiter knows as v6
-                      reads as a wrong number rather than as the first
-                      assessment of that job, which is what it is. Assessment
-                      versions are their own sequence; they do not track the
-                      JD's.
-                      All three are read off the published record (the job
-                      version falls back to the JD version actually selected,
-                      which is the same version in the numbering every JD badge
-                      shows), and any one of them that the record does not
-                      carry is left out rather than guessed at.
-                      One wrapped row under the name, not a chip floated to the
-                      right edge: the badges then sit on the text's own left
-                      margin and stay aligned with it however many of them
-                      there are and however narrow the screen. */}
-                  <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                    {jobIdForPublished && <JobIdBadge>{jobIdForPublished}</JobIdBadge>}
-                    {jobVersionForPublished != null && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-slate-100 text-gray-700 ring-1 ring-gray-200">
-                        Job v{jobVersionForPublished}
-                      </span>
-                    )}
-                    {publishedAssessment.version != null && (
-                      <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
-                        Assessment v{publishedAssessment.version}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* The ways on from here, weighted as the design weights them:
-                  two outlined routes in the brand ink and one filled primary,
-                  all three the same height and stacked full-width on a phone.
-                  Trimmed a step: `px-4 py-2.5` with a 4-unit icon and one text
-                  size, rather than `px-5 sm:px-6 py-3` with a 5-unit icon and
-                  a size that grew at `sm`. Three buttons of a size the page
-                  does not need were the widest thing on it after the
-                  headline; one set of paddings across all three also means
-                  their heights cannot drift apart at a breakpoint. */}
-              <div className="flex flex-col sm:flex-row gap-2.5 sm:gap-3 justify-center">
-                {/* Both of these leave the flow for a real page, so they are
-                    gated on the id the publish call returned - without it
-                    there is nothing to open. */}
-                {publishedAssessment.id && (
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/recruitment/assessments/${publishedAssessment.id}`)}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-brand-blue/20 text-brand-blue font-semibold hover:bg-brand-blue/5 hover:border-brand-blue/40 rounded-lg transition-colors text-sm"
-                  >
-                    <Eye className="w-4 h-4" />
-                    View Assessment
-                  </button>
-                )}
-                {publishedAssessment.id && (
-                  /* `?share=1` opens the assessment's own Share dialog on
-                     arrival, so inviting candidates is one step from here
-                     rather than a hunt through the list. */
-                  <button
-                    type="button"
-                    onClick={() => router.push(`/recruitment/assessments/${publishedAssessment.id}?share=1`)}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-brand-blue/20 text-brand-blue font-semibold hover:bg-brand-blue/5 hover:border-brand-blue/40 rounded-lg transition-colors text-sm"
-                  >
-                    <Share2 className="w-4 h-4" />
-                    Share Invites
-                  </button>
-                )}
+        {showPublishSuccessModal && (
+          <div className="fixed inset-0 z-[60] bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6" role="dialog" aria-modal="true" aria-labelledby="assessment-published-title">
+            <div className="w-full max-w-[95vw] sm:max-w-md rounded-2xl bg-white shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
+              <div className="px-6 pt-5 pb-3 border-b border-gray-100 flex items-center justify-between shrink-0">
+                <h2 id="assessment-published-title" className="text-lg font-bold text-gray-900 tracking-tight">Assessment Published</h2>
                 <button
                   type="button"
-                  onClick={goToAssessmentsList}
-                  /* `border border-transparent` matches the two outlined
-                     buttons' box: their 1px border is inside their height, so
-                     without one here the filled button came out 2px shorter.
-                     In the desktop row `align-items: stretch` hid that; once
-                     the three stack on a phone it showed as one odd button in
-                     the column. */
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white font-semibold shadow-md shadow-brand-blue/25 ring-1 ring-white/10 border border-transparent rounded-lg transition-colors text-sm"
+                  onClick={closePublishSuccessModal}
+                  className="p-1.5 text-gray-500 hover:bg-slate-100 hover:text-gray-700 rounded-lg transition-colors flex-shrink-0"
+                  aria-label="Close"
                 >
-                  <ArrowRight className="w-4 h-4" />
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="px-6 py-5 text-center flex-1 overflow-y-auto">
+                <div className="relative inline-flex items-center justify-center mb-4">
+                  <span className="absolute w-2 h-2 rounded-full bg-green-400 animate-ping" style={{ top: -4, left: 10 }} />
+                  <span className="absolute w-1.5 h-1.5 rounded-full bg-brand-blue/60 animate-ping" style={{ top: 8, right: -2, animationDelay: '0.2s' }} />
+                  <span className="absolute w-2 h-2 rounded-full bg-brand-cyan/60 animate-ping" style={{ bottom: 0, left: -2, animationDelay: '0.4s' }} />
+                  <div className="w-16 h-16 bg-green-100 ring-1 ring-green-200 rounded-full flex items-center justify-center">
+                    <CheckCircle2 className="w-8 h-8 text-green-600" />
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600 mb-4">
+                  Assessment published successfully. You can now invite candidates.
+                </p>
+                <p className="text-xs text-gray-500 mb-4">
+                  This message will close in 3 seconds.
+                </p>
+                <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 rounded-xl border border-brand-blue/15 ring-1 ring-brand-blue/10 px-4 py-3 text-left">
+                  <div className="flex items-center justify-between gap-3">
+                    <span className="text-sm text-gray-500">Assessment</span>
+                    <span className="text-sm font-medium text-brand-blue text-right break-words">{publishedAssessmentTitle}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="px-6 py-3 border-t border-gray-100 bg-slate-50/60 flex items-center justify-end shrink-0">
+                <button
+                  type="button"
+                  onClick={closePublishSuccessModal}
+                  className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors"
+                >
                   Go to Assessments
                 </button>
               </div>
             </div>
+          </div>
+        )}
+
+        {renderAddHRQuizModal()}
           </div>
         </div>
       </div>
@@ -5152,11 +3912,13 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       <div className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-            {/* Past the commit point, so the trail is one leaf and the wizard
-                steps are not in it — see `buildStepCrumbs`. */}
             <PageBreadcrumb
               className="mb-3"
-              items={buildBreadcrumbItems()}
+              items={buildBreadcrumbItems(
+                fromJobDetails
+                  ? (isEditMode ? 'Edit Assessment' : 'Create Assessment')
+                  : (selectedJob?.title || (isEditMode ? 'Edit Assessment' : 'Create Assessment'))
+              )}
             />
             <div className="w-full">
           <div className="mb-6 sm:mb-8">

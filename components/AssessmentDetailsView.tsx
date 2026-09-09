@@ -1,6 +1,6 @@
 import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Star, Globe, Zap, Loader2, Monitor, Ban } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
@@ -103,25 +103,11 @@ export default function AssessmentDetailsView({
   breadcrumbItems,
 }: AssessmentDetailsViewProps) {
   const router = useRouter();
-  const searchParams = useSearchParams();
   const dialog = useGlobalDialog();
   const { isTenantAdmin, user } = useAuth();
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
-  type DetailsTab = 'overview' | 'sections' | 'analytics' | 'activity' | 'versions' | 'newversions' | 'info' | 'viewjd';
-  /* `?tab=` lets another screen deep-link to one of these tabs — the All
-     Assessments table's "View History" action lands on `versions` directly,
-     rather than dropping the reader on Overview to hunt for it. Read once as
-     the INITIAL value, not synced: the tab strip is the owner from then on, so
-     clicking a tab does not have to write to the URL to survive a re-render.
-     An unrecognised value falls through to 'overview'. */
-  const requestedTab = searchParams.get('tab');
-  const initialTab: DetailsTab = ([
-    'overview', 'sections', 'analytics', 'activity', 'versions', 'newversions', 'info', 'viewjd',
-  ] as const).includes(requestedTab as DetailsTab)
-    ? (requestedTab as DetailsTab)
-    : 'overview';
-  const [activeTab, setActiveTab] = useState<DetailsTab>(initialTab);
+  const [activeTab, setActiveTab] = useState<'overview' | 'sections' | 'analytics' | 'activity' | 'versions' | 'newversions' | 'info' | 'viewjd'>('overview');
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityPage, setActivityPage] = useState(1);
@@ -234,55 +220,18 @@ export default function AssessmentDetailsView({
     fetchVersions();
   }, [assessment?.id, activeTab]);
 
-  // Sibling versions (V1 and every duplicate sharing the same JD) — powers the
-  // separate "New Versions" tab. Capped at 5 versions per assessment.
+  // Sibling versions (V1 + V2 + V3 sharing the same JD) — powers the
+  // separate "New Versions" tab. Capped at the 3-version limit server-side.
   useEffect(() => {
     const fetchSiblings = async () => {
       if (!assessment?.id || !assessment?.jd_id || activeTab !== 'newversions') return;
       setSiblingsLoading(true);
       try {
-        /* ONE REQUEST PER JOB VERSION, merged and deduped by assessment id —
-           not one for this assessment's own `jd_id`.
-
-           Asking once with this assessment's `jd_id` only returns the whole
-           job's assessments if the endpoint widens that filter to the JD's
-           lineage. Where it matches the id exactly, every assessment authored
-           against a DIFFERENT version of the same job is absent from the
-           reply — so a Draft created against another version reads here as
-           not existing at all. Each version is asked about itself instead, so
-           the reply cannot be narrower than the question; if the endpoint
-           does widen, the extra copies arrive as duplicates and the dedupe
-           drops them.
-
-           Deduped by ASSESSMENT id, the record's own unique key — never by
-           job or version — so two assessments on one job version stay two
-           rows. The same fan-out the assessments list uses for its version
-           panel (`loadAssessmentLineage`), so both surfaces list the same
-           assessments. */
-        let versionIds: string[] = [assessment.jd_id];
-        try {
-          const lineage = await jdService.getLineageVersions(assessment.jd_id);
-          const ids = lineage.map((v: any) => v.id).filter(Boolean);
-          if (ids.length) versionIds = [...new Set([assessment.jd_id, ...ids])];
-        } catch (error) {
-          console.error('Failed to fetch JD lineage for sibling versions:', error);
-        }
-
-        const responses = await Promise.all(
-          versionIds.map((versionId) =>
-            assessmentService
-              .list({ jd_id: versionId, page_size: 50 })
-              // One version failing must not blank the others.
-              .catch(() => ({ items: [] as any[] })),
-          ),
-        );
-        const byAssessmentId = new Map<string, any>();
-        for (const response of responses) {
-          for (const row of ((response.items || []) as any[])) {
-            if (row?.id) byAssessmentId.set(row.id, row);
-          }
-        }
-        const items = [...byAssessmentId.values()].sort(
+        const response = await assessmentService.list({
+          jd_id: assessment.jd_id,
+          page_size: 50,
+        });
+        const items = (response.items || []).sort(
           (a: any, b: any) => (a.version || 0) - (b.version || 0)
         );
         setSiblingVersions(items);
@@ -1695,7 +1644,7 @@ export default function AssessmentDetailsView({
                 </div>
                 <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">New Versions</h3>
               </div>
-              <p className="text-xs sm:text-sm text-gray-600">All versions of this assessment (V1 is the original; V2 onwards are duplicates, up to 5).</p>
+              <p className="text-xs sm:text-sm text-gray-600">All versions of this assessment (V1 is the original; V2 and V3 are duplicates).</p>
             </div>
 
             {siblingsLoading ? (

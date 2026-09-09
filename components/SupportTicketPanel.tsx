@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { ArrowLeft, X, HelpCircle, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle, FileText, Upload, Trash2, Search } from 'lucide-react';
+import { X, HelpCircle, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle, FileText, Upload, Trash2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 
@@ -353,10 +353,9 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
             <div className="p-6">
               <button
                 onClick={() => setView('main')}
-                className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4"
+                className="text-sm text-gray-600 hover:text-gray-900 mb-4"
               >
-                <ArrowLeft className="w-4 h-4" />
-                Back
+                ← Back
               </button>
 
               <h3 className="text-gray-900 mb-4">Submit Support Ticket</h3>
@@ -491,10 +490,9 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
             <div className="p-6">
               <button
                 onClick={() => setView('main')}
-                className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4"
+                className="text-sm text-gray-600 hover:text-gray-900 mb-4"
               >
-                <ArrowLeft className="w-4 h-4" />
-                Back
+                ← Back
               </button>
 
               <div className="flex items-center justify-between mb-4">
@@ -560,10 +558,9 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
             <div className="p-6">
               <button
                 onClick={() => setView('tickets')}
-                className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 mb-4"
+                className="text-sm text-gray-600 hover:text-gray-900 mb-4"
               >
-                <ArrowLeft className="w-4 h-4" />
-                Back to Tickets
+                ← Back to Tickets
               </button>
 
               {/* Ticket Header */}

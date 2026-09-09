@@ -1,7 +1,6 @@
 'use client';
 
-import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { ArrowLeft, Briefcase, Plus, Loader2, Building2, MapPin, Clock, TrendingUp, Calendar, User, Sparkles, ClipboardList } from 'lucide-react';
+import { ArrowLeft, Briefcase, Plus, Loader2, Building2, MapPin, Clock, TrendingUp, Calendar, User, Target, Sparkles } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -69,7 +68,7 @@ export default function ResumeScoringJDSelection() {
             </button>
             <div className="flex items-center gap-3">
               <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-                <ClipboardList className="w-5 h-5 text-brand-blue" />
+                <Target className="w-5 h-5 text-brand-blue" />
               </div>
               <div>
                 <h1 className="text-gray-900 text-lg font-semibold tracking-tight">Select Job Description</h1>
@@ -150,16 +149,18 @@ export default function ResumeScoringJDSelection() {
                       {/* Title row */}
                       <div className="flex items-center gap-2 flex-wrap">
                         {jd.job_id && (
-                          <JobIdBadge>{jd.job_id}</JobIdBadge>
+                          <span className="px-2 py-0.5 text-xs font-mono font-semibold bg-brand-blue text-white rounded shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                            {jd.job_id}
+                          </span>
                         )}
-                        <h3 className="font-semibold text-gray-900 truncate min-w-0 tracking-tight" title={jd.title}>{jd.title}</h3>
+                        <h3 className="font-semibold text-gray-900 truncate tracking-tight">{jd.title}</h3>
                         <span className="flex items-center gap-1 px-2 py-0.5 text-xs text-green-700 bg-green-100 rounded-full ring-1 ring-green-200">
                           <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
                           Published
                         </span>
                         {scored > 0 && (
                           <span className="flex items-center gap-1 px-2 py-0.5 text-xs text-brand-blue bg-brand-blue/10 rounded-full ring-1 ring-brand-blue/20">
-                            <ClipboardList className="w-3 h-3" />
+                            <Target className="w-3 h-3" />
                             {scored} scored
                           </span>
                         )}
@@ -214,7 +215,7 @@ export default function ResumeScoringJDSelection() {
                         onClick={() => handleSelectJd(jd)}
                         className="inline-flex items-center gap-1.5 px-4 py-1.5 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                       >
-                        <ClipboardList className="w-4 h-4" />
+                        <Target className="w-4 h-4" />
                         Score Resumes
                       </button>
                     ) : null}

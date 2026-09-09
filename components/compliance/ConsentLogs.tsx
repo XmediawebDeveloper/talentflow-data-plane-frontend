@@ -19,7 +19,6 @@ import {
   Download,
   Filter,
 } from 'lucide-react';
-import ListEmptyState from '@/components/ui/list-empty-state';
 import consentService, { ConsentLog, ConsentAuditLog } from '@/lib/services/consentService';
 import { formatIST } from '@/lib/utils/dateUtils';
 
@@ -102,18 +101,6 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
   };
 
   const totalPages = Math.ceil(total / limit);
-
-  /* Whether a filter is what emptied the list, which decides which flavour of
-     the shared empty state shows. `featureFilter` counts only when the user
-     moved it off the value this tab was mounted with — the Assessments page
-     pins it to ASSESSMENT and AI Interview to its own feature, so treating that
-     as "narrowed" would put a Reset button in front of every empty tab. */
-  const hasNarrowingFilters =
-    featureFilter !== defaultFeature ||
-    statusFilter !== '' ||
-    emailFilter.trim() !== '' ||
-    startDate !== '' ||
-    endDate !== '';
 
   if (isLoading && logs.length === 0) {
     return (
@@ -207,129 +194,117 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
           </div>
       )}
 
-      {/* Nothing to list: the shared ListEmptyState, INSTEAD of the table —
-          the message used to sit under a live table header drawn over zero
-          rows, which is exactly the drift these shared states exist to stop.
-          It picks its own wording: a filter that matched nothing gets "No
-          consent logs match …" and a Reset, an empty log gets the plain line.
-
-          The filter bar above stays either way; it is what a narrowed zero
-          needs, and `clearFilters` here is the same handler its own Clear
-          button calls. */}
-      {logs.length === 0 && !isLoading ? (
-        <ListEmptyState
-          icon={Shield}
-          isNarrowed={hasNarrowingFilters}
-          query={emailFilter}
-          entityLabel="consent log"
-          emptyTitle="No consent logs found"
-          emptyDescription="Consent records appear here once candidates accept the terms for an assessment or interview."
-          onReset={clearFilters}
-        />
-      ) : (
-        <div className="overflow-x-auto tf-table-shell">
-          <table className="w-full min-w-[640px]">
-            <thead className="bg-gray-50">
-              <tr>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Assessment
-                </th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                  Candidate
-                </th>
-                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
-                  Feature
-                </th>
-                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
-                  Status
-                </th>
-                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
-                  Device
-                </th>
-                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
-                  IP Address
-                </th>
-                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
-                  Date
-                </th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-200">
-              {logs.map((log) => (
-                <tr key={log.id} className="hover:bg-gray-50">
-                  <td className="px-4 py-3">
-                    <div>
-                      {log.assessment_sequence_number && (
-                        <p className="text-xs font-medium text-gray-500">
-                          AS-{String(log.assessment_sequence_number).padStart(3, '0')}
-                        </p>
-                      )}
-                      <p className="text-sm text-gray-900">
-                        {log.assessment_title || '—'}
+      {/* Table */}
+      <div className="overflow-x-auto tf-table-shell">
+        <table className="w-full min-w-[640px]">
+          <thead className="bg-gray-50">
+            <tr>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Assessment
+              </th>
+              <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+                Candidate
+              </th>
+              <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                Feature
+              </th>
+              <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                Status
+              </th>
+              <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
+                Device
+              </th>
+              <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
+                IP Address
+              </th>
+              <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                Date
+              </th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-200">
+            {logs.map((log) => (
+              <tr key={log.id} className="hover:bg-gray-50">
+                <td className="px-4 py-3">
+                  <div>
+                    {log.assessment_sequence_number && (
+                      <p className="text-xs font-medium text-gray-500">
+                        AS-{String(log.assessment_sequence_number).padStart(3, '0')}
                       </p>
+                    )}
+                    <p className="text-sm text-gray-900">
+                      {log.assessment_title || '—'}
+                    </p>
+                  </div>
+                </td>
+                <td className="px-4 py-3">
+                  <div className="flex items-center gap-2">
+                    <User className="w-4 h-4 text-gray-400" />
+                    <div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {log.candidate_name || 'Unknown'}
+                      </p>
+                      <p className="text-[10px] sm:text-xs text-gray-500 truncate">{log.candidate_email}</p>
                     </div>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <User className="w-4 h-4 text-gray-400" />
-                      <div>
-                        <p className="text-sm font-medium text-gray-900">
-                          {log.candidate_name || 'Unknown'}
-                        </p>
-                        <p className="text-[10px] sm:text-xs text-gray-500 truncate">{log.candidate_email}</p>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-3 sm:px-4 py-2.5 sm:py-3">
-                    <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs font-medium ${
-                      log.feature_name === 'ASSESSMENT'
-                        ? 'bg-blue-100 text-blue-700'
-                        : 'bg-purple-100 text-purple-700'
-                    }`}>
-                      {log.feature_name === 'ASSESSMENT' ? 'Assessment' : 'AI Interview'}
+                  </div>
+                </td>
+                <td className="px-3 sm:px-4 py-2.5 sm:py-3">
+                  <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs font-medium ${
+                    log.feature_name === 'ASSESSMENT'
+                      ? 'bg-blue-100 text-blue-700'
+                      : 'bg-purple-100 text-purple-700'
+                  }`}>
+                    {log.feature_name === 'ASSESSMENT' ? 'Assessment' : 'AI Interview'}
+                  </span>
+                </td>
+                <td className="px-3 sm:px-4 py-2.5 sm:py-3">
+                  <div className="flex items-center gap-1">
+                    {log.consent_status ? (
+                      <>
+                        <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-500" />
+                        <span className="text-xs sm:text-sm text-green-700">Accepted</span>
+                      </>
+                    ) : (
+                      <>
+                        <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500" />
+                        <span className="text-xs sm:text-sm text-red-700">Declined</span>
+                      </>
+                    )}
+                  </div>
+                </td>
+                <td className="px-3 sm:px-4 py-2.5 sm:py-3 hidden md:table-cell">
+                  <div className="flex items-center gap-1.5">
+                    <Monitor className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <span className="text-xs sm:text-sm text-gray-600 truncate">
+                      {log.device_type || 'Unknown'} / {log.browser_name || 'Unknown'}
                     </span>
-                  </td>
-                  <td className="px-3 sm:px-4 py-2.5 sm:py-3">
-                    <div className="flex items-center gap-1">
-                      {log.consent_status ? (
-                        <>
-                          <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-500" />
-                          <span className="text-xs sm:text-sm text-green-700">Accepted</span>
-                        </>
-                      ) : (
-                        <>
-                          <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500" />
-                          <span className="text-xs sm:text-sm text-red-700">Declined</span>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-3 sm:px-4 py-2.5 sm:py-3 hidden md:table-cell">
-                    <div className="flex items-center gap-1.5">
-                      <Monitor className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      <span className="text-xs sm:text-sm text-gray-600 truncate">
-                        {log.device_type || 'Unknown'} / {log.browser_name || 'Unknown'}
-                      </span>
-                    </div>
-                  </td>
-                  <td className="px-3 sm:px-4 py-2.5 sm:py-3 hidden md:table-cell">
-                    <div className="flex items-center gap-1.5">
-                      <Globe className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      <span className="text-xs sm:text-sm text-gray-600">{log.ip_address}</span>
-                    </div>
-                  </td>
-                  <td className="px-3 sm:px-4 py-2.5 sm:py-3">
-                    <div className="flex items-center gap-1">
-                      <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
-                      <span className="text-[10px] sm:text-sm text-gray-600 whitespace-nowrap">
-                        {new Date(log.created_at).toLocaleDateString()}
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  </div>
+                </td>
+                <td className="px-3 sm:px-4 py-2.5 sm:py-3 hidden md:table-cell">
+                  <div className="flex items-center gap-1.5">
+                    <Globe className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <span className="text-xs sm:text-sm text-gray-600">{log.ip_address}</span>
+                  </div>
+                </td>
+                <td className="px-3 sm:px-4 py-2.5 sm:py-3">
+                  <div className="flex items-center gap-1">
+                    <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
+                    <span className="text-[10px] sm:text-sm text-gray-600 whitespace-nowrap">
+                      {new Date(log.created_at).toLocaleDateString()}
+                    </span>
+                  </div>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Empty State */}
+      {logs.length === 0 && !isLoading && (
+        <div className="text-center py-8 sm:py-12">
+          <Shield className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300 mx-auto mb-3 sm:mb-4" />
+          <p className="text-sm text-gray-500">No consent logs found</p>
         </div>
       )}
 

@@ -38,20 +38,6 @@ interface ScoringProgressContextType {
 
   // Actions
   startScoringJob: (jobId: string, jobTitle: string, items: Omit<ScoringProgressItem, 'status'>[], returnUrl?: string) => void;
-  /**
-   * Upsert a whole job from a progress snapshot.
-   *
-   * `startScoringJob` is for a run this tab is DISPATCHING — it resets every
-   * item to Queued. A run that arrives already in flight (the `?batch_id=`
-   * handoff from My Resumes, Resume Database or AI Talent Match, polled by the
-   * route) has to report its real counts instead, and re-report them on every
-   * poll, so calling that would peg the widget at 0% forever.
-   *
-   * One state write per tick, deliberately: syncing such a run through
-   * `updateItemStatus` would be one write per resume per tick, which for a
-   * few hundred resumes is a few hundred renders every two seconds.
-   */
-  syncScoringJob: (job: Omit<ScoringJob, 'startedAt'> & { startedAt?: string }) => void;
   updateItemStatus: (jobId: string, itemId: string, status: ScoringProgressItem['status'], result?: Partial<ScoringProgressItem>) => void;
   clearCompletedJobs: () => void;
   clearJob: (jobId: string) => void;
@@ -63,9 +49,6 @@ interface ScoringProgressContextType {
 }
 
 const STORAGE_KEY = 'scoring_progress_state';
-
-/** How long a finished run stays available in the corner before it is forgotten. */
-const JOB_RETENTION_MS = 24 * 60 * 60 * 1000;
 
 const ScoringProgressContext = createContext<ScoringProgressContextType | undefined>(undefined);
 
@@ -82,19 +65,10 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
-        /* Finished runs are KEPT. The corner button is meant to stay put until
-           the recruiter dismisses it, and dropping every job with nothing left
-           running meant a completed run vanished on the next page load — taking
-           the only way back to its results with it.
-
-           The one thing still dropped is a run old enough that nobody is coming
-           back to it, so a forgotten job cannot haunt the corner indefinitely. */
-        const cutoff = Date.now() - JOB_RETENTION_MS;
-        const activeJobs = (parsed.activeScoringJobs || []).filter((job: ScoringJob) => {
-          if (job.queued > 0 || job.processing > 0) return true;
-          const startedAt = job.startedAt ? new Date(job.startedAt).getTime() : 0;
-          return startedAt > cutoff;
-        });
+        // Filter out jobs that are fully completed (no queued or processing items)
+        const activeJobs = (parsed.activeScoringJobs || []).filter((job: ScoringJob) =>
+          job.queued > 0 || job.processing > 0
+        );
         setActiveScoringJobs(activeJobs);
         setIsMinimized(parsed.isMinimized ?? true);
       }
@@ -147,21 +121,6 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
 
     // Show the progress indicator when starting a new job
     setIsMinimized(false);
-  }, []);
-
-  const syncScoringJob = useCallback((incoming: Omit<ScoringJob, 'startedAt'> & { startedAt?: string }) => {
-    setActiveScoringJobs(prev => {
-      const existing = prev.find(j => j.jobId === incoming.jobId);
-      /* `startedAt` is kept from the first sighting — it is what the retention
-         window ages a finished run out on, and taking it from each snapshot
-         would keep pushing that expiry forward. */
-      const next: ScoringJob = {
-        ...incoming,
-        startedAt: existing?.startedAt || incoming.startedAt || new Date().toISOString(),
-      };
-      if (!existing) return [...prev, next];
-      return prev.map(job => (job.jobId === incoming.jobId ? next : job));
-    });
   }, []);
 
   const updateItemStatus = useCallback((
@@ -228,7 +187,6 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
       hasActiveScoring,
       isMainPanelOpen,
       startScoringJob,
-      syncScoringJob,
       updateItemStatus,
       clearCompletedJobs,
       clearJob,

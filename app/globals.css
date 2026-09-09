@@ -242,30 +242,6 @@
   --score-low: #ef4444;
   --score-low-bg: #fee2e2;
 
-  /* ── Invite / attempt status tokens ─────────────────────────────────────
-     One semantic colour per status in the invite lifecycle, so a status reads
-     the same wherever it is drawn — the badge in an invite table, the status
-     filter on the Assessments page's Invitation Status tab, anything added
-     next. These were the same four colours before, spelled out as literal
-     Tailwind classes in each component, which is how they would have drifted.
-
-     Three of the four alias the brand palette rather than restating a hex,
-     because that is what the badges were already using. Completed's green has
-     no brand equivalent, so it carries the value the badges already drew it
-     with (Tailwind green-700). Terminal failure states (Invite Failed,
-     Bounced, Terminated) are NOT here — they are still per-component reds;
-     tokenise them when something needs to share them.
-
-     Used through the utilities in @theme below: text-status-completed,
-     bg-status-completed/10, ring-status-completed/20, … Alpha modifiers work
-     because these resolve to plain colour values. Dark values are in the
-     .dark block — the same colours the badges' `dark:` variants used to name
-     one by one. */
-  --status-invited: var(--brand-blue);
-  --status-expired: var(--brand-orange-deep);
-  --status-progress: var(--brand-cyan);
-  --status-completed: #15803d;
-
   /* ── Brand palette (logo-based) ─────────────────────────────────────── */
   /* Deep blue family (primary brand) */
   --brand-blue: #0f3c99;
@@ -552,14 +528,6 @@
   --color-brand-peach: var(--brand-peach);
   --color-brand-sky: var(--brand-sky);
 
-  /* Invite / attempt status utilities — text-status-completed,
-     bg-status-expired/10, ring-status-progress/20, and so on. See the token
-     definitions in :root above (and their dark values in .dark). */
-  --color-status-invited: var(--status-invited);
-  --color-status-expired: var(--status-expired);
-  --color-status-progress: var(--status-progress);
-  --color-status-completed: var(--status-completed);
-
   /* Three-dot (⋮) menu icon utilities — text-menu-icon-view,
      text-menu-icon-archive, etc. See the token definitions in :root above. */
   --color-menu-icon-view: var(--menu-icon-view);
@@ -658,22 +626,6 @@
   --score-medium-bg: rgba(245, 158, 11, 0.15);
   --score-low: #f87171;
   --score-low-bg: rgba(239, 68, 68, 0.15);
-
-  /* Invite / attempt status tokens — dark mode. Listed explicitly rather than
-     left to alias the brand tokens: --brand-* keep their light values in dark
-     mode (it is the `.dark .text-brand-*` utility overrides further down that
-     lift them), so a status token pointing at var(--brand-blue) would render
-     the deep light-mode blue on a dark page.
-
-     Each value is the one the invite badges' own `dark:` variants already
-     used, so nothing about how a status looks in dark mode changes:
-     .dark .text-brand-blue (#93c5fd), .dark .text-brand-orange-deep
-     (#fdba74), .dark .text-brand-cyan (#67e8f9) and .dark .text-green-700
-     (#4ade80). */
-  --status-invited: #93c5fd;
-  --status-expired: #fdba74;
-  --status-progress: #67e8f9;
-  --status-completed: #4ade80;
 
   /* Marketing palette — dark side. Only the tokens that actually flip are
      listed; the fixed ones (navy band, solid buttons, cyan/amber fills) keep
@@ -1981,7 +1933,7 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
    That leaves the vertical track running the full height of the shell, header
    included, since a native bar can only span the box that owns it. So the
    native bars are hidden and redrawn as an overlay whose vertical track starts
-   below the header — see `[data-tf-native-bars]` further down and
+   below the header — see `.tf-vscroll-custom` further down and
    `components/TableScrollbars.tsx`. Scrolling itself is still the browser's;
    only the bars' rendering is ours.
 
@@ -2145,25 +2097,6 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   max-height: none;
 }
 
-/* ScoreTableModal (the "View Score Table" popup): embeds
-   DetailedScorecardTab's rubric table — a `.tf-table-shell` sized for the
-   full CandidateScoringDetailPage's generous surrounding space — inside a
-   much shorter modal that already scrolls itself (`.score-table-modal-body`).
-   Two independently-scrolling, independently-sticky containers stacked like
-   that is exactly the "one scroll container per table" rule above warns
-   about, and here it showed up as the table visibly bleeding past the modal
-   card. Dropping the shell's own cap and letting it grow to natural height
-   makes the modal body the only vertical scroller; its sticky `thead`
-   retargets to that ancestor instead and keeps working. */
-.score-table-modal-body .tf-table-shell {
-  min-height: 0;
-  max-height: none;
-  /* y only — the element's own `overflow-x-auto` (DetailedScorecardTab.tsx)
-     still has to contain the rubric table sideways; only the vertical cap
-     and its independent scroll/sticky context are the problem here. */
-  overflow-y: visible;
-}
-
 /* ── Custom scrollbars for the shell ───────────────────────────────────
    The native vertical bar has to span the whole shell, header included,
    because the shell is the scroll container and the header sits inside it.
@@ -2178,19 +2111,13 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
    The webkit line is kept for older WebKit that predates the standard
    property. `!important` for the same reason: it is overriding that `*` rule.
 
-   The mark is written at runtime, and only after the component has measured
+   The class is added at runtime, and only after the component has measured
    that these rules really do remove the native bars — so a browser that
-   ignores them keeps working native ones rather than getting none at all.
-
-   Keyed off a `data-` attribute rather than a class because React owns the
-   `class` attribute on every shell it renders: a re-render that changed a
-   shell's className string wiped a runtime-added class, the native bars came
-   back underneath the overlay, and the table showed two horizontal scrollbars.
-   React never writes an attribute it did not render, so this one survives. */
-[data-tf-native-bars='hidden'] {
+   ignores them keeps working native ones rather than getting none at all. */
+.tf-vscroll-custom {
   scrollbar-width: none !important;
 }
-[data-tf-native-bars='hidden']::-webkit-scrollbar {
+.tf-vscroll-custom::-webkit-scrollbar {
   width: 0 !important;
   height: 0 !important;
 }
@@ -2244,25 +2171,14 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
 }
 
 /* Guard rail for the one-scroll-container rule: a wrapper immediately around a
-   scroll container, or one immediately inside it, would draw a second
-   horizontal track a few pixels from the first.
-
-   Both of this app's table scroll containers count on both sides of the pair —
-   `.tf-table-shell` and `.table-responsive` — so the rule holds whichever a
-   table uses, and a `.table-responsive` nested in either is caught too.
-
-   Only the sideways-only scrollers are neutralised: `overflow-x: visible`
-   computes back to `auto` on an element that also scrolls vertically, so a
-   dialog body or a `.tf-table-shell` keeps doing its job and is never a target
-   here — it is only ever the container whose single bar survives.
-
-   Direct-child scope, deliberately: a scrollable <pre>, a chip row or a code
-   block deeper inside a cell is its own affair and is left alone. */
-:where(.tf-table-shell, .table-responsive)
-  > :where(.overflow-x-auto, .overflow-x-scroll, .table-responsive),
-:where(.overflow-x-auto, .overflow-x-scroll, .table-responsive):has(
-    > :where(.tf-table-shell, .table-responsive)
-  ) {
+   shell, or one immediately inside it, would draw a second horizontal track a
+   few pixels from the shell's own. Only the sideways-only
+   utilities are neutralised, so a wrapper that scrolls vertically (a dialog
+   body, say) keeps doing its job, and a scrollable <pre> deeper inside a cell
+   is left alone. */
+.tf-table-shell > .overflow-x-auto,
+.tf-table-shell > .overflow-x-scroll,
+:where(.overflow-x-auto, .overflow-x-scroll):has(> .tf-table-shell) {
   overflow-x: visible;
 }
 

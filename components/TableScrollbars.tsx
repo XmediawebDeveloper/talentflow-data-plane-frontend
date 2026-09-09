@@ -30,25 +30,8 @@ import { useEffect } from 'react';
    ones mounted later by a route change or a dialog. */
 
 const SHELL_SELECTOR = '.tf-table-shell';
-/**
- * Marks a shell whose native bars are suppressed (see globals.css).
- *
- * A `data-` attribute, NOT a class, and that is the whole point: this mark is
- * written at runtime onto elements React renders, and React owns their `class`
- * attribute. Any re-render that changes a shell's className string rewrites the
- * whole attribute and takes a runtime-added class with it - which brought the
- * native bars back while this overlay was still drawing its own, so the table
- * showed TWO horizontal scrollbars (and two vertical ones) until it unmounted.
- * `ResumeTable`'s shell is one such shell: its class list ends in an
- * interpolated `${tableShellClassName}`.
- *
- * React never writes an attribute it did not render, so a data attribute
- * cannot be clobbered that way. `sync()` re-asserts it anyway, once per frame
- * per shell, so any other mechanism that strips it self-heals on the next
- * frame rather than leaving a doubled bar behind.
- */
-const NATIVE_HIDDEN_ATTR = 'data-tf-native-bars';
-const NATIVE_HIDDEN_VALUE = 'hidden';
+/** Marks a shell whose native bars are suppressed (see globals.css). */
+const NATIVE_HIDDEN_CLASS = 'tf-vscroll-custom';
 
 const BAR_SIZE = 8;    // thumb thickness in px
 const BAR_INSET = 2;   // gap between thumb and the shell's edge
@@ -74,7 +57,7 @@ type Entry = {
  *  rule, doing nothing leaves working native bars rather than none at all. */
 function nativeBarsCanBeHidden(): boolean {
   const probe = document.createElement('div');
-  probe.setAttribute(NATIVE_HIDDEN_ATTR, NATIVE_HIDDEN_VALUE);
+  probe.className = NATIVE_HIDDEN_CLASS;
   probe.style.cssText =
     'position:absolute;top:-9999px;left:-9999px;width:100px;height:100px;overflow:scroll;visibility:hidden';
   probe.appendChild(document.createElement('div')).style.cssText = 'width:300px;height:300px';
@@ -213,16 +196,6 @@ export default function TableScrollbars() {
        needs no invalidation step. */
     const sync = () => {
       entries.forEach(({ y, x }, shell) => {
-        /* Re-assert the suppression before measuring. Nothing should be able to
-           strip it now that it is a data attribute React does not own, but a
-           shell that has lost it renders its native bars UNDER the two this
-           overlay is about to position - the doubled-scrollbar bug - and one
-           attribute read per shell per frame is a cheap way to make that state
-           unreachable rather than merely unlikely. */
-        if (shell.getAttribute(NATIVE_HIDDEN_ATTR) !== NATIVE_HIDDEN_VALUE) {
-          shell.setAttribute(NATIVE_HIDDEN_ATTR, NATIVE_HIDDEN_VALUE);
-        }
-
         const hideBoth = () => {
           y.track.style.display = 'none';
           x.track.style.display = 'none';
@@ -317,7 +290,7 @@ export default function TableScrollbars() {
     };
 
     const attach = (shell: HTMLElement) => {
-      shell.setAttribute(NATIVE_HIDDEN_ATTR, NATIVE_HIDDEN_VALUE);
+      shell.classList.add(NATIVE_HIDDEN_CLASS);
 
       const y = createBar(shell, 'y');
       const x = createBar(shell, 'x');
@@ -334,7 +307,7 @@ export default function TableScrollbars() {
           if (table) resizeObserver.unobserve(table);
           y.dispose();
           x.dispose();
-          shell.removeAttribute(NATIVE_HIDDEN_ATTR);
+          shell.classList.remove(NATIVE_HIDDEN_CLASS);
         },
       });
     };

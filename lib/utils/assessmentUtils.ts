@@ -182,31 +182,3 @@ export function formatDateOnlyIST(dateStr: string | Date | null | undefined): st
     year: 'numeric',
   });
 }
-
-/**
- * What an assessment can honestly report as its question count.
- *
- * The list endpoint carries no question count. `hr_enabled ? 10 : 0` style
- * arithmetic on the section flags — which the assessments list used to do —
- * returns the same number for every assessment with the same sections switched
- * on, so it tracks nothing. The three topic arrays are real values on the
- * response, so this counts those: what the assessment is actually configured
- * with. It is a count of TOPICS, which is not identical to a count of
- * questions, and is the closest honest figure available until the backend
- * exposes one.
- *
- * Shared so the Job List row's "Total Questions" and the version history's
- * per-version "Questions" are the same number by construction — a job row's
- * total is exactly the sum of the rows its version panel lists.
- */
-export function countAssessmentTopics(assessment: {
-  hr_topics?: unknown[] | null;
-  technical_topics?: unknown[] | null;
-  coding_topics?: unknown[] | null;
-}): number {
-  return (
-    (assessment.hr_topics?.length ?? 0)
-    + (assessment.technical_topics?.length ?? 0)
-    + (assessment.coding_topics?.length ?? 0)
-  );
-}

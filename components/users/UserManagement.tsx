@@ -9,7 +9,7 @@ import {
   type CustomPermissionSubCategory,
 } from '@/lib/constants/permissionCategories';
 import { useRouter } from 'next/navigation';
-import { ArrowLeft,
+import {
   Search,
   Plus,
   Pencil,
@@ -3340,9 +3340,8 @@ export default function UserManagement() {
                     <button
                       onClick={() => setResetPwMode('choose')}
                       disabled={resetPwSubmitting}
-                      className="flex items-center gap-2 px-3 py-2 text-sm rounded-lg ring-1 ring-gray-300 dark:ring-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-60"
+                      className="px-3 py-2 text-sm rounded-lg ring-1 ring-gray-300 dark:ring-slate-600 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-60"
                     >
-                      <ArrowLeft className="w-4 h-4" />
                       Back
                     </button>
                     <button

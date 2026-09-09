@@ -169,7 +169,7 @@ export const PERMISSION_MODULES: ModulePermissions[] = [
   {
     id: 'resume_scoring',
     name: 'Resume Scoring',
-    icon: 'ClipboardList',
+    icon: 'Target',
     description: 'AI-powered resume scoring and candidate evaluation',
     permissions: [
       {

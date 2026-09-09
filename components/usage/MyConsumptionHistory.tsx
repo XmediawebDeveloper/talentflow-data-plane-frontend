@@ -9,7 +9,7 @@ import React, { useState, useEffect } from 'react';
 import type { IconComponent } from '@/lib/types/icon';
 import {
   Loader2,
-  ClipboardList,
+  Target,
   ClipboardCheck,
   Video,
   Calendar,
@@ -33,7 +33,7 @@ import {
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 const UNIT_TYPE_ICONS: Record<UnitType, IconComponent> = {
-  RS: ClipboardList,
+  RS: Target,
   AS: ClipboardCheck,
   AIU: Video,
 };

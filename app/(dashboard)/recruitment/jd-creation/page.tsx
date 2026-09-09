@@ -2,7 +2,7 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense, useMemo } from 'react';
-import { ArrowLeft, Loader2, AlertTriangle, XCircle, CreditCard, ShieldX, LogIn } from 'lucide-react';
+import { Loader2, AlertTriangle, XCircle, CreditCard, ShieldX, LogIn } from 'lucide-react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import JDCreation from '@/components/JDCreation';
@@ -194,9 +194,8 @@ function AccessBlockedError({
           {getActionButton()}
           <button
             onClick={onBack}
-            className="flex items-center justify-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-medium transition-colors text-sm"
+            className="px-4 sm:px-5 py-2 sm:py-2.5 bg-white dark:bg-slate-800 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-medium transition-colors text-sm"
           >
-            <ArrowLeft className="w-4 h-4" />
             Go Back
           </button>
         </div>
@@ -367,31 +366,7 @@ function JDCreationContent() {
     router.push(fromAssessment ? ASSESSMENT_CREATE_HREF : '/recruitment/job-openings?view=list');
   };
 
-  /* The breadcrumb leaf names the step the recruiter is actually on, rather than
-     saying "Create Job Description" for the whole four-screen flow.
-
-     Seeded from `?stage=` so a refresh mid-flow renders the right crumb on the
-     very first paint instead of flashing "Create" — but only SEEDED. The URL is
-     kept in sync by `history.replaceState` inside JDCreation, which bypasses the
-     Next router on purpose, so `stageFromUrl` never updates as the user moves;
-     `onStepChange` below is what keeps this live. The URL also cannot express
-     step 4 at all (publishing does not change `?stage=`), which is the other
-     reason it can only ever be a seed.
-
-     Step 1 keeps the existing Create/Edit distinction — that is the one screen
-     where which of the two you are doing is not otherwise obvious. */
-  const [jdDisplayStep, setJdDisplayStep] = useState<1 | 2 | 3 | 4>(
-    stageFromUrl === 'review' ? 3 : stageFromUrl === 'extract' ? 2 : 1,
-  );
-
-  /* One short word per step. The trail already says "Job Descriptions" one crumb
-     up, so repeating it in the leaf ("Create Job Description") only pushed the
-     part that actually changes off the end of a narrow bar. */
-  const jdLeafLabel =
-    jdDisplayStep === 2 ? 'Edit'
-      : jdDisplayStep === 3 ? 'Review'
-        : jdDisplayStep === 4 ? 'Publish'
-          : 'Create';
+  const jdLeafLabel = editingJD ? 'Edit Job Description' : 'Create Job Description';
 
   // The trail names where the recruiter actually came from. Entering from the
   // assessment flow used to reset it to Dashboard › Job Descriptions, which
@@ -554,10 +529,6 @@ function JDCreationContent() {
           isJDInUse={isJDInUse}
           jdUsageMessage={jdUsageMessage}
           breadcrumbItems={breadcrumbItems}
-          /* `setJdDisplayStep` is a state setter, so its identity is stable —
-             passing it directly cannot re-fire the reporting effect inside
-             JDCreation on every render. */
-          onStepChange={setJdDisplayStep}
         />
       </div>
     </DndProvider>
