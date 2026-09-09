@@ -89,6 +89,7 @@ interface InterviewUIProps {
    * check skipped) falls back to today's unconstrained default-camera
    * behavior — no pinning, no switch detection. */
   approvedCameraDeviceId?: string | null;
+  approvedMicDeviceId?: string | null;
   /** Object URL of the candidate's captured identity photo, used for the "You"
    * chat avatar. Null/undefined (e.g. identity step skipped) → the "You" text
    * avatar is shown instead. */
@@ -522,7 +523,7 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
 });
 const LiveAIBubbleMemo = memo(LiveAIBubble);
 
-export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInterviewClosing, onTerminate, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl, approvedCameraDeviceId }: InterviewUIProps) {
+export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInterviewClosing, onTerminate, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl, approvedCameraDeviceId, approvedMicDeviceId }: InterviewUIProps) {
   // ── Effective device capability ──────────────────────────────────────────
   // The portal detects this at the system-check step, but a RESUMED session (or
   // any entry path that skips system check) arrives with deviceCapability=undefined
@@ -1689,7 +1690,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // mic reopens on the built-in device, the pin is rewritten to that built-in,
   // so a "does the pinned device still exist?" check would always say yes. This
   // ref stays on the ORIGINAL device so its disappearance is detectable.
-  const interviewMicDeviceIdRef = useRef<string | undefined>(undefined);
+  // Seeded from the approvedMicDeviceId prop — the mic the candidate verified
+  // at System Check. Before this existed the ref waited on the first live
+  // answer-mic track, which meant the interview pinned whatever the OS called
+  // "default" and the candidate's explicit Device Settings choice was lost.
+  const interviewMicDeviceIdRef = useRef<string | undefined>(approvedMicDeviceId ?? undefined);
   // Mics that were connected and working when the candidate passed the system
   // check. A mid-interview swap to one of these is an ALLOWED fallback rather
   // than a proctoring pause (the proctoring monitor logs it as
@@ -2716,10 +2721,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  // Device tracking — scoped to the ACTIVE recording session only. We clear the
-  // pin at turn end so each new question reopens on the browser's current
-  // default input instead of staying stuck on an old system/headset device.
-  const pinnedAudioDeviceIdRef = useRef<string | undefined>(undefined);
+  // Device tracking for the ACTIVE recording session. Seeded from the mic the
+  // candidate approved at System Check so the FIRST answer turn already captures
+  // on their chosen device — it used to start undefined, so turn 1 opened the OS
+  // default and their selection never took effect.
+  //
+  // The pin is still cleared at turn end (see teardownRecordingMedia) so a later
+  // turn can follow a legitimate device change rather than staying stuck on a
+  // device that has since been unplugged; getDedicatedRecordingAudioStream falls
+  // back from exact() → default, so a vanished pin degrades gracefully.
+  const pinnedAudioDeviceIdRef = useRef<string | undefined>(approvedMicDeviceId ?? undefined);
   const audioDeviceChangeListenerRef = useRef<(() => void) | null>(null);
   // AnalyserNode tapped off the mic source for the live recording waveform UI.
   // Passive sink (source→analyser only, never →destination, so no echo).
@@ -9805,6 +9816,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 showHandIndicator={false}
                 isHandRaised={handDetection.isHandRaised}
                 initialCameraDeviceId={interviewCameraDeviceIdRef.current}
+                audioDeviceId={approvedMicDeviceId ?? undefined}
               />
 
               {/* REC badge — overlaid inside the camera frame (top-right). REC is

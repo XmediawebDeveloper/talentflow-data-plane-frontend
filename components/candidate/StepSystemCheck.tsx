@@ -32,7 +32,7 @@ import {
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { prefetchObjectDetectionModel } from '@/components/ai-interview/proctoring/InterviewObjectDetection';
 import { checkVirtualCamera, isVirtualCameraLabel, INVALID_CAMERA_SELECTION_MESSAGE } from '@/lib/proctoring/virtualCameraDetection';
-import { canOpenDevice, enumerateAudioInputIds, saveVerifiedAudioInputs } from '@/lib/utils/mediaDeviceProbe';
+import { canOpenDevice, enumerateAudioInputIds, saveVerifiedAudioInputs, currentAudioInputId } from '@/lib/utils/mediaDeviceProbe';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -42,7 +42,11 @@ interface StepSystemCheckProps {
   /** approvedCameraDeviceId is the resolved deviceId of the camera that
    * passed the webcam check (null if none — shouldn't happen once Continue
    * is enabled, but kept nullable defensively). */
-  onAllPassed: (approvedCameraDeviceId: string | null) => void;
+  // Both APPROVED devices are handed upward so the interview can PIN them.
+  // The mic used to be omitted, so the candidate's Device Settings choice died
+  // here and the interview silently opened the OS default instead — on Windows
+  // usually a freshly-plugged headset, i.e. NOT the mic they selected.
+  onAllPassed: (approvedCameraDeviceId: string | null, approvedMicDeviceId: string | null) => void;
   /** Called just before proceeding — registers the candidate's face as a baseline for identity verification during the interview */
   onRegisterFace?: (videoElement: HTMLVideoElement) => Promise<boolean>;
   /**
@@ -1936,7 +1940,18 @@ export default function StepSystemCheck({
         streamRef.current = null;
       }
 
-      onAllPassed(approvedCameraDeviceIdRef.current);
+      // Resolve the mic the candidate actually verified on: their explicit
+      // Device Settings choice, or the concrete device behind "System Default".
+      // Resolving the concrete id matters even when they never chose, because
+      // "default" is a moving target on Windows — plugging a headset in
+      // reassigns it, so an interview that merely asks for the default can
+      // change microphone underneath itself mid-session.
+      let _approvedMicId: string | null = selectedMicIdRef.current || null;
+      if (!_approvedMicId) {
+        try { _approvedMicId = await currentAudioInputId(); } catch { _approvedMicId = null; }
+      }
+      console.log(`[SystemCheck] approved devices — camera=${approvedCameraDeviceIdRef.current ?? 'default'} mic=${_approvedMicId ?? 'default'}`);
+      onAllPassed(approvedCameraDeviceIdRef.current, _approvedMicId);
     } finally {
       if (mountedRef.current) setIsProceedLoading(false);
     }

@@ -139,3 +139,28 @@ export function loadVerifiedAudioInputs(token: string): Set<string> {
     return new Set();
   }
 }
+
+/**
+ * The deviceId of the microphone the browser would open RIGHT NOW with no
+ * constraint — i.e. the concrete device behind "System Default".
+ *
+ * Used to resolve the candidate's effective mic at system-check time so the
+ * interview can PIN it. Pinning a concrete id matters even when the candidate
+ * never touched the dropdown: "default" is a moving target on Windows (plugging
+ * a headset in silently reassigns it), so an interview that just asks for the
+ * default can change microphone underneath itself.
+ *
+ * Returns null if no mic can be opened; the probe stream is always stopped.
+ */
+export async function currentAudioInputId(): Promise<string | null> {
+  let stream: MediaStream | null = null;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    const id = stream.getAudioTracks()[0]?.getSettings?.().deviceId;
+    return id && id !== 'default' && id !== 'communications' ? id : null;
+  } catch {
+    return null;
+  } finally {
+    stream?.getTracks().forEach(t => t.stop());
+  }
+}
