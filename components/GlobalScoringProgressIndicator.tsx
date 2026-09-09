@@ -88,6 +88,12 @@ export default function GlobalScoringProgressIndicator() {
     : 0;
 
   const isAllComplete = totalStats.queued === 0 && totalStats.processing === 0;
+  // "Complete" only means every item that finished actually succeeded. If every
+  // finished item failed (e.g. the backend has no OpenAI key configured), calling
+  // it "Complete" with a green checkmark told the user scoring worked when it
+  // didn't — nothing was scored and they'd only find out by opening each result.
+  const isAllFailed = isAllComplete && totalStats.completed === 0 && totalStats.failed > 0;
+  const hasSomeFailures = isAllComplete && totalStats.failed > 0 && totalStats.completed > 0;
 
   /* ---- Where this widget sits, and on which layer ---------------------------
      `bottom-6 right-6` is the Resume Scoring page's own progress button's spot,
@@ -162,7 +168,9 @@ export default function GlobalScoringProgressIndicator() {
   if (isMinimized) {
     return (
       <div
-        className="fixed bottom-6 right-6 z-[10050] bg-gray-900 text-white px-4 py-3 rounded-xl shadow-2xl hover:bg-gray-800 transition-all cursor-pointer flex items-center gap-3 animate-in slide-in-from-bottom duration-300 border border-gray-700 max-w-xs"
+        className={`fixed bottom-6 right-6 z-[10050] text-white px-4 py-3 rounded-xl shadow-2xl transition-all cursor-pointer flex items-center gap-3 animate-in slide-in-from-bottom duration-300 border max-w-xs ${
+          isAllFailed ? 'bg-red-700 hover:bg-red-800 border-red-600' : 'bg-gray-900 hover:bg-gray-800 border-gray-700'
+        }`}
         onClick={restore}
       >
         <div className="relative flex-shrink-0">
@@ -172,17 +180,19 @@ export default function GlobalScoringProgressIndicator() {
           )}
         </div>
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold truncate">Scoring Progress</p>
-          <p className="text-xs text-gray-400">
-            {isAllComplete
-              ? `Complete: ${totalStats.completed} scored`
+          <p className="text-sm font-semibold truncate">{isAllFailed ? 'Scoring Failed' : 'Scoring Progress'}</p>
+          <p className="text-xs text-gray-300">
+            {isAllFailed
+              ? `${totalStats.failed} resume${totalStats.failed !== 1 ? 's' : ''} could not be scored`
+              : isAllComplete
+              ? `Complete: ${totalStats.completed} scored${totalStats.failed > 0 ? `, ${totalStats.failed} failed` : ''}`
               : `${totalStats.completed}/${totalStats.total} (${overallProgress}%)`
             }
           </p>
         </div>
         <div className="w-12 h-1.5 bg-gray-700 rounded-full overflow-hidden flex-shrink-0">
           <div
-            className={`h-full transition-[width] duration-300 ease-out ${isAllComplete ? 'bg-green-500' : 'bg-blue-500'}`}
+            className={`h-full transition-[width] duration-300 ease-out ${isAllFailed ? 'bg-red-400' : isAllComplete ? 'bg-green-500' : 'bg-blue-500'}`}
             style={{ width: `${overallProgress}%` }}
           />
         </div>
@@ -196,16 +206,24 @@ export default function GlobalScoringProgressIndicator() {
     <div className="fixed bottom-6 right-6 z-[10050] w-96 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
       {/* Header */}
       <div className={`flex items-center justify-between px-4 py-3 ${
-        isAllComplete ? 'bg-green-600' : 'bg-gray-800'
+        isAllFailed ? 'bg-red-700' : hasSomeFailures ? 'bg-amber-600' : isAllComplete ? 'bg-green-600' : 'bg-gray-800'
       } text-white`}>
         <div className="flex items-center gap-2">
           {hasActiveScoring ? (
             <Loader2 className="w-5 h-5 animate-spin" />
+          ) : isAllFailed ? (
+            <XCircle className="w-5 h-5" />
           ) : (
             <CheckCircle2 className="w-5 h-5" />
           )}
           <span className="font-medium text-sm">
-            {hasActiveScoring ? 'Scoring in Progress' : 'Scoring Complete'}
+            {hasActiveScoring
+              ? 'Scoring in Progress'
+              : isAllFailed
+              ? 'Scoring Failed'
+              : hasSomeFailures
+              ? 'Scoring Complete (with errors)'
+              : 'Scoring Complete'}
           </span>
         </div>
         <div className="flex items-center gap-1">
@@ -310,6 +328,17 @@ function JobProgressItem({
     ? Math.round(((job.completed + job.failed) / job.total) * 100)
     : 0;
 
+  // Surface *why* it failed instead of just a count — a missing API key and a
+  // transient network error need different reactions from the user, and both
+  // previously showed the same bare "X failed" with no way to tell them apart
+  // without opening each candidate's result individually.
+  const firstFailureReason = job.items.find(item => item.status === 'Failed' && item.errorReason)?.errorReason;
+  const friendlyFailureReason = firstFailureReason
+    ? /openai client|api key|RS_OPENAI_API_KEY/i.test(firstFailureReason)
+      ? 'AI scoring is not configured — the OpenAI API key is missing on the server. Contact your administrator.'
+      : firstFailureReason
+    : undefined;
+
   return (
     <div className="border-b border-gray-100 last:border-b-0">
       <div
@@ -385,6 +414,12 @@ function JobProgressItem({
               <div className="text-sm font-medium text-red-600">{job.failed}</div>
             </div>
           </div>
+
+          {isComplete && job.failed > 0 && friendlyFailureReason && (
+            <div className="mb-3 px-3 py-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+              {friendlyFailureReason}
+            </div>
+          )}
 
           {/* Actions */}
           <div className="flex items-center gap-2">

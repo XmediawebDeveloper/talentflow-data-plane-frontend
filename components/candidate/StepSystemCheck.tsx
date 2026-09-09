@@ -1527,8 +1527,17 @@ export default function StepSystemCheck({
       // reachable only by clicking that now-disabled button. Reset to 'idle'
       // so the unconditionally-enabled "Start recording" button takes over
       // for the newly selected device instead of a dead-ended "Record again".
-      if (voiceEnrollStatus === 'failed' || voiceEnrollStatus === 'disconnected') {
+      //
+      // A previously-SUCCEEDED voiceprint is invalidated here too: it was
+      // captured on the device the candidate is now switching away from, so
+      // it can't be trusted to match whatever device is now selected. Without
+      // this, voiceEnrollStatus stays 'success' after a mic switch and
+      // "Run Check" unlocks without the candidate ever re-proving their voice
+      // on the newly selected microphone.
+      if (voiceEnrollStatus === 'failed' || voiceEnrollStatus === 'disconnected' || voiceEnrollStatus === 'success') {
+        voiceEnrollPromiseRef.current = null;
         setVoiceEnrollStatus('idle');
+        setVoiceEnrollProgress(0);
       }
     } finally {
       setIsSwitchingDevice(false);
