@@ -89,6 +89,7 @@ interface InterviewUIProps {
    * check skipped) falls back to today's unconstrained default-camera
    * behavior — no pinning, no switch detection. */
   approvedCameraDeviceId?: string | null;
+  approvedMicDeviceId?: string | null;
   /** Object URL of the candidate's captured identity photo, used for the "You"
    * chat avatar. Null/undefined (e.g. identity step skipped) → the "You" text
    * avatar is shown instead. */
@@ -522,7 +523,7 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
 });
 const LiveAIBubbleMemo = memo(LiveAIBubble);
 
-export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInterviewClosing, onTerminate, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl, approvedCameraDeviceId }: InterviewUIProps) {
+export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInterviewClosing, onTerminate, faceVerification, voiceVerification, copyPasteBlocking = true, onTimerChange, deviceCapability, candidatePhotoUrl, approvedCameraDeviceId, approvedMicDeviceId }: InterviewUIProps) {
   // ── Effective device capability ──────────────────────────────────────────
   // The portal detects this at the system-check step, but a RESUMED session (or
   // any entry path that skips system check) arrives with deviceCapability=undefined
@@ -1558,8 +1559,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // the condition for resuming.
   useEffect(() => {
     if (!isConnected) return;
-    const disabled = !proctoringState.isCameraActive || !proctoringState.isMicrophoneActive;
-    if (!disabled) return;
+    // NOTE: deliberately NOT gated on "a device is reported disabled".
+    //
+    // Recovery used to start only once proctoringState flipped a device to
+    // inactive. That created a deadlock the moment the monitor learned to hold
+    // its report back while a verified mic fallback is available (see
+    // InterviewProctoringMonitor): the report is what triggered recovery, so
+    // suppressing the report also suppressed the swap that was supposed to make
+    // the report unnecessary. The tick below decides purely from actual TRACK
+    // liveness, so it repairs a dead track whether or not anything has been
+    // reported yet — and does nothing at all while both tracks are healthy.
     // Camera and microphone are recovered INDEPENDENTLY, each with a request
     // that names only its own device.
     //
@@ -1602,15 +1611,35 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         } catch { /* camera still unavailable — keep polling */ }
       }
 
-      if (!audioAlive || !proctoringState.isMicrophoneActive) {
+      if (!audioAlive || !proctoringStateRef.current.isMicrophoneActive) {
         try {
-          // Target the device the interview STARTED on so a replugged headset
-          // is recognized as "restored" (the deviceId-swap check requires an
-          // EXACT match) instead of silently landing on whatever the OS calls
-          // "default" — which never satisfies that check and left the pause
-          // stuck forever even after the candidate replugged the same headset.
-          if (await webcamRef.current?.reacquireAudio(initialMicDeviceId ?? undefined)) {
-            console.log('[InterviewUI] Device recovery: MICROPHONE re-acquired independently');
+          // Re-acquire onto a CONCRETE device id — never the bare default.
+          //
+          // Asking for audio with no deviceId makes Chrome return a track whose
+          // getSettings().deviceId is the literal string "default". That is an
+          // ALIAS, not a device, and the verified set stores only real hardware
+          // ids (enumerateAudioInputIds filters 'default'/'communications' out).
+          // So the monitor compared "default" against the baseline, found it
+          // absent from the accepted set, and reported device_swapped — every
+          // single time. Recovery kept succeeding, the monitor kept rejecting
+          // it, and the two looped against each other once a second forever
+          // with the interview stuck paused.
+          //
+          // Preference order: the device the interview is pinned to (a replug
+          // must be recognised as "restored"), then any system-check-verified
+          // device that is actually present, then whatever real device exists.
+          // Every one of those is a concrete id, so the resulting track carries
+          // an id the monitor can actually match.
+          const inputs = (await navigator.mediaDevices.enumerateDevices())
+            .filter(d => d.kind === 'audioinput' && d.deviceId
+              && d.deviceId !== 'default' && d.deviceId !== 'communications');
+          const pinned = interviewMicDeviceIdRef.current ?? initialMicDeviceId ?? undefined;
+          const target =
+            (pinned && inputs.some(d => d.deviceId === pinned) ? pinned : undefined)
+            ?? inputs.find(d => verifiedMicIdsRef.current.has(d.deviceId))?.deviceId
+            ?? inputs[0]?.deviceId;
+          if (target && await webcamRef.current?.reacquireAudio(target)) {
+            console.log(`[InterviewUI] Device recovery: MICROPHONE re-acquired on ${target.slice(0, 8)}…`);
           }
         } catch { /* mic still unavailable — keep polling */ }
       }
@@ -1618,13 +1647,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       // Stop only once BOTH sides are genuinely healthy. The old loop exited on
       // the first success, which on a two-device outage abandoned the polling
       // while the second device was still missing.
-      const cur = proctoringStateRef.current;
-      if (cur.isCameraActive && cur.isMicrophoneActive) {
-        cancelled = true;
-        clearInterval(id);
-        navigator.mediaDevices?.removeEventListener?.('devicechange', onDeviceChange);
-        console.log('[InterviewUI] Device recovery: all media restored — overlay will clear');
-      }
+      // No self-cancel. This watcher stays armed for the whole interview so the
+      // SECOND unplug is repaired as promptly as the first; when both tracks are
+      // live the tick above does nothing at all.
     };
 
     // EVENT-DRIVEN first, polling only as the safety net. `devicechange` fires
@@ -1685,7 +1710,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // mic reopens on the built-in device, the pin is rewritten to that built-in,
   // so a "does the pinned device still exist?" check would always say yes. This
   // ref stays on the ORIGINAL device so its disappearance is detectable.
-  const interviewMicDeviceIdRef = useRef<string | undefined>(undefined);
+  // Seeded from the approvedMicDeviceId prop — the mic the candidate verified
+  // at System Check. Before this existed the ref waited on the first live
+  // answer-mic track, which meant the interview pinned whatever the OS called
+  // "default" and the candidate's explicit Device Settings choice was lost.
+  const interviewMicDeviceIdRef = useRef<string | undefined>(approvedMicDeviceId ?? undefined);
   // Mics that were connected and working when the candidate passed the system
   // check. A mid-interview swap to one of these is an ALLOWED fallback rather
   // than a proctoring pause (the proctoring monitor logs it as
@@ -2712,10 +2741,16 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   const wsRef = useRef<WebSocket | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
-  // Device tracking — scoped to the ACTIVE recording session only. We clear the
-  // pin at turn end so each new question reopens on the browser's current
-  // default input instead of staying stuck on an old system/headset device.
-  const pinnedAudioDeviceIdRef = useRef<string | undefined>(undefined);
+  // Device tracking for the ACTIVE recording session. Seeded from the mic the
+  // candidate approved at System Check so the FIRST answer turn already captures
+  // on their chosen device — it used to start undefined, so turn 1 opened the OS
+  // default and their selection never took effect.
+  //
+  // The pin is still cleared at turn end (see teardownRecordingMedia) so a later
+  // turn can follow a legitimate device change rather than staying stuck on a
+  // device that has since been unplugged; getDedicatedRecordingAudioStream falls
+  // back from exact() → default, so a vanished pin degrades gracefully.
+  const pinnedAudioDeviceIdRef = useRef<string | undefined>(approvedMicDeviceId ?? undefined);
   const audioDeviceChangeListenerRef = useRef<(() => void) | null>(null);
   // AnalyserNode tapped off the mic source for the live recording waveform UI.
   // Passive sink (source→analyser only, never →destination, so no echo).
@@ -7233,8 +7268,27 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 .find(track => track.readyState === 'live')
             );
             if ((!pinnedStillExists && audioDevices.length > 0) || !recordingTrackLive) {
-              console.warn(`[Recording ${timestamp}] Recording microphone changed or disconnected — restarting answer capture`);
-              stopRecordingSilentRef.current();
+              console.warn(`[Recording ${timestamp}] Answer mic changed or disconnected — hot-swapping to an available device`);
+              // HOLD the answer instead of submitting it.
+              //
+              // This used to call stopRecordingSilent(), which sends end_turn:
+              // the partial answer was submitted and the backend moved on to
+              // the next question. With two mics connected, unplugging one
+              // therefore cost the candidate the rest of their answer even
+              // though another mic was sitting right there — the opposite of
+              // the "switch to the available device and carry on" behaviour
+              // this handler exists for.
+              //
+              // holdRecordingForOutage releases only the mic hardware and the
+              // per-turn watchdogs, keeping speechDetectedRef, the live
+              // transcript and the backend's open utterance, so reopening below
+              // continues the SAME turn and the eventual end_turn carries the
+              // whole answer.
+              holdRecordingForOutageRef.current();
+              // Drop the pin so the reopen goes straight to the best available
+              // device instead of spending a failing exact() attempt on the mic
+              // that was just unplugged.
+              pinnedAudioDeviceIdRef.current = undefined;
               setTimeout(() => {
                 if (
                   isRecordingRef.current === false &&
@@ -9782,6 +9836,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 showHandIndicator={false}
                 isHandRaised={handDetection.isHandRaised}
                 initialCameraDeviceId={interviewCameraDeviceIdRef.current}
+                audioDeviceId={approvedMicDeviceId ?? undefined}
               />
 
               {/* REC badge — overlaid inside the camera frame (top-right). REC is

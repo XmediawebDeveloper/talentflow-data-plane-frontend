@@ -18,6 +18,13 @@ interface WebcamProps {
    * old-track teardown below), this fires before any teardown happens.
    */
   onTracksReplaced?: (newStream: MediaStream) => void;
+  /**
+   * Microphone approved at System Check. The proctoring stream opens THIS
+   * device rather than the OS default, so the audio the monitor watches is the
+   * mic the candidate actually chose — mirroring the camera pin above. Falls
+   * back to the default when the exact device cannot be opened.
+   */
+  audioDeviceId?: string | null;
   className?: string;
   showHandIndicator?: boolean;
   isHandRaised?: boolean;
@@ -67,7 +74,7 @@ export interface WebcamRef {
 }
 
 export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
-  { onStream, onVideoReady, onTracksReplaced, className = "", showHandIndicator = false, isHandRaised = false, initialCameraDeviceId },
+  { onStream, onVideoReady, onTracksReplaced, audioDeviceId, className = "", showHandIndicator = false, isHandRaised = false, initialCameraDeviceId },
   ref
 ) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -99,19 +106,24 @@ export const Webcam = memo(forwardRef<WebcamRef, WebcamProps>(function Webcam(
         noiseSuppression: true,
         autoGainControl: true,
       }; // Required for proctoring voice detection and webcam recording
+      const pinnedAudio = audioDeviceId
+        ? { ...audioConstraint, deviceId: { exact: audioDeviceId } }
+        : audioConstraint;
       let stream: MediaStream;
       try {
         stream = await navigator.mediaDevices.getUserMedia({
           video: pinnedCameraDeviceIdRef.current
             ? { ...baseVideo, deviceId: { exact: pinnedCameraDeviceIdRef.current } }
             : baseVideo,
-          audio: audioConstraint,
+          audio: pinnedAudio,
         });
       } catch (err) {
-        // Approved device may be gone (unplugged since System Check, or the
-        // interview started on a fresh session with a stale id) — fall back
-        // to the OS default rather than failing the whole acquire.
-        if (!pinnedCameraDeviceIdRef.current) throw err;
+        // An approved device may be gone (unplugged since System Check, or a
+        // stale id from a fresh session). Retry with the OS default rather than
+        // failing the whole acquire — and retry EACH device independently, so a
+        // vanished mic can't cost us the camera or vice versa.
+        if (!pinnedCameraDeviceIdRef.current && !audioDeviceId) throw err;
+        console.warn('[Webcam] Approved device unavailable — retrying with defaults');
         stream = await navigator.mediaDevices.getUserMedia({ video: baseVideo, audio: audioConstraint });
       }
 

@@ -687,6 +687,12 @@ export function useInterviewProctoringMonitor({
   const TRACK_MUTE_DEBOUNCE_MS = 3000;
   const cameraMuteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const micMuteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Pending 'wait for a verified mic fallback before pausing' timer.
+  const micFallbackGraceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Long enough for the 700ms recovery poll to reacquire and hand the monitor a
+  // fresh stream (measured ~1.2s end-to-end), short enough that a genuinely
+  // lost mic is still flagged promptly.
+  const MIC_FALLBACK_GRACE_MS = 3500;
   // Wall-clock of the first poll tick that saw the video track muted, or null
   // when it is healthy. The onmute EVENT path above debounces via
   // cameraMuteTimerRef, but the periodic health poll below used to report a
@@ -733,10 +739,50 @@ export function useInterviewProctoringMonitor({
       clearTimeout(micMuteTimerRef.current);
       micMuteTimerRef.current = null;
     }
+    // A healthy mic cancels any pending fallback grace (below).
+    if (micFallbackGraceRef.current) {
+      clearTimeout(micFallbackGraceRef.current);
+      micFallbackGraceRef.current = null;
+    }
     if (!micDisabledRef.current) return;
     micDisabledRef.current = false;
     setState(prev => ({ ...prev, isMicrophoneActive: true }));
   }, []);
+
+  /**
+   * Report a DEAD mic track — but give a verified fallback a moment first.
+   *
+   * A physically unplugged mic ENDS its track; it does not swap to a live track
+   * on another device, so the deviceId-swap branch below never sees it and this
+   * fired instantly. With two verified mics connected that meant: track ends →
+   * mic disabled → interview pauses and the overlay appears → ~1.2s later the
+   * recovery loop swaps in the other mic and it all clears. The candidate got a
+   * "Microphone Disconnected" popup for a device change that was allowed and
+   * already being repaired.
+   *
+   * So when a verified fallback set exists, hold the report briefly and re-check:
+   * if recovery has landed on an acceptable device by then, never report at all.
+   * If it hasn't, report exactly as before — only later.
+   *
+   * With NO verified set (the common single-mic case) this is a straight
+   * pass-through, so the strict behaviour is completely unchanged.
+   */
+  const reportMicDeadWithFallbackGrace = useCallback((reason: string) => {
+    if (micDisabledRef.current || micFallbackGraceRef.current) return;
+    if (acceptedMicIdsRef.current.size === 0) { reportMicDisabled(reason); return; }
+    console.warn(`[INTERVIEW_PROCTORING] mic ${reason} — holding ${MIC_FALLBACK_GRACE_MS}ms for a verified fallback before pausing`);
+    micFallbackGraceRef.current = setTimeout(() => {
+      micFallbackGraceRef.current = null;
+      const live = streamRef.current?.getAudioTracks()
+        .find(t => t.readyState === 'live' && !t.muted && t.enabled);
+      const id = live?.getSettings?.().deviceId;
+      if (live && id && (id === initialMicDeviceIdRef.current || acceptedMicIdsRef.current.has(id))) {
+        console.warn('[INTERVIEW_PROCTORING] verified fallback landed within the grace — not pausing');
+        return;  // the device_swapped branch logs microphone_switched and re-pins
+      }
+      reportMicDisabled(reason);
+    }, MIC_FALLBACK_GRACE_MS);
+  }, [reportMicDisabled]);
 
   const setupTrackMonitoring = useCallback(() => {
     const currentStream = streamRef.current;
@@ -747,7 +793,12 @@ export function useInterviewProctoringMonitor({
     // again each time a fresh stream comes in.
     if (initialMicDeviceIdRef.current === null) {
       const firstAudioTrack = currentStream.getAudioTracks()[0];
-      initialMicDeviceIdRef.current = firstAudioTrack?.getSettings?.().deviceId || null;
+      const firstId = firstAudioTrack?.getSettings?.().deviceId || null;
+      // Never adopt an ALIAS as the baseline. 'default'/'communications' are
+      // Chrome's pointers to "whatever the OS currently prefers", not devices —
+      // baselining on one would make every real device look like a swap.
+      initialMicDeviceIdRef.current =
+        firstId && firstId !== 'default' && firstId !== 'communications' ? firstId : null;
     }
 
     currentStream.getVideoTracks().forEach(track => {
@@ -771,13 +822,13 @@ export function useInterviewProctoringMonitor({
     });
 
     currentStream.getAudioTracks().forEach(track => {
-      track.onended = () => reportMicDisabled('track_ended');
+      track.onended = () => reportMicDeadWithFallbackGrace('track_ended');
       track.onmute = () => {
         if (micMuteTimerRef.current) clearTimeout(micMuteTimerRef.current);
         micMuteTimerRef.current = setTimeout(() => {
           micMuteTimerRef.current = null;
           if (track.readyState === 'live' && !track.muted) return;
-          reportMicDisabled('track_muted');
+          reportMicDeadWithFallbackGrace('track_muted');
         }, TRACK_MUTE_DEBOUNCE_MS);
       };
       track.onunmute = () => reportMicRestored();
@@ -817,11 +868,11 @@ export function useInterviewProctoringMonitor({
 
       const aTracks = s.getAudioTracks();
       if (aTracks.length === 0) {
-        reportMicDisabled('no_track');
+        reportMicDeadWithFallbackGrace('no_track');
       } else {
         const at = aTracks[0];
         if (at.readyState === 'ended' || at.muted || !at.enabled) {
-          reportMicDisabled(
+          reportMicDeadWithFallbackGrace(
             at.readyState === 'ended' ? 'readystate_ended'
             : at.muted ? 'track_muted_poll'
             : 'track_disabled'
@@ -829,6 +880,16 @@ export function useInterviewProctoringMonitor({
         } else if (
           initialMicDeviceIdRef.current
           && at.getSettings?.().deviceId
+          // An ALIAS id ('default'/'communications') says nothing about WHICH
+          // physical device is in use, so it can neither confirm nor deny a
+          // swap — treat it as unjudgeable and fall through to "restored".
+          // Without this the monitor rejected every alias-id track forever:
+          // recovery kept re-acquiring, the monitor kept reporting
+          // device_swapped, and the interview sat paused in a 1s loop. Our own
+          // recovery now always requests a CONCRETE id (see InterviewUI), so
+          // this is the belt-and-braces against any path that doesn't.
+          && at.getSettings().deviceId !== 'default'
+          && at.getSettings().deviceId !== 'communications'
           && at.getSettings().deviceId !== initialMicDeviceIdRef.current
           && !acceptedMicIdsRef.current.has(at.getSettings().deviceId as string)
         ) {
@@ -849,6 +910,8 @@ export function useInterviewProctoringMonitor({
         } else if (
           initialMicDeviceIdRef.current
           && at.getSettings?.().deviceId
+          && at.getSettings().deviceId !== 'default'
+          && at.getSettings().deviceId !== 'communications'
           && at.getSettings().deviceId !== initialMicDeviceIdRef.current
         ) {
           // Verified fallback in use. Re-pin to it so every later comparison is
@@ -1225,6 +1288,8 @@ export function useInterviewProctoringMonitor({
       if (voiceIntervalRef.current) { clearInterval(voiceIntervalRef.current); voiceIntervalRef.current = null; }
       if (batchFlushIntervalRef.current) { clearInterval(batchFlushIntervalRef.current); batchFlushIntervalRef.current = null; }
       if (trackHealthIntervalRef.current) { clearInterval(trackHealthIntervalRef.current); trackHealthIntervalRef.current = null; }
+      // A pending fallback grace must never fire into a torn-down monitor.
+      if (micFallbackGraceRef.current) { clearTimeout(micFallbackGraceRef.current); micFallbackGraceRef.current = null; }
       if (permissionCleanupRef.current) { permissionCleanupRef.current(); permissionCleanupRef.current = null; }
       // Cancel pending mute debounce timers so they can't fire into an unmounted tree
       if (cameraMuteTimerRef.current) { clearTimeout(cameraMuteTimerRef.current); cameraMuteTimerRef.current = null; }

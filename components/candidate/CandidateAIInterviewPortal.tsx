@@ -276,6 +276,10 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // to and monitors this exact device instead of "whatever the OS calls
   // default" at interview start.
   const [approvedCameraDeviceId, setApprovedCameraDeviceId] = useState<string | null>(null);
+  // The mic the candidate verified at System Check. Pinned by the interview so
+  // it captures on the device they CHOSE rather than whatever the OS currently
+  // calls "default" (which a plugged-in headset silently steals).
+  const [approvedMicDeviceId, setApprovedMicDeviceId] = useState<string | null>(null);
 
   // Identity photo blob — stored here so onRegisterFace can use it AFTER system-check
   // face polling is stopped (avoids concurrent TF.js/WebGL calls that corrupt the backend).
@@ -1239,8 +1243,14 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     }
   };
 
-  const handleSystemCheckPassed = (approvedCameraId: string | null) => {
+  const handleSystemCheckPassed = (approvedCameraId: string | null, approvedMicId: string | null) => {
     setApprovedCameraDeviceId(approvedCameraId);
+    setApprovedMicDeviceId(approvedMicId);
+    // Publish for the screen-recording audio mix, which is built in this portal
+    // BEFORE the interview mounts and would otherwise open the OS default.
+    try {
+      if (approvedMicId) (window as any).__interviewMicDeviceId = approvedMicId;
+    } catch { /* best-effort */ }
     // Detect the candidate's device tier ONCE here (system check already gates
     // entry). The interview then enables heavy features (neural VAD, 3D avatar)
     // only on 'high' tier and a lightweight path on weaker machines.
@@ -3005,6 +3015,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           deviceCapability={deviceCapability}
           candidatePhotoUrl={candidatePhotoUrl}
           approvedCameraDeviceId={approvedCameraDeviceId}
+          approvedMicDeviceId={approvedMicDeviceId}
         />
         {/* Screen share stopped — blocking overlay (higher z-index than fullscreen overlay) */}
         {screenShareStopped && (
