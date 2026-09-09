@@ -34,6 +34,7 @@ export default function PageBreadcrumb({
   className = 'mb-4',
   sticky = true,
   actions,
+  barRef,
 }: {
   items: BreadcrumbCrumb[];
   className?: string;
@@ -52,6 +53,18 @@ export default function PageBreadcrumb({
    * what it was, so no other page shifts.
    */
   actions?: React.ReactNode;
+  /**
+   * Ref onto the bar element itself. A page that pins a SECOND sticky layer
+   * below this one (a tab bar, say) must offset it by this bar's real height —
+   * measuring beats hardcoding, because the bar grows when `actions` wrap onto
+   * a second line, and an offset that is too small leaves this bar covering the
+   * layer underneath and swallowing its clicks.
+   *
+   * A wrapper div around <PageBreadcrumb> is NOT an alternative: `sticky` needs
+   * this bar to be a direct child of the scrolling card, and a wrapper boxes it
+   * to its own height so it can never travel.
+   */
+  barRef?: React.Ref<HTMLElement>;
 }) {
   const router = useRouter();
   const list = (
@@ -106,7 +119,7 @@ export default function PageBreadcrumb({
   );
 
   return (
-    <Breadcrumb className={`${sticky ? 'sticky top-0 z-30 ' : ''}bg-slate-50 ring-1 ring-slate-200/80 px-3 py-2 ${className}`}>
+    <Breadcrumb ref={barRef} className={`${sticky ? 'sticky top-0 z-30 ' : ''}bg-slate-50 ring-1 ring-slate-200/80 px-3 py-2 ${className}`}>
       {actions ? (
         // flex-wrap + ml-auto rather than justify-between: on a narrow screen
         // the actions drop to their own line and stay right-aligned there,

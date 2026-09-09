@@ -394,8 +394,8 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                   >
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <h3 className="font-semibold tracking-tight text-gray-900">{jd.title}</h3>
+                        <div className="flex items-center gap-2 min-w-0">
+                          <h3 className="font-semibold tracking-tight text-gray-900 truncate min-w-0" title={jd.title}>{jd.title}</h3>
                           <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">Published</span>
                         </div>
                         <div className="flex items-center gap-4 mt-1.5 text-sm text-gray-500">

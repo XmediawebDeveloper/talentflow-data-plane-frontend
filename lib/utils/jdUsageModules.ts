@@ -150,3 +150,84 @@ export function formatModuleNames(modules: JDUsageModule[]): string {
   if (names.length <= 1) return names[0] ?? '';
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
+
+/**
+ * A module named on the disable confirmation, with the glyph the dashboard
+ * already draws it with.
+ */
+export interface JDModuleSummary {
+  /** Stable React key. */
+  key: string;
+  name: string;
+  /** What the module does — read as "…will not be available to use in". */
+  summary: string;
+  icon: LucideIcon;
+  /** Glyph colour, from the dashboard's own per-module icon palette. */
+  iconClass: string;
+  /** Tint + ring for the glyph's tile, matching the dashboard menu grid's. */
+  tileClass: string;
+}
+
+/**
+ * What a JD stops being usable for once it is disabled.
+ *
+ * Deliberately static, unlike `getJDUsageModules()`: that one answers "what is
+ * holding this JD right now", which is a question about counts. Disabling is a
+ * question about capability — every module a live JD feeds goes dark, whether
+ * or not it has touched this JD yet — so all four are listed unconditionally.
+ *
+ * Icons are looked up from the shared menu config through the same helper the
+ * rest of this file uses, so each module is drawn with exactly the glyph the
+ * sidebar and dashboard grid use for it. The colours are the dashboard's own
+ * per-module icon colours (`--menu-icon-ai` for AI Talent Match and
+ * `--menu-icon-score` for Resume Scoring, expressed as the brand tokens they
+ * resolve to), so nothing new is invented here either.
+ */
+const DISABLE_IMPACT_MODULES: ReadonlyArray<{
+  key: string;
+  navId: string;
+  name: string;
+  summary: string;
+  iconClass: string;
+  tileClass: string;
+}> = [
+  {
+    key: 'ai-talent-match',
+    navId: 'ai-talent-match',
+    name: 'AI Talent Match',
+    summary: 'Matching candidates using AI algorithms',
+    iconClass: 'text-brand-cyan',
+    tileClass: 'bg-brand-cyan/10 ring-1 ring-brand-cyan/15',
+  },
+  {
+    key: 'resume-scoring',
+    navId: 'resume-scoring',
+    name: 'Resume Scoring',
+    summary: 'Scoring and ranking resumes automatically',
+    iconClass: 'text-brand-teal',
+    tileClass: 'bg-brand-teal/10 ring-1 ring-brand-teal/15',
+  },
+  {
+    key: 'assessments',
+    navId: 'assessments',
+    name: 'Assessment',
+    summary: 'Generating and managing assessments',
+    iconClass: 'text-brand-orange',
+    tileClass: 'bg-brand-orange/10 ring-1 ring-brand-orange/15',
+  },
+  {
+    key: 'ai-interviews',
+    navId: 'ai-interviews',
+    name: 'AI Interview',
+    summary: 'Conducting AI-powered interviews',
+    iconClass: 'text-brand-blue',
+    tileClass: 'bg-brand-blue/10 ring-1 ring-brand-blue/15',
+  },
+];
+
+export function getJDDisableImpactModules(): JDModuleSummary[] {
+  return DISABLE_IMPACT_MODULES.map(({ navId, ...module }) => ({
+    ...module,
+    icon: getNavEntry(navId)?.icon ?? LayoutGrid,
+  }));
+}

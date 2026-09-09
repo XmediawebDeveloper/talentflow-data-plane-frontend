@@ -18,6 +18,12 @@ interface Job {
   experience?: string;
   jobId?: string;
   currentVersion?: number;
+  /* Carried so the job rows can show what the Resume Scoring job rows show.
+     All four already exist on the JD record; they were simply never mapped. */
+  industryType?: string;
+  remoteType?: string;
+  postedBy?: string;
+  postedDate?: string;
 }
 
 interface MatchHistory {
@@ -55,6 +61,10 @@ function transformJDToJob(jd: JDResponse): Job {
         : undefined,
     jobId: jd.job_id,
     currentVersion: jd.current_version,
+    industryType: jd.industry_type,
+    remoteType: jd.remote_type,
+    postedBy: jd.created_by_name,
+    postedDate: jd.published_at,
   };
 }
 
@@ -170,7 +180,7 @@ export default function AITalentMatchRoute() {
 
   return (
     <FeatureGate feature="ai_talent_match">
-      <div className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
+      <div className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
         <AITalentMatchPage jobs={jobs} matchHistory={matchHistory} matchSessionCounts={matchSessionCounts} />
       </div>
     </FeatureGate>

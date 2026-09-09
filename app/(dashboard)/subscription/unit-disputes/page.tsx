@@ -1,7 +1,7 @@
 'use client';
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { Shield, Search, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, Download, ExternalLink, RefreshCw, Filter, Calendar, Plus, Copy, ChevronRight, ChevronLeft, X, ChevronDown } from 'lucide-react';
+import { ArrowLeft, Shield, Search, Clock, CheckCircle2, XCircle, Loader2, AlertCircle, Download, ExternalLink, RefreshCw, Filter, Calendar, Plus, Copy, ChevronRight, ChevronLeft, X, ChevronDown } from 'lucide-react';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { toast } from 'sonner';
@@ -434,7 +434,7 @@ export default function UnitDisputesPage() {
   // --- Render ---
 
   return (
-    <main ref={rootRef} className="flex-1 overflow-x-hidden bg-slate-50">
+    <main ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Unit Disputes' }]} />
@@ -1068,8 +1068,9 @@ export default function UnitDisputesPage() {
                     <div className="mt-6 flex flex-col-reverse gap-2 sm:flex-row sm:gap-3">
                       <button
                         onClick={() => setFileStep(1)}
-                        className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-gray-300 dark:hover:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"
+                        className="flex items-center justify-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-gray-300 dark:hover:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"
                       >
+                        <ArrowLeft className="w-4 h-4" />
                         Back
                       </button>
                       <button
