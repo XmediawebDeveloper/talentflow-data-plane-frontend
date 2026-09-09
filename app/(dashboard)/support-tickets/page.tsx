@@ -7,7 +7,7 @@ export default function SupportTicketsPage() {
   const { isTenantAdmin } = usePermissions();
 
   return (
-    <div className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
+    <div className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
       <SupportCenter isAdmin={isTenantAdmin} />
     </div>
   );

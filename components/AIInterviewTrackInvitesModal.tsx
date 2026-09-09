@@ -12,6 +12,7 @@ import InviteFilterBar, {
   type InviteFilterState,
 } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
+import { TRACKER_DIALOG_PANEL_CLASS } from '@/lib/constants/trackerDialog';
 import AIInterviewInviteTable, {
   resolveInviteStatus,
   isExpiredForActions,
@@ -228,7 +229,7 @@ export default function AIInterviewTrackInvitesModal({
           screen with empty space under the rows. The list absorbs the overflow
           once the cap engages, so a long list still scrolls inside the dialog on
           a 320px phone. */}
-      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-brand-blue/10 sm:border sm:border-gray-100 dark:sm:border-slate-700/60 sm:ring-1 sm:ring-black/[0.02] dark:sm:ring-white/[0.02] w-full sm:max-w-2xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl max-h-[92dvh] sm:max-h-[calc(100dvh-2rem)] md:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+      <div className={TRACKER_DIALOG_PANEL_CLASS}>
         {/* Header */}
         <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0">
           <div className="min-w-0 flex-1">

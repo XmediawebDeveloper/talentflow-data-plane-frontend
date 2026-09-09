@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, X, Eye, BarChart3, Calendar, Mail, Phone, Clock, CheckCircle, XCircle, FileText, Archive, Loader2, Trash2, Award, Play } from 'lucide-react';
+import { ArrowLeft, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, X, Eye, BarChart3, Calendar, Mail, Phone, Clock, CheckCircle, XCircle, FileText, Archive, Loader2, Trash2, Award, Play } from 'lucide-react';
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services/assessmentService';
@@ -1479,9 +1479,10 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                 <div className="flex items-center justify-between gap-3 p-5 border-t border-gray-200">
                   <button
                     onClick={() => setExportStep('format')}
-                    className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                   >
-                    ← Back
+                    <ArrowLeft className="w-4 h-4" />
+                    Back
                   </button>
                   <button
                     onClick={() => {

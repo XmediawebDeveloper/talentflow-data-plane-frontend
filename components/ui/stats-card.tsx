@@ -218,13 +218,18 @@ export function StatsCardGrid({
   children: React.ReactNode;
   className?: string;
   /** Max columns at xl. Auto-adjusts down on smaller screens. */
-  columns?: 2 | 3 | 4;
+  columns?: 2 | 3 | 4 | 5;
 }) {
   const colClass =
     columns === 2
       ? 'grid-cols-1 sm:grid-cols-2'
       : columns === 3
         ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3'
-        : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4';
+        : columns === 5
+          // Five tiles take the app's existing five-up ladder (Dashboard's
+          // overview row): 1 / 2 / 3 / 5, with the md step so a five-card row
+          // never leaves a single orphan on a tablet.
+          ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5'
+          : 'grid-cols-1 sm:grid-cols-2 xl:grid-cols-4';
   return <div className={cn('grid gap-2.5 sm:gap-3 mb-5', colClass, className)}>{children}</div>;
 }

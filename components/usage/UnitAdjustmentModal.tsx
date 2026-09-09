@@ -14,7 +14,7 @@ import {
   Minus,
   Check,
   AlertTriangle,
-  Target,
+  ClipboardList,
   ClipboardCheck,
   Video,
   History,
@@ -42,7 +42,7 @@ type AdjustmentMode = 'add' | 'deduct' | 'set';
 
 // Icons for each unit type
 const UNIT_TYPE_ICONS: Record<UnitType, IconComponent> = {
-  RS: Target,
+  RS: ClipboardList,
   AS: ClipboardCheck,
   AIU: Video,
 };

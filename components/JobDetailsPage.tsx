@@ -40,7 +40,8 @@ import {
   Brain,
   Plus,
   Lock,
-  BarChart
+  BarChart,
+  BarChart3
 } from 'lucide-react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
@@ -263,8 +264,8 @@ ${job.certifications?.join(', ') || 'N/A'}
 
   const tabs = [
     { id: 'overview', label: 'Overview', icon: FileText },
-    { id: 'scored-resumes', label: 'Scored Resumes', icon: Target },
-    { id: 'assessment-results', label: 'Assessment Results', icon: ClipboardList },
+    { id: 'scored-resumes', label: 'Scored Resumes', icon: ClipboardList },
+    { id: 'assessment-results', label: 'Assessment Results', icon: BarChart3 },
   ];
 
   // Mock data for recent activity
@@ -542,13 +543,13 @@ ${job.certifications?.join(', ') || 'N/A'}
                     onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${job.id}`)}
                     className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-sm"
                   >
-                    <Target className="w-4 h-4" />
+                    <ClipboardList className="w-4 h-4" />
                     Score New Resumes
                   </button>
                 </div>
                 {job.scored_resumes_count === 0 ? (
                   <div className="text-center py-12">
-                    <Target className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                    <ClipboardList className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                     <h3 className="text-lg font-medium text-gray-900 mb-2">No scored resumes yet</h3>
                     <p className="text-gray-500 mb-4">Start scoring resumes against this job description</p>
                     {permissions.canRunScoring && (
@@ -556,7 +557,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                         onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${job.id}`)}
                         className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
                       >
-                        <Target className="w-4 h-4" />
+                        <ClipboardList className="w-4 h-4" />
                         Score Resumes
                       </button>
                     )}
@@ -657,7 +658,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                 {/* Score Resumes - Permission + Feature flag */}
                 {permissions.canRunScoring && (
                   <QuickActionButton
-                    icon={<Target className="w-4 h-4" />}
+                    icon={<ClipboardList className="w-4 h-4" />}
                     label="Score Resumes"
                     onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${job.id}`)}
                     disabled={!features.resume_scoring}
@@ -692,7 +693,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center">
-                      <Target className="w-4 h-4 text-gray-800" />
+                      <ClipboardList className="w-4 h-4 text-gray-800" />
                     </div>
                     <span className="text-sm text-gray-600">Scored</span>
                   </div>
@@ -701,7 +702,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <div className="w-8 h-8 bg-yellow-50 rounded-lg flex items-center justify-center">
-                      <ClipboardList className="w-4 h-4 text-yellow-600" />
+                      <BarChart3 className="w-4 h-4 text-yellow-600" />
                     </div>
                     <span className="text-sm text-gray-600">Assessments</span>
                   </div>
@@ -721,8 +722,8 @@ ${job.certifications?.join(', ') || 'N/A'}
                       activity.type === 'score' ? 'bg-green-50' : 'bg-gray-50'
                     }`}>
                       {activity.type === 'application' && <Users className="w-4 h-4 text-gray-800" />}
-                      {activity.type === 'score' && <Target className="w-4 h-4 text-green-600" />}
-                      {activity.type === 'assessment' && <ClipboardList className="w-4 h-4 text-gray-800" />}
+                      {activity.type === 'score' && <ClipboardList className="w-4 h-4 text-green-600" />}
+                      {activity.type === 'assessment' && <BarChart3 className="w-4 h-4 text-gray-800" />}
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-900">{activity.action}</p>

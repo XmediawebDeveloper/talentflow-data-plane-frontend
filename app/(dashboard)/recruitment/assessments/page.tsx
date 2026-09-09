@@ -20,6 +20,15 @@ export default function AssessmentsRoute() {
   const preSelectedJdId = searchParams.get('jd_id');
   const preSelectedJdTitle = searchParams.get('jd_title');
   const assessmentIdFromUrl = searchParams.get('assessment_id');
+  /* Which cut of the list to open on, for arrivals that already know: "Go to
+     Assessments" off the Publish step sends `?tab=all` so the recruiter lands
+     on All Assessments beside what they just published, rather than on the
+     summary cards with the list a click away.
+
+     Compared against the one value that has a caller rather than mapped from
+     the URL wholesale — this is a URL turning into page state, so it accepts
+     what it is documented to accept and ignores everything else. */
+  const listTabFromUrl = searchParams.get('tab') === 'all' ? 'all' as const : undefined;
 
   // Capture create-flow params on first mount so they survive the URL strip
   // below. Without this, the loading spinner blocks <Assessments> from mounting
@@ -28,6 +37,14 @@ export default function AssessmentsRoute() {
   const initialAutoCreate = useRef(autoCreate);
   const initialPreSelectedJdId = useRef(preSelectedJdId);
   const initialPreSelectedJdTitle = useRef(preSelectedJdTitle);
+  /* Held from the first render for the same reason as the three above: the
+     strip below clears `?tab=all` before <Assessments> mounts, so reading the
+     param at mount time would find nothing.
+     A once-initialised `useState` rather than a fourth ref — same "capture the
+     first render's value and never recompute" semantics, without reading a ref
+     during render, which is what `react-hooks/refs` objects to in the three
+     lines above. */
+  const [initialListTab] = useState(listTabFromUrl);
 
   // Handle deep link to specific assessment from notifications
   useEffect(() => {
@@ -38,11 +55,11 @@ export default function AssessmentsRoute() {
 
   // Clear query params after reading (to prevent re-triggering on refresh)
   useEffect(() => {
-    if (autoCreate) {
+    if (autoCreate || listTabFromUrl) {
       // Clear query params from URL without triggering a navigation
       router.replace('/recruitment/assessments', { scroll: false });
     }
-  }, [autoCreate, router]);
+  }, [autoCreate, listTabFromUrl, router]);
 
   useEffect(() => {
     const fetchJobs = async () => {
@@ -114,12 +131,13 @@ export default function AssessmentsRoute() {
 
   return (
     <FeatureGate feature="assessment">
-      <div className="relative flex-1 flex flex-col overflow-x-hidden bg-slate-50">
+      <div className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
         <Assessments
           jobs={jobs}
           autoOpenCreate={initialAutoCreate.current}
           preSelectedJdId={initialPreSelectedJdId.current || undefined}
           preSelectedJdTitle={initialPreSelectedJdTitle.current ? decodeURIComponent(initialPreSelectedJdTitle.current) : undefined}
+          initialListTab={initialListTab}
         />
       </div>
     </FeatureGate>

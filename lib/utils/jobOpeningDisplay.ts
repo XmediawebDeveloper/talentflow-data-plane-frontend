@@ -15,6 +15,19 @@ import type { JDResponse, JDLineageVersion } from '@/lib/services/jdService';
 import { formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 
+/**
+ * The "JD-164 Police Officer V2" label — job_id, title and lineage version
+ * combined the way surfaces that name one specific JD version (confirm
+ * dialogs, progress panels) read it out, rather than showing the bare title.
+ * Falls back gracefully when a field is missing (e.g. a draft with no job_id
+ * yet, or a version number the caller doesn't have).
+ */
+export const formatJobVersionLabel = (job: Pick<Job, 'job_id' | 'title' | 'versionNumber'>): string => {
+  const parts = [job.job_id, job.title].filter(Boolean);
+  const label = parts.join(' ') || 'Untitled';
+  return job.versionNumber ? `${label} V${job.versionNumber}` : label;
+};
+
 /** "full_time" → "Full Time". A dash when there is nothing to format. */
 export const formatEmploymentType = (type: string | undefined): string => {
   if (!type) return '-';
@@ -212,6 +225,12 @@ export const mapJDToJob = (jd: JDListRow): Job => ({
   applicants: jd.applicants_count || 0,
   description: jd.description,
   skills: jd.skills || jd.must_have_skills || [],
+  /* The same skills the line above collapses, carried through unflattened for
+     the surfaces that show the two groups apart. Added alongside `skills`
+     rather than in place of it, so every existing consumer of `skills` reads
+     exactly what it read before. */
+  must_have_skills: jd.must_have_skills || [],
+  nice_to_have_skills: jd.nice_to_have_skills || [],
   postedDate: jd.created_at,
   postedBy: jd.created_by_name || jd.created_by,
   employmentType: jd.employment_type,
@@ -298,30 +317,39 @@ export const getPublishedJobs = (allVersions: Job[]): Job[] =>
    reused as a selection test offers picks the next step refuses.
 
      MAIN LIST   — which ONE version of a job represents it in the picker?
-                   Its latest LIVE version: the highest-numbered Published or
-                   Republished one. A newer Archived, Disabled or Draft version
-                   does not take that place — the job is still live at the
-                   version below it, and that is the version an assessment
-                   would be built against. A job with no live version at all
+                   Its newest version that a new assessment could be built
+                   against: the highest-numbered Published or Republished one
+                   that does not already have an assessment. A newer Archived,
+                   Disabled or Draft version does not take that place — the job
+                   is still live at the version below it, and that is the
+                   version an assessment would be built against — and neither
+                   does a published version already spoken for, which falls
+                   through to the next published version DOWN (never up to the
+                   archived one above it). A job with no such version at all
                    therefore has no row.
 
      VERSION HISTORY — which versions are listed under it?
                    All of them, newest first, each showing its real status:
-                   Published, Republished, Disabled, Archived and Draft alike.
-                   This is where a recruiter reads what happened to a job.
+                   Published, Republished, Disabled, Archived and Draft alike,
+                   the ones that already have an assessment included. This is
+                   where a recruiter reads what happened to a job, and it is
+                   deliberately NOT narrowed by what the main list picked.
 
      SELECTION   — can a NEW assessment be created against a version?
-                   Published and Republished only. Disabled and Archived are
-                   out of service, so an assessment authored against one would
-                   be pinned to a JD no candidate will ever be sent, and a
-                   Draft is unfinished.
+                   Published and Republished only, and only where one does not
+                   already exist. Disabled and Archived are out of service, so
+                   an assessment authored against one would be pinned to a JD
+                   no candidate will ever be sent, and a Draft is unfinished.
 
-   Whether the version already HAS an assessment is a further, separate thing:
-   it is a reason the existing record must be preserved and surfaced, never a
-   reason to change any answer above. An archived version with an assessment is
-   listed in that job's version history showing "Archived", and is not
-   selectable — its assessment does not buy it selectability, and its archived
-   status does not remove the assessment already built against it. */
+   Whether the version already HAS an assessment is a further, separate thing,
+   and it answers only two of the three questions above. It removes a version
+   from the MAIN LIST (a row a recruiter cannot act on is not worth opening the
+   picker on) and from SELECTION (one assessment per version), but never from
+   VERSION HISTORY — there the existing record must be preserved and surfaced.
+   Status and assessment stay independent tests: an archived version with an
+   assessment is listed in that job's version history showing "Archived", and
+   is not selectable — its assessment does not buy it selectability, and its
+   archived status does not remove the assessment already built against it. */
 
 /**
  * Can a NEW assessment be created against this JD version? Published and
@@ -344,14 +372,29 @@ export const isSelectableVersion = (job: Pick<Job, 'status'>): boolean => {
 
 /**
  * The version of a lineage that represents it in the Create Assessment main
- * list — its latest LIVE version, or `null` when it has none.
+ * list — its latest ELIGIBLE version, or `null` when it has none.
  *
- * Live means Published or Republished, which is deliberately the same test the
- * radio uses (`isSelectableVersion`): the row a recruiter sees in this list is
- * always a row they can actually build an assessment against.
+ * Eligible means two things, both of which have to hold:
+ *
+ *   LIVE          — Published or Republished, which is deliberately the same
+ *                   test the radio uses (`isSelectableVersion`), so the row a
+ *                   recruiter sees is always a row they can build against.
+ *   NOT YET BUILT  — no assessment exists against it. One assessment per
+ *                   version is the rule the controls on the card already
+ *                   enforce; applying it to the representative as well means
+ *                   the list opens on a version the recruiter can actually
+ *                   act on instead of on a version whose radio is dead.
+ *
+ * `hasAssessment` is how the second half is asked, and it DEFAULTS TO "no
+ * version has one" so that a caller which does not pass it keeps the pure
+ * status behaviour this function had before. The caller owns the predicate
+ * because only it knows which versions are taken — that answer comes from a
+ * fetched index, and this module is pure.
  *
  * `bucket` arrives newest-version-first (see `groupByLineage`), so the first
- * live entry is the latest one and no sort is repeated here.
+ * eligible entry is the latest one and no sort is repeated here. Walking the
+ * bucket in that order IS the "newest → oldest, skip the taken ones" rule:
+ * v3 published-with-an-assessment falls through to v2, and v2 to v1.
  *
  * Latest LIVE rather than highest-numbered is what stops a version that is no
  * longer in service from standing in for a job that is: v3 archived over a
@@ -360,33 +403,49 @@ export const isSelectableVersion = (job: Pick<Job, 'status'>): boolean => {
  * The same skip covers a v4 draft raised over a published v3. Republished
  * needs no special case — its stored status is `published`.
  *
- * The skipped versions are not lost: View Versions lists the entire lineage,
- * newest first, each row showing its real status.
+ * A skipped version is never a fallback: passing over a taken v3 moves to the
+ * next PUBLISHED version below it, never to the archived v4 or v5 above it.
+ * The status test is applied to every candidate, not just the first.
  *
- * `null` (rather than `bucket[0]`) removes a job with no live version at all —
- * one that is nothing but drafts, or whose every version has been archived or
- * disabled. There is no version of it an assessment could be built against, so
- * there is no row.
+ * The skipped versions are not lost: View Versions lists the entire lineage,
+ * newest first, each row showing its real status — including the ones that
+ * already have an assessment, which is where that assessment is read.
+ *
+ * `null` (rather than `bucket[0]`) removes a job with no eligible version at
+ * all — one that is nothing but drafts, or whose every version has been
+ * archived or disabled, or whose every published version already carries an
+ * assessment. There is no version of it a NEW assessment could be built
+ * against, so there is no row.
  */
-export const assessmentListRepresentative = (bucket: Job[]): Job | null =>
-  bucket.find(version => isSelectableVersion(version)) ?? null;
+export const assessmentListRepresentative = (
+  bucket: Job[],
+  hasAssessment: (version: Job) => boolean = () => false,
+): Job | null =>
+  bucket.find(version => isSelectableVersion(version) && !hasAssessment(version)) ?? null;
 
 /**
- * The Create Assessment job list: one row per job, each on its latest live
- * (Published or Republished) version, with jobs that have no live version
- * dropped.
+ * The Create Assessment job list: one row per job, each on its newest
+ * published version that does not already have an assessment, with jobs that
+ * have no such version dropped.
  *
  * Pass the FULL, unfiltered version list. The status test runs per version
  * INSIDE each lineage, so filtering by status upstream would remove the very
  * versions the collapse needs in order to pick the right representative.
  *
- * Takes no account of assessments, by design — see the note above. Visibility
- * here is a pure function of status.
+ * `hasAssessment` is optional and defaults to "none of them do", which is the
+ * status-only list this used to return. Only the Create Assessment picker
+ * passes it — this list is that picker's alone (nothing else imports it), so
+ * the skip cannot reach the Job Openings list, the Apply to Job dialog or any
+ * version history, all of which go through `collapseToLatestVersions` /
+ * `getPublishedJobs` and are untouched by it.
  */
-export const buildAssessmentJobList = (allVersions: Job[]): Job[] => {
+export const buildAssessmentJobList = (
+  allVersions: Job[],
+  hasAssessment: (version: Job) => boolean = () => false,
+): Job[] => {
   const reps: Job[] = [];
   groupByLineage(allVersions).forEach(bucket => {
-    const rep = assessmentListRepresentative(bucket);
+    const rep = assessmentListRepresentative(bucket, hasAssessment);
     if (rep) reps.push(rep);
   });
   return reps;
@@ -599,4 +658,21 @@ export const resolveVersionHistoryRows = (
       ...v,
       isLatest: v.is_latest_version || (v.version_number ?? 1) >= latestNumber,
     }));
+};
+
+/**
+ * A job title cut to fit a table column: at most 25 characters, with an
+ * ellipsis standing in for the rest.
+ *
+ * CSS truncation was doing this by column width, so the same job read as a
+ * different length in every table it appeared in, and a narrow viewport could
+ * cut it to a couple of words. A character budget is the same everywhere.
+ *
+ * Pair it with a `title` attribute carrying the full string — this hides text,
+ * so there has to be a way to see it.
+ */
+export const truncateJobTitle = (title?: string | null, max = 25): string => {
+  if (!title) return '-';
+  const trimmed = title.trim();
+  return trimmed.length > max ? `${trimmed.slice(0, max).trimEnd()}...` : trimmed;
 };
