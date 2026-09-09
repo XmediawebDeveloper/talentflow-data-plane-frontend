@@ -1927,16 +1927,23 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         setShareBarAttempts(nextAttempt);
         console.warn(`[ShareBar] interview screen NOT present (attempt ${nextAttempt}) — re-prompting, not proceeding`);
         setShareBarError('We can’t see this interview on the screen you shared. Please stop sharing and share the screen (or monitor) that is showing THIS interview, then press Continue again.');
+      } else if (res.check_unavailable) {
+        // Backend couldn't run the vision check at all (its LLM call errored/
+        // timed out, or it never got a usable frame) — fails CLOSED: re-prompt
+        // with a message that names the real cause instead of the misleading
+        // "we can still see the bar" wording below, so a backend hiccup keeps
+        // the candidate here (retryable) rather than letting them straight
+        // through unverified.
+        const nextAttempt = shareBarAttempts + 1;
+        setShareBarAttempts(nextAttempt);
+        console.warn(`[ShareBar] check unavailable (attempt ${nextAttempt}) — NOT proceeding, re-prompting`);
+        setShareBarError('We could not verify your screen just now — this looks like a temporary connection issue. Please wait a moment and press Continue again.');
       } else if (res.hidden) {
         await startInterviewNow();
       } else {
         // HARD GATE (per requirement): do NOT allow the interview to start until
         // the vision check confirms the share bar is hidden. On a confident
         // "bar visible" we ALWAYS re-prompt — no auto-proceed after N attempts.
-        // (Infra failures — capture returned no frame, or the vision call
-        // errors/times out — still fail-open above and in the catch below, so a
-        // backend hiccup can never permanently brick a candidate; only a real
-        // "bar is visible" keeps them on this step.)
         const nextAttempt = shareBarAttempts + 1;
         setShareBarAttempts(nextAttempt);
         console.warn(`[ShareBar] bar still visible (attempt ${nextAttempt}) — re-prompting, not proceeding`);
