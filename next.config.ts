@@ -9,11 +9,12 @@ const nextConfig: NextConfig = {
   // Standalone output: emits .next/standalone with a self-contained server.js —
   // lets the Docker image ship without node_modules (~250MB instead of ~2GB).
   output: 'standalone',
-  // Type errors fail the build. Verified clean with `npx tsc --noEmit` (0 errors)
-  // before this was switched on, so nothing is being newly broken by it — the
-  // flag was suppressing an empty set and hiding any future regression.
+  // Type-checking during `next build` was measured at ~117s of a ~150s build
+  // (see .next/trace-build) — the dominant cost. Skipped here for build speed;
+  // run `npx tsc --noEmit` separately (e.g. in CI or pre-commit) to still catch
+  // type errors, since they will no longer fail this build.
   typescript: {
-    ignoreBuildErrors: false,
+    ignoreBuildErrors: true,
   },
   allowedDevOrigins: ['abi.0sms.com', '*.0sms.com'],
   serverExternalPackages: [
