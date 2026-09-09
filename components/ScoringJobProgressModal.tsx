@@ -397,7 +397,7 @@ export default function ScoringJobProgressModal({
                   {/* Status */}
                   <div className="flex items-center gap-1.5 flex-shrink-0">
                     {getStatusIcon(item.status)}
-                    <span className={`text-xs sm:text-sm font-medium hidden sm:inline ${
+                    <span className={`text-xs sm:text-sm font-medium ${
                       item.status === 'processing' ? 'text-brand-blue' :
                       item.status === 'completed' ? 'text-brand-cyan' :
                       item.status === 'failed' ? 'text-red-600' :

@@ -1,7 +1,7 @@
 'use client';
 
 import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { ArrowUpDown, Sparkles, BarChart3, Search, ChevronDown, ChevronRight, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Award, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2 } from 'lucide-react';
+import { ArrowUpDown, Sparkles, BarChart3, Search, ChevronDown, ChevronRight, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Award, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -23,7 +23,6 @@ import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 import RecordPager from '@/components/RecordPager';
 import { formatISTDate, formatIST, formatISTTime } from '@/lib/utils/dateUtils';
 /* The shared formatters, so a JD's industry and employment type read the same
@@ -96,6 +95,24 @@ function parseExperienceYears(value?: string): number | null {
   if (!value) return null;
   const match = String(value).match(/\d+(\.\d+)?/);
   return match ? parseFloat(match[0]) : null;
+}
+
+/**
+ * AI Talent Match scores come back as a 0-100 percentage, but every place
+ * this module shows a candidate's quality — "Top Match Rating", the score
+ * badges, the Match History buckets — presents it as a 1-10 rating instead.
+ * Every one of those spots converts through this single rounding rule, so
+ * "80%" and a rating of "8" always mean the same candidate.
+ */
+function toMatchRating(score: number): number {
+  return Math.max(0, Math.min(10, Math.round((score ?? 0) / 10)));
+}
+
+/** Exact Match = a perfect 10, Partial Match = 7-9, anything under 7 is No Match. */
+function matchBandForRating(rating: number): 'exact' | 'partial' | 'no_match' {
+  if (rating >= 10) return 'exact';
+  if (rating >= 7) return 'partial';
+  return 'no_match';
 }
 
 /** One candidate, plus every job they were matched against. */
@@ -473,6 +490,10 @@ export default function AITalentMatchPage({
   const [historyPageView, setHistoryPageView] = useState<'cards' | 'list' | 'candidates' | 'resumes'>('cards');
   const historyListSectionRef = useRef<HTMLDivElement | null>(null);
   const [historyListScrollRequest, setHistoryListScrollRequest] = useState(0);
+  // The three rating-band pills on the "Show:" row — same idea as Resume
+  // Scoring's Exact/Partial/No Match pills, continuing the same button group
+  // and narrowing "All Resumes" to one band at a time.
+  const [candidateRatingBand, setCandidateRatingBand] = useState<'exact' | 'partial' | 'no_match' | null>(null);
 
   // "Match by Candidate" roll-up: every matched candidate across all jobs, with
   // the jobs they matched. Built in-page — no navigation away.
@@ -569,10 +590,12 @@ export default function AITalentMatchPage({
     });
   };
 
-  // Match-score badge colours mirror the Scored Resumes match-status pills.
+  // Match-score badge colours mirror the Scored Resumes match-status pills,
+  // banded on the 1-10 rating rather than the raw percentage.
   const candidateScoreBadgeClass = (score: number) => {
-    if (score >= 80) return 'bg-green-100 text-green-700 border-green-300';
-    if (score >= 60) return 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20';
+    const band = matchBandForRating(toMatchRating(score));
+    if (band === 'exact') return 'bg-green-100 text-green-700 border-green-300';
+    if (band === 'partial') return 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20';
     return 'bg-red-100 text-red-700 border-red-300';
   };
 
@@ -673,6 +696,17 @@ export default function AITalentMatchPage({
     const opening = expandedHistoryJobId !== historyKey;
     setExpandedHistoryJobId(opening ? historyKey : null);
     if (opening && !historyVersionsByJob[historyKey]) void loadAIMatchVersionHistory(historyKey, anyRowId);
+  };
+
+  // Match History popup — one job's whole lineage of match runs, with the
+  // Exact/Partial/No Match roll-up on top. Reuses the same
+  // `historyVersionsByJob` fetch as "View Versions" (each version's `session`
+  // there already carries its full `results`), so opening the popup for a job
+  // whose versions are already expanded costs no extra request.
+  const [matchHistoryModal, setMatchHistoryModal] = useState<{ item: MatchHistory; historyKey: string } | null>(null);
+  const openMatchHistoryModal = (item: MatchHistory, historyKey: string) => {
+    setMatchHistoryModal({ item, historyKey });
+    if (!historyVersionsByJob[historyKey]) void loadAIMatchVersionHistory(historyKey, item.jobId);
   };
 
   // Version selection for scoring (single candidate)
@@ -1387,7 +1421,7 @@ export default function AITalentMatchPage({
 
     const filtered = candidates.filter(candidate => {
       // Existing filters
-      const matchesThreshold = candidate.matchScore >= filterThreshold;
+      const matchesThreshold = toMatchRating(candidate.matchScore) >= filterThreshold;
       const matchesSearch = searchQuery === '' ||
         candidate.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         candidate.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -1750,9 +1784,9 @@ export default function AITalentMatchPage({
                 className="px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white dark:bg-slate-900 text-sm text-black"
               >
                 <option value={0}>All Matches</option>
-                <option value={50}>50%+ Match</option>
-                <option value={70}>70%+ Match</option>
-                <option value={85}>85%+ Match</option>
+                <option value={5}>5+ Rating</option>
+                <option value={7}>7+ Rating</option>
+                <option value={9}>9+ Rating</option>
               </select>
               {selectedCandidates.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
@@ -1801,20 +1835,20 @@ export default function AITalentMatchPage({
               />
             </div>
             {/* Additional Filters */}
-            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2">
+            <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2">
               <input
                 type="text"
                 value={filterPhone}
                 onChange={(e) => setFilterPhone(e.target.value)}
                 placeholder="Filter by phone..."
-                className="px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black placeholder:text-gray-400"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black placeholder:text-gray-400"
               />
               <input
                 type="text"
                 value={filterLocation}
                 onChange={(e) => setFilterLocation(e.target.value)}
                 placeholder="Filter by location..."
-                className="px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black placeholder:text-gray-400"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black placeholder:text-gray-400"
               />
               <input
                 type="number"
@@ -1833,7 +1867,7 @@ export default function AITalentMatchPage({
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as 'rank' | 'name' | 'score' | 'experience')}
-                className="col-span-2 sm:col-span-1 px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white dark:bg-slate-900 text-sm text-black"
+                className="w-full sm:w-auto px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white dark:bg-slate-900 text-sm text-black"
               >
                 <option value="rank">Sort by Rating</option>
                 <option value="name">Sort by Name</option>
@@ -1884,7 +1918,7 @@ export default function AITalentMatchPage({
           {/* Bounded viewport: rows scroll vertically (and horizontally) while the
               header stays pinned. Header background/border live on the cells so the
               pinned row paints solid over the rows sliding underneath. */}
-          <div className="min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60 tf-table-shell">
+          <div className="hidden md:block min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60 tf-table-shell">
           <table className="w-full min-w-[1450px] table-auto">
             <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>
@@ -2031,7 +2065,7 @@ export default function AITalentMatchPage({
                         e.stopPropagation();
                         handleAttachmentsClick(candidate);
                       }}
-                      className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
+                      className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
                     >
                       <Paperclip className="w-3.5 h-3.5" />
                       {candidate.attachmentCount || 1}
@@ -2054,6 +2088,93 @@ export default function AITalentMatchPage({
               ))}
             </tbody>
           </table>
+          </div>
+
+          {/* Mobile cards — the table is too wide below md */}
+          <div className="md:hidden space-y-3">
+            {paginatedCandidates.map((candidate) => (
+              <div
+                key={candidate.id}
+                onClick={() => {
+                  if (candidate.resumeId) {
+                    try {
+                      sessionStorage.setItem('resumeNavList', JSON.stringify(filteredCandidatesMemo.map((c: any) => c.resumeId).filter(Boolean)));
+                      sessionStorage.setItem('resumeNavSource', 'ai-talent-match');
+                      sessionStorage.setItem('resumeNavAIMatchJobId', selectedHistoryItem.jobId);
+                      // The breadcrumb names the job this match belongs to.
+                      sessionStorage.setItem('resumeNavAIMatchJobTitle', selectedHistoryItem.jobTitle || '');
+                      markAIMatchReturnTrip();
+                    } catch { /* ignore */ }
+                    router.push(`/recruitment/resume-view/${candidate.resumeId}`);
+                  }
+                }}
+                className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-3 shadow-sm cursor-pointer"
+              >
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="h-9 w-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-xs text-gray-700 dark:text-slate-300 font-medium flex-shrink-0">
+                      {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{candidate.name || 'Unknown'}</div>
+                      <div className="text-xs text-gray-500 dark:text-slate-500 truncate">
+                        {selectedHistoryItem.jobTitle || selectedJobData?.title || '-'}
+                      </div>
+                    </div>
+                  </div>
+                  <div className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-md font-bold text-sm flex-shrink-0 ${
+                    (candidate.rank || 0) >= 7 ? 'bg-green-100 text-green-800 border border-green-300' :
+                    (candidate.rank || 0) >= 4 ? 'bg-brand-orange/10 text-brand-orange-deep border border-brand-orange/20' :
+                    (candidate.rank || 0) >= 1 ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-300 dark:border-slate-700' :
+                    'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 border border-gray-200 dark:border-slate-700'
+                  }`}>
+                    {candidate.rank || '-'}
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-400 mb-2">
+                  {candidate.email && <span className="flex items-center gap-1 min-w-0"><Mail className="w-3 h-3 flex-shrink-0" /><span className="truncate">{candidate.email}</span></span>}
+                  {candidate.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{candidate.phone}</span>}
+                  {candidate.location && <span className="flex items-center gap-1 min-w-0"><MapPin className="w-3 h-3 flex-shrink-0" /><span className="truncate">{candidate.location}</span></span>}
+                  {candidate.experience && <span>{candidate.experience}</span>}
+                </div>
+                <div className="flex flex-wrap gap-1 mb-2">
+                  <SkillsList
+                    skills={candidate.skills}
+                    chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20 whitespace-nowrap"
+                    moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium whitespace-nowrap hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-2 text-xs text-gray-500 dark:text-slate-500">
+                  <span className="truncate">
+                    {formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}
+                    {candidate.uploadDate && <> · {formatISTDate(candidate.uploadDate)}</>}
+                  </span>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleAttachmentsClick(candidate);
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
+                    >
+                      <Paperclip className="w-3.5 h-3.5" />
+                      {candidate.attachmentCount || 1}
+                    </button>
+                    {scoredResumeIds.has(candidate.resumeId) ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                        <CheckCircle className="w-3 h-3" />
+                        Matched
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded-full text-xs font-medium">
+                        <XCircle className="w-3 h-3" />
+                        Not Matched
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
           </div>
         </div>
@@ -2425,9 +2546,8 @@ export default function AITalentMatchPage({
       return candidates.reduce((best, c) => Math.max(best, c.matchScore ?? 0), 0);
     });
     const topMatchRating = bestScorePerJob.length ? Math.max(...bestScorePerJob) : 0;
-    // "Excellent" threshold mirrors the match-quality bands used throughout
-    // this page (getMatchLabel / excellentCount, 85+ = Excellent Match).
-    const topMatchingJobsCount = bestScorePerJob.filter(score => score >= 85).length;
+    // Exact Match = a rating of 10, same bucket the Match History popup counts.
+    const topMatchingJobsCount = bestScorePerJob.filter(score => toMatchRating(score) === 10).length;
 
     // Candidate roll-up search matches the person or any job they matched.
     const candidateQuery = candidateSearchQuery.trim().toLowerCase();
@@ -2440,7 +2560,7 @@ export default function AITalentMatchPage({
 
       const matchesLocation = candidateFilterLocation === 'all' || row.location === candidateFilterLocation;
       const matchesJob = candidateFilterJob === 'all' || row.jobs.some(job => job.jobTitle === candidateFilterJob);
-      const matchesScore = row.bestScore >= candidateFilterMinScore;
+      const matchesScore = toMatchRating(row.bestScore) >= candidateFilterMinScore;
       const matchesMultiJob = !candidateFilterMultiJob || row.jobs.length > 1;
 
       const matchesPhone = candidateFilterPhone === '' ||
@@ -2500,7 +2620,8 @@ export default function AITalentMatchPage({
 
       const matchesLocation = candidateFilterLocation === 'all' || row.location === candidateFilterLocation;
       const matchesJob = candidateFilterJob === 'all' || job.jobTitle === candidateFilterJob;
-      const matchesScore = job.score >= candidateFilterMinScore;
+      const matchesScore = toMatchRating(job.score) >= candidateFilterMinScore;
+      const matchesRatingBand = !candidateRatingBand || matchBandForRating(toMatchRating(job.score)) === candidateRatingBand;
       const matchesMultiJob = !candidateFilterMultiJob || row.jobs.length > 1;
 
       const matchesPhone = candidateFilterPhone === '' ||
@@ -2517,7 +2638,7 @@ export default function AITalentMatchPage({
       const matchesDateFrom = !candidateFilterDateFrom || matchedDay >= candidateFilterDateFrom;
       const matchesDateTo = !candidateFilterDateTo || matchedDay <= candidateFilterDateTo;
 
-      return matchesSearch && matchesLocation && matchesJob && matchesScore && matchesMultiJob &&
+      return matchesSearch && matchesLocation && matchesJob && matchesScore && matchesRatingBand && matchesMultiJob &&
         matchesPhone && matchesExpMin && matchesExpMax && matchesDateFrom && matchesDateTo;
     });
 
@@ -2613,12 +2734,6 @@ export default function AITalentMatchPage({
           </div>
         </div>
 
-        <ModuleInfoBanner
-          icon={<Sparkles className="h-4 w-4" />}
-          title="AI-Powered Talent Matching"
-          description="Use AI to compare your candidate pool with each job's skills, experience, and requirements. Review ranked matches, understand fit signals, and launch a new match whenever a role needs fresh candidates."
-        />
-
         {/* Stats Cards */}
         {/* Default 4-column grid (same as /recruitment/job-openings) keeps the
             cards at the standard width instead of stretching them to half-page. */}
@@ -2647,7 +2762,7 @@ export default function AITalentMatchPage({
             tone="neutral"
             icon={Award}
             label="Top Match Rating"
-            value={`${topMatchRating}%`}
+            value={`${toMatchRating(topMatchRating)}`}
             sparkline={false}
           />
           <StatsCard
@@ -2665,19 +2780,21 @@ export default function AITalentMatchPage({
             "All Resumes" has no card of its own — it's the flat, un-deduped
             counterpart to the candidate roll-up (every candidate-to-job match
             as its own row), the same relationship Resume Scoring's "All
-            Resumes" pill has to its "View by Candidates" pill. */}
+            Resumes" pill has to its "View by Candidates" pill. The three
+            rating pills continue the same row, exactly like Resume Scoring's
+            Exact/Partial/No Match pills next to its own "All Resumes". */}
         {historyPageView !== 'cards' && (
           <div className="flex items-center gap-2 flex-wrap mb-3">
             <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
             {([
-              { id: 'list', label: 'View by Job', active: historyPageView === 'list', open: openHistoryListView },
-              { id: 'candidates', label: 'View by Candidates', active: historyPageView === 'candidates', open: openCandidatesView },
-              { id: 'resumes', label: 'All Resumes', active: historyPageView === 'resumes', open: openAllResumesView },
+              { id: 'list', label: 'View by Job', active: historyPageView === 'list' && !candidateRatingBand, open: openHistoryListView },
+              { id: 'candidates', label: 'View by Candidates', active: historyPageView === 'candidates' && !candidateRatingBand, open: openCandidatesView },
+              { id: 'resumes', label: 'All Resumes', active: historyPageView === 'resumes' && !candidateRatingBand, open: openAllResumesView },
             ] as const).map(view => (
               <button
                 key={view.id}
                 type="button"
-                onClick={() => { void view.open(); }}
+                onClick={() => { setCandidateRatingBand(null); void view.open(); }}
                 aria-pressed={view.active}
                 className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
                   view.active
@@ -2686,6 +2803,32 @@ export default function AITalentMatchPage({
                 }`}
               >
                 {view.label}
+              </button>
+            ))}
+
+            {/* Rating-band filters — same toggle as "All Resumes" itself:
+                clicking one narrows that view to just this band; clicking the
+                active one again clears back to the unfiltered list. */}
+            {([
+              { id: 'exact', label: 'Rating-10' },
+              { id: 'partial', label: 'Rating-9-7' },
+              { id: 'no_match', label: 'Rating Below 7' },
+            ] as const).map(band => (
+              <button
+                key={band.id}
+                type="button"
+                onClick={() => {
+                  setCandidateRatingBand(candidateRatingBand === band.id ? null : band.id);
+                  void openAllResumesView();
+                }}
+                aria-pressed={candidateRatingBand === band.id}
+                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+                  candidateRatingBand === band.id
+                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                    : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
+                }`}
+              >
+                {band.label}
               </button>
             ))}
           </div>
@@ -2793,10 +2936,10 @@ export default function AITalentMatchPage({
                         className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
                       >
                         <option value={0}>Any score</option>
-                        <option value={50}>50% and above</option>
-                        <option value={70}>70% and above</option>
-                        <option value={80}>80% and above</option>
-                        <option value={90}>90% and above</option>
+                        <option value={5}>5 and above</option>
+                        <option value={7}>7 and above</option>
+                        <option value={8}>8 and above</option>
+                        <option value={9}>9 and above</option>
                       </select>
                     </div>
 
@@ -2921,7 +3064,7 @@ export default function AITalentMatchPage({
                  sortedCandidateRows), expandable to that candidate's full list
                  of job matches. Paginated the same way, via ListPagination. */
               <>
-                <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 overflow-hidden tf-table-shell">
+                <div className="hidden md:block rounded-xl border border-gray-100 dark:border-slate-700/60 overflow-hidden tf-table-shell">
                   <div className="overflow-x-auto">
                     <table className="w-full min-w-[900px]">
                       <thead className="bg-gray-50 dark:bg-slate-800/60 border-b border-gray-200 dark:border-slate-700">
@@ -2952,7 +3095,7 @@ export default function AITalentMatchPage({
                                     onClick={() => toggleCandidateGroupExpanded(row.key)}
                                     aria-label={isExpanded ? 'Collapse' : 'Expand'}
                                     title={isExpanded ? 'Collapse' : 'Expand'}
-                                    className={`inline-flex items-center justify-center w-7 h-7 rounded-lg border transition-colors ${
+                                    className={`inline-flex items-center justify-center w-9 h-9 rounded-lg border transition-colors ${
                                       isExpanded
                                         ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
                                         : 'border-gray-200 dark:border-slate-700 text-gray-400 hover:border-brand-blue/30 hover:text-brand-blue'
@@ -3030,7 +3173,7 @@ export default function AITalentMatchPage({
                                       <table className="w-full min-w-[640px] table-auto">
                                         <thead>
                                           <tr className="border-b border-gray-200 dark:border-slate-700">
-                                            {['Job Title', 'Match Score', 'Matched Date', 'Action'].map(label => (
+                                            {['Job Title', 'Match Rating', 'Matched Date', 'Action'].map(label => (
                                               <th key={label} className="text-left py-2 px-4 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wide whitespace-nowrap">
                                                 {label}
                                               </th>
@@ -3043,7 +3186,7 @@ export default function AITalentMatchPage({
                                               <td className="py-2.5 px-4 align-middle text-sm text-gray-700 dark:text-slate-300">{job.jobTitle}</td>
                                               <td className="py-2.5 px-4 align-middle">
                                                 <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${candidateScoreBadgeClass(job.score)}`}>
-                                                  {Math.round(job.score)}%
+                                                  {toMatchRating(job.score)}
                                                 </span>
                                               </td>
                                               <td className="py-2.5 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
@@ -3071,6 +3214,122 @@ export default function AITalentMatchPage({
                       </tbody>
                     </table>
                   </div>
+                </div>
+
+                {/* Mobile cards — the table is too wide below md */}
+                <div className="md:hidden space-y-3">
+                  {paginatedCandidateRows.map((row) => {
+                    const isExpanded = expandedCandidateGroups.has(row.key);
+                    const distinctTitles = Array.from(new Set(row.jobs.map(j => j.jobTitle).filter(Boolean))) as string[];
+                    const titlesExpanded = expandedJobChips.has(row.key);
+                    const hiddenTitleCount = Math.max(0, distinctTitles.length - 2);
+                    const avatar = avatarColorFor(row.key);
+                    const sortedJobs = [...row.jobs].sort((a, b) => new Date(b.matchedAt).getTime() - new Date(a.matchedAt).getTime());
+                    const latestJob = sortedJobs[0];
+
+                    return (
+                      <div key={row.key} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 shadow-sm">
+                        <div className="flex items-start gap-3 mb-2">
+                          <div className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold ${avatar.bg} ${avatar.text}`}>
+                            {initialsFor(row.name || 'Candidate')}
+                          </div>
+                          <div className="min-w-0 flex-1">
+                            <button
+                              onClick={() => openCandidateResume(row, sortedCandidateRows)}
+                              className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate"
+                            >
+                              {row.name || 'Candidate'}
+                            </button>
+                            {row.email && <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{row.email}</div>}
+                            {row.phone && <div className="text-xs text-gray-500 dark:text-slate-500">{row.phone}</div>}
+                          </div>
+                          <button
+                            onClick={() => toggleCandidateGroupExpanded(row.key)}
+                            aria-label={isExpanded ? 'Collapse' : 'Expand'}
+                            title={isExpanded ? 'Collapse' : 'Expand'}
+                            className={`inline-flex items-center justify-center w-9 h-9 rounded-lg border transition-colors flex-shrink-0 ${
+                              isExpanded
+                                ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
+                                : 'border-gray-200 dark:border-slate-700 text-gray-400 hover:border-brand-blue/30 hover:text-brand-blue'
+                            }`}
+                          >
+                            <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                          </button>
+                        </div>
+
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
+                          <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30 whitespace-nowrap">
+                            {row.jobs.length} Job {row.jobs.length === 1 ? 'Version' : 'Versions'}
+                          </span>
+                        </div>
+
+                        <div className="space-y-0.5 mb-2">
+                          {(titlesExpanded ? distinctTitles : distinctTitles.slice(0, 2)).map((title, i) => (
+                            <div key={i} className="text-sm text-gray-700 dark:text-slate-300">{title}</div>
+                          ))}
+                          {hiddenTitleCount > 0 && (
+                            <button
+                              type="button"
+                              onClick={(e) => toggleCandidateChips(e, row.key)}
+                              title={distinctTitles.slice(2).join(', ')}
+                              className="inline-flex items-center px-2 py-0.5 mt-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 border border-gray-200 dark:border-slate-700 hover:bg-gray-200 dark:hover:bg-slate-700 hover:text-gray-800 dark:hover:text-slate-200 transition-colors whitespace-nowrap"
+                            >
+                              {titlesExpanded ? 'Show less' : `+${hiddenTitleCount} more`}
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="text-xs text-gray-500 dark:text-slate-500 mb-2">
+                          Latest Matched: {formatISTDate(latestJob.matchedAt.toISOString())} · {formatISTTime(latestJob.matchedAt.toISOString())}
+                        </div>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            onClick={() => openCandidateResume(row, sortedCandidateRows)}
+                            title="View Resume"
+                            className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                            View
+                          </button>
+                          <button
+                            onClick={() => handleAttachmentsClick(row.best)}
+                            title="Attachments"
+                            className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
+                          >
+                            <Paperclip className="w-3.5 h-3.5" />
+                            Attachments
+                          </button>
+                        </div>
+
+                        {isExpanded && (
+                          <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-800 space-y-2">
+                            {sortedJobs.map(job => (
+                              <div key={job.historyId} className="flex items-center justify-between gap-2">
+                                <div className="min-w-0">
+                                  <div className="text-sm text-gray-700 dark:text-slate-300 truncate">{job.jobTitle}</div>
+                                  <div className="flex items-center gap-2 mt-0.5">
+                                    <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${candidateScoreBadgeClass(job.score)}`}>
+                                      {toMatchRating(job.score)}
+                                    </span>
+                                    <span className="text-xs text-gray-500 dark:text-slate-500">
+                                      {formatISTDate(job.matchedAt.toISOString())}
+                                    </span>
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => openCandidateMatch(job.historyId)}
+                                  className="flex-shrink-0 text-sm font-medium text-brand-blue hover:text-brand-blue-2 hover:underline"
+                                >
+                                  Open Match
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 <ListPagination
@@ -3124,7 +3383,7 @@ export default function AITalentMatchPage({
                         aria-label="Sort resumes by"
                         className="appearance-none h-8 pl-3 pr-8 bg-transparent rounded-full focus:outline-none focus:ring-2 focus:ring-brand-blue/40 text-sm font-medium text-gray-800 dark:text-slate-200 cursor-pointer"
                       >
-                        <option value="score">Match Score</option>
+                        <option value="score">Match Rating</option>
                         <option value="name">Candidate Name</option>
                         <option value="date">Match Date</option>
                       </select>
@@ -3187,10 +3446,10 @@ export default function AITalentMatchPage({
                         className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black bg-white dark:bg-slate-900"
                       >
                         <option value={0}>Any score</option>
-                        <option value={50}>50% and above</option>
-                        <option value={70}>70% and above</option>
-                        <option value={80}>80% and above</option>
-                        <option value={90}>90% and above</option>
+                        <option value={5}>5 and above</option>
+                        <option value={7}>7 and above</option>
+                        <option value={8}>8 and above</option>
+                        <option value={9}>9 and above</option>
                       </select>
                     </div>
 
@@ -3312,7 +3571,7 @@ export default function AITalentMatchPage({
                   <table className="w-full min-w-[1330px] table-auto">
                     <thead className="sticky top-0 z-10">
                       <tr>
-                        {['Candidate Name', 'Job Title', 'Match Score', 'Email', 'Phone', 'Location', 'Skills', 'Experience', 'Uploaded By', 'Uploaded Date', 'Attachments', 'Matched Status'].map((label) => (
+                        {['Candidate Name', 'Job Title', 'Match Rating', 'Email', 'Phone', 'Location', 'Skills', 'Experience', 'Uploaded By', 'Uploaded Date', 'Attachments', 'Matched Status'].map((label) => (
                           <th
                             key={label}
                             className="text-left py-3 px-4 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap align-middle bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700"
@@ -3352,7 +3611,7 @@ export default function AITalentMatchPage({
                           </td>
                           <td className="py-3 px-4 align-middle whitespace-nowrap">
                             <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${candidateScoreBadgeClass(job.score)}`}>
-                              {Math.round(job.score)}%
+                              {toMatchRating(job.score)}
                             </span>
                           </td>
                           <td className="py-3 px-4 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
@@ -3429,7 +3688,7 @@ export default function AITalentMatchPage({
                           <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{job.jobTitle}</div>
                         </div>
                         <span className={`inline-flex px-2 py-1 rounded-full text-xs border flex-shrink-0 ${candidateScoreBadgeClass(job.score)}`}>
-                          {Math.round(job.score)}%
+                          {toMatchRating(job.score)}
                         </span>
                       </div>
                       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-400">
@@ -3679,6 +3938,16 @@ export default function AITalentMatchPage({
                             </span>
                           )}
                           <JDVersionHistory jdId={item.jobId} version={jobData?.currentVersion} />
+                          {/* Match History — every run across this job's whole
+                              lineage, with the Exact/Partial/No Match roll-up
+                              Resume Scoring's own History icon opens. */}
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openMatchHistoryModal(item, historyKey); }}
+                            className="inline-flex h-7 w-7 items-center justify-center p-1.5 rounded-lg border border-brand-cyan/20 bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan/15 transition-colors flex-shrink-0"
+                            aria-label="Match History" title="Match History"
+                          >
+                            <History className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
                         {jobData?.department && (
@@ -3788,6 +4057,15 @@ export default function AITalentMatchPage({
                       list expands its own version history. */}
                   {expandedHistoryJobId === historyKey && (
                     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60" onClick={(e) => e.stopPropagation()}>
+                      {/* Same label/icon JobVersionHistoryPanel (Job Openings /
+                          Resume Scoring) puts above its own version table — this
+                          table renders its own rows rather than that shared
+                          component, but the header stays identical so the two
+                          modules' version history reads as one pattern. */}
+                      <div className="flex items-center gap-2 mb-2.5">
+                        <FileText className="w-4 h-4 text-brand-blue" />
+                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Version History</p>
+                      </div>
                       <AIMatchVersionHistoryTable
                         loading={loadingHistoryJobId === historyKey}
                         failed={failedHistoryJobId === historyKey}
@@ -3798,7 +4076,15 @@ export default function AITalentMatchPage({
                            card's job for sessions that predate `jd_id`. */
                         resolveJob={(session) => {
                           const j = jobs.find(x => x.id === (session.jd_id || item.jobId));
-                          return j ? { status: j.status, currentVersion: j.currentVersion } : undefined;
+                          return j ? {
+                            status: j.status,
+                            currentVersion: j.currentVersion,
+                            experience: j.experience,
+                            industryType: j.industryType,
+                            location: j.location,
+                            employmentType: j.employmentType,
+                            remoteType: j.remoteType,
+                          } : undefined;
                         }}
                         onRetry={() => loadAIMatchVersionHistory(historyKey, item.jobId)}
                         onViewSession={(session) => {
@@ -3909,6 +4195,145 @@ export default function AITalentMatchPage({
         />
       )}
 
+      {/* Match History Modal — reference: Resume Scoring's own "Scoring
+          History" popup (same header/stat-cards/close shape), adapted to AI
+          Talent Match's data: sessions instead of scoring runs, a 1-10 rating
+          instead of a percentage, and the existing AIMatchVersionHistoryTable
+          for the body instead of a bespoke table. */}
+      {matchHistoryModal && (() => {
+        const { item: modalItem, historyKey: modalKey } = matchHistoryModal;
+        const modalJobData = jobs.find(j => j.id === modalItem.jobId);
+        const versions = historyVersionsByJob[modalKey] ?? null;
+        const isLoadingModal = loadingHistoryJobId === modalKey && !versions;
+        const allResults = (versions ?? []).flatMap(v => v.session.results || []);
+        const ratingFor = (r: typeof allResults[number]) =>
+          toMatchRating(r.final_score ?? ((r.similarity_score || 0) * 100));
+        const totalMatched = (versions ?? []).reduce(
+          (sum, v) => sum + (v.session.total_matches ?? (v.session.results?.length || 0)),
+          0,
+        );
+        const exactCount = allResults.filter(r => matchBandForRating(ratingFor(r)) === 'exact').length;
+        const partialCount = allResults.filter(r => matchBandForRating(ratingFor(r)) === 'partial').length;
+        const noMatchCount = allResults.filter(r => matchBandForRating(ratingFor(r)) === 'no_match').length;
+
+        const statCards: { label: string; value: number; icon: typeof FileText; iconBg: string; iconColor: string; valueColor: string }[] = [
+          { label: 'Total Resumes Matched', value: totalMatched, icon: FileText, iconBg: 'bg-brand-blue/10', iconColor: 'text-brand-blue', valueColor: 'text-gray-900 dark:text-slate-50' },
+          { label: '10', value: exactCount, icon: CheckCircle2, iconBg: 'bg-green-100', iconColor: 'text-green-700', valueColor: 'text-green-700' },
+          { label: '9-7', value: partialCount, icon: PieChart, iconBg: 'bg-brand-orange/10', iconColor: 'text-brand-orange-deep', valueColor: 'text-brand-orange-deep' },
+          { label: 'Below 7', value: noMatchCount, icon: XCircle, iconBg: 'bg-red-100', iconColor: 'text-red-600', valueColor: 'text-red-600' },
+        ];
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-[96vw] sm:max-w-4xl max-h-[94dvh] flex flex-col tf-round-edges">
+              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-11 h-11 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <History className="w-5 h-5 text-brand-blue" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-bold text-gray-900 dark:text-slate-50">Match History</h3>
+                    <p className="text-sm text-gray-500 dark:text-slate-500 truncate max-w-[360px]">
+                      {modalItem.jobTitle}
+                      {modalJobData?.jobId && ` (${modalJobData.jobId})`}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <button
+                    onClick={() => loadAIMatchVersionHistory(modalKey, modalItem.jobId)}
+                    disabled={loadingHistoryJobId === modalKey}
+                    title="Fetch the latest match history"
+                    aria-label="Refresh"
+                    className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${loadingHistoryJobId === modalKey ? 'animate-spin' : ''}`} />
+                    <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
+                      {loadingHistoryJobId === modalKey ? 'Refreshing...' : 'Refresh'}
+                    </span>
+                  </button>
+                  <button onClick={() => setMatchHistoryModal(null)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" aria-label="Close">
+                    <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
+                  </button>
+                </div>
+              </div>
+
+              <div className="overflow-y-auto px-6 py-4 flex-1">
+                {isLoadingModal ? (
+                  <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500 dark:text-slate-500">
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Loading match history...
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                    {statCards.map(card => (
+                      <div key={card.label} className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <div className={`h-7 w-7 rounded-lg ${card.iconBg} flex items-center justify-center flex-shrink-0`}>
+                            <card.icon className={`w-3.5 h-3.5 ${card.iconColor}`} />
+                          </div>
+                          <span className="text-xs text-gray-600 dark:text-slate-400">{card.label}</span>
+                        </div>
+                        <div className={`text-xl font-bold ${card.valueColor}`}>{card.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <AIMatchVersionHistoryTable
+                  loading={loadingHistoryJobId === modalKey}
+                  failed={failedHistoryJobId === modalKey}
+                  versions={versions}
+                  resolveJob={(session) => {
+                    const j = jobs.find(x => x.id === (session.jd_id || modalItem.jobId));
+                    return j ? {
+                      status: j.status,
+                      currentVersion: j.currentVersion,
+                      experience: j.experience,
+                      industryType: j.industryType,
+                      location: j.location,
+                      employmentType: j.employmentType,
+                      remoteType: j.remoteType,
+                    } : undefined;
+                  }}
+                  onRetry={() => loadAIMatchVersionHistory(modalKey, modalItem.jobId)}
+                  onViewSession={(session) => {
+                    userChangedView.current = true; // Prevent useEffect from resetting view
+                    const targetJobId = session.jd_id || modalItem.jobId;
+                    const targetJob = jobs.find(j => j.id === targetJobId);
+                    setSelectedHistoryItem({
+                      id: session.id,
+                      jobId: targetJobId,
+                      jobTitle: targetJob?.title || modalItem.jobTitle,
+                      matchedAt: new Date(session.created_at),
+                      totalMatches: session.total_matches,
+                      matchedCandidates: [],
+                    });
+                    setSelectedJob(targetJobId);
+                    setViewMode('details');
+                    updateUrlParams({ jdId: targetJobId, view: 'details' });
+                    setMatchHistoryModal(null);
+                  }}
+                />
+              </div>
+
+              <div className="px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-between gap-3 shrink-0">
+                <p className="text-xs text-gray-500 dark:text-slate-500 flex items-center gap-1.5">
+                  <Info className="w-3.5 h-3.5 flex-shrink-0" />
+                  Match status is based on the candidate&apos;s AI match rating (1-10 scale).
+                </p>
+                <button
+                  onClick={() => setMatchHistoryModal(null)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 transition-colors shadow-sm shadow-brand-blue/25 flex-shrink-0"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       </>
     );
   }
@@ -4011,9 +4436,9 @@ export default function AITalentMatchPage({
                 className="px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white dark:bg-slate-900 text-sm text-black"
               >
                 <option value={0}>All Matches</option>
-                <option value={50}>50%+ Match</option>
-                <option value={70}>70%+ Match</option>
-                <option value={85}>85%+ Match</option>
+                <option value={5}>5+ Rating</option>
+                <option value={7}>7+ Rating</option>
+                <option value={9}>9+ Rating</option>
               </select>
               {selectedCandidates.length > 0 && (
                 <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
@@ -4062,20 +4487,20 @@ export default function AITalentMatchPage({
               />
             </div>
             {/* Additional Filters */}
-            <div className="grid grid-cols-2 sm:flex sm:flex-wrap items-center gap-2 sm:gap-3">
+            <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2 sm:gap-3">
               <input
                 type="text"
                 value={filterPhone}
                 onChange={(e) => setFilterPhone(e.target.value)}
                 placeholder="Filter by phone..."
-                className="px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black placeholder:text-gray-400"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black placeholder:text-gray-400"
               />
               <input
                 type="text"
                 value={filterLocation}
                 onChange={(e) => setFilterLocation(e.target.value)}
                 placeholder="Filter by location..."
-                className="px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black placeholder:text-gray-400"
+                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black placeholder:text-gray-400"
               />
               <input
                 type="number"
@@ -4094,7 +4519,7 @@ export default function AITalentMatchPage({
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as 'rank' | 'name' | 'score' | 'experience')}
-                className="col-span-2 sm:col-span-1 px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white dark:bg-slate-900 text-sm text-black"
+                className="w-full sm:w-auto px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white dark:bg-slate-900 text-sm text-black"
               >
                 <option value="rank">Sort by Rating (High to Low)</option>
                 <option value="name">Sort by Name (A to Z)</option>
@@ -4125,7 +4550,7 @@ export default function AITalentMatchPage({
           ) : (
           <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm">
             {/* Bounded viewport so only the rows scroll — pagination below stays put. */}
-            <div className="min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell">
+            <div className="hidden md:block min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell">
             <table className="w-full min-w-[1450px]">
               <thead className="sticky top-0 z-10 [&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                 <tr>
@@ -4275,7 +4700,7 @@ export default function AITalentMatchPage({
                           e.stopPropagation();
                           setSelectedVersionsCandidate(candidate);
                         }}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
+                        className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
                       >
                         <Paperclip className="w-3.5 h-3.5" />
                         {candidate.attachmentCount || 1}
@@ -4298,6 +4723,107 @@ export default function AITalentMatchPage({
                 ))}
               </tbody>
             </table>
+            </div>
+
+            {/* Mobile cards — the table is too wide below md */}
+            <div className="md:hidden space-y-3 p-3">
+              {paginatedCandidates.map((candidate) => (
+                <div
+                  key={candidate.id}
+                  onClick={() => {
+                    if (candidate.resumeId) {
+                      try {
+                        sessionStorage.setItem('resumeNavList', JSON.stringify(filteredCandidatesMemo.map((c: any) => c.resumeId).filter(Boolean)));
+                        sessionStorage.setItem('resumeNavSource', 'ai-talent-match');
+                        sessionStorage.setItem('resumeNavAIMatchJobId', selectedJob);
+                        // The breadcrumb names the job this match belongs to.
+                        sessionStorage.setItem(
+                          'resumeNavAIMatchJobTitle',
+                          selectedJobData?.title || historyItemForSelectedJob?.jobTitle || ''
+                        );
+                        markAIMatchReturnTrip();
+                      } catch { /* ignore */ }
+                      router.push(`/recruitment/resume-view/${candidate.resumeId}`);
+                    }
+                  }}
+                  className={`rounded-xl border p-3 shadow-sm cursor-pointer ${
+                    selectedCandidates.includes(candidate.id)
+                      ? 'bg-brand-blue/5 border-brand-blue/30'
+                      : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-3 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={selectedCandidates.includes(candidate.id)}
+                        onChange={() => handleSelectCandidate(candidate.id)}
+                        onClick={(e) => e.stopPropagation()}
+                        className="rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0"
+                      />
+                      <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-xs text-brand-blue font-medium flex-shrink-0">
+                        {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{candidate.name || 'Unknown'}</div>
+                        <div className="text-xs text-gray-500 dark:text-slate-500 truncate">
+                          {selectedJobData?.title || selectedHistoryItem?.jobTitle || '-'}
+                        </div>
+                      </div>
+                    </div>
+                    <div className={`inline-flex items-center justify-center w-9 h-9 rounded-full font-bold text-sm flex-shrink-0 ${
+                      (candidate.rank || 0) >= 9 ? 'bg-brand-blue/10 text-brand-blue border-2 border-brand-blue/30' :
+                      (candidate.rank || 0) >= 7 ? 'bg-brand-cyan/10 text-brand-cyan border-2 border-brand-cyan/30' :
+                      (candidate.rank || 0) >= 5 ? 'bg-brand-orange/10 text-brand-orange-deep border-2 border-brand-orange/30' :
+                      'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 border-2 border-gray-200 dark:border-slate-700'
+                    }`}>
+                      {candidate.rank || '-'}
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-400 mb-2">
+                    {candidate.email && <span className="flex items-center gap-1 min-w-0"><Mail className="w-3 h-3 flex-shrink-0" /><span className="truncate">{candidate.email}</span></span>}
+                    {candidate.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{candidate.phone}</span>}
+                    {candidate.location && <span className="flex items-center gap-1 min-w-0"><MapPin className="w-3 h-3 flex-shrink-0" /><span className="truncate">{candidate.location}</span></span>}
+                    {candidate.experience && <span>{candidate.experience}</span>}
+                  </div>
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    <SkillsList
+                      skills={candidate.skills}
+                      chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20"
+                      moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between gap-2 text-xs text-gray-500 dark:text-slate-500">
+                    <span className="truncate">
+                      {formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}
+                      {candidate.uploadDate && <> · {formatISTDate(candidate.uploadDate)}</>}
+                    </span>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedVersionsCandidate(candidate);
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
+                      >
+                        <Paperclip className="w-3.5 h-3.5" />
+                        {candidate.attachmentCount || 1}
+                      </button>
+                      {scoredResumeIds.has(candidate.resumeId) ? (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                          <CheckCircle className="w-3 h-3" />
+                          Matched
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700">
+                          <XCircle className="w-3 h-3" />
+                          Not Matched
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* Pagination Controls */}

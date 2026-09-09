@@ -13,7 +13,6 @@ import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 import JDVersionHistory from '@/components/JDVersionHistory';
 
 interface Job {
@@ -161,12 +160,6 @@ export default function AITalentMatchPageJobsList({
           </div>
         </div>
       </div>
-
-      <ModuleInfoBanner
-        icon={<Sparkles className="h-4 w-4" />}
-        title="AI-Powered Talent Matching"
-        description="Select a published job and let AI compare its skills, experience, and requirements against your candidate pool. Review ranked matches to quickly focus on the most relevant people for the role."
-      />
 
       {/* Search and Filter Bar */}
       <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 lg:p-5 mb-4 sm:mb-6">
@@ -317,7 +310,7 @@ export default function AITalentMatchPageJobsList({
                           type="button"
                           onClick={(e) => { e.stopPropagation(); if (!isDisabled) handleToggleJob(job.id); }}
                           disabled={isDisabled}
-                          className="flex-shrink-0"
+                          className="flex h-9 w-9 flex-shrink-0 items-center justify-center"
                           title={isSelected ? 'Deselect' : 'Select'}
                           aria-label={isSelected ? 'Deselect job' : 'Select job'}
                         >
@@ -475,7 +468,7 @@ export default function AITalentMatchPageJobsList({
                         type="button"
                         onClick={(event) => { event.stopPropagation(); if (!isDisabled) handleToggleJob(job.id); }}
                         disabled={isDisabled}
-                        className="flex h-9 w-5 flex-shrink-0 items-center justify-center"
+                        className="flex h-9 w-9 flex-shrink-0 items-center justify-center"
                         aria-label={isSelected ? 'Deselect job' : 'Select job'}
                       >
                         <input
