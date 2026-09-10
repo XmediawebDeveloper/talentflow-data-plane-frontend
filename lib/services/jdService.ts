@@ -153,6 +153,16 @@ export interface JDMergeTrailEntry {
     | 'same-wording'
     | 'same-item-with-detail'
     | 'restates-existing-skills'
+    /** The JD listed this same skill in BOTH sections and the stronger one won. Unique
+     *  in that its `removed` text EQUALS the survivor - there is no second wording,
+     *  only an explanation of where the skill went - so it renders as a plain note with
+     *  no Add button. */
+    | 'cross-list-priority'
+    /** The JD wrote a longer phrase than the skill name we kept ("Docker
+     *  containerization" -> "Docker"). The child is the JD's OWN wording, verified to
+     *  appear verbatim in the document, so the action is "use the JD's wording"
+     *  (replace this skill's text) rather than "add" (a second skill). */
+    | 'narrowed-from-jd-wording'
     | 'ai-review';
 }
 

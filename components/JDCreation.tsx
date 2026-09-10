@@ -874,6 +874,10 @@ interface DraggableSkillProps {
   /** Set when other wordings from the JD were grouped under this skill at extraction. */
   mergedInto?: JDMergeTrailEntry;
   onRestoreMerged?: (survivor: string, removed: string) => void;
+  /** Replace this skill's text with the JD's own longer wording (narrowing notes). */
+  onUseJdWording?: (
+    category: 'mustHaveSkills' | 'niceToHaveSkills', index: number, jdWording: string,
+  ) => void;
 }
 
 const DraggableSkill = ({
@@ -891,6 +895,7 @@ const DraggableSkill = ({
   readOnly = false,
   mergedInto,
   onRestoreMerged,
+  onUseJdWording,
 }: DraggableSkillProps) => {
   // Grouped wordings start EXPANDED. Collapsed-by-default was the old badge, and it
   // reproduced the problem it was meant to solve: a recruiter scanning the list saw the
@@ -1018,28 +1023,52 @@ const DraggableSkill = ({
           takes it back out as a skill of its own if the grouping was wrong. */}
       {groupedCount > 0 && showMerged && (
         <div className="px-2.5 pb-2 pl-7">
-          {mergedInto!.removed.map((rm, i) => (
+          {mergedInto!.removed.map((rm, i) => {
+          const isCrossListNote = mergedInto!.source === 'cross-list-priority';
+          const isNarrowingNote = mergedInto!.source === 'narrowed-from-jd-wording';
+          return (
             <div key={rm} className="flex items-start gap-1.5 pt-1.5 text-left">
               <span className="select-none text-gray-300 dark:text-slate-600 text-xs leading-5 font-mono flex-shrink-0">
                 └──
               </span>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-[13px] text-gray-600 dark:text-slate-400 break-words" title={rm}>
-                    {rm}
-                  </span>
-                  {!readOnly && onRestoreMerged && (
-                    <button
-                      type="button"
-                      onClick={() => onRestoreMerged(mergedInto!.survivor, rm)}
-                      className="inline-flex items-center gap-0.5 text-[11px] font-medium text-brand-blue hover:underline flex-shrink-0"
-                      title={`Track "${rm}" as its own skill instead of part of "${skill}"`}
-                    >
-                      <Plus className="w-3 h-3" />
-                      Add
-                    </button>
-                  )}
-                </div>
+                {/* A cross-list note names the SAME text as its parent - it says "the
+                    JD listed this in the other section too", not "here is another
+                    wording". Echoing the skill name back would read as a duplicate, and
+                    an Add button would create the very duplicate the precedence rule
+                    exists to prevent. So that variant renders as the reason alone. */}
+                {!isCrossListNote && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-[13px] text-gray-600 dark:text-slate-400 break-words" title={rm}>
+                      {rm}
+                    </span>
+                    {!readOnly && onRestoreMerged && !isNarrowingNote && (
+                      <button
+                        type="button"
+                        onClick={() => onRestoreMerged(mergedInto!.survivor, rm)}
+                        className="inline-flex items-center gap-0.5 text-[11px] font-medium text-brand-blue hover:underline flex-shrink-0"
+                        title={`Track "${rm}" as its own skill instead of part of "${skill}"`}
+                      >
+                        <Plus className="w-3 h-3" />
+                        Add
+                      </button>
+                    )}
+                    {/* A narrowing note's child is the JD's OWN wording, not a second
+                        skill - so the action REPLACES this skill's text. Adding it
+                        would leave "Docker" and "Docker containerization" side by side,
+                        which is the duplicate the extraction correctly avoided. */}
+                    {!readOnly && onUseJdWording && isNarrowingNote && (
+                      <button
+                        type="button"
+                        onClick={() => onUseJdWording(category, index, rm)}
+                        className="inline-flex items-center gap-0.5 text-[11px] font-medium text-brand-blue hover:underline flex-shrink-0"
+                        title={`Rename this skill to the JD's wording: "${rm}"`}
+                      >
+                        Use JD wording
+                      </button>
+                    )}
+                  </div>
+                )}
                 {/* The reason and the JD line are what make this checkable rather than
                     something to take on trust. A group with no evidence behind it is
                     just a deletion with extra steps. */}
@@ -1053,7 +1082,8 @@ const DraggableSkill = ({
                 )}
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       )}
     </div>
@@ -2035,6 +2065,40 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
    * top-level skill would read as the skill being counted twice. When the last child
    * leaves, the group disappears with it.
    */
+  /**
+   * Adopt the JD's own longer wording for a skill ("Use JD wording" on a narrowing note).
+   *
+   * The counterpart to promoting a grouped skill, and deliberately a REPLACE rather than
+   * an add: the note's child is not a second skill, it is the same skill as the JD
+   * happened to phrase it. Adding it would put "Docker" and "Docker containerization"
+   * side by side - the duplicate the extraction was right to avoid.
+   *
+   * The note is dropped once used, because the skill now IS the JD's wording and there
+   * is no longer a difference to explain.
+   */
+  const handleUseJdWording = (
+    category: 'mustHaveSkills' | 'niceToHaveSkills', index: number, jdWording: string,
+  ) => {
+    setExtractedData(prev => {
+      const list = [...(prev[category] || [])];
+      const current = list[index];
+      if (current === undefined) return prev;
+      list[index] = jdWording;
+      return {
+        ...prev,
+        [category]: list,
+        mergeTrail: prev.mergeTrail.filter(
+          e => !(e.survivor === current && e.source === 'narrowed-from-jd-wording'),
+        ),
+      };
+    });
+    markExtractedDataModified();
+    toast.success({
+      title: 'Using the JD wording',
+      description: `This skill now reads "${jdWording}", exactly as the job description wrote it.`,
+    });
+  };
+
   const handlePromoteGroupedSkill = (survivor: string, removed: string) => {
     // Where this wording goes back to. Usually the survivor's own list; a requirement
     // SENTENCE folded into the skills that cover it goes back to its comments list
@@ -7140,6 +7204,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           e => e.list === 'must_have_skills' && e.survivor === skill
                         )}
                         onRestoreMerged={handlePromoteGroupedSkill}
+                        onUseJdWording={handleUseJdWording}
                         onMove={handleMoveSkill}
                         onRemove={handleRemoveSkill}
                         onStartEdit={handleStartEditSkill}
@@ -7221,6 +7286,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           e => e.list === 'nice_to_have_skills' && e.survivor === skill
                         )}
                         onRestoreMerged={handlePromoteGroupedSkill}
+                        onUseJdWording={handleUseJdWording}
                         onMove={handleMoveSkill}
                         onRemove={handleRemoveSkill}
                         onStartEdit={handleStartEditSkill}
