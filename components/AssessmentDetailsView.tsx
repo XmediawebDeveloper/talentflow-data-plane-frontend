@@ -49,6 +49,56 @@ interface Section {
 // IST timezone constant
 const INDIA_TIMEZONE = 'Asia/Kolkata';
 
+/**
+ * EVERY ASSESSMENT IN ONE JOB'S LINEAGE, deduped by assessment id.
+ *
+ * ONE REQUEST PER JOB VERSION, merged — not one for the assessment's own
+ * `jd_id`.
+ *
+ * Asking once with a single `jd_id` only returns the whole job's assessments
+ * if the endpoint widens that filter to the JD's lineage. Where it matches the
+ * id exactly, every assessment authored against a DIFFERENT version of the
+ * same job is absent from the reply — so a Draft created against another
+ * version reads as not existing at all. Each version is asked about itself
+ * instead, so the reply cannot be narrower than the question; if the endpoint
+ * does widen, the extra copies arrive as duplicates and the dedupe drops them.
+ *
+ * Deduped by ASSESSMENT id, the record's own unique key — never by job or
+ * version — so two assessments on one job version stay two rows. The same
+ * fan-out the assessments list uses for its version panel
+ * (`loadAssessmentLineage`), so every surface lists the same assessments.
+ *
+ * Returned unsorted: the callers order it themselves, and they want opposite
+ * orders — the New Versions tab reads oldest-first, the header's version menu
+ * newest-first, the way both version menus on this page do.
+ */
+const fetchAssessmentLineage = async (jdId: string): Promise<any[]> => {
+  let versionIds: string[] = [jdId];
+  try {
+    const lineage = await jdService.getLineageVersions(jdId);
+    const ids = lineage.map((v: any) => v.id).filter(Boolean);
+    if (ids.length) versionIds = [...new Set([jdId, ...ids])];
+  } catch (error) {
+    console.error('Failed to fetch JD lineage for assessment versions:', error);
+  }
+
+  const responses = await Promise.all(
+    versionIds.map((versionId) =>
+      assessmentService
+        .list({ jd_id: versionId, page_size: 50 })
+        // One version failing must not blank the others.
+        .catch(() => ({ items: [] as any[] })),
+    ),
+  );
+  const byAssessmentId = new Map<string, any>();
+  for (const response of responses) {
+    for (const row of ((response.items || []) as any[])) {
+      if (row?.id) byAssessmentId.set(row.id, row);
+    }
+  }
+  return [...byAssessmentId.values()];
+};
+
 const formatEmploymentType = (type: string | undefined): string => {
   if (!type) return '';
   return type
@@ -213,6 +263,111 @@ export default function AssessmentDetailsView({
     }
   };
 
+  /* ── Assessment version selector ─────────────────────────────────────────
+   *
+   * The Job version badge's twin, for the OTHER version this page carries.
+   * Same control, same grammar: the badge states the version you are on,
+   * opens a menu of every version of this assessment, and selecting one
+   * navigates to it — so "show only V2's data" is true here for exactly the
+   * reason it is true there, without a second code path.
+   *
+   * The assessment's own versions only — the duplicates minted from it, which
+   * is what the New Versions tab lists in full. It does NOT list the job's
+   * versions; conflating the two is the ambiguity this page labels its way
+   * out of everywhere else, and the badge beside it is where they live.
+   *
+   * FETCHED ON FIRST OPEN, not on mount, and this is where the two badges
+   * differ. The job's versions are one request (the JD lineage), so the job
+   * badge can afford to have them ready. An assessment's versions cost that
+   * request PLUS one per job version — the reason this page already refuses
+   * to resolve an assessment per version up front for the job menu — so they
+   * are fetched when the menu is actually opened and kept for the rest of the
+   * visit. The menu says it is loading in the meantime; the badge itself is
+   * never dead.
+   */
+  /* Held WITH the assessment id it was fetched for, rather than reset by an
+     effect when that id changes: a different record is a different lineage,
+     and a cache that has to be cleared by a render pass is a cache that is
+     briefly wrong. A stale entry simply stops matching and is refetched. */
+  const [assessmentVersions, setAssessmentVersions] = useState<{ assessmentId: string; rows: any[] } | null>(null);
+  const [assessmentVersionsLoading, setAssessmentVersionsLoading] = useState(false);
+  const [showAssessmentVersionMenu, setShowAssessmentVersionMenu] = useState(false);
+  const [assessmentSwitching, setAssessmentSwitching] = useState<string | null>(null);
+  const assessmentVersionMenuRef = useRef<HTMLDivElement | null>(null);
+
+  /* Close on an outside click, exactly as the job menu does. */
+  useEffect(() => {
+    if (!showAssessmentVersionMenu) return;
+    const onDown = (e: MouseEvent) => {
+      if (
+        assessmentVersionMenuRef.current &&
+        !assessmentVersionMenuRef.current.contains(e.target as Node)
+      ) {
+        setShowAssessmentVersionMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [showAssessmentVersionMenu]);
+
+  /* The cached rows, but only if they belong to the assessment on screen. */
+  const assessmentVersionRows =
+    assessmentVersions && assessmentVersions.assessmentId === assessment?.id
+      ? assessmentVersions.rows
+      : null;
+
+  const toggleAssessmentVersionMenu = () => {
+    const opening = !showAssessmentVersionMenu;
+    setShowAssessmentVersionMenu(opening);
+    if (!opening || assessmentVersionRows || assessmentVersionsLoading) return;
+    /* No `jd_id`, no lineage to ask about: an assessment with no job behind it
+       is its own only version, so the menu says so rather than fetching. */
+    if (!assessment?.jd_id) {
+      setAssessmentVersions({ assessmentId: assessment?.id, rows: [] });
+      return;
+    }
+    const requestedFor = assessment.id;
+    setAssessmentVersionsLoading(true);
+    fetchAssessmentLineage(assessment.jd_id)
+      .then((rows) => setAssessmentVersions({ assessmentId: requestedFor, rows }))
+      .catch((error) => {
+        console.error('[TalentFlow] Failed to load assessment versions:', error);
+        setAssessmentVersions({ assessmentId: requestedFor, rows: [] });
+      })
+      .finally(() => setAssessmentVersionsLoading(false));
+  };
+
+  /* Newest first, on the version the record reports — the order the job menu
+     lists its versions in. */
+  const sortedAssessmentVersions = useMemo(
+    () => [...(assessmentVersionRows ?? [])].sort((a, b) => (b?.version ?? 0) - (a?.version ?? 0)),
+    [assessmentVersionRows],
+  );
+  /* The highest version in the lineage, for the "Latest" chip — the job menu
+     reads a flag the lineage endpoint sets; assessments carry no such flag, so
+     it is derived from the list the menu is drawing. */
+  const latestAssessmentVersion = useMemo(
+    () => sortedAssessmentVersions.reduce((max, row) => Math.max(max, row?.version ?? 0), 0),
+    [sortedAssessmentVersions],
+  );
+
+  /**
+   * Open THIS version of the assessment.
+   *
+   * Navigates rather than swapping state in place, for the same reason the job
+   * menu does: the whole page — header, every tab, every fetch keyed on the
+   * assessment id — reloads for the version selected, so nothing from V1 can
+   * survive into a V2 view. A Draft lands on the route's own draft rule, which
+   * sends it to the configure page the Edit action opens; the version menu
+   * does not carry a second copy of that decision.
+   */
+  const handleAssessmentVersionSelect = (version: any) => {
+    setShowAssessmentVersionMenu(false);
+    if (!version?.id || version.id === assessment?.id) return;
+    setAssessmentSwitching(version.id);
+    router.push(`/recruitment/assessments/${version.id}`);
+  };
+
   /* The tabs, as data.
    *
    * Six near-identical buttons used to be written out longhand, which is why
@@ -365,48 +520,10 @@ export default function AssessmentDetailsView({
       if (!assessment?.id || !assessment?.jd_id || activeTab !== 'newversions') return;
       setSiblingsLoading(true);
       try {
-        /* ONE REQUEST PER JOB VERSION, merged and deduped by assessment id —
-           not one for this assessment's own `jd_id`.
-
-           Asking once with this assessment's `jd_id` only returns the whole
-           job's assessments if the endpoint widens that filter to the JD's
-           lineage. Where it matches the id exactly, every assessment authored
-           against a DIFFERENT version of the same job is absent from the
-           reply — so a Draft created against another version reads here as
-           not existing at all. Each version is asked about itself instead, so
-           the reply cannot be narrower than the question; if the endpoint
-           does widen, the extra copies arrive as duplicates and the dedupe
-           drops them.
-
-           Deduped by ASSESSMENT id, the record's own unique key — never by
-           job or version — so two assessments on one job version stay two
-           rows. The same fan-out the assessments list uses for its version
-           panel (`loadAssessmentLineage`), so both surfaces list the same
-           assessments. */
-        let versionIds: string[] = [assessment.jd_id];
-        try {
-          const lineage = await jdService.getLineageVersions(assessment.jd_id);
-          const ids = lineage.map((v: any) => v.id).filter(Boolean);
-          if (ids.length) versionIds = [...new Set([assessment.jd_id, ...ids])];
-        } catch (error) {
-          console.error('Failed to fetch JD lineage for sibling versions:', error);
-        }
-
-        const responses = await Promise.all(
-          versionIds.map((versionId) =>
-            assessmentService
-              .list({ jd_id: versionId, page_size: 50 })
-              // One version failing must not blank the others.
-              .catch(() => ({ items: [] as any[] })),
-          ),
-        );
-        const byAssessmentId = new Map<string, any>();
-        for (const response of responses) {
-          for (const row of ((response.items || []) as any[])) {
-            if (row?.id) byAssessmentId.set(row.id, row);
-          }
-        }
-        const items = [...byAssessmentId.values()].sort(
+        /* The shared lineage fan-out — see `fetchAssessmentLineage`. The
+           header's Assessment version menu reads the same list, so the tab
+           and the badge can never disagree about which versions exist. */
+        const items = (await fetchAssessmentLineage(assessment.jd_id)).sort(
           (a: any, b: any) => (a.version || 0) - (b.version || 0)
         );
         setSiblingVersions(items);
@@ -899,12 +1016,101 @@ export default function AssessmentDetailsView({
                   </div>
                 )}
                 {assessment.version != null && (
-                  <span
-                    title={`Assessment version ${assessment.version}`}
-                    className="inline-flex items-center px-2.5 py-1 bg-brand-blue text-white rounded-full text-xs font-medium whitespace-nowrap"
-                  >
-                    Assessment V{assessment.version}
-                  </span>
+                  /* The assessment's own version control, beside the job's and
+                     built the same way — see the "Assessment version selector"
+                     block above. Keeps the badge it replaced exactly: the
+                     assessment blue this page uses everywhere else, labelled,
+                     because two bare numbers side by side is the ambiguity the
+                     Send Invite rows already spell their way out of. */
+                  <div className="relative" ref={assessmentVersionMenuRef}>
+                    <button
+                      type="button"
+                      onClick={toggleAssessmentVersionMenu}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-blue text-white rounded-full text-xs font-medium hover:bg-brand-blue-2 transition-colors whitespace-nowrap"
+                      aria-label={`Select assessment version, currently V${assessment.version}`}
+                      aria-haspopup="menu"
+                      aria-expanded={showAssessmentVersionMenu}
+                      title="Switch assessment version"
+                    >
+                      Assessment V{assessment.version}
+                      <ChevronDown className={`w-3 h-3 transition-transform ${showAssessmentVersionMenu ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showAssessmentVersionMenu && (
+                      <div
+                        role="menu"
+                        aria-label="Available assessment versions"
+                        className="absolute left-0 top-full mt-2 w-64 max-h-72 overflow-y-auto bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-1 z-50"
+                      >
+                        {assessmentVersionsLoading ? (
+                          <div className="px-3 py-3 flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400">
+                            <Loader2 className="w-3 h-3 animate-spin text-brand-blue" />
+                            Loading assessment versions…
+                          </div>
+                        ) : sortedAssessmentVersions.length === 0 ? (
+                          <div className="px-3 py-3 text-xs text-gray-500 dark:text-slate-400">
+                            No versions available
+                          </div>
+                        ) : (
+                          sortedAssessmentVersions.map((version) => {
+                            /* "Current" is the ASSESSMENT RECORD on screen, not
+                               a version number - two records can report the
+                               same number (one per job version), and the row id
+                               is what the page is actually showing. */
+                            const isCurrentVersion = version.id === assessment.id;
+                            const isSwitching = assessmentSwitching === version.id;
+                            return (
+                              <button
+                                key={version.id}
+                                type="button"
+                                role="menuitem"
+                                disabled={isCurrentVersion || !!assessmentSwitching}
+                                onClick={() => handleAssessmentVersionSelect(version)}
+                                className={`w-full px-3 py-2 text-left transition-colors ${
+                                  isCurrentVersion ? 'bg-brand-blue/5 cursor-default' : 'hover:bg-brand-blue/5'
+                                } ${assessmentSwitching && !isSwitching ? 'opacity-60' : ''}`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-xs font-semibold text-gray-900 dark:text-slate-100">
+                                    V{version.version ?? 1}
+                                  </span>
+                                  <div className="flex items-center gap-1">
+                                    {version.status && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300 capitalize">
+                                        {version.status}
+                                      </span>
+                                    )}
+                                    {isSwitching ? (
+                                      <Loader2 className="w-3 h-3 animate-spin text-brand-blue" />
+                                    ) : isCurrentVersion ? (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue">
+                                        Selected
+                                      </span>
+                                    ) : (version.version ?? 0) === latestAssessmentVersion ? (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
+                                        Latest
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </div>
+                                {/* The record's own id, and the JOB VERSION it
+                                    was authored against - a lineage holds
+                                    assessments built on different versions of
+                                    the job, so the number alone does not say
+                                    which one a row is. */}
+                                <div className="text-[11px] text-gray-500 dark:text-slate-400 truncate">
+                                  {[
+                                    version.short_id || stripVersionFromTitle(version.title || ''),
+                                    version.jd_version != null ? `Job v${version.jd_version}` : null,
+                                  ].filter(Boolean).join(' · ')}
+                                </div>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

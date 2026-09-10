@@ -1,7 +1,8 @@
 'use client';
 
+import Image from 'next/image';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { ArrowUpDown, Sparkles, BarChart3, Search, ChevronDown, ChevronRight, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Award, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical } from 'lucide-react';
+import { ArrowUpDown, Sparkles, BarChart3, Search, ChevronDown, ChevronRight, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Award, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,12 +27,13 @@ import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { assessmentService } from '@/lib/services';
 import ShareAssessmentModal from './ShareAssessmentModal';
+import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
+import { aiInterviewService, AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import RecordPager from '@/components/RecordPager';
 import { formatISTDate, formatIST, formatISTTime } from '@/lib/utils/dateUtils';
 /* The shared formatters, so a JD's industry and employment type read the same
    here as on the Resume Scoring rows this list is modelled on. */
@@ -43,6 +45,10 @@ import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import JDVersionHistory from '@/components/JDVersionHistory';
+
+/* Shared row for both candidate tables' ⋮ Actions menu (Preview Resume /
+   Score Resume / Invite Assessment / Invite AI Interview). */
+const actionsMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700 hover:!bg-gray-50 focus:!bg-gray-50 focus:!text-gray-700 focus-visible:!outline-none data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700';
 
 interface Job {
   id: string;
@@ -172,9 +178,16 @@ export default function AITalentMatchPage({
   // ✅ RBAC: Check if user can run AI match operations (bypass for tenant admin)
   const canRunAiMatch = isTenantAdmin || (user?.permissions?.canRunAiMatch ?? false);
   const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
+  const canCreateAssessments = isTenantAdmin || hasPermission('canCreateAssessments');
+  const canCreateAIInterviews = isTenantAdmin || hasPermission('canCreateAIInterviews');
 
 
-  const [viewMode, setViewMode] = useState<'history' | 'details' | 'new' | 'results' | 'matching'>('history');
+  /* 'details' used to be its own viewMode (the "Match Details" page) — it and
+     'results' were the same page in every way that matters, just reached
+     through a different breadcrumb hop, so it's gone now. `view=details` in
+     the URL still works (see the searchParams effect below) — it's just an
+     alias onto 'results'. */
+  const [viewMode, setViewMode] = useState<'history' | 'new' | 'results' | 'matching'>('history');
   const [selectedHistoryItem, setSelectedHistoryItem] = useState<MatchHistory | null>(null);
   const [selectedJob, setSelectedJob] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
@@ -296,6 +309,30 @@ export default function AITalentMatchPage({
 
     historyCandidateRequests.current.set(item.id, request);
     return request;
+  };
+
+  /* The one thing every "view this job's match" entry point needs — Match
+     Details used to be its own page/viewMode, but it and the results view
+     were the same page in every way that matters (same table, same filters,
+     same empty state), just reached through a different breadcrumb hop. This
+     is what all of those entry points now call instead of setViewMode('details'),
+     so there's exactly one "view a match" destination: the results view.
+     Populates matchedCandidates synchronously from cache when available, and
+     kicks off a fetch (updating both matchedCandidates and selectedHistoryItem
+     once it resolves) when this specific session's candidates haven't been
+     loaded yet — the same session-aware hydration Match Details relied on. */
+  const openMatchResults = (item: MatchHistory, jobId: string) => {
+    setSelectedHistoryItem(item);
+    setSelectedJob(jobId);
+    const resolved = getResolvedHistoryCandidates(item);
+    setMatchedCandidates(resolved);
+    if (resolved.length === 0 && item.totalMatches > 0) {
+      loadHistoryCandidates(item).then(candidates => {
+        setMatchedCandidates(candidates);
+        setSelectedHistoryItem(prev => (prev && prev.id === item.id) ? { ...prev, matchedCandidates: candidates } : prev);
+      }).catch(() => { /* loadHistoryCandidates already toasts on failure */ });
+    }
+    setViewMode('results');
   };
 
   // Build the "Match by Candidate" roll-up: pull each session's candidates
@@ -567,9 +604,9 @@ export default function AITalentMatchPage({
   const openCandidateMatch = (historyId: string) => {
     const item = matchHistory.find(h => h.id === historyId);
     if (!item) return;
-    setSelectedHistoryItem(item);
-    setSelectedJob(item.jobId);
-    setViewMode('details');
+    userChangedView.current = true;
+    openMatchResults(item, item.jobId);
+    updateUrlParams({ jdId: item.jobId, view: 'results' });
   };
 
   // Picking a person in the candidate roll-up opens their resume directly.
@@ -642,6 +679,13 @@ export default function AITalentMatchPage({
      resume-selection step, opened from a row's ⋮ menu instead of navigating
      away to the full resume-view page. */
   const [previewResume, setPreviewResume] = useState<{ id: string; name: string; fileName?: string } | null>(null);
+
+  /* Invite AI Interview from a row's ⋮ menu — same "resolve this job's live
+     config, then open the share modal" flow JobDetailView uses for its own
+     Scored Resumes row invite. */
+  const [shareAIInterviewConfig, setShareAIInterviewConfig] = useState<AIInterviewResponse | null>(null);
+  const [aiInterviewInviteSeed, setAiInterviewInviteSeed] = useState<{ name: string; email: string; resumeId?: string }[] | null>(null);
+  const [resolvingInviteConfig, setResolvingInviteConfig] = useState(false);
 
   // AI match version history — all match runs for one job, not just the latest.
   // Inline expand-in-place under the job card, one open at a time (like the
@@ -931,17 +975,6 @@ export default function AITalentMatchPage({
 
   useEffect(() => {
     const hydrateSelectedHistory = async () => {
-      if (viewMode === 'details' && selectedHistoryItem) {
-        const resolvedCandidates = getResolvedHistoryCandidates(selectedHistoryItem);
-        if (selectedHistoryItem.totalMatches > 0 && resolvedCandidates.length === 0) {
-          const candidates = await loadHistoryCandidates(selectedHistoryItem);
-          setSelectedHistoryItem(prev => prev && prev.id === selectedHistoryItem.id
-            ? { ...prev, matchedCandidates: candidates }
-            : prev);
-        }
-        return;
-      }
-
       if (viewMode === 'results' && selectedJob && matchedCandidates.length === 0) {
         const historyItem = matchHistory.find(item => item.jobId === selectedJob);
         if (!historyItem || historyItem.totalMatches <= 0) return;
@@ -1044,9 +1077,13 @@ export default function AITalentMatchPage({
     // Set the selected job
     setSelectedJob(preselectedJobId);
 
-    // Determine view based on URL param or sessionStorage flag
-    const shouldShowResults = urlView === 'results' || showResultsOnly;
-    const shouldShowDetails = urlView === 'details';
+    // Determine view based on URL param or sessionStorage flag. `view=details`
+    // is folded in here too — Match Details was never a different page, just
+    // a different breadcrumb hop onto this same results view, and a couple of
+    // external pages (e.g. resume-view's "back to AI Talent Match" crumb)
+    // still link with `view=details`, so it stays a harmless alias rather
+    // than a dead link.
+    const shouldShowResults = urlView === 'results' || urlView === 'details' || showResultsOnly;
     const isMatching = urlView === 'matching';
 
     if (isMatching) {
@@ -1058,18 +1095,6 @@ export default function AITalentMatchPage({
       setViewMode('matching');
       setShowMatchingPanel(true);
       return;
-    } else if (shouldShowDetails) {
-      // User clicked from history list - show details view
-      const existingMatch = matchHistory.find(h => h.jobId === preselectedJobId);
-
-      if (existingMatch) {
-        setSelectedHistoryItem(existingMatch);
-        setViewMode('details');
-      } else {
-        // No match found, go to history
-        setViewMode('history');
-        updateUrlParams({});
-      }
     } else if (shouldShowResults) {
       // User clicked "AI Talent Match Results" - show existing results or empty state
       const existingMatch = matchHistory.find(h => h.jobId === preselectedJobId);
@@ -1211,8 +1236,14 @@ export default function AITalentMatchPage({
     }
   };
 
-  const handleSubmitToScoring = async () => {
-    if (selectedCandidates.length === 0) {
+  /* Optional explicit ids so a row's ⋮ "Score Resume" can score just that one
+     candidate without waiting on `setSelectedCandidates` to commit — a
+     synchronous call right after that setter would otherwise still see the
+     previous selection in this closure. Falls back to the current selection
+     for the bulk toolbar's own "Score (n)" button. */
+  const handleSubmitToScoring = async (candidateIds?: string[]) => {
+    const idsToScore = candidateIds ?? selectedCandidates;
+    if (idsToScore.length === 0) {
       toast.warning('Please select at least one candidate to score');
       return;
     }
@@ -1223,7 +1254,7 @@ export default function AITalentMatchPage({
       : getResolvedHistoryCandidates(selectedHistoryItem);
 
     // Get selected candidates data
-    const selected = currentCandidates.filter(c => selectedCandidates.includes(c.id));
+    const selected = currentCandidates.filter(c => idsToScore.includes(c.id));
 
     // Get the job ID and title
     const jobId = selectedJob || selectedHistoryItem?.jobId;
@@ -1328,8 +1359,14 @@ export default function AITalentMatchPage({
   };
 
   // Assessment handlers
-  const handleAssessment = async () => {
-    if (selectedCandidates.length === 0) {
+  /* Same optional-ids pattern as handleSubmitToScoring — a row's ⋮ "Invite
+     Assessment" seeds this via an explicit id, not the (not-yet-committed)
+     selection state. `handleProceedToInvite` below still reads
+     `selectedCandidates` directly, but only fires later once the assessment
+     picker modal closes, by which point that setSelectedCandidates call has
+     committed. */
+  const handleAssessment = async (candidateIds?: string[]) => {
+    if ((candidateIds ?? selectedCandidates).length === 0) {
       toast.warning('Please select at least one candidate');
       return;
     }
@@ -1440,6 +1477,42 @@ export default function AITalentMatchPage({
     } catch (error: any) {
       console.error('Failed to send invitations:', error);
       toast.error(error.message || 'Failed to send invitations');
+    }
+  };
+
+  /* Invite AI Interview — resolves this job's live (published) AI interview
+     config, same lookup JobDetailView's own Scored Resumes row invite uses,
+     then opens the AI Interviews module's own share modal pre-filled with
+     one candidate. */
+  const handleInviteAIInterview = async (seed: { name: string; email: string; resumeId?: string }[]) => {
+    if (resolvingInviteConfig) return;
+    const jobId = selectedJob || selectedHistoryItem?.jobId;
+    if (!jobId) {
+      toast.error('Job ID not found');
+      return;
+    }
+    setAiInterviewInviteSeed(seed);
+    setResolvingInviteConfig(true);
+    try {
+      const liveConfig = await aiInterviewService.findLiveConfigForJd(jobId);
+      if (!liveConfig) {
+        const draftResult = await aiInterviewService
+          .listConfigs({ status: 'draft', page_size: 50, compact: true })
+          .catch(() => null);
+        const hasDraft = (draftResult?.items ?? []).some((c: AIInterviewResponse) => c.jd_id === jobId);
+        toast.error(
+          hasDraft
+            ? 'This job’s AI interview is still a draft. Publish it before inviting candidates.'
+            : 'No AI interview has been created for this job yet.',
+          { duration: 6000 }
+        );
+        return;
+      }
+      setShareAIInterviewConfig(liveConfig);
+    } catch {
+      toast.error('Could not load the AI interview for this job. Please try again.');
+    } finally {
+      setResolvingInviteConfig(false);
     }
   };
 
@@ -1666,949 +1739,6 @@ export default function AITalentMatchPage({
           />
         )}
       </main>
-    );
-  }
-
-  // View: History Details
-  if (viewMode === 'details' && selectedHistoryItem) {
-    const detailCandidates = getResolvedHistoryCandidates(selectedHistoryItem);
-    const filteredCandidates = filteredCandidatesMemo;
-    const paginatedCandidates = getPaginatedCandidates();
-    const excellentCount = detailCandidates.filter(c => c.matchScore >= 85).length;
-    const goodCount = detailCandidates.filter(c => c.matchScore >= 70 && c.matchScore < 85).length;
-    const moderateCount = detailCandidates.filter(c => c.matchScore < 70).length;
-    const isLoadingSelectedHistory = loadingHistorySessionId === selectedHistoryItem.id;
-    const _matchIdx = matchHistory.findIndex(h => h.jobId === selectedHistoryItem.jobId);
-    const _prevMatch = _matchIdx > 0 ? matchHistory[_matchIdx - 1] : null;
-    const _nextMatch = _matchIdx >= 0 && _matchIdx < matchHistory.length - 1 ? matchHistory[_matchIdx + 1] : null;
-    const _goToMatch = (item: MatchHistory) => {
-      setSelectedHistoryItem(item);
-      setSelectedCandidates([]);
-      setSelectedJob('');
-    };
-
-    return (
-      <>
-
-      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
-        <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-            <div className="flex items-center justify-between gap-3 mb-4 md:mb-6">
-              {/* Previous / Next rides inside the breadcrumb bar, as on
-                  job-details. Run AI Match stays down in the actions row — only
-                  the pager moved. */}
-              <PageBreadcrumb
-                className="mb-0 flex-1"
-                items={[
-                  { label: 'Dashboard', href: '/dashboard' },
-                  { label: 'AI Talent Match', onClick: () => setViewMode('history') },
-                  // Deepest crumb names the job this match belongs to.
-                  { label: selectedHistoryItem?.jobTitle || 'Match Details' },
-                ]}
-                actions={matchHistory.length > 1 ? (
-                  <RecordPager
-                    currentIndex={_matchIdx >= 0 ? _matchIdx : 0}
-                    totalCount={matchHistory.length}
-                    onPrev={_prevMatch ? () => _goToMatch(_prevMatch) : undefined}
-                    onNext={_nextMatch ? () => _goToMatch(_nextMatch) : undefined}
-                  />
-                ) : undefined}
-              />
-            </div>
-        {/* Header Section */}
-        <div className="border-b border-gray-200 dark:border-slate-700 mb-4 pb-4">
-          <div className="w-full">
-          {/* Actions */}
-          {(() => {
-            // Check if job is disabled
-            const jobData = jobs.find(j => j.id === selectedHistoryItem.jobId);
-            const jobStatus = jobData?.status?.toLowerCase();
-            const isJobDisabled = jobStatus === 'disabled';
-            // Show Run AI Match button for all jobs except disabled ones
-            const canRunAIMatch = !isJobDisabled;
-
-            return (
-              <>
-                <div className="flex justify-end mb-4">
-                  <div className="flex flex-wrap items-center justify-end gap-2 w-full sm:w-auto">
-                    {/* Run AI Match — now alone in this row; the Previous/Next
-                        pager it used to sit beside moved into the breadcrumb. */}
-                    {canRunAIMatch && (
-                      <button
-                        onClick={() => {
-                          if (!canRunAiMatch) {
-                            toast.error('You do not have permission to run AI matching operations');
-                            return;
-                          }
-                          const jobId = selectedJob || selectedHistoryItem?.jobId;
-                          if (jobId) {
-                            handleRunAIMatch(jobId);
-                            setSelectedCandidates([]);
-                          }
-                        }}
-                        disabled={!canRunAiMatch}
-                        className={`px-3 py-2 rounded-lg transition-colors text-sm font-medium flex items-center justify-center gap-2 w-full sm:w-auto ${
-                          canRunAiMatch
-                            ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 cursor-pointer'
-                            : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-                        }`}
-                        title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
-                      >
-                        <Sparkles className="w-3.5 h-3.5" />
-                        Run AI Match
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {/* Job Info Card */}
-                <div className="bg-gradient-to-br from-brand-blue/[0.04] to-brand-cyan/[0.03] rounded-xl border border-brand-blue/15 ring-1 ring-brand-blue/5 p-3 mb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-9 w-9 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-                      <Sparkles className="w-4 h-4 text-white" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex flex-wrap items-center gap-2">
-                        <h1 className="text-base sm:text-lg text-gray-900 dark:text-slate-50 font-semibold">{selectedHistoryItem.jobTitle}</h1>
-                        {isJobDisabled && (
-                          <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-medium rounded-full border border-red-200">
-                            Disabled
-                          </span>
-                        )}
-                      </div>
-                <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400 mt-1">
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    {formatISTDate(selectedHistoryItem.matchedAt.toISOString())}
-                  </span>
-                  <span className="flex items-center gap-1">
-                    <User className="w-3.5 h-3.5" />
-                    {selectedHistoryItem.totalMatches} matches
-                  </span>
-                  <span className="flex items-center gap-1 px-2 py-0.5 bg-brand-blue/10 text-brand-blue rounded-full text-xs font-medium border border-brand-blue/20">
-                    <Sparkles className="w-3 h-3" />
-                    AI Talent Match • 0 units consumed
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Filters & Search */}
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search candidates..."
-                  className="w-full pl-9 pr-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black placeholder:text-gray-400"
-                />
-              </div>
-              <select
-                value={filterThreshold}
-                onChange={(e) => setFilterThreshold(Number(e.target.value))}
-                className="px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white dark:bg-slate-900 text-sm text-black"
-              >
-                <option value={0}>All Matches</option>
-                <option value={5}>5+ Rating</option>
-                <option value={7}>7+ Rating</option>
-                <option value={9}>9+ Rating</option>
-              </select>
-              {selectedCandidates.length > 0 && (
-                <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-                  {availableUnits !== null && selectedCandidates.length > availableUnits && (
-                    <div className="flex items-center gap-1.5 px-3 py-1.5 bg-brand-orange/10 border border-brand-orange/30 ring-1 ring-brand-orange/15 rounded-lg w-full sm:w-auto">
-                      <AlertTriangle className="w-4 h-4 text-brand-orange-deep flex-shrink-0" />
-                      <span className="text-xs text-brand-orange-deep font-medium">
-                        Insufficient units! You have {availableUnits} RS unit{availableUnits !== 1 ? 's' : ''} but selected {selectedCandidates.length}. Remove {selectedCandidates.length - availableUnits} resume{selectedCandidates.length - availableUnits > 1 ? 's' : ''}.
-                      </span>
-                    </div>
-                  )}
-                  <>
-                  {canRunScoring && (
-                  <button
-                      onClick={handleSubmitToScoring}
-                      disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
-                    className={`px-3 py-2 text-white rounded-lg transition-all font-medium text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial ${
-                      availableUnits !== null && selectedCandidates.length > availableUnits
-                        ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                        : 'bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
-                    }`}
-                    >
-                      <ClipboardList className="w-3.5 h-3.5" />
-                      Score ({selectedCandidates.length})
-                    </button>
-                  )}
-                  {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
-                    <button
-                      onClick={handleAssessment}
-                      className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
-                    >
-                      <BarChart3 className="w-3.5 h-3.5" />
-                      Assessment ({selectedCandidates.length})
-                    </button>
-                  )}
-                </>
-                </div>
-              )}
-              {/* Count badge closes the row, as it does on every list. */}
-              <ListCountBadge
-                className="sm:ml-auto"
-                filtered={filteredCandidates.length}
-                total={detailCandidates.length}
-                noun="candidate"
-                selected={selectedCandidates.length}
-              />
-            </div>
-            {/* Additional Filters */}
-            <div className="grid grid-cols-1 sm:flex sm:flex-wrap items-center gap-2">
-              <input
-                type="text"
-                value={filterPhone}
-                onChange={(e) => setFilterPhone(e.target.value)}
-                placeholder="Filter by phone..."
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black placeholder:text-gray-400"
-              />
-              <input
-                type="text"
-                value={filterLocation}
-                onChange={(e) => setFilterLocation(e.target.value)}
-                placeholder="Filter by location..."
-                className="w-full px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black placeholder:text-gray-400"
-              />
-              <input
-                type="number"
-                value={filterExperienceMin}
-                onChange={(e) => setFilterExperienceMin(e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="Min exp"
-                className="w-full sm:w-28 px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black placeholder:text-gray-400"
-              />
-              <input
-                type="number"
-                value={filterExperienceMax}
-                onChange={(e) => setFilterExperienceMax(e.target.value === '' ? '' : Number(e.target.value))}
-                placeholder="Max exp"
-                className="w-full sm:w-28 px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black placeholder:text-gray-400"
-              />
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as 'rank' | 'name' | 'score' | 'experience')}
-                className="w-full sm:w-auto px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 bg-white dark:bg-slate-900 text-sm text-black"
-              >
-                <option value="rank">Sort by Rating</option>
-                <option value="name">Sort by Name</option>
-                <option value="score">Sort by Score</option>
-                <option value="experience">Sort by Experience</option>
-              </select>
-            </div>
-          </div>
-              </>
-            );
-          })()}
-          </div>
-        </div>
-
-        {/* Candidates List - Table View */}
-        {isLoadingSelectedHistory ? (
-          <div className="flex-1 flex items-center justify-center p-8">
-            <div className="flex items-center gap-3 text-sm text-gray-600 dark:text-slate-400">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Loading matched candidates...
-            </div>
-          </div>
-        ) : detailCandidates.length === 0 ? (
-          <div className="mx-auto w-full max-w-[1400px] py-8">
-            <div className="border-2 border-dashed border-brand-blue/20 rounded-xl p-8 sm:p-10 text-center bg-white dark:bg-slate-900">
-              <div className="w-12 h-12 rounded-xl bg-brand-blue/10 text-brand-blue flex items-center justify-center mx-auto mb-4">
-                <Sparkles className="w-5 h-5" />
-              </div>
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2">No matched candidates found</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto">
-                There are no AI match results available for this job yet. Run AI Match to generate candidate matches.
-              </p>
-            </div>
-          </div>
-        ) : filteredCandidates.length === 0 ? (
-          <div className="mx-auto w-full max-w-[1400px] py-8">
-            <div className="border border-gray-200 dark:border-slate-700 rounded-xl p-8 text-center bg-white dark:bg-slate-900">
-              <Search className="w-8 h-8 text-gray-400 dark:text-slate-500 mx-auto mb-3" />
-              <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-2">No candidates match the current filters</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400">
-                Adjust the search or filter values to view matched candidates for this job.
-              </p>
-            </div>
-          </div>
-        ) : (
-        <div className="flex-1">
-          <div className="mx-auto w-full max-w-[1400px] py-4">
-          {/* Bounded viewport: rows scroll vertically (and horizontally) while the
-              header stays pinned. Header background/border live on the cells so the
-              pinned row paints solid over the rows sliding underneath. */}
-          <div className="hidden md:block min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60 tf-table-shell">
-          <table className="w-full min-w-[1450px] table-auto">
-            <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
-              <tr>
-                <th className="w-12 px-4 py-3 align-middle tf-sticky-col-left">
-                  <input
-                    type="checkbox"
-                    checked={filteredCandidates.length > 0 && filteredCandidates.every(c => selectedCandidates.includes(c.id))}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        setSelectedCandidates(filteredCandidates.map(c => c.id));
-                      } else {
-                        setSelectedCandidates([]);
-                      }
-                    }}
-                    className="rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/40"
-                  />
-                </th>
-                <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
-                  Match Rating
-                </th>
-                <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
-                  Candidate Name
-                </th>
-                <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
-                  Job Title
-                </th>
-                <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
-                  Job Version
-                </th>
-                <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
-                  Email
-                </th>
-                <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
-                  Phone
-                </th>
-                <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
-                  Location
-                </th>
-                <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
-                  Skills
-                </th>
-                <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
-                  Experience
-                </th>
-                <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
-                  Uploaded By
-                </th>
-                <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
-                  Uploaded Date
-                </th>
-                <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
-                  Attachments
-                </th>
-                <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
-                  Matched Status
-                </th>
-                <th className="px-4 py-3 text-right text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">
-                  Actions
-                </th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-slate-900 divide-y divide-gray-200 dark:divide-slate-700">
-              {paginatedCandidates.map((candidate, index) => (
-                <tr
-                  key={candidate.id}
-                  data-row-selected={selectedCandidates.includes(candidate.id)}
-                  className={`hover:bg-brand-blue/[0.03] transition-colors cursor-pointer ${
-                    selectedCandidates.includes(candidate.id) ? 'bg-brand-blue/5' : ''
-                  }`}
-                  onClick={() => {
-                    if (candidate.resumeId) {
-                      try {
-                        sessionStorage.setItem('resumeNavList', JSON.stringify(filteredCandidatesMemo.map((c: any) => c.resumeId).filter(Boolean)));
-                        sessionStorage.setItem('resumeNavSource', 'ai-talent-match');
-                        sessionStorage.setItem('resumeNavAIMatchJobId', selectedHistoryItem.jobId);
-                        // The breadcrumb names the job this match belongs to.
-                        sessionStorage.setItem('resumeNavAIMatchJobTitle', selectedHistoryItem.jobTitle || '');
-                        markAIMatchReturnTrip();
-                      } catch { /* ignore */ }
-                      router.push(`/recruitment/resume-view/${candidate.resumeId}`);
-                    }
-                  }}
-                >
-                  <td className="px-4 py-3 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
-                    <input
-                      type="checkbox"
-                      checked={selectedCandidates.includes(candidate.id)}
-                      onChange={() => handleSelectCandidate(candidate.id)}
-                      className="rounded border-gray-300 dark:border-slate-700 text-brand-blue focus:ring-brand-blue/40"
-                    />
-                  </td>
-                  <td className="px-4 py-3 align-middle whitespace-nowrap">
-                    <div className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-md font-bold text-sm ${
-                      (candidate.rank || 0) >= 7 ? 'bg-green-100 text-green-800 border border-green-300' :
-                      (candidate.rank || 0) >= 4 ? 'bg-brand-orange/10 text-brand-orange-deep border border-brand-orange/20' :
-                      (candidate.rank || 0) >= 1 ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-300 dark:border-slate-700' :
-                      'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 border border-gray-200 dark:border-slate-700'
-                    }`}>
-                      {candidate.rank || '-'}
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 align-middle whitespace-nowrap">
-                    <div className="flex items-center gap-3">
-                      <div className="h-9 w-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-xs text-gray-700 dark:text-slate-300 font-medium">
-                        {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
-                      </div>
-                      <div>
-                        <div className="text-sm font-medium text-gray-900 dark:text-slate-50">{candidate.name || 'Unknown'}</div>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 align-middle whitespace-nowrap">
-                    <span className="block max-w-[220px] truncate text-sm text-gray-700 dark:text-slate-300">
-                      {selectedHistoryItem.jobTitle || selectedJobData?.title || '-'}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 align-middle whitespace-nowrap">
-                    {selectedJobData?.currentVersion ? (
-                      <span className="px-2 py-0.5 rounded-md font-semibold text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
-                        v{selectedJobData.currentVersion}
-                      </span>
-                    ) : (
-                      <span className="text-gray-400 dark:text-slate-500">-</span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                    {candidate.email ? candidate.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
-                  </td>
-                  <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                    {(() => {
-                      const numbers = splitPhoneNumbers(candidate.phone, 2);
-                      return numbers.length > 0
-                        ? <div className="flex flex-col gap-0.5">{numbers.map((num, i) => <span key={i}>{num}</span>)}</div>
-                        : <span className="text-gray-400 dark:text-slate-500">-</span>;
-                    })()}
-                  </td>
-                  <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                    {candidate.location ? candidate.location : <span className="text-gray-400 dark:text-slate-500">-</span>}
-                  </td>
-                  <td className="px-4 py-3 align-middle min-w-[220px]">
-                    <div className="flex flex-wrap gap-1">
-                      <SkillsList
-                        skills={candidate.skills}
-                        chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20 whitespace-nowrap"
-                        moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium whitespace-nowrap hover:bg-brand-blue/10 transition-colors cursor-pointer"
-                      />
-                    </div>
-                  </td>
-                  <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">{candidate.experience}</td>
-                  <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                    {formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}
-                  </td>
-                  <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
-                    {candidate.uploadDate ? formatISTDate(candidate.uploadDate) : <span className="text-gray-400 dark:text-slate-500">-</span>}
-                  </td>
-                  <td className="px-4 py-3 align-middle whitespace-nowrap">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAttachmentsClick(candidate);
-                      }}
-                      className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
-                    >
-                      <Paperclip className="w-3.5 h-3.5" />
-                      {candidate.attachmentCount || 1}
-                    </button>
-                  </td>
-                  <td className="px-4 py-3 align-middle whitespace-nowrap">
-                    {scoredResumeIds.has(candidate.resumeId) ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                        <CheckCircle className="w-3 h-3" />
-                        Matched
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded-full text-xs font-medium">
-                        <XCircle className="w-3 h-3" />
-                        Not Matched
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-4 py-3 align-middle text-right whitespace-nowrap tf-sticky-col" onClick={(e) => e.stopPropagation()}>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <button
-                          type="button"
-                          aria-label="Actions"
-                          title="Actions"
-                          className="p-1.5 bg-white dark:bg-slate-900 rounded-md border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-                        >
-                          <MoreVertical className="w-3.5 h-3.5 text-gray-600 dark:text-slate-300" />
-                        </button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-44 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                        <DropdownMenuItem
-                          className="group !rounded-none !px-4 !py-2.5 text-sm text-gray-700 hover:!bg-gray-50 focus:!bg-gray-50 focus:!text-gray-700 focus-visible:!outline-none data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700"
-                          onSelect={() => setPreviewResume({ id: candidate.resumeId, name: candidate.name || 'Resume' })}
-                        >
-                          <Eye className="w-4 h-4 text-menu-icon-view" />
-                          <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          </div>
-
-          {/* Mobile cards — the table is too wide below md */}
-          <div className="md:hidden space-y-3">
-            {paginatedCandidates.map((candidate) => (
-              <div
-                key={candidate.id}
-                onClick={() => {
-                  if (candidate.resumeId) {
-                    try {
-                      sessionStorage.setItem('resumeNavList', JSON.stringify(filteredCandidatesMemo.map((c: any) => c.resumeId).filter(Boolean)));
-                      sessionStorage.setItem('resumeNavSource', 'ai-talent-match');
-                      sessionStorage.setItem('resumeNavAIMatchJobId', selectedHistoryItem.jobId);
-                      // The breadcrumb names the job this match belongs to.
-                      sessionStorage.setItem('resumeNavAIMatchJobTitle', selectedHistoryItem.jobTitle || '');
-                      markAIMatchReturnTrip();
-                    } catch { /* ignore */ }
-                    router.push(`/recruitment/resume-view/${candidate.resumeId}`);
-                  }
-                }}
-                className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-3 shadow-sm cursor-pointer"
-              >
-                <div className="flex items-start justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="h-9 w-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-xs text-gray-700 dark:text-slate-300 font-medium flex-shrink-0">
-                      {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{candidate.name || 'Unknown'}</div>
-                      <div className="text-xs text-gray-500 dark:text-slate-500 truncate">
-                        {selectedHistoryItem.jobTitle || selectedJobData?.title || '-'}
-                      </div>
-                    </div>
-                  </div>
-                  <div className={`inline-flex items-center justify-center px-2.5 py-0.5 rounded-md font-bold text-sm flex-shrink-0 ${
-                    (candidate.rank || 0) >= 7 ? 'bg-green-100 text-green-800 border border-green-300' :
-                    (candidate.rank || 0) >= 4 ? 'bg-brand-orange/10 text-brand-orange-deep border border-brand-orange/20' :
-                    (candidate.rank || 0) >= 1 ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-300 dark:border-slate-700' :
-                    'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 border border-gray-200 dark:border-slate-700'
-                  }`}>
-                    {candidate.rank || '-'}
-                  </div>
-                </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-400 mb-2">
-                  {candidate.email && <span className="flex items-center gap-1 min-w-0"><Mail className="w-3 h-3 flex-shrink-0" /><span className="truncate">{candidate.email}</span></span>}
-                  {candidate.phone && <span className="flex items-center gap-1"><Phone className="w-3 h-3" />{candidate.phone}</span>}
-                  {candidate.location && <span className="flex items-center gap-1 min-w-0"><MapPin className="w-3 h-3 flex-shrink-0" /><span className="truncate">{candidate.location}</span></span>}
-                  {candidate.experience && <span>{candidate.experience}</span>}
-                </div>
-                <div className="flex flex-wrap gap-1 mb-2">
-                  <SkillsList
-                    skills={candidate.skills}
-                    chipClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20 whitespace-nowrap"
-                    moreClassName="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs text-brand-blue font-medium whitespace-nowrap hover:bg-brand-blue/10 transition-colors cursor-pointer"
-                  />
-                </div>
-                <div className="flex items-center justify-between gap-2 text-xs text-gray-500 dark:text-slate-500">
-                  <span className="truncate">
-                    {formatUploadedBy(candidate.uploadedByName, candidate.uploadedBy)}
-                    {candidate.uploadDate && <> · {formatISTDate(candidate.uploadDate)}</>}
-                  </span>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleAttachmentsClick(candidate);
-                      }}
-                      className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
-                    >
-                      <Paperclip className="w-3.5 h-3.5" />
-                      {candidate.attachmentCount || 1}
-                    </button>
-                    {scoredResumeIds.has(candidate.resumeId) ? (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
-                        <CheckCircle className="w-3 h-3" />
-                        Matched
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded-full text-xs font-medium">
-                        <XCircle className="w-3 h-3" />
-                        Not Matched
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-          </div>
-        </div>
-        )}
-
-        {/* Pagination Controls */}
-        {totalFilteredCandidates > 0 && (
-          <div className="mx-auto w-full max-w-[1400px]">
-            <Pagination
-              currentPage={currentPage}
-              totalPages={totalPages}
-              totalItems={totalFilteredCandidates}
-              itemsPerPage={itemsPerPage}
-              onPageChange={handlePageChange}
-              onItemsPerPageChange={handleItemsPerPageChange}
-            />
-          </div>
-        )}
-          </div>
-        </div>
-      </main>
-
-      {/* Resume Versions Modal */}
-      {selectedVersionsCandidate && (
-        <ResumeVersionsModal
-          candidate={selectedVersionsCandidate}
-          versions={realVersionsData}
-          loading={loadingVersions}
-          onClose={() => {
-            setSelectedVersionsCandidate(null);
-            setRealVersionsData([]);
-          }}
-        />
-      )}
-
-      {/* Preview — opened from a row's ⋮ menu, same in-app document viewer the
-          Resume Scoring module's resume-selection step uses. */}
-      {previewResume && (
-        <ResumeTextPreviewModal
-          resumeId={previewResume.id}
-          title={previewResume.name}
-          subtitle={previewResume.fileName}
-          onClose={() => setPreviewResume(null)}
-        />
-      )}
-
-      {/* Version Selection Modal for Scoring (single candidate) */}
-      {showVersionSelectForScoring && scoringCandidate && (
-        <ResumeVersionsModal
-          candidate={scoringCandidate}
-          versions={scoringVersions}
-          loading={loadingVersions}
-          selectionMode={true}
-          onClose={() => {
-            setShowVersionSelectForScoring(false);
-            setScoringCandidate(null);
-            setScoringVersions([]);
-          }}
-          onSelectVersion={async (version) => {
-            // Score with selected version
-            const jobId = selectedJob || selectedHistoryItem?.jobId;
-            if (!jobId || !scoringCandidate) return;
-
-            try {
-              const response = await scoringService.startBulkScoringAsync(jobId, [version.id]);
-              const scoringData = {
-                batchId: response.batch_id,
-                jobId: response.jd_id,
-                jobTitle: response.jd_title,
-                totalResumes: response.total_resumes,
-                resumeItems: [{ resumeId: version.id, candidateName: scoringCandidate.name }],
-              };
-              sessionStorage.setItem('pendingScoringBatch', JSON.stringify(scoringData));
-              router.push(`/recruitment/resume-scoring?batch_id=${response.batch_id}`);
-            } catch (error: any) {
-              console.error('Failed to start scoring:', error);
-              toast.error(error.message || 'Failed to start scoring');
-            }
-
-            setShowVersionSelectForScoring(false);
-            setScoringCandidate(null);
-            setScoringVersions([]);
-          }}
-        />
-      )}
-
-      {/* AI Matching Progress Panel - for details view */}
-      {showMatchingPanel && selectedJob && (
-        <AITalentMatchProgressPanel
-          jobTitle={selectedJobData?.title || selectedHistoryItem?.jobTitle || 'Job Description'}
-          jobId={selectedJob}
-
-          onComplete={handleMatchingComplete}
-          onError={(error) => {
-            setMatchError(error);
-            setShowMatchingPanel(false);
-          }}
-        />
-      )}
-
-      {/* Assessment Selection Modal - for details/results view */}
-      {isAssessmentModalOpen && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            setIsAssessmentModalOpen(false);
-            setSelectedAssessments([]);
-            setAssessmentSearchQuery('');
-          }
-        }}>
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-4xl max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
-            <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-slate-700 shrink-0">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-slate-50">Select Active Assessments</h2>
-                <button
-                  onClick={() => {
-                    setIsAssessmentModalOpen(false);
-                    setSelectedAssessments([]);
-                    setAssessmentSearchQuery('');
-                  }}
-                  className="text-gray-400 dark:text-slate-500 hover:text-gray-600 p-1"
-                 aria-label="Close">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-3">
-                Select one or more assessments to send to {selectedCandidates.length} candidate{selectedCandidates.length !== 1 ? 's' : ''}
-              </p>
-
-              {/* Search Bar */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
-                <input
-                  type="text"
-                  value={assessmentSearchQuery}
-                  onChange={(e) => setAssessmentSearchQuery(e.target.value)}
-                  placeholder="Search assessments..."
-                  className="w-full pl-9 pr-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
-                />
-              </div>
-
-              {/* Select All / Clear All */}
-              {assessments.length > 0 && (() => {
-                const filteredAssessments = assessments.filter(assessment => {
-                  if (!assessmentSearchQuery.trim()) return true;
-                  const query = assessmentSearchQuery.toLowerCase();
-                  return (
-                    assessment.short_id?.toLowerCase().includes(query) ||
-                    assessment.title?.toLowerCase().includes(query) ||
-                    assessment.jd_short_id?.toLowerCase().includes(query) ||
-                    assessment.jd_title?.toLowerCase().includes(query)
-                  );
-                });
-                return filteredAssessments.length > 0 && (
-                  <button
-                    onClick={() => {
-                      if (selectedAssessments.length === filteredAssessments.length) {
-                        setSelectedAssessments([]);
-                      } else {
-                        setSelectedAssessments(filteredAssessments);
-                      }
-                    }}
-                    className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium mt-3"
-                  >
-                    {selectedAssessments.length === filteredAssessments.length && selectedAssessments.length > 0 ? 'Clear All' : 'Select All'}
-                  </button>
-                );
-              })()}
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5">
-              {(() => {
-                const filteredAssessments = assessments.filter(assessment => {
-                  if (!assessmentSearchQuery.trim()) return true;
-                  const query = assessmentSearchQuery.toLowerCase();
-                  return (
-                    assessment.short_id?.toLowerCase().includes(query) ||
-                    assessment.title?.toLowerCase().includes(query) ||
-                    assessment.jd_short_id?.toLowerCase().includes(query) ||
-                    assessment.jd_title?.toLowerCase().includes(query)
-                  );
-                });
-
-                return filteredAssessments.length === 0 ? (
-                  <div className="text-center py-10">
-                    <BarChart3 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-sm text-gray-500 dark:text-slate-500">{assessmentSearchQuery ? 'No assessments match your search' : 'No active assessments available'}</p>
-                    <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">{assessmentSearchQuery ? 'Try different search terms' : 'Create and publish an assessment first'}</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {filteredAssessments.map((assessment) => {
-                      const isSelected = selectedAssessments.some(a => a.id === assessment.id);
-                      return (
-                        <button
-                          key={assessment.id}
-                          onClick={() => handleAssessmentSelect(assessment)}
-                          className={`w-full text-left border-2 rounded-lg p-3 transition-all ${
-                            isSelected
-                              ? 'border-brand-blue/50 bg-brand-blue/5 shadow-sm shadow-brand-blue/10'
-                              : 'border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/5'
-                          }`}
-                        >
-                          <div className="flex items-start gap-2">
-                            {/* Checkbox */}
-                            <div className="flex-shrink-0 mt-1">
-                              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                                isSelected
-                                  ? 'bg-brand-blue border-brand-blue'
-                                  : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-700'
-                              }`}>
-                                {isSelected && (
-                                  <CheckCircle className="w-4 h-4 text-white" />
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="flex-1">
-                              {/* Assessment ID, Title, Version + Active Badge */}
-                              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                                {assessment.short_id && (
-                                  <span className="text-xs px-2 py-0.5 bg-brand-blue text-white rounded font-semibold">
-                                    {assessment.short_id}
-                                  </span>
-                                )}
-                                {(() => {
-                                  // Strip any "- Version N" baked into the stored title
-                                  // and render the live version (from `version`, falling
-                                  // back to the parsed title version) as its own badge.
-                                  const parsed = parseAssessmentTitle(assessment.title || '');
-                                  const displayVersion = typeof assessment.version === 'number'
-                                    ? assessment.version
-                                    : parsed.version;
-                                  const base = parsed.cleanTitle || 'Untitled assessment';
-                                  return (
-                                    <>
-                                      <h5 className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{base}</h5>
-                                      {displayVersion && (
-                                        <span className="text-xs px-2 py-0.5 bg-brand-cyan/15 text-brand-cyan ring-1 ring-brand-cyan/30 rounded font-semibold">
-                                          V{displayVersion}
-                                        </span>
-                                      )}
-                                    </>
-                                  );
-                                })()}
-                                <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
-                                  Active
-                                </span>
-                              </div>
-
-                              {/* Linked JD Information */}
-                              {assessment.jd_short_id && (
-                                <div className="text-xs text-gray-600 dark:text-slate-400 mb-1.5">
-                                  <span className="font-medium">Linked to: </span>
-                                  <span className="text-gray-800 dark:text-slate-100">{assessment.jd_short_id}</span>
-                                  {assessment.jd_title && (
-                                    <span className="ml-1">- {assessment.jd_title}</span>
-                                  )}
-                                  {assessment.jd_version && (
-                                    <span className="ml-1 text-gray-500 dark:text-slate-500">v{assessment.jd_version}</span>
-                                  )}
-                                </div>
-                              )}
-
-                              {/* Duration and Sections */}
-                              <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-slate-500">
-                                <span className="flex items-center gap-1">
-                                  <Clock className="w-3 h-3" />
-                                  {assessment.duration_minutes || 0} min
-                                </span>
-                              </div>
-
-                              {/* Created By and Date */}
-                              <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-slate-500 mt-1.5">
-                                {assessment.created_by_name && (
-                                  <>
-                                    <span>Created by: <span className="text-gray-700 dark:text-slate-300 font-medium">{assessment.created_by_name}</span></span>
-                                    <span>•</span>
-                                  </>
-                                )}
-                                {assessment.created_at && (
-                                  <span>
-                                    {formatIST(assessment.created_at)}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 gap-3 sm:gap-0 shrink-0">
-              <div className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 text-center sm:text-left">
-                {selectedAssessments.length} assessment{selectedAssessments.length !== 1 ? 's' : ''} selected
-              </div>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <button
-                  onClick={() => {
-                    setIsAssessmentModalOpen(false);
-                    setSelectedAssessments([]);
-                    setAssessmentSearchQuery('');
-                  }}
-                  className="px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-200 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleProceedToInvite}
-                  disabled={selectedAssessments.length === 0}
-                  className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white text-sm rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  <Mail className="w-4 h-4" />
-                  <span className="hidden sm:inline">Proceed to Send Invitations</span>
-                  <span className="sm:hidden">Send Invitations</span>
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Share Assessment Modal - for details/results view */}
-      {isShareModalOpen && selectedAssessments.length > 0 && (
-        <ShareAssessmentModal
-          isOpen={isShareModalOpen}
-          onClose={() => {
-            setIsShareModalOpen(false);
-            setCurrentAssessmentForShare(null);
-            setSelectedAssessments([]);
-            setPrefilledCandidates([]);
-            setAssessmentSearchQuery('');
-          }}
-          assessment={{
-            id: selectedAssessments[0].id,
-            title: selectedAssessments[0].title,
-            duration: `${selectedAssessments[0].duration_minutes || 0} min`,
-            questions: (selectedAssessments[0].hr_enabled ? 1 : 0) +
-                      (selectedAssessments[0].technical_enabled ? 1 : 0) +
-                      (selectedAssessments[0].coding_enabled ? 1 : 0),
-            type: 'AI-Generated',
-            short_id: selectedAssessments[0].short_id,
-            version: selectedAssessments[0].version,
-            jd_short_id: selectedAssessments[0].jd_short_id,
-            jd_title: selectedAssessments[0].jd_title,
-            jd_version: selectedAssessments[0].jd_version,
-          }}
-          additionalAssessments={selectedAssessments.map(a => ({
-            id: a.id,
-            title: a.title,
-            duration: `${a.duration_minutes || 0} min`,
-            questions: (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0),
-            type: 'AI-Generated',
-            short_id: a.short_id,
-            version: a.version,
-            jd_short_id: a.jd_short_id,
-            jd_title: a.jd_title,
-            jd_version: a.jd_version
-          }))}
-          prefilledCandidates={prefilledCandidates}
-          inviteSource="Resume Scoring"
-        />
-      )}
-      </>
     );
   }
 
@@ -3973,10 +3103,8 @@ export default function AITalentMatchPage({
                   key={item.id}
                   onClick={() => {
                     userChangedView.current = true; // Prevent useEffect from resetting view
-                    setSelectedHistoryItem(item);
-                    setSelectedJob(item.jobId);
-                    setViewMode('details');
-                    updateUrlParams({ jdId: item.jobId, view: 'details' });
+                    openMatchResults(item, item.jobId);
+                    updateUrlParams({ jdId: item.jobId, view: 'results' });
                   }}
                   className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 transition-all duration-150 p-4 cursor-pointer group"
                   role="button"
@@ -4093,10 +3221,8 @@ export default function AITalentMatchPage({
                           onClick={(e) => {
                             e.stopPropagation();
                             userChangedView.current = true; // Prevent useEffect from resetting view
-                            setSelectedHistoryItem(item);
-                            setSelectedJob(item.jobId);
-                            setViewMode('details');
-                            updateUrlParams({ jdId: item.jobId, view: 'details' });
+                            openMatchResults(item, item.jobId);
+                            updateUrlParams({ jdId: item.jobId, view: 'results' });
                           }}
                           aria-label="View Details"
                           title="View Details"
@@ -4175,17 +3301,15 @@ export default function AITalentMatchPage({
                           // navigate using the session's own jd_id, not this row's.
                           const targetJobId = session.jd_id || item.jobId;
                           const targetJob = jobs.find(j => j.id === targetJobId);
-                          setSelectedHistoryItem({
+                          openMatchResults({
                             id: session.id,
                             jobId: targetJobId,
                             jobTitle: targetJob?.title || item.jobTitle,
                             matchedAt: new Date(session.created_at),
                             totalMatches: session.total_matches,
                             matchedCandidates: [],
-                          });
-                          setSelectedJob(targetJobId);
-                          setViewMode('details');
-                          updateUrlParams({ jdId: targetJobId, view: 'details' });
+                          }, targetJobId);
+                          updateUrlParams({ jdId: targetJobId, view: 'results' });
                         }}
                         onRunMatch={(session) => {
                           if (!canRunAiMatch) {
@@ -4392,17 +3516,15 @@ export default function AITalentMatchPage({
                     userChangedView.current = true; // Prevent useEffect from resetting view
                     const targetJobId = session.jd_id || modalItem.jobId;
                     const targetJob = jobs.find(j => j.id === targetJobId);
-                    setSelectedHistoryItem({
+                    openMatchResults({
                       id: session.id,
                       jobId: targetJobId,
                       jobTitle: targetJob?.title || modalItem.jobTitle,
                       matchedAt: new Date(session.created_at),
                       totalMatches: session.total_matches,
                       matchedCandidates: [],
-                    });
-                    setSelectedJob(targetJobId);
-                    setViewMode('details');
-                    updateUrlParams({ jdId: targetJobId, view: 'details' });
+                    }, targetJobId);
+                    updateUrlParams({ jdId: targetJobId, view: 'results' });
                     setMatchHistoryModal(null);
                   }}
                   onRunMatch={(session) => {
@@ -4458,13 +3580,6 @@ export default function AITalentMatchPage({
             items={[
               { label: 'Dashboard', href: '/dashboard' },
               { label: 'AI Talent Match', onClick: () => setViewMode('history') },
-              ...(selectedHistoryItem?.jobId === selectedJob ? [{
-                label: 'Match Details',
-                onClick: () => {
-                  setViewMode('details');
-                  updateUrlParams({ jdId: selectedJob, view: 'details' });
-                },
-              }] : []),
               { label: selectedJobData?.title || 'Results' },
             ]}
           />
@@ -4552,7 +3667,7 @@ export default function AITalentMatchPage({
                   <>
                   {canRunScoring && (
                   <button
-                      onClick={handleSubmitToScoring}
+                      onClick={() => handleSubmitToScoring()}
                       disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
                     className={`px-3 py-2 text-white rounded-lg transition-all font-medium text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial ${
                       availableUnits !== null && selectedCandidates.length > availableUnits
@@ -4566,7 +3681,7 @@ export default function AITalentMatchPage({
                   )}
                   {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
                     <button
-                      onClick={handleAssessment}
+                      onClick={() => handleAssessment()}
                       className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
                     >
                       <BarChart3 className="w-3.5 h-3.5" />
@@ -4637,14 +3752,37 @@ export default function AITalentMatchPage({
               <p className="text-sm text-gray-600 dark:text-slate-400 text-center">Loading matched candidates...</p>
             </div>
           ) : matchedCandidates.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 px-4">
-              <div className="w-12 h-12 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center mb-3">
-                <Sparkles className="w-5 h-5 text-brand-blue" />
-              </div>
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2 text-center">No AI Match Results Yet</h3>
-              <p className="text-sm text-gray-600 dark:text-slate-400 text-center max-w-md mb-4">
+            <div className="border-2 border-dashed border-brand-blue/20 rounded-xl p-8 sm:p-10 text-center bg-white dark:bg-slate-900">
+              <Image
+                src="/ai-talent-match-empty-state.webp"
+                alt="No matched candidates illustration"
+                width={144}
+                height={144}
+                className="mb-4 h-32 w-32 object-contain mx-auto sm:h-36 sm:w-36"
+              />
+              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2">No AI Match Results Yet</h3>
+              <p className="text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto mb-4">
                 AI Talent Match has not been run for this job yet. Run AI matching to find candidates that match this job description.
               </p>
+              <button
+                onClick={() => {
+                  if (!canRunAiMatch) {
+                    toast.error('You do not have permission to run AI matching operations');
+                    return;
+                  }
+                  handleRunAIMatch(selectedJob);
+                }}
+                disabled={!canRunAiMatch}
+                className={`px-4 py-2 rounded-lg transition-all font-medium shadow-sm inline-flex items-center gap-2 text-sm ${
+                  canRunAiMatch
+                    ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer'
+                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
+                }`}
+                title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
+              >
+                <Sparkles className="w-4 h-4" />
+                Run AI Match
+              </button>
             </div>
           ) : (
           <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm">
@@ -4701,10 +3839,13 @@ export default function AITalentMatchPage({
                     Uploaded Date
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                    Resume Version
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Attachments
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
-                    Matched Status
+                    Scored Status
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider tf-sticky-col">
                     Actions
@@ -4809,6 +3950,11 @@ export default function AITalentMatchPage({
                       {candidate.uploadDate ? formatISTDate(candidate.uploadDate) : <span className="text-gray-400 dark:text-slate-500">-</span>}
                     </td>
                     <td className="px-4 py-4">
+                      <span className="inline-flex px-2 py-1 rounded-full text-xs border bg-blue-50 text-blue-700 border-blue-200">
+                        v{candidate.resumeVersion || 1}
+                      </span>
+                    </td>
+                    <td className="px-4 py-4">
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -4822,14 +3968,14 @@ export default function AITalentMatchPage({
                     </td>
                     <td className="px-4 py-4">
                       {scoredResumeIds.has(candidate.resumeId) ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 ring-1 ring-green-200 dark:bg-green-900/30 dark:text-green-400 dark:ring-green-800">
                           <CheckCircle className="w-3 h-3" />
-                          Matched
+                          Scored
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700">
                           <XCircle className="w-3 h-3" />
-                          Not Matched
+                          Not Scored
                         </span>
                       )}
                     </td>
@@ -4845,14 +3991,54 @@ export default function AITalentMatchPage({
                             <MoreVertical className="w-3.5 h-3.5 text-gray-600 dark:text-slate-300" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                        <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                           <DropdownMenuItem
-                            className="group !rounded-none !px-4 !py-2.5 text-sm text-gray-700 hover:!bg-gray-50 focus:!bg-gray-50 focus:!text-gray-700 focus-visible:!outline-none data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700"
+                            className={actionsMenuItemClass}
                             onSelect={() => setPreviewResume({ id: candidate.resumeId, name: candidate.name || 'Resume' })}
                           >
                             <Eye className="w-4 h-4 text-menu-icon-view" />
                             <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
                           </DropdownMenuItem>
+                          {canRunScoring && (
+                            <DropdownMenuItem
+                              className={actionsMenuItemClass}
+                              disabled={!candidate.resumeId}
+                              onSelect={() => {
+                                if (!candidate.resumeId) return;
+                                setSelectedCandidates([candidate.id]);
+                                handleSubmitToScoring([candidate.id]);
+                              }}
+                            >
+                              <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Score Resume</span>
+                            </DropdownMenuItem>
+                          )}
+                          {canCreateAssessments && (
+                            <DropdownMenuItem
+                              className={actionsMenuItemClass}
+                              onSelect={() => {
+                                setSelectedCandidates([candidate.id]);
+                                handleAssessment([candidate.id]);
+                              }}
+                            >
+                              <FileText className="w-4 h-4 text-menu-icon-view" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Invite Assessment</span>
+                            </DropdownMenuItem>
+                          )}
+                          {canCreateAIInterviews && (
+                            <DropdownMenuItem
+                              className={actionsMenuItemClass}
+                              disabled={!candidate.email || resolvingInviteConfig}
+                              title={!candidate.email ? 'Candidate has no email on file' : undefined}
+                              onSelect={() => {
+                                if (!candidate.email) return;
+                                handleInviteAIInterview([{ name: candidate.name || 'Candidate', email: candidate.email, resumeId: candidate.resumeId }]);
+                              }}
+                            >
+                              <Video className="w-4 h-4 text-menu-icon-share" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Invite AI Interview</span>
+                            </DropdownMenuItem>
+                          )}
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </td>
@@ -4947,14 +4133,14 @@ export default function AITalentMatchPage({
                         {candidate.attachmentCount || 1}
                       </button>
                       {scoredResumeIds.has(candidate.resumeId) ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 ring-1 ring-green-200 dark:bg-green-900/30 dark:text-green-400 dark:ring-green-800">
                           <CheckCircle className="w-3 h-3" />
-                          Matched
+                          Scored
                         </span>
                       ) : (
                         <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700">
                           <XCircle className="w-3 h-3" />
-                          Not Matched
+                          Not Scored
                         </span>
                       )}
                     </div>
@@ -5032,6 +4218,18 @@ export default function AITalentMatchPage({
           title={previewResume.name}
           subtitle={previewResume.fileName}
           onClose={() => setPreviewResume(null)}
+        />
+      )}
+
+      {/* Send AI Interview via Email — opened from a row's ⋮ "Invite AI
+          Interview" once its job's live config resolves. */}
+      {shareAIInterviewConfig && (
+        <ShareAIInterviewModal
+          isOpen={!!shareAIInterviewConfig}
+          onClose={() => { setShareAIInterviewConfig(null); setAiInterviewInviteSeed(null); }}
+          config={shareAIInterviewConfig}
+          initialCandidates={aiInterviewInviteSeed ?? undefined}
+          onInviteSent={() => toast.success('AI interview invitation sent')}
         />
       )}
 

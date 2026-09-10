@@ -85,6 +85,9 @@ export interface MatchedCandidate {
   aiScore?: number;
   concerns?: string[];
   rank?: number;  // Rating (1-10 scale)
+  /** The resume record's own current version number (distinct from the JD's
+   *  version) — same field ScoredResumesTable's "Resume Version" column reads. */
+  resumeVersion?: number;
 }
 
 // Vector-based matching interfaces for client-side similarity computation
@@ -162,6 +165,7 @@ async function enrichCandidatesWithResumeDetails(candidates: MatchedCandidate[])
             uploadedByName: resume.uploaded_by_name || '',
             uploadDate: resume.created_at || candidate.uploadDate,
             attachmentCount: resume.version_count || 1,
+            resumeVersion: resume.version || 1,
           };
         } catch (error) {
           console.error(`Failed to fetch resume details for ${candidate.resumeId}:`, error);
