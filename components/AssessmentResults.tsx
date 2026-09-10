@@ -495,7 +495,14 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   // Handle delete result
   const handleDeleteResult = async (resultId: string, candidateName: string) => {
-    if (!await dialog.confirm({ title: 'Delete Result', message: `Are you sure you want to delete the result for ${candidateName}? This action cannot be undone.`, variant: 'error', confirmText: 'Delete' })) {
+    if (!await dialog.confirm({
+      title: 'Delete Result',
+      message: 'Are you sure you want to delete this result?\nThis action cannot be undone.',
+      variant: 'delete',
+      confirmText: 'Delete Result',
+      item: { label: 'CANDIDATE RESULT', name: candidateName },
+      warningNote: 'Deleting this result will permanently remove it and cannot be restored.',
+    })) {
       return;
     }
     setIsDeleting(resultId);

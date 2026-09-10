@@ -2739,7 +2739,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       return;
     }
 
-    if (!await dialog.confirm({ title: 'Delete Assessment', message: 'Delete this assessment permanently? This action cannot be undone.', variant: 'error', confirmText: 'Delete' })) return;
+    if (!await dialog.confirm({
+      title: 'Delete Assessment',
+      message: 'Are you sure you want to delete this assessment?\nThis action cannot be undone.',
+      variant: 'delete',
+      confirmText: 'Delete Assessment',
+      item: assessment ? { label: 'ASSESSMENT', name: assessment.title } : undefined,
+      warningNote: 'Deleting this assessment will permanently remove it and cannot be restored.',
+    })) return;
 
     try {
       await assessmentService.delete(assessmentId);

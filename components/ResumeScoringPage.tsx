@@ -2209,6 +2209,33 @@ export default function ResumeScoringPage({
           /* Nothing published on this JD → nothing to invite to, so the row's
              Invite goes disabled rather than opening a menu that dead-ends. */
           assessmentConfigured={jdInviteTargets.known ? jdInviteTargets.assessmentConfigured : undefined}
+          /* Same "skip the job picker, land straight on Select Applicants to
+             Score" shortcut as the header's own Score New Resumes button —
+             this is what powers the empty state's Score Resumes action. Kept
+             separate from `onScoreResumes` (the table's persistent header
+             button) so this doesn't also add a redundant button once
+             resumes exist — the header above already has one. */
+          onScoreResumesFromEmptyState={canRunScoring ? () => {
+            const jobForPicker: LineageJob = {
+              id: selectedHistoryItem.jobId,
+              job_id: selectedHistoryItem.jdJobId,
+              title: selectedHistoryItem.jobTitle,
+              status: mapJdStatusToJobStatus(selectedHistoryItem.jdStatus),
+              location: selectedHistoryItem.jdLocation || '',
+              daysActive: 0,
+              requiredMatch: 0,
+              industry_type: selectedHistoryItem.jdIndustryType,
+              employmentType: selectedHistoryItem.jdEmploymentType,
+              workMode: selectedHistoryItem.jdRemoteType,
+              postedBy: selectedHistoryItem.jdCreatedByName,
+              postedDate: selectedHistoryItem.jdPublishedAt,
+              creation_method: selectedHistoryItem.jdCreationMethod as LineageJob['creation_method'],
+              currentVersion: selectedHistoryItem.jdCurrentVersion,
+            };
+            setViewMode('new');
+            handleJobPicked({ job: jobForPicker, lineage: lineageKey(jobForPicker) });
+            setShowResumeSelectionModal(true);
+          } : undefined}
           onViewCandidate={(resume) => {
             setSelectedCandidateForView(resume);
             setViewMode('candidateView');

@@ -33,7 +33,14 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
   };
 
   const handleDelete = async () => {
-    if (await dialog.confirm({ title: 'Delete Resume', message: 'Are you sure you want to delete this resume? This action cannot be undone.', variant: 'error', confirmText: 'Delete' })) {
+    if (await dialog.confirm({
+      title: 'Delete Resume',
+      message: 'Are you sure you want to delete this resume?\nThis action cannot be undone.',
+      variant: 'delete',
+      confirmText: 'Delete Resume',
+      item: { label: 'RESUME', name: resume.name },
+      warningNote: 'Deleting this resume will permanently remove it and cannot be restored.',
+    })) {
       onDelete?.(resume.id);
       onClose();
     }

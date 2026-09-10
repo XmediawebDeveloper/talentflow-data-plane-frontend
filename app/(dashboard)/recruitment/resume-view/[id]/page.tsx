@@ -745,7 +745,14 @@ Best regards`);
   };
 
   const handleDelete = async () => {
-    if (await dialog.confirm({ title: 'Delete Resume', message: 'Are you sure you want to delete this resume? This action cannot be undone.', variant: 'error', confirmText: 'Delete' })) {
+    if (await dialog.confirm({
+      title: 'Delete Resume',
+      message: 'Are you sure you want to delete this resume?\nThis action cannot be undone.',
+      variant: 'delete',
+      confirmText: 'Delete Resume',
+      item: { label: 'RESUME', name: getCandidateName() },
+      warningNote: 'Deleting this resume will permanently remove it and cannot be restored.',
+    })) {
       try {
         await resumeService.delete(resumeId);
         toast.success('Resume deleted');
