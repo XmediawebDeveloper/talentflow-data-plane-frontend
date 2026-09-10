@@ -7,6 +7,7 @@ import ColumnCustomizationModal from './ColumnCustomizationModal';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
+import { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import InviteShareModal from './InviteShareModal';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
@@ -203,6 +204,15 @@ interface ScoredResumesTableProps {
    */
   onScoreResumes?: () => void;
   /**
+   * Score Resumes CTA shown inside the empty state's illustration card, for
+   * when this table's own list is empty from the start (not narrowed by a
+   * search/filter) — separate from `onScoreResumes` (the persistent header
+   * button) so a host wanting the CTA only in the "no resumes scored yet"
+   * moment doesn't also get a redundant button in the header once resumes
+   * exist.
+   */
+  onScoreResumesFromEmptyState?: () => void;
+  /**
    * Opens the host's "Send AI Interview via Email" flow for one candidate —
    * the AI Interview entry in each row's Invite menu. Omitted where the host
    * has no AI interview to invite to (or the viewer can't share one), and the
@@ -247,6 +257,7 @@ export default function ScoredResumesTable({
   title = 'Scored Resumes',
   groupByEmail = false,
   onScoreResumes,
+  onScoreResumesFromEmptyState,
   onInviteAIInterview,
   assessmentConfigured,
   aiInterviewConfigured,
@@ -2138,9 +2149,17 @@ Best regards`);
             isNarrowed={search.isNarrowed}
             query={search.appliedQuery}
             entityLabel="scored resume"
-            emptyTitle="No scored resumes yet"
-            emptyDescription="Upload and score candidates to see them here."
+            emptyTitle="No Scored Resumes"
+            emptyDescription="Score resumes against this job description to see the candidates here."
             onReset={search.reset}
+            imageSrc="/scored-resumes-empty-state.webp"
+            imageAlt="Scored resumes illustration"
+            action={onScoreResumesFromEmptyState ? (
+              <button onClick={onScoreResumesFromEmptyState} className={TAB_EMPTY_ACTION_CLASS}>
+                <ClipboardList className="w-4 h-4" />
+                Score Resumes
+              </button>
+            ) : undefined}
           />
         )}
       </div>
@@ -2350,9 +2369,17 @@ Best regards`);
             isNarrowed={search.isNarrowed}
             query={search.appliedQuery}
             entityLabel="scored resume"
-            emptyTitle="No scored resumes yet"
-            emptyDescription="Upload and score candidates to see them here."
+            emptyTitle="No Scored Resumes"
+            emptyDescription="Score resumes against this job description to see the candidates here."
             onReset={search.reset}
+            imageSrc="/scored-resumes-empty-state.webp"
+            imageAlt="Scored resumes illustration"
+            action={onScoreResumesFromEmptyState ? (
+              <button onClick={onScoreResumesFromEmptyState} className={TAB_EMPTY_ACTION_CLASS}>
+                <ClipboardList className="w-4 h-4" />
+                Score Resumes
+              </button>
+            ) : undefined}
           />
         )}
       </div>

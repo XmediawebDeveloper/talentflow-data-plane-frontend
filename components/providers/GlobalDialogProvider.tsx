@@ -9,13 +9,27 @@ import {
   useEffect,
   ReactNode,
 } from 'react';
-import { AlertTriangle, CheckCircle, Info, XCircle, HelpCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Info, XCircle, HelpCircle, Trash2, X, AlertCircle, FileText, LucideIcon } from 'lucide-react';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
-type DialogVariant = 'error' | 'warning' | 'success' | 'confirm' | 'info';
+/** `delete` is its own variant (not reusing `error`) so a destructive confirm
+ *  always gets the trash-in-a-circle treatment, while `error` stays free for
+ *  actual failure alerts (showError) that have nothing to do with deleting. */
+type DialogVariant = 'error' | 'warning' | 'success' | 'confirm' | 'info' | 'delete';
+
+/** The bordered "what you're about to delete" card — icon + category label +
+ *  name + optional badge (e.g. a version pill) — shown between the message
+ *  and the Important callout when provided. */
+interface DialogItemPreview {
+  icon?: LucideIcon;
+  /** Small uppercase category label above the name, e.g. "JOB OPENING". */
+  label?: string;
+  name: string;
+  badge?: string;
+}
 
 interface DialogOptions {
   title: string;
@@ -25,6 +39,12 @@ interface DialogOptions {
   cancelText?: string;
   /** If true the cancel / secondary button is hidden (used for simple alerts) */
   hideCancelButton?: boolean;
+  /** Renders the item-preview card below the message. */
+  item?: DialogItemPreview;
+  /** Renders the red "Important" callout below the item card, explaining what
+   *  permanently happens — e.g. "Deleting this job opening will permanently
+   *  remove it from your job openings and cannot be restored." */
+  warningNote?: string;
 }
 
 interface DialogState extends DialogOptions {
@@ -83,6 +103,12 @@ const variantConfig: Record<
     iconBg: 'bg-blue-100 dark:bg-blue-900/30',
     iconColor: 'text-blue-600 dark:text-blue-400',
     confirmBtn: 'bg-blue-600 hover:bg-blue-700 focus-visible:ring-blue-600',
+  },
+  delete: {
+    icon: Trash2,
+    iconBg: 'bg-red-100 dark:bg-red-900/30',
+    iconColor: 'text-red-600 dark:text-red-500',
+    confirmBtn: 'bg-red-600 hover:bg-red-700 focus-visible:ring-red-600',
   },
   info: {
     icon: Info,
@@ -187,6 +213,8 @@ export function GlobalDialogProvider({ children }: { children: ReactNode }) {
           confirmText: options.confirmText ?? 'OK',
           cancelText: options.cancelText ?? 'Cancel',
           hideCancelButton: options.hideCancelButton ?? false,
+          item: options.item,
+          warningNote: options.warningNote,
           resolve,
         });
       });
@@ -264,21 +292,33 @@ export function GlobalDialogProvider({ children }: { children: ReactNode }) {
             className="fixed inset-0 z-[9999] flex items-center justify-center p-4 pointer-events-none"
           >
             <div
-              className="bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-md w-full pointer-events-auto animate-in zoom-in-95 fade-in duration-200"
+              className="relative bg-white dark:bg-gray-900 rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full pointer-events-auto animate-in zoom-in-95 fade-in duration-200"
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="p-6">
+              {/* X close — every variant gets it now, not just delete, so the
+                  dialog can always be dismissed the same way regardless of
+                  what triggered it. */}
+              <button
+                type="button"
+                onClick={() => handleClose(false)}
+                aria-label="Close"
+                className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="p-6 pt-8">
                 {/* Icon */}
                 <div
-                  className={`w-12 h-12 ${config.iconBg} rounded-full flex items-center justify-center mx-auto mb-4`}
+                  className={`w-16 h-16 ${config.iconBg} rounded-full flex items-center justify-center mx-auto mb-4`}
                 >
-                  <Icon className={`w-6 h-6 ${config.iconColor}`} />
+                  <Icon className={`w-7 h-7 ${config.iconColor}`} />
                 </div>
 
                 {/* Title */}
                 <h3
                   id="global-dialog-title"
-                  className="text-lg font-semibold text-gray-900 dark:text-gray-100 text-center mb-2"
+                  className="text-xl font-bold text-gray-900 dark:text-gray-100 text-center mb-2"
                 >
                   {dialog.title}
                 </h3>
@@ -286,10 +326,46 @@ export function GlobalDialogProvider({ children }: { children: ReactNode }) {
                 {/* Message */}
                 <p
                   id="global-dialog-desc"
-                  className="text-gray-600 dark:text-gray-400 text-center text-sm whitespace-pre-line mb-6"
+                  className="text-gray-600 dark:text-gray-400 text-center text-sm whitespace-pre-line mb-4"
                 >
                   {dialog.message}
                 </p>
+
+                {/* Item preview — what's about to be deleted/acted on. */}
+                {dialog.item && (() => {
+                  const ItemIcon = dialog.item.icon ?? FileText;
+                  return (
+                    <div className="mb-4 rounded-xl border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/60 p-3 flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-lg bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center flex-shrink-0">
+                        <ItemIcon className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        {dialog.item.label && (
+                          <p className="text-[11px] font-semibold tracking-wide text-gray-500 dark:text-slate-400 uppercase">
+                            {dialog.item.label}
+                          </p>
+                        )}
+                        <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{dialog.item.name}</p>
+                        {dialog.item.badge && (
+                          <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                            {dialog.item.badge}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Important callout — what permanently happens. */}
+                {dialog.warningNote && (
+                  <div className="mb-4 rounded-xl border border-red-200 dark:border-red-900/40 bg-red-50 dark:bg-red-900/20 p-3 flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <p className="text-sm font-bold text-red-700 dark:text-red-400">Important</p>
+                      <p className="text-sm text-red-700/90 dark:text-red-300/90 mt-0.5">{dialog.warningNote}</p>
+                    </div>
+                  </div>
+                )}
 
                 {/* Buttons */}
                 <div className="flex gap-3">
@@ -307,8 +383,9 @@ export function GlobalDialogProvider({ children }: { children: ReactNode }) {
                     ref={confirmBtnRef}
                     type="button"
                     onClick={() => handleClose(true)}
-                    className={`flex-1 px-4 py-2.5 text-white rounded-lg transition-colors text-sm font-medium shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 ${config.confirmBtn}`}
+                    className={`flex-1 px-4 py-2.5 text-white rounded-lg transition-colors text-sm font-medium shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 flex items-center justify-center gap-2 ${config.confirmBtn}`}
                   >
+                    {dialog.variant === 'delete' && <Trash2 className="w-4 h-4" />}
                     {dialog.confirmText}
                   </button>
                 </div>

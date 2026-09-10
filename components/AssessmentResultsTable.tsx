@@ -220,9 +220,11 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
     const confirmed = await dialog.confirm({
       title: 'Delete Result',
-      message: `Are you sure you want to delete the result for ${result.candidateName}? This action cannot be undone.`,
-      variant: 'error',
-      confirmText: 'Delete',
+      message: 'Are you sure you want to delete this result?\nThis action cannot be undone.',
+      variant: 'delete',
+      confirmText: 'Delete Result',
+      item: { label: 'CANDIDATE RESULT', name: result.candidateName },
+      warningNote: 'Deleting this result will permanently remove it and cannot be restored.',
     });
 
     if (!confirmed) return;

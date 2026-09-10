@@ -1,12 +1,24 @@
 'use client';
 
-import { Eye, Loader2 } from 'lucide-react';
+import { Eye, Loader2, MoreVertical, Sparkles } from 'lucide-react';
 import { AIMatchSessionResponse } from '@/lib/services/aiMatchService';
-import { formatIST } from '@/lib/utils/dateUtils';
+import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 /* The app's shared status vocabulary. `getDisplayStatus` is what turns a
    published JD with a publish counter above 1 into "Republished", and
    `getStatusConfig` gives that label the same colours every other list uses. */
-import { getDisplayStatus, getStatusConfig, formatEmploymentType, formatIndustryType } from '@/lib/utils/jobOpeningDisplay';
+import { getDisplayStatus, getStatusConfig, getCreationMethodConfig, formatEmploymentType, formatIndustryType } from '@/lib/utils/jobOpeningDisplay';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
+
+/* Same three-dot menu convention as every other list in the app (Job
+   Openings, Resume Scoring): Radix `DropdownMenu`, portaled so it isn't
+   clipped by this table's `overflow-x-auto` wrapper. */
+const actionsMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700 hover:!bg-gray-50 focus:!bg-gray-50 focus:!text-gray-700 focus-visible:!outline-none data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700';
 
 export interface AIMatchSessionVersion {
   /**
@@ -98,9 +110,17 @@ interface AIMatchVersionHistoryTableProps {
     location?: string;
     employmentType?: string;
     remoteType?: string;
+    /** Drives the AI / Manual badge shown under Status. */
+    creationMethod?: string;
+    postedBy?: string;
+    postedDate?: string;
   } | undefined;
   onRetry: () => void;
   onViewSession: (session: AIMatchSessionResponse) => void;
+  /** Permission/status gating (toast on denial, etc.) is the caller's job —
+   *  this component only renders the menu item and disables it when the
+   *  resolved job is Disabled. */
+  onRunMatch: (session: AIMatchSessionResponse) => void;
 }
 
 /**
@@ -116,6 +136,7 @@ export default function AIMatchVersionHistoryTable({
   resolveJob,
   onRetry,
   onViewSession,
+  onRunMatch,
 }: AIMatchVersionHistoryTableProps) {
   if (loading && !versions) {
     return (
@@ -165,6 +186,7 @@ export default function AIMatchVersionHistoryTable({
             <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Experience / Industry</th>
             <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Location</th>
             <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Work Mode / Type</th>
+            <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Posted On / By</th>
             <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Last Match Date</th>
             <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Number of Runs</th>
             <th className="py-2.5 px-3 font-bold text-gray-900 bg-brand-sky dark:bg-slate-800 dark:text-slate-100">Total Matches</th>
@@ -226,11 +248,18 @@ export default function AIMatchVersionHistoryTable({
                     }
                     const label = getDisplayStatus(job.status, job.currentVersion);
                     const cfg = getStatusConfig(label);
+                    const methodCfg = getCreationMethodConfig(job.creationMethod);
                     return (
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium border whitespace-nowrap ${cfg.bg} ${cfg.text} ${cfg.border}`}>
-                        <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-                        {label}
-                      </span>
+                      <div className="flex flex-col items-start gap-1">
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium border whitespace-nowrap ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                          {label}
+                        </span>
+                        <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium border whitespace-nowrap ${methodCfg.bg} ${methodCfg.text} ${methodCfg.border}`}>
+                          <span className={`w-1.5 h-1.5 rounded-full ${methodCfg.dot}`} />
+                          {methodCfg.label}
+                        </span>
+                      </div>
                     );
                   })()}
                 </td>
@@ -264,6 +293,19 @@ export default function AIMatchVersionHistoryTable({
                     <div className="text-gray-500 dark:text-slate-500">{formatEmploymentType(job.remoteType)}</div>
                   )}
                 </td>
+                {/* Posted On / By — date over author, same stacked treatment
+                    as Experience/Industry and Work Mode/Type above. */}
+                <td className={`py-2.5 px-3 whitespace-nowrap ${rowDivider}`}>
+                  <div className="text-gray-700 dark:text-slate-300">
+                    {job?.postedDate ? formatISTDate(job.postedDate) : '—'}
+                  </div>
+                  <div
+                    className="text-gray-500 dark:text-slate-500 max-w-[140px] truncate"
+                    title={job?.postedBy || ''}
+                  >
+                    {job?.postedBy || '—'}
+                  </div>
+                </td>
                 {/* Most recent match against this JD version. */}
                 <td className={`py-2.5 px-3 text-gray-600 dark:text-slate-400 whitespace-nowrap ${rowDivider}`}>
                   {formatIST(lastMatchedAt)}
@@ -271,14 +313,32 @@ export default function AIMatchVersionHistoryTable({
                 <td className={`py-2.5 px-3 text-gray-900 dark:text-slate-100 ${rowDivider}`}>{runCount}</td>
                 <td className={`py-2.5 px-3 text-gray-900 dark:text-slate-100 ${rowDivider}`}>{session.total_matches}</td>
                 <td className={`py-2.5 px-3 text-right ${rowDivider}`}>
-                  <button
-                    type="button"
-                    onClick={() => onViewSession(session)}
-                    className="inline-flex items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 px-2 py-1 font-medium text-gray-700 dark:text-slate-200 hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors whitespace-nowrap"
-                  >
-                    <Eye className="w-3 h-3" />
-                    View
-                  </button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button
+                        type="button"
+                        aria-label="Actions"
+                        title="Actions"
+                        className="p-1.5 bg-white dark:bg-slate-900 rounded-md border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                      >
+                        <MoreVertical className="w-3.5 h-3.5 text-gray-600 dark:text-slate-300" />
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                      <DropdownMenuItem className={actionsMenuItemClass} onSelect={() => onViewSession(session)}>
+                        <Eye className="w-4 h-4 text-menu-icon-view" />
+                        <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className={actionsMenuItemClass}
+                        disabled={job?.status?.toLowerCase() === 'disabled'}
+                        onSelect={() => onRunMatch(session)}
+                      >
+                        <Sparkles className="w-4 h-4 text-menu-icon-ai" />
+                        <span className={MENU_ITEM_SCALE_CLASS}>Run AI Match</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </td>
               </tr>
             );
@@ -294,6 +354,7 @@ export default function AIMatchVersionHistoryTable({
         const job = resolveJob?.(session);
         const label = job?.status ? getDisplayStatus(job.status, job.currentVersion) : undefined;
         const cfg = label ? getStatusConfig(label) : undefined;
+        const methodCfg = job?.status ? getCreationMethodConfig(job.creationMethod) : undefined;
         return (
           <div
             key={session.id}
@@ -315,10 +376,18 @@ export default function AIMatchVersionHistoryTable({
                 )}
               </span>
               {cfg && label ? (
-                <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium border whitespace-nowrap ${cfg.bg} ${cfg.text} ${cfg.border}`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
-                  {label}
-                </span>
+                <div className="flex flex-col items-end gap-1">
+                  <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium border whitespace-nowrap ${cfg.bg} ${cfg.text} ${cfg.border}`}>
+                    <span className={`w-1.5 h-1.5 rounded-full ${cfg.dot}`} />
+                    {label}
+                  </span>
+                  {methodCfg && (
+                    <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-medium border whitespace-nowrap ${methodCfg.bg} ${methodCfg.text} ${methodCfg.border}`}>
+                      <span className={`w-1.5 h-1.5 rounded-full ${methodCfg.dot}`} />
+                      {methodCfg.label}
+                    </span>
+                  )}
+                </div>
               ) : (
                 <span className="text-gray-400 dark:text-slate-600">—</span>
               )}
@@ -337,19 +406,43 @@ export default function AIMatchVersionHistoryTable({
                   {job.remoteType && ` · ${formatEmploymentType(job.remoteType)}`}
                 </span>
               )}
+              {(job?.postedDate || job?.postedBy) && (
+                <span>
+                  Posted {job.postedDate ? formatISTDate(job.postedDate) : '—'}
+                  {job.postedBy && ` by ${job.postedBy}`}
+                </span>
+              )}
               <span>Last Match Date: {formatIST(lastMatchedAt)}</span>
               <span>Number of Runs: {runCount}</span>
             </div>
             <div className="flex items-center justify-between gap-2">
               <span className="text-gray-900 dark:text-slate-100 font-medium">{session.total_matches} total matches</span>
-              <button
-                type="button"
-                onClick={() => onViewSession(session)}
-                className="inline-flex items-center gap-1 rounded-md border border-gray-200 dark:border-slate-700 px-2.5 py-2 font-medium text-gray-700 dark:text-slate-200 hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
-              >
-                <Eye className="w-3 h-3" />
-                View
-              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    aria-label="Actions"
+                    title="Actions"
+                    className="p-2 bg-white dark:bg-slate-900 rounded-md border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                  >
+                    <MoreVertical className="w-3.5 h-3.5 text-gray-600 dark:text-slate-300" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                  <DropdownMenuItem className={actionsMenuItemClass} onSelect={() => onViewSession(session)}>
+                    <Eye className="w-4 h-4 text-menu-icon-view" />
+                    <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className={actionsMenuItemClass}
+                    disabled={job?.status?.toLowerCase() === 'disabled'}
+                    onSelect={() => onRunMatch(session)}
+                  >
+                    <Sparkles className="w-4 h-4 text-menu-icon-ai" />
+                    <span className={MENU_ITEM_SCALE_CLASS}>Run AI Match</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
         );

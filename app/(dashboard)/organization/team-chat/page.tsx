@@ -269,10 +269,12 @@ export default function TeamChatPage() {
     if (!selectedChannel) return;
     setShowHeaderMenu(false);
     const ok = await dialog.confirm({
-      title: 'Delete channel',
-      message: `Delete "${selectedChannel.name}"? This permanently removes the channel and all its messages.`,
-      variant: 'error',
-      confirmText: 'Delete',
+      title: 'Delete Channel',
+      message: 'Are you sure you want to delete this channel?\nThis action cannot be undone.',
+      variant: 'delete',
+      confirmText: 'Delete Channel',
+      item: { label: 'CHANNEL', name: selectedChannel.name },
+      warningNote: 'Deleting this channel will permanently remove it and all its messages.',
     });
     if (!ok) return;
     try {

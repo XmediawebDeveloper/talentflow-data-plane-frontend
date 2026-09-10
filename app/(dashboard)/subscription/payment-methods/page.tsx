@@ -270,7 +270,15 @@ export default function PaymentMethodsPage() {
   };
 
   const deleteMethod = async (id: string) => {
-    if (!await dialog.confirm({ title: 'Delete Payment Method', message: 'Are you sure you want to delete this payment method?', variant: 'error', confirmText: 'Delete' })) return;
+    const method = paymentMethods.find(pm => pm.id === id);
+    if (!await dialog.confirm({
+      title: 'Delete Payment Method',
+      message: 'Are you sure you want to delete this payment method?\nThis action cannot be undone.',
+      variant: 'delete',
+      confirmText: 'Delete Payment Method',
+      item: method ? { label: 'PAYMENT METHOD', name: `${method.card_type} •••• ${method.card_last_four}` } : undefined,
+      warningNote: 'Deleting this payment method will permanently remove it from your account.',
+    })) return;
 
     setDeleting(id);
     try {

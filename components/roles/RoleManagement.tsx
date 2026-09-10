@@ -197,9 +197,11 @@ export default function RoleManagement() {
 
     const confirmed = await dialog.confirm({
       title: 'Delete Role',
-      message: 'Are you sure you want to delete this role? Users with this role will lose their permissions.',
-      variant: 'error',
-      confirmText: 'Delete',
+      message: 'Are you sure you want to delete this role?\nThis action cannot be undone.',
+      variant: 'delete',
+      confirmText: 'Delete Role',
+      item: role ? { label: 'ROLE', name: role.name } : undefined,
+      warningNote: 'Deleting this role is permanent — users assigned to it will immediately lose its permissions.',
     });
     if (!confirmed) return;
 
