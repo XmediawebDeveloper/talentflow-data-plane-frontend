@@ -1,6 +1,6 @@
 'use client';
 
-import { ArrowRight, Building2, Check, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown } from 'lucide-react';
+import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown } from 'lucide-react';
 import type { AssessmentResponse, HRTopic } from '@/lib/services/assessmentService';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -14,6 +14,7 @@ import dynamic from 'next/dynamic';
 import { toast } from 'sonner';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { useAuth } from '@/components/providers/AuthProvider';
+import SuccessAnimation from '@/components/ui/success-animation';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import JDFullViewModal from '@/components/jobs/JDFullViewModal';
@@ -47,24 +48,6 @@ const COMPILABLE_LANGUAGES_LOWER = new Set(COMPILABLE_LANGUAGES.map(l => l.toLow
  *  caps so the two cannot drift; every gate reads this, never a literal. */
 const MAX_CODING_LANGUAGES = 10;
 
-/**
- * The confetti thrown around the published mark on the Publish Assessment
- * page. `x`/`y` are the stroke's centre offset from the mark's own centre and
- * `tilt` its rotation, so the burst is described once here and travels with
- * the mark rather than being pinned to the page.
- *
- * The colours are the brand palette (cyan, orange, teal) plus the green the
- * mark itself carries; the one violet has no brand token, so it takes plain
- * violet-500 rather than a new one being invented for a decoration.
- */
-const PUBLISHED_CONFETTI = [
-  { x: -78, y: -27, tilt: 45, color: 'bg-brand-cyan' },
-  { x: -108, y: 5, tilt: 45, color: 'bg-brand-orange' },
-  { x: -74, y: 30, tilt: -45, color: 'bg-brand-teal' },
-  { x: 64, y: -36, tilt: -45, color: 'bg-green-500' },
-  { x: 108, y: -13, tilt: 45, color: 'bg-violet-500' },
-  { x: 72, y: 19, tilt: 45, color: 'bg-brand-cyan' },
-] as const;
 const filterCompilable = (langs: string[] | undefined | null): string[] => {
   if (!Array.isArray(langs)) return [];
   return langs.filter(l => l && COMPILABLE_LANGUAGES_LOWER.has(String(l).trim().toLowerCase()));
@@ -517,6 +500,24 @@ interface AssessmentCreationProps {
   topicSettings?: TopicSettings;
   preSelectedJobId?: string;
   proctoringSettings?: ProctoringSettings | null;
+  /**
+   * Rendered inside a popup rather than as the /assessments/create PAGE —
+   * `AssessmentConfigureModal`, which is how the assessment details page's
+   * Edit action opens this flow without leaving the record it is showing.
+   *
+   * The step, the JD and the assessment being edited come from the props
+   * below instead of from the URL, and nothing here rewrites the address bar:
+   * the host page's route (and its Back button) has to survive the popup
+   * being opened and closed. Everything else — the Configure form, its
+   * validation, its Save as Draft / Publish and every dialog they raise — is
+   * the same code the page runs.
+   */
+  embedded?: boolean;
+  /**
+   * The assessment to edit, for `embedded` mode: the popup's stand-in for the
+   * page's `?edit=<id>`. Ignored on the page, which reads the URL.
+   */
+  editAssessmentId?: string;
 }
 
 /** The three assessment rounds, by name — each round owns the section of the
@@ -590,17 +591,24 @@ function getExperienceRange(job: Pick<Job, 'experience' | 'experience_min' | 'ex
   return { min: 0, max: 0 };
 }
 
-export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings, preSelectedJobId, proctoringSettings: initialProctoringSettings }: AssessmentCreationProps) {
+export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings, preSelectedJobId, proctoringSettings: initialProctoringSettings, embedded = false, editAssessmentId: embeddedEditAssessmentId }: AssessmentCreationProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isTenantAdmin, user } = useAuth();
   const canCreateJd = isTenantAdmin || (user?.permissions?.canCreateJD ?? false);
   const { available: assessmentAvailable } = usePlanFeature('assessment');
 
-  // Read initial step from URL, default to 'select-jd'
-  const urlStep = searchParams.get('step') as 'select-jd' | 'configure' | 'publish' | 'preview' | null;
-  const urlJdId = searchParams.get('jd_id');
-  const editAssessmentId = searchParams.get('edit'); // Edit mode: assessment ID to edit
+  /* Read initial step from URL, default to 'select-jd'.
+   *
+   * In `embedded` mode the popup's props answer all three instead. The URL
+   * belongs to the page the popup is open ON — the assessment details route —
+   * and reading `step`/`jd_id`/`edit` off it there would either find nothing
+   * or, worse, find another surface's params. */
+  const urlStep = embedded
+    ? ('configure' as const)
+    : (searchParams.get('step') as 'select-jd' | 'configure' | 'publish' | 'preview' | null);
+  const urlJdId = embedded ? (preSelectedJobId ?? null) : searchParams.get('jd_id');
+  const editAssessmentId = embedded ? (embeddedEditAssessmentId ?? null) : searchParams.get('edit'); // Edit mode: assessment ID to edit
 
   // Entered from a JD's Job Details page (Quick Actions → Assessment → Create).
   // Mirrors the AI Interview config flow: the breadcrumb stays anchored to that
@@ -641,6 +649,21 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [duration, setDuration] = useState(30); // Assessment duration in minutes (15-180)
   const [isEditMode, setIsEditMode] = useState(false);
+  /**
+   * Has the read of the assessment being edited FINISHED — either with the
+   * record or with a failure?
+   *
+   * The Configure step is held on its loader until it has (see
+   * `loadingEditedAssessment` further down). Until the record arrives the only
+   * configuration in state is `getInitialSections()`, the defaults for a NEW
+   * assessment — and showing those on an Edit, even for the moment before the
+   * saved rounds land, is showing the recruiter a configuration nobody chose,
+   * on a form whose Publish button would then save it.
+   *
+   * Settled on failure too, so a read that cannot be served falls through to
+   * the form rather than spinning behind a toast.
+   */
+  const [editLoadSettled, setEditLoadSettled] = useState(false);
   const [editingAssessment, setEditingAssessment] = useState<any>(null);
   const [jdSearch, setJdSearch] = useState('');
   /* JD picker paging. The page is stored WITH the search it belongs to — the
@@ -723,6 +746,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       startingAssessmentRef.current = null;
       setStartingAssessmentFor(null);
     }
+    /* A popup has no address of its own. The step lives in state either way;
+       what the page adds is the URL that names it, and rewriting the details
+       route's address from inside a dialog would break its Back button and
+       leave a `?step=configure` on a page that is not this flow. */
+    if (embedded) return;
+
     const params = new URLSearchParams();
 
     // Origin params ride along on every rewrite. Without this the breadcrumb
@@ -1007,10 +1036,19 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
         // to flip the label.
         setCodingEnabledSource(assessment.coding_enabled ? 'auto' : null);
 
+        setEditLoadSettled(true);
         console.log('[TalentFlow] Assessment loaded for editing:', assessment.title);
       } catch (error) {
         console.error('Failed to load assessment for edit:', error);
+        setEditLoadSettled(true);
         toast.error('Failed to load assessment for editing. Please try again.');
+        /* In a popup, "back" is closing it — the recruiter is already on the
+           record they were editing and navigating away from it would be a
+           worse answer than the toast. */
+        if (embedded) {
+          onBack();
+          return;
+        }
         // Back where the recruiter came from (the JD's page when the flow
         // started there), not the Assessments list they never chose.
         router.push(returnUrl || '/recruitment/assessments');
@@ -1054,13 +1092,20 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const [generatedAssessment, setGeneratedAssessment] = useState<any>(null);
   const [proctoringEnabled, setProctoringEnabled] = useState(initialProctoringSettings?.proctoring_enabled ?? true);
 
-  // Sync proctoringEnabled when settings load async (only before user manually toggles)
+  /* Sync proctoringEnabled when the tenant's settings load async (only before
+     the user manually toggles).
+     
+     The tenant default is the default for a NEW assessment. An EDIT already
+     has a decision on file — `loadAssessmentForEdit` reads `proctoring_enabled`
+     off the record — and letting the settings response arrive afterwards and
+     overwrite it is the same reset the round configuration used to suffer,
+     one field along. */
   const [userToggledProctoring, setUserToggledProctoring] = useState(false);
   useEffect(() => {
-    if (!userToggledProctoring && initialProctoringSettings != null) {
+    if (!editAssessmentId && !userToggledProctoring && initialProctoringSettings != null) {
       setProctoringEnabled(initialProctoringSettings.proctoring_enabled);
     }
-  }, [initialProctoringSettings, userToggledProctoring]);
+  }, [editAssessmentId, initialProctoringSettings, userToggledProctoring]);
 
   const [localJobs, setLocalJobs] = useState<Job[]>(jobs);
   const [isLoadingJobs, setIsLoadingJobs] = useState(false);
@@ -1368,6 +1413,15 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     if (existingAssessmentRedirectRef.current) return;
     existingAssessmentRedirectRef.current = true;
 
+    /* Unreachable from the popup, which only ever opens in edit mode (the
+       one-per-version check that calls this is skipped when `editAssessmentId`
+       is set) — and if it ever were reached, the assessment it would navigate
+       to is the one the host page is already showing. Close instead. */
+    if (embedded) {
+      onBack();
+      return;
+    }
+
     if (!fromJobDetails) {
       router.replace('/recruitment/assessments');
       return;
@@ -1539,26 +1593,51 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     setIsCodingLockedBySmartConfig(false);
     setCodingLockReason('');
 
-    // Only auto-enable if JD has languages we support
-    const hasValidLanguages = codingLanguages.length > 0;
+    /* THE JD'S DEFAULTS ARE FOR A NEW ASSESSMENT ONLY.
+     *
+     * In EDIT mode the rounds have already been decided and published by a
+     * recruiter, and `loadAssessmentForEdit` above is what puts that saved
+     * configuration on screen. Applying the JD defaults here as well made the
+     * two writes a RACE, and this one usually won: both start on mount, this
+     * one waits on the JD list plus the eligibility index while the edit read
+     * is a single GET, so the saved rounds landed first and were then
+     * overwritten by "HR on, Technical on, Coding per the JD" — the bug where
+     * a recruiter who published HR off / Technical off / Coding on reopened
+     * Edit and found their configuration back at the defaults.
+     *
+     * So the JD half of this effect stops at the JOB: it still selects it, and
+     * still records the languages the JD implies (`jdExtractedLanguages`,
+     * which is only the list offered when the coding round is switched back
+     * on — never the saved state itself). What the rounds ARE is read from the
+     * record, and nothing here recalculates it.
+     *
+     * `editAssessmentId` — the URL/prop that put the flow in edit mode — is
+     * read rather than the `isEditMode` state it sets, because the state
+     * lands one render later and this effect can run inside that window. */
+    if (!editAssessmentId) {
+      // Only auto-enable if JD has languages we support
+      const hasValidLanguages = codingLanguages.length > 0;
 
-    if (hasValidLanguages) {
-      const split = calculateTimeSplit(job, true);
-      setSections([
-        { name: 'HR', percentage: 0, topics: [], enabled: true },
-        { name: 'Technical', percentage: split.technical, topics: [], enabled: true },
-        { name: 'Coding', percentage: split.coding, topics: [], enabled: true },
-      ]);
-      setSelectedCodingLanguages(codingLanguages);
-      console.log(`[TalentFlow] Coding auto-enabled: Technical ${split.technical}%, Coding ${split.coding}%`);
+      if (hasValidLanguages) {
+        const split = calculateTimeSplit(job, true);
+        setSections([
+          { name: 'HR', percentage: 0, topics: [], enabled: true },
+          { name: 'Technical', percentage: split.technical, topics: [], enabled: true },
+          { name: 'Coding', percentage: split.coding, topics: [], enabled: true },
+        ]);
+        setSelectedCodingLanguages(codingLanguages);
+        console.log(`[TalentFlow] Coding auto-enabled: Technical ${split.technical}%, Coding ${split.coding}%`);
+      } else {
+        setSections([
+          { name: 'HR', percentage: 0, topics: [], enabled: true },
+          { name: 'Technical', percentage: 100, topics: [], enabled: true },
+          { name: 'Coding', percentage: 0, topics: [], enabled: false },
+        ]);
+        setSelectedCodingLanguages([]);
+        console.log('[TalentFlow] No supported languages detected - coding disabled');
+      }
     } else {
-      setSections([
-        { name: 'HR', percentage: 0, topics: [], enabled: true },
-        { name: 'Technical', percentage: 100, topics: [], enabled: true },
-        { name: 'Coding', percentage: 0, topics: [], enabled: false },
-      ]);
-      setSelectedCodingLanguages([]);
-      console.log('[TalentFlow] No supported languages detected - coding disabled');
+      console.log('[TalentFlow] Edit mode - keeping the saved round configuration for JD:', job.title);
     }
 
     setSelectedJob(job);
@@ -2661,12 +2740,22 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       // the parent's onCreateAssessment which closes the creation view and
       // reloads the list — that's the expected "I'm done here" behaviour.
       if (!saveAsDraft) {
-        /* On to the Publish Assessment step, which exists only to report this.
-           The record and the step are set together, so that page never renders
-           with nothing to confirm. `resultAssessment.id` rides along so the
-           page's own actions can open the assessment and its invites. */
-        setPublishedAssessment({ ...assessmentDefinition, id: resultAssessment.id });
-        setStep('publish');
+        /* The Publish Assessment step is a PAGE — the end of the create flow,
+           with its own ways onward. A popup opened over a record that already
+           exists has none of that to report: the recruiter is looking at the
+           very assessment they just republished, so the popup hands the
+           record back and closes, and the host refreshes what is behind it. */
+        if (embedded) {
+          toast.success(`Assessment ${isEditMode ? 'updated' : 'published'} successfully.`);
+          onCreateAssessment({ ...assessmentDefinition, id: resultAssessment.id });
+        } else {
+          /* On to the Publish Assessment step, which exists only to report this.
+             The record and the step are set together, so that page never renders
+             with nothing to confirm. `resultAssessment.id` rides along so the
+             page's own actions can open the assessment and its invites. */
+          setPublishedAssessment({ ...assessmentDefinition, id: resultAssessment.id });
+          setStep('publish');
+        }
       } else {
         toast.success('Assessment saved as draft. You can publish it later.');
         onCreateAssessment(assessmentDefinition);
@@ -2770,6 +2859,10 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   // Handle browser close/refresh - save draft
   useEffect(() => {
     const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      /* The popup edits an assessment that already exists, and it is not the
+         page being unloaded — a "leave site?" prompt raised from a dialog
+         open over the details view would be asking about the wrong thing. */
+      if (embedded) return;
       if (step === 'configure' && selectedJob && !draftSavedId) {
         // Check if percentages are valid before auto-saving
         const totalPct = sections.filter(s => s.enabled).reduce((sum, s) => sum + s.percentage, 0);
@@ -2929,6 +3022,22 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     return null;
   }
 
+  /* THE STEP'S OUTER SHELL — the page's, or the popup's.
+   *
+   * On the route this flow owns its screen: a scrolling `bg-slate-50` main, a
+   * 1400px column, and the padded white card every other recruitment page
+   * draws. In a popup all three are already there — the dialog panel IS the
+   * card, and it owns the scrolling — so repeating them stacked two white
+   * cards inside a rounded frame and nested a scroll container in a scroll
+   * container. Same content either way; only the frame around it differs. */
+  const stepShellClass = embedded
+    ? 'relative'
+    : 'flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 relative';
+  const stepColumnClass = embedded ? 'w-full' : 'mx-auto w-full max-w-[1400px]';
+  const stepCardClass = embedded
+    ? 'p-4 sm:p-5 w-full'
+    : 'p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl';
+
   // Deep-linked with a JD already chosen (Job Details → Assessment → Create,
   // which lands on ?step=configure&jd_id=…). The auto-select effect can only run
   // once the JD list AND the assessment-eligibility set have resolved, and it is
@@ -2951,17 +3060,30 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     !isEditMode &&
     (!hasLoadedAssessmentEligibility || isLoadingJobs || preselectedJobResolvable);
 
+  /* EDIT: the saved configuration comes before any fallback default.
+   *
+   * `sections` starts life as `getInitialSections()` — the defaults a NEW
+   * assessment opens on — and the record's own rounds replace it when the edit
+   * read lands. Rendering the form in between put the defaults on screen for
+   * an Edit, which is both wrong to read and, for a fast click, wrong to save.
+   * The same loader the pre-selected-JD case uses covers the gap. */
+  const loadingEditedAssessment = !!editAssessmentId && !editLoadSettled;
+
   // Not scoped to `step === 'select-jd'`: with ?step=configure the Configure
   // form would otherwise render against a null selectedJob until the effect lands.
-  if (resolvingPreselectedJd) {
+  if (resolvingPreselectedJd || loadingEditedAssessment) {
     return (
-      <div className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
-        <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-            <PageBreadcrumb
-              className="mb-3"
-              items={buildBreadcrumbItems()}
-            />
+      <div className={stepShellClass}>
+        <div className={stepColumnClass}>
+          <div className={stepCardClass}>
+            {/* No trail inside a popup: the breadcrumb states the path to the
+                PAGE, and the page under the popup has its own. */}
+            {!embedded && (
+              <PageBreadcrumb
+                className="mb-3"
+                items={buildBreadcrumbItems()}
+              />
+            )}
             <div className="flex items-center justify-center h-64">
               <Loader2 className="h-8 w-8 text-brand-blue animate-spin" />
               <span className="ml-3 text-sm text-gray-600">Loading assessment configuration...</span>
@@ -4008,7 +4130,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     );
 
     return (
-      <div className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 relative">
+      <div className={stepShellClass}>
         {/* Auto-saving overlay */}
         {isAutoSaving && (
           <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -4019,8 +4141,8 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           </div>
         )}
 
-        <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+        <div className={stepColumnClass}>
+          <div className={stepCardClass}>
             {/* Every step builds the same trail — see `buildStepCrumbs`. Here
                 that is
                   Dashboard › Assessments › Select Job Description › Configure Assessment
@@ -4032,17 +4154,25 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 that says where the recruiter is standing but not what they are
                 doing there, and the job is already named in the heading two
                 lines below. */}
-            <PageBreadcrumb
-              className="mb-3"
-              items={buildBreadcrumbItems()}
-            />
+            {/* Popup: no trail (the page behind it has one) and no heading —
+                the dialog's own header carries this step's title and the job
+                it is configuring, so printing them again inside the body
+                labelled the same thing twice. */}
+            {!embedded && (
+              <PageBreadcrumb
+                className="mb-3"
+                items={buildBreadcrumbItems()}
+              />
+            )}
             <div className="w-full">
-          <div className="mb-4 sm:mb-6">
-            <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 mb-1 tracking-tight">Configure Assessment</h1>
-            <p className="text-sm sm:text-base text-gray-600">
-              Set duration, section distribution, and topics for <span className="text-brand-blue font-medium truncate">{selectedJob?.title}</span>
-            </p>
-          </div>
+          {!embedded && (
+            <div className="mb-4 sm:mb-6">
+              <h1 className="text-lg sm:text-xl lg:text-2xl font-semibold text-gray-900 mb-1 tracking-tight">Configure Assessment</h1>
+              <p className="text-sm sm:text-base text-gray-600">
+                Set duration, section distribution, and topics for <span className="text-brand-blue font-medium truncate">{selectedJob?.title}</span>
+              </p>
+            </div>
+          )}
 
           {/* Two Column Layout */}
           <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
@@ -4235,7 +4365,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           </div>
                           <span className="text-xs sm:text-sm text-gray-500 flex-shrink-0">
                             Total:{' '}
-                            <span className={`font-semibold ${isPercentageValid ? 'text-green-600' : 'text-red-500'}`}>
+                            <span className={`font-bold ${isPercentageValid ? 'text-green-600' : 'text-red-500'}`}>
                               {totalPercentage}%
                             </span>
                           </span>
@@ -4256,8 +4386,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                           {distribution.map(section => (
                             <span key={section.name} className="inline-flex items-center gap-2 text-xs sm:text-sm text-gray-600">
                               <span className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${barColor(section.name)}`} />
-                              {section.name} Section
-                              <span className="font-semibold text-gray-900">{section.percentage}%</span>
+                              {/* "Technical round", not "Technical Section" —
+                                  the round is what the recruiter switched on
+                                  above, and what every other label on this
+                                  step calls it. */}
+                              {section.name} round
+                              <span className="font-bold text-gray-900">{section.percentage}%</span>
                             </span>
                           ))}
                         </div>
@@ -4591,28 +4725,29 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 {(() => {
                   const techSection = sections.find(s => s.name === 'Technical');
                   const codeSection = sections.find(s => s.name === 'Coding');
-                  const techMin = techSection?.enabled ? Math.round(30 * (techSection.percentage / 100)) : 0;
-                  const codeMin = codeSection?.enabled ? 30 - techMin : 0;
                   if (!techSection?.enabled && !codeSection?.enabled) return null;
                   /**
                    * One row per timed round, a card each rather than two lines
                    * in a shared panel: the round's own icon and colour, its
-                   * name and minutes on the first line, and the share those
-                   * minutes came from as a bar under them.
+                   * name, and its share of the assessment.
                    *
-                   * The icon, tile and bar colours are the round's own, the
-                   * same ones its card in Assessment Rounds carries, so a row
-                   * here is matched to the round it reports by colour alone.
-                   * Both rows are the same shape, so one helper draws them.
+                   * The icon and tile colours are the round's own, the same
+                   * ones its card in Assessment Rounds carries, so a row here
+                   * is matched to the round it reports by colour alone. Both
+                   * rows are the same shape, so one helper draws them.
+                   *
+                   * ONE LINE, ONE FIGURE. The row used to run two: the round's
+                   * minutes and a "(65%)" beside its name on the first, a share
+                   * bar and that same 65% under them on the second - the
+                   * percentage printed twice, and the minutes restating what a
+                   * share of a fixed 30 already says.
                    */
                   const renderDurationRow = (row: {
                     name: string;
                     percentage: number;
-                    minutes: number;
                     Icon: typeof Brain;
                     tile: string;
                     iconColor: string;
-                    bar: string;
                   }) => (
                     <div
                       key={row.name}
@@ -4621,49 +4756,31 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                       <div className={`w-8 h-8 rounded-xl flex items-center justify-center flex-shrink-0 ${row.tile}`}>
                         <row.Icon className={`w-4 h-4 ${row.iconColor}`} />
                       </div>
-                      {/* Two stacked columns rather than one: what the round IS
-                          on the left (its name, then its share as a track), what
-                          it COMES TO on the right (its minutes, then its share
-                          as a figure). Both columns run two lines of the same
-                          height - the track is centred in a text-line-high box
-                          rather than sized to itself - so line one reads across
-                          as "Technical … 20 min" and line two as "bar … 65%". */}
+                      {/* What the round IS on the left, what it COMES TO on the
+                          right: "Technical … 65%". */}
                       <div className="min-w-0 flex-1">
-                        <div className="text-xs text-gray-600 truncate">{row.name} ({row.percentage}%)</div>
-                        <div className="mt-1.5 flex h-4 items-center">
-                          <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
-                            <div
-                              style={{ width: `${Math.min(row.percentage, 100)}%` }}
-                              className={`h-full ${row.bar} transition-all`}
-                            />
-                          </div>
-                        </div>
+                        <div className="text-xs text-gray-600 truncate">{row.name}</div>
                       </div>
                       <div className="flex-shrink-0 text-right">
-                        <div className="text-xs font-medium text-gray-900">{row.minutes} min</div>
-                        <div className="mt-1.5 h-4 text-xs text-gray-500">{row.percentage}%</div>
+                        <div className="text-xs font-bold text-gray-500">{row.percentage}%</div>
                       </div>
                     </div>
                   );
                   return (
                     <div className="mt-3 space-y-2">
                       {techSection?.enabled && renderDurationRow({
-                        name: 'Technical',
+                        name: 'Technical round',
                         percentage: techSection.percentage,
-                        minutes: techMin,
                         Icon: Brain,
                         tile: 'bg-brand-cyan/10 ring-1 ring-brand-cyan/15',
                         iconColor: 'text-brand-cyan',
-                        bar: 'bg-brand-cyan',
                       })}
                       {codeSection?.enabled && renderDurationRow({
-                        name: 'Coding',
+                        name: 'Coding round',
                         percentage: codeSection.percentage,
-                        minutes: codeMin,
                         Icon: Code,
                         tile: 'bg-brand-orange/10 ring-1 ring-brand-orange/15',
                         iconColor: 'text-brand-orange-deep',
-                        bar: 'bg-brand-orange',
                       })}
                     </div>
                   );
@@ -4999,27 +5116,21 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 headline, the thing that was published named on a panel of its
                 own, then the ways on from here. */}
             <div className="py-4 sm:py-6 text-center">
-              {/* The mark: a solid green disc inside its own halo, drawn as a
-                  ring so the halo cannot drift out of register with the disc,
-                  with the confetti thrown clear of both. The whole burst is
-                  scaled down rather than re-laid-out on a narrow screen, so
-                  the strokes keep their distance from the mark. */}
-              <div className="relative mx-auto mb-4 sm:mb-5 h-[84px] w-[84px] scale-[0.85] sm:scale-100">
-                {PUBLISHED_CONFETTI.map(piece => (
-                  <span
-                    key={`${piece.x},${piece.y}`}
-                    aria-hidden="true"
-                    className={`absolute left-1/2 top-1/2 h-[3px] w-[13px] rounded-full ${piece.color}`}
-                    style={{
-                      transform: `translate(calc(-50% + ${piece.x}px), calc(-50% + ${piece.y}px)) rotate(${piece.tilt}deg)`,
-                    }}
-                  />
-                ))}
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="flex h-[50px] w-[50px] items-center justify-center rounded-full bg-green-500 ring-[17px] ring-green-50">
-                    <Check className="h-7 w-7 text-white" strokeWidth={3} />
-                  </div>
-                </div>
+              {/* The published tick: `SuccessAnimation`, the same component
+                  the JD review screen shows when a JD is published — same
+                  size, same stroke, same burst, because it is the same tick
+                  and not a second drawing of one.
+
+                  It replaces the whole mark rather than sitting inside it: the
+                  animation brings its own circle and throws its particles past
+                  that circle's edge, so the green disc, its halo ring and the
+                  hand-placed confetti that used to be here would each have cut
+                  a line through the burst. Its own fallback (the disc-and-tick
+                  badge, and the reduced-motion path) comes with it.
+
+                  The margin below is this page's own, untouched. */}
+              <div className="flex justify-center mb-4 sm:mb-5">
+                <SuccessAnimation />
               </div>
 
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight mb-2 sm:mb-3">

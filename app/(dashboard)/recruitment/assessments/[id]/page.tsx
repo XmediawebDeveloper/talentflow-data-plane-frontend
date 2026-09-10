@@ -7,6 +7,7 @@ import AssessmentDetailsView from '@/components/AssessmentDetailsView';
 import ShareAssessmentModal from '@/components/ShareAssessmentModal';
 import AssessmentPreviewModal from '@/components/AssessmentPreviewModal';
 import AssessmentEditModal from '@/components/AssessmentEditModal';
+import AssessmentConfigureModal from '@/components/AssessmentConfigureModal';
 import { assessmentService } from '@/lib/services';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -83,6 +84,12 @@ function AssessmentDetailsContent() {
      be undone by a re-render still reading `?share=1` off the URL. */
   const shareOnArrivalHandledRef = useRef(false);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
+  /* Edit opens the Assessment Configure step in a POPUP over this page — no
+     route change, so the record stays on screen behind it and closing needs no
+     navigation. `AssessmentEditModal` is the fallback for the one case
+     Configure cannot serve: an assessment with no `jd_id`, which the
+     job-scoped Configure form has nothing to lay itself out from. */
+  const [showConfigureModal, setShowConfigureModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
 
   const fetchAssessment = async () => {
@@ -288,7 +295,7 @@ function AssessmentDetailsContent() {
         <AssessmentDetailsView
           assessment={assessment}
           onBack={handleBack}
-          onEdit={() => setShowEditModal(true)}
+          onEdit={() => (assessment.jd_id ? setShowConfigureModal(true) : setShowEditModal(true))}
           onPreview={() => setShowPreviewModal(true)}
           onShare={canInvite ? () => setShowShareModal(true) : undefined}
           onViewResults={handleViewResults}
@@ -319,6 +326,18 @@ function AssessmentDetailsContent() {
             isOpen={showPreviewModal}
             onClose={() => setShowPreviewModal(false)}
             assessment={assessment}
+          />
+        )}
+
+        {showConfigureModal && (
+          <AssessmentConfigureModal
+            isOpen={showConfigureModal}
+            onClose={() => setShowConfigureModal(false)}
+            assessment={assessment}
+            /* Republished or saved as a draft — the header, the sections and
+               the version badge on this page are all read from the record, so
+               it is refetched rather than patched locally. */
+            onSaved={fetchAssessment}
           />
         )}
 
