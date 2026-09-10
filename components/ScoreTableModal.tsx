@@ -138,13 +138,12 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobTitle, onCl
             <X className="w-5 h-5 text-gray-500" />
           </button>
         </div>
-        {/* score-table-modal-body: DetailedScorecardTab's own .tf-table-shell
-            caps its height and scrolls independently, which assumes the full
-            page's generous surrounding space (see globals.css). Nested inside
-            this modal's own scroller there isn't room for both, and the two
-            competing scroll/sticky contexts is what was bleeding the table
-            past the card. The matching globals.css rule drops that inner cap
-            so this div stays the only vertical scroller. */}
+        {/* score-table-modal-body: the only vertical scroller in this modal.
+            DetailedScorecardTab's rubric table grows to its content (it does not
+            use `.tf-table-shell`), so nothing nested inside competes for the
+            scroll or the sticky context — which is what used to bleed the table
+            past the card. The class is kept as the scroll container itself and
+            as the hook the globals.css note refers to. */}
         <div className="score-table-modal-body flex-1 overflow-y-auto p-4 sm:p-6">
           {loading ? (
             <div className="flex items-center justify-center py-16">

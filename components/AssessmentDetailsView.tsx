@@ -266,6 +266,16 @@ export default function AssessmentDetailsView({
   const jdMustHaveSkills = jdData?.must_have_skills || [];
   const jdNiceToHaveSkills = jdData?.nice_to_have_skills || [];
   const jdMustHaveComments = jdData?.must_have_comments || [];
+  /**
+   * The Required/Preferred line under a criterion tile, worded exactly as the JD
+   * view and the Step 3 review show it. "Required" means Resume Scoring treats the
+   * criterion as Essential (60% block, a rating below 7 fails the whole Essential
+   * section); "Preferred" criteria share the 40% block and never fail a candidate
+   * on their own.
+   */
+  const jdRequirementLabel = (mandatory?: boolean) =>
+    mandatory ? '✓ Required (Essential)' : '○ Preferred';
+
   const jdNiceToHaveComments = jdData?.nice_to_have_comments || [];
   const jdExperienceText = formatJobExperienceText({
     jobLevel: jdData?.job_level,
@@ -2534,7 +2544,13 @@ export default function AssessmentDetailsView({
 
                           <div className="space-y-4 sm:space-y-6">
                             <div>
-                              <h4 className="text-sm text-gray-700 mb-3">Must-Have Additional Requirements ({jdMustHaveComments.length})</h4>
+                              {/* Labelled Essential/Preferred: Education has no tile of
+                                  its own, so which list a degree lands in is the only
+                                  place its Required status is visible. */}
+                              <h4 className="text-sm text-gray-700 mb-3">
+                                Must-Have Additional Requirements ({jdMustHaveComments.length})
+                                <span className="ml-2 text-xs font-normal text-gray-500">✓ Required (Essential)</span>
+                              </h4>
                               {jdMustHaveComments.length > 0 ? (
                                 <div className="space-y-2">
                                   {jdMustHaveComments.map((comment, index) => (
@@ -2549,7 +2565,10 @@ export default function AssessmentDetailsView({
                               )}
                             </div>
                             <div>
-                              <h4 className="text-sm text-gray-700 mb-3">Nice-to-Have Additional Requirements ({jdNiceToHaveComments.length})</h4>
+                              <h4 className="text-sm text-gray-700 mb-3">
+                                Nice-to-Have Additional Requirements ({jdNiceToHaveComments.length})
+                                <span className="ml-2 text-xs font-normal text-gray-500">○ Preferred</span>
+                              </h4>
                               {jdNiceToHaveComments.length > 0 ? (
                                 <div className="space-y-2">
                                   {jdNiceToHaveComments.map((comment, index) => (
@@ -2574,6 +2593,7 @@ export default function AssessmentDetailsView({
                           <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
                             <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Experience</h4>
                             <p className="text-sm sm:text-base text-gray-900">{jdExperienceText || 'Not specified'}</p>
+                            <p className="text-xs text-gray-500 mt-1">{jdRequirementLabel(jdData.experience_mandatory)}</p>
                           </div>
                           {/* Education tile REMOVED 2026-08-21. Same Requirements grid
                               as JobDetailView, same reason: education is a line inside
@@ -2583,6 +2603,14 @@ export default function AssessmentDetailsView({
                             <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
                               <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Industry Type</h4>
                               <p className="text-sm sm:text-base text-gray-900">{prettifyCode(jdData.industry_type)}</p>
+                              <p className="text-xs text-gray-500 mt-1">{jdRequirementLabel(jdData.industry_mandatory)}</p>
+                            </div>
+                          )}
+                          {jdData.location && (
+                            <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                              <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Location</h4>
+                              <p className="text-sm sm:text-base text-gray-900">{jdData.location}</p>
+                              <p className="text-xs text-gray-500 mt-1">{jdRequirementLabel(jdData.location_mandatory)}</p>
                             </div>
                           )}
                           <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
@@ -2592,6 +2620,42 @@ export default function AssessmentDetailsView({
                           <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
                             <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Work Mode</h4>
                             <p className="text-sm sm:text-base text-gray-900">{workModeLabel(jdData.remote_type)}</p>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Scoring Preferences - recruiter answers that change how a resume
+                          is graded against this JD but appear nowhere else once it is
+                          published. Same block as the JD view and the scored-resume View
+                          JD tab, so all three read the same. */}
+                      <div className="p-4 sm:p-6 border-b border-gray-200">
+                        <h3 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4">Scoring Preferences</h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                          <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                            <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Allow Over-Qualified Candidates</h4>
+                            <p className="text-sm sm:text-base text-gray-900">
+                              {jdData.allow_overqualified === null || jdData.allow_overqualified === undefined
+                                ? 'Not specified'
+                                : jdData.allow_overqualified ? 'Yes' : 'No'}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {jdData.allow_overqualified === false
+                                ? 'Experience well above the range scores lower'
+                                : 'Extra relevant experience is not penalised'}
+                            </p>
+                          </div>
+                          <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
+                            <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Job Hopping</h4>
+                            <p className="text-sm sm:text-base text-gray-900">
+                              {jdData.job_hopping_enabled === null || jdData.job_hopping_enabled === undefined
+                                ? 'Not specified'
+                                : jdData.job_hopping_enabled ? 'Evaluated' : 'Not evaluated'}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1">
+                              {jdData.job_hopping_enabled === false
+                                ? 'Tenure pattern is not scored for this role'
+                                : 'Scored as a Preferred criterion'}
+                            </p>
                           </div>
                         </div>
                       </div>

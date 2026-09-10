@@ -34,6 +34,10 @@ interface ScoredResume {
   // Overall Score so it never looks like a simple average of the two
   // percentages shown next to it. Computed fresh per candidate by the API.
   scoreFormula?: string;
+  // Mean rating across the Required criteria (0-10); null when the JD has none.
+  // Exact Match needs >= 8, Partial Match is below 8 - so this is the only value
+  // that explains which of the two a passing candidate received.
+  essentialAverage?: number | null;
   scoredDate: string;
   scoredBy: string;
   experience?: string;
@@ -472,6 +476,11 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
                  original genuinely has none. */
               scorePercentage: resume.scorePercentage ?? Number((completeResumeData.overall_score || 0).toFixed(1)),
               scoreFormula: resume.scoreFormula || completeResumeData.score_formula,
+              // Mean Required rating - the Exact/Partial discriminator, shown on the
+              // Score Table beside the classification. `??` not `||`: an average of 0
+              // is a real value (every Required criterion rated 0), while null means
+              // the JD has no Required criteria at all.
+              essentialAverage: resume.essentialAverage ?? completeResumeData.essential_average,
               criteriaScores: completeResumeData.criteria_scores || {},
               scoreBreakdown: completeResumeData.score_breakdown || [],
               aiSummary: resume.aiSummary || completeResumeData.ai_summary,
@@ -672,6 +681,17 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // JD lists / requirement values, read straight off the fetched JD record.
   const jdMustHaveSkills: string[] = jdDetails?.must_have_skills || [];
   const jdNiceToHaveSkills: string[] = jdDetails?.nice_to_have_skills || [];
+  /**
+   * The Required/Preferred line under a criterion tile in the Extracted Data
+   * Summary, worded exactly as the JD view and the Step 3 review show it.
+   *
+   * "Required" means Resume Scoring treated the criterion as Essential: it shares
+   * the 60% block and a rating below 7 on it fails the whole Essential section.
+   * "Preferred" criteria share the 40% block and never fail a candidate alone.
+   */
+  const jdRequirementLabel = (mandatory?: boolean) =>
+    mandatory ? '✓ Required (Essential)' : '○ Preferred';
+
   const jdMustHaveComments: string[] = jdDetails?.must_have_comments || [];
   const jdNiceToHaveComments: string[] = jdDetails?.nice_to_have_comments || [];
 
@@ -1461,6 +1481,7 @@ Best regards`);
               resume={{
                 scorePercentage: fullResumeData.scorePercentage,
                 scoreFormula: fullResumeData.scoreFormula,
+                essentialAverage: fullResumeData.essentialAverage,
                 matchStatus: fullResumeData.matchStatus || resume.matchStatus,
                 scoredDate: fullResumeData.scoredDate,
                 scoredBy: fullResumeData.scoredBy,
@@ -2439,7 +2460,14 @@ Best regards`);
                       {/* Right: Comments */}
                       <div className="space-y-4 sm:space-y-6">
                         <div>
-                          <h5 className="text-sm text-gray-700 mb-3">Must-Have Additional Requirements ({jdMustHaveComments.length})</h5>
+                          {/* Labelled Essential/Preferred: Education has no tile of its
+                              own, and `education_mandatory` decides which of these two
+                              lists a degree requirement lands in - so this label is the
+                              only place a Required degree is visible. */}
+                          <h5 className="text-sm text-gray-700 mb-3">
+                            Must-Have Additional Requirements ({jdMustHaveComments.length})
+                            <span className="ml-2 text-xs font-normal text-gray-500">✓ Required (Essential)</span>
+                          </h5>
                           {jdMustHaveComments.length > 0 ? (
                             <div className="space-y-2">
                               {jdMustHaveComments.map((comment, index) => (
@@ -2454,7 +2482,10 @@ Best regards`);
                           )}
                         </div>
                         <div>
-                          <h5 className="text-sm text-gray-700 mb-3">Nice-to-Have Additional Requirements ({jdNiceToHaveComments.length})</h5>
+                          <h5 className="text-sm text-gray-700 mb-3">
+                            Nice-to-Have Additional Requirements ({jdNiceToHaveComments.length})
+                            <span className="ml-2 text-xs font-normal text-gray-500">○ Preferred</span>
+                          </h5>
                           {jdNiceToHaveComments.length > 0 ? (
                             <div className="space-y-2">
                               {jdNiceToHaveComments.map((comment, index) => (
@@ -2479,12 +2510,24 @@ Best regards`);
                       <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
                         <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Experience</h5>
                         <p className="text-sm sm:text-base text-gray-900">{jdExperienceLabel}</p>
+                        <p className="text-xs text-gray-500 mt-1">{jdRequirementLabel(jdDetails.experience_mandatory)}</p>
                       </div>
-                      {/* Education tile REMOVED 2026-08-21 - see the chip note above. */}
+                      {/* Education tile REMOVED 2026-08-21 - see the chip note above.
+                          `education_mandatory` decides which of the two Additional
+                          Requirements lists the degree lands in, and those are labelled
+                          Required/Preferred above, so the distinction is still readable. */}
                       {jdDetails.industry_type && (
                         <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
                           <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Industry Type</h5>
                           <p className="text-sm sm:text-base text-gray-900">{prettifyCode(jdDetails.industry_type)}</p>
+                          <p className="text-xs text-gray-500 mt-1">{jdRequirementLabel(jdDetails.industry_mandatory)}</p>
+                        </div>
+                      )}
+                      {jdLocation && (
+                        <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
+                          <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Location</h5>
+                          <p className="text-sm sm:text-base text-gray-900">{jdLocation}</p>
+                          <p className="text-xs text-gray-500 mt-1">{jdRequirementLabel(jdDetails.location_mandatory)}</p>
                         </div>
                       )}
                       <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
@@ -2494,6 +2537,42 @@ Best regards`);
                       <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
                         <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Work Mode</h5>
                         <p className="text-sm sm:text-base text-gray-900">{workModeLabel(jdDetails.remote_type)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Scoring Preferences - the recruiter answers that changed how THIS
+                      resume was graded. Most useful on this page of all: it is where
+                      someone asks why a candidate failed, and whether an over-qualified
+                      candidate is penalised is otherwise invisible. */}
+                  <div className="p-4 sm:p-6 border-b border-gray-200">
+                    <h4 className="text-base font-semibold text-gray-900 mb-4">Scoring Preferences</h4>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                      <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
+                        <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Allow Over-Qualified Candidates</h5>
+                        <p className="text-sm sm:text-base text-gray-900">
+                          {jdDetails.allow_overqualified === null || jdDetails.allow_overqualified === undefined
+                            ? 'Not specified'
+                            : jdDetails.allow_overqualified ? 'Yes' : 'No'}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {jdDetails.allow_overqualified === false
+                            ? 'Experience well above the range scores lower'
+                            : 'Extra relevant experience is not penalised'}
+                        </p>
+                      </div>
+                      <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
+                        <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Job Hopping</h5>
+                        <p className="text-sm sm:text-base text-gray-900">
+                          {jdDetails.job_hopping_enabled === null || jdDetails.job_hopping_enabled === undefined
+                            ? 'Not specified'
+                            : jdDetails.job_hopping_enabled ? 'Evaluated' : 'Not evaluated'}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-1">
+                          {jdDetails.job_hopping_enabled === false
+                            ? 'Tenure pattern is not scored for this role'
+                            : 'Scored as a Preferred criterion'}
+                        </p>
                       </div>
                     </div>
                   </div>

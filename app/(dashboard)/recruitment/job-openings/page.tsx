@@ -470,7 +470,18 @@ export default function JobOpeningsPage() {
     } catch (error) {
       console.error('Failed to check JD usage status:', error);
     }
-    if (!await dialog.confirm({ title: 'Delete Job Opening', message: `Are you sure you want to delete "${job.title}"? This action cannot be undone.`, variant: 'error', confirmText: 'Delete' })) return;
+    if (!await dialog.confirm({
+      title: 'Delete Job Opening',
+      message: 'Are you sure you want to delete this job opening?\nThis action cannot be undone.',
+      variant: 'delete',
+      confirmText: 'Delete Job Opening',
+      item: {
+        label: 'JOB OPENING',
+        name: [job.job_id, job.title].filter(Boolean).join(' – ') || job.title,
+        badge: job.versionNumber ? `V${job.versionNumber}` : undefined,
+      },
+      warningNote: 'Deleting this job opening will permanently remove it from your job openings and cannot be restored.',
+    })) return;
     try {
       await jdService.delete(job.id);
       setJobs(prev => prev.filter(j => j.id !== job.id));

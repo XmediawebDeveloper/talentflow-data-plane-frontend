@@ -1,7 +1,15 @@
 'use client';
 
 import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { ArrowUpDown, Sparkles, BarChart3, Search, ChevronDown, ChevronRight, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Award, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart } from 'lucide-react';
+import { ArrowUpDown, Sparkles, BarChart3, Search, ChevronDown, ChevronRight, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Award, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
+import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 import { useState, useEffect, useRef, useMemo, Fragment } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -53,6 +61,8 @@ interface Job {
   remoteType?: string;
   postedBy?: string;
   postedDate?: string;
+  /** Drives the AI / Manual badge next to Status in the version history table. */
+  creationMethod?: string;
 }
 
 // Extended interface for UI display (adds versions for modal)
@@ -628,6 +638,11 @@ export default function AITalentMatchPage({
   const [loadingVersions, setLoadingVersions] = useState(false);
   const [realVersionsData, setRealVersionsData] = useState<any[]>([]);
 
+  /* Preview — same in-app document viewer used by the Resume Scoring module's
+     resume-selection step, opened from a row's ⋮ menu instead of navigating
+     away to the full resume-view page. */
+  const [previewResume, setPreviewResume] = useState<{ id: string; name: string; fileName?: string } | null>(null);
+
   // AI match version history — all match runs for one job, not just the latest.
   // Inline expand-in-place under the job card, one open at a time (like the
   // Job Openings list's own version history).
@@ -1109,6 +1124,20 @@ export default function AITalentMatchPage({
 
     // Update URL to show matching in progress
     updateUrlParams({ jdId: jobToMatch, view: 'matching' });
+
+    /* The URL-driven effect above would normally flip viewMode to 'matching'
+       itself, but it bails out immediately whenever isMatchingInProgress.current
+       is set (see its guard at the top) — which this function always sets, one
+       line up. Without setting it here too, callers whose current viewMode
+       doesn't already render the progress panel (e.g. the version history
+       list) update the URL but never actually show the panel. Reset the same
+       state the effect's own 'matching' branch resets, so a run started from
+       History doesn't carry over a stale selected history item or old results. */
+    setSelectedHistoryItem(null);
+    setSelectedCandidates([]);
+    setMatchedCandidates([]);
+    setMatchError(null);
+    setViewMode('matching');
 
     // Show matching progress panel
     setShowMatchingPanel(true);
@@ -1946,6 +1975,9 @@ export default function AITalentMatchPage({
                   Job Title
                 </th>
                 <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
+                  Job Version
+                </th>
+                <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
                   Email
                 </th>
                 <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
@@ -1971,6 +2003,9 @@ export default function AITalentMatchPage({
                 </th>
                 <th className="px-4 py-3 text-left text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle">
                   Matched Status
+                </th>
+                <th className="px-4 py-3 text-right text-xs text-gray-900 dark:text-slate-50 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">
+                  Actions
                 </th>
               </tr>
             </thead>
@@ -2029,6 +2064,15 @@ export default function AITalentMatchPage({
                       {selectedHistoryItem.jobTitle || selectedJobData?.title || '-'}
                     </span>
                   </td>
+                  <td className="px-4 py-3 align-middle whitespace-nowrap">
+                    {selectedJobData?.currentVersion ? (
+                      <span className="px-2 py-0.5 rounded-md font-semibold text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
+                        v{selectedJobData.currentVersion}
+                      </span>
+                    ) : (
+                      <span className="text-gray-400 dark:text-slate-500">-</span>
+                    )}
+                  </td>
                   <td className="px-4 py-3 align-middle whitespace-nowrap text-sm text-gray-700 dark:text-slate-300">
                     {candidate.email ? candidate.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
                   </td>
@@ -2083,6 +2127,29 @@ export default function AITalentMatchPage({
                         Not Matched
                       </span>
                     )}
+                  </td>
+                  <td className="px-4 py-3 align-middle text-right whitespace-nowrap tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          type="button"
+                          aria-label="Actions"
+                          title="Actions"
+                          className="p-1.5 bg-white dark:bg-slate-900 rounded-md border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                        >
+                          <MoreVertical className="w-3.5 h-3.5 text-gray-600 dark:text-slate-300" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-44 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                        <DropdownMenuItem
+                          className="group !rounded-none !px-4 !py-2.5 text-sm text-gray-700 hover:!bg-gray-50 focus:!bg-gray-50 focus:!text-gray-700 focus-visible:!outline-none data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700"
+                          onSelect={() => setPreviewResume({ id: candidate.resumeId, name: candidate.name || 'Resume' })}
+                        >
+                          <Eye className="w-4 h-4 text-menu-icon-view" />
+                          <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </td>
                 </tr>
               ))}
@@ -2207,6 +2274,17 @@ export default function AITalentMatchPage({
             setSelectedVersionsCandidate(null);
             setRealVersionsData([]);
           }}
+        />
+      )}
+
+      {/* Preview — opened from a row's ⋮ menu, same in-app document viewer the
+          Resume Scoring module's resume-selection step uses. */}
+      {previewResume && (
+        <ResumeTextPreviewModal
+          resumeId={previewResume.id}
+          title={previewResume.name}
+          subtitle={previewResume.fileName}
+          onClose={() => setPreviewResume(null)}
         />
       )}
 
@@ -4084,6 +4162,9 @@ export default function AITalentMatchPage({
                             location: j.location,
                             employmentType: j.employmentType,
                             remoteType: j.remoteType,
+                            creationMethod: j.creationMethod,
+                            postedBy: j.postedBy,
+                            postedDate: j.postedDate,
                           } : undefined;
                         }}
                         onRetry={() => loadAIMatchVersionHistory(historyKey, item.jobId)}
@@ -4105,6 +4186,13 @@ export default function AITalentMatchPage({
                           setSelectedJob(targetJobId);
                           setViewMode('details');
                           updateUrlParams({ jdId: targetJobId, view: 'details' });
+                        }}
+                        onRunMatch={(session) => {
+                          if (!canRunAiMatch) {
+                            toast.error('You do not have permission to run AI matching operations');
+                            return;
+                          }
+                          handleRunAIMatch(session.jd_id || item.jobId);
                         }}
                       />
                     </div>
@@ -4294,6 +4382,9 @@ export default function AITalentMatchPage({
                       location: j.location,
                       employmentType: j.employmentType,
                       remoteType: j.remoteType,
+                      creationMethod: j.creationMethod,
+                      postedBy: j.postedBy,
+                      postedDate: j.postedDate,
                     } : undefined;
                   }}
                   onRetry={() => loadAIMatchVersionHistory(modalKey, modalItem.jobId)}
@@ -4312,6 +4403,14 @@ export default function AITalentMatchPage({
                     setSelectedJob(targetJobId);
                     setViewMode('details');
                     updateUrlParams({ jdId: targetJobId, view: 'details' });
+                    setMatchHistoryModal(null);
+                  }}
+                  onRunMatch={(session) => {
+                    if (!canRunAiMatch) {
+                      toast.error('You do not have permission to run AI matching operations');
+                      return;
+                    }
+                    handleRunAIMatch(session.jd_id || modalItem.jobId);
                     setMatchHistoryModal(null);
                   }}
                 />
@@ -4578,6 +4677,9 @@ export default function AITalentMatchPage({
                     Job Title
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
+                    Job Version
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Email
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
@@ -4603,6 +4705,9 @@ export default function AITalentMatchPage({
                   </th>
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider">
                     Matched Status
+                  </th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-500 dark:text-slate-400 uppercase tracking-wider tf-sticky-col">
+                    Actions
                   </th>
                 </tr>
               </thead>
@@ -4664,6 +4769,15 @@ export default function AITalentMatchPage({
                         {selectedJobData?.title || selectedHistoryItem?.jobTitle || '-'}
                       </span>
                     </td>
+                    <td className="px-4 py-3">
+                      {selectedJobData?.currentVersion ? (
+                        <span className="px-2 py-0.5 rounded-md font-semibold text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
+                          v{selectedJobData.currentVersion}
+                        </span>
+                      ) : (
+                        <span className="text-gray-400 dark:text-slate-500">-</span>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-slate-300">
                       {candidate.email ? candidate.email : <span className="text-gray-400 dark:text-slate-500">-</span>}
                     </td>
@@ -4718,6 +4832,29 @@ export default function AITalentMatchPage({
                           Not Matched
                         </span>
                       )}
+                    </td>
+                    <td className="px-4 py-4 text-right tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            type="button"
+                            aria-label="Actions"
+                            title="Actions"
+                            className="p-1.5 bg-white dark:bg-slate-900 rounded-md border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                          >
+                            <MoreVertical className="w-3.5 h-3.5 text-gray-600 dark:text-slate-300" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-44 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                          <DropdownMenuItem
+                            className="group !rounded-none !px-4 !py-2.5 text-sm text-gray-700 hover:!bg-gray-50 focus:!bg-gray-50 focus:!text-gray-700 focus-visible:!outline-none data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700"
+                            onSelect={() => setPreviewResume({ id: candidate.resumeId, name: candidate.name || 'Resume' })}
+                          >
+                            <Eye className="w-4 h-4 text-menu-icon-view" />
+                            <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </td>
                   </tr>
                 ))}
@@ -4884,6 +5021,17 @@ export default function AITalentMatchPage({
             setSelectedVersionsCandidate(null);
             setRealVersionsData([]);
           }}
+        />
+      )}
+
+      {/* Preview — opened from a row's ⋮ menu, same in-app document viewer the
+          Resume Scoring module's resume-selection step uses. */}
+      {previewResume && (
+        <ResumeTextPreviewModal
+          resumeId={previewResume.id}
+          title={previewResume.name}
+          subtitle={previewResume.fileName}
+          onClose={() => setPreviewResume(null)}
         />
       )}
 

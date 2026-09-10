@@ -24,6 +24,8 @@ interface Job {
   remoteType?: string;
   postedBy?: string;
   postedDate?: string;
+  /** Drives the AI / Manual badge next to Status in the version history table. */
+  creationMethod?: string;
 }
 
 interface MatchHistory {
@@ -65,6 +67,7 @@ function transformJDToJob(jd: JDResponse): Job {
     remoteType: jd.remote_type,
     postedBy: jd.created_by_name,
     postedDate: jd.published_at,
+    creationMethod: jd.creation_method,
   };
 }
 

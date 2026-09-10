@@ -1,6 +1,7 @@
 'use client';
 
 import * as React from 'react';
+import Image from 'next/image';
 import type { LucideIcon } from 'lucide-react';
 import { cn } from './utils';
 
@@ -31,6 +32,12 @@ export interface ListEmptyStateProps {
   /** Optional call to action for the genuinely-empty case (e.g. "Create"). */
   action?: React.ReactNode;
   className?: string;
+  /** Swaps the plain icon-in-circle for a larger illustration in the
+   *  genuinely-empty (not narrowed) case only — the "no matches" case stays
+   *  the plain icon since that's a generic, list-agnostic concept. Mirrors
+   *  TabEmptyState's imageSrc so the two empty states can share one asset. */
+  imageSrc?: string;
+  imageAlt?: string;
 }
 
 export default function ListEmptyState({
@@ -43,14 +50,26 @@ export default function ListEmptyState({
   onReset,
   action,
   className,
+  imageSrc,
+  imageAlt,
 }: ListEmptyStateProps) {
   const trimmedQuery = (query || '').trim();
 
   return (
     <div className={cn('py-14 px-6 text-center', className)}>
-      <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
-        <Icon className="w-7 h-7 text-brand-blue" />
-      </div>
+      {!isNarrowed && imageSrc ? (
+        <Image
+          src={imageSrc}
+          alt={imageAlt || ''}
+          width={144}
+          height={144}
+          className="mb-4 h-32 w-32 object-contain mx-auto sm:h-36 sm:w-36"
+        />
+      ) : (
+        <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
+          <Icon className="w-7 h-7 text-brand-blue" />
+        </div>
+      )}
 
       {isNarrowed ? (
         <>

@@ -375,6 +375,16 @@ interface ExtendedJob extends Job {
   mustHaveComments?: string[];
   niceToHaveComments?: string[];
   education?: string;
+  // Scoring configuration, surfaced in the Extracted Data Summary below. These
+  // decide which criteria Resume Scoring treats as Essential (the 60% block)
+  // rather than Preferred, whether an over-qualified candidate is penalised, and
+  // whether Job Hopping is scored at all.
+  experienceMandatory?: boolean;
+  educationMandatory?: boolean;
+  industryMandatory?: boolean;
+  locationMandatory?: boolean;
+  allowOverqualified?: boolean | null;
+  jobHoppingEnabled?: boolean | null;
   // JD13: Usage status for edit/republish logic
   usageStatus?: JDUsageStatus;
 }
@@ -563,6 +573,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const niceToHaveSkills = job.niceToHaveSkills || [];
   const mustHaveComments = job.mustHaveComments || [];
   const niceToHaveComments = job.niceToHaveComments || [];
+
+  /**
+   * The Required/Preferred line under a criterion tile in the Extracted Data
+   * Summary. Mirrors the wording the recruiter saw on the Step 3 review, so the
+   * published JD reads back the same way it was configured.
+   *
+   * "Required" means Resume Scoring treats the criterion as Essential: it shares
+   * the 60% block, and a rating below 7 on it fails the whole Essential section.
+   * "Preferred" criteria share the 40% block and never fail a candidate on their own.
+   */
+  const requirementLabel = (mandatory?: boolean) =>
+    mandatory ? '✓ Required (Essential)' : '○ Preferred';
   /* ---- The two sticky layers on this page ----------------------------------
      The breadcrumb pins at top-0 (z-30) and the tab bar pins below it (z-20).
      The tab bar's offset used to be a hardcoded `top-[52px]`, a guess at the
@@ -3045,7 +3067,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       {/* Right: Comments */}
                       <div className="space-y-4 sm:space-y-6">
                         <div>
-                          <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Must-Have Additional Requirements ({mustHaveComments.length})</h4>
+                          {/* Labelled Essential/Preferred because these two lists are
+                              where a degree requirement lands - Education has no tile of
+                              its own, and `education_mandatory` decides which list it
+                              goes in. Without the label there is no way to see on a
+                              published JD whether the degree is Required. */}
+                          <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">
+                            Must-Have Additional Requirements ({mustHaveComments.length})
+                            <span className="ml-2 text-xs font-normal text-gray-500 dark:text-slate-500">✓ Required (Essential)</span>
+                          </h4>
                           {mustHaveComments.length > 0 ? (
                             <div className="space-y-2">
                               {mustHaveComments.map((comment, index) => (
@@ -3060,7 +3090,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                           )}
                         </div>
                         <div>
-                          <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Nice-to-Have Additional Requirements ({niceToHaveComments.length})</h4>
+                          <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">
+                            Nice-to-Have Additional Requirements ({niceToHaveComments.length})
+                            <span className="ml-2 text-xs font-normal text-gray-500 dark:text-slate-500">○ Preferred</span>
+                          </h4>
                           {niceToHaveComments.length > 0 ? (
                             <div className="space-y-2">
                               {niceToHaveComments.map((comment, index) => (
@@ -3085,15 +3118,26 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
                         <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Experience</h4>
                         <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{job.experience || 'Not specified'}</p>
+                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{requirementLabel(job.experienceMandatory)}</p>
                       </div>
                       {/* Education tile REMOVED 2026-08-21 - see the chip note above.
                           The requirement is listed in Must-Have / Nice-to-Have
                           Additional Requirements, in the recruiter's own words and
-                          with the field of study a bare level throws away. */}
+                          with the field of study a bare level throws away. Which of
+                          those two lists it lands in IS the Required/Preferred
+                          answer, which is why the lists are labelled above. */}
                       {job.industry_type && (
                         <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
                           <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Industry Type</h4>
                           <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{prettifyCode(job.industry_type)}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{requirementLabel(job.industryMandatory)}</p>
+                        </div>
+                      )}
+                      {job.location && (
+                        <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
+                          <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Location</h4>
+                          <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{job.location}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{requirementLabel(job.locationMandatory)}</p>
                         </div>
                       )}
                       <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
@@ -3103,6 +3147,43 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
                         <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Work Mode</h4>
                         <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{workModeLabel(job.workMode)}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Scoring Preferences. Recruiter answers that change how a resume is
+                      graded but appear nowhere else once the JD is published, so a
+                      recruiter reading a published JD could not tell whether an
+                      over-qualified candidate would be penalised or whether Job Hopping
+                      was even being scored. */}
+                  <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700">
+                    <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Scoring Preferences</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
+                      <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
+                        <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Allow Over-Qualified Candidates</h4>
+                        <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">
+                          {job.allowOverqualified === null || job.allowOverqualified === undefined
+                            ? 'Not specified'
+                            : job.allowOverqualified ? 'Yes' : 'No'}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
+                          {job.allowOverqualified === false
+                            ? 'Experience well above the range scores lower'
+                            : 'Extra relevant experience is not penalised'}
+                        </p>
+                      </div>
+                      <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
+                        <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Job Hopping</h4>
+                        <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">
+                          {job.jobHoppingEnabled === null || job.jobHoppingEnabled === undefined
+                            ? 'Not specified'
+                            : job.jobHoppingEnabled ? 'Evaluated' : 'Not evaluated'}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
+                          {job.jobHoppingEnabled === false
+                            ? 'Tenure pattern is not scored for this role'
+                            : 'Scored as a Preferred criterion'}
+                        </p>
                       </div>
                     </div>
                   </div>

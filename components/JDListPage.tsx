@@ -325,7 +325,13 @@ export default function JDListPage() {
 
   const handleBulkDelete = async () => {
     if (selectedJds.length === 0) return;
-    if (!await dialog.confirm({ title: 'Delete Job Descriptions', message: `Are you sure you want to delete ${selectedJds.length} job description(s)?`, variant: 'error', confirmText: 'Delete' })) return;
+    if (!await dialog.confirm({
+      title: 'Delete Job Descriptions',
+      message: `Are you sure you want to delete ${selectedJds.length} job description(s)?\nThis action cannot be undone.`,
+      variant: 'delete',
+      confirmText: 'Delete',
+      warningNote: 'Deleting these job descriptions will permanently remove them and cannot be restored.',
+    })) return;
 
     try {
       let successCount = 0;

@@ -556,7 +556,13 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
     if (!onBulkDelete) return;
     const selectedJobsData = sortedJobs.filter(job => selectedJobs.has(job.id));
     if (selectedJobsData.length === 0) return;
-    if (await dialog.confirm({ title: 'Delete Jobs', message: `Are you sure you want to delete ${selectedJobsData.length} job(s)? This action cannot be undone.`, variant: 'error', confirmText: 'Delete' })) {
+    if (await dialog.confirm({
+      title: 'Delete Job Openings',
+      message: `Are you sure you want to delete ${selectedJobsData.length} job opening(s)?\nThis action cannot be undone.`,
+      variant: 'delete',
+      confirmText: 'Delete',
+      warningNote: 'Deleting these job openings will permanently remove them from your job openings and cannot be restored.',
+    })) {
       await onBulkDelete(selectedJobsData);
       setSelectedJobs(new Set());
       setShowBulkActions(false);

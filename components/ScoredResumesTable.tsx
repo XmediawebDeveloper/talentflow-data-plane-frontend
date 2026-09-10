@@ -7,6 +7,7 @@ import ColumnCustomizationModal from './ColumnCustomizationModal';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
+import { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import InviteShareModal from './InviteShareModal';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
@@ -203,6 +204,15 @@ interface ScoredResumesTableProps {
    */
   onScoreResumes?: () => void;
   /**
+   * Score Resumes CTA shown inside the empty state's illustration card, for
+   * when this table's own list is empty from the start (not narrowed by a
+   * search/filter) — separate from `onScoreResumes` (the persistent header
+   * button) so a host wanting the CTA only in the "no resumes scored yet"
+   * moment doesn't also get a redundant button in the header once resumes
+   * exist.
+   */
+  onScoreResumesFromEmptyState?: () => void;
+  /**
    * Opens the host's "Send AI Interview via Email" flow for one candidate —
    * the AI Interview entry in each row's Invite menu. Omitted where the host
    * has no AI interview to invite to (or the viewer can't share one), and the
@@ -247,6 +257,7 @@ export default function ScoredResumesTable({
   title = 'Scored Resumes',
   groupByEmail = false,
   onScoreResumes,
+  onScoreResumesFromEmptyState,
   onInviteAIInterview,
   assessmentConfigured,
   aiInterviewConfigured,
@@ -2138,9 +2149,17 @@ Best regards`);
             isNarrowed={search.isNarrowed}
             query={search.appliedQuery}
             entityLabel="scored resume"
-            emptyTitle="No scored resumes yet"
-            emptyDescription="Upload and score candidates to see them here."
+            emptyTitle="No Scored Resumes"
+            emptyDescription="Score resumes against this job description to see the candidates here."
             onReset={search.reset}
+            imageSrc="/scored-resumes-empty-state.webp"
+            imageAlt="Scored resumes illustration"
+            action={onScoreResumesFromEmptyState ? (
+              <button onClick={onScoreResumesFromEmptyState} className={TAB_EMPTY_ACTION_CLASS}>
+                <ClipboardList className="w-4 h-4" />
+                Score Resumes
+              </button>
+            ) : undefined}
           />
         )}
       </div>
@@ -2178,18 +2197,13 @@ Best regards`);
                     <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${matchBadgeClass(resume.matchStatus)}`}>
                       {resume.matchStatus}
                     </span>
-                    {/* Colour follows the verdict (same palette as the badge above), not a
-                        score threshold: under the scoring mechanism Exact and Partial share
-                        the 60-100 range and are told apart by the essential average, so any
-                        score cut-off would contradict the badge beside it. */}
+                    {/* Same three colours as the badge above, from the one palette in
+                        lib/utils/matchStatus.ts - green / brand orange / red. Not a score
+                        threshold: Exact and Partial share the 60-100 range and are told
+                        apart by the Required average, so any cut-off on the number would
+                        contradict the badge beside it. */}
                     <div className={`text-lg ${
-                      resume.matchStatus === 'Exact Match'
-                        ? 'text-green-700'
-                        : resume.matchStatus === 'Partial Match'
-                        ? 'text-yellow-700'
-                        : resume.matchStatus === 'No Match'
-                        ? 'text-red-700'
-                        : 'text-gray-800'
+                      MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(resume.matchStatus) ?? 'No Match']
                     }`}>
                       {resume.scorePercentage}%
                     </div>
@@ -2355,9 +2369,17 @@ Best regards`);
             isNarrowed={search.isNarrowed}
             query={search.appliedQuery}
             entityLabel="scored resume"
-            emptyTitle="No scored resumes yet"
-            emptyDescription="Upload and score candidates to see them here."
+            emptyTitle="No Scored Resumes"
+            emptyDescription="Score resumes against this job description to see the candidates here."
             onReset={search.reset}
+            imageSrc="/scored-resumes-empty-state.webp"
+            imageAlt="Scored resumes illustration"
+            action={onScoreResumesFromEmptyState ? (
+              <button onClick={onScoreResumesFromEmptyState} className={TAB_EMPTY_ACTION_CLASS}>
+                <ClipboardList className="w-4 h-4" />
+                Score Resumes
+              </button>
+            ) : undefined}
           />
         )}
       </div>

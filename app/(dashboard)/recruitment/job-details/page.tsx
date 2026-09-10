@@ -49,6 +49,17 @@ interface ExtendedJob extends Job {
   mustHaveComments?: string[];
   niceToHaveComments?: string[];
   education?: string;
+  // Scoring configuration. These decide how a resume is graded against this JD -
+  // which criteria are Essential (the 60% block) rather than Preferred, whether an
+  // over-qualified candidate is penalised, and whether Job Hopping is scored at
+  // all - so the JD view has to show them. They were captured at JD creation and
+  // then invisible everywhere afterwards.
+  experienceMandatory?: boolean;
+  educationMandatory?: boolean;
+  industryMandatory?: boolean;
+  locationMandatory?: boolean;
+  allowOverqualified?: boolean | null;
+  jobHoppingEnabled?: boolean | null;
   // JD13: Usage status for edit/republish logic
   usageStatus?: JDUsageStatus;
 }
@@ -217,6 +228,15 @@ function JobDetailsContent() {
         niceToHaveComments: data.nice_to_have_comments || [],
         assessmentGuidance: data.assessment_guidance,
         additionalDetails: data.additional_details,
+        // Scoring configuration - see the type above. `??` not `||` for the two
+        // tri-state flags: `false` is a real recruiter answer ("do not allow
+        // over-qualified"), and only a genuinely absent value should read as unset.
+        experienceMandatory: data.experience_mandatory ?? false,
+        educationMandatory: data.education_mandatory ?? false,
+        industryMandatory: data.industry_mandatory ?? false,
+        locationMandatory: data.location_mandatory ?? false,
+        allowOverqualified: data.allow_overqualified ?? null,
+        jobHoppingEnabled: data.job_hopping_enabled ?? null,
         salaryMin: data.salary_min,
         salaryMax: data.salary_max,
         salaryCurrency: data.salary_currency,

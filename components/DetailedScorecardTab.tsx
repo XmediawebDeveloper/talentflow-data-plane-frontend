@@ -55,6 +55,12 @@ interface ScoredResumeDetail {
   // rest of the app keys its score colors off, rather than its own separate
   // score-threshold scale.
   matchStatus?: string;
+  // Mean rating across the Required criteria (0-10); null/undefined when the JD
+  // defines no Required criteria, where the average is undefined rather than 0.
+  // Displayed because it is the ONLY value separating Exact Match (>= 8) from
+  // Partial Match (< 8) - without it a recruiter cannot tell why a candidate who
+  // passed every Required criterion got one label rather than the other.
+  essentialAverage?: number | null;
   scoredDate: string;
   scoredBy: string;
   detailedScores: DetailedScores;
@@ -467,6 +473,34 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
 
   // Same three colors as the Match Status badge shown next to this score
   // elsewhere on the page (Overview tab, Scored Resumes table).
+  // Mean Required rating. Prefer the API's value (computed by the same code that
+  // decided the classification, so the two can never disagree); fall back to the
+  // mean of the Required rows on screen for payloads that predate the field.
+  // `??` deliberately: an average of 0 is real, undefined/null is "not supplied",
+  // and when the JD has no Required criteria both paths yield null - the average
+  // is undefined there, not zero, so the whole item is hidden rather than showing 0.
+  const requiredRatings = criteriaScores
+    .filter(item => item.criteriaType === 'Required')
+    .map(item => item.rating);
+  const essentialAverageRaw: number | null =
+    resume.essentialAverage ??
+    (requiredRatings.length > 0
+      ? requiredRatings.reduce((sum, r) => sum + r, 0) / requiredRatings.length
+      : null);
+
+  // Shown only for the two PASSING classifications, which is what the spec asks
+  // for and the only place it means anything. The average is computed over every
+  // Required rating including the failing ones, so a No Match can carry a high
+  // average - one criterion at 6 among eight 9s averages 8.56 while still failing
+  // outright. Printed beside a "No Match" chip that reads as a contradiction, so
+  // for a failed candidate the Required % (below 60) is the number that explains
+  // the outcome, not this one.
+  const isPassingMatch = (() => {
+    const normalized = resume.matchStatus?.toLowerCase().replace(/[_\s]/g, '');
+    return normalized === 'exactmatch' || normalized === 'excellentmatch' || normalized === 'partialmatch';
+  })();
+  const essentialAverageValue = isPassingMatch ? essentialAverageRaw : null;
+
   const getOverallScoreColor = (matchStatus?: string): string => {
     const normalized = matchStatus?.toLowerCase().replace(/[_\s]/g, '');
     if (normalized === 'exactmatch' || normalized === 'excellentmatch') return 'text-green-600';
@@ -524,6 +558,26 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             <span className="text-gray-600">|</span>
           </>
         )}
+        {/* The Exact/Partial discriminator. A rating out of 10, not a percentage -
+            it is the mean of the Required ratings, so it is shown on the same scale
+            the criteria table below uses. Hidden when the JD has no Required
+            criteria, where the average is undefined rather than zero. */}
+        {essentialAverageValue !== null && (
+          <>
+            <span className="text-gray-700 flex items-center gap-1">
+              Required Avg Rating:{' '}
+              <span className="font-semibold text-gray-900">{essentialAverageValue.toFixed(2)}</span>
+              <span className="text-gray-500">/10</span>
+              <Tooltip
+                content={`Mean rating across the ${summaryData?.requiredCount ?? 0} Required criteria. This is what separates the two passing classifications: 8.00 or above is an Exact Match, below 8.00 is a Partial Match. It is a rating out of 10, not a percentage, and it is not affected by Preferred criteria. A single Required criterion rated 7 does not force a Partial Match - only this average decides.`}
+                position="bottom"
+              >
+                <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
+              </Tooltip>
+            </span>
+            <span className="text-gray-400">|</span>
+          </>
+        )}
         <span className="text-gray-600">
           {resume.scoredDate && !isNaN(new Date(resume.scoredDate).getTime())
             ? formatIST(resume.scoredDate)
@@ -550,7 +604,19 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             </h4>
           </div>
 
-          <div className="tf-table-shell">
+          {/* Sideways scroll only — deliberately NOT `.tf-table-shell`.
+              That shell is the app's LIST-table treatment: a height cap
+              (`100dvh - 20rem`), a sticky header and its own vertical scroller,
+              which is right for a table whose row count is unbounded and paged.
+              This one is fixed-length — one row per scoring criterion, about
+              eight to ten, never more — and it sits inside a page (or a modal
+              body) that already scrolls. Capping it there put a SECOND vertical
+              scrollbar inside the first, so the last few criteria sat hidden
+              behind it while the summary tiles below made the section look
+              complete. It grows to its content instead: the page is the only
+              vertical scroller and every criterion is visible at once.
+              globals.css calls the shell opt-in for exactly this reason. */}
+          <div className="overflow-x-auto">
             <table className="w-full table-fixed">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>

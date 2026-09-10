@@ -72,7 +72,15 @@ export default function TenantsManagement({ currentTenant, onSelectTenant }: Ten
   };
 
   const handleDeleteTenant = async (id: string) => {
-    if (await dialog.confirm({ title: 'Delete Tenant', message: 'Are you sure you want to delete this tenant? This action cannot be undone.', variant: 'error', confirmText: 'Delete' })) {
+    const tenant = tenants.find(t => t.id === id);
+    if (await dialog.confirm({
+      title: 'Delete Tenant',
+      message: 'Are you sure you want to delete this tenant?\nThis action cannot be undone.',
+      variant: 'delete',
+      confirmText: 'Delete Tenant',
+      item: tenant ? { label: 'TENANT', name: tenant.name } : undefined,
+      warningNote: 'Deleting this tenant will permanently remove it and cannot be restored.',
+    })) {
       setTenants(tenants.filter(t => t.id !== id));
     }
   };

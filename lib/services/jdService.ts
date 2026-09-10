@@ -61,6 +61,10 @@ export interface JDCreate {
   coding_required?: boolean;
   supported_languages?: string[];
   allow_overqualified?: boolean;
+  // RS20: whether Job Hopping is scored at all for this JD. Returned by the JD
+  // endpoints (defaulted from the experience range when never set explicitly),
+  // and shown in the JD view's Scoring Preferences.
+  job_hopping_enabled?: boolean;
   creation_stage?: 'create' | 'extract' | 'review';  // Where user left off in draft
   creation_method?: 'manual' | 'ai_generated';  // How the JD was created
   ai_prompt?: string;  // Original AI prompt used to generate JD

@@ -728,6 +728,13 @@ interface EditingJDData {
   must_have_skills?: string[];
   nice_to_have_skills?: string[];
   education_requirements?: { degree?: string };
+  // Required/Essential toggles. These decide which criteria the scoring engine
+  // treats as Essential (60% block) rather than Preferred, so reopening a JD has
+  // to restore them - see the hydration block below.
+  experience_mandatory?: boolean;
+  education_mandatory?: boolean;
+  industry_mandatory?: boolean;
+  location_mandatory?: boolean;
   experience_min?: number;
   experience_max?: number;
   industry_type?: string;
@@ -6315,11 +6322,18 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           mustHaveSkills: effectiveEditingJD.must_have_skills || [],
           niceToHaveSkills: effectiveEditingJD.nice_to_have_skills || [],
           education: educationValue,
-          educationRequired: false,  // Default to false - user can enable if needed
+          // BUG29: these three used to be hardcoded `false` here. Reopening a JD that
+          // was published with Experience/Education/Industry marked Required showed the
+          // toggles OFF, and the next save wrote that back - silently demoting those
+          // criteria from Essential (60% block) to Preferred, so Resume Scoring stopped
+          // enforcing them. The flags are stored on the JD and returned by the API;
+          // read them. `locationsRequired` below always did this correctly, via
+          // locations[].is_required, which is why only these three drifted.
+          educationRequired: effectiveEditingJD.education_mandatory ?? false,
           experience: experienceValue,
-          experienceRequired: false,  // Default to false - user can enable if needed
+          experienceRequired: effectiveEditingJD.experience_mandatory ?? false,
           industryType: industryValue,
-          industryTypeRequired: false,  // Default to false - user can enable if needed
+          industryTypeRequired: effectiveEditingJD.industry_mandatory ?? false,
           department: effectiveEditingJD.department || '',
           salaryFrom: sanitizeExtractedSalary(effectiveEditingJD.salary_min),
           salaryTo: sanitizeExtractedSalary(effectiveEditingJD.salary_max),
@@ -6351,7 +6365,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             radius: loc.radius_km?.toString() || '50',
             country: (loc.country === 'US' ? 'US' : 'IN') as 'IN' | 'US',
           })) || [],
-          locationsRequired: effectiveEditingJD.locations?.some(loc => loc.is_required) || false,
+          // Prefer the top-level flag: `location_mandatory` is the column Resume
+          // Scoring reads to decide whether Location is Essential, so it is the
+          // source of truth. The per-location `is_required` is the older shape and
+          // stays as the fallback for JDs saved before the column existed.
+          locationsRequired:
+            effectiveEditingJD.location_mandatory ??
+            (effectiveEditingJD.locations?.some(loc => loc.is_required) || false),
           };
           extractedDataSnapshotRef.current = next;
           return next;
