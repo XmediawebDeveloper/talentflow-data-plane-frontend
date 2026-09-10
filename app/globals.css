@@ -2200,24 +2200,19 @@ tbody tr[data-row-selected="true"]:hover > .tf-sticky-col-left {
   max-height: none;
 }
 
-/* ScoreTableModal (the "View Score Table" popup): embeds
-   DetailedScorecardTab's rubric table — a `.tf-table-shell` sized for the
-   full CandidateScoringDetailPage's generous surrounding space — inside a
-   much shorter modal that already scrolls itself (`.score-table-modal-body`).
-   Two independently-scrolling, independently-sticky containers stacked like
-   that is exactly the "one scroll container per table" rule above warns
-   about, and here it showed up as the table visibly bleeding past the modal
-   card. Dropping the shell's own cap and letting it grow to natural height
-   makes the modal body the only vertical scroller; its sticky `thead`
-   retargets to that ancestor instead and keeps working. */
-.score-table-modal-body .tf-table-shell {
-  min-height: 0;
-  max-height: none;
-  /* y only — the element's own `overflow-x-auto` (DetailedScorecardTab.tsx)
-     still has to contain the rubric table sideways; only the vertical cap
-     and its independent scroll/sticky context are the problem here. */
-  overflow-y: visible;
-}
+/* ScoreTableModal (the "View Score Table" popup) used to need an override here:
+   DetailedScorecardTab's rubric table carried `.tf-table-shell`, whose height
+   cap and independent scroller fought the modal's own, and the table visibly
+   bled past the modal card. This rule dropped the cap for that one case.
+
+   The rubric table no longer opts into the shell at all — it is a fixed-length
+   table (one row per scoring criterion) that grows to its content, so the page
+   or the modal body is the only vertical scroller in every context, not just
+   inside this modal. The override is therefore gone rather than kept as a
+   selector matching nothing. If that table is ever given `.tf-table-shell`
+   again, the nested-scroller problem comes back on the FULL PAGE too, where it
+   hid the last criteria behind a second scrollbar — fix it by not adding the
+   shell, not by re-adding an exception here. */
 
 /* ── Custom scrollbars for the shell ───────────────────────────────────
    The native vertical bar has to span the whole shell, header included,

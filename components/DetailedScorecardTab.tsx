@@ -604,7 +604,19 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             </h4>
           </div>
 
-          <div className="tf-table-shell">
+          {/* Sideways scroll only — deliberately NOT `.tf-table-shell`.
+              That shell is the app's LIST-table treatment: a height cap
+              (`100dvh - 20rem`), a sticky header and its own vertical scroller,
+              which is right for a table whose row count is unbounded and paged.
+              This one is fixed-length — one row per scoring criterion, about
+              eight to ten, never more — and it sits inside a page (or a modal
+              body) that already scrolls. Capping it there put a SECOND vertical
+              scrollbar inside the first, so the last few criteria sat hidden
+              behind it while the summary tiles below made the section look
+              complete. It grows to its content instead: the page is the only
+              vertical scroller and every criterion is visible at once.
+              globals.css calls the shell opt-in for exactly this reason. */}
+          <div className="overflow-x-auto">
             <table className="w-full table-fixed">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
