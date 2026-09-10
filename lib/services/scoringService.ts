@@ -63,6 +63,10 @@ export interface ScoringResponse {
   overall_score: number;
   essential_score?: number;
   non_essential_score?: number;
+  // Mean rating across the Required criteria (0-10). The ONLY thing separating
+  // Exact Match from Partial Match (>= 8 vs < 8), so it is displayed beside the
+  // classification. Null when the JD defines no Required criteria.
+  essential_average?: number | null;
   match_status: 'excellent' | 'partial' | 'no_match' | 'exact_match' | 'partial_match';
   ai_summary?: string;
   strengths: string[];

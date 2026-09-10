@@ -2017,18 +2017,13 @@ Best regards`);
                     <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${matchBadgeClass(resume.matchStatus)}`}>
                       {resume.matchStatus}
                     </span>
-                    {/* Colour follows the verdict (same palette as the badge above), not a
-                        score threshold: under the scoring mechanism Exact and Partial share
-                        the 60-100 range and are told apart by the essential average, so any
-                        score cut-off would contradict the badge beside it. */}
+                    {/* Same three colours as the badge above, from the one palette in
+                        lib/utils/matchStatus.ts - green / brand orange / red. Not a score
+                        threshold: Exact and Partial share the 60-100 range and are told
+                        apart by the Required average, so any cut-off on the number would
+                        contradict the badge beside it. */}
                     <div className={`text-lg ${
-                      resume.matchStatus === 'Exact Match'
-                        ? 'text-green-700'
-                        : resume.matchStatus === 'Partial Match'
-                        ? 'text-yellow-700'
-                        : resume.matchStatus === 'No Match'
-                        ? 'text-red-700'
-                        : 'text-gray-800'
+                      MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(resume.matchStatus) ?? 'No Match']
                     }`}>
                       {resume.scorePercentage}%
                     </div>
