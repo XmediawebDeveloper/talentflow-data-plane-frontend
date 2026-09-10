@@ -31,7 +31,6 @@ import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ListToolbar from '@/components/ui/list-toolbar';
@@ -800,8 +799,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
             <div className="flex flex-col sm:items-end gap-2">
               {/* Quota limit warning */}
               {quotaInfo && quotaInfo.remaining <= 0 && (
-                <div className="flex items-center gap-2 px-3 py-1.5 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs">
-                  <AlertCircle className="w-4 h-4" />
+                <div className="flex items-start gap-2 px-3 py-1.5 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs">
+                  <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                   <span>Job publishing limit reached ({quotaInfo.used}/{quotaInfo.limit}). <a href="/subscription/current-plan" className="underline font-medium">Upgrade your plan</a></span>
                 </div>
               )}
@@ -830,12 +829,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
               )}
             </div>
           </div>
-
-          <ModuleInfoBanner
-            icon={<FileText className="h-4 w-4" />}
-            title="AI-Powered Job Descriptions"
-            description="Create clear, role-specific job descriptions with responsibilities, required skills, experience, location, and hiring criteria. Published jobs become the foundation for AI Talent Match, Resume Scoring, Assessments, and AI Interviews."
-          />
 
           <StatsCardGrid>
             <StatsCard tone="neutral" active={isOverviewCardActive('all')} showClickArrow icon={Briefcase} label="Total Jobs" value={stats.total} sparkline={false} onClick={() => openListView('all')}>
@@ -1330,7 +1323,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                         {onEditJob && !['disabled', 'archived'].includes(job.status.toLowerCase()) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
-                            className="p-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+                            className="p-2.5 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
                             aria-label="Edit" title="Edit"
                           >
                             <Edit className="w-4 h-4" />
@@ -1341,7 +1334,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                         {job.status.toLowerCase() !== 'draft' && (
                           <button
                             onClick={(e) => { e.stopPropagation(); onViewJob(job); }}
-                            className="p-2 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+                            className="p-2.5 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
                             aria-label="View" title="View"
                           >
                             <Eye className="w-4 h-4" />
@@ -1355,7 +1348,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                               e.stopPropagation();
                               setActiveDropdown(activeDropdown === job.id ? null : job.id);
                             }}
-                            className="p-2 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+                            className="p-2.5 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
                           >
                             <MoreVertical className="w-4 h-4 text-gray-600" />
                           </button>
@@ -1509,7 +1502,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                   >
                     <div className="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
                       {/* Individual Select + Job Icon */}
-                      <div className="hidden md:flex items-center gap-2 flex-shrink-0">
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         <button
                           onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
                           title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
@@ -1544,10 +1537,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                         {onEditJob && !['disabled', 'archived'].includes(job.status.toLowerCase()) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
-                            className="h-7 w-7 flex items-center justify-center bg-white text-brand-orange border border-brand-orange/40 rounded-md hover:bg-brand-orange/10 hover:border-brand-orange transition-all"
+                            className="h-9 w-9 flex items-center justify-center bg-white text-brand-orange border border-brand-orange/40 rounded-md hover:bg-brand-orange/10 hover:border-brand-orange transition-all"
                             aria-label="Edit" title="Edit"
                           >
-                            <Edit className="w-3.5 h-3.5" />
+                            <Edit className="w-4 h-4" />
                           </button>
                         )}
 
@@ -1555,10 +1548,10 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                         {job.status.toLowerCase() !== 'draft' && (
                           <button
                             onClick={(e) => { e.stopPropagation(); onViewJob(job); }}
-                            className="h-7 w-7 flex items-center justify-center bg-white text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all"
+                            className="h-9 w-9 flex items-center justify-center bg-white text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all"
                             aria-label="View" title="View"
                           >
-                            <Eye className="w-3.5 h-3.5" />
+                            <Eye className="w-4 h-4" />
                           </button>
                         )}
 
@@ -1569,9 +1562,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                               e.stopPropagation();
                               setActiveDropdown(activeDropdown === job.id ? null : job.id);
                             }}
-                            className="h-7 w-7 flex items-center justify-center bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:border-gray-400 transition-all"
+                            className="h-9 w-9 flex items-center justify-center bg-white border border-gray-300 rounded-md hover:bg-gray-50 hover:border-gray-400 transition-all"
                           >
-                            <MoreVertical className="w-3.5 h-3.5 text-gray-600" />
+                            <MoreVertical className="w-4 h-4 text-gray-600" />
                           </button>
                           {activeDropdown === job.id && (
                             <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-40">
@@ -1906,7 +1899,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className={`p-2 rounded-lg border transition-all ${
+                  className={`p-2.5 rounded-lg border transition-all ${
                     currentPage === 1
                       ? 'border-gray-300 text-gray-400 cursor-not-allowed'
                       : 'border-gray-300 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
@@ -1923,7 +1916,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                       key={index}
                       onClick={() => typeof page === 'number' && handlePageChange(page)}
                       disabled={page === '...'}
-                      className={`min-w-[32px] h-8 px-2 rounded-lg text-sm transition-all ${
+                      className={`min-w-[40px] h-10 px-2 rounded-lg text-sm transition-all ${
                         page === currentPage
                           ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                           : page === '...'
@@ -1940,7 +1933,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className={`p-2 rounded-lg border transition-all ${
+                  className={`p-2.5 rounded-lg border transition-all ${
                     currentPage === totalPages
                       ? 'border-gray-300 text-gray-400 cursor-not-allowed'
                       : 'border-gray-300 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'

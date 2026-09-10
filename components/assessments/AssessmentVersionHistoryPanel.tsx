@@ -157,6 +157,85 @@ interface AssessmentVersionHistoryPanelProps {
    * keeps only this panel's own buttons.
    */
   renderAction?: (assessment: AssessmentVersionRow) => ReactNode;
+  /**
+   * The picked ASSESSMENT version, and the way to change it.
+   *
+   * Selection lives here and nowhere else in this panel. There is no radio on
+   * a job version row and none on the job itself: a job version is reached by
+   * expanding it and a job by opening the panel, neither of which is a choice
+   * that has to be held. The one thing worth holding is which assessment
+   * version the reader has settled on, so that is the only thing with a
+   * control.
+   *
+   * ONE group across the whole panel, not one per job version. Several job
+   * versions can be expanded at once, and "one assessment version at a time"
+   * has to hold across all of them - a per-group radio would happily let one
+   * row in each expanded group be selected simultaneously, which is precisely
+   * the multi-selection this must not allow.
+   *
+   * Controlled: the panel renders `selectedAssessmentId` and reports clicks.
+   * It keeps no copy, so what survives a reopen is whatever the host chose to
+   * keep, and the panel cannot drift from it.
+   *
+   * Omit `onSelectAssessment` and the column is not rendered at all - a radio
+   * nothing reads is a control that does nothing.
+   */
+  selectedAssessmentId?: string | null;
+  /**
+   * Reports the pick together with the JOB VERSION it was made under.
+   *
+   * The version matters as much as the assessment: assessment version numbers
+   * restart per job version, so "Assessment V1" alone names several different
+   * rows in one job. The caller needs the pair to say what was chosen, and to
+   * show it again afterwards.
+   */
+  onSelectAssessment?: (
+    assessmentId: string,
+    context: { jobVersion: number; jobVersionId?: string },
+  ) => void;
+  /**
+   * The Job Version + Assessment Version pair currently chosen.
+   *
+   * It DE-EMPHASISES, it does not lock. Rows outside the pair fade back so
+   * the active branch is obvious at a glance, but every one of them stays
+   * clickable and every radio stays enabled: picking any other assessment,
+   * under any other job version, simply replaces the pair. Hover returns a
+   * faded row to full strength, which is the signal that it is still live.
+   *
+   * This was a hard lock and that was wrong. `pointer-events-none` on the
+   * other rows meant the only way to change a choice was to clear it first
+   * and start again - select, deselect, navigate, select. A single-choice
+   * control should behave like a radio group: click another option and the
+   * previous one gives way.
+   *
+   * Scoped to the PAIR, not to the assessment alone. Two job versions can
+   * each hold an "Assessment V1", so keying on the assessment version NUMBER
+   * would highlight a row in a different branch that happens to share a
+   * number. Matched by job version first, then by the row's own id.
+   *
+   * Null on the Job List, which chooses nothing - reading a history is not a
+   * choice that has to exclude anything.
+   */
+  activeSelection?: { jobVersion: number; assessmentId: string } | null;
+  /**
+   * The eye on an ASSESSMENT row - opens that assessment's details.
+   *
+   * A slot, like `renderAction` and `headerAction`: the panel does not own
+   * the details view, the host does. Omit it and no eye is rendered.
+   */
+  onViewAssessment?: (assessment: AssessmentVersionRow) => void;
+  /**
+   * The radio group's `name`.
+   *
+   * One group per SURFACE, not one per app. The Send Invite dialog renders
+   * these same job rows over the page's own list, and both share
+   * `openVersionsFor` - so the panel can be mounted twice at once, once
+   * behind the overlay and once inside it. Sharing a `name` would make the
+   * browser treat the two as a single group and unpick the page's selection
+   * whenever the dialog's was set. Distinct names keep each surface's "one at
+   * a time" to itself.
+   */
+  selectionGroupName?: string;
 }
 
 /* The list's own status vocabulary for ASSESSMENTS, not the raw DB one: the
@@ -565,6 +644,11 @@ export default function AssessmentVersionHistoryPanel({
   onViewJobVersion,
   headerAction,
   renderAction,
+  selectedAssessmentId,
+  onSelectAssessment,
+  activeSelection,
+  onViewAssessment,
+  selectionGroupName = 'assessment-version-selection',
 }: AssessmentVersionHistoryPanelProps) {
   /* Which job versions have their assessment table open. Local to the panel:
      nothing outside it needs to know, and the state dies with the panel when
@@ -580,9 +664,57 @@ export default function AssessmentVersionHistoryPanel({
     });
   };
 
+  /* Does the ASSESSMENT sub-table's Actions column have anything to put in
+     it? Its only content is the host's `renderAction`, so without that the
+     column is a header over empty cells — 160px of dead width that pushes the
+     real columns leftward and reads as a broken table. A host that omits the
+     slot (the Send Invite picker, which lists versions to choose between and
+     deliberately offers no per-row actions) now gets no column at all. */
+  /* The Select column exists only where a host reads the selection. Same rule
+     as the Actions column below it: no consumer, no column. */
+  const showsAssessmentSelect = !!onSelectAssessment;
+
+  /* The Actions column exists if EITHER control does. It used to be gated on
+     `renderAction` alone, which meant a host offering only the eye - the Send
+     Invite dialog, which lists versions to choose between and wants no
+     per-row Send / Track / Result - lost the whole column and the eye with
+     it. */
+  const showsAssessmentActions = !!renderAction || !!onViewAssessment;
+
+  /* Sized to what the cell actually holds, so it never reserves room for
+     controls this host does not render:
+       eye + quick actions + menu   215
+       quick actions + menu          180
+       eye alone                      90  (the 28px button plus the header word)
+     Literal class strings, not built from a number, so Tailwind's scanner
+     can see all three. */
+  const assessmentActionsMinW = renderAction
+    ? onViewAssessment
+      ? 'min-w-[215px]'
+      : 'min-w-[180px]'
+    : 'min-w-[90px]';
+
+  /* The table's own floor is the sum of its columns' minimums - declared
+     below that sum, the shortfall comes off the last column, which is
+     Actions. An inline style rather than a class: the combinations multiply
+     with every optional column, and a class assembled from a number is one
+     Tailwind never emits. */
+  const assessmentTableMinWidth =
+    800 +
+    (showsAssessmentSelect ? 70 : 0) +
+    (showsAssessmentActions ? (renderAction ? (onViewAssessment ? 215 : 180) : 90) : 0);
+
+
+
   /* Wide enough for the eye plus the longer of the two actions the cell can
-     hold — "Create Assessment" is the widest thing this column ever renders. */
-  const jobColumns = [...JOB_COLUMNS, { label: 'Actions', minW: 'min-w-[280px]' }];
+     hold. "Create Assessment" is the widest thing it ever renders — but only
+     when the host passes `onCreateAssessment`. Without it the widest is "View
+     Assessment", so reserving the full 280px leaves a ragged gap on the right
+     of every row. Measured against what this host can actually render. */
+  const jobColumns = [
+    ...JOB_COLUMNS,
+    { label: 'Actions', minW: onCreateAssessment ? 'min-w-[280px]' : 'min-w-[180px]' },
+  ];
   const assessmentRows = assessments ?? [];
 
   /* ── The job version → assessment join ──────────────────────────────────
@@ -738,7 +870,14 @@ export default function AssessmentVersionHistoryPanel({
                 : ''
             }`}
           >
-            <table className="w-full min-w-[1180px] text-left">
+            {/* Sum of this table's own column minimums - see jobColumns.
+                Declared below that sum, the shortfall came off the last
+                column, which is Actions. */}
+            <table
+              className={`w-full text-left ${
+                onCreateAssessment ? 'min-w-[1220px]' : 'min-w-[1120px]'
+              }`}
+            >
               <thead>
                 {/* The bottom hairline is an inset shadow, not border-b —
                     collapsed-table borders detach from sticky cells and would
@@ -772,6 +911,15 @@ export default function AssessmentVersionHistoryPanel({
                      fetch returned for the version, which is a different
                      question from whether the version HAS one. */
                   const hasAssessments = group.hasAssessment;
+                  /* A pick exists and it was made under a DIFFERENT job
+                     version. The row fades so the chosen branch stands out -
+                     and stays entirely usable, because opening this version
+                     and picking from it is exactly how a choice is changed. */
+                  const jobVersionDimmed =
+                    !!activeSelection && activeSelection.jobVersion !== group.jobVersion;
+                  /* Expansion is the reader's, always. It used to be forced
+                     shut whenever another version held the pick, which is what
+                     made changing a choice impossible without clearing it. */
                   const isOpen = expandedJobVersions.has(group.jobVersion);
                   /* The newest assessment version in this group — the one its
                      inner table badges Latest. Read off the sorted list rather
@@ -791,8 +939,18 @@ export default function AssessmentVersionHistoryPanel({
                           the containing block for its cells, which silently
                           kills position:sticky on the pinned Actions cell. */}
                       <tr
-                        className={`group border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 transition-colors duration-200 ease-out hover:bg-brand-blue/[0.03] dark:hover:bg-brand-blue/[0.08] ${
+                        title={
+                          jobVersionDimmed
+                            ? `Job V${activeSelection?.jobVersion} currently holds the selection — open this version to choose from it instead`
+                            : undefined
+                        }
+                        className={`group border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 transition-all duration-200 ease-out hover:bg-brand-blue/[0.03] dark:hover:bg-brand-blue/[0.08] ${
                           hasAssessments ? 'cursor-pointer' : ''
+                        } ${
+                          /* Faded back, not switched off - and hover restores
+                             it, so the row reads as available rather than
+                             barred. */
+                          jobVersionDimmed ? 'opacity-60 hover:opacity-100' : ''
                         }`}
                         /* The whole row toggles, not just the button — a small
                            target at the far right of a scrolling table is a
@@ -977,10 +1135,24 @@ export default function AssessmentVersionHistoryPanel({
                                           purpose: sharing a grid would force
                                           the inner rows into columns sized for
                                           eight outer ones. */}
-                                      <table className="w-full min-w-[930px] text-left">
+                                      <table
+                                        className="w-full text-left"
+                                        style={{ minWidth: `${assessmentTableMinWidth}px` }}
+                                      >
                                         <thead>
                                           <tr>
-                                            {[...ASSESSMENT_COLUMNS, { label: 'Actions', minW: 'min-w-[160px]' }].map(({ label, minW }) => (
+                                            {[
+                                              /* Select FIRST, Actions LAST, the
+                                                 data columns between - the order
+                                                 the table is specified in. */
+                                              ...(showsAssessmentSelect
+                                                ? [{ label: 'Select', minW: 'min-w-[70px]' }]
+                                                : []),
+                                              ...ASSESSMENT_COLUMNS,
+                                              ...(showsAssessmentActions
+                                                ? [{ label: 'Actions', minW: assessmentActionsMinW }]
+                                                : []),
+                                            ].map(({ label, minW }) => (
                                               <th
                                                 key={label}
                                                 className={`py-2 px-3 text-xs font-semibold text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 border-b border-gray-200 dark:border-slate-700 ${minW}`}
@@ -1001,7 +1173,11 @@ export default function AssessmentVersionHistoryPanel({
                                           {count === 0 && (
                                             <tr>
                                               <td
-                                                colSpan={ASSESSMENT_COLUMNS.length + 1}
+                                                colSpan={
+                                                  ASSESSMENT_COLUMNS.length +
+                                                  (showsAssessmentSelect ? 1 : 0) +
+                                                  (showsAssessmentActions ? 1 : 0)
+                                                }
                                                 className="py-4 px-3 text-xs text-gray-500 dark:text-slate-400"
                                               >
                                                 This job version has an assessment, but its details could not be
@@ -1013,16 +1189,79 @@ export default function AssessmentVersionHistoryPanel({
                                             const isCurrent = !!currentAssessmentId && assessment.id === currentAssessmentId;
                                             const statusLabel = assessmentStatusLabel(assessment.status);
                                             const invitations = assessment.invitations_count ?? 0;
+                                            const isPicked = selectedAssessmentId === assessment.id;
+                                            /* The one row still in play once a
+                                               pick exists. Matched on the row's
+                                               own id under an already-matching
+                                               job version, never on the version
+                                               NUMBER: two job versions can each
+                                               carry an "Assessment V1", and
+                                               matching by number would light up
+                                               a row in the wrong branch. */
+                                            /* Faded because something else is
+                                               picked - never barred. Clicking
+                                               this row's radio replaces the
+                                               selection, which is the whole
+                                               point of a single-choice
+                                               control. */
+                                            const assessmentDimmed = !!activeSelection && !isPicked;
                                             return (
                                               <tr
                                                 key={assessment.id}
-                                                className={`border-b last:border-b-0 border-gray-100 dark:border-slate-700/70 transition-colors ${
-                                                  isCurrent
-                                                    ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/[0.14]'
-                                                    : 'hover:bg-brand-blue/[0.03] dark:hover:bg-slate-800'
+                                                className={`border-b last:border-b-0 border-gray-100 dark:border-slate-700/70 transition-all ${
+                                                  isPicked
+                                                    ? 'bg-brand-blue/[0.10] dark:bg-brand-blue/[0.18] ring-1 ring-inset ring-brand-blue/40'
+                                                    : isCurrent
+                                                      ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/[0.14] hover:bg-brand-blue/[0.10]'
+                                                      : 'hover:bg-brand-blue/[0.03] dark:hover:bg-slate-800'
+                                                } ${
+                                                  assessmentDimmed ? 'opacity-60 hover:opacity-100' : ''
                                                 } ${onRowClick ? 'cursor-pointer' : ''}`}
                                                 onClick={onRowClick ? () => onRowClick(assessment.id) : undefined}
                                               >
+                                                {/* Select - the panel's ONLY
+                                                    radio, on an ASSESSMENT
+                                                    version row and nowhere
+                                                    else.
+
+                                                    One `name` for the whole
+                                                    panel, so the browser's own
+                                                    radio-group rule does the
+                                                    enforcing: picking any row
+                                                    unpicks whatever was picked
+                                                    before, including a row in a
+                                                    different expanded job
+                                                    version. Two selected at
+                                                    once is not a state this can
+                                                    represent.
+
+                                                    The click is stopped at the
+                                                    cell: the row itself opens
+                                                    the assessment, and choosing
+                                                    a version must not also
+                                                    navigate away from the table
+                                                    the choice was made in. */}
+                                                {showsAssessmentSelect && (
+                                                  <td
+                                                    className="py-2.5 px-3 whitespace-nowrap align-middle"
+                                                    onClick={(e) => e.stopPropagation()}
+                                                  >
+                                                    <input
+                                                      type="radio"
+                                                      name={selectionGroupName}
+                                                      value={assessment.id}
+                                                      checked={isPicked}
+                                                      onChange={() =>
+                                                        onSelectAssessment?.(assessment.id, {
+                                                          jobVersion: group.jobVersion,
+                                                          jobVersionId: group.jobVersionId,
+                                                        })
+                                                      }
+                                                      aria-label={`Select assessment V${assessment.version ?? 1} of job V${group.jobVersion}`}
+                                                      className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40 cursor-pointer"
+                                                    />
+                                                  </td>
+                                                )}
                                                 <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                                                   <span className="inline-flex items-center gap-1.5">
                                                     <VersionChip kind="assessment" version={assessment.version} />
@@ -1047,24 +1286,55 @@ export default function AssessmentVersionHistoryPanel({
                                                 <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                                                   <MetricCell value={invitations} label={invitations === 1 ? 'Invitation' : 'Invitations'} />
                                                 </td>
-                                                <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                                                  {/* gap-1.5 matches the spacing
-                                                      inside the quick-action
-                                                      group, so all four
-                                                      controls read as one
-                                                      evenly spaced row. */}
-                                                  <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                                    {/* The host's own menu and
-                                                        quick actions, unchanged.
-                                                        Nothing else: the row
-                                                        itself opens the
-                                                        assessment, so a View
-                                                        button beside it was a
-                                                        second control for the
-                                                        same navigation. */}
-                                                    {renderAction?.(assessment)}
-                                                  </div>
-                                                </td>
+                                                {/* Cell and header are gated
+                                                    on the same flag, so the
+                                                    row can never carry one
+                                                    more cell than the header
+                                                    declares - which is what
+                                                    shifts every column right
+                                                    of it out of alignment. */}
+                                                {showsAssessmentActions && (
+                                                  <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                                    {/* gap-1.5 matches the spacing
+                                                        inside the quick-action
+                                                        group, so all four
+                                                        controls read as one
+                                                        evenly spaced row. */}
+                                                    <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
+                                                      {/* Read THIS assessment.
+                                                          Same square bordered
+                                                          eye the job version row
+                                                          above carries, so the
+                                                          two levels offer the
+                                                          same affordance for
+                                                          "show me this one".
+                                                          Leads the cell, then
+                                                          the host's own quick
+                                                          actions and menu. */}
+                                                      {onViewAssessment && (
+                                                        <button
+                                                          type="button"
+                                                          onClick={() => onViewAssessment(assessment)}
+                                                          aria-label={`View assessment V${assessment.version ?? 1} details`}
+                                                          title={`View assessment V${assessment.version ?? 1} details`}
+                                                          className="h-7 w-7 flex items-center justify-center rounded-md border border-brand-blue/40 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
+                                                        >
+                                                          <Eye className="w-3.5 h-3.5" />
+                                                        </button>
+                                                      )}
+                                                      {/* The host's own menu and
+                                                          quick actions, where a
+                                                          host offers them. The
+                                                          Send Invite dialog does
+                                                          not: its rows are a
+                                                          choice, and Send /
+                                                          Track / Result all act
+                                                          on an assessment rather
+                                                          than help pick one. */}
+                                                      {renderAction?.(assessment)}
+                                                    </div>
+                                                  </td>
+                                                )}
                                               </tr>
                                             );
                                           })}

@@ -220,6 +220,14 @@ interface ScoredResumesTableProps {
    */
   assessmentConfigured?: boolean;
   aiInterviewConfigured?: boolean;
+  /**
+   * The host's "Show:" view pills (View by Job / View by Candidates / All
+   * Resumes / verdict filters). Rendered between the search/filter bar and
+   * the Select All row so the two read as one control stack, rather than
+   * floating above the whole card. Omitted by hosts that don't have a pill
+   * row of their own (e.g. a single-job view).
+   */
+  viewPillsSlot?: React.ReactNode;
 }
 
 export default function ScoredResumesTable({
@@ -241,7 +249,8 @@ export default function ScoredResumesTable({
   onScoreResumes,
   onInviteAIInterview,
   assessmentConfigured,
-  aiInterviewConfigured
+  aiInterviewConfigured,
+  viewPillsSlot
 }: ScoredResumesTableProps) {
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();  // Get tenant info from auth context
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
@@ -1368,7 +1377,7 @@ Best regards`);
   };
 
   return (
-    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+    <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 sm:p-6">
       {/* Header — title and the one page-level action. Everything that acts on
           the list lives in the toolbar below, and everything that acts on a
           selection lives in its own row under that, same as job-openings. */}
@@ -1615,6 +1624,13 @@ Best regards`);
           </div>
         )}
 
+        {/* pt-3, not relying on the parent's space-y-3: that only adds a
+            margin-top, which collapses with this slot's own mb-3 down to a
+            single 12px gap instead of the two stacking — padding never
+            collapses, so this guarantees the same visible gap job-openings
+            gets above its own status-tabs row. */}
+        {viewPillsSlot && <div className="pt-3">{viewPillsSlot}</div>}
+
         {/* Selection row — its own strip under the search/filter row, divided by
             a rule, exactly like job-openings' "Select all + Bulk Actions" line.
             Bulk buttons only appear once something is picked, so the row stays
@@ -1722,7 +1738,8 @@ Best regards`);
 
       {isGrouped ? (
         <div className="rounded-xl border border-gray-200 overflow-hidden">
-          <div className="overflow-x-auto tf-table-shell">
+          {/* Desktop Table View — grouped */}
+          <div className="hidden md:block overflow-x-auto tf-table-shell">
             <table className="w-full min-w-[900px]">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
@@ -1812,7 +1829,7 @@ Best regards`);
                               <button
                                 aria-label="Actions"
                                 title="Actions"
-                                className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200"
+                                className="p-2.5 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200"
                               >
                                 <MoreVertical className="w-4 h-4 text-gray-600" />
                               </button>
@@ -1855,7 +1872,7 @@ Best regards`);
                                             <button
                                               aria-label="Actions"
                                               title="Actions"
-                                              className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200"
+                                              className="p-2.5 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200"
                                             >
                                               <MoreVertical className="w-4 h-4 text-gray-600" />
                                             </button>
@@ -1878,19 +1895,163 @@ Best regards`);
                 })}
               </tbody>
             </table>
+
+            {candidateGroups.length === 0 && (
+              <ListEmptyState
+                icon={Search}
+                isNarrowed={search.isNarrowed}
+                query={search.appliedQuery}
+                entityLabel="candidate"
+                emptyTitle="No scored candidates yet"
+                emptyDescription="Upload and score candidates to see them here."
+                onReset={search.reset}
+              />
+            )}
           </div>
 
-          {candidateGroups.length === 0 && (
-            <ListEmptyState
-              icon={Search}
-              isNarrowed={search.isNarrowed}
-              query={search.appliedQuery}
-              entityLabel="candidate"
-              emptyTitle="No scored candidates yet"
-              emptyDescription="Upload and score candidates to see them here."
-              onReset={search.reset}
-            />
-          )}
+          {/* Mobile Card View — grouped. Same data/state as the desktop table
+              above (paginatedGroups, expandedGroupKeys, avatarColorFor,
+              renderActionsMenuItems, formatters) — just laid out as cards
+              with the per-candidate job history as a stacked list instead of
+              a nested <table>, since a second horizontal-scrolling table
+              inside a card is no more usable on a phone than the outer one. */}
+          <div className="md:hidden space-y-3">
+            {paginatedGroups.map(({ key, rows }) => {
+              const primary = rows[0];
+              const isExpanded = expandedGroupKeys.has(key);
+              const avatar = avatarColorFor(key);
+              return (
+                <div key={key} className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <div className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold ${avatar.bg} ${avatar.text}`}>
+                        {initialsFor(primary.candidateName || 'Candidate')}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        {onViewCandidate ? (
+                          <button
+                            onClick={(e) => { e.stopPropagation(); onViewCandidate(primary); }}
+                            className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline text-left transition-colors block truncate w-full"
+                          >
+                            {primary.candidateName || 'Candidate'}
+                          </button>
+                        ) : (
+                          <div className="text-sm font-medium text-gray-900 truncate">{primary.candidateName || 'Candidate'}</div>
+                        )}
+                        {primary.email && <div className="text-xs text-gray-500 truncate">{primary.email}</div>}
+                        {primary.phone && <div className="text-xs text-gray-500">{primary.phone}</div>}
+                      </div>
+                    </div>
+                    <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button
+                            aria-label="Actions"
+                            title="Actions"
+                            className="p-2.5 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200"
+                          >
+                            <MoreVertical className="w-4 h-4 text-gray-600" />
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                          {renderActionsMenuItems(primary)}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 flex items-center justify-between gap-2 flex-wrap">
+                    <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700 border border-blue-200 whitespace-nowrap">
+                      {rows.length} Job {rows.length === 1 ? 'Version' : 'Versions'}
+                    </span>
+                    <div className="text-xs text-gray-500 text-right">
+                      <div>{formatISTDate(primary.scoredDate)}</div>
+                      <div className="text-gray-400">{formatISTTime(primary.scoredDate)}</div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => toggleGroupExpanded(key)}
+                    aria-label={isExpanded ? 'Collapse job history' : 'Expand job history'}
+                    className={`mt-3 w-full flex items-center justify-between px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                      isExpanded
+                        ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
+                        : 'border-gray-200 text-gray-600 hover:border-brand-blue/30 hover:text-brand-blue'
+                    }`}
+                  >
+                    <span>{isExpanded ? 'Hide job history' : 'View job history'}</span>
+                    <ChevronRight className={`w-4 h-4 transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
+                  </button>
+
+                  {isExpanded && (
+                    <div className="mt-2 space-y-2">
+                      {rows.map((row) => (
+                        <div key={row.id} className="rounded-lg border border-gray-200 bg-gray-50/60 p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0">
+                              <div className="text-sm font-medium text-gray-800 truncate" title={row.jobTitle || undefined}>
+                                {truncateJobTitle(row.jobTitle) || 'Untitled role'}
+                              </div>
+                              <div className="mt-1 flex items-center gap-2 flex-wrap">
+                                <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border ${matchBadgeClass(row.matchStatus)}`}>
+                                  {row.matchStatus}
+                                </span>
+                                <span className={`text-sm font-semibold ${MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(row.matchStatus) ?? 'No Match']}`}>
+                                  {row.scorePercentage}%
+                                </span>
+                              </div>
+                              <div className="mt-1 flex items-center gap-1 text-xs text-gray-500">
+                                <Calendar className="w-3 h-3" />
+                                <span>{formatISTDate(row.scoredDate)} <span className="text-gray-400">{formatISTTime(row.scoredDate)}</span></span>
+                              </div>
+                            </div>
+                            <div className="flex-shrink-0" onClick={(e) => e.stopPropagation()}>
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <button
+                                    aria-label="Actions"
+                                    title="Actions"
+                                    className="p-2.5 bg-white rounded-lg hover:bg-gray-50 transition-all border border-gray-200"
+                                  >
+                                    <MoreVertical className="w-4 h-4 text-gray-600" />
+                                  </button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end" className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                                  {renderActionsMenuItems(row)}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
+                          </div>
+                          {onViewCandidate && (
+                            <button
+                              onClick={(e) => { e.stopPropagation(); onViewCandidate(row); }}
+                              className="mt-2 w-full px-3 py-1.5 text-xs font-medium text-brand-blue border border-brand-blue/30 rounded-md hover:bg-brand-blue/5 transition-colors flex items-center justify-center gap-1.5"
+                            >
+                              <Eye className="w-3.5 h-3.5" />
+                              Open Match
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+
+            {candidateGroups.length === 0 && (
+              <ListEmptyState
+                icon={Search}
+                isNarrowed={search.isNarrowed}
+                query={search.appliedQuery}
+                entityLabel="candidate"
+                emptyTitle="No scored candidates yet"
+                emptyDescription="Upload and score candidates to see them here."
+                onReset={search.reset}
+              />
+            )}
+          </div>
         </div>
       ) : (
         <>
@@ -1930,7 +2091,7 @@ Best regards`);
                 <td className="py-3 px-4 align-middle tf-sticky-col-left">
                   <button
                     onClick={() => handleSelectResume(resume.id)}
-                    className="p-1 hover:bg-gray-200 rounded"
+                    className="p-2.5 hover:bg-gray-200 rounded"
                   >
                     {selectedResumes.includes(resume.id) ? (
                       <CheckSquare className="w-4 h-4 text-gray-800" />
@@ -1952,7 +2113,7 @@ Best regards`);
                       <button
                         aria-label="Actions"
                         title="Actions"
-                        className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-all"
+                        className="p-2.5 bg-white rounded-lg hover:bg-gray-50 transition-all"
                       >
                         <MoreVertical className="w-4 h-4 text-gray-600" />
                       </button>

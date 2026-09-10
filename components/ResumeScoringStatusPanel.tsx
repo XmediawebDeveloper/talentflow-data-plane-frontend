@@ -658,7 +658,7 @@ export default function ResumeScoringStatusPanel({
             {/* Failed Resumes Alert */}
             {failedResumes.length > 0 && remainingResumes === 0 && (
               <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-4">
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
                     <div>
@@ -673,7 +673,7 @@ export default function ResumeScoringStatusPanel({
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex flex-wrap items-center gap-2">
                     {failedResumes.length > 1 && (
                       <button
                         onClick={selectAllFailed}
@@ -709,7 +709,7 @@ export default function ResumeScoringStatusPanel({
               </div>
             )}
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="bg-white rounded-lg px-4 py-3 border border-gray-200 shadow-sm">
                 <div className="flex items-center justify-between">
                   <div>

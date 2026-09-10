@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Clock, Calendar, User, BarChart3, CheckSquare, CheckCircle, XCircle, Briefcase, Award, Target, GraduationCap, MapPin, Building2, MessageSquare, TrendingUp, Info } from 'lucide-react';
+import { Clock, Calendar, User, BarChart3, CheckSquare, CheckCircle, XCircle, Briefcase, Award, Target, GraduationCap, MapPin, Building2, MessageSquare, TrendingUp, Info, Copy, Check } from 'lucide-react';
+import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { Tooltip } from '@/components/ui/tooltip';
 
@@ -92,8 +93,24 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
   // CSS-positioned tooltip depending on which row was hovered. A portal to
   // <body> with measured coordinates has nothing left to clip it against.
   const [reasoningTooltip, setReasoningTooltip] = useState<{ text: string; left: number; width: number; top: number; openUp: boolean } | null>(null);
+  // The pill and the tooltip are siblings (the tooltip is a portal, not a DOM
+  // child of the pill), so the mouse crosses a real gap between them —
+  // hiding the instant it leaves the pill closed the tooltip before it could
+  // reach the text underneath. Hiding is deferred a beat instead, and
+  // cancelled if the pointer lands on either the pill or the tooltip within
+  // that window, so crossing the gap (or reading/selecting the tooltip
+  // itself) keeps it open.
+  const hideReasoningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelHideReasoningTooltip = () => {
+    if (hideReasoningTimeoutRef.current) {
+      clearTimeout(hideReasoningTimeoutRef.current);
+      hideReasoningTimeoutRef.current = null;
+    }
+  };
 
   const showReasoningTooltip = (e: React.MouseEvent<HTMLElement>, text: string) => {
+    cancelHideReasoningTooltip();
     const rect = e.currentTarget.getBoundingClientRect();
     // Spans the AI Reasoning column's own cell (left-aligned to it) rather
     // than a fixed width centered on the pill — wide enough to read the
@@ -112,7 +129,26 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
       openUp,
     });
   };
-  const hideReasoningTooltip = () => setReasoningTooltip(null);
+  const hideReasoningTooltip = () => {
+    cancelHideReasoningTooltip();
+    hideReasoningTimeoutRef.current = setTimeout(() => setReasoningTooltip(null), 150);
+  };
+  useEffect(() => () => cancelHideReasoningTooltip(), []);
+
+  // Briefly swaps the copy icon for a checkmark on the row just copied —
+  // cleared after a beat rather than left to the next click, so it always
+  // reads as "just now" instead of stale state from an earlier copy.
+  const [copiedReasoningIndex, setCopiedReasoningIndex] = useState<number | null>(null);
+  const copyReasoning = async (index: number, text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedReasoningIndex(index);
+      toast.success('AI reasoning copied to clipboard');
+      setTimeout(() => setCopiedReasoningIndex(current => (current === index ? null : current)), 1500);
+    } catch {
+      toast.error('Failed to copy to clipboard');
+    }
+  };
 
   // Convert percentage scores to rating out of 10
   const convertToRating = (percentage: number): number => {
@@ -632,14 +668,27 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                         </span>
                       </td>
                       <td className="px-3 py-3">
-                        <span
-                          onMouseEnter={(e) => showReasoningTooltip(e, criteria.aiReasoning)}
-                          onMouseLeave={hideReasoningTooltip}
-                          className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 whitespace-nowrap cursor-default"
-                        >
-                          {criteria.aiReasoning.split(' ').slice(0, 4).join(' ')}
-                          {criteria.aiReasoning.split(' ').length > 4 ? '…' : ''}
-                        </span>
+                        <div className="flex items-center gap-1.5">
+                          <span
+                            onMouseEnter={(e) => showReasoningTooltip(e, criteria.aiReasoning)}
+                            onMouseLeave={hideReasoningTooltip}
+                            className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 whitespace-nowrap cursor-default"
+                          >
+                            {criteria.aiReasoning.split(' ').slice(0, 4).join(' ')}
+                            {criteria.aiReasoning.split(' ').length > 4 ? '…' : ''}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => copyReasoning(index, criteria.aiReasoning)}
+                            className="p-1 rounded-md text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors flex-shrink-0"
+                            aria-label="Copy AI reasoning"
+                            title="Copy full text"
+                          >
+                            {copiedReasoningIndex === index
+                              ? <Check className="w-3.5 h-3.5 text-green-600" />
+                              : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
                       </td>
                     </tr>
                   );
@@ -684,15 +733,17 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
           above for why this is a portal instead of a CSS-positioned child. */}
       {reasoningTooltip && typeof document !== 'undefined' && createPortal(
         <div
-          className="fixed z-[100] max-w-[95vw] pointer-events-none"
+          className="fixed z-[100] max-w-[95vw]"
           style={{
             left: reasoningTooltip.left,
             width: reasoningTooltip.width,
             top: reasoningTooltip.top,
             transform: reasoningTooltip.openUp ? 'translateY(-100%)' : undefined,
           }}
+          onMouseEnter={cancelHideReasoningTooltip}
+          onMouseLeave={hideReasoningTooltip}
         >
-          <div className="whitespace-normal bg-[#e1ebed] text-gray-800 text-xs rounded-xl py-2.5 px-3.5 shadow-xl border border-gray-200 leading-relaxed">
+          <div className="whitespace-normal bg-[#e1ebed] text-gray-800 text-xs rounded-xl py-2.5 px-3.5 shadow-xl border border-gray-200 leading-relaxed select-text">
             {reasoningTooltip.text}
           </div>
         </div>,

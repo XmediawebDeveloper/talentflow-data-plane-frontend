@@ -377,7 +377,7 @@ export const candidateAIInterviewService = {
   async verifyShareBarHidden(
     token: string,
     blob: Blob,
-  ): Promise<{ enabled: boolean; hidden: boolean; pip_detected?: boolean; recorder_overlay_detected?: boolean; foreign_app_detected?: boolean; foreign_app_label?: string; interview_screen_present?: boolean; reason?: string }> {
+  ): Promise<{ enabled: boolean; hidden: boolean; pip_detected?: boolean; recorder_overlay_detected?: boolean; foreign_app_detected?: boolean; foreign_app_label?: string; interview_screen_present?: boolean; check_unavailable?: boolean; reason?: string }> {
     const fd = new FormData();
     fd.append('file', blob, 'screen.jpg');
     const url = `${API_BASE_URL}/candidate/ai-interview/${token}/verify-share-bar`;

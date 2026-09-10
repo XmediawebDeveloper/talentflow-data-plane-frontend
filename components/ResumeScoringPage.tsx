@@ -1,6 +1,7 @@
 "use client";
 
 import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { WorkInProgressIcon } from '@/components/icons/nav-icons';
 import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Award, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronRight, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
@@ -23,7 +24,6 @@ import { Resume as SharedResume } from '@/lib/types/types';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import ModuleInfoBanner from '@/components/ModuleInfoBanner';
 import { formatIST, formatISTDate, toISODateIST } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
@@ -2033,8 +2033,8 @@ export default function ResumeScoringPage({
                   <ClipboardList className="w-4 h-4 text-white" />
                 </div>
                 <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">{selectedHistoryItem.jobTitle}</h1>
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight break-words">{selectedHistoryItem.jobTitle}</h1>
                     {detailsVersionNumber && detailsVersionNumber >= 1 && (
                       detailsVersionRows.length > 1 ? (
                         <DropdownMenu>
@@ -2491,7 +2491,7 @@ export default function ResumeScoringPage({
               </button>
             )}
             <div className="h-9 w-9 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
-              <History className="w-4 h-4 text-white" />
+              <ClipboardList className="w-4 h-4 text-white" />
             </div>
             <div className="min-w-0">
               <h1 className="text-gray-900 dark:text-slate-50 text-lg sm:text-xl font-semibold tracking-tight">Resume Scoring</h1>
@@ -2568,12 +2568,6 @@ export default function ResumeScoringPage({
           </div>
         </div>
 
-        <ModuleInfoBanner
-          icon={<ClipboardList className="h-4 w-4" />}
-          title="AI-Powered Resume Scoring"
-          description="Evaluate resumes against a selected job description using AI analysis of skills, experience, education, and role fit. Review transparent scores and recommendations to identify the strongest candidates faster."
-        />
-
         {/* Overview cards — always visible; the active card is highlighted
             once its list is open below. */}
           <div className="mb-4 sm:mb-5">
@@ -2584,8 +2578,13 @@ export default function ResumeScoringPage({
                 is one too many. Not gated on `activeScoringJobs.length`: a
                 finished job now stays in that list for a day, which kept this
                 button hidden long after the run it deferred to had ended. */}
+            {/* bottom-24, not bottom-6: GlobalScoringProgressIndicator anchors
+                its own shrunk button/card to bottom-6 in this same corner and
+                can still be showing a recently-finished run (its retention
+                window keeps it up to a day), so bottom-6 here would stack this
+                button directly underneath it — a dead, invisible tap target. */}
             {scoredHistory.length > 0 && !progressDismissed && !hasActiveScoring && (
-              <div className="pointer-events-none fixed inset-x-0 bottom-6 z-30">
+              <div className="pointer-events-none fixed inset-x-0 bottom-24 z-30">
                 <div className="mx-auto flex max-w-[1400px] justify-end px-6 md:px-10">
                   <div className="pointer-events-auto flex flex-col items-center gap-1">
                 <button
@@ -2718,15 +2717,19 @@ export default function ResumeScoringPage({
             </StatsCardGrid>
           </div>
 
-        {pageView === 'list' && (
-        <>
-        <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
-
-        {/* View pills — the same control the Job Openings list uses for its
+        {pageView === 'list' && (() => {
+        /* View pills — the same control the Job Openings list uses for its
             status row, so the two pages switch views the same way. They select
             exactly what the three cards above do; the cards stay because they
             also carry the counts, and both drive `openScoringListView`, so
-            whichever you use the other reflects it. */}
+            whichever you use the other reflects it.
+
+            Computed once here (rather than inlined at one spot) so it can be
+            handed to `ScoredResumesTable` as a slot — rendered between its
+            filter bar and its Select All row — for the two views that use
+            that table, and rendered directly above the Job List for the one
+            view that doesn't. */
+        const viewPills = (
         <div className="flex items-center gap-2 flex-wrap mb-3">
           <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
           {([
@@ -2780,7 +2783,11 @@ export default function ResumeScoringPage({
             </button>
           ))}
         </div>
+        );
 
+        return (
+        <>
+        <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
         {/* Global View - All Scored Candidates */}
         {isGlobalView ? (
           <div className="space-y-4">
@@ -2832,11 +2839,13 @@ export default function ResumeScoringPage({
                    Resumes Scored" shows the identical rows flat, one per
                    scoring event, in plain newest-first order. */
                 groupByEmail={globalListMode === 'candidates'}
+                viewPillsSlot={viewPills}
               />
             )}
           </div>
         ) : (
         <>
+        {viewPills}
         {/* Selection / Download Bar — only while rows are selected. The view
             toggle now lives in the search + filter bar below, after the count. */}
         {selectedHistoryItems.size > 0 && (
@@ -3176,13 +3185,13 @@ export default function ResumeScoringPage({
                     </button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end">
-                    <DropdownMenuItem className="group" onSelect={() => openVersionProgress(versionJob)}>
-                      <Eye className="w-4 h-4" />
-                      <span className={MENU_ITEM_SCALE_CLASS}>View Progress</span>
-                    </DropdownMenuItem>
                     <DropdownMenuItem className="group" onSelect={() => openVersionDetails(versionJob.id)}>
                       <FileText className="w-4 h-4" />
                       <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem className="group" onSelect={() => openVersionProgress(versionJob)}>
+                      <WorkInProgressIcon className="w-4 h-4" />
+                      <span className={MENU_ITEM_SCALE_CLASS}>View Progress</span>
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
@@ -3354,17 +3363,6 @@ export default function ResumeScoringPage({
                       <div className="flex flex-col gap-2 flex-shrink-0 w-full sm:w-auto">
                         <div className="flex items-center gap-1.5 self-end">
                           <button
-                            onClick={(e) => { e.stopPropagation(); openWholeJobProgress(); }}
-                            disabled={loadingProgressJobId === item.jobId}
-                            aria-label="View Progress"
-                            title="View Progress (every version of this job)"
-                            className="h-9 w-9 flex items-center justify-center border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/50 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                          >
-                            {loadingProgressJobId === item.jobId
-                              ? <Loader2 className="w-4 h-4 animate-spin" />
-                              : <Eye className="w-4 h-4" />}
-                          </button>
-                          <button
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedHistoryItem(item);
@@ -3387,6 +3385,17 @@ export default function ResumeScoringPage({
                             className="h-9 w-9 flex items-center justify-center border border-brand-cyan/30 bg-white dark:bg-slate-900 text-brand-cyan hover:bg-brand-cyan/5 hover:border-brand-cyan/50 rounded-lg transition-colors"
                           >
                             <FileText className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openWholeJobProgress(); }}
+                            disabled={loadingProgressJobId === item.jobId}
+                            aria-label="View Progress"
+                            title="View Progress (every version of this job)"
+                            className="h-9 w-9 flex items-center justify-center border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/50 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            {loadingProgressJobId === item.jobId
+                              ? <Loader2 className="w-4 h-4 animate-spin" />
+                              : <WorkInProgressIcon className="w-4 h-4" />}
                           </button>
                         </div>
                         {hasVersionHistory && (
@@ -3538,7 +3547,7 @@ export default function ResumeScoringPage({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div className="bg-gradient-to-br from-green-50 to-green-50/40 border border-green-200/70 ring-1 ring-green-100 rounded-lg p-3">
                           <div className="flex items-center justify-between mb-1">
                             <span className="text-xs text-gray-700 dark:text-slate-300 font-medium">Exact Match</span>
@@ -3575,17 +3584,6 @@ export default function ResumeScoringPage({
                       <div className="mt-4 flex flex-col gap-2 w-full">
                         <div className="flex items-center justify-end gap-1.5">
                           <button
-                            onClick={(e) => { e.stopPropagation(); openWholeJobProgress(); }}
-                            disabled={loadingProgressJobId === item.jobId}
-                            aria-label="View Progress"
-                            title="View Progress (every version of this job)"
-                            className="h-9 w-9 flex items-center justify-center border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/50 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                          >
-                            {loadingProgressJobId === item.jobId
-                              ? <Loader2 className="w-4 h-4 animate-spin" />
-                              : <Eye className="w-4 h-4" />}
-                          </button>
-                          <button
                             onClick={() => {
                               setSelectedHistoryItem(item);
                               setViewMode('details');
@@ -3609,6 +3607,17 @@ export default function ResumeScoringPage({
                             className="h-9 w-9 flex items-center justify-center border border-brand-cyan/30 bg-white dark:bg-slate-900 text-brand-cyan hover:bg-brand-cyan/5 hover:border-brand-cyan/50 rounded-lg transition-colors cursor-pointer"
                           >
                             <FileText className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); openWholeJobProgress(); }}
+                            disabled={loadingProgressJobId === item.jobId}
+                            aria-label="View Progress"
+                            title="View Progress (every version of this job)"
+                            className="h-9 w-9 flex items-center justify-center border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/50 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            {loadingProgressJobId === item.jobId
+                              ? <Loader2 className="w-4 h-4 animate-spin" />
+                              : <WorkInProgressIcon className="w-4 h-4" />}
                           </button>
                         </div>
                         {hasVersionHistory && (
@@ -3702,7 +3711,8 @@ export default function ResumeScoringPage({
         </>
         )}
         </>
-        )}
+        );
+        })()}
 
         {showProgressModal && (
           <BulkScoringProgressModal
@@ -4150,7 +4160,14 @@ export default function ResumeScoringPage({
                       {allResumes.length === 0 ? 'No scoring history available.' : 'No scoring history matches these filters.'}
                     </div>
                   ) : (
-                    <>
+                    /* overflow-x-auto + min-w below: the grid's fixed/fr column
+                       tracks need ~760px to fit the Status column's three
+                       badges without crushing them, wider than a phone
+                       viewport — scroll it sideways instead of clipping it
+                       (overflow-hidden on the outer card used to do exactly
+                       that, silently cutting columns off on mobile). */
+                    <div className="overflow-x-auto">
+                    <div className="min-w-[760px]">
                       {/* A CSS grid rather than a <table>: header and body rows
                           share the exact same `historyGridCols` track list, so
                           every column lines up pixel-for-pixel regardless of
@@ -4247,7 +4264,8 @@ export default function ResumeScoringPage({
                           );
                         })}
                       </div>
-                    </>
+                    </div>
+                    </div>
                   )}
                 </div>
 
@@ -4331,12 +4349,6 @@ export default function ResumeScoringPage({
           </div>
         </div>
       </div>
-
-      <ModuleInfoBanner
-        icon={<ClipboardList className="h-4 w-4" />}
-        title="AI-Powered Resume Scoring"
-        description="Evaluate resumes against a selected job description using AI analysis of skills, experience, education, and role fit. Review transparent scores and recommendations to identify the strongest candidates faster."
-      />
 
       {/* Job Selection — static on the page: the same search, job cards and
           Version History the Apply to Job popup uses (via the shared

@@ -2514,6 +2514,19 @@ export default function AIInterviewConfig() {
 
   const proceedToClusters = async () => {
     if (!selectedJd) return;
+
+    // 0. Cluster generation on the next page needs AI_CONFIG_OPENAI_API_KEY.
+    // Check availability BEFORE navigating — failing after the navigation
+    // strands the recruiter on the Clusters page with nothing to fix there.
+    const { available: aiAvailable } = await aiInterviewService.getAIConfigStatus();
+    if (!aiAvailable) {
+      toast.error(
+        'AI is not configured for this workspace (missing OpenAI API key). Contact your admin to configure it before continuing.',
+        { duration: 9000 }
+      );
+      return;
+    }
+
     isNavigatingRef.current = true;
 
     // 1. Save draft first so the Clusters page reads the latest skills.

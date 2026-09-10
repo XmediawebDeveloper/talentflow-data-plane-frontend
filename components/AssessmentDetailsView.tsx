@@ -1,16 +1,16 @@
-import { ArrowLeft, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Star, Globe, Zap, Loader2, Monitor, Ban } from 'lucide-react';
-import { useState, useMemo, useEffect } from 'react';
+import { ArrowLeft, ChevronDown, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Target, Sparkles, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Star, Globe, Zap, Loader2, Monitor, Ban } from 'lucide-react';
+import { Fragment, useState, useMemo, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
 import remarkBreaks from 'remark-breaks';
 import remarkGfm from 'remark-gfm';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { assessmentService, jdService } from '@/lib/services';
+import type { JDLineageVersion } from '@/lib/services/jdService';
 import type { JDResponse } from '@/lib/services';
 import { stripVersionFromTitle, isAssessmentRevoked } from '@/lib/utils/assessmentUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
-import VersionBadge from './VersionBadge';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
@@ -122,6 +122,120 @@ export default function AssessmentDetailsView({
     ? (requestedTab as DetailsTab)
     : 'overview';
   const [activeTab, setActiveTab] = useState<DetailsTab>(initialTab);
+  /* ── Job version selector ────────────────────────────────────────────────
+   *
+   * The Job Details page's control, in the Job Details grammar: a solid purple
+   * badge showing the version you are on, opening a menu of every version of
+   * the job. Selecting one navigates, exactly as it does there - which is what
+   * makes "show only V2's data" true without a second code path. The route
+   * refetches for the assessment it lands on, so nothing from V1 can survive
+   * into a V2 view.
+   *
+   * The job's versions only. It does NOT list the assessment's own versions;
+   * those are the New Versions tab's job, and conflating the two is the
+   * ambiguity this page labels its way out of everywhere else.
+   *
+   * One request on mount for the lineage (the list is needed to draw the
+   * menu). The assessment for a chosen version is looked up only when that
+   * version is actually clicked, rather than fanning out a request per version
+   * up front - a job with six versions would otherwise cost seven requests on
+   * every page load to populate a menu most readers never open.
+   */
+  const [jobVersions, setJobVersions] = useState<JDLineageVersion[]>([]);
+  const [showVersionMenu, setShowVersionMenu] = useState(false);
+  const [versionSwitching, setVersionSwitching] = useState<string | null>(null);
+  const versionMenuRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    const load = async () => {
+      if (!assessment?.jd_id) return;
+      try {
+        const lineage = await jdService.getLineageVersions(assessment.jd_id);
+        if (!cancelled) setJobVersions(Array.isArray(lineage) ? lineage : []);
+      } catch (error) {
+        console.error('[TalentFlow] Failed to load job versions:', error);
+        if (!cancelled) setJobVersions([]);
+      }
+    };
+    load();
+    return () => { cancelled = true; };
+  }, [assessment?.jd_id]);
+
+  /* Close on an outside click, the way the Job Details menu does. */
+  useEffect(() => {
+    if (!showVersionMenu) return;
+    const onDown = (e: MouseEvent) => {
+      if (versionMenuRef.current && !versionMenuRef.current.contains(e.target as Node)) {
+        setShowVersionMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [showVersionMenu]);
+
+  /* Newest first, on the version number the lineage reports. */
+  const sortedJobVersions = useMemo(
+    () => [...jobVersions].sort((a, b) => (b?.version_number ?? 0) - (a?.version_number ?? 0)),
+    [jobVersions],
+  );
+
+  /**
+   * Open the assessment authored against THIS job version.
+   *
+   * The assessment is looked up by the version's own JD row id, which is the
+   * join every other surface on this page uses - a job version IS a JD row,
+   * and `jd_id` on an assessment names the row it was built against. Newest
+   * assessment wins where a version carries more than one.
+   *
+   * Navigates rather than swapping state in place, so the whole page - header,
+   * every tab, every fetch keyed on the assessment id - reloads for the new
+   * version. There is no path by which V1 data can persist into a V2 view.
+   */
+  const handleJobVersionSelect = async (version: JDLineageVersion) => {
+    setShowVersionMenu(false);
+    if (!version?.id || version.id === assessment?.jd_id) return;
+    setVersionSwitching(version.id);
+    try {
+      const res = await assessmentService.list({ jd_id: version.id, page_size: 50 });
+      const items = Array.isArray(res) ? res : (res?.items ?? []);
+      if (!items.length) {
+        toast.error(`Job v${version.version_number ?? 1} has no assessment yet`);
+        return;
+      }
+      const newest = [...items].sort((a, b) => (b?.version ?? 0) - (a?.version ?? 0))[0];
+      router.push(`/recruitment/assessments/${newest.id}`);
+    } catch (error) {
+      console.error('[TalentFlow] Failed to open the assessment for that job version:', error);
+      toast.error('Could not open that job version');
+    } finally {
+      setVersionSwitching(null);
+    }
+  };
+
+  /* The tabs, as data.
+   *
+   * Six near-identical buttons used to be written out longhand, which is why
+   * one of them (New Versions) had quietly lost the `min-w`/`text-center` the
+   * other five carried. One list, one renderer, and they cannot drift again.
+   *
+   * The ids, the labels and their order are exactly as they were - this is a
+   * change of layout, not of what the page offers. `?tab=` still deep-links to
+   * any of them, because `activeTab` is untouched.
+   *
+   * Icons come from the set this file already imports, matching the Result
+   * Details nav, which is icon-led. `Layers` is the version-history glyph the
+   * assessments list already uses for Job Versions; `Copy` for New Versions,
+   * because duplicating is what mints one.
+   */
+  const detailTabs: { id: DetailsTab; label: string; icon: typeof FileText }[] = [
+    { id: 'overview', label: 'Assessment Details', icon: FileText },
+    { id: 'activity', label: 'Recent Activity', icon: Clock },
+    { id: 'versions', label: 'Version History', icon: Layers },
+    { id: 'info', label: 'Assessment Info', icon: Info },
+    { id: 'viewjd', label: 'View JD', icon: Briefcase },
+    { id: 'newversions', label: 'New Versions', icon: Copy },
+  ];
   const [recentActivity, setRecentActivity] = useState<any[]>([]);
   const [activityLoading, setActivityLoading] = useState(false);
   const [activityPage, setActivityPage] = useState(1);
@@ -611,192 +725,294 @@ export default function AssessmentDetailsView({
         ) : undefined}
       />
 
-      {/* Header — scrolls with the page. It used to be `sticky top-0`, pinned
-          against the old full-bleed layout; inside the job-details card the
-          breadcrumb is the only sticky element, so a second pinned layer just
-          sat on top of it. */}
-      <div>
-        <div className="px-3 sm:px-5 lg:px-8 py-3 sm:py-4 lg:py-5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4">
-            <div className="flex items-start gap-2 sm:gap-3 lg:gap-4 min-w-0">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-11 lg:h-11 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-                <FileText className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-brand-blue" />
-              </div>
-              <div className="min-w-0">
-                {/* Line 1: AS-022 SQL Developer - Assessment V1  Active AI-Generated */}
-                <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2 flex-wrap">
-                  <span className="px-1.5 sm:px-2 lg:px-2.5 py-0.5 sm:py-1 bg-brand-blue text-white rounded text-xs sm:text-sm font-bold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                    {assessment.short_id || `AS-${String(assessment.id).slice(0, 8).toUpperCase()}`}
+      {/* Assessment summary — the Job Details page's first card, in the slot
+          the original header occupied: under the breadcrumb, above the
+          nav/content grid. One card, and its grammar is JobDetailView's own
+          rather than a third design:
+
+            wrapper  brand-blue/30 border, brand-blue/10 ring, p-4 sm:p-5,
+                     inside an mb-5 block
+            row 1    solid blue mono ID pill, a plain `font-normal` title,
+                     then the status pill
+            row 2    `text-xs text-gray-600`, icon+text facts and chips
+                     separated by a `text-gray-300` bullet, ending on the
+                     version badge
+            right    the actions column
+
+          Two version badges where a job has one, because this page carries
+          both and they genuinely diverge: an assessment is only re-versioned
+          when someone duplicates it, so a job on v5 can hold assessment V3.
+          Job version keeps JobDetailView's solid purple badge exactly; the
+          assessment's sits beside it in the assessment blue this page uses
+          everywhere else, and both are labelled - two bare numbers side by
+          side is the ambiguity the Send Invite rows already spell their way
+          out of ("Job V3 → Assessment V2").
+
+          Values are unchanged: the assessment the route already fetched, plus
+          `sections`/`formattedDuration` this file derives. No new request, no
+          new field, nothing hardcoded. A value the API did not return drops
+          its item and its bullet rather than printing a blank. */}
+      <div className="mb-5">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-brand-blue/30 dark:border-brand-blue/40 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
+          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              {/* Row 1: Job ID + Assessment title + Status */}
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                {assessment.jd_short_id && (
+                  <span className="inline-flex items-center px-2 py-0.5 bg-blue-600 text-white rounded-md text-xs font-semibold font-mono tracking-wide">
+                    {assessment.jd_short_id}
                   </span>
-                  <h1 className="text-sm sm:text-base lg:text-xl text-gray-900 dark:text-slate-50 font-semibold truncate tracking-tight">
-                    {assessment.jd_title || stripVersionFromTitle(assessment.title)} - Assessment
-                  </h1>
-                  <VersionBadge version={assessment.version} size="md" variant="secondary" />
-                  <span className={`px-3 py-1 rounded-full text-xs font-medium ring-1 ${
+                )}
+                {/* The JOB's own name, and nothing appended to it. The
+                    literal " - Assessment" that used to follow was written
+                    here in the markup, not stored anywhere - the page it sits
+                    on already says what this is. `stripVersionFromTitle` is
+                    the fallback for rows with no `jd_title`, and only removes
+                    a "Version N" suffix baked into an old stored title; it
+                    does not touch the API value. */}
+                <h1 className="font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate">
+                  {assessment.jd_title || stripVersionFromTitle(assessment.title)}
+                </h1>
+                {assessment.status && (
+                  <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${
                     assessment.status === 'Active'
-                      ? 'bg-green-100 text-green-700 ring-green-200'
+                      ? 'bg-green-50 text-green-700 border-green-200'
                       : assessment.status === 'Draft'
-                      ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
-                      : 'bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-gray-200 dark:ring-slate-700'
+                        ? 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20'
+                        : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700'
                   }`}>
                     {assessment.status}
                   </span>
-                  {sections.length > 0 && (
-                    <span className="px-2 py-1 bg-brand-cyan/10 text-brand-cyan rounded text-xs flex items-center gap-1 ring-1 ring-brand-cyan/20">
-                      <Sparkles className="w-3 h-3" />
-                      AI-Generated
-                    </span>
-                  )}
-                </div>
+                )}
+              </div>
 
-                {/* Line 2: Linked to: JD-025 - SQL Developer v2 */}
-                {assessment.jd_short_id && (
-                  <div className="text-sm text-gray-700 dark:text-slate-300 mb-2">
-                    <span className="font-medium">Linked to: {assessment.jd_short_id}</span>
-                    {assessment.jd_title && (
-                      <span> - {assessment.jd_title}</span>
-                    )}
-                    {assessment.jd_version && (
-                      <span className="ml-1 text-gray-500 dark:text-slate-500">v{assessment.jd_version}</span>
+              {/* Row 2: Rounds + Duration + Created Date + Created By + versions */}
+              <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
+                {/* No per-icon colour. The four icons inherit the row's own
+                    `text-gray-600 dark:text-slate-400` through currentColor, so
+                    they read as one quiet line of facts instead of four tinted
+                    ones competing with the pills above and beside them. */}
+                {([
+                  { key: 'rounds', icon: Layers, label: sections.length > 0 ? `${sections.length} round${sections.length !== 1 ? 's' : ''}` : null },
+                  { key: 'duration', icon: Clock, label: formattedDuration },
+                  { key: 'created-at', icon: Calendar, label: assessment.created_at ? `Created ${formatIST(assessment.created_at)}` : null },
+                  { key: 'created-by', icon: User, label: assessment.created_by_name ? `By ${assessment.created_by_name}` : null },
+                ] as { key: string; icon: typeof Clock; label: string | null | undefined }[])
+                  .filter((fact) => !!fact.label)
+                  .map((fact, i) => (
+                    <Fragment key={fact.key}>
+                      {/* Between items only. After the filter, so a dropped
+                          fact takes its bullet with it. */}
+                      {i > 0 && <span aria-hidden className="text-gray-300">&bull;</span>}
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <fact.icon className="w-4 h-4 flex-shrink-0" />
+                        <span className="truncate" title={fact.label ?? undefined}>{fact.label}</span>
+                      </div>
+                    </Fragment>
+                  ))}
+
+                {/* Version badges, on the tail of the row exactly as the Job
+                    Details card ends on its own. */}
+                {(assessment.jd_version != null || assessment.version != null) && (
+                  <span aria-hidden className="text-gray-300">&bull;</span>
+                )}
+                {assessment.jd_version != null && (
+                  /* The Job Details page's version control, same badge and
+                     same menu. It replaces the static pill that stood here:
+                     the job's versions are a choice, not a label. */
+                  <div className="relative" ref={versionMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => setShowVersionMenu((open) => !open)}
+                      disabled={sortedJobVersions.length === 0}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-600 text-white rounded-full text-xs font-medium hover:bg-purple-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                      aria-label={`Select job version, currently v${assessment.jd_version}`}
+                      aria-haspopup="menu"
+                      aria-expanded={showVersionMenu}
+                      title={sortedJobVersions.length === 0 ? 'Loading job versions…' : 'Switch job version'}
+                    >
+                      Job v{assessment.jd_version}
+                      <ChevronDown className={`w-3 h-3 transition-transform ${showVersionMenu ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showVersionMenu && (
+                      <div
+                        role="menu"
+                        aria-label="Available job versions"
+                        className="absolute left-0 top-full mt-2 w-56 max-h-72 overflow-y-auto bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-1 z-50"
+                      >
+                        {sortedJobVersions.length === 0 ? (
+                          <div className="px-3 py-3 text-xs text-gray-500 dark:text-slate-400">
+                            No versions available
+                          </div>
+                        ) : (
+                          sortedJobVersions.map((version) => {
+                            /* "Current" is the JD ROW this assessment was built
+                               against, not a version number - two rows can
+                               report the same number, and the row id is what
+                               the assessment actually points at. */
+                            const isCurrentVersion = version.id === assessment.jd_id;
+                            const isSwitching = versionSwitching === version.id;
+                            return (
+                              <button
+                                key={version.id}
+                                type="button"
+                                role="menuitem"
+                                disabled={isCurrentVersion || !!versionSwitching}
+                                onClick={() => handleJobVersionSelect(version)}
+                                className={`w-full px-3 py-2 text-left transition-colors ${
+                                  isCurrentVersion ? 'bg-brand-blue/5 cursor-default' : 'hover:bg-brand-blue/5'
+                                } ${versionSwitching && !isSwitching ? 'opacity-60' : ''}`}
+                              >
+                                <div className="flex items-center justify-between gap-2">
+                                  <span className="text-xs font-semibold text-gray-900 dark:text-slate-100">
+                                    v{version.version_number ?? 1}
+                                  </span>
+                                  <div className="flex items-center gap-1">
+                                    {version.status && (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300 capitalize">
+                                        {version.status}
+                                      </span>
+                                    )}
+                                    {isSwitching ? (
+                                      <Loader2 className="w-3 h-3 animate-spin text-brand-blue" />
+                                    ) : isCurrentVersion ? (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                                        Selected
+                                      </span>
+                                    ) : version.is_latest_version ? (
+                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
+                                        Latest
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </div>
+                                <div className="text-[11px] text-gray-500 dark:text-slate-400 truncate">
+                                  {version.job_id || version.title}
+                                </div>
+                              </button>
+                            );
+                          })
+                        )}
+                      </div>
                     )}
                   </div>
                 )}
-
-                {/* Line 3: 30 min 3 sections 1 candidates Created 9 Feb 2026 at 06:46 pm Last Updated date_time */}
-                <div className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 flex items-center gap-2 sm:gap-3 lg:gap-4 flex-wrap">
-                  <span>{formattedDuration}</span>
-                  <span>{sections.length} section{sections.length !== 1 ? 's' : ''}</span>
-                  <span>{assessment.candidates || 0} candidates</span>
-                  {assessment.created_at && (
-                    <span>
-                      Created {formatIST(assessment.created_at)}
-                    </span>
-                  )}
-                  {assessment.updated_at && (
-                    <span>
-                      Last Updated {formatIST(assessment.updated_at)}
-                    </span>
-                  )}
-                </div>
+                {assessment.version != null && (
+                  <span
+                    title={`Assessment version ${assessment.version}`}
+                    className="inline-flex items-center px-2.5 py-1 bg-brand-blue text-white rounded-full text-xs font-medium whitespace-nowrap"
+                  >
+                    Assessment V{assessment.version}
+                  </span>
+                )}
               </div>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            {/* Actions. Share keeps every one of its own rules; Edit is the
+                pencil from the reference, on the `onEdit` the route has always
+                passed. */}
+            <div className="flex items-center gap-2 flex-shrink-0 self-start">
               {onShare && canCreateAssessments && (() => {
-                // Share is blocked for Archived (out of circulation) AND
-                // once invites have been revoked (assessment is sealed —
-                // recruiter should clone a new version for a fresh round).
-                // We use the shared isAssessmentRevoked helper so this
-                // check honours BOTH the backend has_revoked_invites flag
-                // AND the tab-local sessionStorage seal — without the
-                // local fallback, opening the details view of an assessment
-                // you just revoked left Share enabled (because the
-                // assessment prop comes straight from the list response
-                // and may not carry the backend flag yet).
-                const isArchived = assessment.status === 'Archived';
-                const hasRevoked = isAssessmentRevoked(assessment as any);
-                const blockedReason = isArchived
-                  ? 'Archived assessments cannot be shared'
-                  : hasRevoked
-                  ? 'Invites for this assessment have been revoked. Duplicate it to start fresh.'
-                  : '';
-                const disabled = !!blockedReason;
-                return (
-                  <button
-                    onClick={disabled ? undefined : onShare}
-                    disabled={disabled}
-                    title={blockedReason}
-                    className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 transition-all flex items-center gap-1.5 sm:gap-2 font-medium text-xs sm:text-sm ${
-                      disabled
-                        ? 'bg-gray-200 dark:bg-slate-700 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                        : 'bg-brand-blue hover:bg-brand-blue-2 text-white'
-                    }`}
-                  >
-                    <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                    Share
-                  </button>
-                );
+        // Share is blocked for Archived (out of circulation) AND
+        // once invites have been revoked (assessment is sealed —
+        // recruiter should clone a new version for a fresh round).
+        // We use the shared isAssessmentRevoked helper so this
+        // check honours BOTH the backend has_revoked_invites flag
+        // AND the tab-local sessionStorage seal — without the
+        // local fallback, opening the details view of an assessment
+        // you just revoked left Share enabled (because the
+        // assessment prop comes straight from the list response
+        // and may not carry the backend flag yet).
+        const isArchived = assessment.status === 'Archived';
+        const hasRevoked = isAssessmentRevoked(assessment as any);
+        const blockedReason = isArchived
+          ? 'Archived assessments cannot be shared'
+          : hasRevoked
+          ? 'Invites for this assessment have been revoked. Duplicate it to start fresh.'
+          : '';
+        const disabled = !!blockedReason;
+        return (
+          <button
+            onClick={disabled ? undefined : onShare}
+            disabled={disabled}
+            title={blockedReason}
+            className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 transition-all flex items-center gap-1.5 sm:gap-2 font-medium text-xs sm:text-sm ${
+              disabled
+                ? 'bg-gray-200 dark:bg-slate-700 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                : 'bg-brand-blue hover:bg-brand-blue-2 text-white'
+            }`}
+          >
+            <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+            Share
+          </button>
+        );
               })()}
+              {onEdit && canCreateAssessments && (
+                <button
+                  type="button"
+                  onClick={onEdit}
+                  aria-label="Edit assessment"
+                  title="Edit assessment"
+                  className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue transition-all flex-shrink-0"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Tabs — not sticky, matching job-details. The old
-          `top-[120px] sm:top-[148px] lg:top-[168px]` offsets were hand-measured
-          against the previous header height; once the header stopped being
-          pinned those numbers pinned the bar mid-page, where it covered the
-          content scrolling beneath it. */}
-      <div className="bg-white border-b border-gray-200">
-        <div>
-          <div className="flex gap-3 sm:gap-4 lg:gap-6 overflow-x-auto scrollbar-hide">
-            <button
-              onClick={() => setActiveTab('overview')}
-              className={`min-w-[120px] sm:min-w-[140px] py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap text-center ${
-                activeTab === 'overview'
-                  ? 'border-brand-blue text-brand-blue font-medium'
-                  : 'border-transparent text-gray-600 hover:text-brand-blue'
-              }`}
-            >
-              Assessment Details
-            </button>
-            <button
-              onClick={() => setActiveTab('activity')}
-              className={`min-w-[120px] sm:min-w-[140px] py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap text-center ${
-                activeTab === 'activity'
-                  ? 'border-brand-blue text-brand-blue font-medium'
-                  : 'border-transparent text-gray-600 hover:text-brand-blue'
-              }`}
-            >
-              Recent Activity
-            </button>
-            <button
-              onClick={() => setActiveTab('versions')}
-              className={`min-w-[120px] sm:min-w-[140px] py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap text-center ${
-                activeTab === 'versions'
-                  ? 'border-brand-blue text-brand-blue font-medium'
-                  : 'border-transparent text-gray-600 hover:text-brand-blue'
-              }`}
-            >
-              Version History
-            </button>
-            <button
-              onClick={() => setActiveTab('info')}
-              className={`min-w-[120px] sm:min-w-[140px] py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap text-center ${
-                activeTab === 'info'
-                  ? 'border-brand-blue text-brand-blue font-medium'
-                  : 'border-transparent text-gray-600 hover:text-brand-blue'
-              }`}
-            >
-              Assessment Info
-            </button>
-            <button
-              onClick={() => setActiveTab('viewjd')}
-              className={`min-w-[120px] sm:min-w-[140px] py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap text-center ${
-                activeTab === 'viewjd'
-                  ? 'border-brand-blue text-brand-blue font-medium'
-                  : 'border-transparent text-gray-600 hover:text-brand-blue'
-              }`}
-            >
-              View JD
-            </button>
-            <button
-              onClick={() => setActiveTab('newversions')}
-              className={`py-2.5 sm:py-3 text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
-                activeTab === 'newversions'
-                  ? 'border-brand-blue text-brand-blue font-medium'
-                  : 'border-transparent text-gray-600 hover:text-brand-blue'
-              }`}
-            >
-              New Versions
-            </button>
-          </div>
-        </div>
-      </div>
+      {/* Unified detail layout: vertical navigation on the left, the selected
+          tab's content on the right.
 
-      {/* Content */}
-      <div className="py-3 sm:py-4 lg:py-6 w-full bg-white dark:bg-slate-900">
+          The grid, the aside's chrome and the button states are the Result
+          Details page's (`CandidateResultDetails`), copied rather than
+          reinvented so the two detail pages read as one screen. Same column
+          ladder - 180px, 220px at sm, 280px at lg - so the nav grows with the
+          viewport instead of squeezing the content at every width.
+
+          `items-start` keeps the aside its own height rather than stretching
+          it down the full content column, and `sticky top-20 self-start` keeps
+          it in view while a long tab scrolls beside it.
+
+          The strip that used to live here was horizontal and scrolled sideways
+          (`overflow-x-auto scrollbar-hide`), so with six tabs the last of them
+          was off-screen and undiscoverable at anything under a wide desktop.
+          Stacked vertically they are all visible at once. */}
+      <div className="grid grid-cols-[180px_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[220px_minmax(0,1fr)] sm:gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
+        <aside className="sticky top-20 self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+          <nav className="p-2 sm:p-3" aria-label="Assessment details sections">
+            <div className="flex flex-col gap-1.5">
+              {detailTabs.map((tab) => {
+                const isActive = activeTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`w-full rounded-lg px-3 py-2.5 text-left text-xs sm:text-sm transition-colors flex items-center gap-2 ${
+                      isActive
+                        ? 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
+                        : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
+                    }`}
+                  >
+                    <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                    <span className="min-w-0 leading-snug">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        </aside>
+
+        {/* Content — `min-w-0` so a wide table inside a tab scrolls in its own
+            box instead of stretching the grid column and pushing the nav off
+            the page. */}
+        <div className="min-w-0 overflow-x-auto scroll-mt-24 py-3 sm:py-4 lg:py-6 w-full bg-white dark:bg-slate-900">
+
         {/* Overview Tab */}
         {activeTab === 'overview' && (
           <div className="space-y-6">
@@ -826,117 +1042,6 @@ export default function AssessmentDetailsView({
                   <span className="px-4 py-2 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded-lg">
                     100%
                   </span>
-                </div>
-
-                {/* Assessment Rounds */}
-                <div className="space-y-4">
-                  <h4 className="text-sm font-medium text-gray-700">Assessment Rounds</h4>
-
-                  {assessment.hr_enabled && (
-                    <div className="bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="px-3 py-1 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded">
-                          HR Round
-                        </span>
-                        <span className="px-3 py-1 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-sm font-medium rounded-lg">
-                          {assessment.hr_percentage}%
-                        </span>
-                      </div>
-                      <div>
-                        <div className="text-xs font-medium text-gray-700 mb-2">Topics Covered:</div>
-                        <div className="flex flex-wrap gap-2">
-                          {(assessment.hr_topics || []).length > 0 ? (
-                            (assessment.hr_topics || []).map((topic: any, idx: number) => (
-                              <span key={idx} className="px-2 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs">
-                                {typeof topic === 'string' ? topic : topic?.text || JSON.stringify(topic)}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="px-2 py-1 bg-slate-100 text-gray-600 ring-1 ring-gray-200 rounded text-xs">
-                              N/A
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {assessment.technical_enabled && (
-                    <div className="bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="px-3 py-1 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded">
-                          Technical Round
-                        </span>
-                        <span className="px-3 py-1 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-sm font-medium rounded-lg">
-                          {assessment.technical_percentage}%
-                        </span>
-                      </div>
-                      <div>
-                        <div className="text-xs font-medium text-gray-700 mb-2">Topics Covered:</div>
-                        <div className="flex flex-wrap gap-2">
-                          {(assessment.technical_topics || []).length > 0 ? (
-                            (assessment.technical_topics || []).map((topic: any, idx: number) => (
-                              <span key={idx} className="px-2 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs">
-                                {typeof topic === 'string' ? topic : topic?.text || JSON.stringify(topic)}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="px-2 py-1 bg-slate-100 text-gray-600 ring-1 ring-gray-200 rounded text-xs">
-                              N/A
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {(() => {
-                    // ==================== COMPILER AVAILABILITY CHECK ====================
-                    // Only show coding section if coding_enabled AND at least one language has a compiler
-                    if (!assessment.coding_enabled) return null;
-
-                    const compilerLanguages = [
-                      'python', 'python3', 'javascript', 'js', 'java',
-                      'typescript', 'ts', 'cpp', 'c++', 'c', 'csharp', 'cs',
-                      'go', 'rust', 'ruby', 'php', 'kotlin', 'swift', 'sql'
-                    ];
-
-                    const codingLanguages = assessment.coding_languages || [];
-                    const hasCompiler = codingLanguages.some((lang: string) =>
-                      compilerLanguages.includes(lang.toLowerCase())
-                    );
-
-                    if (!hasCompiler) return null;
-
-                    return (
-                    <div className="bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <span className="px-3 py-1 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded">
-                          Coding Round
-                        </span>
-                        <span className="px-3 py-1 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-sm font-medium rounded-lg">
-                          {assessment.coding_percentage}%
-                        </span>
-                      </div>
-                      <div>
-                        <div className="text-xs font-medium text-gray-700 mb-2">Topics Covered:</div>
-                        <div className="flex flex-wrap gap-2">
-                          {(assessment.coding_topics || []).length > 0 ? (
-                            (assessment.coding_topics || []).map((topic: any, idx: number) => (
-                              <span key={idx} className="px-2 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs">
-                                {typeof topic === 'string' ? topic : topic?.text || JSON.stringify(topic)}
-                              </span>
-                            ))
-                          ) : (
-                            <span className="px-2 py-1 bg-slate-100 text-gray-600 ring-1 ring-gray-200 rounded text-xs">
-                              N/A
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                    );
-                  })()}
                 </div>
 
                 {/* Sections Details - Moved from Sections tab */}
@@ -2573,6 +2678,7 @@ export default function AssessmentDetailsView({
           )}
         </div>
       )}
+      </div>
       </div>
       </div>
       </div>
