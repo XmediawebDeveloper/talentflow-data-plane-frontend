@@ -8,7 +8,7 @@ import type { User, Tenant } from '@/lib/types/tenant';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { jdService, JDLineageVersion, JDUsageStatus } from '@/lib/services/jdService';
+import { jdService, JDLineageVersion, JDUsageStatus, JDVersion } from '@/lib/services/jdService';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
@@ -41,7 +41,7 @@ import AIInterviewTrackInvitesModal from './AIInterviewTrackInvitesModal';
 import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
 import AIInterviewResults from './ai-interview/AIInterviewResults';
 import CandidateResultsView from './ai-interview/CandidateResultsView';
-import { aiInterviewService, AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, AIInterviewResponse, AIInterviewVersionHistoryItem } from '@/lib/services/aiInterviewService';
 import { formatJobExperienceBadge } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { toast } from 'sonner';
@@ -798,6 +798,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const [assessmentInviteCount, setAssessmentInviteCount] = useState(0);
   const [loadingAssessmentResults, setLoadingAssessmentResults] = useState(false);
   const [viewingAssessmentResult, setViewingAssessmentResult] = useState<any | null>(null);
+  /* The Assessment objects themselves (not the per-candidate results above) —
+     kept for Recent Activity's "Assessment Created (Vn)" entry, which needs
+     each assessment's own created_by_name/created_at/version rather than a
+     candidate's result. */
+  const [jdAssessments, setJdAssessments] = useState<any[]>([]);
 
   // AI Talent Match state
   const [aiMatchSessions, setAiMatchSessions] = useState<AIMatchSessionResponse[]>([]);
@@ -865,6 +870,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const [loadingAIInterviewConfig, setLoadingAIInterviewConfig] = useState(false);
   const [aiInterviewConfigError, setAiInterviewConfigError] = useState<string | null>(null);
   const aiInterviewConfigFetchedRef = useRef(false);
+  /* The interview config's own edit/publish version — for Recent Activity's
+     "AI Interview Created (Vn)" entry. `AIInterviewResponse` itself carries no
+     version number (only `jd_current_version`, which is the linked JD's
+     version, not the interview's own), so this is its own small fetch,
+     mirroring the JD-version-history one above. */
+  const [aiInterviewVersionHistory, setAiInterviewVersionHistory] = useState<AIInterviewVersionHistoryItem[]>([]);
 
   /* `aiInterviewConfig` comes from findLiveConfigForJd, which only matches
      published/in-use configs — so its presence IS "there is something to invite
@@ -1294,6 +1305,38 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     }
   }, [job.id]);
 
+  /* Real per-publish attribution for the Recent Activity panel — who
+     published/republished this JD, and exactly when. `job.postedBy` /
+     `job.postedDate` (created_by_name / created_at) name the JD's CREATOR,
+     which is not necessarily who clicked Publish, and carry nothing at all
+     for a republish. `/jd/{id}/versions` returns one entry per PUBLISHED
+     version with its own `published_by_name` + `published_at`, which is the
+     actual answer to both. Archive/disable have no equivalent endpoint — the
+     backend does not record who changed a JD to those statuses — so those two
+     activity entries stay date-only (see below). */
+  const [jdVersionHistory, setJdVersionHistory] = useState<JDVersion[]>([]);
+  useEffect(() => {
+    if (!job.id) return;
+    let cancelled = false;
+    jdService.getVersionHistory(job.id)
+      .then((res) => { if (!cancelled) setJdVersionHistory(res.versions || []); })
+      .catch(() => { /* Recent Activity falls back to job.postedBy/postedDate */ });
+    return () => { cancelled = true; };
+  }, [job.id]);
+
+  /* Same idea, for the AI Interview config's OWN version — `AIInterviewResponse`
+     has no version field of its own (only the linked JD's), so Recent
+     Activity's "AI Interview Created (Vn)" reads it from this config's
+     dedicated version-history endpoint instead. */
+  useEffect(() => {
+    if (!aiInterviewConfig?.id) { setAiInterviewVersionHistory([]); return; }
+    let cancelled = false;
+    aiInterviewService.getVersionHistory(aiInterviewConfig.id)
+      .then((res) => { if (!cancelled) setAiInterviewVersionHistory(res.items || []); })
+      .catch(() => { /* Recent Activity falls back to "V1" */ });
+    return () => { cancelled = true; };
+  }, [aiInterviewConfig?.id]);
+
   // Fetch assessment results on component mount (only if plan includes assessment)
   useEffect(() => {
     if (job.id && hasPlanFeature('assessment')) {
@@ -1416,6 +1459,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       // First, get all assessments for this JD
       const assessmentsResponse = await assessmentService.list({ jd_id: job.id, page_size: 100 });
       const assessments = assessmentsResponse.items || [];
+      setJdAssessments(assessments);
       // Derived here rather than in a separate request — this list is already
       // loaded, and it's the same source Create uses to decide its destination.
       // Published/active is the same pair handleOpenShareAssessment treats as
@@ -1542,6 +1586,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       console.error('Failed to fetch assessment results:', error);
       setAssessmentInviteCount(0);
       setAssessmentResults([]);
+      setJdAssessments([]);
     } finally {
       setLoadingAssessmentResults(false);
     }
@@ -3519,58 +3564,150 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             </div>
           </div>
 
-          {/* Recent Activity */}
+          {/* Recent Activity — one row per actual EVENT (every JD version
+              publish, every scored resume, every AI match run, every
+              assessment created, plus the interview config's own creation),
+              merged from every source this page already fetches and sorted
+              newest-first, rather than one summary row per activity TYPE. That
+              is what lets the panel grow past a handful of rows as real
+              activity accumulates instead of being capped at one line per
+              category regardless of how much actually happened.
+
+              Each row is a title, a Clock-tagged date/time, and a User-tagged
+              name. The name is real wherever the backend records who did it,
+              and falls back to "System" (this file's own pre-existing
+              `job.postedBy || 'System'` convention) where it doesn't, rather
+              than leaving the line blank:
+                - Job Published / Republished: /jd/{id}/versions returns one
+                  entry per PUBLISHED version with its own published_by_name +
+                  published_at — one row per version, oldest is "Published",
+                  every later one "Republished" (no version number on the
+                  title: a republish is that same JD's own version going out
+                  again, not a new artifact worth numbering here).
+                - Resume Scored: one row per scored resume, from its own
+                  scored_by_name + scoredDate.
+                - AI Talent Match Run: one row per session (no "who" field
+                  exists on AIMatchSessionResponse at all, so date-only →
+                  "System").
+                - Assessment Created: one row per Assessment record, from its
+                  own created_by_name + created_at + version.
+                - AI Interview Created: one row, versioned from the config's
+                  own /ai-interview/{id}/version-history (AIInterviewResponse
+                  carries no version of its own).
+                - Job Archived / Disabled: `job.status` only holds the CURRENT
+                  status, with no history of past transitions, so these can
+                  only ever contribute at most one row each (date-only →
+                  "System"), and "Unarchived"/"Re-enabled" never appear — a JD
+                  back in Published state is indistinguishable from one that
+                  was never archived/disabled. */}
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
             <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Recent Activity</h3>
             <div className="space-y-3">
-              {scoredResumesStats.total > 0 && (
-                <div className="flex gap-3">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
-                  <div>
-                    <div className="text-sm text-gray-900 dark:text-slate-50">{scoredResumesStats.total} resume(s) scored</div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500">Resume scoring completed</div>
+              {(() => {
+                interface ActivityEvent { key: string; dot: string; title: string; date?: string; by?: string }
+                const events: ActivityEvent[] = [];
+
+                if (jdVersionHistory.length > 0) {
+                  jdVersionHistory.forEach((v) => {
+                    events.push({
+                      key: `jd-v${v.version_number}`,
+                      dot: v.version_number === 1 ? 'bg-green-500' : 'bg-purple-500',
+                      title: v.version_number === 1 ? 'Job Published' : 'Job Republished',
+                      date: v.published_at,
+                      by: v.published_by_name,
+                    });
+                  });
+                } else {
+                  // Lineage fetch hasn't landed (or failed) — fall back to the
+                  // JD's own creator/updated fields so Published/Republished
+                  // still show something rather than vanishing entirely.
+                  if (job.status === 'Published' && job.postedDate) {
+                    events.push({ key: 'jd-published', dot: 'bg-green-500', title: 'Job Published', date: job.postedDate, by: job.postedBy });
+                  }
+                  if (job.currentVersion && job.currentVersion > 1) {
+                    events.push({ key: 'jd-republished', dot: 'bg-purple-500', title: 'Job Republished', date: job.updated_at, by: job.postedBy });
+                  }
+                }
+                if (job.status === 'Archived') {
+                  events.push({ key: 'archived', dot: 'bg-brand-orange', title: 'Job Archived', date: job.updated_at });
+                }
+                if (job.status === 'Disabled') {
+                  events.push({ key: 'disabled', dot: 'bg-red-500', title: 'Job Disabled', date: job.updated_at });
+                }
+                scoredResumes.forEach((r: any, i: number) => {
+                  events.push({
+                    key: `scored-${r.id || i}`,
+                    dot: 'bg-blue-500',
+                    // A count, not the candidate's name — each row already
+                    // represents exactly one scoring event, so this is always
+                    // "(1)", matching Assessment Created (Vn)'s own
+                    // "parenthesized number" shape.
+                    title: 'Resume Scored (1)',
+                    date: r.scoredDate,
+                    by: r.scoredBy,
+                  });
+                });
+                aiMatchSessions.forEach((s) => {
+                  events.push({
+                    key: `ai-match-${s.id}`,
+                    dot: 'bg-brand-cyan',
+                    title: `AI Talent Match Run (${s.total_matches ?? 0} Matched)`,
+                    date: s.created_at,
+                  });
+                });
+                jdAssessments.forEach((a: any) => {
+                  events.push({
+                    key: `assessment-${a.id}`,
+                    dot: 'bg-indigo-500',
+                    title: `Assessment Created (V${a.version ?? 1})`,
+                    date: a.created_at,
+                    by: a.created_by_name,
+                  });
+                });
+                if (aiInterviewConfig) {
+                  // "Created" is definitionally the FIRST version — the
+                  // config's version history can hold many later entries
+                  // (every edit/republish adds one), and taking the latest of
+                  // those showed "Created (V7)" for a config edited six times
+                  // since. The earliest entry (falling back to 1, since a
+                  // config with no history yet is still at its first version)
+                  // is the one this title actually means.
+                  const createdVersion = aiInterviewVersionHistory.length > 0
+                    ? Math.min(...aiInterviewVersionHistory.map(v => v.version))
+                    : 1;
+                  events.push({
+                    key: 'ai-interview',
+                    dot: 'bg-pink-500',
+                    title: `AI Interview Created (V${createdVersion})`,
+                    date: aiInterviewConfig.created_at,
+                    by: aiInterviewConfig.created_by_name,
+                  });
+                }
+
+                events.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+
+                if (events.length === 0) {
+                  return <div className="text-sm text-gray-500 dark:text-slate-500 italic">No recent activity</div>;
+                }
+                return events.map((e) => (
+                  <div key={e.key} className="flex gap-3">
+                    <div className={`w-2 h-2 ${e.dot} rounded-full mt-1.5 flex-shrink-0`}></div>
+                    <div>
+                      <div className="text-sm text-gray-900 dark:text-slate-50">{e.title}</div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500 dark:text-slate-500">
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="w-3 h-3" strokeWidth={1.75} />
+                          {e.date ? formatISTDateTime(e.date) : 'N/A'}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <UserIcon className="w-3 h-3" strokeWidth={1.75} />
+                          {e.by || 'System'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )}
-              {scoredResumesStats.exactMatch > 0 && (
-                <div className="flex gap-3">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
-                  <div>
-                    <div className="text-sm text-gray-900 dark:text-slate-50">{scoredResumesStats.exactMatch} exact match(es) found</div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500">High-quality candidates identified</div>
-                  </div>
-                </div>
-              )}
-              {scoredResumesStats.partialMatch > 0 && (
-                <div className="flex gap-3">
-                  <div className="w-2 h-2 bg-brand-orange rounded-full mt-1.5 flex-shrink-0"></div>
-                  <div>
-                    <div className="text-sm text-gray-900 dark:text-slate-50">{scoredResumesStats.partialMatch} partial match(es) found</div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500">Candidates with potential identified</div>
-                  </div>
-                </div>
-              )}
-              {job.currentVersion && job.currentVersion > 1 && (
-                <div className="flex gap-3">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full mt-1.5 flex-shrink-0"></div>
-                  <div>
-                    <div className="text-sm text-gray-900 dark:text-slate-50">JD updated to version {job.currentVersion}.0</div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500">Job description republished</div>
-                  </div>
-                </div>
-              )}
-              {job.status === 'Published' && job.postedDate && (
-                <div className="flex gap-3">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
-                  <div>
-                    <div className="text-sm text-gray-900 dark:text-slate-50">Job published by {job.postedBy || 'System'}</div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500">{formatISTDateTime(job.postedDate)}</div>
-                  </div>
-                </div>
-              )}
-              {scoredResumesStats.total === 0 && job.status !== 'Published' && !job.currentVersion && (
-                <div className="text-sm text-gray-500 dark:text-slate-500 italic">No recent activity</div>
-              )}
+                ));
+              })()}
             </div>
           </div>
 
