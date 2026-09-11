@@ -43,6 +43,23 @@ interface IntegrityCheckTabProps {
    * endpoint for the "Violation evidence" section below the Event log.
    */
   interviewId: string;
+  /**
+   * The pre-interview "hide the sharing bar" vision check's last recorded
+   * result (system_check_results.share_bar_check on the session row) — the
+   * two images it sent to the LLM (original + locally enhanced) plus the
+   * verdict flags. Undefined when the candidate never reached that step, or
+   * when persisting it failed (best-effort on the backend). Powers the
+   * "Screen-share verification" section placed right after the Event log.
+   */
+  shareBarCheck?: {
+    hidden?: boolean;
+    pip_detected?: boolean;
+    recorder_overlay_detected?: boolean;
+    foreign_app_detected?: boolean;
+    foreign_app_label?: string;
+    interview_screen_present?: boolean;
+    checked_at?: string;
+  };
 }
 
 /* ── local time helpers (kept self-contained) ─────────────────────────────── */
@@ -202,7 +219,7 @@ interface TypeGroup {
 }
 
 export default function IntegrityCheckTab({
-  violations, startTs, completedAt, hasRecording, onJumpToRecording, interviewId,
+  violations, startTs, completedAt, hasRecording, onJumpToRecording, interviewId, shareBarCheck,
 }: IntegrityCheckTabProps) {
   const summary = useMemo(() => summarizeViolations(violations), [violations]);
 
@@ -311,7 +328,11 @@ export default function IntegrityCheckTab({
   };
 
   /* ── empty state ────────────────────────────────────────────────────────── */
-  if (summary.raw === 0) {
+  // Only short-circuit to the plain banner when there is truly nothing else to
+  // show. A clean candidate (zero proctoring violations) can still have a
+  // share-bar verification check on record — that section must still render,
+  // so this early return is skipped whenever shareBarCheck is present.
+  if (summary.raw === 0 && !shareBarCheck) {
     return (
       <div className="text-center py-16 bg-green-50 rounded-xl border border-green-200 ring-1 ring-green-100">
         <ShieldCheck className="w-9 h-9 text-green-500 mx-auto mb-3" />
@@ -559,6 +580,48 @@ export default function IntegrityCheckTab({
         </p>
       </div>
 
+      {/* ── SCREEN-SHARE VERIFICATION ───────────────────────────────────── */}
+      {shareBarCheck && (
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">Screen-share verification</h3>
+          <p className="text-[11px] text-gray-400 mb-3">
+            The two images sent to the AI before this interview was allowed to start — the original screen capture and
+            a locally sharpened/contrast-boosted copy of the same capture, used to catch small or collapsed icons.
+            Only the most recent check attempt is kept. Click a thumbnail to enlarge.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl">
+            <ShareBarScreenshotCard interviewId={interviewId} which="original" label="Original capture" />
+            <ShareBarScreenshotCard interviewId={interviewId} which="enhanced" label="Enhanced (sharpened/contrast)" />
+          </div>
+          <div className="flex flex-wrap gap-2 mt-3">
+            {shareBarCheck.hidden === false && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Sharing bar was still visible</span>
+            )}
+            {shareBarCheck.pip_detected && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Picture-in-Picture detected</span>
+            )}
+            {shareBarCheck.recorder_overlay_detected && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Screen-recorder overlay detected</span>
+            )}
+            {shareBarCheck.foreign_app_detected && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">
+                Foreign app/window detected{shareBarCheck.foreign_app_label ? `: ${shareBarCheck.foreign_app_label}` : ''}
+              </span>
+            )}
+            {shareBarCheck.interview_screen_present === false && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Interview screen not detected</span>
+            )}
+            {shareBarCheck.hidden && !shareBarCheck.pip_detected && !shareBarCheck.recorder_overlay_detected
+              && !shareBarCheck.foreign_app_detected && shareBarCheck.interview_screen_present !== false && (
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">Clean — no issues found</span>
+            )}
+          </div>
+          {shareBarCheck.checked_at && (
+            <p className="text-[11px] text-gray-400 mt-2">Checked at {formatClock(shareBarCheck.checked_at)}</p>
+          )}
+        </div>
+      )}
+
       {/* ── VIOLATION EVIDENCE ──────────────────────────────────────────── */}
       {evidenceGroups.length > 0 && (
         <div>
@@ -629,6 +692,63 @@ function EvidenceCard({ interviewId, record, label }: {
         <div className="px-3 py-2.5">
           <div className="text-xs font-semibold text-gray-700">{label}</div>
           {summary && <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{summary}</p>}
+        </div>
+      </div>
+      {enlarged && url && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6 cursor-zoom-out"
+          onClick={() => setEnlarged(false)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt={label} className="max-w-full max-h-full rounded-lg shadow-2xl" />
+        </div>
+      )}
+    </>
+  );
+}
+
+/**
+ * One of the two "Screen-share verification" thumbnails (original / enhanced),
+ * fetched through the authenticated GET /ai-interview/{interviewId}/share-bar-
+ * screenshot?which=... endpoint — same fetch-on-mount + click-to-enlarge
+ * pattern as EvidenceCard above.
+ */
+function ShareBarScreenshotCard({ interviewId, which, label }: {
+  interviewId: string; which: 'original' | 'enhanced'; label: string;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [enlarged, setEnlarged] = useState(false);
+
+  useEffect(() => {
+    if (url || failed) return;
+    let cancelled = false;
+    api.get(`/ai-interview/${interviewId}/share-bar-screenshot?which=${which}`, { responseType: 'blob' })
+      .then((res) => { if (!cancelled) setUrl(URL.createObjectURL(res.data)); })
+      .catch(() => { if (!cancelled) setFailed(true); });
+    return () => { cancelled = true; };
+  }, [interviewId, which, url, failed]);
+
+  if (failed) return null;
+
+  return (
+    <>
+      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm overflow-hidden">
+        <button
+          type="button"
+          onClick={() => url && setEnlarged(true)}
+          disabled={!url}
+          className="block w-full aspect-video bg-slate-100"
+        >
+          {url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={url} alt={label} className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>
+          )}
+        </button>
+        <div className="px-3 py-2.5">
+          <div className="text-xs font-semibold text-gray-700">{label}</div>
         </div>
       </div>
       {enlarged && url && (
