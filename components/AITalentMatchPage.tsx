@@ -3160,10 +3160,6 @@ export default function AITalentMatchPage({
               // this row's id — every republished version of the same job
               // shares one history key so their runs aren't split across cards.
               const historyKey = jobData?.jobId || item.jobId;
-              // Same value the "Top Match Rating"/"Top Matching Jobs" cards and
-              // the exact-match filter above read — shown here so it's obvious
-              // *why* a job appears when that filter is on.
-              const bestScore = getJobBestScore(item);
 
               return (
                 <div
@@ -3269,14 +3265,6 @@ export default function AITalentMatchPage({
                           <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                           {item.totalMatches} {item.totalMatches === 1 ? 'candidate' : 'candidates'} matched
                         </span>
-                        {/* Real top rating for this job — same score behind
-                            the "Top Match Rating"/"Top Matching Jobs" cards. */}
-                        {item.totalMatches > 0 && (
-                          <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg border ${candidateScoreBadgeClass(bestScore)}`}>
-                            <Award className="w-4 h-4" />
-                            Top Rating {toMatchRating(bestScore)}/10
-                          </span>
-                        )}
                         </div>
                       </div>
                     </div>
