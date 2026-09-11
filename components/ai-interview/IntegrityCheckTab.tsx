@@ -14,7 +14,7 @@
  * severity comes from the backend-recomputed `severity` on each record.
  */
 
-import { Fragment, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   ShieldAlert, ShieldCheck, Users, Eye, Camera, Clipboard,
   Play, ChevronDown, ChevronRight, AudioLines, Smartphone, QrCode,
@@ -37,6 +37,12 @@ interface IntegrityCheckTabProps {
   hasRecording: boolean;
   /** Seek the recording tab to `seconds` into the interview. */
   onJumpToRecording: (seconds: number) => void;
+  /**
+   * AI interview session id — needed to fetch evidence screenshots through the
+   * authenticated GET /ai-interview/{interviewId}/proctor-event-screenshot
+   * endpoint for the "Violation evidence" section below the Event log.
+   */
+  interviewId: string;
 }
 
 /* ── local time helpers (kept self-contained) ─────────────────────────────── */
@@ -196,7 +202,7 @@ interface TypeGroup {
 }
 
 export default function IntegrityCheckTab({
-  violations, startTs, completedAt, hasRecording, onJumpToRecording,
+  violations, startTs, completedAt, hasRecording, onJumpToRecording, interviewId,
 }: IntegrityCheckTabProps) {
   const summary = useMemo(() => summarizeViolations(violations), [violations]);
 
@@ -232,6 +238,20 @@ export default function IntegrityCheckTab({
     return [...map.values()].sort((a, b) =>
       SEV_RANK[a.severity] - SEV_RANK[b.severity] || b.count - a.count);
   }, [violations]);
+
+  // One card per violation TYPE that has a captured evidence screenshot
+  // (object-detection violations only — phone_detected / unauthorized_object;
+  // everything else never gets a screenshot at capture time, so this is
+  // naturally empty for them). Reuses the SAME grouping as the Event log table
+  // above so "one card per group" matches "one row per group" 1:1.
+  const evidenceGroups = useMemo(() => {
+    const out: { key: string; label: string; record: ViolationRecord }[] = [];
+    for (const g of groups) {
+      const withShot = g.records.find(r => !!r.screenshot_url);
+      if (withShot) out.push({ key: g.key, label: g.label, record: withShot });
+    }
+    return out;
+  }, [groups]);
 
   // Categories present, in display order, with their groups.
   const categoryBlocks = useMemo(() => {
@@ -538,7 +558,89 @@ export default function IntegrityCheckTab({
             : 'Expand a row to see every occurrence.'}
         </p>
       </div>
+
+      {/* ── VIOLATION EVIDENCE ──────────────────────────────────────────── */}
+      {evidenceGroups.length > 0 && (
+        <div>
+          <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">Violation evidence</h3>
+          <p className="text-[11px] text-gray-400 mb-3">
+            One captured frame per flagged item, with a short AI-generated description. Click a thumbnail to enlarge.
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            {evidenceGroups.map(g => (
+              <EvidenceCard key={g.key} interviewId={interviewId} record={g.record} label={g.label} />
+            ))}
+          </div>
+        </div>
+      )}
     </div>
+  );
+}
+
+/**
+ * One evidence card: fetches the screenshot through the authenticated
+ * GET /ai-interview/{interviewId}/proctor-event-screenshot endpoint (mirrors
+ * the identity-photo fetch-on-mount pattern elsewhere in this app — the
+ * backend never hands back a raw/presigned URL, so this call is required),
+ * shows the AI summary underneath, and click-to-enlarges into a simple
+ * full-screen overlay (no existing lightbox component in this codebase to
+ * reuse, so a minimal one is built inline here).
+ */
+function EvidenceCard({ interviewId, record, label }: {
+  interviewId: string; record: ViolationRecord; label: string;
+}) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [enlarged, setEnlarged] = useState(false);
+  const objectClass = typeof record.details?.object_class === 'string' ? record.details.object_class : '';
+
+  useEffect(() => {
+    if (url || failed) return;
+    let cancelled = false;
+    const params = new URLSearchParams({ event_type: record.event_type });
+    if (objectClass) params.set('object_class', objectClass);
+    api.get(`/ai-interview/${interviewId}/proctor-event-screenshot?${params.toString()}`, { responseType: 'blob' })
+      .then((res) => { if (!cancelled) setUrl(URL.createObjectURL(res.data)); })
+      .catch(() => { if (!cancelled) setFailed(true); });
+    return () => { cancelled = true; };
+  }, [interviewId, record.event_type, objectClass, url, failed]);
+
+  if (failed) return null;
+
+  const summary = record.ai_summary
+    ?? (typeof record.details?.ai_summary === 'string' ? record.details.ai_summary : undefined);
+
+  return (
+    <>
+      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm overflow-hidden">
+        <button
+          type="button"
+          onClick={() => url && setEnlarged(true)}
+          disabled={!url}
+          className="block w-full aspect-video bg-slate-100"
+        >
+          {url ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={url} alt={label} className="w-full h-full object-cover hover:opacity-90 transition-opacity" />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center text-xs text-gray-400">Loading…</div>
+          )}
+        </button>
+        <div className="px-3 py-2.5">
+          <div className="text-xs font-semibold text-gray-700">{label}</div>
+          {summary && <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{summary}</p>}
+        </div>
+      </div>
+      {enlarged && url && (
+        <div
+          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6 cursor-zoom-out"
+          onClick={() => setEnlarged(false)}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src={url} alt={label} className="max-w-full max-h-full rounded-lg shadow-2xl" />
+        </div>
+      )}
+    </>
   );
 }
 

@@ -4489,6 +4489,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 violations={violations}
                 startTs={videoAnchor}
                 completedAt={liveSession.completed_at}
+                interviewId={liveSession.id}
                 hasRecording={!!(liveSession.recording_file_path || liveSession.screen_recording_file_path)}
                 onJumpToRecording={(seconds) => {
                   seekNonceRef.current += 1;

@@ -30,6 +30,19 @@ export interface ViolationRecord {
   severity: string; // backend-recomputed: 'high' | 'medium' | 'low' (legacy minor/moderate/severe)
   timestamp?: string;
   details?: Record<string, unknown>;
+  /**
+   * Set ONLY for object-detection violations (phone_detected / unauthorized_object)
+   * that have a captured evidence frame — one per distinct (event_type,
+   * object_class) per session. Truthy check only: the actual bytes are always
+   * fetched through the authenticated
+   * GET /ai-interview/{id}/proctor-event-screenshot?event_type=&object_class=
+   * endpoint, never rendered directly from this value. Also duplicated into
+   * `details.ai_summary` server-side; kept at the top level here for a
+   * convenient read in the "Violation Evidence" cards.
+   */
+  screenshot_url?: string | null;
+  /** Short AI-generated description of what's visible in that screenshot. */
+  ai_summary?: string | null;
 }
 
 export type RecruiterSeverity = 'serious' | 'moderate' | 'minor' | 'advisory';
