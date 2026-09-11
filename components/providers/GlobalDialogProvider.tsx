@@ -367,14 +367,15 @@ export function GlobalDialogProvider({ children }: { children: ReactNode }) {
                   </div>
                 )}
 
-                {/* Buttons */}
-                <div className="flex gap-3">
+                {/* Buttons — right-aligned, sized like ArchiveJobModal /
+                    DisableJobModal's footer rather than stretched flex-1s. */}
+                <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
                   {!dialog.hideCancelButton && (
                     <button
                       ref={cancelBtnRef}
                       type="button"
                       onClick={() => handleClose(false)}
-                      className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm font-medium text-gray-700 dark:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-400"
+                      className="px-6 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm font-semibold text-gray-700 dark:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-400"
                     >
                       {dialog.cancelText}
                     </button>
@@ -383,7 +384,7 @@ export function GlobalDialogProvider({ children }: { children: ReactNode }) {
                     ref={confirmBtnRef}
                     type="button"
                     onClick={() => handleClose(true)}
-                    className={`flex-1 px-4 py-2.5 text-white rounded-lg transition-colors text-sm font-medium shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 flex items-center justify-center gap-2 ${config.confirmBtn}`}
+                    className={`px-6 py-2.5 text-white rounded-lg transition-colors text-sm font-semibold shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 flex items-center justify-center gap-2 ${config.confirmBtn}`}
                   >
                     {dialog.variant === 'delete' && <Trash2 className="w-4 h-4" />}
                     {dialog.confirmText}

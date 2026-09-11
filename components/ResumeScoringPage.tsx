@@ -2814,10 +2814,10 @@ export default function ResumeScoringPage({
 
         return (
         <>
-        <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
         {/* Global View - All Scored Candidates */}
         {isGlobalView ? (
           <div className="space-y-4">
+            <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
             {isLoadingGlobal ? (
               /* No card while loading — a bordered box around a spinner reads as
                  an empty table that has finished. `tf-loader-center` gives the
@@ -2872,7 +2872,7 @@ export default function ResumeScoringPage({
           </div>
         ) : (
         <>
-        {viewPills}
+        <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
         {/* Selection / Download Bar — only while rows are selected. The view
             toggle now lives in the search + filter bar below, after the count. */}
         {selectedHistoryItems.size > 0 && (
@@ -2895,7 +2895,7 @@ export default function ResumeScoringPage({
 
         {/* Search and Filter Bar — only when there's a list to filter */}
         {scoredHistory.length > 0 && (
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4 mb-4">
+          <div className="bg-white dark:bg-slate-900 p-4 mb-4 border-b border-gray-200 dark:border-slate-700/60">
             {/* This list is its own component, not `ScoredResumesTable`, so it
                 did not get the section heading the other five views have. Named
                 for what its rows are — jobs, not resumes — which is the whole
@@ -3003,6 +3003,11 @@ export default function ResumeScoringPage({
             })()}
           </div>
         )}
+
+        {/* View pills — placed under the search/filter bar rather than above
+            it, matching where the two global views show theirs (inside
+            ScoredResumesTable, between its own filter bar and its rows). */}
+        {viewPills}
 
         {/* History List or Empty State */}
         {displayHistory.length > 0 ? (
