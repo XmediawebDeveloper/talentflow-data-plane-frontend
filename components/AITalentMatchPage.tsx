@@ -541,6 +541,13 @@ export default function AITalentMatchPage({
   // Scoring's Exact/Partial/No Match pills, continuing the same button group
   // and narrowing "All Resumes" to one band at a time.
   const [candidateRatingBand, setCandidateRatingBand] = useState<'exact' | 'partial' | 'no_match' | null>(null);
+  // "Top Matching Jobs" card drill-down: narrows the Matched Jobs list (View by
+  // Job) to only jobs whose best candidate hit a perfect 10/10 — the same
+  // definition `topMatchingJobsCount` below counts. Separate from
+  // `candidateRatingBand` because that one narrows the candidate-level "All
+  // Resumes" view instead; the two views group by different things (job vs.
+  // candidate-per-job), so each needs its own filter flag.
+  const [showOnlyExactMatchJobs, setShowOnlyExactMatchJobs] = useState(false);
 
   // "Match by Candidate" roll-up: every matched candidate across all jobs, with
   // the jobs they matched. Built in-page — no navigation away.
@@ -650,7 +657,12 @@ export default function AITalentMatchPage({
 
   // One clear for the whole Matched Jobs list — shared by the panel's "Reset
   // all" and the empty state's button, which used to reset only three of them.
-  const clearHistoryFilters = historySearch.reset;
+  // Also drops the "Top Matching Jobs" card's exact-match narrowing, so
+  // "Clear All Filters" really does return to every matched job.
+  const clearHistoryFilters = () => {
+    historySearch.reset();
+    setShowOnlyExactMatchJobs(false);
+  };
 
   const openHistoryListView = () => {
     setHistoryCurrentPage(1);
@@ -1630,6 +1642,15 @@ export default function AITalentMatchPage({
     return 'Low Match';
   };
 
+  // A job's best candidate score, from whichever candidate list is currently
+  // available for it — lazy-loaded rows once fetched, else the initial prop
+  // data. Shared by the exact-match job filter below and the "Top Match
+  // Rating" / "Top Matching Jobs" stats so both read the same number.
+  const getJobBestScore = (item: MatchHistory): number => {
+    const candidates = historyCandidatesById[item.id] ?? item.matchedCandidates ?? [];
+    return candidates.reduce((best, c) => Math.max(best, c.matchScore ?? 0), 0);
+  };
+
   const filteredHistory = matchHistory.filter(item => {
     const query = historySearchQuery.trim().toLowerCase();
     const jobCode = jobs.find(j => j.id === item.jobId)?.jobId || '';
@@ -1670,7 +1691,14 @@ export default function AITalentMatchPage({
           return matchesPhone && matchesLocation && matchesExpMin && matchesExpMax;
         });
 
-    return matchesSearch && matchesDateFrom && matchesDateTo && matchesMinMatches && matchesCandidateFilters;
+    // "Top Matching Jobs" drill-down: same "rating 10" definition
+    // `topMatchingJobsCount` counts. A job whose candidates haven't loaded yet
+    // scores 0 here (see getJobBestScore) and is correctly excluded until its
+    // real data arrives, rather than shown permissively.
+    const matchesExactOnly = !showOnlyExactMatchJobs ||
+      toMatchRating(getJobBestScore(item)) === 10;
+
+    return matchesSearch && matchesDateFrom && matchesDateTo && matchesMinMatches && matchesCandidateFilters && matchesExactOnly;
   });
 
   const sortedHistory = [...filteredHistory].sort((a, b) => {
@@ -1746,13 +1774,9 @@ export default function AITalentMatchPage({
   if (viewMode === 'history') {
     const totalMatchedCandidates = matchHistory.reduce((sum, item) => sum + (item.totalMatches || 0), 0);
 
-    // Best score per job, using whichever candidate list is currently
-    // available for it — lazy-loaded rows when present, else the initial
-    // prop data (same fallback `filteredHistory` uses above).
-    const bestScorePerJob = matchHistory.map(item => {
-      const candidates = historyCandidatesById[item.id] ?? item.matchedCandidates ?? [];
-      return candidates.reduce((best, c) => Math.max(best, c.matchScore ?? 0), 0);
-    });
+    // Best score per job — shared with the "Top Matching Jobs" filter above,
+    // so the card's count and its drill-down list can never disagree.
+    const bestScorePerJob = matchHistory.map(getJobBestScore);
     const topMatchRating = bestScorePerJob.length ? Math.max(...bestScorePerJob) : 0;
     // Exact Match = a rating of 10, same bucket the Match History popup counts.
     const topMatchingJobsCount = bestScorePerJob.filter(score => toMatchRating(score) === 10).length;
@@ -1948,13 +1972,15 @@ export default function AITalentMatchPage({
         <StatsCardGrid className="mb-5">
           <StatsCard
             tone="neutral"
-            active={historyPageView === 'list'}
+            active={historyPageView === 'list' && !showOnlyExactMatchJobs}
             showClickArrow
             icon={History}
             label="Matched Jobs"
             value={matchHistory.length}
             sparkline={false}
-            onClick={openHistoryListView}
+            // Every matched job — drops any narrowing left by "Top Matching
+            // Jobs" so this always shows the full count it displays.
+            onClick={() => { setCandidateRatingBand(null); setShowOnlyExactMatchJobs(false); openHistoryListView(); }}
           />
           <StatsCard
             tone="neutral"
@@ -1964,21 +1990,41 @@ export default function AITalentMatchPage({
             label="Match by Candidate"
             value={totalMatchedCandidates}
             sparkline={false}
-            onClick={openCandidatesView}
+            onClick={() => { setCandidateRatingBand(null); setShowOnlyExactMatchJobs(false); void openCandidatesView(); }}
           />
           <StatsCard
             tone="neutral"
+            active={historyPageView === 'resumes' && candidateRatingBand === matchBandForRating(toMatchRating(topMatchRating))}
+            showClickArrow
             icon={Award}
             label="Top Match Rating"
             value={`${toMatchRating(topMatchRating)}`}
             sparkline={false}
+            // Drills into the real candidates holding this exact rating — same
+            // "All Resumes" view + rating-band filter the pills below use, so
+            // there is exactly one filtering mechanism, not a second one.
+            onClick={() => {
+              setShowOnlyExactMatchJobs(false);
+              setCandidateRatingBand(matchBandForRating(toMatchRating(topMatchRating)));
+              void openAllResumesView();
+            }}
           />
           <StatsCard
             tone="neutral"
+            active={historyPageView === 'list' && showOnlyExactMatchJobs}
+            showClickArrow
             icon={Briefcase}
             label="Top Matching Jobs"
             value={topMatchingJobsCount}
             sparkline={false}
+            // Drills into the real jobs behind this count — View by Job,
+            // narrowed to jobs whose best candidate is a perfect 10/10 (the
+            // same definition the count above uses).
+            onClick={() => {
+              setCandidateRatingBand(null);
+              setShowOnlyExactMatchJobs(true);
+              openHistoryListView();
+            }}
           />
         </StatsCardGrid>
 
@@ -1995,14 +2041,14 @@ export default function AITalentMatchPage({
           <div className="flex items-center gap-2 flex-wrap mb-3">
             <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
             {([
-              { id: 'list', label: 'View by Job', active: historyPageView === 'list' && !candidateRatingBand, open: openHistoryListView },
+              { id: 'list', label: 'View by Job', active: historyPageView === 'list' && !candidateRatingBand && !showOnlyExactMatchJobs, open: openHistoryListView },
               { id: 'candidates', label: 'View by Candidates', active: historyPageView === 'candidates' && !candidateRatingBand, open: openCandidatesView },
               { id: 'resumes', label: 'All Resumes', active: historyPageView === 'resumes' && !candidateRatingBand, open: openAllResumesView },
             ] as const).map(view => (
               <button
                 key={view.id}
                 type="button"
-                onClick={() => { setCandidateRatingBand(null); void view.open(); }}
+                onClick={() => { setCandidateRatingBand(null); setShowOnlyExactMatchJobs(false); void view.open(); }}
                 aria-pressed={view.active}
                 className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
                   view.active
@@ -2027,6 +2073,7 @@ export default function AITalentMatchPage({
                 type="button"
                 onClick={() => {
                   setCandidateRatingBand(candidateRatingBand === band.id ? null : band.id);
+                  setShowOnlyExactMatchJobs(false);
                   void openAllResumesView();
                 }}
                 aria-pressed={candidateRatingBand === band.id}
@@ -3087,7 +3134,23 @@ export default function AITalentMatchPage({
         {filteredHistory.length > 0 ? (
           <>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-0 mb-3">
-              <h2 className="text-base sm:text-lg text-gray-900 dark:text-slate-50 font-medium">Matched Jobs ({filteredHistory.length})</h2>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-lg text-gray-900 dark:text-slate-50 font-medium">Matched Jobs ({filteredHistory.length})</h2>
+                {/* Set by the "Top Matching Jobs" card — makes the narrowing
+                    visible and reversible instead of a silent filter. */}
+                {showOnlyExactMatchJobs && (
+                  <button
+                    type="button"
+                    onClick={() => setShowOnlyExactMatchJobs(false)}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20 hover:bg-brand-blue/15 transition-colors"
+                    title="Clear this filter"
+                  >
+                    <Award className="w-3 h-3" />
+                    Perfect (10/10) matches only
+                    <X className="w-3 h-3" />
+                  </button>
+                )}
+              </div>
               <p className="text-sm text-gray-600 dark:text-slate-400">Click any job to view matched candidates</p>
             </div>
             <div className="grid gap-3 sm:gap-4">
@@ -3097,6 +3160,10 @@ export default function AITalentMatchPage({
               // this row's id — every republished version of the same job
               // shares one history key so their runs aren't split across cards.
               const historyKey = jobData?.jobId || item.jobId;
+              // Same value the "Top Match Rating"/"Top Matching Jobs" cards and
+              // the exact-match filter above read — shown here so it's obvious
+              // *why* a job appears when that filter is on.
+              const bestScore = getJobBestScore(item);
 
               return (
                 <div
@@ -3202,6 +3269,14 @@ export default function AITalentMatchPage({
                           <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
                           {item.totalMatches} {item.totalMatches === 1 ? 'candidate' : 'candidates'} matched
                         </span>
+                        {/* Real top rating for this job — same score behind
+                            the "Top Match Rating"/"Top Matching Jobs" cards. */}
+                        {item.totalMatches > 0 && (
+                          <span className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg border ${candidateScoreBadgeClass(bestScore)}`}>
+                            <Award className="w-4 h-4" />
+                            Top Rating {toMatchRating(bestScore)}/10
+                          </span>
+                        )}
                         </div>
                       </div>
                     </div>
