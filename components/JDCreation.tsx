@@ -1597,6 +1597,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             additional_details: jd.additional_details,
             must_have_comments: jd.must_have_comments,
             nice_to_have_comments: jd.nice_to_have_comments,
+            // Skill groups + notes. See the note in jd-creation/page.tsx - BOTH
+            // mappings must forward this, or Step 2 hydrates an empty trail and the
+            // next save clears the stored groups.
+            skill_merge_trail: jd.skill_merge_trail,
             department: jd.department,
             certifications: jd.certifications,
             domain_keywords: jd.domain_keywords,
