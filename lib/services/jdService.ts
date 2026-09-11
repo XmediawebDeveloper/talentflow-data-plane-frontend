@@ -137,6 +137,10 @@ export interface JDMergeTrailEntry {
    *  for a requirement sentence that was folded into the skills covering it, which must
    *  go back to its comments list rather than in among the skill names. */
   restore_lists?: string[];
+  /** The kind of EACH child, same order as `removed`. One skill can hold a narrowing
+   *  note beside a genuine merge, and the kind decides the action offered for that
+   *  child. Fall back to `source` for entries saved before this existed. */
+  sources?: JDMergeTrailEntry['source'][];
   survivor_source?: string | null;
   list: 'must_have_skills' | 'nice_to_have_skills' | 'must_have_comments' | 'nice_to_have_comments';
   /** 'skill' entries are worth surfacing; 'comment' merges rest on judgement, so their
@@ -163,6 +167,9 @@ export interface JDMergeTrailEntry {
      *  appear verbatim in the document, so the action is "use the JD's wording"
      *  (replace this skill's text) rather than "add" (a second skill). */
     | 'narrowed-from-jd-wording'
+    /** A JD requirement phrase that ended up in NO list. Belongs to no item, so
+     *  `survivor` is empty; Step 2 lists these in their own panel with Add / Dismiss. */
+    | 'possibly-missed'
     | 'ai-review';
 }
 
