@@ -4283,6 +4283,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         nice_to_have_skills: extraction.niceToHaveSkills,
         must_have_comments: extraction.mustHaveComments,
         nice_to_have_comments: extraction.niceToHaveComments,
+        // The groups + notes that go WITH those four lists. This is the first save after
+        // extraction, and it was writing the lists without them: the row had the skills
+        // and an empty `skill_merge_trail`, so a refresh on Step 2 - before the recruiter
+        // ever pressed Next, which is the only save that used to send the trail - showed a
+        // flat skill list with nothing grouped and nothing to promote back out. The
+        // provenance existed only in the browser's memory until Step 2 was left.
+        skill_merge_trail: extraction.mergeTrail || [],
         education_requirements: extraction.education ? { degree: extraction.education } : undefined,
         experience_min: extractionExperiencePayload.experienceMin,
         experience_max: extractionExperiencePayload.experienceMax,

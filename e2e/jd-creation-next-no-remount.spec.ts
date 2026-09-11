@@ -105,7 +105,11 @@ const SAVED_JD = {
   current_version: 1,
 };
 
+/** Bodies of the create/update calls the wizard makes, newest last. */
+const savedBodies: Record<string, unknown>[] = [];
+
 async function mockCreateFlow(page: Page) {
+  savedBodies.length = 0;
   await page.route("**/jd/access-check", (route) =>
     route.fulfill({
       status: 200,
@@ -117,11 +121,24 @@ async function mockCreateFlow(page: Page) {
     await new Promise((r) => setTimeout(r, 1200));
     return route.fulfill({ status: 200, json: EXTRACTION });
   });
-  // Create + update + re-fetch of the new draft.
-  await page.route(new RegExp("/jd/" + NEW_JD_ID + "(\\?|$)"), (route) =>
-    route.fulfill({ status: 200, json: SAVED_JD }),
-  );
+  // Create + update + re-fetch of the new draft. Write bodies are recorded so a test
+  // can assert what was actually PERSISTED, not only what is on screen.
+  const record = (route: import("@playwright/test").Route) => {
+    const method = route.request().method();
+    if (method === "POST" || method === "PUT" || method === "PATCH") {
+      try {
+        savedBodies.push(route.request().postDataJSON());
+      } catch {
+        /* non-JSON body: not a save we care about */
+      }
+    }
+  };
+  await page.route(new RegExp("/jd/" + NEW_JD_ID + "(\\?|$)"), (route) => {
+    record(route);
+    return route.fulfill({ status: 200, json: SAVED_JD });
+  });
   await page.route(/\/jd(\?[^/]*)?$/, (route) => {
+    record(route);
     if (route.request().method() === "POST") {
       return route.fulfill({ status: 201, json: SAVED_JD });
     }
@@ -171,6 +188,36 @@ test.describe("JD Creation — Next does not remount the wizard", () => {
     // And we stayed on Step 2 - no bounce back to Step 1.
     await expect(step1(page)).toHaveCount(0);
     await expect(step2(page)).toBeVisible();
+  });
+
+  test("the draft saved right after extraction carries the skill groups", async ({ page }) => {
+    // The save that follows extraction writes the four lists to the JD row. It used to
+    // write them WITHOUT `skill_merge_trail`, so the row had the skills and no groups:
+    // a refresh on Step 2 - before the recruiter ever pressed Next, the only save that
+    // sent the trail - came back as a flat skill list. Confirmed against staging: every
+    // JD created since carried `skill_merge_trail = []`.
+    await loginViaUi(page);
+    await page.goto("/recruitment/jd-creation");
+    await fillStep1(page);
+
+    const next = page.getByRole("button", { name: "Next", exact: true });
+    await expect(next).toBeEnabled();
+    await next.click();
+    await expect(step2(page)).toBeVisible();
+
+    await expect
+      .poll(() => savedBodies.filter((b) => Array.isArray(b?.must_have_skills)).length, {
+        message: "no save carrying the extracted lists was sent",
+      })
+      .toBeGreaterThan(0);
+
+    const withLists = savedBodies.filter((b) => Array.isArray(b?.must_have_skills));
+    const saved = withLists[withLists.length - 1] as Record<string, unknown>;
+    expect(saved.must_have_skills).toContain("Backend Programming");
+    const trail = saved.skill_merge_trail as Array<Record<string, unknown>> | undefined;
+    expect(trail, "the save that persists the skills must persist their groups too").toBeTruthy();
+    expect(trail!.map((e) => e.survivor)).toContain("Backend Programming");
+    expect(trail![0].removed).toEqual(["Server-Side Programming"]);
   });
 
   test("the wait shows progress on the button and leaves Step 1 in place", async ({ page }) => {
