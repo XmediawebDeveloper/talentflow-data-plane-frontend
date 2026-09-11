@@ -858,9 +858,15 @@ const step2Fingerprint = (data: unknown, jobTitle: string): string =>
 // How many skills a category shows before the rest collapse behind "+N more".
 const SKILL_PREVIEW_LIMIT = 10;
 
-// The two child kinds that EXPLAIN a difference rather than record a merge: a skill
-// whose wording is shorter than the JD's, and a skill the JD listed in both sections.
-const NOTE_KINDS: ReadonlyArray<string> = ['narrowed-from-jd-wording', 'cross-list-priority'];
+// The child kinds that EXPLAIN something rather than record a merge: a skill whose
+// wording is shorter than the JD's, a skill the JD listed in both sections, and (JD24)
+// what the JD SAYS about a skill - "executed more than 3,000 test cases", "1 million
+// users", "5 years". That last one is context, not a second skill and not by itself a
+// requirement; "Add" promotes it into Additional Requirements when the recruiter decides
+// it must be one.
+const NOTE_KINDS: ReadonlyArray<string> = [
+  'narrowed-from-jd-wording', 'cross-list-priority', 'context-from-jd',
+];
 
 /** Per-child kind and the counts the badge shows. The kind is read PER CHILD because
  *  one item can hold a note beside a genuine merge, and each offers a different action.
