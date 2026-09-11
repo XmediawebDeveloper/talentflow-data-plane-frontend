@@ -296,10 +296,16 @@ export default function AITalentMatchPage({
         const details = await aiMatchService.getSession(item.id);
         const candidates = details.candidates as MatchedCandidateWithVersions[];
         setHistoryCandidatesById(prev => ({ ...prev, [item.id]: candidates }));
+        // A retry that succeeds after an earlier failure — this session is no
+        // longer "failed", it's loaded.
+        setFailedHistorySessionIds(prev => (prev.has(item.id) ? (() => {
+          const next = new Set(prev); next.delete(item.id); return next;
+        })() : prev));
         return candidates;
       } catch (error) {
         console.error('[AITalentMatch] Failed to fetch session details:', error);
         if (!silent) toast.error('Failed to load matched candidates');
+        setFailedHistorySessionIds(prev => (prev.has(item.id) ? prev : new Set(prev).add(item.id)));
         return [] as MatchedCandidateWithVersions[];
       } finally {
         historyCandidateRequests.current.delete(item.id);
@@ -786,6 +792,13 @@ export default function AITalentMatchPage({
   const [scoringVersions, setScoringVersions] = useState<any[]>([]);
   const [historyCandidatesById, setHistoryCandidatesById] = useState<Record<string, MatchedCandidateWithVersions[]>>({});
   const [loadingHistorySessionId, setLoadingHistorySessionId] = useState<string | null>(null);
+  // Sessions whose candidate fetch failed. Kept separate from
+  // `historyCandidatesById` so a failure never gets cached as "0 candidates" —
+  // opening that job later still retries — but "Top Match Rating"/"Top
+  // Matching Jobs" (via `topStatsReady`) need to know a session is done being
+  // waited on even when it errored, or a single failed fetch would leave
+  // those tiles on their loading skeleton forever.
+  const [failedHistorySessionIds, setFailedHistorySessionIds] = useState<Set<string>>(new Set());
 
   // Scored resume IDs for current JD
   const [scoredResumeIds, setScoredResumeIds] = useState<Set<string>>(new Set());
@@ -1787,7 +1800,9 @@ export default function AITalentMatchPage({
     // sessions resolved. Holding the real number back until every session has
     // resolved means the tiles show only their final, correct value.
     const topStatsReady = matchHistory.every(
-      item => (item.totalMatches || 0) <= 0 || historyCandidatesById[item.id] !== undefined
+      item => (item.totalMatches || 0) <= 0 ||
+        historyCandidatesById[item.id] !== undefined ||
+        failedHistorySessionIds.has(item.id)
     );
 
     // Candidate roll-up search matches the person or any job they matched.
