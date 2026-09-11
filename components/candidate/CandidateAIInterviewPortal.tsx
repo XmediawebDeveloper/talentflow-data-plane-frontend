@@ -207,6 +207,11 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // ours, which is what makes the vision check (and clean-reference comparison)
   // reliable. Restored immediately after the capture.
   const shareBarCardRef = useRef<HTMLDivElement>(null);
+  // The outer hide-share-bar PAGE wrapper. Its background is forced to WHITE
+  // during the capture (see captureScreenFrame) so anything foreign sitting
+  // outside our own page reads at maximum contrast. Restored to its normal
+  // styling immediately after the capture.
+  const shareBarPageRef = useRef<HTMLDivElement>(null);
   // Baseline browser zoom (via devicePixelRatio) captured when the candidate is
   // interacting normally. Shrinking the browser zoom to minimum makes an in-page
   // recorder/extension widget tiny enough to evade the vision check, so at the
@@ -1663,19 +1668,25 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   }, []);
 
 
-  // Grab a single JPEG frame from the ENTIRE-screen share stream (used by the
-  // hide-share-bar vision check). Returns null if the stream isn't available.
+  // Grab ONE JPEG frame from the ENTIRE-screen share stream (used by the
+  // hide-share-bar vision check), with our own page's background forced to
+  // WHITE during the grab. The backend derives a second, locally-enhanced
+  // (upscaled/sharpened/contrast-boosted) duplicate of this same frame server-
+  // side — see _enhanced_full_screen_for_vision in candidate_ai_interview.py —
+  // so only one capture is needed here. Returns null if the stream isn't
+  // available or the canvas context can't be obtained.
   const captureScreenFrame = useCallback(async (): Promise<Blob | null> => {
     const stream = screenStreamRef.current;
     const track = stream?.getVideoTracks?.()[0];
     if (!stream || !track || track.readyState !== 'live') return null;
-    // Hide our own on-page reference mock of the sharing bar BEFORE grabbing the
-    // frame. The capture is of the WHOLE screen, which includes this page — and
-    // that page shows a realistic mock ("This site is sharing your screen · Stop
-    // sharing · Hide"). Left visible, the vision model sees OUR illustration and
-    // reports the real bar as "still visible" even when the candidate has hidden
-    // it — a false positive that traps them on this step. We hide it, wait for
-    // the screen-capture pipeline to reflect the change, capture, then restore.
+    // Hide our own on-page reference mock of the sharing bar BEFORE grabbing
+    // either frame. The capture is of the WHOLE screen, which includes this
+    // page — and that page shows a realistic mock ("This site is sharing your
+    // screen · Stop sharing · Hide"). Left visible, the vision model sees OUR
+    // illustration and reports the real bar as "still visible" even when the
+    // candidate has hidden it — a false positive that traps them on this step.
+    // We hide it, wait for the screen-capture pipeline to reflect the change,
+    // capture both frames, then restore.
     // Hide the ENTIRE setup popup during the capture so the screenshot is just
     // the empty screen background. Then anything still on the frame — a recorder
     // toolbar, another app window, a stray icon — is unmistakably NOT part of the
@@ -1701,10 +1712,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       el.style.visibility = 'hidden';
       return () => { el.style.visibility = prev; };
     });
+    // The outer page wrapper — its background is swapped to WHITE for the
+    // capture (see shareBarPageRef declaration). Restored to its normal
+    // dark-gradient styling in `finally`.
+    const pageEl = shareBarPageRef.current;
+    const prevPageBg = pageEl?.style.background;
     try {
-      // Let the compositor + screen-capture stream drop the now-hidden popup
-      // (a few frames of latency); brief, during the "Checking…" state.
-      if (hideEls.length) await new Promise<void>((r) => window.setTimeout(r, 250));
       const video = document.createElement('video');
       video.muted = true;
       (video as HTMLVideoElement).playsInline = true;
@@ -1728,20 +1741,31 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       const targetW = Math.min(2048, Math.max(vw, 1920));
       const scale = targetW / vw;
       const cw = Math.max(1, Math.round(vw * scale)), ch = Math.max(1, Math.round(vh * scale));
-      const canvas = document.createElement('canvas');
-      canvas.width = cw; canvas.height = ch;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) { try { video.pause(); } catch { /* ignore */ } video.srcObject = null; return null; }
-      ctx.imageSmoothingEnabled = true;
-      try { (ctx as CanvasRenderingContext2D).imageSmoothingQuality = 'high'; } catch { /* not all browsers */ }
-      ctx.drawImage(video, 0, 0, cw, ch);
+
+      const grabFrame = async (): Promise<Blob | null> => {
+        const canvas = document.createElement('canvas');
+        canvas.width = cw; canvas.height = ch;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+        ctx.imageSmoothingEnabled = true;
+        try { (ctx as CanvasRenderingContext2D).imageSmoothingQuality = 'high'; } catch { /* not all browsers */ }
+        ctx.drawImage(video, 0, 0, cw, ch);
+        return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.9));
+      };
+
+      // Page background WHITE for the capture.
+      if (pageEl) pageEl.style.background = '#ffffff';
+      if (hideEls.length || pageEl) await new Promise<void>((r) => window.setTimeout(r, 250));
+      const frame = await grabFrame();
+
       try { video.pause(); } catch { /* ignore */ }
       video.srcObject = null;
-      return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.9));
+      return frame;
     } finally {
-      // Always restore every hidden graphic, whether capture succeeded,
-      // returned null, or threw.
+      // Always restore every hidden graphic and the page background, whether
+      // capture succeeded, returned null, or threw.
       restores.forEach((restore) => restore());
+      if (pageEl) pageEl.style.background = prevPageBg ?? '';
     }
   }, []);
 
@@ -2815,7 +2839,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // ========== HIDE SCREEN-SHARE BAR (vision-LLM verified, pre-start) ==========
   if (step === 'hide_share_bar') {
     return (
-      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
+      <div ref={shareBarPageRef} className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
         <div ref={shareBarCardRef} className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full my-auto p-6 md:p-8">
           <div data-capture-decor className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-3">
             <Monitor className="w-8 h-8 text-blue-600" />

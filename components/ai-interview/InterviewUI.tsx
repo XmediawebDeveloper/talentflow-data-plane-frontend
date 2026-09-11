@@ -2347,6 +2347,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
     emitEvent('gaze_away', { direction });
   }, [emitEvent]);
 
+  // Distinct (event_type:object_class) keys already screenshotted this session —
+  // see handleObjectDetected below. A ref (not state) so tracking it never
+  // triggers a re-render.
+  const capturedObjectScreenshotTypesRef = useRef<Set<string>>(new Set());
+
   // Prohibited object on camera (phone / second screen / book).
   // The whole payload is forwarded verbatim so `object_class` — the model's own
   // class string — lands in the stored violation. The recruiter's Integrity
@@ -2361,8 +2366,55 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         consecutive_frames: det.consecutive_frames,
         detector: det.detector,
       });
+
+      // One evidence screenshot per distinct violation TYPE per session — keyed
+      // exactly like the recruiter UI's "Times" grouping (groupKeyOf in
+      // violationTaxonomy.ts: event_type + object_class), NOT per repeated
+      // re-arm of the same class. Best-effort and fire-and-forget: any failure
+      // here (no frame, network error) is caught below and never touches the
+      // emitEvent() call above or the rest of the proctoring pipeline.
+      const captureKey = `${eventType}:${det.object_class}`;
+      if (!capturedObjectScreenshotTypesRef.current.has(captureKey)) {
+        capturedObjectScreenshotTypesRef.current.add(captureKey);
+        try {
+          const video = webcamRef.current?.getVideoElement?.();
+          if (video && video.readyState >= 2 && video.videoWidth > 0) {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+              ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              canvas.toBlob((blob) => {
+                if (!blob) return;
+                // The event just emitted above is only QUEUED locally — the
+                // backend batches proctoring events and normally flushes every
+                // BACKEND_FLUSH_INTERVAL (5s, InterviewProctoringMonitor.ts).
+                // Uploading the screenshot immediately would routinely race
+                // ahead of that flush, arriving before the matching
+                // proctoring_events row even exists, so the backend finds
+                // nothing to attach it to and silently drops it (confirmed: a
+                // real violation showed in the Event log with no Violation
+                // Evidence card). Force-flush the queue now and wait for it
+                // before uploading, so the row is guaranteed to exist first.
+                flushEvents()
+                  .catch(() => { /* upload still attempted below; worst case
+                                    the backend just finds no row to attach to,
+                                    same as before this fix */ })
+                  .finally(() => {
+                    candidateAIInterviewService
+                      .uploadProctorEventScreenshot(token, eventType, det.object_class, blob)
+                      .catch(() => { /* already logged inside the service call */ });
+                  });
+              }, 'image/jpeg', 0.85);
+            }
+          }
+        } catch (captureErr) {
+          console.warn('[PROCTOR-SCREENSHOT] capture failed (non-blocking):', captureErr);
+        }
+      }
     },
-    [emitEvent],
+    [emitEvent, flushEvents, token],
   );
 
   // Detection is best-effort: it needs WebGPU (Safari/Firefox may not have it)

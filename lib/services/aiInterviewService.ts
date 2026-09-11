@@ -233,7 +233,7 @@ export interface AIInterviewResponse {
   ai_evaluation?: Record<string, any>;
   conversation_transcript?: Record<string, any>[];
   recording_file_path?: string;
-  proctoring_violations?: { event_type: string; severity: string; timestamp?: string; details?: Record<string, any> }[];
+  proctoring_violations?: { event_type: string; severity: string; timestamp?: string; details?: Record<string, any>; screenshot_url?: string | null; ai_summary?: string | null }[];
   tab_switch_count?: number;
   copy_paste_count?: number;
   // Computed at interview completion (AIU-82)
