@@ -744,6 +744,23 @@ Best regards`);
     }
   };
 
+  /* Select/deselect one candidate group in "View by Candidates" — toggles
+     every scoring row that person carries (one per job/version) in one go,
+     since a group has no single id of its own to select. Mirrors
+     handleSelectAll's own toggle-each-row approach so it works the same way
+     whether selection is externally or internally controlled. */
+  const handleSelectGroup = (rows: ScoredResume[]) => {
+    const allSelected = rows.every((r) => selectedResumes.includes(r.id));
+    rows.forEach((r) => {
+      const isSelected = selectedResumes.includes(r.id);
+      if (allSelected && isSelected) {
+        handleSelectResume(r.id);
+      } else if (!allSelected && !isSelected) {
+        handleSelectResume(r.id);
+      }
+    });
+  };
+
   const handleColumnApply = (selectedColumnIds: string[]) => {
     setAvailableColumns(prev =>
       prev.map(col => ({
@@ -1754,12 +1771,21 @@ Best regards`);
             <table className="w-full min-w-[900px]">
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
+                  <th className="text-left py-3 px-4 w-12 align-middle tf-sticky-col-left">
+                    <button onClick={handleSelectAll} className="p-1 hover:bg-gray-100 rounded">
+                      {selectedResumes.length === filteredResumes.length && filteredResumes.length > 0 ? (
+                        <CheckSquare className="w-4 h-4 text-gray-800" />
+                      ) : (
+                        <Square className="w-4 h-4 text-gray-400" />
+                      )}
+                    </button>
+                  </th>
                   <th className="w-10 px-3 py-3" />
                   <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wide">Candidate</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wide">Job Versions</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wide">Job Titles</th>
                   <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wide">Latest Updated</th>
-                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wide">Actions</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-700 uppercase tracking-wide tf-sticky-col">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -1770,9 +1796,22 @@ Best regards`);
                   const titlesExpanded = expandedTitleKeys.has(key);
                   const hiddenTitleCount = Math.max(0, distinctTitles.length - JOB_TITLE_PREVIEW_COUNT);
                   const avatar = avatarColorFor(key);
+                  const groupSelected = rows.every((r) => selectedResumes.includes(r.id));
                   return (
                     <Fragment key={key}>
-                      <tr className="hover:bg-gray-50/70 transition-colors">
+                      <tr className="hover:bg-[#fafbfc] transition-colors">
+                        <td className="py-4 px-4 align-top tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            onClick={() => handleSelectGroup(rows)}
+                            className="p-1 hover:bg-gray-200 rounded"
+                          >
+                            {groupSelected ? (
+                              <CheckSquare className="w-4 h-4 text-gray-800" />
+                            ) : (
+                              <Square className="w-4 h-4 text-gray-400" />
+                            )}
+                          </button>
+                        </td>
                         <td className="px-3 py-4 align-top">
                           <button
                             onClick={() => toggleGroupExpanded(key)}
@@ -1834,7 +1873,7 @@ Best regards`);
                           <div className="text-sm text-gray-900">{formatISTDate(primary.scoredDate)}</div>
                           <div className="text-xs text-gray-500">{formatISTTime(primary.scoredDate)}</div>
                         </td>
-                        <td className="px-4 py-4 align-top" onClick={(e) => e.stopPropagation()}>
+                        <td className="px-4 py-4 align-top tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
                               <button
@@ -1853,7 +1892,7 @@ Best regards`);
                       </tr>
                       {isExpanded && (
                         <tr key={`${key}-detail`}>
-                          <td colSpan={6} className="p-0 bg-gray-50/60">
+                          <td colSpan={7} className="p-0 bg-gray-50/60">
                             {/* Same columns as the flat "Total Scored
                                 Resumes" table — including whatever the user
                                 turned on in Customize Columns — so expanding a
@@ -1931,10 +1970,21 @@ Best regards`);
               const primary = rows[0];
               const isExpanded = expandedGroupKeys.has(key);
               const avatar = avatarColorFor(key);
+              const groupSelected = rows.every((r) => selectedResumes.includes(r.id));
               return (
                 <div key={key} className="bg-white border border-gray-200 rounded-xl p-3 shadow-sm">
                   <div className="flex items-start justify-between gap-2">
                     <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); handleSelectGroup(rows); }}
+                        className="p-1 hover:bg-gray-200 rounded mt-1 flex-shrink-0"
+                      >
+                        {groupSelected ? (
+                          <CheckSquare className="w-5 h-5 text-gray-800" />
+                        ) : (
+                          <Square className="w-5 h-5 text-gray-400" />
+                        )}
+                      </button>
                       <div className={`flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center text-xs font-semibold ${avatar.bg} ${avatar.text}`}>
                         {initialsFor(primary.candidateName || 'Candidate')}
                       </div>
@@ -2095,7 +2145,7 @@ Best regards`);
               <tr
                 key={resume.id}
                 onClick={(e) => handleRowClick(resume.id, e)}
-                className={`border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer ${
+                className={`border-b border-gray-100 hover:bg-[#fafbfc] transition-colors cursor-pointer ${
                   index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
                 }`}
               >

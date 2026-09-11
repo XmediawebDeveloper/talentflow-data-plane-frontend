@@ -1,7 +1,7 @@
 'use client';
 
 import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { Plus, Clock, Calendar, Users, CheckCircle, FileText, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
+import { Plus, Clock, Calendar, Users, CheckCircle, FileText, ArrowDown, ArrowRight, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef } from 'react';
@@ -8435,24 +8435,160 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         variant="warning"
       />
 
-      {/* Clone confirmation — creates a draft copy. Recruiter publishes
-          and invites V2 candidates manually via the normal invite flow. */}
-      <ConfirmationDialog
-        isOpen={!!cloneTargetAssessment}
-        onClose={() => { if (!isCloning) setCloneTargetAssessment(null); }}
-        onConfirm={handleConfirmClone}
-        title="Duplicate assessment?"
-        description={
-          cloneTargetAssessment
-            ? `A draft copy of "${stripVersionFromTitle(cloneTargetAssessment.title || '')}" will be created as the next version`
-              + `${cloneTargetAssessment.short_id ? ` of ${cloneTargetAssessment.short_id}` : ''}`
-              + `, keeping the same assessment ID. You can edit it before publishing.`
-            : ''
-        }
-        confirmText={isCloning ? 'Duplicating…' : 'Duplicate'}
-        cancelText="Cancel"
-        variant="info"
-      />
+      {/* Duplicate confirmation — creates a DRAFT copy as the lineage's next
+          version. The recruiter publishes it and invites its candidates
+          manually through the normal invite flow; nothing is sent from here.
+
+          Its own dialog rather than the shared `ConfirmationDialog` the other
+          confirmations on this page use: this one has to SHOW the move it is
+          about to make — the job the version stays on, and the draft version
+          that comes out the other side — and a title/description pair cannot
+          draw that. Everything it acts on is the same state as before
+          (`cloneTargetAssessment`, `isCloning`, `handleConfirmClone`). */}
+      {cloneTargetAssessment && (() => {
+        /* WHICH version this will mint. `handleOpenCloneModal` force-loads the
+           lineage before opening this dialog, so the highest version that
+           actually exists is already on hand; the target's own version stands
+           in if that fetch failed.
+
+           Archived rows COUNT here, unlike the cap they are excluded from: an
+           archived V3 still owns the number 3, so the next version is 4
+           whether or not it is archived. */
+        const sourceVersion = Number(cloneTargetAssessment.version) || 1;
+        const lineageRows = assessmentLineages[cloneTargetAssessment.jd_id ?? ''] ?? [];
+        const nextVersion = lineageRows.reduce(
+          (highest, row) => Math.max(highest, Number(row.version) || 0),
+          sourceVersion,
+        ) + 1;
+        const jobTitle = cloneTargetAssessment.jd_title
+          || cloneTargetAssessment.job?.title
+          || stripVersionFromTitle(cloneTargetAssessment.title || '')
+          || 'This job';
+        const jobVersion = cloneTargetAssessment.jd_version ?? 1;
+
+        const closeIfIdle = () => { if (!isCloning) setCloneTargetAssessment(null); };
+
+        return (
+        <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden">
+            {/* Header and the two panels scroll together, so the actions stay
+                reachable on a short viewport. */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-7 pt-5 sm:pt-7 pb-5 sm:pb-6">
+              <div className="flex items-start gap-3 sm:gap-4">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-blue-50 dark:bg-blue-500/15 flex items-center justify-center flex-shrink-0">
+                  <Copy className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue dark:text-blue-300" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight leading-tight">
+                    Create Version {nextVersion}?
+                  </h3>
+                  <p className="text-sm sm:text-base text-gray-500 dark:text-slate-400 mt-1 leading-snug">
+                    A new draft version of this assessment will be created for the same job.
+                    Version {sourceVersion} will remain unchanged, and you can edit Version{' '}
+                    {nextVersion} before publishing.
+                  </p>
+                </div>
+                <button
+                  onClick={closeIfIdle}
+                  disabled={isCloning}
+                  className="p-1.5 -mr-1.5 -mt-1 text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 flex-shrink-0"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5 sm:w-6 sm:h-6" />
+                </button>
+              </div>
+
+              {/* FROM — the job the lineage belongs to, which the new version
+                  stays on. Unchanged by the duplicate, which is the point of
+                  showing it. */}
+              <div className="mt-5 sm:mt-6 rounded-xl border border-gray-200/80 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3 sm:p-4">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                    <Briefcase className="w-5 h-5 text-brand-blue" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400">Current Job</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                      {cloneTargetAssessment.jd_short_id && (
+                        <>
+                          {/* The app's one Job ID badge, not a fourth variant
+                              of the same identifier — see JobIdBadge. */}
+                          <JobIdBadge className="flex-shrink-0">
+                            {cloneTargetAssessment.jd_short_id}
+                          </JobIdBadge>
+                          <span aria-hidden="true" className="text-gray-300 dark:text-slate-600">|</span>
+                        </>
+                      )}
+                      <span className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 break-words">
+                        {jobTitle}
+                      </span>
+                      <span aria-hidden="true" className="text-gray-300 dark:text-slate-600">|</span>
+                      <span className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50">
+                        V{jobVersion}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex justify-center py-2 sm:py-2.5" aria-hidden="true">
+                <ArrowDown className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400 dark:text-slate-500" />
+              </div>
+
+              {/* TO — what the confirm button actually produces: a draft, which
+                  is why the panel is amber and carries the same Draft pill the
+                  lists use. */}
+              <div className="rounded-xl border border-amber-200/70 bg-amber-50 p-3 sm:p-4">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400">New Assessment Version</p>
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                      <span className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50">
+                        Assessment Version {nextVersion}
+                      </span>
+                      <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 text-xs sm:text-sm font-semibold">
+                        Draft
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex-shrink-0 border-t border-gray-200 dark:border-slate-700 px-5 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
+              <button
+                onClick={closeIfIdle}
+                disabled={isCloning}
+                className="px-5 sm:px-8 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmClone}
+                disabled={isCloning}
+                className="px-5 sm:px-8 py-2.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+              >
+                {isCloning ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Duplicating…
+                  </>
+                ) : (
+                  <>
+                    Create Version {nextVersion}
+                    <ArrowRight className="w-4 h-4" />
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+        );
+      })()}
 
       {/* Revoke confirmation — invalidates only PENDING / SENT links.
           Candidates who have opened, started, or completed the assessment

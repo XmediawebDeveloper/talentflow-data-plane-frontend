@@ -2129,12 +2129,12 @@ thead th.tf-sticky-col-left {
   z-index: 11;
 }
 
-/* The opaque background above would otherwise swallow the row hover tint, so
-   the pinned cell repaints it — an opaque version of the `hover:bg-brand-blue/5`
-   the rows carry, since a translucent one would let content show through. */
+/* Hover — flat #fafbfc for the pinned cell, not a blue-tinted color-mix, so
+   a hovered row reads as one consistent color instead of the sticky column
+   showing a different tint than the rest of the row. */
 tbody tr:hover > .tf-sticky-col,
 tbody tr:hover > .tf-sticky-col-left {
-  background-color: color-mix(in srgb, var(--brand-blue) 5%, #ffffff);
+  background-color: #fafbfc;
 }
 .dark tbody tr:hover > .tf-sticky-col,
 .dark tbody tr:hover > .tf-sticky-col-left {
@@ -2148,7 +2148,7 @@ tbody tr:hover > .tf-sticky-col-left {
    background class: each table names that tint differently
    (bg-blue-50, bg-brand-blue/5, …), so a shared attribute is the one hook
    every table can set without fighting the others' class names. Declared
-   after the hover rules so hovering a selected row still shows hover
+   after the hover rule so hovering a selected row still shows hover
    feedback instead of being masked by the stronger selected tint. */
 tbody tr[data-row-selected="true"] > .tf-sticky-col,
 tbody tr[data-row-selected="true"] > .tf-sticky-col-left {

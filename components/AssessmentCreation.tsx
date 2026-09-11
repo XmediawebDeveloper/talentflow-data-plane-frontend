@@ -2,7 +2,7 @@
 
 import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown } from 'lucide-react';
 import type { AssessmentResponse, HRTopic } from '@/lib/services/assessmentService';
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -18,6 +18,8 @@ import SuccessAnimation from '@/components/ui/success-animation';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import JDFullViewModal from '@/components/jobs/JDFullViewModal';
+import CodingRoundLanguageModal from '@/components/assessments/CodingRoundLanguageModal';
+import LanguageLogo from '@/components/assessments/LanguageLogo';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
@@ -1403,6 +1405,19 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   // either don't fit that pattern or have no compiler. They can still
   // appear in the Technical round as MCQ / text-based questions.
   const programmingLanguages = [...COMPILABLE_LANGUAGES];
+
+  /* The JD's OWN languages, narrowed to the ones the runner can execute.
+     This is what decides which of the language picker's two states opens:
+     non-empty means the job role requires a coding round, empty means it is
+     Auto (Not Required) — the same split the Coding Round card's badge draws,
+     read from the same value so the two cannot contradict each other.
+
+     Memoised because the picker derives its browsable list from it; without
+     this it would be a fresh array on every keystroke anywhere on the page. */
+  const jdCodingLanguages = useMemo(
+    () => filterCompilable(jdExtractedLanguages),
+    [jdExtractedLanguages],
+  );
 
   // Guards against a second toast/redirect: the auto-select effect can re-run
   // before the router navigates away (selectedJob stays null on this path).
@@ -3998,8 +4013,12 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                     {chosen.map(lang => (
                       <span
                         key={lang}
-                        className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-xs"
+                        className="inline-flex items-center gap-1.5 pl-1.5 pr-2 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-xs"
                       >
+                        {/* The language's own mark, the same file the picker
+                            shows on its cards — one size down so it sits in a
+                            text-xs pill without stretching it. */}
+                        <LanguageLogo language={lang} size="sm" />
                         {lang}
                         <button
                           type="button"
@@ -4512,8 +4531,35 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
             </div>
 
-            {/* Right Column - Sidebar */}
-            <div className="w-full lg:w-80 lg:flex-shrink-0 space-y-4">
+            {/* Right Column - Sidebar.
+
+                STICKY FROM `lg` UP, which is the same breakpoint the row turns
+                two-column at — below it the layout stacks and the sidebar
+                stays in normal flow, where a pinned panel would only eat the
+                screen the form needs.
+
+                `lg:self-start` is what makes it possible at all: a flex item
+                stretches to the row's height by default, and an element that
+                is already as tall as its container can never stick. Shrinking
+                it to its own content height is the same `sticky … self-start`
+                pairing the assessment and candidate detail pages use for their
+                nav asides.
+
+                It stops on its own at the foot of the row, because a sticky
+                element never leaves its containing block — no listener, no
+                measured height.
+
+                THE HEIGHT CAP IS NOT DECORATION. This column ends in the
+                Save as Draft / Publish card, and a sticky panel taller than
+                the scrollport pins its top and pushes its own bottom
+                permanently below the fold — the two buttons that end the step
+                would have become unreachable on a 768px-tall laptop, which is
+                exactly where this column's ~640px lands. Capped and scrolled
+                internally instead. The figure is the scrollport minus the
+                offsets: 4.5rem header (`h-[72px]` at lg) + 1.5rem top offset +
+                1.5rem breathing room at the bottom. Nothing shows while the
+                content fits, which is the common case. */}
+            <div className="w-full lg:w-80 lg:flex-shrink-0 space-y-4 lg:sticky lg:top-6 lg:self-start lg:max-h-[calc(100dvh-7.5rem)] lg:overflow-y-auto">
               {/**
                * What the JD itself decided, on a card of its own ABOVE the
                * duration it feeds.
@@ -4846,28 +4892,43 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           </div>
         </div>
 
-        {/* Coding Confirmation Popup */}
-        {showCodingConfirm && (
+        {/* The coding round's LANGUAGE PICKER — the 'enable' and 'edit'
+            paths. Which of its two states opens is the JOB ROLE's answer, not
+            this page's: `jdCodingLanguages` non-empty is a role that requires
+            a coding round, empty is Auto (Not Required). See
+            CodingRoundLanguageModal. */}
+        {showCodingConfirm && codingPopupMode !== 'disable' && (
+          <CodingRoundLanguageModal
+            mode={codingPopupMode}
+            languages={programmingLanguages}
+            jdLanguages={jdCodingLanguages}
+            selected={selectedCodingLanguages}
+            maxLanguages={MAX_CODING_LANGUAGES}
+            onToggle={toggleLanguageSelection}
+            onClear={() => setSelectedCodingLanguages([])}
+            onCancel={handleCancelCodingAction}
+            onConfirm={handleConfirmCodingAction}
+          />
+        )}
+
+        {/* Disable Coding Round confirmation — a dialog of its own. It asks
+            one question and lists what the answer throws away, so it never
+            needed the language picker the other two modes are built around. */}
+        {showCodingConfirm && codingPopupMode === 'disable' && (
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
             <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-md w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
               {/* Header */}
-              <div className={`${codingPopupMode === 'disable' ? 'bg-red-50 border-b border-red-200' : 'bg-gray-50 border-b border-brand-blue/15'} px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl`}>
+              <div className="flex-shrink-0 bg-red-50 border-b border-red-200 px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <div className={`w-8 h-8 sm:w-10 sm:h-10 ${codingPopupMode === 'disable' ? 'bg-red-100' : 'bg-brand-blue/10 ring-1 ring-brand-blue/15'} rounded-xl flex items-center justify-center flex-shrink-0`}>
-                    <Code className={`w-4 h-4 sm:w-5 sm:h-5 ${codingPopupMode === 'disable' ? 'text-red-600' : 'text-brand-blue'}`} />
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Code className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">
-                      {codingPopupMode === 'disable'
-                        ? 'Disable Coding Round?'
-                        : codingPopupMode === 'edit'
-                        ? 'Choose your programming language'
-                        : 'Enable Coding Round'}
+                      Disable Coding Round?
                     </h3>
-                    <p className={`text-xs sm:text-sm ${codingPopupMode === 'disable' ? 'text-red-700' : 'text-brand-blue'}`}>
-                      {codingPopupMode === 'disable'
-                        ? 'This will remove the coding assessment'
-                        : `Select up to ${MAX_CODING_LANGUAGES} programming languages for the assessment`}
+                    <p className="text-xs sm:text-sm text-red-700">
+                      This will remove the coding assessment
                     </p>
                   </div>
                 </div>
@@ -4875,98 +4936,16 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
               {/* Content */}
               <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
-                {codingPopupMode === 'disable' ? (
-                  <>
-                    <p className="text-sm sm:text-base text-gray-600 mb-4">
-                      Are you sure you want to disable the coding round? The following languages will be removed:
-                    </p>
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      {selectedCodingLanguages.map(lang => (
-                        <span key={lang} className="px-3 py-1.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-sm">
-                          {lang}
-                        </span>
-                      ))}
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-sm sm:text-base text-gray-600 mb-4">
-                      Please select at least one programming language for the coding assessment
-                      {' '}(maximum {MAX_CODING_LANGUAGES}).
-                    </p>
-                    {/* Language Selection */}
-                    <div className="mb-4">
-                      <label className="block text-xs sm:text-sm font-medium text-gray-700 mb-2">
-                        Programming Languages <span className="text-red-500">*</span>
-                      </label>
-                      <div className="border border-gray-200 rounded-xl p-3 max-h-40 overflow-y-auto">
-                        <div className="flex flex-wrap gap-2">
-                          {programmingLanguages.map(lang => {
-                            const isSelected = selectedCodingLanguages.includes(lang);
-                            /* At the cap, the unpicked languages go inert - the
-                               picked ones never do, or a full selection could
-                               not be changed, only abandoned. */
-                            const blocked = !isSelected && selectedCodingLanguages.length >= MAX_CODING_LANGUAGES;
-                            return (
-                              <button
-                                key={lang}
-                                onClick={() => toggleLanguageSelection(lang)}
-                                disabled={blocked}
-                                title={blocked ? `Maximum ${MAX_CODING_LANGUAGES} languages selected` : undefined}
-                                className={`px-3 py-1.5 rounded-full text-sm transition-all ${
-                                  isSelected
-                                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
-                                    : blocked
-                                    ? 'bg-slate-50 text-gray-400 cursor-not-allowed'
-                                    : 'bg-slate-100 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue'
-                                }`}
-                              >
-                                {lang}
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </div>
-                      {selectedCodingLanguages.length > 0 && (
-                        <div className="mt-3">
-                          <div className="flex items-center justify-between mb-1.5">
-                            <span className="text-xs font-medium text-gray-700">
-                              Selected ({selectedCodingLanguages.length}/{MAX_CODING_LANGUAGES})
-                              {selectedCodingLanguages.length >= MAX_CODING_LANGUAGES && (
-                                <span className="ml-1.5 font-normal text-brand-orange-deep">maximum reached</span>
-                              )}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedCodingLanguages([])}
-                              className="text-xs text-gray-500 hover:text-red-600 transition-colors"
-                            >
-                              Clear all
-                            </button>
-                          </div>
-                          <div className="flex flex-wrap gap-1.5 p-2 bg-brand-blue/5 ring-1 ring-brand-blue/15 rounded-lg">
-                            {selectedCodingLanguages.map(lang => (
-                              <span
-                                key={`sel-${lang}`}
-                                className="inline-flex items-center gap-1 px-2 py-0.5 bg-white text-brand-blue ring-1 ring-brand-blue/30 rounded-full text-xs"
-                              >
-                                {lang}
-                                <button
-                                  type="button"
-                                  onClick={() => toggleLanguageSelection(lang)}
-                                  className="text-brand-blue/60 hover:text-red-600 transition-colors"
-                                  aria-label={`Remove ${lang}`}
-                                >
-                                  <X className="w-3 h-3" />
-                                </button>
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
+                <p className="text-sm sm:text-base text-gray-600 mb-4">
+                  Are you sure you want to disable the coding round? The following languages will be removed:
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  {selectedCodingLanguages.map(lang => (
+                    <span key={lang} className="px-3 py-1.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-sm">
+                      {lang}
+                    </span>
+                  ))}
+                </div>
               </div>
 
               {/* Actions */}
@@ -4979,18 +4958,9 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 </button>
                 <button
                   onClick={handleConfirmCodingAction}
-                  disabled={codingPopupMode !== 'disable' && selectedCodingLanguages.length === 0}
-                  className={`flex-1 px-4 py-2 rounded-lg text-sm transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed ${
-                    codingPopupMode === 'disable'
-                      ? 'bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-500/25 ring-1 ring-white/10'
-                      : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
-                  }`}
+                  className="flex-1 px-4 py-2 rounded-lg text-sm transition-colors bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-500/25 ring-1 ring-white/10"
                 >
-                  {codingPopupMode === 'disable'
-                    ? 'Yes, Disable'
-                    : codingPopupMode === 'edit'
-                    ? 'Save Languages'
-                    : 'Enable Coding'}
+                  Yes, Disable
                 </button>
               </div>
             </div>
