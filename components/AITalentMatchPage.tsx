@@ -1780,6 +1780,15 @@ export default function AITalentMatchPage({
     const topMatchRating = bestScorePerJob.length ? Math.max(...bestScorePerJob) : 0;
     // Exact Match = a rating of 10, same bucket the Match History popup counts.
     const topMatchingJobsCount = bestScorePerJob.filter(score => toMatchRating(score) === 10).length;
+    // Every session's candidates load in individually (in the background — see
+    // the prefetch effect above), so `bestScorePerJob` fills in one job at a
+    // time rather than all at once. Rendering the count as each one lands made
+    // "Top Match Rating"/"Top Matching Jobs" visibly count up (1, 2, 3, ...) as
+    // sessions resolved. Holding the real number back until every session has
+    // resolved means the tiles show only their final, correct value.
+    const topStatsReady = matchHistory.every(
+      item => (item.totalMatches || 0) <= 0 || historyCandidatesById[item.id] !== undefined
+    );
 
     // Candidate roll-up search matches the person or any job they matched.
     const candidateQuery = candidateSearchQuery.trim().toLowerCase();
@@ -1998,7 +2007,12 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={Award}
             label="Top Match Rating"
-            value={`${toMatchRating(topMatchRating)}`}
+            // Shown only once every session has resolved — see `topStatsReady`
+            // — so this renders the final rating directly instead of visibly
+            // counting up as sessions load in one by one.
+            value={topStatsReady ? `${toMatchRating(topMatchRating)}` : (
+              <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
+            )}
             sparkline={false}
             // Drills into the real candidates holding this exact rating — same
             // "All Resumes" view + rating-band filter the pills below use, so
@@ -2015,7 +2029,12 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={Briefcase}
             label="Top Matching Jobs"
-            value={topMatchingJobsCount}
+            // Same "hold until every session has resolved" rule as Top Match
+            // Rating above, so this shows the final count directly rather than
+            // counting up (1, 2, 3, ...) as sessions load in.
+            value={topStatsReady ? topMatchingJobsCount : (
+              <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
+            )}
             sparkline={false}
             // Drills into the real jobs behind this count — View by Job,
             // narrowed to jobs whose best candidate is a perfect 10/10 (the
