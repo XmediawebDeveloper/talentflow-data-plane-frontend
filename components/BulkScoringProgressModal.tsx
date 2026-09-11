@@ -617,7 +617,7 @@ export default function BulkScoringProgressModal({
 
             `Loader2` only spins while something is actually processing; a
             permanently spinning icon on a finished run reads as still working. */}
-        <div className="px-3 sm:px-5 py-3 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
+        <div className="px-3 sm:px-5 py-2 bg-white dark:bg-slate-900 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
           <div className="flex flex-wrap items-center gap-2">
             {[
               { key: 'queued', label: 'Queue', count: queuedCount, icon: <Clock className="w-4 h-4" />, tone: 'text-blue-600 dark:text-blue-300' },
@@ -692,30 +692,36 @@ export default function BulkScoringProgressModal({
           </div>
         )}
 
-        {/* Filters */}
-        <div className="p-3 sm:p-5 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-            <div>
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-1 sm:mb-1.5">
-                Search Candidate
+        {/* Filters — Search/Status/Source and the "Filters" toggle all sit on
+            one line: each field is label-beside-control (not stacked) with a
+            fixed, short width rather than stretching to fill a grid column,
+            and the toggle is appended right after Source instead of dropping
+            to its own row below. Wraps only when the modal is too narrow to
+            fit them all (phones), which the expanded panel doesn't need to
+            match since it already lays its own fields out in a grid. */}
+        <div className="p-2.5 sm:p-3 border-b border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 shrink-0">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
+                Search
               </label>
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search by name or email..."
-                className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black text-xs sm:text-sm"
+                placeholder="Name or email..."
+                className="w-36 sm:w-44 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-black text-xs"
               />
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
                 Status
               </label>
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs sm:text-sm"
+                className="w-28 sm:w-32 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs"
               >
                 <option value="all">All Status</option>
                 <option value="queued">Queued</option>
@@ -726,14 +732,14 @@ export default function BulkScoringProgressModal({
               </select>
             </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+            <div className="flex items-center gap-1.5">
+              <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
                 Source
               </label>
               <select
                 value={sourceFilter}
                 onChange={(e) => setSourceFilter(e.target.value)}
-                className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs sm:text-sm"
+                className="w-28 sm:w-32 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs"
               >
                 <option value="all">All Sources</option>
                 {/* Only show Internal DB option if user has permission */}
@@ -741,17 +747,15 @@ export default function BulkScoringProgressModal({
                 <option value="my-resumes">My Resumes</option>
               </select>
             </div>
-          </div>
 
-          {/* Filters - the less-used controls live behind this toggle rather
-              than stretching the toolbar: the three above answer most
-              questions, and these narrow an already-filtered list. */}
-          <div className="mt-3">
+            {/* Filters - the less-used controls live behind this toggle rather
+                than stretching the toolbar: the three above answer most
+                questions, and these narrow an already-filtered list. */}
             <button
               type="button"
               onClick={() => setShowMoreFilters(v => !v)}
               aria-expanded={showMoreFilters}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs sm:text-sm font-medium transition-colors ${
+              className={`inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
                 showMoreFilters || extraFiltersApplied
                   ? 'border-brand-blue/40 bg-brand-blue/5 text-brand-blue'
                   : 'border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:border-brand-blue/40 hover:text-brand-blue'
@@ -766,23 +770,24 @@ export default function BulkScoringProgressModal({
               )}
               <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${showMoreFilters ? 'rotate-180' : ''}`} />
             </button>
+          </div>
 
-            {showMoreFilters && (
-              <div className="mt-3 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.03] p-3 sm:p-4">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          {showMoreFilters && (
+              <div className="mt-2 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.03] p-2.5 sm:p-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
                   {/* Each select appears only when the rows actually carry that
                       field - a popup for a single scoring run has no versions
                       to choose between - and its options are read off the rows
                       themselves. */}
                   {scoredByOptions.length > 0 && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
                         Scored By
                       </label>
                       <select
                         value={scoredByFilter}
                         onChange={(e) => setScoredByFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs sm:text-sm"
+                        className="w-full min-w-0 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs"
                       >
                         <option value="all">All Scorers</option>
                         {scoredByOptions.map(name => (
@@ -793,14 +798,14 @@ export default function BulkScoringProgressModal({
                   )}
 
                   {jobVersionOptions.length > 0 && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
                         Job Version
                       </label>
                       <select
                         value={jobVersionFilter}
                         onChange={(e) => setJobVersionFilter(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs sm:text-sm"
+                        className="w-full min-w-0 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs"
                       >
                         <option value="all">All Versions</option>
                         {jobVersionOptions.map(version => (
@@ -810,8 +815,8 @@ export default function BulkScoringProgressModal({
                     </div>
                   )}
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
                       Scored From
                     </label>
                     <input
@@ -819,12 +824,12 @@ export default function BulkScoringProgressModal({
                       value={scoredFrom}
                       max={scoredTo || undefined}
                       onChange={(e) => setScoredFrom(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs sm:text-sm"
+                      className="w-full min-w-0 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs"
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <label className="text-xs font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap shrink-0">
                       Scored To
                     </label>
                     <input
@@ -832,15 +837,14 @@ export default function BulkScoringProgressModal({
                       value={scoredTo}
                       min={scoredFrom || undefined}
                       onChange={(e) => setScoredTo(e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs sm:text-sm"
+                      className="w-full min-w-0 px-2.5 py-1.5 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black text-xs"
                     />
                   </div>
                 </div>
               </div>
-            )}
-          </div>
+          )}
 
-          <div className="mt-2 flex items-center justify-between text-sm">
+          <div className="mt-1.5 flex items-center justify-between text-sm">
             <span className="text-gray-600 dark:text-slate-400">
               Showing <span className="font-medium text-gray-900 dark:text-slate-50">{filteredData.length}</span> of <span className="font-medium text-gray-900 dark:text-slate-50">{totalResumes}</span> records
             </span>

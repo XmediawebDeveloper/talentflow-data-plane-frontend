@@ -1,6 +1,6 @@
 'use client';
 
-import { X, Upload, File, Trash2, FolderPlus, FolderOpen, FolderInput, FolderRoot, Archive, ChevronRight, ChevronDown, AlertCircle, CheckCircle, XCircle, Shield, HardDrive, FileText, FileUser, Files, Database, Info, Lightbulb, ClipboardList } from 'lucide-react';
+import { X, Upload, File, Trash2, FolderPlus, FolderOpen, FolderInput, FolderRoot, Archive, ChevronRight, ChevronDown, AlertCircle, CheckCircle, XCircle, Shield, HardDrive, FileText, FileUser, Files, Database, Info, Lightbulb } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import ViewResumeButton from '@/components/ui/view-resume-button';
 import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
@@ -143,7 +143,6 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
 
   const [activeTab, setActiveTab] = useState<'single' | 'bulk'>('single');
   const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
-  const [uploadSuccess, setUploadSuccess] = useState<{ resumeId: string; candidateName: string } | null>(null);
   // Find root folder for default selection
   const rootFolder = folders.find(f => f.name.toLowerCase() === 'root' && !f.parentId);
 
@@ -779,17 +778,16 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
         return;
       }
 
-      // Success - show success state with scoring option for single uploads
+      // Success — hand the new resume to the caller (SelectSourceModal uses
+      // this to auto-tick it in "Select Applicants to Score") and close
+      // immediately. This used to pause on a "Resume Uploaded Successfully!"
+      // interstitial with a "Score Against a Job" button, but that button's
+      // only caller was already inside a specific job's scoring flow — an
+      // extra "do you want to score this?" click from inside the screen
+      // that's already doing exactly that was redundant, not a real choice.
       if (activeTab === 'single' && result.resumeId && onScoreResume) {
-        setUploadSuccess({
-          resumeId: result.resumeId,
-          candidateName: result.candidateName || selectedFiles[0]?.name || 'Resume'
-        });
-        setIsUploading(false);
-        return;
+        onScoreResume(result.resumeId, result.candidateName || selectedFiles[0]?.name || 'Resume');
       }
-
-      // For bulk uploads or when scoring is not available, close modal
       onClose();
     } catch (error: any) {
       console.error('Upload error:', error);
@@ -886,38 +884,6 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
-          {/* Success State with Scoring Option */}
-          {uploadSuccess ? (
-            <div className="text-center py-6 sm:py-8">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 bg-brand-teal/10 rounded-full flex items-center justify-center mx-auto mb-3 sm:mb-4">
-                <CheckCircle className="w-6 h-6 sm:w-8 sm:h-8 text-brand-teal" />
-              </div>
-              <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-slate-50 mb-1.5 sm:mb-2">Resume Uploaded Successfully!</h3>
-              <p className="text-sm sm:text-base text-gray-600 dark:text-slate-400 mb-4 sm:mb-6 px-2">
-                {uploadSuccess.candidateName} has been added to your resume database.
-              </p>
-
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-center gap-2 max-w-md mx-auto">
-                <button
-                  onClick={onClose}
-                  className="px-4 py-2 text-sm border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-                >
-                  Done
-                </button>
-                <button
-                  onClick={() => {
-                    onScoreResume?.(uploadSuccess.resumeId, uploadSuccess.candidateName);
-                    onClose();
-                  }}
-                  className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
-                >
-                  <ClipboardList className="w-4 h-4" />
-                  Score Against a Job
-                </button>
-              </div>
-            </div>
-          ) : (
-          <>
           {/* RU quota. Brand-tinted panel rather than raw blue-50/blue-200 so
               it sits in the same palette as the rest of the app. */}
           <div className="mb-4 sm:mb-6 p-3 sm:p-4 rounded-xl bg-gradient-to-r from-brand-blue/[0.07] via-brand-cyan/[0.05] to-white dark:from-brand-blue/10 dark:via-brand-cyan/5 dark:to-slate-900 border border-brand-blue/15 ring-1 ring-black/[0.02]">
@@ -1414,8 +1380,6 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               <span className="font-semibold">Tip:</span> Organize resumes into folders to find the right candidates faster.
             </p>
           </div>
-          </>
-          )}
         </div>
 
         {/* No Files Error Alert */}
@@ -1437,8 +1401,6 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
           </div>
         )}
 
-        {/* Hide footer when showing success state */}
-        {!uploadSuccess && (
         <div className="flex-shrink-0 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 p-4 sm:p-5 border-t border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900">
           <button
             onClick={onClose}
@@ -1483,7 +1445,6 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
             }
           </button>
         </div>
-        )}
       </div>
 
       {/* Duplicate Resume Detection Modal */}

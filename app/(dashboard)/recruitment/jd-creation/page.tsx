@@ -233,6 +233,35 @@ function JDCreationContent() {
   const fromAssessment = flowOrigin === 'assessment';
   const fromResumeScoring = flowOrigin === 'resume-scoring';
 
+  // Which JD this mount is KEYED on (see the `key` prop below). It is not simply
+  // `jdId`, because `jdId` appears mid-session: Step 1's extraction saves the new
+  // draft and `ensureJDCreationUrl` then attaches `id=` to the URL. Next syncs that
+  // `history.replaceState` into `useSearchParams`, so a key of `jdId ?? 'new'` flipped
+  // `'new'` -> `<id>` right after `setStep('extract')` and REMOUNTED JDCreation: `step`
+  // fell back to its blank `'create'` default and the recruiter saw Step 1 repaint
+  // empty, then jump to Step 2 once the parent's re-fetch rehydrated it. The
+  // `freshParam` branch only protects the entry points that pass the `?new=` nonce;
+  // the sidebar and the `?from=assessment|ai-interview|resume-scoring` entries carry
+  // none, and every one of those flickered.
+  //
+  // So an id that appears while this mount had none is IGNORED for keying - it is this
+  // same draft, not a different target. Every OTHER change of `id` still rekeys,
+  // because those are real changes of target: entering on one JD's `?id=` and moving to
+  // another's, and "Create another JD" (which pushes this same route with no `id` at
+  // all and must get a blank form).
+  const [keyedJdId, setKeyedJdId] = useState<string>(jdId ?? 'new');
+  const [lastSeenJdId, setLastSeenJdId] = useState<string | null>(jdId);
+  if (jdId !== lastSeenJdId) {
+    const isDraftWeJustCreated = lastSeenJdId === null && jdId !== null;
+    setLastSeenJdId(jdId);
+    if (!isDraftWeJustCreated) {
+      // `blank-after-*` rather than a bare 'new': leaving a saved JD for a blank form
+      // has to change the key even when the key was already 'new' (the draft this
+      // session created never rekeyed), or the blank form inherits its state.
+      setKeyedJdId(jdId ?? `blank-after-${lastSeenJdId}`);
+    }
+  }
+
   const [editingJD, setEditingJD] = useState<JDResponse | null>(null);
   const [loading, setLoading] = useState(true); // Start with loading true for access check
   const [accessCheck, setAccessCheck] = useState<JDAccessCheckResponse | null>(null);
@@ -490,6 +519,11 @@ function JDCreationContent() {
       additional_details: editingJD.additional_details,
       must_have_comments: editingJD.must_have_comments,
       nice_to_have_comments: editingJD.nice_to_have_comments,
+      // The skill groups + notes Step 2 shows under each skill. Dropping it here did
+      // MORE than hide them: Step 2 hydrates `mergeTrail` from this object, so it fell
+      // back to [], and the next save sends `skill_merge_trail: []`, which CLEARS the
+      // stored groups. One refresh of Step 2 therefore deleted the provenance for good.
+      skill_merge_trail: editingJD.skill_merge_trail,
       // Also forwarded (previously dropped on edit → silent data loss):
       certifications: editingJD.certifications,
       domain_keywords: editingJD.domain_keywords,
@@ -543,11 +577,14 @@ function JDCreationContent() {
           // `freshParam` (the per-click nonce from the "Create JD" entry point)
           // never changes for the lifetime of one session, pinning the key to
           // it keeps this same in-progress draft mounted as `id`/`stage` are
-          // attached to the URL. It only falls back to `jdId` when there's no
-          // `freshParam` at all - i.e. entering directly on an existing JD's
-          // `?id=...` link (e.g. "Edit" from the JD list) - where switching to
-          // a different `id` really is a different target and must remount.
-          key={freshParam ? `new-${freshParam}` : (jdId ?? 'new')}
+          // attached to the URL.
+          //
+          // The fallback is `keyedJdId`, NOT `jdId` - see its comment above.
+          // Entry points without the nonce (the sidebar, `?from=...`) mount with
+          // no id at all, and keying on the live `jdId` remounted them the moment
+          // the draft was saved. `keyedJdId` ignores that one null -> id change and
+          // still changes for every real change of target.
+          key={freshParam ? `new-${freshParam}` : keyedJdId}
           onBack={handleViewAllJobs}
           onPublish={handleJDPublish}
           editingJD={memoizedEditingJD}

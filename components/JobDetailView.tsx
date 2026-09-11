@@ -1,6 +1,6 @@
 'use client'
 
-import { ArrowLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Zap, ClipboardList, Video } from 'lucide-react';
+import { ArrowLeft, ChevronRight, MapPin, Calendar, Users, Briefcase, X, CheckCircle, Sparkles, UserPlus, ChevronDown, Upload, UserCheck, Phone, Building2, Clock, TrendingUp, Star, User as UserIcon, Ban, Archive, ArchiveRestore, History, Edit, XCircle, RefreshCw, Trash2, Eye, Download, Brain, Lock, BarChart, BarChart3, MessageSquare, FileText, Search, Paperclip, Loader2, AlertCircle, Info, ArrowRight, Zap, ClipboardList, Video } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -8,7 +8,7 @@ import type { User, Tenant } from '@/lib/types/tenant';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { jdService, JDLineageVersion, JDUsageStatus } from '@/lib/services/jdService';
+import { jdService, JDLineageVersion, JDUsageStatus, JDVersion } from '@/lib/services/jdService';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
@@ -41,7 +41,7 @@ import AIInterviewTrackInvitesModal from './AIInterviewTrackInvitesModal';
 import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
 import AIInterviewResults from './ai-interview/AIInterviewResults';
 import CandidateResultsView from './ai-interview/CandidateResultsView';
-import { aiInterviewService, AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, AIInterviewResponse, AIInterviewVersionHistoryItem } from '@/lib/services/aiInterviewService';
 import { formatJobExperienceBadge } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { toast } from 'sonner';
@@ -663,6 +663,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // "none created" from "created but not published" so the gates below can name
   // the actual blocker. False while still loading.
   const [hasAnyAssessment, setHasAnyAssessment] = useState(false);
+  /* Has the lookup behind `hasPublishedAssessment` actually come back yet?
+     That flag is `false` both when nothing is published and when nothing has
+     been asked, and the Create gate has to tell those apart — otherwise a job
+     with a published assessment shows an enabled Create for the first moment
+     of every page load. Set once the fetch settles, success or failure. */
+  const [assessmentExistenceChecked, setAssessmentExistenceChecked] = useState(false);
   // Whether one of them is actually PUBLISHED. This is what Send Invite needs —
   // a draft has nothing to invite candidates to, and clicking through would only
   // bounce them back with "publish it first". False while still loading.
@@ -674,6 +680,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // Whether this JD has any AI interview at all (live or draft). False while
   // still loading.
   const [hasAnyAIInterview, setHasAnyAIInterview] = useState(false);
+  /** The AI-interview twin of `assessmentExistenceChecked`. */
+  const [aiInterviewExistenceChecked, setAiInterviewExistenceChecked] = useState(false);
   const [showAssessmentPicker, setShowAssessmentPicker] = useState(false);
   const [pickerAssessments, setPickerAssessments] = useState<any[]>([]);
   const [pickerSelectedIds, setPickerSelectedIds] = useState<string[]>([]);
@@ -798,6 +806,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const [assessmentInviteCount, setAssessmentInviteCount] = useState(0);
   const [loadingAssessmentResults, setLoadingAssessmentResults] = useState(false);
   const [viewingAssessmentResult, setViewingAssessmentResult] = useState<any | null>(null);
+  /* The Assessment objects themselves (not the per-candidate results above) —
+     kept for Recent Activity's "Assessment Created (Vn)" entry, which needs
+     each assessment's own created_by_name/created_at/version rather than a
+     candidate's result. */
+  const [jdAssessments, setJdAssessments] = useState<any[]>([]);
 
   // AI Talent Match state
   const [aiMatchSessions, setAiMatchSessions] = useState<AIMatchSessionResponse[]>([]);
@@ -865,6 +878,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const [loadingAIInterviewConfig, setLoadingAIInterviewConfig] = useState(false);
   const [aiInterviewConfigError, setAiInterviewConfigError] = useState<string | null>(null);
   const aiInterviewConfigFetchedRef = useRef(false);
+  /* The interview config's own edit/publish version — for Recent Activity's
+     "AI Interview Created (Vn)" entry. `AIInterviewResponse` itself carries no
+     version number (only `jd_current_version`, which is the linked JD's
+     version, not the interview's own), so this is its own small fetch,
+     mirroring the JD-version-history one above. */
+  const [aiInterviewVersionHistory, setAiInterviewVersionHistory] = useState<AIInterviewVersionHistoryItem[]>([]);
 
   /* `aiInterviewConfig` comes from findLiveConfigForJd, which only matches
      published/in-use configs — so its presence IS "there is something to invite
@@ -888,6 +907,56 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     hasPublishedAssessment && features.assessment && job.status !== 'Disabled';
   const canInviteToAIInterview =
     hasLiveAIInterview && features.ai_interview && job.status !== 'Disabled';
+
+  /* ONE PUBLISHED ASSESSMENT AND ONE PUBLISHED AI INTERVIEW PER JOB. Create is
+     offered until one is PUBLISHED and refused from then on — one answer per
+     side, read by every Create on the page (the section toolbars, the tab
+     empty states and the Quick Action tiles) so no two of them can disagree.
+
+     PUBLISHED, NOT MERELY CREATED. A draft leaves Create live on purpose: on
+     a draft the button does not mint a second record, it opens the "Draft …
+     for this job" prompt and hands the recruiter back into the flow they left
+     — and that prompt has no other entry point on this page, so gating it on
+     the draft would strand the draft here. What must never happen is a SECOND
+     record once one is live, and that is exactly what these two read.
+
+     THE RECORD DECIDES, not the click. `hasPublishedAssessment` is set from
+     the status the API returns on `assessmentService.list({ jd_id: job.id })`
+     ('published' / 'active'), and `hasLiveAIInterview` from
+     `findLiveConfigForJd`, which matches only published-and-beyond configs.
+     Both run on mount against this JD version's own id, so the gate is
+     re-derived from the backend on every mount: it survives a reload, it
+     survives navigating away and back, and a draft that is published
+     elsewhere disables Create here as soon as the next load lands. Nothing
+     here remembers that a create happened in this session.
+
+     Both handlers still re-query on the click — that is the backstop for the
+     deep-link path (`?action=create-ai-interview`) and for the window between
+     a stale tab rendering and the fetch landing — so this gate is the honest
+     label on the button, not the only thing enforcing the rule. */
+  const assessmentAlreadyPublished = hasPublishedAssessment;
+  const aiInterviewAlreadyPublished = hasLiveAIInterview;
+  const blockAssessmentCreate = !assessmentExistenceChecked || assessmentAlreadyPublished;
+  const blockAIInterviewCreate = !aiInterviewExistenceChecked || aiInterviewAlreadyPublished;
+  /** Why Create is off, for the button titles and tile tooltips. Null when on. */
+  const assessmentCreateBlockedReason = !features.assessment
+    ? 'Assessments not enabled'
+    : job.status === 'Disabled'
+      ? 'JD is disabled'
+      : assessmentAlreadyPublished
+        ? 'This job already has a published assessment'
+        : !assessmentExistenceChecked
+          ? 'Checking this job’s assessment…'
+          : null;
+  const aiInterviewCreateBlockedReason = !features.ai_interview
+    ? 'AI Interviews not enabled'
+    : job.status === 'Disabled'
+      ? 'JD is disabled'
+      : aiInterviewAlreadyPublished
+        ? 'This job already has a published AI interview'
+        : !aiInterviewExistenceChecked
+          ? 'Checking this job’s AI interview…'
+          : null;
 
   const loadAIInterviewConfig = async () => {
     if (aiInterviewConfigFetchedRef.current) return;
@@ -930,6 +999,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       setAiInterviewConfigError('Could not load AI interview results. Please try again.');
     } finally {
       setLoadingAIInterviewConfig(false);
+      // Same release-on-failure rule as the assessment side above.
+      setAiInterviewExistenceChecked(true);
     }
   };
 
@@ -963,7 +1034,16 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     // Also runs for share-only users: the Send Invite gate reads
     // hasAnyAIInterview, which this sets — without it a user who can invite but
     // not view results would find the button permanently disabled.
-    if (!permissions.canViewAIInterviews && !permissions.canShareAIInterviews) return;
+    //
+    // And for CREATE-only users, for the mirror-image reason: the Create gate
+    // reads the same value, so a user who can create but neither view nor
+    // share would never learn that an interview already exists and would be
+    // offered Create on a job that already has one.
+    if (
+      !permissions.canViewAIInterviews
+      && !permissions.canShareAIInterviews
+      && !permissions.canCreateAIInterviews
+    ) return;
     // job.id changing means a different JD version — the fetched-once guard
     // belongs to the previous id, so clear it or this version would keep
     // showing the other version's interview config and invite count.
@@ -1294,6 +1374,38 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     }
   }, [job.id]);
 
+  /* Real per-publish attribution for the Recent Activity panel — who
+     published/republished this JD, and exactly when. `job.postedBy` /
+     `job.postedDate` (created_by_name / created_at) name the JD's CREATOR,
+     which is not necessarily who clicked Publish, and carry nothing at all
+     for a republish. `/jd/{id}/versions` returns one entry per PUBLISHED
+     version with its own `published_by_name` + `published_at`, which is the
+     actual answer to both. Archive/disable have no equivalent endpoint — the
+     backend does not record who changed a JD to those statuses — so those two
+     activity entries stay date-only (see below). */
+  const [jdVersionHistory, setJdVersionHistory] = useState<JDVersion[]>([]);
+  useEffect(() => {
+    if (!job.id) return;
+    let cancelled = false;
+    jdService.getVersionHistory(job.id)
+      .then((res) => { if (!cancelled) setJdVersionHistory(res.versions || []); })
+      .catch(() => { /* Recent Activity falls back to job.postedBy/postedDate */ });
+    return () => { cancelled = true; };
+  }, [job.id]);
+
+  /* Same idea, for the AI Interview config's OWN version — `AIInterviewResponse`
+     has no version field of its own (only the linked JD's), so Recent
+     Activity's "AI Interview Created (Vn)" reads it from this config's
+     dedicated version-history endpoint instead. */
+  useEffect(() => {
+    if (!aiInterviewConfig?.id) { setAiInterviewVersionHistory([]); return; }
+    let cancelled = false;
+    aiInterviewService.getVersionHistory(aiInterviewConfig.id)
+      .then((res) => { if (!cancelled) setAiInterviewVersionHistory(res.items || []); })
+      .catch(() => { /* Recent Activity falls back to "V1" */ });
+    return () => { cancelled = true; };
+  }, [aiInterviewConfig?.id]);
+
   // Fetch assessment results on component mount (only if plan includes assessment)
   useEffect(() => {
     if (job.id && hasPlanFeature('assessment')) {
@@ -1416,6 +1528,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       // First, get all assessments for this JD
       const assessmentsResponse = await assessmentService.list({ jd_id: job.id, page_size: 100 });
       const assessments = assessmentsResponse.items || [];
+      setJdAssessments(assessments);
       // Derived here rather than in a separate request — this list is already
       // loaded, and it's the same source Create uses to decide its destination.
       // Published/active is the same pair handleOpenShareAssessment treats as
@@ -1542,8 +1655,14 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       console.error('Failed to fetch assessment results:', error);
       setAssessmentInviteCount(0);
       setAssessmentResults([]);
+      setJdAssessments([]);
     } finally {
       setLoadingAssessmentResults(false);
+      /* Settled either way. A failed lookup deliberately RELEASES the Create
+         gate rather than holding it shut: `handleCreateAssessment` re-queries
+         on the click and refuses there if an assessment turns up, so a flaky
+         request costs a redirect, not the ability to ever create one. */
+      setAssessmentExistenceChecked(true);
     }
   };
 
@@ -2159,14 +2278,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     permissions.canCreateAssessments && hasPlanFeature('assessment') ? (
       <button
         onClick={handleCreateAssessment}
-        disabled={!features.assessment || job.status === 'Disabled' || resolvingAssessmentTarget}
-        title={
+        disabled={
           !features.assessment
-            ? 'Assessments not enabled'
-            : job.status === 'Disabled'
-              ? 'JD is disabled'
-              : undefined
+          || job.status === 'Disabled'
+          || resolvingAssessmentTarget
+          || blockAssessmentCreate
         }
+        title={assessmentCreateBlockedReason ?? undefined}
         className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
       >
         {resolvingAssessmentTarget
@@ -2227,14 +2345,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     permissions.canCreateAIInterviews && hasPlanFeature('ai_interview') ? (
       <button
         onClick={handleCreateAIInterview}
-        disabled={!features.ai_interview || job.status === 'Disabled' || resolvingAIInterviewTarget}
-        title={
+        disabled={
           !features.ai_interview
-            ? 'AI Interviews not enabled'
-            : job.status === 'Disabled'
-              ? 'JD is disabled'
-              : undefined
+          || job.status === 'Disabled'
+          || resolvingAIInterviewTarget
+          || blockAIInterviewCreate
         }
+        title={aiInterviewCreateBlockedReason ?? undefined}
         className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
       >
         {resolvingAIInterviewTarget
@@ -3273,12 +3390,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         accent="cyan"
                         onClick={handleCreateAssessment}
                         loading={resolvingAssessmentTarget}
-                        disabled={!features.assessment || job.status === 'Disabled'}
-                        disabledTooltip={
+                        disabled={
                           !features.assessment
-                            ? 'Assessments not enabled'
-                            : 'JD is disabled'
+                          || job.status === 'Disabled'
+                          || blockAssessmentCreate
                         }
+                        disabledTooltip={assessmentCreateBlockedReason ?? undefined}
                       />
 
                       <QuickActionTile
@@ -3368,12 +3485,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       accent="orange"
                       onClick={handleCreateAIInterview}
                       loading={resolvingAIInterviewTarget}
-                      disabled={!features.ai_interview || job.status === 'Disabled'}
-                      disabledTooltip={
+                      disabled={
                         !features.ai_interview
-                          ? 'AI Interviews not enabled'
-                          : 'JD is disabled'
+                        || job.status === 'Disabled'
+                        || blockAIInterviewCreate
                       }
+                      disabledTooltip={aiInterviewCreateBlockedReason ?? undefined}
                     />
                   )}
 
@@ -3519,58 +3636,150 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             </div>
           </div>
 
-          {/* Recent Activity */}
+          {/* Recent Activity — one row per actual EVENT (every JD version
+              publish, every scored resume, every AI match run, every
+              assessment created, plus the interview config's own creation),
+              merged from every source this page already fetches and sorted
+              newest-first, rather than one summary row per activity TYPE. That
+              is what lets the panel grow past a handful of rows as real
+              activity accumulates instead of being capped at one line per
+              category regardless of how much actually happened.
+
+              Each row is a title, a Clock-tagged date/time, and a User-tagged
+              name. The name is real wherever the backend records who did it,
+              and falls back to "System" (this file's own pre-existing
+              `job.postedBy || 'System'` convention) where it doesn't, rather
+              than leaving the line blank:
+                - Job Published / Republished: /jd/{id}/versions returns one
+                  entry per PUBLISHED version with its own published_by_name +
+                  published_at — one row per version, oldest is "Published",
+                  every later one "Republished" (no version number on the
+                  title: a republish is that same JD's own version going out
+                  again, not a new artifact worth numbering here).
+                - Resume Scored: one row per scored resume, from its own
+                  scored_by_name + scoredDate.
+                - AI Talent Match Run: one row per session (no "who" field
+                  exists on AIMatchSessionResponse at all, so date-only →
+                  "System").
+                - Assessment Created: one row per Assessment record, from its
+                  own created_by_name + created_at + version.
+                - AI Interview Created: one row, versioned from the config's
+                  own /ai-interview/{id}/version-history (AIInterviewResponse
+                  carries no version of its own).
+                - Job Archived / Disabled: `job.status` only holds the CURRENT
+                  status, with no history of past transitions, so these can
+                  only ever contribute at most one row each (date-only →
+                  "System"), and "Unarchived"/"Re-enabled" never appear — a JD
+                  back in Published state is indistinguishable from one that
+                  was never archived/disabled. */}
           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
             <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Recent Activity</h3>
             <div className="space-y-3">
-              {scoredResumesStats.total > 0 && (
-                <div className="flex gap-3">
-                  <div className="w-2 h-2 bg-blue-500 rounded-full mt-1.5 flex-shrink-0"></div>
-                  <div>
-                    <div className="text-sm text-gray-900 dark:text-slate-50">{scoredResumesStats.total} resume(s) scored</div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500">Resume scoring completed</div>
+              {(() => {
+                interface ActivityEvent { key: string; dot: string; title: string; date?: string; by?: string }
+                const events: ActivityEvent[] = [];
+
+                if (jdVersionHistory.length > 0) {
+                  jdVersionHistory.forEach((v) => {
+                    events.push({
+                      key: `jd-v${v.version_number}`,
+                      dot: v.version_number === 1 ? 'bg-green-500' : 'bg-purple-500',
+                      title: v.version_number === 1 ? 'Job Published' : 'Job Republished',
+                      date: v.published_at,
+                      by: v.published_by_name,
+                    });
+                  });
+                } else {
+                  // Lineage fetch hasn't landed (or failed) — fall back to the
+                  // JD's own creator/updated fields so Published/Republished
+                  // still show something rather than vanishing entirely.
+                  if (job.status === 'Published' && job.postedDate) {
+                    events.push({ key: 'jd-published', dot: 'bg-green-500', title: 'Job Published', date: job.postedDate, by: job.postedBy });
+                  }
+                  if (job.currentVersion && job.currentVersion > 1) {
+                    events.push({ key: 'jd-republished', dot: 'bg-purple-500', title: 'Job Republished', date: job.updated_at, by: job.postedBy });
+                  }
+                }
+                if (job.status === 'Archived') {
+                  events.push({ key: 'archived', dot: 'bg-brand-orange', title: 'Job Archived', date: job.updated_at });
+                }
+                if (job.status === 'Disabled') {
+                  events.push({ key: 'disabled', dot: 'bg-red-500', title: 'Job Disabled', date: job.updated_at });
+                }
+                scoredResumes.forEach((r: any, i: number) => {
+                  events.push({
+                    key: `scored-${r.id || i}`,
+                    dot: 'bg-blue-500',
+                    // A count, not the candidate's name — each row already
+                    // represents exactly one scoring event, so this is always
+                    // "(1)", matching Assessment Created (Vn)'s own
+                    // "parenthesized number" shape.
+                    title: 'Resume Scored (1)',
+                    date: r.scoredDate,
+                    by: r.scoredBy,
+                  });
+                });
+                aiMatchSessions.forEach((s) => {
+                  events.push({
+                    key: `ai-match-${s.id}`,
+                    dot: 'bg-brand-cyan',
+                    title: `AI Talent Match Run (${s.total_matches ?? 0} Matched)`,
+                    date: s.created_at,
+                  });
+                });
+                jdAssessments.forEach((a: any) => {
+                  events.push({
+                    key: `assessment-${a.id}`,
+                    dot: 'bg-indigo-500',
+                    title: `Assessment Created (V${a.version ?? 1})`,
+                    date: a.created_at,
+                    by: a.created_by_name,
+                  });
+                });
+                if (aiInterviewConfig) {
+                  // "Created" is definitionally the FIRST version — the
+                  // config's version history can hold many later entries
+                  // (every edit/republish adds one), and taking the latest of
+                  // those showed "Created (V7)" for a config edited six times
+                  // since. The earliest entry (falling back to 1, since a
+                  // config with no history yet is still at its first version)
+                  // is the one this title actually means.
+                  const createdVersion = aiInterviewVersionHistory.length > 0
+                    ? Math.min(...aiInterviewVersionHistory.map(v => v.version))
+                    : 1;
+                  events.push({
+                    key: 'ai-interview',
+                    dot: 'bg-pink-500',
+                    title: `AI Interview Created (V${createdVersion})`,
+                    date: aiInterviewConfig.created_at,
+                    by: aiInterviewConfig.created_by_name,
+                  });
+                }
+
+                events.sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+
+                if (events.length === 0) {
+                  return <div className="text-sm text-gray-500 dark:text-slate-500 italic">No recent activity</div>;
+                }
+                return events.map((e) => (
+                  <div key={e.key} className="flex gap-3">
+                    <div className={`w-2 h-2 ${e.dot} rounded-full mt-1.5 flex-shrink-0`}></div>
+                    <div>
+                      <div className="text-sm text-gray-900 dark:text-slate-50">{e.title}</div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500 dark:text-slate-500">
+                        <span className="inline-flex items-center gap-1">
+                          <Clock className="w-3 h-3" strokeWidth={1.75} />
+                          {e.date ? formatISTDateTime(e.date) : 'N/A'}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          <UserIcon className="w-3 h-3" strokeWidth={1.75} />
+                          {e.by || 'System'}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                </div>
-              )}
-              {scoredResumesStats.exactMatch > 0 && (
-                <div className="flex gap-3">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
-                  <div>
-                    <div className="text-sm text-gray-900 dark:text-slate-50">{scoredResumesStats.exactMatch} exact match(es) found</div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500">High-quality candidates identified</div>
-                  </div>
-                </div>
-              )}
-              {scoredResumesStats.partialMatch > 0 && (
-                <div className="flex gap-3">
-                  <div className="w-2 h-2 bg-brand-orange rounded-full mt-1.5 flex-shrink-0"></div>
-                  <div>
-                    <div className="text-sm text-gray-900 dark:text-slate-50">{scoredResumesStats.partialMatch} partial match(es) found</div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500">Candidates with potential identified</div>
-                  </div>
-                </div>
-              )}
-              {job.currentVersion && job.currentVersion > 1 && (
-                <div className="flex gap-3">
-                  <div className="w-2 h-2 bg-purple-500 rounded-full mt-1.5 flex-shrink-0"></div>
-                  <div>
-                    <div className="text-sm text-gray-900 dark:text-slate-50">JD updated to version {job.currentVersion}.0</div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500">Job description republished</div>
-                  </div>
-                </div>
-              )}
-              {job.status === 'Published' && job.postedDate && (
-                <div className="flex gap-3">
-                  <div className="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></div>
-                  <div>
-                    <div className="text-sm text-gray-900 dark:text-slate-50">Job published by {job.postedBy || 'System'}</div>
-                    <div className="text-xs text-gray-500 dark:text-slate-500">{formatISTDateTime(job.postedDate)}</div>
-                  </div>
-                </div>
-              )}
-              {scoredResumesStats.total === 0 && job.status !== 'Published' && !job.currentVersion && (
-                <div className="text-sm text-gray-500 dark:text-slate-500 italic">No recent activity</div>
-              )}
+                ));
+              })()}
             </div>
           </div>
 
@@ -3764,67 +3973,134 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
       {/* Draft assessment prompt — Create found an unpublished draft for this JD.
           Publishing happens here rather than on the assessment details page,
-          which for a draft shows an unfinished record and no way forward. */}
-      {draftAssessment && (
+          which for a draft shows an unfinished record and no way forward.
+
+          ONE SHELL, TWO STATES, and `readyToPublish` is the only thing that
+          moves between them: the subject line, the status panel and the single
+          primary action. A draft whose Configure step never finished cannot be
+          published — the API rejects it — so that state offers only the way
+          back into the flow, and the publishable one offers only Publish. */}
+      {draftAssessment && (() => {
+        const readyToPublish = assessmentDraftReadyToPublish(draftAssessment);
+        /* The same name every other list shows for this record: the version
+           suffix stripped, falling back to the short id and then to a
+           placeholder, so an untitled draft still names something. */
+        const draftTitle =
+          parseAssessmentTitle(draftAssessment.title || '').cleanTitle
+          || draftAssessment.short_id
+          || 'Untitled assessment';
+
+        return (
         <div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full border border-gray-200 dark:border-slate-700">
-            <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-200 dark:border-slate-700">
-              <div className="flex items-start gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-lg bg-amber-100 ring-1 ring-amber-200 flex items-center justify-center flex-shrink-0">
-                  <AlertCircle className="w-4 h-4 text-amber-600" />
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden border border-gray-200 dark:border-slate-700">
+            {/* Everything above the actions scrolls together, so a long
+                assessment title on a short viewport can never push the buttons
+                off the bottom. */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-7 pt-5 sm:pt-7 pb-5 sm:pb-6">
+              {/* Header */}
+              <div className="flex items-start gap-3 sm:gap-4">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+                  <AlertCircle className="w-6 h-6 sm:w-7 sm:h-7 text-amber-600" />
                 </div>
-                <div className="min-w-0">
-                  <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight leading-tight">
                     Draft assessment for this job
                   </h3>
-                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
-                    {assessmentDraftReadyToPublish(draftAssessment)
+                  <p className="text-sm sm:text-base text-gray-500 dark:text-slate-400 mt-1 leading-snug">
+                    {readyToPublish
                       ? 'Publish it to start inviting candidates.'
-                      : 'Finish the setup steps before it can be published.'}
+                      : 'Complete the remaining setup steps before it can be published.'}
                   </p>
                 </div>
+                <button
+                  onClick={() => setDraftAssessment(null)}
+                  disabled={publishingDraft}
+                  className="p-1.5 -mr-1.5 -mt-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400 dark:text-slate-400" />
+                </button>
               </div>
+
+              {/* THE RECORD this prompt is about — named, timed and badged, so
+                  the recruiter knows which draft they are being asked about
+                  before they choose. */}
+              <div className="mt-5 sm:mt-6 rounded-xl border border-gray-200/80 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3 sm:p-4">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 break-words leading-snug">
+                      {draftTitle}
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs sm:text-sm text-gray-500 dark:text-slate-400">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Clock className="w-4 h-4 flex-shrink-0" />
+                        {draftAssessment.duration_minutes || 30} min
+                      </span>
+                      <span aria-hidden="true" className="text-gray-300 dark:text-slate-600">|</span>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-medium">
+                        <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                        Draft
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* WHY it is still a draft, and what the primary action below
+                  will do about it. Amber while the setup is unfinished; the
+                  brand's own blue once there is nothing left to finish. */}
+              <div
+                className={`mt-3 sm:mt-4 rounded-xl p-3 sm:p-5 ${
+                  readyToPublish ? 'bg-brand-blue/5 ring-1 ring-brand-blue/15' : 'bg-amber-50'
+                }`}
+              >
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div
+                    className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                      readyToPublish ? 'bg-brand-blue/10' : 'bg-amber-100'
+                    }`}
+                  >
+                    {readyToPublish ? (
+                      <CheckCircle className="w-5 h-5 text-brand-blue" />
+                    ) : (
+                      <Info className="w-5 h-5 text-amber-600" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">
+                      {readyToPublish ? 'Ready to publish' : 'Setup incomplete'}
+                    </p>
+                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-1 leading-relaxed">
+                      {readyToPublish
+                        ? <>Candidates can&apos;t be invited to a draft. Publishing makes this
+                            assessment live for {job.title}.</>
+                        : <>The assessment configuration isn&apos;t complete yet. Continue editing to
+                            finish the remaining setup steps and publish the assessment.</>}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* One primary action, decided by whether the draft is publishable
+                — same rule as the AI interview prompt below. Cancel is the
+                close button's twin, kept where a decision is actually made. */}
+            <div className="flex-shrink-0 border-t border-gray-200 dark:border-slate-700 px-5 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
               <button
                 onClick={() => setDraftAssessment(null)}
                 disabled={publishingDraft}
-                className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded transition-colors disabled:opacity-50 flex-shrink-0"
-                aria-label="Close"
+                className="px-5 sm:px-8 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <X className="w-5 h-5 text-gray-500 dark:text-slate-400" />
+                Cancel
               </button>
-            </div>
-
-            <div className="px-5 py-4">
-              <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 p-3">
-                <div className="text-sm font-medium text-gray-900 dark:text-slate-50 break-words">
-                  {parseAssessmentTitle(draftAssessment.title || '').cleanTitle
-                    || draftAssessment.short_id
-                    || 'Untitled assessment'}
-                </div>
-                <div className="text-xs text-gray-500 dark:text-slate-400 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                  {draftAssessment.short_id && <span>{draftAssessment.short_id}</span>}
-                  <span>{draftAssessment.duration_minutes || 30} min</span>
-                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">Draft</span>
-                </div>
-              </div>
-              <p className="text-xs text-gray-600 dark:text-slate-400 mt-3">
-                {assessmentDraftReadyToPublish(draftAssessment)
-                  ? <>Candidates can&apos;t be invited to a draft. Publishing makes this
-                      assessment live for {job.title}.</>
-                  : <>This draft&apos;s <span className="font-medium text-gray-900 dark:text-slate-200">Configure</span> step
-                      isn&apos;t finished — its sections don&apos;t add up to a publishable
-                      assessment yet. Pick the flow back up where you left it.</>}
-              </p>
-            </div>
-
-            {/* One action, decided by whether the draft is publishable — same
-                rule as the AI interview prompt below. */}
-            <div className="flex flex-col sm:flex-row gap-2 sm:justify-end px-5 py-3 border-t border-gray-200 dark:border-slate-700">
-              {assessmentDraftReadyToPublish(draftAssessment) ? (
+              {readyToPublish ? (
                 <button
                   onClick={handlePublishDraftAssessment}
                   disabled={publishingDraft}
-                  className="px-4 py-2 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                  className="px-5 sm:px-8 py-2.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                 >
                   {publishingDraft && <Loader2 className="w-4 h-4 animate-spin" />}
                   {publishingDraft ? 'Publishing…' : 'Publish'}
@@ -3832,76 +4108,147 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               ) : (
                 <button
                   onClick={handleEditDraftAssessment}
-                  className="px-4 py-2 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2"
+                  className="px-5 sm:px-8 py-2.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2"
                 >
                   Continue editing
+                  <ArrowRight className="w-4 h-4" />
                 </button>
               )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
-      {/* Draft AI interview prompt — same shape as the assessment one above. */}
-      {draftAIInterview && (
+      {/* Draft AI interview prompt — the assessment prompt above, for the
+          other artefact: same shell, same two states, same single primary
+          action. Only the record it describes and the reason a draft is
+          unfinished differ, because the two wizards stop in different places.
+
+          ONE ACTION, decided by how far the wizard got: a finished draft can
+          only be published, an unfinished one can only be resumed. Offering
+          both let recruiters hit Publish on a draft the API was always going
+          to reject. */}
+      {draftAIInterview && (() => {
+        const readyToPublish = aiDraftReachedFinalStep(draftAIInterview);
+        const draftTitle =
+          draftAIInterview.position
+          || draftAIInterview.jd_title
+          || job.title
+          || 'Untitled interview';
+
+        return (
         <div className="fixed inset-0 bg-gray-900/40 dark:bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-[95vw] sm:max-w-md w-full border border-gray-200 dark:border-slate-700">
-            <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-200 dark:border-slate-700">
-              <div className="flex items-start gap-3 min-w-0">
-                <div className="w-9 h-9 rounded-lg bg-amber-100 ring-1 ring-amber-200 flex items-center justify-center flex-shrink-0">
-                  <AlertCircle className="w-4 h-4 text-amber-600" />
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden border border-gray-200 dark:border-slate-700">
+            {/* Everything above the actions scrolls together, so a long
+                position title on a short viewport can never push the buttons
+                off the bottom. */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-7 pt-5 sm:pt-7 pb-5 sm:pb-6">
+              {/* Header */}
+              <div className="flex items-start gap-3 sm:gap-4">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-amber-100 flex items-center justify-center flex-shrink-0">
+                  <AlertCircle className="w-6 h-6 sm:w-7 sm:h-7 text-amber-600" />
                 </div>
-                <div className="min-w-0">
-                  <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">
+                <div className="min-w-0 flex-1">
+                  <h3 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight leading-tight">
                     Draft AI interview for this job
                   </h3>
-                  <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">
-                    {aiDraftReachedFinalStep(draftAIInterview)
+                  <p className="text-sm sm:text-base text-gray-500 dark:text-slate-400 mt-1 leading-snug">
+                    {readyToPublish
                       ? 'Publish it to start inviting candidates.'
-                      : 'Finish the setup steps before it can be published.'}
+                      : 'Complete the remaining setup steps before it can be published.'}
                   </p>
                 </div>
+                <button
+                  onClick={() => setDraftAIInterview(null)}
+                  disabled={publishingAIDraft}
+                  className="p-1.5 -mr-1.5 -mt-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50 flex-shrink-0"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5 sm:w-6 sm:h-6 text-gray-400 dark:text-slate-400" />
+                </button>
               </div>
+
+              {/* THE RECORD this prompt is about. `Brain` rather than the
+                  assessment prompt's `FileText` — the same mark the AI
+                  Interview tab and its empty state already carry, so the
+                  artefact is recognisable before the title is read. */}
+              <div className="mt-5 sm:mt-6 rounded-xl border border-gray-200/80 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3 sm:p-4">
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div className="w-11 h-11 sm:w-14 sm:h-14 rounded-xl bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                    <Brain className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 break-words leading-snug">
+                      {draftTitle}
+                    </p>
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 text-xs sm:text-sm text-gray-500 dark:text-slate-400">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Clock className="w-4 h-4 flex-shrink-0" />
+                        {draftAIInterview.duration_minutes || 30} min
+                      </span>
+                      <span aria-hidden="true" className="text-gray-300 dark:text-slate-600">|</span>
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-medium">
+                        <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                        Draft
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* WHY it is still a draft. The unfinished case names the step
+                  the wizard stopped before — the AI flow has one, and knowing
+                  which is the difference between resuming and re-deriving. */}
+              <div
+                className={`mt-3 sm:mt-4 rounded-xl p-3 sm:p-5 ${
+                  readyToPublish ? 'bg-brand-blue/5 ring-1 ring-brand-blue/15' : 'bg-amber-50'
+                }`}
+              >
+                <div className="flex items-start gap-3 sm:gap-4">
+                  <div
+                    className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
+                      readyToPublish ? 'bg-brand-blue/10' : 'bg-amber-100'
+                    }`}
+                  >
+                    {readyToPublish ? (
+                      <CheckCircle className="w-5 h-5 text-brand-blue" />
+                    ) : (
+                      <Info className="w-5 h-5 text-amber-600" />
+                    )}
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50">
+                      {readyToPublish ? 'Ready to publish' : 'Setup incomplete'}
+                    </p>
+                    <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-1 leading-relaxed">
+                      {readyToPublish
+                        ? <>Candidates can&apos;t be invited to a draft. Publishing makes this
+                            interview live for {job.title}.</>
+                        : <>This draft stopped before{' '}
+                            <span className="font-medium text-gray-900 dark:text-slate-200">Preview &amp; Publish</span>
+                            {' '}— its clusters aren&apos;t set yet, so there is nothing to publish.
+                            Continue editing to pick the flow back up where you left it.</>}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex-shrink-0 border-t border-gray-200 dark:border-slate-700 px-5 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
               <button
                 onClick={() => setDraftAIInterview(null)}
                 disabled={publishingAIDraft}
-                className="p-1 hover:bg-gray-100 dark:hover:bg-slate-800 rounded transition-colors disabled:opacity-50 flex-shrink-0"
-                aria-label="Close"
+                className="px-5 sm:px-8 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <X className="w-5 h-5 text-gray-500 dark:text-slate-400" />
+                Cancel
               </button>
-            </div>
-
-            <div className="px-5 py-4">
-              <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 p-3">
-                <div className="text-sm font-medium text-gray-900 dark:text-slate-50 break-words">
-                  {draftAIInterview.position || draftAIInterview.jd_title || job.title || 'Untitled interview'}
-                </div>
-                <div className="text-xs text-gray-500 dark:text-slate-400 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                  <span>{draftAIInterview.duration_minutes || 30} min</span>
-                  <span className="px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 font-medium">Draft</span>
-                </div>
-              </div>
-              <p className="text-xs text-gray-600 dark:text-slate-400 mt-3">
-                {aiDraftReachedFinalStep(draftAIInterview)
-                  ? <>Candidates can&apos;t be invited to a draft. Publishing makes this
-                      interview live for {job.title}.</>
-                  : <>This draft stopped before <span className="font-medium text-gray-900 dark:text-slate-200">Preview &amp; Publish</span>.
-                      Its clusters aren&apos;t set yet, so there is nothing to publish —
-                      pick the flow back up where you left it.</>}
-              </p>
-            </div>
-
-            {/* One action, decided by how far the wizard got: a finished draft
-                can only be published, an unfinished one can only be resumed.
-                Offering both let recruiters hit Publish on a draft the API was
-                always going to reject. */}
-            <div className="flex flex-col sm:flex-row gap-2 sm:justify-end px-5 py-3 border-t border-gray-200 dark:border-slate-700">
-              {aiDraftReachedFinalStep(draftAIInterview) ? (
+              {readyToPublish ? (
                 <button
                   onClick={handlePublishDraftAIInterview}
                   disabled={publishingAIDraft}
-                  className="px-4 py-2 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                  className="px-5 sm:px-8 py-2.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
                 >
                   {publishingAIDraft && <Loader2 className="w-4 h-4 animate-spin" />}
                   {publishingAIDraft ? 'Publishing…' : 'Publish'}
@@ -3909,15 +4256,17 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               ) : (
                 <button
                   onClick={handleEditDraftAIInterview}
-                  className="px-4 py-2 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2"
+                  className="px-5 sm:px-8 py-2.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2"
                 >
                   Continue editing
+                  <ArrowRight className="w-4 h-4" />
                 </button>
               )}
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* Assessment Picker — shown when this JD has multiple published assessments.
           User selects which one(s) before the Share modal opens. */}

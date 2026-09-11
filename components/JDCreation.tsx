@@ -858,6 +858,129 @@ const step2Fingerprint = (data: unknown, jobTitle: string): string =>
 // How many skills a category shows before the rest collapse behind "+N more".
 const SKILL_PREVIEW_LIMIT = 10;
 
+// The two child kinds that EXPLAIN a difference rather than record a merge: a skill
+// whose wording is shorter than the JD's, and a skill the JD listed in both sections.
+const NOTE_KINDS: ReadonlyArray<string> = ['narrowed-from-jd-wording', 'cross-list-priority'];
+
+/** Per-child kind and the counts the badge shows. The kind is read PER CHILD because
+ *  one item can hold a note beside a genuine merge, and each offers a different action.
+ *  Groups saved before per-child kinds existed fall back to the entry-level `source`. */
+const trailCounts = (entry?: JDMergeTrailEntry) => {
+  const kindOf = (i: number) => entry?.sources?.[i] ?? entry?.source;
+  const total = entry?.removed?.length || 0;
+  const notes = (entry?.removed || []).filter((_, i) => NOTE_KINDS.includes(kindOf(i) || '')).length;
+  return { kindOf, total, notes, merges: total - notes };
+};
+
+/** "2 grouped · 1 note" - named for what it holds. A bare "1 grouped" on a note that
+ *  explains a shortened wording read as though something had been merged AWAY, the
+ *  opposite of what the note says, so recruiters did not notice an explanation was there. */
+const trailBadgeLabel = (merges: number, notes: number) => [
+  merges > 0 ? `${merges} grouped` : null,
+  notes > 0 ? `${notes} ${notes === 1 ? 'note' : 'notes'}` : null,
+].filter(Boolean).join(' · ');
+
+interface TrailChildrenProps {
+  entry: JDMergeTrailEntry;
+  /** The skill or requirement the children hang off. */
+  parentText: string;
+  readOnly: boolean;
+  onPromote?: (survivor: string, removed: string) => void;
+  /** Replace the parent's text with the JD's own wording (narrowing notes only). */
+  onUseJdWording?: (jdWording: string) => void;
+}
+
+/**
+ * The children of one skill or requirement: wordings folded into it, and notes that
+ * explain how it differs from the JD. Shared by the skills lists AND the Additional
+ * Requirements lists - requirement groups used to be filtered out of Step 2 entirely,
+ * and because the filtered list is what gets saved, they were discarded as well. A
+ * merge nobody can see is exactly the silent deletion this tree exists to prevent.
+ */
+const TrailChildren = ({ entry, parentText, readOnly, onPromote, onUseJdWording }: TrailChildrenProps) => {
+  const { kindOf } = trailCounts(entry);
+  return (
+    <div className="px-2.5 pb-2 pl-7">
+      {entry.removed.map((rm, i) => {
+        const isCrossListNote = kindOf(i) === 'cross-list-priority';
+        const isNarrowingNote = kindOf(i) === 'narrowed-from-jd-wording';
+        return (
+          <div key={`${rm}-${i}`} className="flex items-start gap-1.5 pt-1.5 text-left">
+            <span className="select-none text-gray-300 dark:text-slate-600 text-xs leading-5 font-mono flex-shrink-0">
+              └──
+            </span>
+            <div className="min-w-0 flex-1">
+              {/* A cross-list note names the SAME text as its parent - it says "the JD
+                  listed this in the other section too", not "here is another wording".
+                  Echoing the name back would read as a duplicate, and an Add button
+                  would create the very duplicate the precedence rule exists to prevent. */}
+              {!isCrossListNote && (
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-[13px] text-gray-600 dark:text-slate-400 break-words" title={rm}>
+                    {rm}
+                  </span>
+                  {!readOnly && onPromote && !isNarrowingNote && (
+                    <button
+                      type="button"
+                      onClick={() => onPromote(entry.survivor, rm)}
+                      className="inline-flex items-center gap-0.5 text-[11px] font-medium text-brand-blue hover:underline flex-shrink-0"
+                      title={`Track "${rm}" on its own instead of as part of "${parentText}"`}
+                    >
+                      <Plus className="w-3 h-3" />
+                      Add
+                    </button>
+                  )}
+                  {/* A narrowing note's child is the JD's OWN wording, not a second
+                      item - so the action REPLACES the parent's text. Adding it would
+                      put "Docker" beside "Docker containerization", the duplicate the
+                      extraction was right to avoid. */}
+                  {!readOnly && onUseJdWording && isNarrowingNote && (
+                    <button
+                      type="button"
+                      onClick={() => onUseJdWording(rm)}
+                      className="inline-flex items-center gap-0.5 text-[11px] font-medium text-brand-blue hover:underline flex-shrink-0"
+                      title={`Rename to the JD's wording: "${rm}"`}
+                    >
+                      Use JD wording
+                    </button>
+                  )}
+                </div>
+              )}
+              {/* The reason and the JD line are what make this checkable rather than
+                  something to take on trust. */}
+              <p className="text-[11px] text-gray-500 dark:text-slate-500 leading-snug mt-0.5">
+                {entry.reasons?.[i]}
+              </p>
+              {entry.removed_sources?.[i] && (
+                <p className="text-[11px] text-gray-400 dark:text-slate-600 italic leading-snug break-words">
+                  From the JD: &ldquo;{entry.removed_sources[i]}&rdquo;
+                </p>
+              )}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+};
+
+/** The badge button that shows / hides a TrailChildren block. */
+const TrailBadge = ({ entry, open, onToggle }: { entry?: JDMergeTrailEntry; open: boolean; onToggle: () => void }) => {
+  const { total, notes, merges } = trailCounts(entry);
+  if (total === 0) return null;
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className="flex-shrink-0 text-[11px] leading-none px-1.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900"
+      title={open ? 'Hide the details' : 'Show how this differs from the JD wording'}
+      aria-expanded={open}
+    >
+      {trailBadgeLabel(merges, notes)}
+    </button>
+  );
+};
+
 interface DraggableSkillProps {
   skill: string;
   index: number;
@@ -973,17 +1096,7 @@ const DraggableSkill = ({
             >
               {skill}
             </span>
-            {groupedCount > 0 && (
-              <button
-                type="button"
-                onClick={() => setShowMerged(v => !v)}
-                className="flex-shrink-0 text-[11px] leading-none px-1.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-200 hover:bg-amber-100 transition-colors dark:bg-amber-950/40 dark:text-amber-300 dark:border-amber-900"
-                title={showMerged ? 'Hide the wordings grouped under this skill' : 'Show the wordings grouped under this skill'}
-                aria-expanded={showMerged}
-              >
-                {groupedCount} grouped
-              </button>
-            )}
+            <TrailBadge entry={mergedInto} open={showMerged} onToggle={() => setShowMerged(v => !v)} />
           </div>
           {!readOnly && (
             <div className="flex gap-1">
@@ -1022,69 +1135,13 @@ const DraggableSkill = ({
           is removed now; it is filed here with the evidence for the decision, and "Add"
           takes it back out as a skill of its own if the grouping was wrong. */}
       {groupedCount > 0 && showMerged && (
-        <div className="px-2.5 pb-2 pl-7">
-          {mergedInto!.removed.map((rm, i) => {
-          const isCrossListNote = mergedInto!.source === 'cross-list-priority';
-          const isNarrowingNote = mergedInto!.source === 'narrowed-from-jd-wording';
-          return (
-            <div key={rm} className="flex items-start gap-1.5 pt-1.5 text-left">
-              <span className="select-none text-gray-300 dark:text-slate-600 text-xs leading-5 font-mono flex-shrink-0">
-                └──
-              </span>
-              <div className="min-w-0 flex-1">
-                {/* A cross-list note names the SAME text as its parent - it says "the
-                    JD listed this in the other section too", not "here is another
-                    wording". Echoing the skill name back would read as a duplicate, and
-                    an Add button would create the very duplicate the precedence rule
-                    exists to prevent. So that variant renders as the reason alone. */}
-                {!isCrossListNote && (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-[13px] text-gray-600 dark:text-slate-400 break-words" title={rm}>
-                      {rm}
-                    </span>
-                    {!readOnly && onRestoreMerged && !isNarrowingNote && (
-                      <button
-                        type="button"
-                        onClick={() => onRestoreMerged(mergedInto!.survivor, rm)}
-                        className="inline-flex items-center gap-0.5 text-[11px] font-medium text-brand-blue hover:underline flex-shrink-0"
-                        title={`Track "${rm}" as its own skill instead of part of "${skill}"`}
-                      >
-                        <Plus className="w-3 h-3" />
-                        Add
-                      </button>
-                    )}
-                    {/* A narrowing note's child is the JD's OWN wording, not a second
-                        skill - so the action REPLACES this skill's text. Adding it
-                        would leave "Docker" and "Docker containerization" side by side,
-                        which is the duplicate the extraction correctly avoided. */}
-                    {!readOnly && onUseJdWording && isNarrowingNote && (
-                      <button
-                        type="button"
-                        onClick={() => onUseJdWording(category, index, rm)}
-                        className="inline-flex items-center gap-0.5 text-[11px] font-medium text-brand-blue hover:underline flex-shrink-0"
-                        title={`Rename this skill to the JD's wording: "${rm}"`}
-                      >
-                        Use JD wording
-                      </button>
-                    )}
-                  </div>
-                )}
-                {/* The reason and the JD line are what make this checkable rather than
-                    something to take on trust. A group with no evidence behind it is
-                    just a deletion with extra steps. */}
-                <p className="text-[11px] text-gray-500 dark:text-slate-500 leading-snug mt-0.5">
-                  {mergedInto!.reasons?.[i]}
-                </p>
-                {mergedInto!.removed_sources?.[i] && (
-                  <p className="text-[11px] text-gray-400 dark:text-slate-600 italic leading-snug break-words">
-                    From the JD: &ldquo;{mergedInto!.removed_sources[i]}&rdquo;
-                  </p>
-                )}
-              </div>
-            </div>
-          );
-          })}
-        </div>
+        <TrailChildren
+          entry={mergedInto!}
+          parentText={skill}
+          readOnly={readOnly}
+          onPromote={onRestoreMerged}
+          onUseJdWording={onUseJdWording ? (w) => onUseJdWording(category, index, w) : undefined}
+        />
       )}
     </div>
   );
@@ -1143,6 +1200,9 @@ interface DraggableCommentProps {
   onSaveEdit: () => void;
   onCancelEdit: () => void;
   readOnly?: boolean;
+  /** Set when other wordings were grouped under this requirement, or a note explains it. */
+  mergedInto?: JDMergeTrailEntry;
+  onRestoreMerged?: (survivor: string, removed: string) => void;
 }
 
 const DraggableComment = ({
@@ -1157,8 +1217,14 @@ const DraggableComment = ({
   onEditChange,
   onSaveEdit,
   onCancelEdit,
-  readOnly = false
+  readOnly = false,
+  mergedInto,
+  onRestoreMerged,
 }: DraggableCommentProps) => {
+  // Open by default for the same reason as the skills tree: a collapsed badge is easy to
+  // scroll past, and the whole point is that the recruiter notices.
+  const [showMerged, setShowMerged] = useState(true);
+  const hasTrail = (mergedInto?.removed?.length || 0) > 0;
   const [{ isDragging }, drag, dragPreview] = useDrag(() => ({
     type: 'COMMENT',
     item: { comment, category, index },
@@ -1174,10 +1240,11 @@ const DraggableComment = ({
   return (
     <div
       ref={dragPreview as unknown as React.Ref<HTMLDivElement>}
-      className={`flex items-center justify-between p-2.5 ${bgColor} border rounded-lg group transition-opacity ${
+      className={`${bgColor} border rounded-lg group transition-opacity ${
         isDragging ? 'opacity-50' : 'opacity-100'
       }`}
     >
+    <div className="flex items-center justify-between p-2.5">
       {isEditing ? (
         <>
           <input
@@ -1228,6 +1295,7 @@ const DraggableComment = ({
             >
               {comment}
             </span>
+            <TrailBadge entry={mergedInto} open={showMerged} onToggle={() => setShowMerged(v => !v)} />
           </div>
           {!readOnly && (
             <div className="flex gap-1">
@@ -1263,6 +1331,15 @@ const DraggableComment = ({
             </div>
           )}
         </>
+      )}
+    </div>
+      {hasTrail && showMerged && (
+        <TrailChildren
+          entry={mergedInto!}
+          parentText={comment}
+          readOnly={readOnly}
+          onPromote={onRestoreMerged}
+        />
       )}
     </div>
   );
@@ -1520,6 +1597,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             additional_details: jd.additional_details,
             must_have_comments: jd.must_have_comments,
             nice_to_have_comments: jd.nice_to_have_comments,
+            // Skill groups + notes. See the note in jd-creation/page.tsx - BOTH
+            // mappings must forward this, or Step 2 hydrates an empty trail and the
+            // next save clears the stored groups.
+            skill_merge_trail: jd.skill_merge_trail,
             department: jd.department,
             certifications: jd.certifications,
             domain_keywords: jd.domain_keywords,
@@ -2084,12 +2165,32 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       const current = list[index];
       if (current === undefined) return prev;
       list[index] = jdWording;
+      const listKey = category === 'mustHaveSkills' ? 'must_have_skills' : 'nice_to_have_skills';
+      const nextTrail = prev.mergeTrail
+        .map(e => {
+          if (e.survivor !== current || e.list !== listKey) return e;
+          // Remove only the NARROWING child: the skill now IS the JD's wording, so there
+          // is no difference left to explain. Any genuine merge under the same skill
+          // stays - and is re-pointed at the new name, or it would be orphaned (the
+          // tree finds a group by the text of the skill it is drawing).
+          const kindOf = (i: number) => e.sources?.[i] ?? e.source;
+          const keep = e.removed.map((_, i) => kindOf(i) !== 'narrowed-from-jd-wording');
+          const pick = <T,>(arr?: T[]) => (arr ? arr.filter((_, i) => keep[i]) : arr);
+          return {
+            ...e,
+            survivor: jdWording,
+            removed: e.removed.filter((_, i) => keep[i]),
+            reasons: e.reasons.filter((_, i) => keep[i]),
+            removed_sources: pick(e.removed_sources),
+            restore_lists: pick(e.restore_lists),
+            sources: pick(e.sources),
+          };
+        })
+        .filter(e => e.removed.length > 0);
       return {
         ...prev,
         [category]: list,
-        mergeTrail: prev.mergeTrail.filter(
-          e => !(e.survivor === current && e.source === 'narrowed-from-jd-wording'),
-        ),
+        mergeTrail: nextTrail,
       };
     });
     markExtractedDataModified();
@@ -2097,6 +2198,59 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       title: 'Using the JD wording',
       description: `This skill now reads "${jdWording}", exactly as the job description wrote it.`,
     });
+  };
+
+  /**
+   * What the collapsed tail of a skills list is hiding, for the "+N more" button.
+   * Notes on skills past the preview limit were invisible until the recruiter happened to
+   * expand the list - on a 21-skill JD the Docker and Kubernetes notes sat at positions
+   * 16 and 17 with nothing on screen to say they existed.
+   */
+  const hiddenTrailLabel = (category: 'mustHaveSkills' | 'niceToHaveSkills') => {
+    const listKey = category === 'mustHaveSkills' ? 'must_have_skills' : 'nice_to_have_skills';
+    const hidden = new Set((extractedData[category] || []).slice(SKILL_PREVIEW_LIMIT));
+    let merges = 0;
+    let notes = 0;
+    for (const e of extractedData.mergeTrail || []) {
+      if (e.list !== listKey || !hidden.has(e.survivor)) continue;
+      const c = trailCounts(e);
+      merges += c.merges;
+      notes += c.notes;
+    }
+    const detail = trailBadgeLabel(merges, notes);
+    return detail ? ` · ${detail}` : '';
+  };
+
+  /**
+   * A JD phrase that landed in no list ("possibly missed"): add it as a skill, or dismiss
+   * the flag. Either way the entry leaves the trail - once added it is on screen, and
+   * once dismissed the recruiter has decided it does not matter.
+   */
+  const handleResolvePossiblyMissed = (
+    phrase: string,
+    target: 'mustHaveSkills' | 'niceToHaveSkills' | null,
+  ) => {
+    setExtractedData(prev => {
+      const trail = prev.mergeTrail.filter(
+        e => !(e.source === 'possibly-missed' && e.removed[0] === phrase),
+      );
+      if (!target) return { ...prev, mergeTrail: trail };
+      const already = (prev[target] || []).some(
+        sk => sk.trim().toLowerCase() === phrase.trim().toLowerCase(),
+      );
+      return {
+        ...prev,
+        [target]: already ? prev[target] : [...(prev[target] || []), phrase],
+        mergeTrail: trail,
+      };
+    });
+    markExtractedDataModified();
+    if (target) {
+      toast.success({
+        title: 'Requirement added',
+        description: `"${phrase}" is now in ${target === 'mustHaveSkills' ? 'Must-Have' : 'Nice-to-Have'} Skills.`,
+      });
+    }
   };
 
   const handlePromoteGroupedSkill = (survivor: string, removed: string) => {
@@ -2130,6 +2284,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           reasons: e.reasons.filter((_, i) => i !== nextIdx),
           removed_sources: (e.removed_sources || []).filter((_, i) => i !== nextIdx),
           restore_lists: (e.restore_lists || []).filter((_, i) => i !== nextIdx),
+          sources: e.sources ? e.sources.filter((_, i) => i !== nextIdx) : e.sources,
         })
         .filter(e => e.removed.length > 0);
       return {
@@ -3182,8 +3337,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // is what a fresh extraction just produced. Reading both means reopening a JD
         // shows the grouping it was created with instead of a list that looks as though
         // nothing was ever grouped.
-        mergeTrail: ((params.merge_trail || params.skill_merge_trail || []) as JDMergeTrailEntry[])
-          .filter((e: JDMergeTrailEntry) => e.kind === 'skill'),
+        // ALL kinds. This used to keep only skill entries, so requirement groups
+        // never reached the screen - and since this state is what gets saved, they
+        // were also deleted from the JD on the first save.
+        mergeTrail: ((params.merge_trail || params.skill_merge_trail || []) as JDMergeTrailEntry[]),
         };
       });
 
@@ -3976,8 +4133,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         ),
         // Both names: a fresh extraction returns `merge_trail`, a saved JD returns the
         // same groups as `skill_merge_trail`. See the other read site for why.
-        mergeTrail: ((params.merge_trail || params.skill_merge_trail || []) as JDMergeTrailEntry[])
-          .filter((e: JDMergeTrailEntry) => e.kind === 'skill'),
+        // ALL kinds. This used to keep only skill entries, so requirement groups
+        // never reached the screen - and since this state is what gets saved, they
+        // were also deleted from the JD on the first save.
+        mergeTrail: ((params.merge_trail || params.skill_merge_trail || []) as JDMergeTrailEntry[]),
         internalRecruiterComments: isEditMode ? extractedData.internalRecruiterComments : [],
         // JD09: Extract certifications and domain keywords
         certifications: params.certifications?.length > 0 ? params.certifications : (isEditMode ? extractedData.certifications : []),
@@ -4124,6 +4283,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         nice_to_have_skills: extraction.niceToHaveSkills,
         must_have_comments: extraction.mustHaveComments,
         nice_to_have_comments: extraction.niceToHaveComments,
+        // The groups + notes that go WITH those four lists. This is the first save after
+        // extraction, and it was writing the lists without them: the row had the skills
+        // and an empty `skill_merge_trail`, so a refresh on Step 2 - before the recruiter
+        // ever pressed Next, which is the only save that used to send the trail - showed a
+        // flat skill list with nothing grouped and nothing to promote back out. The
+        // provenance existed only in the browser's memory until Step 2 was left.
+        skill_merge_trail: extraction.mergeTrail || [],
         education_requirements: extraction.education ? { degree: extraction.education } : undefined,
         experience_min: extractionExperiencePayload.experienceMin,
         experience_max: extractionExperiencePayload.experienceMax,
@@ -6413,8 +6579,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           // that read a fresh extraction result, so omitting it here left `mergeTrail`
           // at its [] initial value: the tree and its Add buttons rendered while the
           // extraction response was still in memory and vanished on the first reload.
-          mergeTrail: (effectiveEditingJD.skill_merge_trail || [])
-            .filter((e: JDMergeTrailEntry) => e.kind === 'skill'),
+          // ALL kinds. This used to keep only skill entries, so requirement groups
+          // never reached the screen - and since this state is what gets saved, they
+          // were also deleted from the JD on the first save.
+          mergeTrail: (effectiveEditingJD.skill_merge_trail || []),
           certifications: effectiveEditingJD.certifications || [],
           domainKeywords: effectiveEditingJD.domain_keywords || [],
           // Preserve the recruiter's actual saved answer; only a JD that genuinely
@@ -7150,6 +7318,75 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 }
               </p>
 
+              {/* POSSIBLY MISSED. JD phrases that ended up in no list. Every other Step 2
+                  note hangs off an item that survived extraction; a requirement that did
+                  not survive had nothing to hang off, so it was the one loss the tree could
+                  never show - "server-side application development" simply was not there,
+                  and nothing said so. Shown first, because it is the only thing on this
+                  screen that reports something ABSENT rather than explaining something
+                  present. */}
+              {(() => {
+                const missed = (extractedData.mergeTrail || []).filter(e => e.source === 'possibly-missed');
+                if (missed.length === 0) return null;
+                return (
+                  <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/30 p-3 sm:p-4">
+                    <div className="flex items-start gap-2 mb-2">
+                      <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                      <div>
+                        <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">
+                          Possibly missed from the JD ({missed.length})
+                        </p>
+                        <p className="text-xs text-gray-600 dark:text-slate-400">
+                          These phrases appear in the JD&apos;s requirements but are not in any list below. Add the ones that matter for this role.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="space-y-2 pl-6">
+                      {missed.map((e) => {
+                        const phrase = e.removed[0];
+                        const suggestNice = e.list === 'nice_to_have_skills';
+                        return (
+                          <div key={phrase} className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                            <span className="text-sm text-gray-800 dark:text-slate-200">{phrase}</span>
+                            {e.removed_sources?.[0] && (
+                              <span className="text-[11px] text-gray-500 dark:text-slate-500 italic">
+                                From the JD: &ldquo;{e.removed_sources[0]}&rdquo;
+                              </span>
+                            )}
+                            {!isRegenerating && (
+                              <span className="inline-flex items-center gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => handleResolvePossiblyMissed(phrase, suggestNice ? 'niceToHaveSkills' : 'mustHaveSkills')}
+                                  className="inline-flex items-center gap-0.5 text-[11px] font-medium text-brand-blue hover:underline"
+                                >
+                                  <Plus className="w-3 h-3" />
+                                  Add to {suggestNice ? 'Nice-to-Have' : 'Must-Have'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleResolvePossiblyMissed(phrase, suggestNice ? 'mustHaveSkills' : 'niceToHaveSkills')}
+                                  className="text-[11px] text-gray-500 hover:text-gray-800 hover:underline"
+                                >
+                                  Add to {suggestNice ? 'Must-Have' : 'Nice-to-Have'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => handleResolvePossiblyMissed(phrase, null)}
+                                  className="text-[11px] text-gray-500 hover:text-gray-800 hover:underline"
+                                >
+                                  Dismiss
+                                </button>
+                              </span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })()}
+
               {/* Skills & Comments Section - Single Row with 3 Columns */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-6 sm:mb-8">
                 {/* Column 1: Must-Have Skills */}
@@ -7225,7 +7462,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     >
                       {expandedSkillCategories.mustHaveSkills
                         ? 'Show less'
-                        : `+${extractedData.mustHaveSkills.length - SKILL_PREVIEW_LIMIT} more`}
+                        : `+${extractedData.mustHaveSkills.length - SKILL_PREVIEW_LIMIT} more${hiddenTrailLabel('mustHaveSkills')}`}
                     </button>
                   )}
                   {validationErrors.mustHaveSkills && (
@@ -7307,7 +7544,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     >
                       {expandedSkillCategories.niceToHaveSkills
                         ? 'Show less'
-                        : `+${extractedData.niceToHaveSkills.length - SKILL_PREVIEW_LIMIT} more`}
+                        : `+${extractedData.niceToHaveSkills.length - SKILL_PREVIEW_LIMIT} more${hiddenTrailLabel('niceToHaveSkills')}`}
                     </button>
                   )}
                 </div>
@@ -7357,6 +7594,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           comment={comment}
                           index={index}
                           category="mustHaveComments"
+                          mergedInto={extractedData.mergeTrail?.find(
+                            e => e.list === 'must_have_comments' && e.survivor === comment
+                          )}
+                          onRestoreMerged={handlePromoteGroupedSkill}
                           onMove={handleMoveComment}
                           onRemove={handleRemoveCommentByCategory}
                           onStartEdit={handleStartEditCommentByCategory}
@@ -7421,6 +7662,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           comment={comment}
                           index={index}
                           category="niceToHaveComments"
+                          mergedInto={extractedData.mergeTrail?.find(
+                            e => e.list === 'nice_to_have_comments' && e.survivor === comment
+                          )}
+                          onRestoreMerged={handlePromoteGroupedSkill}
                           onMove={handleMoveComment}
                           onRemove={handleRemoveCommentByCategory}
                           onStartEdit={handleStartEditCommentByCategory}
