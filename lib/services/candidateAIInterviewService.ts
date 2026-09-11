@@ -453,6 +453,35 @@ export const candidateAIInterviewService = {
     return response.data;
   },
 
+  // Best-effort evidence capture for an OBJECT-DETECTION proctoring violation
+  // (phone_detected / unauthorized_object — never focus-loss/window-blur
+  // types). Called ONCE per distinct violation type per session (caller
+  // dedupes), never on repeated re-triggers. Fire-and-forget: swallows its own
+  // errors so a network blip or missing frame never affects the main
+  // /proctor-event pipeline above.
+  async uploadProctorEventScreenshot(
+    token: string,
+    eventType: string,
+    objectClass: string | undefined,
+    frame: Blob,
+  ): Promise<void> {
+    try {
+      const fd = new FormData();
+      fd.append('event_type', eventType);
+      if (objectClass) fd.append('object_class', objectClass);
+      fd.append('timestamp', new Date().toISOString());
+      fd.append('frame', frame, 'proctor-event.jpg');
+      await candidateApi.post(
+        `/candidate/ai-interview/${token}/proctor-event-screenshot`,
+        fd,
+        { headers: { 'Content-Type': 'multipart/form-data' } },
+      );
+    } catch (err) {
+      // Best-effort — never surface to the candidate or block the interview.
+      console.warn('[PROCTOR-SCREENSHOT] upload failed (non-blocking):', err);
+    }
+  },
+
   // Forward a batch of browser-side diagnostic lines to the backend so they
   // land in journald tagged by session id (grep "ai-<token8>"). Fire-and-forget.
   async reportClientLog(token: string, lines: string[]): Promise<void> {
