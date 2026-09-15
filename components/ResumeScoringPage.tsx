@@ -3012,7 +3012,7 @@ export default function ResumeScoringPage({
         {/* History List or Empty State */}
         {displayHistory.length > 0 ? (
           <>
-          <div className={historyViewMode === 'grid' ? 'grid gap-4' : 'space-y-3'}>
+          <div className={historyViewMode === 'grid' ? 'flex flex-col gap-4' : 'space-y-3'}>
             {displayHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage).map((item) => {
               const avgScore = item.scoredResumes.length > 0
                 ? Math.round(item.scoredResumes.reduce((sum, r) => sum + (r.overall_score || r.scorePercentage || 0), 0) / item.scoredResumes.length)
@@ -3453,6 +3453,7 @@ export default function ResumeScoringPage({
               }
 
               // Grid View
+              const poolPct = (count: number) => item.totalScored > 0 ? Math.round((count / item.totalScored) * 100) : 0;
               return (
                 <div
                   key={item.id}
@@ -3460,26 +3461,36 @@ export default function ResumeScoringPage({
                   // lets the version-history table's min-w-[960px] (see below)
                   // force the whole card wider than its grid track, bleeding
                   // past the rounded border instead of scrolling internally.
-                  className="min-w-0 bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all p-4 group hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5"
+                  className="min-w-0 bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden transition-all group hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5"
                 >
-                  <div className="flex flex-col sm:flex-row items-start gap-3">
-                    <div
-                      className="flex-1 min-w-0 cursor-pointer w-full"
-                      onClick={() => {
-                        setSelectedHistoryItem(item);
-                        setViewMode('details');
-                        onLoadJdScores?.(item.jobId, item.jobTitle);
-                        router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
-                      }}
-                    >
-                      {/* Card header — matches JD grid card */}
-                      <div className="p-0 mb-3">
-                        {/* Top: icon + badges */}
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Briefcase className="h-4 w-4 text-brand-blue" />
+                  <div className="p-4 sm:p-6 lg:p-8">
+                    <div className="flex flex-col sm:flex-row items-start justify-between gap-3 mb-3">
+                      {/* Icon + job id + title + badges */}
+                      <div
+                        className="flex items-start gap-3 min-w-0 cursor-pointer"
+                        onClick={() => {
+                          setSelectedHistoryItem(item);
+                          setViewMode('details');
+                          onLoadJdScores?.(item.jobId, item.jobTitle);
+                          router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
+                        }}
+                      >
+                        <div className="h-10 w-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                          <Briefcase className="h-5 w-5 text-brand-blue" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                            {item.jdJobId && (
+                              <JobIdBadge className="inline-flex h-6 items-center">{item.jdJobId}</JobIdBadge>
+                            )}
+                            <h3
+                              className="text-base font-semibold text-gray-900 dark:text-slate-50 line-clamp-2 min-w-0"
+                              title={item.jobTitle}
+                            >
+                              {item.jobTitle}
+                            </h3>
                           </div>
-                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             {(() => {
                               const s = (item.jdStatus || 'published').toLowerCase();
                               const cfg: Record<string, { label: string; bg: string; text: string; border: string; dot: string }> = {
@@ -3492,14 +3503,14 @@ export default function ResumeScoringPage({
                               };
                               const c = cfg[s] || cfg.published;
                               return (
-                                <span className={`inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs ${c.bg} ${c.text} border ${c.border} gap-1.5`}>
+                                <span className={`inline-flex h-6 items-center px-2 py-0.5 rounded-full text-xs ${c.bg} ${c.text} border ${c.border} gap-1.5`}>
                                   <div className={`w-1.5 h-1.5 rounded-full ${c.dot}`}></div>
                                   {c.label}
                                 </span>
                               );
                             })()}
                             {displayVersionNumber && displayVersionNumber >= 1 && (
-                              <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5">
+                              <span className="inline-flex h-6 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5">
                                 <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
                                 v{displayVersionNumber}
                               </span>
@@ -3507,116 +3518,36 @@ export default function ResumeScoringPage({
                             {/* History icon button */}
                             <button
                               onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
-                              className="inline-flex h-7 w-7 items-center justify-center p-1.5 rounded-lg border border-brand-cyan/20 bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan/15 transition-colors flex-shrink-0"
+                              className="inline-flex h-6 w-6 items-center justify-center rounded-lg border border-brand-cyan/20 bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan/15 transition-colors flex-shrink-0"
                               aria-label="Scoring History" title="Scoring History"
                             >
                               <History className="w-3.5 h-3.5" />
                             </button>
-                          </div>
-                        </div>
-
-                        {/* job_id + title */}
-                        <div className="flex items-center gap-2 mb-3">
-                          {item.jdJobId && (
-                            <JobIdBadge className="inline-flex h-7 items-center">{item.jdJobId}</JobIdBadge>
-                          )}
-                          <h3
-                            className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 line-clamp-2 min-w-0"
-                            title={item.jobTitle}
-                          >
-                            {item.jobTitle}
-                          </h3>
-                        </div>
-
-                        {/* Info rows — matches JD grid card body */}
-                        <div className="space-y-2">
-                          {item.jdDepartment && (
-                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                              <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                              <span className="truncate">{item.jdDepartment}</span>
-                            </div>
-                          )}
-                          {item.jdIndustryType && (
-                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                              <Building2 className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                              <span className="truncate">{formatIndustryType(item.jdIndustryType)}</span>
-                            </div>
-                          )}
-                          {item.jdLocation && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                            <MapPin className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                            <span className="truncate">{item.jdLocation}</span>
-                          </div>
-                          )}
-                          {item.jdEmploymentType && (
-                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                              <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                              <span className="truncate">{formatEmploymentType(item.jdEmploymentType)}</span>
-                            </div>
-                          )}
-                          {item.jdRemoteType && (
-                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                              <Users className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                              <span className="capitalize">{item.jdRemoteType}</span>
-                            </div>
-                          )}
-                          {item.jdPublishedAt && (
-                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                              <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                              <span>Posted {formatISTDate(item.jdPublishedAt)}</span>
-                            </div>
-                          )}
-                          {item.jdCreatedByName && (
-                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                              <User className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                              <span className="truncate">By {item.jdCreatedByName}</span>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                            <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                            <span>{item.totalScored} {item.totalScored === 1 ? 'candidate' : 'candidates'} scored</span>
+                            {item.jdEmploymentType && (
+                              <span className="inline-flex h-6 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700">
+                                {formatEmploymentType(item.jdEmploymentType)}
+                              </span>
+                            )}
+                            {item.jdRemoteType && (
+                              <span className="inline-flex h-6 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700 capitalize">
+                                {item.jdRemoteType}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="bg-gradient-to-br from-green-50 to-green-50/40 border border-green-200/70 ring-1 ring-green-100 rounded-lg p-3">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-700 dark:text-slate-300 font-medium">Exact Match</span>
-                            <Award className="w-4 h-4 text-green-600" />
-                          </div>
-                          <div className="text-2xl text-green-700 font-bold tracking-tight">{exactMatchCount}</div>
+                      {/* Avg score + actions */}
+                      <div className="flex-shrink-0 flex items-start gap-3 self-start">
+                        <div className="text-right">
+                          <div className="text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium">Avg Score</div>
+                          <div className={`text-2xl sm:text-3xl font-bold tracking-tight ${getScoreColor(avgScore)}`}>{avgScore}%</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400">{item.totalScored} {item.totalScored === 1 ? 'candidate' : 'candidates'} scored</div>
                         </div>
-                        <div className="bg-gradient-to-br from-brand-cyan/10 to-brand-cyan/5 border border-brand-cyan/20 ring-1 ring-brand-cyan/10 rounded-lg p-3">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-700 dark:text-slate-300 font-medium">Partial Match</span>
-                            <CheckCircle className="w-4 h-4 text-brand-cyan" />
-                          </div>
-                          <div className="text-2xl text-brand-cyan font-bold tracking-tight">{partialMatchCount}</div>
-                        </div>
-                        <div className="bg-gradient-to-br from-brand-orange/10 to-brand-orange/5 border border-brand-orange/20 ring-1 ring-brand-orange/10 rounded-lg p-3">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-700 dark:text-slate-300 font-medium">No Match</span>
-                            <XCircle className="w-4 h-4 text-brand-orange-deep" />
-                          </div>
-                          <div className="text-2xl text-brand-orange-deep font-bold tracking-tight">{noMatchCount}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex-shrink-0 text-center w-full sm:w-auto">
-                      <div className="text-xs text-gray-600 dark:text-slate-400 mb-1 font-medium">Avg Score</div>
-                      <div className={`text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 tracking-tight ${getScoreColor(avgScore)}`}>
-                        {avgScore}%
-                      </div>
-                      {/* View Progress / View Details are icon-only: the card
-                          above already carries the job title, status and
-                          version badges, so a text label here repeated what
-                          the tooltip already says. */}
-                      <div className="mt-4 flex flex-col gap-2 w-full">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center gap-1.5 pt-0.5">
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setSelectedHistoryItem(item);
                               setViewMode('details');
                               onLoadJdScores?.(item.jobId, item.jobTitle);
@@ -3652,25 +3583,123 @@ export default function ResumeScoringPage({
                               : <WorkInProgressIcon className="w-4 h-4" />}
                           </button>
                         </div>
-                        {hasVersionHistory && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); versionLineage.toggle(versionKey, item.jobId); }}
-                            aria-expanded={versionsExpanded}
-                            title={versionsExpanded ? 'Hide version history' : 'View version history'}
-                            className={`py-2 rounded-lg transition-all text-sm font-medium flex items-center gap-1.5 justify-center cursor-pointer text-white ring-1 ring-white/10 ${
-                              versionsExpanded
-                                ? 'bg-brand-blue-2 shadow-md shadow-brand-blue/30'
-                                : 'bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 hover:shadow-md hover:shadow-brand-blue/30'
-                            }`}
-                          >
-                            {versionsExpanded ? 'Hide Versions' : 'View Versions'}
-                            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
-                          </button>
-                        )}
                       </div>
                     </div>
+
+                    {/* Info strip */}
+                    <div className="flex flex-wrap items-start gap-x-5 gap-y-2 py-2.5 border-t border-b border-gray-100 dark:border-slate-800 mb-3">
+                      {item.jdIndustryType && (
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium mb-1">
+                            <Building2 className="w-3.5 h-3.5 flex-shrink-0" /> Specialty
+                          </div>
+                          <div className="text-sm font-semibold text-gray-800 dark:text-slate-200 truncate">{formatIndustryType(item.jdIndustryType)}</div>
+                        </div>
+                      )}
+                      {item.jdLocation && (
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium mb-1">
+                            <MapPin className="w-3.5 h-3.5 flex-shrink-0" /> Location
+                          </div>
+                          <div className="text-sm font-semibold text-gray-800 dark:text-slate-200 truncate">{item.jdLocation}</div>
+                        </div>
+                      )}
+                      {(item.jdEmploymentType || item.jdRemoteType) && (
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium mb-1">
+                            <Clock className="w-3.5 h-3.5 flex-shrink-0" /> Employment
+                          </div>
+                          <div className="text-sm font-semibold text-gray-800 dark:text-slate-200 capitalize truncate">
+                            {[item.jdEmploymentType && formatEmploymentType(item.jdEmploymentType), item.jdRemoteType].filter(Boolean).join(' · ')}
+                          </div>
+                        </div>
+                      )}
+                      {item.jdPublishedAt && (
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium mb-1">
+                            <Calendar className="w-3.5 h-3.5 flex-shrink-0" /> Posted
+                          </div>
+                          <div className="text-sm font-semibold text-gray-800 dark:text-slate-200 truncate">{formatISTDate(item.jdPublishedAt)}</div>
+                        </div>
+                      )}
+                      {item.jdCreatedByName && (
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium mb-1">
+                            <User className="w-3.5 h-3.5 flex-shrink-0" /> Recruiter
+                          </div>
+                          <div className="text-sm font-semibold text-gray-800 dark:text-slate-200 truncate">{item.jdCreatedByName}</div>
+                        </div>
+                      )}
+                      <div className="min-w-0 sm:ml-auto">
+                        <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium mb-1">
+                          <FileText className="w-3.5 h-3.5 flex-shrink-0" /> Evaluation
+                        </div>
+                        <div className="text-sm font-semibold text-brand-blue truncate">{item.totalScored} Scored</div>
+                      </div>
+                    </div>
+
+                    {/* Match tiles */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div className="bg-green-50/60 dark:bg-green-950/20 border border-green-200/70 dark:border-green-900/40 rounded-lg p-2.5">
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <div>
+                            <div className="text-xs font-semibold text-gray-800 dark:text-slate-200">Exact Match</div>
+                            <div className="text-[11px] text-gray-500 dark:text-slate-400">Fit score &ge; 90%</div>
+                          </div>
+                          <Award className="w-4 h-4 text-green-600 flex-shrink-0" />
+                        </div>
+                        <div className="flex items-end justify-between">
+                          <span className="text-xl text-green-700 dark:text-green-400 font-bold tracking-tight">{exactMatchCount}</span>
+                          <span className="text-[11px] text-green-700/80 dark:text-green-400/80 font-medium">{poolPct(exactMatchCount)}% of pool</span>
+                        </div>
+                      </div>
+                      <div className="bg-brand-cyan/5 border border-brand-cyan/20 rounded-lg p-2.5">
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <div>
+                            <div className="text-xs font-semibold text-gray-800 dark:text-slate-200">Partial Match</div>
+                            <div className="text-[11px] text-gray-500 dark:text-slate-400">Fit score 60% – 89%</div>
+                          </div>
+                          <CheckCircle className="w-4 h-4 text-brand-cyan flex-shrink-0" />
+                        </div>
+                        <div className="flex items-end justify-between">
+                          <span className="text-xl text-brand-cyan font-bold tracking-tight">{partialMatchCount}</span>
+                          <span className="text-[11px] text-brand-cyan/80 font-medium">{poolPct(partialMatchCount)}% of pool</span>
+                        </div>
+                      </div>
+                      <div className="bg-brand-orange/5 border border-brand-orange/20 rounded-lg p-2.5">
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <div>
+                            <div className="text-xs font-semibold text-gray-800 dark:text-slate-200">No Match</div>
+                            <div className="text-[11px] text-gray-500 dark:text-slate-400">Fit score &lt; 60%</div>
+                          </div>
+                          <XCircle className="w-4 h-4 text-brand-orange-deep flex-shrink-0" />
+                        </div>
+                        <div className="flex items-end justify-between">
+                          <span className="text-xl text-brand-orange-deep font-bold tracking-tight">{noMatchCount}</span>
+                          <span className="text-[11px] text-brand-orange-deep/80 font-medium">{poolPct(noMatchCount)}% of pool</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {hasVersionHistory && (
+                      <div className="flex justify-end">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); versionLineage.toggle(versionKey, item.jobId); }}
+                          aria-expanded={versionsExpanded}
+                          title={versionsExpanded ? 'Hide version history' : 'View version history'}
+                          className={`mt-3 px-3.5 py-1.5 rounded-lg transition-all text-xs font-medium flex items-center gap-1.5 justify-center cursor-pointer text-white ring-1 ring-white/10 ${
+                            versionsExpanded
+                              ? 'bg-brand-blue-2 shadow-md shadow-brand-blue/30'
+                              : 'bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 hover:shadow-md hover:shadow-brand-blue/30'
+                          }`}
+                        >
+                          {versionsExpanded ? 'Hide Versions' : 'View Versions'}
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+                    )}
+                    {versionHistoryPanel}
                   </div>
-                  {versionHistoryPanel}
                 </div>
               );
             })}

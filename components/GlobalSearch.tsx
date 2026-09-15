@@ -7,6 +7,7 @@ import { resumeService, folderService, Resume, Folder } from '@/lib/services/res
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { assessmentService, AssessmentResponse } from '@/lib/services/assessmentService';
 import { aiInterviewService, AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { formatDateTimeIST } from '@/lib/utils/timezone';
 
 interface GlobalSearchProps {
   className?: string;
@@ -268,6 +269,11 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                         <span className="font-medium text-sm text-gray-900 dark:text-gray-100">{jd.title}</span>
                         {jd.job_id && (
                           <span className="text-xs text-gray-400 dark:text-gray-500">{jd.job_id}</span>
+                        )}
+                        {/* Different JDs can share a job_id/title and even a creation date,
+                            so include the time to tell results like that apart. */}
+                        {jd.created_at && (
+                          <span className="text-xs text-gray-400 dark:text-gray-500">{formatDateTimeIST(jd.created_at)}</span>
                         )}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
