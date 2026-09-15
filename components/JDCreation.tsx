@@ -6,7 +6,7 @@ import SuccessAnimation from '@/components/ui/success-animation';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
-import { Fragment, useState, useEffect, useRef } from 'react';
+import { Fragment, useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDrag, useDrop } from 'react-dnd';
 import { Job } from '@/lib/types/types';
@@ -876,6 +876,145 @@ const trailCounts = (entry?: JDMergeTrailEntry) => {
   const total = entry?.removed?.length || 0;
   const notes = (entry?.removed || []).filter((_, i) => NOTE_KINDS.includes(kindOf(i) || '')).length;
   return { kindOf, total, notes, merges: total - notes };
+};
+
+/**
+ * A child whose wording is ON SCREEN is not a group any more.
+ *
+ * "Add" promotes a wording into a list, "Use JD wording" renames a skill to its child's
+ * text, and both used to DELETE the child from the trail - which made them one-way: the
+ * recruiter who deleted the line they had just created had nothing left to bring it back,
+ * and the wording reappeared only after a reload, because the reload re-read the stored
+ * trail. So nothing is deleted now; a child is simply not rendered while its text sits in
+ * one of the four lists. Delete that line and the child - with its Add button - is back.
+ *
+ * The same rule decides what is SAVED: `_consolidate_merge_trail` on the backend drops
+ * "any wording that is present in a list after all", so the screen and the stored trail
+ * agree without either side having to remember a promotion.
+ *
+ * Returns undefined when nothing is left to show, so callers can skip the badge entirely.
+ */
+const visibleTrailEntry = (
+  entry: JDMergeTrailEntry | undefined, onScreen: Set<string>,
+): JDMergeTrailEntry | undefined => {
+  if (!entry) return undefined;
+  const norm = (t: string) => t.trim().toLowerCase();
+  // A cross-list note names the SAME text as its parent on purpose ("the JD listed this
+  // in the other section too"), so the on-screen test would delete every one of them.
+  const kindOf = (i: number) => entry.sources?.[i] ?? entry.source;
+  const keep = entry.removed.map(
+    (rm, i) => kindOf(i) === 'cross-list-priority' || !onScreen.has(norm(rm)),
+  );
+  if (keep.every(Boolean)) return entry;
+  if (!keep.some(Boolean)) return undefined;
+  const pick = <T,>(arr?: T[]) => (arr ? arr.filter((_, i) => keep[i]) : arr);
+  return {
+    ...entry,
+    removed: entry.removed.filter((_, i) => keep[i]),
+    reasons: entry.reasons.filter((_, i) => keep[i]),
+    removed_sources: pick(entry.removed_sources),
+    restore_lists: pick(entry.restore_lists),
+    sources: pick(entry.sources),
+  };
+};
+
+/**
+ * Sentence-case a line that is about to become a list item.
+ *
+ * The twin of `_sentence_case` in the backend's openai_service.py, and it exists for the
+ * same reason: the phrases the JD hands us are FRAGMENTS of its sentences - "conducting
+ * test case reviews", "demonstrating a strong understanding of testing methodologies",
+ * "executed more than 3,000 test cases" - so anything promoted out of the "possibly
+ * missed" panel or out of a group arrived in the recruiter's list starting lower-case.
+ *
+ * Only the first character, and only when it is a lower-case letter. A first word that
+ * already carries a capital is deliberate and is left alone: "iOS development",
+ * "eCommerce migrations", "jQuery plugins".
+ */
+const sentenceCase = (text: string): string => {
+  const t = (text || '').trimStart();
+  if (!t || !/^[a-z]/.test(t)) return text;
+  const firstWord = t.split(' ')[0];
+  if (/[A-Z]/.test(firstWord.slice(1))) return text;
+  return text.slice(0, text.length - t.length) + t[0].toUpperCase() + t.slice(1);
+};
+
+/**
+ * The same rule, but SKILL names get a guard: a one-word skill is a name, and plenty of
+ * real ones are lower-case on purpose - "npm", "nginx", "pandas", "kubectl". Capitalising
+ * those would be wrong in a way the recruiter cannot undo by retyping, since extraction
+ * would keep re-supplying the lower-case form. A multi-word phrase in a skills list is a
+ * fragment of a sentence ("conducting test case reviews"), so it is safe.
+ *
+ * Requirement lines are sentences by definition and are always capitalised.
+ */
+const sentenceCaseForList = (text: string, listKey: string): string => {
+  if (listKey.endsWith('_comments')) return sentenceCase(text);
+  return text.trim().includes(' ') ? sentenceCase(text) : text;
+};
+
+/**
+ * Keep the tree attached to its item when the recruiter RENAMES, MOVES or DELETES one.
+ *
+ * A group is found by (list, survivor text), so any edit to that pair orphans it: the
+ * children vanish from the screen, and the next save stores a trail pointing at an item
+ * that no longer exists. Renaming "Docker" or dragging it to Nice-to-Have silently took
+ * its notes with it, and deleting it dropped the JD wordings it had absorbed with nothing
+ * left to say they were ever there.
+ */
+const trailAfterRename = (
+  trail: JDMergeTrailEntry[], listKey: string, from: string, to: string,
+): JDMergeTrailEntry[] => trail.map(
+  e => (e.list === listKey && e.survivor === from ? { ...e, survivor: to } : e),
+);
+
+const trailAfterMove = (
+  trail: JDMergeTrailEntry[], item: string, fromList: string, toList: string,
+): JDMergeTrailEntry[] => trail.map(e => {
+  if (e.list !== fromList || e.survivor !== item) return e;
+  return {
+    ...e,
+    list: toList as JDMergeTrailEntry['list'],
+    // A child restored "to the survivor's own list" has to follow it; one that names a
+    // DIFFERENT list (a requirement sentence folded into a skill) keeps its own target.
+    restore_lists: (e.restore_lists || []).map(r => (r === fromList ? toList : r)),
+  };
+});
+
+/**
+ * Deleting an item drops its group - but NOT the wordings inside it. Each becomes a
+ * "possibly missed" entry, the one kind of note that belongs to no item, so a wording the
+ * JD actually contains is still reported instead of disappearing with the row.
+ * Cross-list notes are the exception: they only ever said "the JD listed this skill in
+ * both sections", which stops being true the moment the skill is gone.
+ */
+const trailAfterRemoval = (
+  trail: JDMergeTrailEntry[], listKey: string, item: string,
+): JDMergeTrailEntry[] => {
+  const out: JDMergeTrailEntry[] = [];
+  for (const e of trail) {
+    if (e.list !== listKey || e.survivor !== item) {
+      out.push(e);
+      continue;
+    }
+    e.removed.forEach((rm, i) => {
+      const kind = e.sources?.[i] ?? e.source;
+      if (kind === 'cross-list-priority') return;
+      out.push({
+        survivor: '',
+        removed: [rm],
+        reasons: [`The JD asks for "${rm}", and it is not in any list. Add it if it matters for this role.`],
+        removed_sources: [e.removed_sources?.[i] ?? null],
+        restore_lists: [e.restore_lists?.[i] ?? e.list],
+        sources: ['possibly-missed'],
+        survivor_source: null,
+        list: e.list,
+        kind: e.kind,
+        source: 'possibly-missed',
+      });
+    });
+  }
+  return out;
 };
 
 /** "2 grouped · 1 note" - named for what it holds. A bare "1 grouped" on a note that
@@ -2163,6 +2302,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
    * The note is dropped once used, because the skill now IS the JD's wording and there
    * is no longer a difference to explain.
    */
+  /** Every wording currently in one of the four lists, lower-cased. What `Add` and
+   *  `Use JD wording` produce lands here, which is how the tree knows a child has been
+   *  taken out of its group - and how deleting that line puts it straight back. */
+  const onScreenWordings = useMemo(() => new Set([
+    ...(extractedData.mustHaveSkills || []),
+    ...(extractedData.niceToHaveSkills || []),
+    ...(extractedData.mustHaveComments || []),
+    ...(extractedData.niceToHaveComments || []),
+  ].map(t => String(t).trim().toLowerCase())), [
+    extractedData.mustHaveSkills, extractedData.niceToHaveSkills,
+    extractedData.mustHaveComments, extractedData.niceToHaveComments,
+  ]);
+
   const handleUseJdWording = (
     category: 'mustHaveSkills' | 'niceToHaveSkills', index: number, jdWording: string,
   ) => {
@@ -2179,18 +2331,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           // is no difference left to explain. Any genuine merge under the same skill
           // stays - and is re-pointed at the new name, or it would be orphaned (the
           // tree finds a group by the text of the skill it is drawing).
-          const kindOf = (i: number) => e.sources?.[i] ?? e.source;
-          const keep = e.removed.map((_, i) => kindOf(i) !== 'narrowed-from-jd-wording');
-          const pick = <T,>(arr?: T[]) => (arr ? arr.filter((_, i) => keep[i]) : arr);
-          return {
-            ...e,
-            survivor: jdWording,
-            removed: e.removed.filter((_, i) => keep[i]),
-            reasons: e.reasons.filter((_, i) => keep[i]),
-            removed_sources: pick(e.removed_sources),
-            restore_lists: pick(e.restore_lists),
-            sources: pick(e.sources),
-          };
+          // Only the SURVIVOR changes. The narrowing child used to be stripped here;
+          // now it stays and simply stops being rendered, because the skill it quotes is
+          // the skill itself - `visibleTrailEntry` hides any child whose wording is on
+          // screen. Renaming the skill back therefore brings the note back, instead of
+          // leaving the recruiter with a skill that has silently lost its explanation.
+          return { ...e, survivor: jdWording };
         })
         .filter(e => e.removed.length > 0);
       return {
@@ -2217,8 +2363,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     const hidden = new Set((extractedData[category] || []).slice(SKILL_PREVIEW_LIMIT));
     let merges = 0;
     let notes = 0;
-    for (const e of extractedData.mergeTrail || []) {
-      if (e.list !== listKey || !hidden.has(e.survivor)) continue;
+    for (const raw of extractedData.mergeTrail || []) {
+      if (raw.list !== listKey || !hidden.has(raw.survivor)) continue;
+      const e = visibleTrailEntry(raw, onScreenWordings);
+      if (!e) continue;
       const c = trailCounts(e);
       merges += c.merges;
       notes += c.notes;
@@ -2229,25 +2377,37 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   /**
    * A JD phrase that landed in no list ("possibly missed"): add it as a skill, or dismiss
-   * the flag. Either way the entry leaves the trail - once added it is on screen, and
-   * once dismissed the recruiter has decided it does not matter.
+   * the flag.
+   *
+   * DISMISS deletes the entry - the recruiter has judged the phrase irrelevant, and it
+   * must not come back. ADD leaves it in place: the flag stops showing because the phrase
+   * is now in a list (`visibleTrailEntry`), so deleting that skill puts the flag back
+   * rather than losing the JD's phrase for good.
    */
   const handleResolvePossiblyMissed = (
     phrase: string,
     target: 'mustHaveSkills' | 'niceToHaveSkills' | null,
   ) => {
     setExtractedData(prev => {
-      const trail = prev.mergeTrail.filter(
-        e => !(e.source === 'possibly-missed' && e.removed[0] === phrase),
-      );
-      if (!target) return { ...prev, mergeTrail: trail };
+      if (!target) {
+        return {
+          ...prev,
+          mergeTrail: prev.mergeTrail.filter(
+            e => !(e.source === 'possibly-missed' && e.removed[0] === phrase),
+          ),
+        };
+      }
       const already = (prev[target] || []).some(
         sk => sk.trim().toLowerCase() === phrase.trim().toLowerCase(),
       );
+      // The phrase is a fragment of the JD's sentence, so it starts lower-case; it is
+      // becoming a list item now, and those read as lines.
+      const added = sentenceCaseForList(
+        phrase, target === 'mustHaveSkills' ? 'must_have_skills' : 'nice_to_have_skills',
+      );
       return {
         ...prev,
-        [target]: already ? prev[target] : [...(prev[target] || []), phrase],
-        mergeTrail: trail,
+        [target]: already ? prev[target] : [...(prev[target] || []), added],
       };
     });
     markExtractedDataModified();
@@ -2283,20 +2443,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       const already = (prev[category] || []).some(
         sk => sk.trim().toLowerCase() === removed.trim().toLowerCase()
       );
-      const nextTrail = prev.mergeTrail
-        .map(e => e !== entry ? e : {
-          ...e,
-          removed: e.removed.filter((_, i) => i !== nextIdx),
-          reasons: e.reasons.filter((_, i) => i !== nextIdx),
-          removed_sources: (e.removed_sources || []).filter((_, i) => i !== nextIdx),
-          restore_lists: (e.restore_lists || []).filter((_, i) => i !== nextIdx),
-          sources: e.sources ? e.sources.filter((_, i) => i !== nextIdx) : e.sources,
-        })
-        .filter(e => e.removed.length > 0);
+      // The child STAYS in the trail. It used to be stripped here, which made "Add" a
+      // one-way door: deleting the line it created left nothing to put it back, and the
+      // wording only reappeared after a reload (which re-read the stored trail). What
+      // decides whether a child is offered is not a flag but the LIST ITSELF - a wording
+      // that is on screen is not a group any more, and one that is deleted becomes one
+      // again. `visibleTrailEntry` below applies that rule when rendering, and the
+      // backend applies the same one in `_consolidate_merge_trail` when saving.
+      const added = sentenceCaseForList(removed, entry.restore_lists?.[nextIdx] || entry.list);
       return {
         ...prev,
-        [category]: already ? prev[category] : [...(prev[category] || []), removed],
-        mergeTrail: nextTrail,
+        [category]: already ? prev[category] : [...(prev[category] || []), added],
       };
     });
     markExtractedDataModified();
@@ -4527,10 +4684,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       ? extractedData.niceToHaveSkills.filter((_, i) => i !== index)
       : extractedData.niceToHaveSkills;
 
+    const nextTrail = trailAfterRemoval(
+      extractedData.mergeTrail || [],
+      category === 'mustHaveSkills' ? 'must_have_skills' : 'nice_to_have_skills',
+      deletedSkill,
+    );
+
     const updatedData = {
       ...extractedData,
       mustHaveSkills: updatedMustHave,
       niceToHaveSkills: updatedNiceToHave,
+      mergeTrail: nextTrail,
     };
     setExtractedData(updatedData);
     markExtractedDataModified();  // Mark as modified to prevent reload from DB
@@ -4541,6 +4705,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         await jdService.update(editingId, {
           must_have_skills: updatedMustHave,
           nice_to_have_skills: updatedNiceToHave,
+          skill_merge_trail: nextTrail,
         });
         console.log('[Delete] Skill deleted and saved to DB successfully:', deletedSkill);
       } catch (error) {
@@ -4567,10 +4732,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     const updatedMustHave = from === 'mustHaveSkills' ? updatedFrom : (to === 'mustHaveSkills' ? updatedTo : extractedData.mustHaveSkills);
     const updatedNiceToHave = from === 'niceToHaveSkills' ? updatedFrom : (to === 'niceToHaveSkills' ? updatedTo : extractedData.niceToHaveSkills);
 
+    const nextTrail = trailAfterMove(
+      extractedData.mergeTrail || [], skill,
+      from === 'mustHaveSkills' ? 'must_have_skills' : 'nice_to_have_skills',
+      to === 'mustHaveSkills' ? 'must_have_skills' : 'nice_to_have_skills',
+    );
+
     setExtractedData(prev => ({
       ...prev,
       mustHaveSkills: updatedMustHave,
       niceToHaveSkills: updatedNiceToHave,
+      mergeTrail: nextTrail,
     }));
     markExtractedDataModified();
 
@@ -4580,6 +4752,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         await jdService.update(editingId, {
           must_have_skills: updatedMustHave,
           nice_to_have_skills: updatedNiceToHave,
+          skill_merge_trail: nextTrail,
         });
         console.log('[Move] Skill moved and saved to DB successfully:', skill);
       } catch (error) {
@@ -4606,7 +4779,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         return;
       }
 
-      const updatedComments = [...extractedData.mustHaveComments, commentToAdd];
+      // A requirement is a line, so it reads as one whether the recruiter typed it
+      // or extraction supplied it.
+      const updatedComments = [...extractedData.mustHaveComments, sentenceCase(commentToAdd)];
 
       setExtractedData(prev => ({
         ...prev,
@@ -4682,10 +4857,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         ? extractedData.niceToHaveSkills.map((skill, i) => i === index ? newValue : skill)
         : extractedData.niceToHaveSkills;
 
+      const listKey = category === 'mustHaveSkills' ? 'must_have_skills' : 'nice_to_have_skills';
+      const previousValue = extractedData[category][index];
+      const nextTrail = trailAfterRename(
+        extractedData.mergeTrail || [], listKey, previousValue, newValue,
+      );
+
       setExtractedData(prev => ({
         ...prev,
         mustHaveSkills: updatedMustHave,
         niceToHaveSkills: updatedNiceToHave,
+        mergeTrail: nextTrail,
       }));
       markExtractedDataModified();
 
@@ -4695,6 +4877,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           await jdService.update(editingId, {
             must_have_skills: updatedMustHave,
             nice_to_have_skills: updatedNiceToHave,
+            skill_merge_trail: nextTrail,
           });
           console.log('[Edit] Skill edited and saved to DB');
         } catch (error) {
@@ -4774,7 +4957,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       setExtractedData(prev => ({
         ...prev,
-        niceToHaveComments: [...(prev.niceToHaveComments || []), commentToAdd],
+        niceToHaveComments: [...(prev.niceToHaveComments || []), sentenceCase(commentToAdd)],
       }));
       setNewComment('');
       setEditingCategory(null);
@@ -5030,6 +5213,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       ...prev,
       [from]: (prev[from] || []).filter(c => c !== comment),
       [to]: [...(prev[to] || []), comment],
+      mergeTrail: trailAfterMove(
+        prev.mergeTrail || [], comment,
+        from === 'mustHaveComments' ? 'must_have_comments' : 'nice_to_have_comments',
+        to === 'mustHaveComments' ? 'must_have_comments' : 'nice_to_have_comments',
+      ),
     }));
     markExtractedDataModified();
   };
@@ -5042,9 +5230,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   const handleRemoveCommentByCategory = async (category: 'mustHaveComments' | 'niceToHaveComments', index: number) => {
     const updatedComments = (extractedData[category] || []).filter((_, i) => i !== index);
+    const nextTrail = trailAfterRemoval(
+      extractedData.mergeTrail || [],
+      category === 'mustHaveComments' ? 'must_have_comments' : 'nice_to_have_comments',
+      (extractedData[category] || [])[index],
+    );
     setExtractedData(prev => ({
       ...prev,
       [category]: updatedComments,
+      mergeTrail: nextTrail,
     }));
     markExtractedDataModified();  // Mark as modified to prevent reload from DB
 
@@ -5052,8 +5246,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (editingId) {
       try {
         const updateData = category === 'mustHaveComments'
-          ? { must_have_comments: updatedComments }
-          : { nice_to_have_comments: updatedComments };
+          ? { must_have_comments: updatedComments, skill_merge_trail: nextTrail }
+          : { nice_to_have_comments: updatedComments, skill_merge_trail: nextTrail };
         await jdService.update(editingId, updateData);
         console.log(`[Delete] ${category} deleted and saved to DB`);
       } catch (error) {
@@ -7332,7 +7526,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                   screen that reports something ABSENT rather than explaining something
                   present. */}
               {(() => {
-                const missed = (extractedData.mergeTrail || []).filter(e => e.source === 'possibly-missed');
+                // A phrase the recruiter has since ADDED is not missing any more - but
+                // the entry stays in the trail, so deleting that skill brings the flag
+                // back. Only "Dismiss" removes it for good.
+                const missed = (extractedData.mergeTrail || []).filter(
+                  e => e.source === 'possibly-missed'
+                    && !onScreenWordings.has(String(e.removed?.[0] || '').trim().toLowerCase()),
+                );
                 if (missed.length === 0) return null;
                 return (
                   <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/30 p-3 sm:p-4">
@@ -7353,7 +7553,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         const suggestNice = e.list === 'nice_to_have_skills';
                         return (
                           <div key={phrase} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                            <span className="text-sm text-gray-800 dark:text-slate-200">{phrase}</span>
+                            {/* Shown the way it will READ once added - the verbatim JD
+                                text is on the "From the JD" line beside it. */}
+                            <span className="text-sm text-gray-800 dark:text-slate-200">{sentenceCaseForList(phrase, "must_have_skills")}</span>
                             {e.removed_sources?.[0] && (
                               <span className="text-[11px] text-gray-500 dark:text-slate-500 italic">
                                 From the JD: &ldquo;{e.removed_sources[0]}&rdquo;
@@ -7443,9 +7645,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         skill={skill}
                         index={index}
                         category="mustHaveSkills"
-                        mergedInto={extractedData.mergeTrail?.find(
+                        mergedInto={visibleTrailEntry(extractedData.mergeTrail?.find(
                           e => e.list === 'must_have_skills' && e.survivor === skill
-                        )}
+                        ), onScreenWordings)}
                         onRestoreMerged={handlePromoteGroupedSkill}
                         onUseJdWording={handleUseJdWording}
                         onMove={handleMoveSkill}
@@ -7525,9 +7727,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         skill={skill}
                         index={index}
                         category="niceToHaveSkills"
-                        mergedInto={extractedData.mergeTrail?.find(
+                        mergedInto={visibleTrailEntry(extractedData.mergeTrail?.find(
                           e => e.list === 'nice_to_have_skills' && e.survivor === skill
-                        )}
+                        ), onScreenWordings)}
                         onRestoreMerged={handlePromoteGroupedSkill}
                         onUseJdWording={handleUseJdWording}
                         onMove={handleMoveSkill}
@@ -7600,9 +7802,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           comment={comment}
                           index={index}
                           category="mustHaveComments"
-                          mergedInto={extractedData.mergeTrail?.find(
+                          mergedInto={visibleTrailEntry(extractedData.mergeTrail?.find(
                             e => e.list === 'must_have_comments' && e.survivor === comment
-                          )}
+                          ), onScreenWordings)}
                           onRestoreMerged={handlePromoteGroupedSkill}
                           onMove={handleMoveComment}
                           onRemove={handleRemoveCommentByCategory}
@@ -7668,9 +7870,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                           comment={comment}
                           index={index}
                           category="niceToHaveComments"
-                          mergedInto={extractedData.mergeTrail?.find(
+                          mergedInto={visibleTrailEntry(extractedData.mergeTrail?.find(
                             e => e.list === 'nice_to_have_comments' && e.survivor === comment
-                          )}
+                          ), onScreenWordings)}
                           onRestoreMerged={handlePromoteGroupedSkill}
                           onMove={handleMoveComment}
                           onRemove={handleRemoveCommentByCategory}
