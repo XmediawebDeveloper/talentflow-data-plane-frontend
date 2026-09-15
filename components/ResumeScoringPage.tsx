@@ -1804,7 +1804,7 @@ export default function ResumeScoringPage({
         phone: resume.phone || 'N/A',
         matchStatus: matchStatus,
         scorePercentage: Math.round(scoreValue),
-        overallRating10: resume.overall_rating_10,
+        overallRating10: resume.overallRating10 ?? resume.overall_rating_10,
         // Keep ISO string for timestamp - let display component format it
         scoredDate: resume.scoredDate || resume.created_at || scoredData.scoredAt,
         // Use scored_by_name from API for recruiter attribution
