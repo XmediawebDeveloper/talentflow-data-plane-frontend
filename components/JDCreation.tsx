@@ -919,6 +919,41 @@ const visibleTrailEntry = (
 };
 
 /**
+ * Sentence-case a line that is about to become a list item.
+ *
+ * The twin of `_sentence_case` in the backend's openai_service.py, and it exists for the
+ * same reason: the phrases the JD hands us are FRAGMENTS of its sentences - "conducting
+ * test case reviews", "demonstrating a strong understanding of testing methodologies",
+ * "executed more than 3,000 test cases" - so anything promoted out of the "possibly
+ * missed" panel or out of a group arrived in the recruiter's list starting lower-case.
+ *
+ * Only the first character, and only when it is a lower-case letter. A first word that
+ * already carries a capital is deliberate and is left alone: "iOS development",
+ * "eCommerce migrations", "jQuery plugins".
+ */
+const sentenceCase = (text: string): string => {
+  const t = (text || '').trimStart();
+  if (!t || !/^[a-z]/.test(t)) return text;
+  const firstWord = t.split(' ')[0];
+  if (/[A-Z]/.test(firstWord.slice(1))) return text;
+  return text.slice(0, text.length - t.length) + t[0].toUpperCase() + t.slice(1);
+};
+
+/**
+ * The same rule, but SKILL names get a guard: a one-word skill is a name, and plenty of
+ * real ones are lower-case on purpose - "npm", "nginx", "pandas", "kubectl". Capitalising
+ * those would be wrong in a way the recruiter cannot undo by retyping, since extraction
+ * would keep re-supplying the lower-case form. A multi-word phrase in a skills list is a
+ * fragment of a sentence ("conducting test case reviews"), so it is safe.
+ *
+ * Requirement lines are sentences by definition and are always capitalised.
+ */
+const sentenceCaseForList = (text: string, listKey: string): string => {
+  if (listKey.endsWith('_comments')) return sentenceCase(text);
+  return text.trim().includes(' ') ? sentenceCase(text) : text;
+};
+
+/**
  * Keep the tree attached to its item when the recruiter RENAMES, MOVES or DELETES one.
  *
  * A group is found by (list, survivor text), so any edit to that pair orphans it: the
@@ -2365,9 +2400,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       const already = (prev[target] || []).some(
         sk => sk.trim().toLowerCase() === phrase.trim().toLowerCase(),
       );
+      // The phrase is a fragment of the JD's sentence, so it starts lower-case; it is
+      // becoming a list item now, and those read as lines.
+      const added = sentenceCaseForList(
+        phrase, target === 'mustHaveSkills' ? 'must_have_skills' : 'nice_to_have_skills',
+      );
       return {
         ...prev,
-        [target]: already ? prev[target] : [...(prev[target] || []), phrase],
+        [target]: already ? prev[target] : [...(prev[target] || []), added],
       };
     });
     markExtractedDataModified();
@@ -2410,9 +2450,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       // that is on screen is not a group any more, and one that is deleted becomes one
       // again. `visibleTrailEntry` below applies that rule when rendering, and the
       // backend applies the same one in `_consolidate_merge_trail` when saving.
+      const added = sentenceCaseForList(removed, entry.restore_lists?.[nextIdx] || entry.list);
       return {
         ...prev,
-        [category]: already ? prev[category] : [...(prev[category] || []), removed],
+        [category]: already ? prev[category] : [...(prev[category] || []), added],
       };
     });
     markExtractedDataModified();
@@ -4738,7 +4779,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         return;
       }
 
-      const updatedComments = [...extractedData.mustHaveComments, commentToAdd];
+      // A requirement is a line, so it reads as one whether the recruiter typed it
+      // or extraction supplied it.
+      const updatedComments = [...extractedData.mustHaveComments, sentenceCase(commentToAdd)];
 
       setExtractedData(prev => ({
         ...prev,
@@ -4914,7 +4957,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       setExtractedData(prev => ({
         ...prev,
-        niceToHaveComments: [...(prev.niceToHaveComments || []), commentToAdd],
+        niceToHaveComments: [...(prev.niceToHaveComments || []), sentenceCase(commentToAdd)],
       }));
       setNewComment('');
       setEditingCategory(null);
@@ -7510,7 +7553,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         const suggestNice = e.list === 'nice_to_have_skills';
                         return (
                           <div key={phrase} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                            <span className="text-sm text-gray-800 dark:text-slate-200">{phrase}</span>
+                            {/* Shown the way it will READ once added - the verbatim JD
+                                text is on the "From the JD" line beside it. */}
+                            <span className="text-sm text-gray-800 dark:text-slate-200">{sentenceCaseForList(phrase, "must_have_skills")}</span>
                             {e.removed_sources?.[0] && (
                               <span className="text-[11px] text-gray-500 dark:text-slate-500 italic">
                                 From the JD: &ldquo;{e.removed_sources[0]}&rdquo;
