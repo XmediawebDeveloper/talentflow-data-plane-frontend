@@ -94,6 +94,17 @@ export interface ScoringResponse {
   // Exact Match from Partial Match (>= 8 vs < 8), so it is displayed beside the
   // classification. Null when the JD defines no Required criteria.
   essential_average?: number | null;
+  // Resume Match Rating Mechanism (client doc, "Final Version A", Sept 2026):
+  // the 0-10 Overall Rating and its two components. Additive alongside
+  // overall_score/essential_average above - match_status is never redecided
+  // by these, only read. non_essential_rating_10/combined_average_10 are null
+  // for No Match and for a JD with no Preferred criteria.
+  essential_rating_10?: number;
+  non_essential_rating_10?: number | null;
+  combined_average_10?: number | null;
+  overall_rating_10?: number;
+  rating_cap_applied?: boolean;
+  rating_summary_text?: string;
   match_status: 'excellent' | 'partial' | 'no_match' | 'exact_match' | 'partial_match';
   ai_summary?: string;
   strengths: string[];

@@ -38,6 +38,15 @@ interface ScoredResume {
   // Exact Match needs >= 8, Partial Match is below 8 - so this is the only value
   // that explains which of the two a passing candidate received.
   essentialAverage?: number | null;
+  // Resume Match Rating Mechanism (client doc, Sept 2026): the 0-10 Overall
+  // Rating and its components, read straight from the API - additive
+  // alongside scorePercentage/essentialAverage above, never replacing them.
+  essentialRating10?: number;
+  nonEssentialRating10?: number | null;
+  combinedAverage10?: number | null;
+  overallRating10?: number;
+  ratingCapApplied?: boolean;
+  ratingSummaryText?: string;
   scoredDate: string;
   scoredBy: string;
   experience?: string;
@@ -481,6 +490,12 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
               // is a real value (every Required criterion rated 0), while null means
               // the JD has no Required criteria at all.
               essentialAverage: resume.essentialAverage ?? completeResumeData.essential_average,
+              essentialRating10: resume.essentialRating10 ?? completeResumeData.essential_rating_10,
+              nonEssentialRating10: resume.nonEssentialRating10 ?? completeResumeData.non_essential_rating_10,
+              combinedAverage10: resume.combinedAverage10 ?? completeResumeData.combined_average_10,
+              overallRating10: resume.overallRating10 ?? completeResumeData.overall_rating_10,
+              ratingCapApplied: resume.ratingCapApplied ?? completeResumeData.rating_cap_applied,
+              ratingSummaryText: resume.ratingSummaryText ?? completeResumeData.rating_summary_text,
               criteriaScores: completeResumeData.criteria_scores || {},
               scoreBreakdown: completeResumeData.score_breakdown || [],
               aiSummary: resume.aiSummary || completeResumeData.ai_summary,
@@ -1482,6 +1497,11 @@ Best regards`);
                 scorePercentage: fullResumeData.scorePercentage,
                 scoreFormula: fullResumeData.scoreFormula,
                 essentialAverage: fullResumeData.essentialAverage,
+                essentialRating10: fullResumeData.essentialRating10,
+                nonEssentialRating10: fullResumeData.nonEssentialRating10,
+                overallRating10: fullResumeData.overallRating10,
+                ratingCapApplied: fullResumeData.ratingCapApplied,
+                ratingSummaryText: fullResumeData.ratingSummaryText,
                 matchStatus: fullResumeData.matchStatus || resume.matchStatus,
                 scoredDate: fullResumeData.scoredDate,
                 scoredBy: fullResumeData.scoredBy,

@@ -61,6 +61,17 @@ interface ScoredResumeDetail {
   // Partial Match (< 8) - without it a recruiter cannot tell why a candidate who
   // passed every Required criterion got one label rather than the other.
   essentialAverage?: number | null;
+  // Resume Match Rating Mechanism (client doc, "Final Version A", Sept 2026):
+  // the 0-10 Overall Rating shown as the headline number below, plus its two
+  // components (Must-Have / Nice-to-Have Average). Additive alongside
+  // scorePercentage/essentialAverage above - match classification and its
+  // color are untouched, only where the numeric Overall Score itself gets
+  // its value and scale is affected.
+  essentialRating10?: number;
+  nonEssentialRating10?: number | null;
+  overallRating10?: number;
+  ratingCapApplied?: boolean;
+  ratingSummaryText?: string;
   scoredDate: string;
   scoredBy: string;
   detailedScores: DetailedScores;
@@ -521,7 +532,11 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
       {/* Score Summary Header - Compact */}
       <div className="flex items-center gap-4 text-sm">
         <span className="text-gray-700 flex items-center gap-1">
-          Overall Score:
+          {/* Resume Match Rating Mechanism (client doc, Sept 2026): the headline
+              number is now the 0-10 Overall Rating, not a percentage - the color
+              keying off match status is untouched. `scorePercentage` stays as a
+              fallback only for a response that predates this field. */}
+          Overall Rating:
           {(weightedScoreExplanation || resume.scoreFormula) && (
             <Tooltip content={weightedScoreExplanation || resume.scoreFormula} position="bottom">
               <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
@@ -529,8 +544,27 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
           )}
         </span>
         <span className={`text-2xl font-bold ${getOverallScoreColor(resume.matchStatus)}`}>
-          {resume.scorePercentage}%
+          {resume.overallRating10 != null ? (
+            <>{resume.overallRating10.toFixed(1)}<span className="text-base font-semibold text-gray-500">/10</span></>
+          ) : (
+            `${resume.scorePercentage}%`
+          )}
         </span>
+        {resume.essentialRating10 != null && (
+          <>
+            <span className="text-gray-400">|</span>
+            <span className="text-gray-700 flex items-center gap-1">
+              Must-Have Avg: <span className="font-semibold text-gray-900">{resume.essentialRating10.toFixed(1)}</span>
+              <span className="text-gray-500">/10</span>
+            </span>
+          </>
+        )}
+        {resume.nonEssentialRating10 != null && (
+          <span className="text-gray-700 flex items-center gap-1">
+            Nice-to-Have Avg: <span className="font-semibold text-gray-900">{resume.nonEssentialRating10.toFixed(1)}</span>
+            <span className="text-gray-500">/10</span>
+          </span>
+        )}
         <span className="text-gray-400">|</span>
         {summaryData && (
           <>
@@ -585,6 +619,12 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
         </span>
         <span className="text-gray-600">by {resume.scoredBy || 'System'}</span>
       </div>
+
+      {/* Status summary sentence for the Overall Rating, per the client's
+          10-point rating document (section 9 UI guidance). */}
+      {resume.ratingSummaryText && (
+        <p className="text-xs text-gray-500 italic">{resume.ratingSummaryText}</p>
+      )}
 
       {/* AI Analysis */}
       {aiReasoning && (
