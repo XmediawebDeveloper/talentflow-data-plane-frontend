@@ -1,5 +1,11 @@
 @import "tailwindcss";
 @plugin "@tailwindcss/typography";
+/* Powers `animate-in`/`animate-out`/`fade-in`/`zoom-in`/`slide-in-from-*` etc.
+   Used across 30+ components (including the scoring progress widget below)
+   but was never registered as a plugin, so every one of those classes was
+   silently inert — no animation, no error, just a class Tailwind didn't
+   recognize and therefore emitted no CSS for. */
+@plugin "tailwindcss-animate";
 
 /* ── Configure dark mode to use .dark class (matches next-themes) ─────── */
 @variant dark (&:where(.dark, .dark *));

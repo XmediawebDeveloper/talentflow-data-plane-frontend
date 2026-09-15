@@ -3,7 +3,7 @@
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { WorkInProgressIcon } from '@/components/icons/nav-icons';
 import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Award, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronRight, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList } from 'lucide-react';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useId } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
@@ -16,7 +16,7 @@ import { normalizeMatchResult } from '@/lib/utils/matchStatus';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import api, { dispatchUnitsConsumed } from '@/lib/services/api';
-import { scoringService } from '@/lib/services/scoringService';
+import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
@@ -371,12 +371,15 @@ export default function ResumeScoringPage({
     getJobProgress,
     hasActiveScoring,
     setOnRestorePanel,
-    setMainPanelOpen,
+    setPanelVisibility,
     setMinimized: setContextMinimized,
     clearJob,
     activeScoringJobs,
     syncScoringJob,
   } = useScoringProgress();
+  // Stable per-instance id for the ref-counted panel-visibility registry —
+  // see `setPanelVisibility` on ScoringProgressContext.
+  const panelOwnerId = useId();
 
   // Use props directly - data is fetched by the page route
   const jobs = propJobs;
@@ -482,20 +485,8 @@ export default function ResumeScoringPage({
 
   // State for real-time scoring status panel
   const [showScoringPanel, setShowScoringPanel] = useState(false);
-  const [isScoringMinimized, setIsScoringMinimized] = useState(false);
   const [resumesToScore, setResumesToScore] = useState<Array<{ id: string; name: string }>>([]);
   const [scoringSource, setScoringSource] = useState<'my-resumes' | 'database'>('database');
-
-  // Register restore callback when scoring panel is minimized
-  useEffect(() => {
-    if (showScoringPanel && isScoringMinimized) {
-      // When minimized, clicking floating indicator should restore the panel
-      setOnRestorePanel(() => setIsScoringMinimized(false));
-    } else {
-      setOnRestorePanel(undefined);
-    }
-    return () => setOnRestorePanel(undefined);
-  }, [showScoringPanel, isScoringMinimized, setOnRestorePanel]);
 
   // Scoring History Modal
   const [historyModalItem, setHistoryModalItem] = useState<ScoredResumeData | null>(null);
@@ -605,8 +596,6 @@ export default function ResumeScoringPage({
   const jobPickerListRef = useRef<HTMLDivElement | null>(null);
   const [jobPickerScrollRequest, setJobPickerScrollRequest] = useState(0);
   const requestJobPickerScroll = () => setJobPickerScrollRequest((request) => request + 1);
-  // Whether the floating Progress Tables icon has revealed its label.
-  const [showProgressLabel, setShowProgressLabel] = useState(false);
 
   /* The JD itself, read-only, over this page. The scoring detail page names the
      job and its version but shows nothing OF it — the description, skills and
@@ -619,12 +608,6 @@ export default function ResumeScoringPage({
   // State for Progress Tables Modal
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressData, setProgressData] = useState<ScoringProgressItem[]>([]);
-  /* Closing the progress popup is a dismissal, not a hide: it puts away the
-     finished run AND the floating button that reopens it, so a completed run
-     stops following the recruiter around the page. It stays dismissed until
-     something new happens — every run start below clears this, which is what
-     brings the popup and the button back for the next task. */
-  const [progressDismissed, setProgressDismissed] = useState(false);
   const [filterByJobId, setFilterByJobId] = useState<string | undefined>(undefined);
   const [showJobTitleColumn, setShowJobTitleColumn] = useState(false);
   /* The "View Progress" popup on a job row in View by Job spans the job's
@@ -637,21 +620,11 @@ export default function ResumeScoringPage({
   const [loadingProgressJobId, setLoadingProgressJobId] = useState<string | null>(null);
   const [isBulkProgressMinimized, setIsBulkProgressMinimized] = useState(false);
 
-  // Hide global floating widget when BulkScoringProgressModal is open and NOT minimized
-  /* Any new scoring work anywhere lifts the dismissal — "if another task
-     starts, the popup works as its flow". Keyed on the context rather than on
-     this component's own run-start handlers, because a run begun from the
-     source picker never touches those, and the floating button would otherwise
-     stay hidden for the rest of the session after one close. */
+  // When minimized, releasing this owner's registration lets GlobalScoringProgressIndicator show
   useEffect(() => {
-    if (hasActiveScoring) setProgressDismissed(false);
-  }, [hasActiveScoring]);
-
-  // When minimized, setMainPanelOpen(false) lets GlobalScoringProgressIndicator show
-  useEffect(() => {
-    setMainPanelOpen(showProgressModal && !isBulkProgressMinimized);
-    return () => { setMainPanelOpen(false); };
-  }, [showProgressModal, isBulkProgressMinimized, setMainPanelOpen]);
+    setPanelVisibility(panelOwnerId, showProgressModal && !isBulkProgressMinimized);
+    return () => { setPanelVisibility(panelOwnerId, false); };
+  }, [showProgressModal, isBulkProgressMinimized, setPanelVisibility, panelOwnerId]);
 
   // Helper: Convert job progress items to ScoringProgressItem[] for BulkScoringProgressModal
   const showBulkProgressFromJob = (jobId: string, jobTitle: string, items: any[], source: 'Internal DB' | 'My Resumes' = 'Internal DB') => {
@@ -662,20 +635,25 @@ export default function ResumeScoringPage({
       jobTitle: jobTitle,
       jobId: jobId,
       source: source,
-      status: item.status === 'completed'
-        ? 'Scored successfully' as const
-        : item.status === 'already_scored'
+      // 'already_scored' is a frontend-only sentinel (pre-scored items pulled
+      // from sessionStorage, never a live backend status) so it's checked
+      // before normalizing; everything else goes through normalizeScoringStatus
+      // so a backend value like 'pending' or 'in_progress' still maps
+      // correctly instead of silently falling through to 'Queued' forever.
+      status: item.status === 'already_scored'
         ? 'Already Scored - Skipped' as const
-        : item.status === 'failed'
+        : normalizeScoringStatus(item.status) === 'completed'
+        ? 'Scored successfully' as const
+        : normalizeScoringStatus(item.status) === 'failed'
         ? 'Failed' as const
-        : item.status === 'processing'
+        : normalizeScoringStatus(item.status) === 'processing'
         ? 'Scoring in progress' as const
         : 'Queued' as const,
       errorReason: item.errorMessage,
       score: item.score,
       scoredDateTime: item.status === 'already_scored' && item.scoredAt
         ? new Date(item.scoredAt)
-        : item.status === 'completed'
+        : normalizeScoringStatus(item.status) === 'completed'
         ? new Date()
         : undefined,
       matchResult: item.matchStatus
@@ -685,9 +663,71 @@ export default function ResumeScoringPage({
     setProgressData(progressItems);
     setFilterByJobId(jobId);
     setShowJobTitleColumn(false);
-    setProgressDismissed(false); // a new run un-dismisses the popup
     setShowProgressModal(true);
   };
+
+  /* Keep the global widget's restore callback pointing at this page's job
+     whenever its progress isn't the thing currently on screen — either
+     because no popup was opened yet this visit (the job is only tracked in
+     the shared context) or because it WAS open and got minimized.
+     Previously `onRestorePanel` was only registered inside each `onMinimize`
+     handler below, so restoring worked right after an explicit minimize but
+     not for a job merely sitting in the shared context — e.g. navigating to
+     this page fresh while a run finishes elsewhere. Clicking the widget then
+     fell back to GlobalScoringProgressIndicator's own
+     `router.push(...&show_progress=true)`, which does nothing on a same-route
+     navigation: the resume-scoring route's search-params effect only runs
+     once on mount, so a later `?show_progress=true` added via client-side
+     navigation is never re-read. Registering this reactively, keyed on the
+     same `showProgressModal && !isBulkProgressMinimized` condition that
+     drives panel visibility above, makes restore work regardless of how the
+     recruiter got to this page. */
+  useEffect(() => {
+    if (showProgressModal && !isBulkProgressMinimized) {
+      setOnRestorePanel(undefined);
+      return;
+    }
+    const job = activeScoringJobs[0];
+    if (!job) {
+      setOnRestorePanel(undefined);
+      return;
+    }
+    /* One arrow, not two: `setOnRestorePanel`'s own wrapper (in
+       ScoringProgressContext) already does the `setState(() => value)` trick
+       needed to store a function safely — wrapping it again here made the
+       stored "callback" a function that RETURNS this restore function
+       instead of one that RUNS it, so calling it from the global widget
+       silently did nothing. */
+    setOnRestorePanel(() => {
+      if (showProgressModal) {
+        // Already built for this job — just bring it back on screen.
+        setIsBulkProgressMinimized(false);
+        setContextMinimized(false);
+        return;
+      }
+      const historyItem = scoredHistory.find(h => h.jobId === job.jobId);
+      const items = historyItem
+        ? (historyItem.scoredResumes || []).map((r: any) => ({
+            resumeId: r.resumeId || r.id,
+            candidateName: r.candidateName || r.name || 'Unknown',
+            status: 'completed' as const,
+            score: r.overallScore ?? r.overall_score ?? 0,
+          }))
+        : job.items.map(i => ({
+            resumeId: i.resumeId,
+            candidateName: i.candidateName,
+            status: i.status === 'Scored successfully' ? ('completed' as const)
+              : i.status === 'Failed' ? ('failed' as const)
+              : i.status === 'Scoring in progress' ? ('processing' as const)
+              : ('queued' as const),
+            score: i.score,
+          }));
+      const source = job.items[0]?.source === 'My Resumes' ? 'My Resumes' : 'Internal DB';
+      showBulkProgressFromJob(job.jobId, job.jobTitle, items, source);
+      setContextMinimized(false);
+    });
+    return () => setOnRestorePanel(undefined);
+  }, [showProgressModal, isBulkProgressMinimized, activeScoringJobs, scoredHistory, setOnRestorePanel, setContextMinimized]);
 
   // History search + filters, in the shared hook.
   const [showHistoryFilters, setShowHistoryFilters] = useState(false);
@@ -1280,20 +1320,20 @@ export default function ResumeScoringPage({
         jobTitle: jobTitle,
         jobId: jobId,
         source: source,
-        status: item.status === 'completed'
-          ? 'Scored successfully' as const
-          : item.status === 'already_scored'
+        status: item.status === 'already_scored'
           ? 'Already Scored - Skipped' as const
-          : item.status === 'failed'
+          : normalizeScoringStatus(item.status) === 'completed'
+          ? 'Scored successfully' as const
+          : normalizeScoringStatus(item.status) === 'failed'
           ? 'Failed' as const
-          : item.status === 'processing'
+          : normalizeScoringStatus(item.status) === 'processing'
           ? 'Scoring in progress' as const
           : 'Queued' as const,
         errorReason: item.errorMessage,
         score: item.score,
         scoredDateTime: item.status === 'already_scored' && item.scoredAt
           ? new Date(item.scoredAt)
-          : item.status === 'completed'
+          : normalizeScoringStatus(item.status) === 'completed'
           ? new Date()
           : undefined,
         // Always derive the match result from the backend's authoritative
@@ -1357,8 +1397,9 @@ export default function ResumeScoringPage({
                 const idx = resumeIdToIndex.get(item.resume_id);
                 if (idx === undefined) continue;
                 const itemId = `${jobId}-${item.resume_id}`;
+                const itemStatus = normalizeScoringStatus(item.status);
 
-                if (item.status === 'completed' && newItemStatuses[idx].status !== 'completed') {
+                if (itemStatus === 'completed' && newItemStatuses[idx].status !== 'completed') {
                   newItemStatuses[idx].status = 'completed';
                   newItemStatuses[idx].score = item.overall_score ?? 0;
                   newItemStatuses[idx].matchStatus = item.match_status;
@@ -1367,13 +1408,13 @@ export default function ResumeScoringPage({
                     matchResult: convertMatchStatus(item.match_status),
                     scoredDateTime: new Date().toISOString(),
                   });
-                } else if (item.status === 'failed' && newItemStatuses[idx].status !== 'failed') {
+                } else if (itemStatus === 'failed' && newItemStatuses[idx].status !== 'failed') {
                   newItemStatuses[idx].status = 'failed';
                   newItemStatuses[idx].errorMessage = item.error_message || 'Scoring failed';
                   updateItemStatus(jobId, itemId, 'Failed', {
                     errorReason: item.error_message || 'Scoring failed',
                   });
-                } else if (item.status === 'processing' && newItemStatuses[idx].status === 'queued') {
+                } else if (itemStatus === 'processing' && newItemStatuses[idx].status === 'queued') {
                   newItemStatuses[idx].status = 'processing';
                   updateItemStatus(jobId, itemId, 'Scoring in progress');
                 }
@@ -1479,13 +1520,13 @@ export default function ResumeScoringPage({
       jobTitle: batchProgress.jobTitle,
       jobId: batchProgress.jobId,
       source: batchSource,
-      status: item.status === 'completed'
-        ? 'Scored successfully' as const
-        : item.status === 'already_scored'
+      status: item.status === 'already_scored'
         ? 'Already Scored - Skipped' as const
-        : item.status === 'failed'
+        : normalizeScoringStatus(item.status) === 'completed'
+        ? 'Scored successfully' as const
+        : normalizeScoringStatus(item.status) === 'failed'
         ? 'Failed' as const
-        : item.status === 'processing'
+        : normalizeScoringStatus(item.status) === 'processing'
         ? 'Scoring in progress' as const
         : 'Queued' as const,
       errorReason: item.errorMessage,
@@ -1537,7 +1578,6 @@ export default function ResumeScoringPage({
     // Only show modal for NEW jobs, not for updates to jobs already shown
     if (!shownJobsRef.current.has(batchProgress.jobId)) {
       shownJobsRef.current.add(batchProgress.jobId);
-      setProgressDismissed(false); // a new run un-dismisses the popup
       setShowProgressModal(true);
     }
 
@@ -2261,10 +2301,9 @@ export default function ResumeScoringPage({
             progressData={progressData}
             onClose={() => {
               setShowProgressModal(false);
-              setProgressDismissed(true);
               /* Every job, not just the settled ones. Clearing only finished
                  work kept anything still queued or processing, which left
-                 the floating button in the corner after an X meant to
+                 the global widget in the corner after an X meant to
                  dismiss it. Closing says "done with this", so it goes too. */
               activeScoringJobs.forEach(job => clearJob(job.jobId));
             }}
@@ -2279,15 +2318,13 @@ export default function ResumeScoringPage({
             showScoredByColumn={progressSpansJob}
             minimized={isBulkProgressMinimized}
             onMinimize={() => {
-              setIsBulkProgressMinimized(true);
               /* Deliberately NOT setMinimized(true) here. The indicator
                  shows the full card first and shrinks itself after 3s;
                  flipping it to the pill in this same tick is what made
-                 the run appear to vanish into the corner instantly. */
-              setOnRestorePanel(() => () => {
-                setIsBulkProgressMinimized(false);
-                setContextMinimized(false);
-              });
+                 the run appear to vanish into the corner instantly.
+                 The restore callback itself is registered by the effect
+                 above, reactively, once this flips true. */
+              setIsBulkProgressMinimized(true);
             }}
             onRetryFailed={async (item) => {
               try {
@@ -2598,97 +2635,13 @@ export default function ResumeScoringPage({
         {/* Overview cards — always visible; the active card is highlighted
             once its list is open below. */}
           <div className="mb-4 sm:mb-5">
-            {/* Progress Tables — floating action button at the bottom-right
-                corner. Clicking it reveals its label and opens the modal. */}
-            {/* Stood down only while a run is actually RUNNING — the floating
-                widget is carrying it then, and two clock buttons in one corner
-                is one too many. Not gated on `activeScoringJobs.length`: a
-                finished job now stays in that list for a day, which kept this
-                button hidden long after the run it deferred to had ended. */}
-            {/* bottom-24, not bottom-6: GlobalScoringProgressIndicator anchors
-                its own shrunk button/card to bottom-6 in this same corner and
-                can still be showing a recently-finished run (its retention
-                window keeps it up to a day), so bottom-6 here would stack this
-                button directly underneath it — a dead, invisible tap target. */}
-            {scoredHistory.length > 0 && !progressDismissed && !hasActiveScoring && (
-              <div className="pointer-events-none fixed inset-x-0 bottom-24 z-30">
-                <div className="mx-auto flex max-w-[1400px] justify-end px-6 md:px-10">
-                  <div className="pointer-events-auto flex flex-col items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowProgressLabel(true);
-                    /* The CURRENT run only — the newest entry — not every job
-                       ever scored. Flattening the whole of `scoredHistory` here
-                       put hundreds of long-finished rows behind a button that
-                       sits beside a running job, so "207/207 complete" was the
-                       library rather than the task the recruiter had just
-                       started. Newest is read from `scoredAt` rather than taken
-                       from the array's order, which nothing here guarantees.
-                       Per-job and per-version history is still reachable from
-                       the rows themselves, which open this same modal scoped. */
-                    const currentRun = [...scoredHistory].sort(
-                      (a, b) => new Date(b.scoredAt).getTime() - new Date(a.scoredAt).getTime(),
-                    )[0];
-                    const allProgressData = (currentRun ? [currentRun] : []).flatMap(item =>
-                      item.scoredResumes.map(resume => ({
-                        id: resume.id,
-                        // required by ScoringProgressItem and used by the modal's Retry
-                        // action; it was omitted, so retry had no resume to re-score.
-                        resumeId: resume.resumeId || resume.id,
-                        candidateName: resume.candidateName || resume.name || 'Unknown',
-                        jobTitle: item.jobTitle,
-                        /* The JD's readable code and version, for the popup's
-                           header chips. Without them the header had only the
-                           internal uuid to show, which is what put
-                           "2f6a0dc3-1fbc-..." where "JD-164  v2" belongs. */
-                        jobCode: item.jdJobId,
-                        jobVersion: item.jdCurrentVersion,
-                        /* Shown under the candidate's name. The same three
-                           spellings the rest of this file reads, because the
-                           history rows come from more than one endpoint. */
-                        email: resume.candidateEmail || resume.candidate_email || resume.email,
-                        jobId: item.jobId,
-                        // This resume's own source, not the JD's aggregate — a job
-                        // scored from both My Resumes and the internal database
-                        // would otherwise show every row under one source.
-                        source: resume.source === 'my-resumes' ? 'My Resumes' : 'Internal DB' as 'My Resumes' | 'Internal DB',
-                        status: 'Scored successfully' as const,
-                        // Each candidate's own scored date, not the job's aggregate
-                        // `scoredAt` — that would show every row under one job with
-                        // the same timestamp regardless of when it was actually scored.
-                        scoredDateTime: resume.scoredDate ? new Date(resume.scoredDate) : new Date(item.scoredAt),
-                        matchResult: (resume.matchStatus === 'exact_match' || resume.matchStatus === 'Exact Match' ? 'Exact Match'
-                                     : resume.matchStatus === 'partial_match' || resume.matchStatus === 'Partial Match' ? 'Partial Match'
-                                     : resume.matchStatus === 'no_match' || resume.matchStatus === 'No Match' ? 'No Match'
-                                     : (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match'
-                                     : (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match'
-                                     : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match',
-                        score: resume.overall_score || resume.scorePercentage || 0,
-                      }))
-                    );
-                    setProgressData(allProgressData);
-                    setProgressSpansJob(false);
-                  setProgressSpansJob(false);
-                    setShowJobTitleColumn(true);
-                    setFilterByJobId(undefined);
-                    setShowProgressModal(true);
-                  }}
-                  aria-label="Current scoring progress"
-                  title="Current scoring progress"
-                  className="h-12 w-12 rounded-full bg-brand-blue text-white flex items-center justify-center shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 hover:bg-brand-blue-2 transition-colors"
-                >
-                  <Clock className="w-5 h-5" />
-                </button>
-                {showProgressLabel && (
-                  <span className="order-first rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-brand-blue shadow-sm ring-1 ring-brand-blue/15">
-                    Progress Tables
-                  </span>
-                )}
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* The page used to also render its own "reopen last progress" floating
+                clock button here (bottom-24, offset above GlobalScoringProgressIndicator's
+                bottom-6 widget). GlobalScoringProgressIndicator already keeps a
+                finished run's round button up for a day and restores this exact
+                popup on click, so the two were showing side by side for the same
+                purpose — the visible "duplicate clock" bug. Removed in favor of
+                the single global widget everywhere, this page included. */}
 
             {/* One clickable card — Total Resumes Scored, which opens the list —
                 followed by the verdict breakdown, which is read-only. Switching
@@ -3453,7 +3406,6 @@ export default function ResumeScoringPage({
               }
 
               // Grid View
-              const poolPct = (count: number) => item.totalScored > 0 ? Math.round((count / item.totalScored) * 100) : 0;
               return (
                 <div
                   key={item.id}
@@ -3648,10 +3600,7 @@ export default function ResumeScoringPage({
                           </div>
                           <Award className="w-4 h-4 text-green-600 flex-shrink-0" />
                         </div>
-                        <div className="flex items-end justify-between">
-                          <span className="text-xl text-green-700 dark:text-green-400 font-bold tracking-tight">{exactMatchCount}</span>
-                          <span className="text-[11px] text-green-700/80 dark:text-green-400/80 font-medium">{poolPct(exactMatchCount)}% of pool</span>
-                        </div>
+                        <div className="text-xl text-green-700 dark:text-green-400 font-bold tracking-tight">{exactMatchCount}</div>
                       </div>
                       <div className="bg-brand-cyan/5 border border-brand-cyan/20 rounded-lg p-2.5">
                         <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -3661,10 +3610,7 @@ export default function ResumeScoringPage({
                           </div>
                           <CheckCircle className="w-4 h-4 text-brand-cyan flex-shrink-0" />
                         </div>
-                        <div className="flex items-end justify-between">
-                          <span className="text-xl text-brand-cyan font-bold tracking-tight">{partialMatchCount}</span>
-                          <span className="text-[11px] text-brand-cyan/80 font-medium">{poolPct(partialMatchCount)}% of pool</span>
-                        </div>
+                        <div className="text-xl text-brand-cyan font-bold tracking-tight">{partialMatchCount}</div>
                       </div>
                       <div className="bg-brand-orange/5 border border-brand-orange/20 rounded-lg p-2.5">
                         <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -3674,10 +3620,7 @@ export default function ResumeScoringPage({
                           </div>
                           <XCircle className="w-4 h-4 text-brand-orange-deep flex-shrink-0" />
                         </div>
-                        <div className="flex items-end justify-between">
-                          <span className="text-xl text-brand-orange-deep font-bold tracking-tight">{noMatchCount}</span>
-                          <span className="text-[11px] text-brand-orange-deep/80 font-medium">{poolPct(noMatchCount)}% of pool</span>
-                        </div>
+                        <div className="text-xl text-brand-orange-deep font-bold tracking-tight">{noMatchCount}</div>
                       </div>
                     </div>
 
@@ -3780,10 +3723,9 @@ export default function ResumeScoringPage({
             progressData={progressData}
             onClose={() => {
               setShowProgressModal(false);
-              setProgressDismissed(true);
               /* Every job, not just the settled ones. Clearing only finished
                  work kept anything still queued or processing, which left
-                 the floating button in the corner after an X meant to
+                 the global widget in the corner after an X meant to
                  dismiss it. Closing says "done with this", so it goes too. */
               activeScoringJobs.forEach(job => clearJob(job.jobId));
             }}
@@ -3798,15 +3740,13 @@ export default function ResumeScoringPage({
             showScoredByColumn={progressSpansJob}
             minimized={isBulkProgressMinimized}
             onMinimize={() => {
-              setIsBulkProgressMinimized(true);
               /* Deliberately NOT setMinimized(true) here. The indicator
                  shows the full card first and shrinks itself after 3s;
                  flipping it to the pill in this same tick is what made
-                 the run appear to vanish into the corner instantly. */
-              setOnRestorePanel(() => () => {
-                setIsBulkProgressMinimized(false);
-                setContextMinimized(false);
-              });
+                 the run appear to vanish into the corner instantly.
+                 The restore callback itself is registered by the effect
+                 above, reactively, once this flips true. */
+              setIsBulkProgressMinimized(true);
             }}
             onRetryFailed={async (item) => {
               try {
@@ -4573,7 +4513,6 @@ export default function ResumeScoringPage({
           progressData={progressData}
           onClose={() => {
             setShowProgressModal(false);
-            setProgressDismissed(true);
             /* The corner widget is a second face of this same run — leaving it
                behind would make the X look like it had not worked. Only settled
                jobs are dropped, and the modal only offers a close once every row
@@ -4592,12 +4531,10 @@ export default function ResumeScoringPage({
           showScoreColumn
           minimized={isBulkProgressMinimized}
           onMinimize={() => {
+            /* See above — the indicator owns the card-then-pill timing, and
+               the restore callback is registered reactively by the effect
+               near showBulkProgressFromJob once this flips true. */
             setIsBulkProgressMinimized(true);
-            /* See above — the indicator owns the card-then-pill timing. */
-            setOnRestorePanel(() => () => {
-              setIsBulkProgressMinimized(false);
-              setContextMinimized(false);
-            });
           }}
           onRetryFailed={async (item) => {
             try {

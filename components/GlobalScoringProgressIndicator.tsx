@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useScoringProgress, ScoringJob } from '@/contexts/ScoringProgressContext';
 import { ClipboardList, X, Minimize2, Maximize2, CheckCircle2, XCircle, Loader2, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { useRouter } from 'next/navigation';
+import BulkScoringProgressModal, { ScoringProgressItem } from '@/components/BulkScoringProgressModal';
 
 export default function GlobalScoringProgressIndicator() {
   const router = useRouter();
@@ -18,6 +19,34 @@ export default function GlobalScoringProgressIndicator() {
   } = useScoringProgress();
 
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
+  /* The full popup, opened right where the recruiter is — no page owns this
+     instance, so it's built straight from the shared context's own job data
+     instead of a page's `scoredHistory`. This is what `restore()` falls back
+     to when no page has registered `onRestorePanel` (i.e. anywhere other than
+     the page that started the run): previously that fell back to
+     `router.push(...&show_progress=true)`, which took the recruiter away to
+     the Resume Scoring page and needed a second click there to actually show
+     anything. */
+  const [showGlobalModal, setShowGlobalModal] = useState(false);
+
+  /** Context's own `ScoringProgressItem` -> the shape `BulkScoringProgressModal`
+   *  renders. The two are almost identical (same run, same fields); only
+   *  `scoredDateTime` needs converting from the ISO string the context stores
+   *  to the `Date` the modal expects. */
+  const toModalItems = (job: ScoringJob): ScoringProgressItem[] =>
+    job.items.map(item => ({
+      id: item.id,
+      resumeId: item.resumeId,
+      candidateName: item.candidateName,
+      jobTitle: item.jobTitle,
+      jobId: item.jobId,
+      source: item.source,
+      status: item.status,
+      errorReason: item.errorReason,
+      scoredDateTime: item.scoredDateTime ? new Date(item.scoredDateTime) : undefined,
+      matchResult: item.matchResult,
+      score: item.score,
+    }));
 
   /* Minimising the main popup hands the run to this widget, which has three
      forms, smallest last:
@@ -26,35 +55,63 @@ export default function GlobalScoringProgressIndicator() {
        card      — the black progress card, bottom-right
        shrunk    — a round progress button in the same corner
 
-     The card is what a minimise drops into, and it shrinks to the round button
-     after three seconds — long enough to read the counts and register where the
-     run went, short enough not to sit over the page. Restoring or expanding
-     puts it back to the card, so the next minimise repeats the same sequence
-     rather than snapping straight to a dot.
+     The card is shown for exactly three seconds — but only once per job, right
+     when that job STARTS — long enough to read the counts and register where
+     the run went. Every later minimise of the SAME job (there can be several,
+     if the recruiter re-opens and re-minimises the popup while it's still
+     running) goes straight to the round button instead of replaying the
+     three-second card each time; on the Resume Scoring page especially, where
+     re-opening the popup is routine, that replay made the card feel like it
+     was popping up "again and again" for no new reason.
+     A genuinely NEW job id (one this widget hasn't shown the card for yet)
+     still gets its own three-second intro.
 
-     The timer keys off `isMinimized` alone, deliberately NOT off
-     `activeScoringJobs`: that changes on every progress tick, and the cleanup
-     would cancel and restart the timer each time, leaving the card up forever. */
+     Keyed on the SET of job ids, not the `activeScoringJobs` array itself:
+     that array gets a new reference on every progress tick, and keying on it
+     directly would restart the timer on every tick, leaving the card up
+     forever during an active run. */
   const [shrunk, setShrunk] = useState(false);
+  const introShownForJobId = useRef<Set<string>>(new Set());
+  const jobIdsKey = activeScoringJobs.map(job => job.jobId).sort().join(',');
   useEffect(() => {
     if (!isMinimized) {
       setShrunk(false);
       return;
     }
-    const timer = setTimeout(() => setShrunk(true), 3000);
+    const currentIds = jobIdsKey ? jobIdsKey.split(',') : [];
+    const hasNewJob = currentIds.some(id => !introShownForJobId.current.has(id));
+    if (!hasNewJob) {
+      setShrunk(true);
+      return;
+    }
+    // A new job arriving while already shrunk (e.g. a run synced in mid-flight
+    // from another tab/page) still gets its card — without this it would stay
+    // on the round button and the timer below would fire into a no-op.
+    setShrunk(false);
+    const timer = setTimeout(() => {
+      currentIds.forEach(id => introShownForJobId.current.add(id));
+      setShrunk(true);
+    }, 3000);
     return () => clearTimeout(timer);
-  }, [isMinimized]);
+  }, [isMinimized, jobIdsKey]);
 
-  /* A minimise gesture always starts the sequence over, even if the widget was
-     already sitting shrunk from an earlier run. Fired on the panel's open →
-     closed EDGE, not on every render. */
+  /* Hovering the shrunk round button previews the same card it shrank from —
+     a transient reveal, not a real un-shrink, so it never touches `shrunk`
+     (which the timer above owns) or the "already shown" tracking. Moving off
+     the button snaps straight back to the dot. */
+  const [isHoveringShrunk, setIsHoveringShrunk] = useState(false);
+
+  /* Still needed independent of the card/shrunk timing above: when a panel
+     that was open just closed, the widget needs to switch into its own
+     "minimized" mode at all (`isMinimized` context flag) — otherwise nothing
+     here would render. Which of the card/shrunk forms that lands on is
+     decided entirely by the effect above now. */
   const wasMainPanelOpen = useRef(isMainPanelOpen);
   useEffect(() => {
     const justMinimised = wasMainPanelOpen.current && !isMainPanelOpen;
     wasMainPanelOpen.current = isMainPanelOpen;
     if (!justMinimised) return;
     setMinimized(true);
-    setShrunk(false);
   }, [isMainPanelOpen, setMinimized]);
 
   /* There is deliberately no auto-dismiss. This widget used to clear itself ten
@@ -67,6 +124,31 @@ export default function GlobalScoringProgressIndicator() {
   // Don't render if no active or recent jobs
   if (activeScoringJobs.length === 0) {
     return null;
+  }
+
+  // The standalone popup takes over regardless of anything else — there's
+  // nothing else for this widget to show while it's up.
+  if (showGlobalModal) {
+    return (
+      <BulkScoringProgressModal
+        progressData={activeScoringJobs.flatMap(toModalItems)}
+        showJobTitleColumn
+        showJobColumns={activeScoringJobs.length > 1}
+        showScoreColumn
+        onClose={() => {
+          setShowGlobalModal(false);
+          // Only settled jobs — anything still queued/processing keeps running
+          // and stays reachable from the widget after this closes.
+          activeScoringJobs.forEach(job => {
+            if (job.queued === 0 && job.processing === 0) clearJob(job.jobId);
+          });
+        }}
+        onMinimize={() => {
+          setShowGlobalModal(false);
+          setMinimized(true);
+        }}
+      />
+    );
   }
 
   // Don't render if the main scoring panel is open (center popup is visible)
@@ -108,41 +190,85 @@ export default function GlobalScoringProgressIndicator() {
   /* Restoring is the same gesture from the card and from the round button, but
      it means two different things depending on where you are.
 
-     The full progress popup is `BulkScoringProgressModal`, and it is rendered by
-     whichever screen OWNS the run's data — the Resume Scoring page, or the
-     source picker that dispatched it. Those register `onRestorePanel` while they
-     are mounted, so on that screen this simply reopens the popup in place.
+     The full progress popup is `BulkScoringProgressModal`, and whichever
+     screen OWNS the run's data — the Resume Scoring page, or the source
+     picker that dispatched it — registers `onRestorePanel` while it is
+     mounted, so on that screen this simply reopens ITS popup in place.
 
-     Anywhere else in the app that popup does not exist to be reopened. Rather
-     than expanding this widget's own small panel and leaving the recruiter to
-     find their way back, go to the run's page and have it open the popup on
-     arrival — `show_progress` is the parameter that page already reads for
-     exactly this. `returnUrl` is where the run was started from, recorded when
-     the job was registered. */
+     Anywhere else, there is no page-owned popup to reopen — but the run's
+     full item list already lives in the shared context, so this widget just
+     builds and shows the same popup itself (`showGlobalModal` below) instead
+     of navigating the recruiter away to go find it. */
   const restore = () => {
     if (onRestorePanel) {
       onRestorePanel();
       return;
     }
-    const job = activeScoringJobs[0];
-    if (job) {
-      const target = job.returnUrl
-        ? `${job.returnUrl}${job.returnUrl.includes('?') ? '&' : '?'}show_progress=true`
-        : `/recruitment/resume-scoring?jd_id=${encodeURIComponent(job.jobId)}&show_progress=true`;
-      router.push(target);
-      return;
-    }
-    setMinimized(false);
+    setShowGlobalModal(true);
   };
+
+  /* Shared between the persistent card (isMinimized && !shrunk) and the
+     hover-preview of it (isMinimized && shrunk && isHoveringShrunk) — same
+     run, same content, so it's built once instead of kept in sync twice. */
+  const cardClassName = `fixed bottom-6 right-6 z-[10050] text-white px-4 py-3 rounded-xl shadow-2xl transition-all cursor-pointer flex items-center gap-3 border max-w-xs ${
+    isAllFailed ? 'bg-red-700 hover:bg-red-800 border-red-600' : 'bg-gray-900 hover:bg-gray-800 border-gray-700'
+  }`;
+  const cardBody = (
+    <>
+      <div className="relative flex-shrink-0">
+        <ClipboardList className="w-5 h-5" />
+        {hasActiveScoring && (
+          <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-500 rounded-full animate-pulse" />
+        )}
+      </div>
+      <div className="flex-1 min-w-0">
+        <p className="text-sm font-semibold truncate">{isAllFailed ? 'Scoring Failed' : 'Scoring Progress'}</p>
+        <p className="text-xs text-gray-300">
+          {isAllFailed
+            ? `${totalStats.failed} resume${totalStats.failed !== 1 ? 's' : ''} could not be scored`
+            : isAllComplete
+            ? `Complete: ${totalStats.completed} scored${totalStats.failed > 0 ? `, ${totalStats.failed} failed` : ''}`
+            : `${totalStats.completed}/${totalStats.total} (${overallProgress}%)`
+          }
+        </p>
+      </div>
+      <div className="w-12 h-1.5 bg-gray-700 rounded-full overflow-hidden flex-shrink-0">
+        <div
+          className={`h-full transition-[width] duration-300 ease-out ${isAllFailed ? 'bg-red-400' : isAllComplete ? 'bg-green-500' : 'bg-blue-500'}`}
+          style={{ width: `${overallProgress}%` }}
+        />
+      </div>
+      <Maximize2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
+    </>
+  );
 
   /* Smallest form: the round progress button. The ring IS the progress — a
      conic gradient rather than a nested SVG, so the whole control is one
-     element and the percentage has no second source of truth. */
+     element and the percentage has no second source of truth.
+
+     Hovering it previews the card it shrank from (`isHoveringShrunk`) — a
+     transient reveal that never touches `shrunk` itself, so moving the
+     pointer away snaps straight back to the dot instead of restarting the
+     three-second auto-shrink. */
   if (isMinimized && shrunk) {
+    if (isHoveringShrunk) {
+      return (
+        <div
+          className={`${cardClassName} animate-in fade-in zoom-in-95 duration-150`}
+          onClick={restore}
+          onMouseEnter={() => setIsHoveringShrunk(true)}
+          onMouseLeave={() => setIsHoveringShrunk(false)}
+        >
+          {cardBody}
+        </div>
+      );
+    }
     return (
       <button
         type="button"
         onClick={restore}
+        onMouseEnter={() => setIsHoveringShrunk(true)}
+        onMouseLeave={() => setIsHoveringShrunk(false)}
         aria-label={
           isAllComplete
             ? `Scoring complete, ${totalStats.completed} scored. Open progress.`
@@ -168,35 +294,10 @@ export default function GlobalScoringProgressIndicator() {
   if (isMinimized) {
     return (
       <div
-        className={`fixed bottom-6 right-6 z-[10050] text-white px-4 py-3 rounded-xl shadow-2xl transition-all cursor-pointer flex items-center gap-3 animate-in slide-in-from-bottom duration-300 border max-w-xs ${
-          isAllFailed ? 'bg-red-700 hover:bg-red-800 border-red-600' : 'bg-gray-900 hover:bg-gray-800 border-gray-700'
-        }`}
+        className={`${cardClassName} animate-in slide-in-from-bottom duration-300`}
         onClick={restore}
       >
-        <div className="relative flex-shrink-0">
-          <ClipboardList className="w-5 h-5" />
-          {hasActiveScoring && (
-            <span className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-blue-500 rounded-full animate-pulse" />
-          )}
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold truncate">{isAllFailed ? 'Scoring Failed' : 'Scoring Progress'}</p>
-          <p className="text-xs text-gray-300">
-            {isAllFailed
-              ? `${totalStats.failed} resume${totalStats.failed !== 1 ? 's' : ''} could not be scored`
-              : isAllComplete
-              ? `Complete: ${totalStats.completed} scored${totalStats.failed > 0 ? `, ${totalStats.failed} failed` : ''}`
-              : `${totalStats.completed}/${totalStats.total} (${overallProgress}%)`
-            }
-          </p>
-        </div>
-        <div className="w-12 h-1.5 bg-gray-700 rounded-full overflow-hidden flex-shrink-0">
-          <div
-            className={`h-full transition-[width] duration-300 ease-out ${isAllFailed ? 'bg-red-400' : isAllComplete ? 'bg-green-500' : 'bg-blue-500'}`}
-            style={{ width: `${overallProgress}%` }}
-          />
-        </div>
-        <Maximize2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
+        {cardBody}
       </div>
     );
   }
