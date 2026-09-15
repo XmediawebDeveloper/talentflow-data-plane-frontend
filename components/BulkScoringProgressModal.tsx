@@ -6,6 +6,7 @@ import api from '@/lib/services/api';
 import { toast } from 'sonner';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
+import { formatOverallScore } from '@/lib/utils/matchStatus';
 
 // Utility function to format date to IST (Asia/Kolkata timezone)
 function formatDateTimeIST(date: Date | string | undefined): { date: string; time: string } {
@@ -42,6 +43,9 @@ export interface ScoringProgressItem {
   scoredDateTime?: Date;
   matchResult?: 'Exact Match' | 'Partial Match' | 'No Match';
   score?: number;
+  // Resume Match Rating Mechanism (client doc, Sept 2026): the 0-10 Overall
+  // Rating shown instead of `score`(%) - see formatOverallScore().
+  overallRating10?: number;
 }
 
 // Score text colours, matched to the three Match Result badge colours so the
@@ -992,7 +996,7 @@ export default function BulkScoringProgressModal({
                             {/* Same three colours the Match Result badge uses,
                                 so the number and the verdict read as one. */}
                             {item.score !== undefined && item.matchResult ? (
-                              <span className={SCORE_TEXT_CLASS[item.matchResult]}>{item.score}%</span>
+                              <span className={SCORE_TEXT_CLASS[item.matchResult]}>{formatOverallScore(item.overallRating10, item.score)}</span>
                             ) : (
                               <span className="text-sm text-gray-400 dark:text-slate-500">&mdash;</span>
                             )}
@@ -1096,7 +1100,7 @@ export default function BulkScoringProgressModal({
                       </div>
                       {item.matchResult ? getMatchResultBadge(item.matchResult, item.score) : null}
                       {showScoreColumn && item.score !== undefined && item.matchResult && (
-                        <span className={SCORE_TEXT_CLASS[item.matchResult]}>{item.score}%</span>
+                        <span className={SCORE_TEXT_CLASS[item.matchResult]}>{formatOverallScore(item.overallRating10, item.score)}</span>
                       )}
                       {item.resumeId && (
                         <button

@@ -901,6 +901,7 @@ export default function ResumeScoringPage({
         phone: item.phone || '',
         matchStatus: item.match_status || 'No Match',
         scorePercentage: Math.round(item.overall_score || 0),
+        overallRating10: item.overall_rating_10,
         scoredDate: item.created_at || new Date().toISOString(),
         scoredBy: item.scored_by_name || item.scored_by || 'AI Engine',
         // Source, Status, Error Reason fields
@@ -1803,6 +1804,7 @@ export default function ResumeScoringPage({
         phone: resume.phone || 'N/A',
         matchStatus: matchStatus,
         scorePercentage: Math.round(scoreValue),
+        overallRating10: resume.overall_rating_10,
         // Keep ISO string for timestamp - let display component format it
         scoredDate: resume.scoredDate || resume.created_at || scoredData.scoredAt,
         // Use scored_by_name from API for recruiter attribution

@@ -165,6 +165,9 @@ export interface BatchScoringItem {
   status: 'queued' | 'processing' | 'completed' | 'failed';
   score_id?: string;
   overall_score?: number;
+  // Resume Match Rating Mechanism (client doc, Sept 2026): the 0-10 Overall
+  // Rating for a completed item's progress row.
+  overall_rating_10?: number;
   match_status?: string;
   error_message?: string;
 }
@@ -201,6 +204,9 @@ export const scoringService = {
       candidate_name: string;
       candidate_email: string;
       overall_score: number;
+      // Resume Match Rating Mechanism (client doc, Sept 2026): the 0-10
+      // Overall Rating shown in the "already scored" warning message.
+      overall_rating_10?: number;
       match_status: string;
       scored_at: string | null;
     }>;
