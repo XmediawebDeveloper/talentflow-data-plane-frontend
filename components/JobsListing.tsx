@@ -1,7 +1,7 @@
 'use client'
 
 import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList } from 'lucide-react';
+import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList, Layers } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -1189,7 +1189,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 return (
                   <div
                     key={job.id}
-                    className={`relative bg-white rounded-xl border transition-[transform,box-shadow,border-color] duration-150 cursor-pointer ${activeDropdown === job.id ? 'z-30' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
+                    className={`relative bg-white rounded-xl border transition-[transform,box-shadow,border-color] duration-150 cursor-pointer h-full flex flex-col ${activeDropdown === job.id ? 'z-30' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
                     onClick={() => job.status.toLowerCase() === 'draft' && onEditJob ? onEditJob(job) : onViewJob(job)}
                   >
                     {/* Card Header */}
@@ -1245,54 +1245,59 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     </div>
 
                     {/* Card Body */}
-                    <div className="p-4">
+                    <div className="p-4 flex-1 flex flex-col">
+                      <div className="flex-1">
                       <div className="space-y-2 mb-4">
                         {job.department && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Briefcase className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            <span className="truncate">{job.department}</span>
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <span className="flex items-center gap-2 text-gray-500">
+                              <Layers className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              Department
+                            </span>
+                            <span className="font-medium text-gray-800 truncate">{job.department}</span>
                           </div>
                         )}
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                          <span className="truncate">{formatIndustryType(job.industry_type)}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                          <span className="truncate">{job.location && job.location.trim() ? job.location : '-'}</span>
-                        </div>
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Briefcase className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                          <span className="truncate">{formatEmploymentType(job.employmentType)}</span>
+                        <div className="flex items-center justify-between gap-2 text-sm">
+                          <span className="flex items-center gap-2 text-gray-500">
+                            <Briefcase className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                            Employment Type
+                          </span>
+                          <span className="font-medium text-gray-800 truncate">{formatEmploymentType(job.employmentType)}</span>
                         </div>
                         {(job as any).workMode && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Users className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            <span className="capitalize">{(job as any).workMode}</span>
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <span className="flex items-center gap-2 text-gray-500">
+                              <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              Workplace
+                            </span>
+                            <span className="font-medium text-gray-800 capitalize truncate">{(job as any).workMode}</span>
                           </div>
                         )}
                         {job.experience && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <TrendingUp className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            <span>{job.experience}</span>
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <span className="flex items-center gap-2 text-gray-500">
+                              <TrendingUp className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              Experience
+                            </span>
+                            <span className="font-medium text-gray-800">{job.experience}</span>
                           </div>
                         )}
                         {job.postedDate && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            <span>Posted {formatISTDate(job.postedDate)}</span>
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <span className="flex items-center gap-2 text-gray-500">
+                              <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              Posted Date
+                            </span>
+                            <span className="font-medium text-gray-800">{formatISTDate(job.postedDate)}</span>
                           </div>
                         )}
                         {job.postedBy && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            <span className="truncate">By {job.postedBy}</span>
-                          </div>
-                        )}
-                        {job.updated_at && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Clock className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            <span className="truncate">Last Updated: {formatLastUpdated(job.updated_at)}</span>
+                          <div className="flex items-center justify-between gap-2 text-sm">
+                            <span className="flex items-center gap-2 text-gray-500">
+                              <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                              Created By
+                            </span>
+                            <span className="font-medium text-gray-800 truncate">{job.postedBy}</span>
                           </div>
                         )}
                       </div>
@@ -1300,14 +1305,14 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                       {/* Salary & Skills Info */}
                       <div className="space-y-2 mb-4">
                         {(job as any).salary && (
-                          <div className="flex items-center gap-2 px-3 py-1.5 bg-green-50 rounded-lg">
-                            <DollarSign className="w-4 h-4 text-green-600" />
-                            <span className="text-sm text-green-700">{(job as any).salary}</span>
+                          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg">
+                            <DollarSign className="w-4 h-4 text-gray-500" />
+                            <span className="text-sm text-gray-700">{(job as any).salary}</span>
                           </div>
                         )}
                         {((job as any).mustHaveSkills?.length > 0 || (job as any).niceToHaveSkills?.length > 0) && (
-                          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-100 rounded-lg">
-                            <Target className="w-4 h-4 text-gray-700" />
+                          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg">
+                            <Target className="w-4 h-4 text-gray-500" />
                             <span className="text-sm text-gray-700">
                               {(job as any).mustHaveSkills?.length || 0} required + {(job as any).niceToHaveSkills?.length || 0} preferred skills
                             </span>
@@ -1315,40 +1320,33 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                         )}
                       </div>
 
-                      {/* Applicants */}
-                      <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg mb-4">
-                        <Users className="w-4 h-4 text-gray-600" />
-                        <span className="text-sm text-gray-700">
+                      {/* Updated + Applicants footer line */}
+                      <div className="flex items-center justify-between gap-2 text-xs text-gray-500 mb-4">
+                        <span className="truncate">
+                          {job.updated_at ? `Updated ${formatLastUpdated(job.updated_at)}` : ''}
+                        </span>
+                        <span className="font-medium text-gray-600 flex-shrink-0">
                           {job.applicants} {job.applicants === 1 ? 'applicant' : 'applicants'}
                         </span>
                       </div>
+                      </div>
 
                       {/* Actions */}
-                      <div className="flex flex-wrap gap-2 items-center">
+                      <div className="flex items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
                         {/* Edit Button - icon only (hidden for Disabled JDs) */}
                         {onEditJob && !['disabled', 'archived'].includes(job.status.toLowerCase()) && (
                           <button
                             onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
-                            className="p-2.5 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
+                            className="flex-shrink-0 p-2.5 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
                             aria-label="Edit" title="Edit"
                           >
                             <Edit className="w-4 h-4" />
                           </button>
                         )}
 
-                        {/* View Button - icon only, hide for Draft */}
-                        {job.status.toLowerCase() !== 'draft' && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onViewJob(job); }}
-                            className="p-2.5 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
-                            aria-label="View" title="View"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
-                        )}
-
                         {/* Three-dot Menu - Grid View */}
-                        <div className="relative">
+                        <div className="relative flex-shrink-0">
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -1472,6 +1470,16 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                             </div>
                           )}
                         </div>
+                      </div>
+
+                        {/* View JD - primary action, always available (including Draft) */}
+                        <button
+                          onClick={(e) => { e.stopPropagation(); onViewJob(job); }}
+                          className="flex-shrink-0 flex items-center justify-center gap-1.5 px-4 py-2.5 bg-brand-blue text-white text-sm font-medium rounded-lg hover:bg-brand-blue/90 transition-all"
+                        >
+                          View JD
+                          <span aria-hidden="true">&rarr;</span>
+                        </button>
                       </div>
                     </div>
                   </div>

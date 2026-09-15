@@ -4,6 +4,33 @@
 
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
 
+/**
+ * Normalizes a scoring batch/item status string from the backend into one of
+ * the four states this app actually branches on.
+ *
+ * This file's own type declarations disagree with each other on the batch
+ * vocabulary — `BatchScoringItem.status` is typed `'queued' | 'processing' |
+ * 'completed' | 'failed'` while `BatchScoringStatus.status` (the aggregate
+ * field on the SAME response) is typed `'pending' | 'processing' |
+ * 'completed' | 'failed'` — which means the real API contract for these
+ * fields was never pinned down consistently. Every poll loop across the app
+ * used to compare the raw string with exact `===` checks (`item.status ===
+ * 'processing'`); if the backend ever sends a value outside the exact set
+ * each call site guessed at (different casing, `pending`/`in_progress`
+ * instead of `queued`/`processing`, etc.) NONE of the branches match and the
+ * item's displayed status silently never advances past its initial "Queued"
+ * — indistinguishable from a genuinely stuck backend, but purely a frontend
+ * string-matching gap. Route every status read through this instead of a
+ * bare `===` chain.
+ */
+export function normalizeScoringStatus(raw: string | null | undefined): 'queued' | 'processing' | 'completed' | 'failed' {
+  const s = (raw || '').toLowerCase().trim();
+  if (['completed', 'complete', 'success', 'succeeded', 'done', 'scored'].includes(s)) return 'completed';
+  if (['failed', 'failure', 'error', 'errored'].includes(s)) return 'failed';
+  if (['processing', 'in_progress', 'in-progress', 'inprogress', 'running', 'started', 'active'].includes(s)) return 'processing';
+  return 'queued'; // 'queued', 'pending', 'not_started', empty/unknown — all treated as not-yet-started
+}
+
 export interface ScoreBreakdownItem {
   category: string;
   rating: number;

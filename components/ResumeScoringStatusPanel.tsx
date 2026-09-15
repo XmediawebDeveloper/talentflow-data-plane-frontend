@@ -1,7 +1,7 @@
 "use client";
 
 import { CheckCircle2, Loader2, XCircle, ClipboardList, TrendingUp, Clock, AlertCircle, RefreshCw, History, Minus } from 'lucide-react';
-import { useState, useEffect, useRef, Fragment } from 'react';
+import { useState, useEffect, useRef, useId, Fragment } from 'react';
 import { useRouter } from 'next/navigation';
 import { scoringService } from '@/lib/services';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
@@ -115,7 +115,10 @@ export default function ResumeScoringStatusPanel({
   const router = useRouter();
 
   // Use global scoring progress context for persistence across pages
-  const { startScoringJob, updateItemStatus, setMainPanelOpen } = useScoringProgress();
+  const { startScoringJob, updateItemStatus, setPanelVisibility } = useScoringProgress();
+  // Stable per-instance id for the ref-counted panel-visibility registry —
+  // see `setPanelVisibility` on ScoringProgressContext.
+  const panelOwnerId = useId();
 
   const [scoringResumes, setScoringResumes] = useState<ScoringResume[]>(
     resumes.map(r => ({
@@ -178,11 +181,11 @@ export default function ResumeScoringStatusPanel({
 
   // Track main panel open state - hide floating indicator when this panel is visible (not minimized)
   useEffect(() => {
-    setMainPanelOpen(!isMinimized);
+    setPanelVisibility(panelOwnerId, !isMinimized);
     return () => {
-      setMainPanelOpen(false);
+      setPanelVisibility(panelOwnerId, false);
     };
-  }, [setMainPanelOpen, isMinimized]);
+  }, [setPanelVisibility, panelOwnerId, isMinimized]);
 
   // Initialize global scoring progress context on mount
   useEffect(() => {

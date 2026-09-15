@@ -69,7 +69,7 @@ interface BulkScoringProgressModalProps {
   /** Add a Scored By column, immediately before Scored Date & Time. */
   showScoredByColumn?: boolean;
   onRetryFailed?: (item: ScoringProgressItem) => Promise<void>; // Added: Retry failed individual
-  onMinimize?: () => void; // Called when user minimizes — parent should call setMainPanelOpen(false)
+  onMinimize?: () => void; // Called when user minimizes — parent should release its panel-visibility registration
   /**
    * Re-pull the rows behind this popup. Renders a refresh button beside close
    * when given, and nothing when not — a button that cannot refresh anything is
@@ -669,28 +669,6 @@ export default function BulkScoringProgressModal({
             </div>
           )}
         </div>
-
-        {/* Preparing State - Show when all are queued and nothing started */}
-        {totalResumes > 0 && queuedCount === totalResumes && inProgressCount === 0 && completedCount === 0 && (
-          <div className="p-4 sm:p-6 border-b border-gray-100 dark:border-slate-700/60 bg-brand-blue/5 shrink-0">
-            <div className="flex items-center justify-center gap-4">
-              <div className="relative">
-                <div className="w-14 h-14 bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-full flex items-center justify-center">
-                  <Loader2 className="w-7 h-7 text-brand-blue animate-spin" />
-                </div>
-                <div className="absolute -top-1 -right-1 w-5 h-5 bg-brand-blue ring-1 ring-white/10 shadow shadow-brand-blue/25 rounded-full flex items-center justify-center animate-pulse">
-                  <span className="text-white text-xs font-bold">{totalResumes}</span>
-                </div>
-              </div>
-              <div className="text-center">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">Preparing Resumes for Scoring...</h3>
-                <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">
-                  Setting up {totalResumes} {totalResumes === 1 ? 'resume' : 'resumes'} for AI analysis
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
 
         {/* Filters — Search/Status/Source and the "Filters" toggle all sit on
             one line: each field is label-beside-control (not stacked) with a
