@@ -537,8 +537,20 @@ export function useInterviewProctoringMonitor({
         console.error('[INTERVIEW_PROCTORING] Video worker error:', err);
       };
 
-      // Create hidden video + canvas for frame capture
+      // Create hidden video + canvas for frame capture. Appended to the DOM
+      // (off-screen) rather than left detached — a detached <video> playing a
+      // MediaStream can have its frame decoding throttled/frozen by the
+      // browser (no compositor driving it), which would silently freeze this
+      // obstruction-detection loop on one stale frame for the whole
+      // interview. Same root cause found and fixed for the share-bar capture
+      // in CandidateAIInterviewPortal.tsx. Removed again in the cleanup below.
       videoRef.current = document.createElement('video');
+      videoRef.current.style.position = 'fixed';
+      videoRef.current.style.left = '-99999px';
+      videoRef.current.style.top = '0';
+      videoRef.current.style.width = '2px';
+      videoRef.current.style.height = '2px';
+      document.body.appendChild(videoRef.current);
       videoRef.current.srcObject = currentStream;
       videoRef.current.muted = true;
       videoRef.current.play();
@@ -1215,7 +1227,7 @@ export function useInterviewProctoringMonitor({
     return () => {
       clearTimeout(timer);
       if (videoIntervalRef.current) { clearInterval(videoIntervalRef.current); videoIntervalRef.current = null; }
-      if (videoRef.current) { videoRef.current.srcObject = null; videoRef.current = null; }
+      if (videoRef.current) { try { videoRef.current.remove(); } catch { /* ignore */ } videoRef.current.srcObject = null; videoRef.current = null; }
       canvasRef.current = null;
       if (videoWorkerRef.current) { videoWorkerRef.current.terminate(); videoWorkerRef.current = null; }
     };
