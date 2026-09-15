@@ -88,6 +88,13 @@ interface MatchHistory {
   matchedAt: Date;
   totalMatches: number;
   matchedCandidates: MatchedCandidateWithVersions[];
+  // Carried from the session's server-side join to job_descriptions — used
+  // as a fallback when `jobData` (looked up from the page's capped `jobs`
+  // list) can't find the job, e.g. an older/superseded republished version.
+  jdJobId?: string;
+  jdStatus?: string;
+  jdDepartment?: string;
+  jdCurrentVersion?: number;
 }
 
 /** Set just before leaving for a resume, so returning keeps the active filters. */
@@ -3536,10 +3543,15 @@ export default function AITalentMatchPage({
             <div className="grid gap-3 sm:gap-4">
             {sortedHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage).map((item) => {
               const jobData = jobs.find(j => j.id === item.jobId);
+              // Fall back to the session's own joined job fields when the job
+              // isn't in this page's capped `jobs` list (see MatchHistory.jdJobId).
+              const jobIdCode = jobData?.jobId || item.jdJobId;
+              const currentVersion = jobData?.currentVersion ?? item.jdCurrentVersion;
+              const department = jobData?.department || item.jdDepartment;
               // Version history is cached/keyed by the human JD-xxx code, not
               // this row's id — every republished version of the same job
               // shares one history key so their runs aren't split across cards.
-              const historyKey = jobData?.jobId || item.jobId;
+              const historyKey = jobIdCode || item.jobId;
 
               return (
                 <div
@@ -3561,8 +3573,8 @@ export default function AITalentMatchPage({
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
-                          {jobData?.jobId && (
-                            <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{jobData.jobId}</JobIdBadge>
+                          {jobIdCode && (
+                            <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{jobIdCode}</JobIdBadge>
                           )}
                           <h3
                             className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 truncate min-w-0 group-hover:text-brand-blue transition-colors"
@@ -3570,23 +3582,23 @@ export default function AITalentMatchPage({
                           >
                             {item.jobTitle}
                           </h3>
-                          {jobData?.currentVersion && (
+                          {currentVersion && (
                             <span className={`inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs gap-1.5 border flex-shrink-0 ${
-                              jobData.currentVersion > 1
+                              currentVersion > 1
                                 ? 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20'
                                 : 'bg-green-50 text-green-700 border-green-200'
                             }`}>
-                              <div className={`w-1.5 h-1.5 rounded-full ${jobData.currentVersion > 1 ? 'bg-brand-orange' : 'bg-green-500'}`}></div>
-                              {jobData.currentVersion > 1 ? 'Republished' : 'Published'}
+                              <div className={`w-1.5 h-1.5 rounded-full ${currentVersion > 1 ? 'bg-brand-orange' : 'bg-green-500'}`}></div>
+                              {currentVersion > 1 ? 'Republished' : 'Published'}
                             </span>
                           )}
-                          {jobData?.currentVersion && (
+                          {currentVersion && (
                             <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
                               <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
-                              v{jobData.currentVersion}
+                              v{currentVersion}
                             </span>
                           )}
-                          <JDVersionHistory jdId={item.jobId} version={jobData?.currentVersion} />
+                          <JDVersionHistory jdId={item.jobId} version={currentVersion} />
                           {/* Match History — every run across this job's whole
                               lineage, with the Exact/Partial/No Match roll-up
                               Resume Scoring's own History icon opens. */}
@@ -3599,10 +3611,10 @@ export default function AITalentMatchPage({
                           </button>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
-                        {jobData?.department && (
+                        {department && (
                           <span className="flex items-center gap-1.5">
                             <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                            {jobData.department}
+                            {department}
                           </span>
                         )}
                         {jobData?.industryType && (
