@@ -1717,10 +1717,29 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     // dark-gradient styling in `finally`.
     const pageEl = shareBarPageRef.current;
     const prevPageBg = pageEl?.style.background;
+    // ROOT CAUSE (found via a real capture that showed the candidate's OWN
+    // card — including leftover error text from a PRIOR blocked attempt —
+    // instead of the hidden-card/white-background state, even after the wait
+    // below): this <video> element was created with document.createElement
+    // but never attached to the DOM. An off-DOM <video> playing a
+    // MediaStream can have its frame decoding throttled/frozen by the
+    // browser (no compositor is driving it), so drawImage() below painted
+    // whichever frame happened to be buffered near attach time — NOT a live
+    // frame reflecting the hide/white-bg change — no matter how long we
+    // waited afterward. Fix: keep it in the real render tree (off-screen,
+    // 2x2px, fixed position) so decoding stays live, and wait for actual
+    // NEW decoded frames (requestVideoFrameCallback) rather than a fixed
+    // wall-clock delay. Removed from the DOM again in `finally`.
+    const video = document.createElement('video');
+    video.muted = true;
+    (video as HTMLVideoElement).playsInline = true;
+    video.style.position = 'fixed';
+    video.style.left = '-99999px';
+    video.style.top = '0';
+    video.style.width = '2px';
+    video.style.height = '2px';
+    document.body.appendChild(video);
     try {
-      const video = document.createElement('video');
-      video.muted = true;
-      (video as HTMLVideoElement).playsInline = true;
       video.srcObject = stream;
       try { await video.play(); } catch { /* ignore */ }
       await new Promise<void>((resolve) => {
@@ -1755,7 +1774,28 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
 
       // Page background WHITE for the capture.
       if (pageEl) pageEl.style.background = '#ffffff';
-      if (hideEls.length || pageEl) await new Promise<void>((r) => window.setTimeout(r, 250));
+      if (hideEls.length || pageEl) {
+        // Wait for ACTUAL new decoded frames, not a fixed wall-clock delay —
+        // that's what silently failed before (see root-cause comment above).
+        // requestVideoFrameCallback is Chromium-only, which matches this
+        // step's existing Chromium-only scope (the hideable sharing bar
+        // itself only exists in Chrome/Edge). Two callbacks for margin: the
+        // first one to arrive after our DOM change may already have been
+        // in flight before we made it. Falls back to a longer fixed delay
+        // (800ms, well beyond the 250ms that was proven insufficient) if the
+        // API isn't available.
+        const rvfc = (video as unknown as { requestVideoFrameCallback?: (cb: () => void) => number }).requestVideoFrameCallback;
+        if (typeof rvfc === 'function') {
+          const waitFrame = () => new Promise<void>((resolve) => {
+            rvfc.call(video, () => resolve());
+            window.setTimeout(resolve, 400); // safety net per frame
+          });
+          await waitFrame();
+          await waitFrame();
+        } else {
+          await new Promise<void>((r) => window.setTimeout(r, 800));
+        }
+      }
       const frame = await grabFrame();
 
       try { video.pause(); } catch { /* ignore */ }
@@ -1766,6 +1806,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       // capture succeeded, returned null, or threw.
       restores.forEach((restore) => restore());
       if (pageEl) pageEl.style.background = prevPageBg ?? '';
+      try { video.remove(); } catch { /* ignore */ }
     }
   }, []);
 
