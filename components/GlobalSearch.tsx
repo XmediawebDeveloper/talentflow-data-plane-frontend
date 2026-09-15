@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { resumeService, folderService, Resume, Folder } from '@/lib/services/resumeService';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { assessmentService, AssessmentResponse } from '@/lib/services/assessmentService';
+import VersionBadge from '@/components/VersionBadge';
 import { aiInterviewService, AIInterviewResponse } from '@/lib/services/aiInterviewService';
 
 interface GlobalSearchProps {
@@ -268,6 +269,9 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                         <span className="font-medium text-sm text-gray-900 dark:text-gray-100">{jd.title}</span>
                         {jd.job_id && (
                           <span className="text-xs text-gray-400 dark:text-gray-500">{jd.job_id}</span>
+                        )}
+                        {!!(jd as any).version_number && (
+                          <VersionBadge version={(jd as any).version_number} size="sm" variant="secondary" />
                         )}
                       </div>
                       <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
