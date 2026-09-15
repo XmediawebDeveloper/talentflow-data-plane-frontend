@@ -56,7 +56,23 @@ interface ScoringProgressContextType {
   clearCompletedJobs: () => void;
   clearJob: (jobId: string) => void;
   setMinimized: (minimized: boolean) => void;
-  setMainPanelOpen: (open: boolean) => void;  // Track main panel visibility
+  /**
+   * Register/unregister this caller's own "a progress panel is visibly open"
+   * state, keyed by a caller-supplied owner id (use `useId()` so concurrent
+   * instances of the same component never collide).
+   *
+   * Three independent components (ResumeScoringPage, SelectSourceModal,
+   * ResumeScoringStatusPanel) each show their own BulkScoringProgressModal /
+   * status panel and each need to hide the global floating widget while
+   * theirs is on screen. They used to all call a single shared
+   * `setMainPanelOpen(open)` boolean directly — whichever one last ran its
+   * effect won, so one component's "my panel just closed" could silently
+   * clobber another's still-open panel and let the global widget and a real
+   * popup render at the same time (or leave the widget wrongly hidden after
+   * navigating away). Ref-counting by owner id means `isMainPanelOpen` is
+   * true whenever ANY owner reports open, regardless of the others' timing.
+   */
+  setPanelVisibility: (ownerId: string, open: boolean) => void;
   getJobProgress: (jobId: string) => ScoringJob | undefined;
   onRestorePanel?: () => void;  // Callback to restore minimized panel
   setOnRestorePanel: (callback: (() => void) | undefined) => void;
@@ -72,7 +88,10 @@ const ScoringProgressContext = createContext<ScoringProgressContextType | undefi
 export function ScoringProgressProvider({ children }: { children: React.ReactNode }) {
   const [activeScoringJobs, setActiveScoringJobs] = useState<ScoringJob[]>([]);
   const [isMinimized, setIsMinimized] = useState(true);
-  const [isMainPanelOpen, setIsMainPanelOpen] = useState(false);  // Track if center panel is open
+  // Ref-counted by owner id (see `setPanelVisibility` on the context type for
+  // why this isn't a single shared boolean anymore).
+  const [openPanelOwners, setOpenPanelOwners] = useState<Set<string>>(new Set());
+  const isMainPanelOpen = openPanelOwners.size > 0;
   const [onRestorePanel, setOnRestorePanelState] = useState<(() => void) | undefined>(undefined);
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -121,28 +140,57 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
   const hasActiveScoring = activeScoringJobs.some(job => job.queued > 0 || job.processing > 0);
 
   const startScoringJob = useCallback((jobId: string, jobTitle: string, items: Omit<ScoringProgressItem, 'status'>[], returnUrl?: string) => {
-    const newJob: ScoringJob = {
-      jobId,
-      jobTitle,
-      total: items.length,
-      queued: items.length,
-      processing: 0,
-      completed: 0,
-      failed: 0,
-      startedAt: new Date().toISOString(),
-      items: items.map(item => ({ ...item, status: 'Queued' as const })),
-      returnUrl,
-    };
+    const newItems: ScoringProgressItem[] = items.map(item => ({ ...item, status: 'Queued' as const }));
 
     setActiveScoringJobs(prev => {
-      // Check if job already exists, update it
       const existingIndex = prev.findIndex(j => j.jobId === jobId);
-      if (existingIndex >= 0) {
-        const updated = [...prev];
-        updated[existingIndex] = newJob;
-        return updated;
+      if (existingIndex < 0) {
+        const newJob: ScoringJob = {
+          jobId,
+          jobTitle,
+          total: newItems.length,
+          queued: newItems.length,
+          processing: 0,
+          completed: 0,
+          failed: 0,
+          startedAt: new Date().toISOString(),
+          items: newItems,
+          returnUrl,
+        };
+        return [...prev, newJob];
       }
-      return [...prev, newJob];
+
+      /* Merge into the EXISTING job rather than replacing it outright.
+         Scoring a second resume against the same JD later in the same
+         session calls this again for the same `jobId` — replacing the whole
+         job object wiped out every item from the first run, which is why the
+         popup showed only the newest resume and the previous one's row
+         vanished. Items already tracked are kept; a re-registered item id
+         (same resume, re-scored) is reset to Queued via the later `set()`
+         call overwriting the earlier one. */
+      const existing = prev[existingIndex];
+      // Defensive: a job persisted to localStorage by an older build, or one
+      // left in a partial state, might not have a well-formed `items` array —
+      // `.map` on that would throw synchronously inside this state updater
+      // and silently abort whatever else the caller does after this call.
+      const itemMap = new Map((Array.isArray(existing.items) ? existing.items : []).map(item => [item.id, item]));
+      newItems.forEach(item => itemMap.set(item.id, item));
+      const mergedItems = Array.from(itemMap.values());
+
+      const merged: ScoringJob = {
+        ...existing,
+        jobTitle,
+        items: mergedItems,
+        total: mergedItems.length,
+        queued: mergedItems.filter(i => i.status === 'Queued').length,
+        processing: mergedItems.filter(i => i.status === 'Scoring in progress').length,
+        completed: mergedItems.filter(i => i.status === 'Scored successfully').length,
+        failed: mergedItems.filter(i => i.status === 'Failed').length,
+        returnUrl: returnUrl || existing.returnUrl,
+      };
+      const updated = [...prev];
+      updated[existingIndex] = merged;
+      return updated;
     });
 
     // Show the progress indicator when starting a new job
@@ -213,8 +261,14 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
     return activeScoringJobs.find(job => job.jobId === jobId);
   }, [activeScoringJobs]);
 
-  const setMainPanelOpenFn = useCallback((open: boolean) => {
-    setIsMainPanelOpen(open);
+  const setPanelVisibility = useCallback((ownerId: string, open: boolean) => {
+    setOpenPanelOwners(prev => {
+      const has = prev.has(ownerId);
+      if (open === has) return prev; // no-op — keep the same Set reference
+      const next = new Set(prev);
+      if (open) next.add(ownerId); else next.delete(ownerId);
+      return next;
+    });
   }, []);
 
   const setOnRestorePanel = useCallback((callback: (() => void) | undefined) => {
@@ -233,7 +287,7 @@ export function ScoringProgressProvider({ children }: { children: React.ReactNod
       clearCompletedJobs,
       clearJob,
       setMinimized,
-      setMainPanelOpen: setMainPanelOpenFn,
+      setPanelVisibility,
       getJobProgress,
       onRestorePanel,
       setOnRestorePanel

@@ -30,7 +30,7 @@ import ResumeDetailView from './ResumeDetailView';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import CandidateResultDetails from './CandidateResultDetails';
 import { Resume } from '@/lib/types/types';
-import { scoringService } from '@/lib/services/scoringService';
+import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
 import { dispatchUnitsConsumed } from '@/lib/services/api';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { parseAssessmentTitle, isAssessmentRevoked, getLocallyRevokedAssessmentIds } from '@/lib/utils/assessmentUtils';
@@ -540,7 +540,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const searchParams = useSearchParams();
   const { available: aiTalentMatchAvailable } = usePlanFeature('ai_talent_match');
   const { hasPlanFeature } = usePlanFeatures();
-  const { startScoringJob, updateItemStatus, setMainPanelOpen } = useScoringProgress();
+  const { startScoringJob, updateItemStatus } = useScoringProgress();
 
   // ---- Read-only label helpers for the Extracted Data Summary dropdown ----
   const prettifyCode = (value?: string): string =>
@@ -1970,31 +1970,54 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
           items.forEach((item: any) => {
             const itemId = `${batchId}-${item.resume_id}`;
-            if (item.status === 'completed') {
+            const itemStatus = normalizeScoringStatus(item.status);
+            if (itemStatus === 'completed') {
               updateItemStatus(batchId, itemId, 'Scored successfully', {
                 score: item.overall_score,
                 scoredDateTime: new Date().toISOString(),
               });
-            } else if (item.status === 'failed') {
+            } else if (itemStatus === 'failed') {
               updateItemStatus(batchId, itemId, 'Failed', {
                 errorReason: item.error_message || 'Scoring failed',
               });
-            } else if (item.status === 'processing') {
+            } else if (itemStatus === 'processing') {
               updateItemStatus(batchId, itemId, 'Scoring in progress');
             }
           });
 
-          // Stop polling when batch is finished
-          if (status.status === 'completed' || status.status === 'failed') {
+          // Stop polling when batch is finished. `status.status` is the
+          // primary signal, but falls back to the counts settling — without
+          // this fallback a batch whose aggregate `status` string never
+          // flips (queued/processing already both 0) polled forever, stuck
+          // showing "Processing" with no way to close the popup.
+          const aggregateStatus = normalizeScoringStatus(status.status);
+          if (aggregateStatus === 'completed' || aggregateStatus === 'failed' ||
+              (status.queued === 0 && status.processing === 0)) {
             clearInterval(poll);
+            clearTimeout(pollTimeoutId);
             fetchScoredResumes();
             // Refresh header quota dropdown — RS deductions landed on CP
             dispatchUnitsConsumed();
           }
-        } catch {
-          clearInterval(poll);
+        } catch (pollError) {
+          // Was silently killing the interval on the FIRST failure, with no
+          // logging — a single transient network error (not even a real
+          // backend problem) permanently ended all future polling right
+          // after it started, leaving the widget stuck on "Queued" forever
+          // with nothing in the Network tab to explain why. Log and keep
+          // retrying instead; the 10-minute circuit breaker above is what
+          // eventually gives up if the backend is genuinely never going to
+          // respond.
+          console.error('[JobDetailView] Error polling batch status:', pollError);
         }
       }, 3000);
+
+      // Circuit breaker: stop polling after 10 minutes even if the backend
+      // never settles this batch, matching the same safeguard on the
+      // Resume-Scoring route's equivalent poll.
+      const pollTimeoutId = setTimeout(() => {
+        clearInterval(poll);
+      }, 600000);
     } catch (err: any) {
       toast.error(err?.message || 'Failed to start scoring');
     }
