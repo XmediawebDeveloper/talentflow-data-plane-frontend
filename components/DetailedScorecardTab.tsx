@@ -565,53 +565,13 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             <span className="text-gray-500">/10</span>
           </span>
         )}
+        {/* Required %/Preferred % and the old Required Avg Rating used to show
+            here too, but they duplicated Must-Have Avg/Nice-to-Have Avg/Overall
+            Rating above once the 10-point rating shipped - hidden per the
+            client's request, not removed: summaryData/essentialAverageValue
+            below are left computed and still feed nothing visible on purpose,
+            in case a future surface needs the weighted-% breakdown again. */}
         <span className="text-gray-400">|</span>
-        {summaryData && (
-          <>
-            <span className="text-gray-700 flex items-center gap-1">
-              Required: <span className="font-semibold text-gray-900">{summaryData.requiredPercentage.toFixed(0)}%</span>
-              <Tooltip
-                content={`Required (essential) criteria share 60% of the total, split equally: ${summaryData.requiredCount} criteria → ${summaryData.requiredWeightEach.toFixed(1)}% each. A criterion earns its full share at a rating of 7 or higher and nothing below. ${summaryData.requiredPassed} of ${summaryData.requiredCount} scored 7+ → ${summaryData.requiredPassed} × ${summaryData.requiredWeightEach.toFixed(1)}% = ${summaryData.requiredPercentage.toFixed(1)}% of 60%.${summaryData.preferredAdded ? ' Every Required criterion passed, so the Preferred credit is added on top.' : ' A Required criterion scored below 7, so this is the whole Overall Score - Preferred is not added.'}`}
-                position="bottom"
-              >
-                <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
-              </Tooltip>
-            </span>
-            <span className="text-gray-700 flex items-center gap-1">
-              Preferred: <span className="font-semibold text-gray-900">{summaryData.preferredPercentage.toFixed(0)}%</span>
-              {!summaryData.preferredAdded && summaryData.preferredCount > 0 && (
-                <span className="text-xs text-gray-500">(not added)</span>
-              )}
-              <Tooltip
-                content={`Preferred (nice-to-have) criteria share 40% of the total, split equally: ${summaryData.preferredCount} criteria → ${summaryData.preferredWeightEach.toFixed(1)}% each. A criterion earns its full share at a rating of 7 or higher and nothing below. ${summaryData.preferredPassed} of ${summaryData.preferredCount} scored 7+ → ${summaryData.preferredPassed} × ${summaryData.preferredWeightEach.toFixed(1)}% = ${summaryData.preferredPercentage.toFixed(1)}% of 40%.${summaryData.preferredAdded ? ' Added to the Required credit to make the Overall Score.' : ' Not added to the Overall Score because a Required criterion scored below 7 - shown so you can see what the candidate would have earned.'}`}
-                position="bottom"
-              >
-                <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
-              </Tooltip>
-            </span>
-            <span className="text-gray-600">|</span>
-          </>
-        )}
-        {/* The Exact/Partial discriminator. A rating out of 10, not a percentage -
-            it is the mean of the Required ratings, so it is shown on the same scale
-            the criteria table below uses. Hidden when the JD has no Required
-            criteria, where the average is undefined rather than zero. */}
-        {essentialAverageValue !== null && (
-          <>
-            <span className="text-gray-700 flex items-center gap-1">
-              Required Avg Rating:{' '}
-              <span className="font-semibold text-gray-900">{essentialAverageValue.toFixed(2)}</span>
-              <span className="text-gray-500">/10</span>
-              <Tooltip
-                content={`Mean rating across the ${summaryData?.requiredCount ?? 0} Required criteria. This is what separates the two passing classifications: 8.00 or above is an Exact Match, below 8.00 is a Partial Match. It is a rating out of 10, not a percentage, and it is not affected by Preferred criteria. A single Required criterion rated 7 does not force a Partial Match - only this average decides.`}
-                position="bottom"
-              >
-                <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
-              </Tooltip>
-            </span>
-            <span className="text-gray-400">|</span>
-          </>
-        )}
         <span className="text-gray-600">
           {resume.scoredDate && !isNaN(new Date(resume.scoredDate).getTime())
             ? formatIST(resume.scoredDate)
