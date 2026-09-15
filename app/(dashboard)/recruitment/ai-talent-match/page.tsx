@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import AITalentMatchPage from '@/components/AITalentMatchPage';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { aiMatchService, AIMatchSessionResponse } from '@/lib/services/aiMatchService';
@@ -78,10 +78,16 @@ export default function AITalentMatchRoute() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
+  /* Extracted so a completed match can trigger the same fetch again instead of
+     only ever running once per mount. `matchHistory`/`jobs`/`matchSessionCounts`
+     used to go stale after the FIRST match run because nothing re-called this —
+     running a match only updated AITalentMatchPage's own local state. It looked
+     like it "worked once" only because navigating away to create a JD and back
+     happened to remount this route the first time; a second round trip hit
+     Next's client-side route cache and reused the same (still stale) instance. */
+  const fetchData = useCallback(async (opts?: { silent?: boolean }) => {
       try {
-        setIsLoading(true);
+        if (!opts?.silent) setIsLoading(true);
 
         // Fetch ALL jobs (not just published) so we can show disabled jobs in history
         // and match history in parallel
@@ -138,16 +144,46 @@ export default function AITalentMatchRoute() {
         setError(null);
       } catch (err) {
         console.error('Failed to fetch data:', err);
-        setError(err instanceof Error ? err.message : 'Failed to load data');
-        setJobs([]);
-        setMatchHistory([]);
-        setMatchSessionCounts({});
+        // A silent background refresh (after a match completes) failing
+        // shouldn't wipe out the good data already on screen — only the
+        // initial load clears state on error.
+        if (!opts?.silent) {
+          setError(err instanceof Error ? err.message : 'Failed to load data');
+          setJobs([]);
+          setMatchHistory([]);
+          setMatchSessionCounts({});
+        }
       } finally {
         setIsLoading(false);
       }
-    };
+  }, []);
 
+  useEffect(() => {
     fetchData();
+  }, [fetchData]);
+
+  /* Update matchHistory the INSTANT a match finishes, rather than waiting on
+     the silent server refetch (`onMatchComplete` below) to pick it up. The
+     refetch hits GET /ai-match/sessions right after the match completes —
+     if the backend writes that session record slightly after responding
+     with the match results (a plausible async/eventual-consistency gap),
+     the refetch can win the race and come back with the OLD list, so
+     "Matched Jobs" still reads its pre-match count even though the match
+     genuinely just ran. This optimistic update doesn't depend on that
+     timing at all — it uses the same MatchHistory object the child already
+     built locally. The silent refetch stays in place as a background
+     reconciliation (candidate counts, session de-dup) but is no longer the
+     only source for the stat the user is actually watching. */
+  const handleSaveMatch = useCallback((newMatch: MatchHistory) => {
+    setMatchHistory(prev => {
+      const existingIndex = prev.findIndex(h => h.jobId === newMatch.jobId);
+      if (existingIndex >= 0) {
+        const updated = [...prev];
+        updated[existingIndex] = newMatch;
+        return updated;
+      }
+      return [newMatch, ...prev];
+    });
   }, []);
 
   if (isLoading) {
@@ -184,7 +220,13 @@ export default function AITalentMatchRoute() {
   return (
     <FeatureGate feature="ai_talent_match">
       <div className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
-        <AITalentMatchPage jobs={jobs} matchHistory={matchHistory} matchSessionCounts={matchSessionCounts} />
+        <AITalentMatchPage
+          jobs={jobs}
+          matchHistory={matchHistory}
+          matchSessionCounts={matchSessionCounts}
+          onSaveMatch={handleSaveMatch}
+          onMatchComplete={() => fetchData({ silent: true })}
+        />
       </div>
     </FeatureGate>
   );
