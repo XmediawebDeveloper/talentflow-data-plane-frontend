@@ -1,5 +1,5 @@
 import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronDown, ChevronRight, Video, BarChart3 } from 'lucide-react';
-import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult } from '@/lib/utils/matchStatus';
+import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { toast } from 'sonner';
@@ -72,7 +72,7 @@ const DEFAULT_COLUMNS = [
   { id: 'email', label: 'Email', enabled: true },
   { id: 'phone', label: 'Phone', enabled: true },
   { id: 'matchStatus', label: 'Match Status', enabled: true },
-  { id: 'scorePercentage', label: 'Score %', enabled: true },
+  { id: 'scorePercentage', label: 'Score', enabled: true },
   { id: 'experience', label: 'Experience', enabled: true },  // Enable by default
   { id: 'education', label: 'Education', enabled: false },
   { id: 'certifications', label: 'Certifications', enabled: false },
@@ -88,6 +88,10 @@ export interface ScoredResume {
   phone: string;
   matchStatus: string;
   scorePercentage: number;
+  // Resume Match Rating Mechanism (client doc, Sept 2026): the 0-10 Overall
+  // Rating shown instead of scorePercentage wherever the score is printed as
+  // plain text - see formatOverallScore() in lib/utils/matchStatus.ts.
+  overallRating10?: number;
   scoredDate: string;
   scoredBy: string;
   experience?: string;
@@ -333,7 +337,7 @@ Candidate Details:
 - Title: ${resume.title || 'N/A'}
 - Experience: ${resume.experience || 'N/A'}
 - Location: ${resume.location || 'N/A'}
-- Match: ${resume.matchStatus || 'N/A'}${resume.scorePercentage != null ? ` (${resume.scorePercentage}%)` : ''}
+- Match: ${resume.matchStatus || 'N/A'}${resume.scorePercentage != null ? ` (${formatOverallScore(resume.overallRating10, resume.scorePercentage)})` : ''}
 
 You can view the full resume at: ${resumeLink}
 
@@ -792,7 +796,7 @@ Best regards`);
       case 'matchStatus':
         return resume.matchStatus || '';
       case 'scorePercentage':
-        return `${resume.scorePercentage}%`;
+        return formatOverallScore(resume.overallRating10, resume.scorePercentage);
       case 'experience':
         return resume.experience || '';
       case 'education':
@@ -1198,7 +1202,7 @@ Best regards`);
           <div className={`text-xl font-semibold ${
             MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(resume.matchStatus) ?? 'No Match']
           }`}>
-            {resume.scorePercentage}%
+            {formatOverallScore(resume.overallRating10, resume.scorePercentage)}
           </div>
         </td>
       );
@@ -2059,7 +2063,7 @@ Best regards`);
                                   {row.matchStatus}
                                 </span>
                                 <span className={`text-sm font-semibold ${MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(row.matchStatus) ?? 'No Match']}`}>
-                                  {row.scorePercentage}%
+                                  {formatOverallScore(row.overallRating10, row.scorePercentage)}
                                 </span>
                               </div>
                               <div className="mt-1 flex items-center gap-1 text-xs text-gray-500">
@@ -2255,7 +2259,7 @@ Best regards`);
                     <div className={`text-lg ${
                       MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(resume.matchStatus) ?? 'No Match']
                     }`}>
-                      {resume.scorePercentage}%
+                      {formatOverallScore(resume.overallRating10, resume.scorePercentage)}
                     </div>
                   </div>
                 </div>
@@ -2544,7 +2548,7 @@ Best regards`);
                         </div>
                         <div className="text-xs text-gray-500 truncate">
                           Scorecard &middot; PDF
-                          {shareCandidate.scorePercentage != null && <> &middot; {shareCandidate.scorePercentage}%</>}
+                          {shareCandidate.scorePercentage != null && <> &middot; {formatOverallScore(shareCandidate.overallRating10, shareCandidate.scorePercentage)}</>}
                         </div>
                       </div>
                       <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
@@ -2673,7 +2677,7 @@ Best regards`);
                   <h2 className="text-lg font-semibold text-gray-900 tracking-tight truncate">Scorecard</h2>
                   <p className="text-sm text-gray-500 truncate">
                     {shareCandidate.candidateName}
-                    {shareCandidate.scorePercentage != null && <> &middot; {shareCandidate.scorePercentage}%</>}
+                    {shareCandidate.scorePercentage != null && <> &middot; {formatOverallScore(shareCandidate.overallRating10, shareCandidate.scorePercentage)}</>}
                   </p>
                 </div>
               </div>

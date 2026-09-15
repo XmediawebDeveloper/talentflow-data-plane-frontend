@@ -20,6 +20,7 @@ import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModa
 import VersionHistoryModal from '@/components/VersionHistoryModal';
 import InviteToAIInterviewFlow from '@/components/InviteToAIInterviewFlow';
 import { useListSearch } from '@/lib/hooks/useListSearch';
+import { formatOverallScore } from '@/lib/utils/matchStatus';
 import { Resume, Folder, Job } from '@/lib/types/types';
 import { resumeService, folderService, ResumeSearchParams } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeService';
@@ -739,7 +740,7 @@ export default function ResumeDatabasePage() {
 
       if (checkResult.existing_count > 0) {
         const alreadyScoredNames = checkResult.existing_scores
-          .map((s: any) => `${s.candidate_name} (${s.overall_score}%)`)
+          .map((s: any) => `${s.candidate_name} (${formatOverallScore(s.overall_rating_10, s.overall_score)})`)
           .join(', ');
 
         if (checkResult.new_count === 0) {

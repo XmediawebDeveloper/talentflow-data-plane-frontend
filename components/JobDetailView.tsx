@@ -1454,6 +1454,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           phone: item.phone || '',
           matchStatus: matchStatus,
           scorePercentage: Number((item.overall_score || 0).toFixed(1)),  // Keep 1 decimal for consistency
+          overallRating10: item.overall_rating_10,
           scoredDate: item.created_at || new Date().toISOString(),
           scoredBy: item.scored_by || item.scored_by_name || 'System',
           // Was missing here — every row on this tab fell back to
