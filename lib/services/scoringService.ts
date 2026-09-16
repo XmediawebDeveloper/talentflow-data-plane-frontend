@@ -351,6 +351,25 @@ export const scoringService = {
       throw new Error(handleApiError(error));
     }
   },
+
+  /**
+   * The CSV/XLS "Export" button on the scored-resumes table builds the file
+   * entirely in the browser (see exportToCSV/exportToXLS in
+   * ScoredResumesTable.tsx) - there's no file-generation request for the
+   * backend to audit, so it fires this immediately after the download starts.
+   * Best-effort: a logging failure should never surface as an export error.
+   */
+  async logClientExport(format: 'csv' | 'excel', recordCount: number, jdId?: string): Promise<void> {
+    try {
+      await api.post('/scoring/export/log', {
+        format,
+        record_count: recordCount,
+        jd_id: jdId,
+      });
+    } catch (error) {
+      console.error('Failed to log export activity:', error);
+    }
+  },
 };
 
 export default scoringService;

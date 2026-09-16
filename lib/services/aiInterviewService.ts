@@ -773,6 +773,21 @@ export const aiInterviewService = {
   },
 
   /**
+   * The "Download Report (PDF)" button on the candidate results page
+   * (EvalReportCombined.tsx) builds the PDF entirely client-side with
+   * jsPDF - there's no file-generation request for the backend to audit,
+   * so it calls this immediately after `doc.save()` triggers the download.
+   * Best-effort: a logging failure should never surface as a download error.
+   */
+  async logReportDownload(sessionId: string, reportType: 'coverage' | 'evaluation' = 'evaluation'): Promise<void> {
+    try {
+      await api.post(`/ai-interview/${sessionId}/reports/log-download?report_type=${reportType}`);
+    } catch (error) {
+      console.error('Failed to log AI interview report download activity:', error);
+    }
+  },
+
+  /**
    * Trigger a browser download from a Blob.
    */
   triggerBlobDownload(blob: Blob, filename: string): void {
