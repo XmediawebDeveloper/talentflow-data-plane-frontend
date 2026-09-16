@@ -7,6 +7,7 @@ import { Tooltip } from '@/components/ui/tooltip';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
 import { toast } from 'sonner';
@@ -159,6 +160,7 @@ function byNewestVersion(a: any, b: any): number {
 }
 
 export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, breadcrumbItems, assessmentConfigured, aiInterviewConfigured }: CandidateScoringDetailPageProps) {
+  const router = useRouter();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const { hasPlanFeature } = usePlanFeatures();
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
@@ -247,20 +249,17 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const tabsSectionRef = useRef<HTMLDivElement>(null);
 
   /**
-   * Job title → the full job description.
-   *
-   * Switching the tab alone isn't enough: the click usually happens well down
-   * the Overview tab, so the JD would open mid-document. Scrolls to the tab
-   * strip — not the page top — so the JD starts right under the tabs.
-   *
-   * `scrollIntoView` rather than `window.scrollTo` because the page scrolls
-   * inside `<main>` (and the dashboard shell around it), not the window — it
-   * walks every scrollable ancestor. The landing point is set by the section's
-   * `scroll-mt-*`, which keeps it clear of the sticky breadcrumb.
+   * Job title → the real Job Details page (a genuine navigation, not the
+   * in-page "View JD" tab - that tab is still reachable from the tab strip
+   * itself for a look without leaving this candidate). Tags the destination
+   * with `from=resume-scoring` so that page's own breadcrumb
+   * (app/(dashboard)/recruitment/job-details/page.tsx) shows a
+   * Resume-Scoring-flavored trail instead of resetting to the generic Job
+   * Openings one every other route lands there with.
    */
   const handleOpenJobDescription = () => {
-    setActiveTab('viewjd');
-    tabsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (!jobId || jobId === 'global') return;
+    router.push(`/recruitment/job-details?id=${jobId}&from=resume-scoring`);
   };
   const [isDataReady, setIsDataReady] = useState(false);
   const [fullResumeData, setFullResumeData] = useState<ScoredResume>(resume);
@@ -1132,12 +1131,9 @@ Best regards`);
 
               // Tags the destination with where it came from, so that page's
               // own breadcrumb (app/(dashboard)/recruitment/job-details/page.tsx)
-              // can show a Resume-Scoring-flavored trail - with a crumb back to
-              // THIS exact candidate - instead of resetting to the generic Job
-              // Openings trail every other route lands there with.
-              const scoreId = fullResumeData.id || resume.id;
-              const candidateName = fullResumeData.candidateName || resume.candidateName || '';
-              const jdDetailsHref = `/recruitment/job-details?id=${jobId}&from=resume-scoring&score_id=${encodeURIComponent(scoreId)}&candidate_name=${encodeURIComponent(candidateName)}`;
+              // shows a Resume-Scoring-flavored trail instead of resetting to
+              // the generic Job Openings one every other route lands there with.
+              const jdDetailsHref = `/recruitment/job-details?id=${jobId}&from=resume-scoring`;
               const existingJobCrumbIndex = base.findIndex(
                 (item, i) => item.label === jobTitle && i !== base.length - 1
               );
