@@ -1110,14 +1110,29 @@ Best regards`);
                 onNext={onNext}
               />
             }
-            items={breadcrumbItems ?? [
-              // Deepest crumb names the record being viewed (the candidate),
-              // not a generic page label.
-              { label: 'Dashboard', href: '/dashboard' },
-              { label: 'Resume Scoring', href: '/recruitment/resume-scoring' },
-              { label: jobTitle, href: `/recruitment/resume-scoring?jd_id=${jobId}` },
-              { label: resume.candidateName || 'Candidate' },
-            ]}
+            items={(() => {
+              const base = breadcrumbItems ?? [
+                // Deepest crumb names the record being viewed (the candidate),
+                // not a generic page label.
+                { label: 'Dashboard', href: '/dashboard' },
+                { label: 'Resume Scoring', href: '/recruitment/resume-scoring' },
+                { label: jobTitle, href: `/recruitment/resume-scoring?jd_id=${jobId}` },
+                { label: resume.candidateName || 'Candidate' },
+              ];
+              // The "Job Title" link above switches to the View JD tab IN
+              // PLACE (a read-only preview) rather than navigating away, so
+              // this candidate page never loses its own place. This crumb is
+              // the one way from there to the REAL Job Details page (edit,
+              // versions, everything else JobDetailView offers) - only added
+              // while that tab is actually open, so the trail still says
+              // where you are otherwise. Also requires a real jobId: the
+              // cross-job global list's candidate view passes the 'global'
+              // sentinel (no single JD) when a row somehow lacks its own
+              // jdId, which is not a real Job Details page to link to.
+              return activeTab === 'viewjd' && jobId && jobId !== 'global'
+                ? [...base, { label: jobTitle, href: `/recruitment/job-details?id=${jobId}` }]
+                : base;
+            })()}
           />
 
           <>
