@@ -44,6 +44,13 @@ import {
 const scoredResumesMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700 hover:!bg-gray-50 focus:!bg-gray-50 focus:!text-gray-700 focus-visible:!outline-none data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700';
 const COLUMN_PREFERENCES_KEY = 'scoredResumesTableColumns';
 
+// The global "View All Candidates" host defaults this table's `jobId` prop to
+// a placeholder ('jd-1'), not a real backend id - guard the export-audit call
+// (which sends it as an optional jd_id) so that placeholder never reaches the
+// API as an invalid UUID.
+const isUuid = (value?: string): value is string =>
+  !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+
 /* ---- The More Filters panel's field metrics ---------------------------------
    One width and one control style for every field in that panel, so "all the
    same size" is guaranteed by construction rather than by seven copies of a
@@ -840,6 +847,7 @@ Best regards`);
 
     toast.success(`Exported ${dataToExport.length} records to CSV`);
     setShowExportModal(false);
+    scoringService.logClientExport('csv', dataToExport.length, isUuid(jobId) ? jobId : undefined);
   };
 
   // Export to XLS (using HTML table format that Excel can read)
@@ -908,6 +916,7 @@ Best regards`);
 
     toast.success(`Exported ${dataToExport.length} records to Excel`);
     setShowExportModal(false);
+    scoringService.logClientExport('excel', dataToExport.length, isUuid(jobId) ? jobId : undefined);
   };
 
   const handleExportExcel = () => {

@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import type { DashboardData } from './types';
 import { buildRationaleLines } from './types';
+import { aiInterviewService } from '@/lib/services/aiInterviewService';
 
 interface Props {
   data: DashboardData;
@@ -24,6 +25,9 @@ interface Props {
   candidateImage?: string | null;
   avgResponseSeconds?: number | null;
   evaluationId?: string | null;
+  /** The AI interview session id - only used to log the PDF download for the
+   *  Audit Log, since the PDF itself is built entirely client-side below. */
+  sessionId?: string | null;
 }
 
 const MHS_THRESHOLD = 6.0;
@@ -46,6 +50,7 @@ export function EvalReportCombined({
   candidateImage,
   avgResponseSeconds,
   evaluationId,
+  sessionId,
 }: Props) {
   const {
     candidate, interview, scores, finalResult, sectionsPresent,
@@ -458,6 +463,10 @@ export function EvalReportCombined({
       doc.text(doc.splitTextToSize(foot, CW - 6), M + 3, y + 4);
 
       doc.save(`eval_report_${candidate.name || 'candidate'}_${evalId}`.replace(/\s+/g, '_') + '.pdf');
+
+      if (sessionId) {
+        aiInterviewService.logReportDownload(sessionId, 'evaluation');
+      }
     } catch (err) {
       console.error('[EvalReport] PDF export failed:', err);
       // eslint-disable-next-line no-alert
