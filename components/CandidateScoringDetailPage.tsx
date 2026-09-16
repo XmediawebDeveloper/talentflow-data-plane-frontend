@@ -3,6 +3,7 @@
 import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2, Sparkles, UserPlus, History, File, HardDrive, User, X, Eye, Share2, Paperclip, Send } from 'lucide-react';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import ViewResumeButton from '@/components/ui/view-resume-button';
+import { Tooltip } from '@/components/ui/tooltip';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
 import { useState, useEffect, useRef } from 'react';
@@ -1261,9 +1262,17 @@ Best regards`);
                   `${fullResumeData.scorePercentage}%`
                 )}
               </div>
-              <span className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium border whitespace-nowrap ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
-                {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
-              </span>
+              {fullResumeData.ratingSummaryText ? (
+                <Tooltip content={fullResumeData.ratingSummaryText} position="bottom">
+                  <span className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium border whitespace-nowrap cursor-help ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
+                    {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
+                  </span>
+                </Tooltip>
+              ) : (
+                <span className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium border whitespace-nowrap ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
+                  {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
+                </span>
+              )}
               <span className="hidden sm:inline text-gray-400">|</span>
               {/* The title is the shortcut into the View JD tab — recruiters
                   reading a score reach for the JD from here constantly. */}
