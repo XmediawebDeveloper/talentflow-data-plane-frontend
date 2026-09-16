@@ -1118,47 +1118,21 @@ Best regards`);
                 { label: jobTitle, href: `/recruitment/resume-scoring?jd_id=${jobId}` },
                 { label: resume.candidateName || 'Candidate' },
               ];
-              // The "Job Title" link above switches to the View JD tab IN
-              // PLACE (a read-only preview) rather than navigating away, so
-              // this candidate page never loses its own place. While that tab
-              // is open, this makes the job crumb the one way from there to
-              // the REAL Job Details page (edit, versions, everything else
-              // JobDetailView offers). Requires a real jobId: the cross-job
-              // global list's candidate view passes the 'global' sentinel
-              // (no single JD) when a row somehow lacks its own jdId, which
-              // is not a real Job Details page to link to.
-              if (activeTab !== 'viewjd' || !jobId || jobId === 'global') return base;
+              // A trailing crumb for the real Job Details page - always
+              // present (not tied to which tab is open), genuinely last, and
+              // still a working link via `forceLink` (PageBreadcrumb's own
+              // rule would otherwise flatten the last item to plain text).
+              // Requires a real jobId: the cross-job global list's candidate
+              // view passes the 'global' sentinel (no single JD) when a row
+              // somehow lacks its own jdId, which is not a real page to link to.
+              if (!jobId || jobId === 'global') return base;
 
               // Tags the destination with where it came from, so that page's
               // own breadcrumb (app/(dashboard)/recruitment/job-details/page.tsx)
               // shows a Resume-Scoring-flavored trail instead of resetting to
               // the generic Job Openings one every other route lands there with.
               const jdDetailsHref = `/recruitment/job-details?id=${jobId}&from=resume-scoring`;
-              const existingJobCrumbIndex = base.findIndex(
-                (item, i) => item.label === jobTitle && i !== base.length - 1
-              );
-              if (existingJobCrumbIndex !== -1) {
-                // A per-job entry point already names this job as its own
-                // crumb (linking back to the resume list scoped to it) -
-                // re-point THAT crumb at the real JD page instead of adding a
-                // second crumb with the identical text going somewhere else,
-                // which would look like a duplicated/broken trail. Its normal
-                // destination (the resume list) comes back the moment another
-                // tab is selected.
-                const updated = [...base];
-                updated[existingJobCrumbIndex] = { label: jobTitle, href: jdDetailsHref };
-                return updated;
-              }
-              // No existing job crumb (the cross-job global list has none) -
-              // insert one. Before the last item, not after: PageBreadcrumb
-              // always renders the LAST item as plain "current page" text,
-              // ignoring its href - the candidate name has to stay last (it's
-              // genuinely the page being viewed), so this goes just before it.
-              return [
-                ...base.slice(0, -1),
-                { label: jobTitle, href: jdDetailsHref },
-                base[base.length - 1],
-              ];
+              return [...base, { label: jobTitle, href: jdDetailsHref, forceLink: true }];
             })()}
           />
 

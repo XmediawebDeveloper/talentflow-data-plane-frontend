@@ -23,6 +23,14 @@ export interface BreadcrumbCrumb {
    * `href` is set or on the last crumb.
    */
   onClick?: () => void;
+  /**
+   * Opt-in to keep `href` a real link even on the LAST crumb, which otherwise
+   * always renders as plain "current page" text (see below) - for the rare
+   * trail that ends in an action rather than the page you're already on (e.g.
+   * "jump to the record's own detail page" from a page that only shows a
+   * summary of it). Off by default so every existing trail is unaffected.
+   */
+  forceLink?: boolean;
 }
 
 /**
@@ -74,7 +82,7 @@ export default function PageBreadcrumb({
           return (
             <React.Fragment key={`${crumb.label}-${idx}`}>
               <BreadcrumbItem>
-                {isLast ? (
+                {isLast && !(crumb.forceLink && crumb.href) ? (
                   <BreadcrumbPage className="font-semibold text-brand-blue">
                     {crumb.label}
                   </BreadcrumbPage>
