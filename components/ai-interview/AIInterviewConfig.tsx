@@ -1262,6 +1262,13 @@ export default function AIInterviewConfig() {
   // through the handoff instead of flashing an empty page.
   const [redirecting, setRedirecting] = useState(false);
   const existingDraftIdRef = useRef<string | null>(null); // track draft id for auto-save updates
+  // True only when existingDraftIdRef was populated from a draft that already
+  // existed before this page loaded (resumed via "Continue Editing" / found by
+  // jd_id) — as opposed to one `ensureDraftId` creates fresh during this
+  // session. Discard must delete the latter (nothing to go back to) but never
+  // the former, or resuming a saved draft and discarding an in-session edit
+  // deletes the recruiter's actual saved work, not just the edit.
+  const draftExistedOnLoadRef = useRef(false);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // In-flight POST /ai-interview/ for this wizard, shared by every path that
   // may need the draft to exist. See ensureDraftId.
@@ -1509,6 +1516,7 @@ export default function AIInterviewConfig() {
         // when the user navigates back from the Clusters page.
         if (existingDraft) {
           existingDraftIdRef.current = existingDraft.id;
+          draftExistedOnLoadRef.current = true;
           setMode(modeFromConfig(
             (existingDraft as any).special_instructions,
             existingDraft.duration_minutes ?? 30,
@@ -2698,8 +2706,12 @@ export default function AIInterviewConfig() {
   const handleDiscardAndNavigate = async () => {
     setShowUnsavedDialog(false);
     isNavigatingRef.current = true;
-    // Delete draft if it exists
-    if (existingDraftIdRef.current) {
+    // Only delete a draft this session created itself (e.g. auto-save's
+    // optimistic create with no prior save to fall back to). A draft that
+    // already existed on load — resumed via "Continue Editing" — must survive
+    // discard: the recruiter is discarding this session's unsaved edits, not
+    // asking to remove the draft from the AI Interviews list.
+    if (existingDraftIdRef.current && !draftExistedOnLoadRef.current) {
       try {
         await aiInterviewService.delete(existingDraftIdRef.current);
         existingDraftIdRef.current = null;
