@@ -1,5 +1,5 @@
 import { Mail, Phone, Calendar, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, Filter, X, UserPlus, Eye, AlertCircle, Loader2, Send, ShieldAlert, Info, ClipboardList, Share2, Paperclip, FileText, FileSpreadsheet, MoreVertical, Award, ChevronDown, ChevronRight, Video, BarChart3 } from 'lucide-react';
-import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore } from '@/lib/utils/matchStatus';
+import { matchBadgeClass, MATCH_SCORE_TEXT_CLASS, normalizeMatchResult, formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { toast } from 'sonner';
@@ -76,7 +76,7 @@ const DEFAULT_COLUMNS = [
   { id: 'email', label: 'Email', enabled: true },
   { id: 'phone', label: 'Phone', enabled: true },
   { id: 'matchStatus', label: 'Match Status', enabled: true },
-  { id: 'scorePercentage', label: 'Score', enabled: true },
+  { id: 'scorePercentage', label: 'Score out of 10', enabled: true },
   { id: 'experience', label: 'Experience', enabled: true },  // Enable by default
   { id: 'education', label: 'Education', enabled: false },
   { id: 'certifications', label: 'Certifications', enabled: false },
@@ -910,7 +910,7 @@ Best regards`);
       case 'matchStatus':
         return resume.matchStatus || '';
       case 'scorePercentage':
-        return formatOverallScore(resume.overallRating10, resume.scorePercentage);
+        return formatOverallScoreValue(resume.overallRating10, resume.scorePercentage);
       case 'experience':
         return resume.experience || '';
       case 'education':
@@ -1316,7 +1316,7 @@ Best regards`);
           <div className={`text-xl font-semibold ${
             MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(resume.matchStatus) ?? 'No Match']
           }`}>
-            {formatOverallScore(resume.overallRating10, resume.scorePercentage)}
+            {formatOverallScoreValue(resume.overallRating10, resume.scorePercentage)}
           </div>
         </td>
       );
