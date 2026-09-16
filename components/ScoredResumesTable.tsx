@@ -10,15 +10,18 @@ import ListEmptyState from '@/components/ui/list-empty-state';
 import { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import InviteShareModal from './InviteShareModal';
+import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services/assessmentService';
+import { aiInterviewService, AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { resumeService } from '@/lib/services/resumeService';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 import ScoreTableModal from './ScoreTableModal';
 import ListPagination from './ListPagination';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { formatIST, formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import {
@@ -224,6 +227,17 @@ interface ScoredResumesTableProps {
    */
   onInviteAIInterview?: (candidate: { name: string; email: string; resumeId?: string }) => void;
   /**
+   * Opt-in for a host that has NO per-job AI Interview plumbing of its own
+   * (the cross-job Resume Scoring lists, where every row can belong to a
+   * different job) — this component then resolves and shares the invite
+   * itself per row, using that row's own `jdId`. Ignored when
+   * `onInviteAIInterview` is supplied; a host that sometimes omits
+   * `onInviteAIInterview` for its OWN reasons (e.g. JobDetailView hiding it
+   * for a disabled job) must NOT also set this, or that per-case gate would
+   * be bypassed by this fallback silently resolving anyway.
+   */
+  enableInternalAIInterviewInvite?: boolean;
+  /**
    * Whether the host JD actually has a published assessment / a live AI
    * interview to invite candidates to. A row's Invite menu only offers what
    * exists: with neither, the whole Invite button is disabled rather than
@@ -263,24 +277,61 @@ export default function ScoredResumesTable({
   onScoreResumes,
   onScoreResumesFromEmptyState,
   onInviteAIInterview,
+  enableInternalAIInterviewInvite = false,
   assessmentConfigured,
   aiInterviewConfigured,
   viewPillsSlot
 }: ScoredResumesTableProps) {
-  const { isTenantAdmin, user, hasPermissionCode } = useAuth();  // Get tenant info from auth context
-  const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
+  const { isTenantAdmin, user, hasPermissionCode, hasPermission, tenant } = useAuth();  // Get tenant info from auth context
+  const { hasPlanFeature } = usePlanFeatures();
+
+  // Tenant-level feature toggle, independent of the subscription-plan check
+  // above — mirrors JobDetailView's own isFeatureEnabled(), the same gate
+  // every other Assessment/AI Interview entry point in the app already reads.
+  // Assumes enabled when the tenant carries no flags at all, same default.
+  const isFeatureEnabled = (feature: string): boolean => {
+    if (!tenant?.features) return true;
+    return (tenant.features as any)[feature] === true;
+  };
+
+  const canCreateAssessments =
+    (isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false)) &&
+    hasPlanFeature('assessment') &&
+    isFeatureEnabled('assessment');
+  // Whether the viewer may invite to AI Interview AT ALL (permission + plan +
+  // tenant feature), AND there is some way to actually carry it out — either
+  // the host's own handler, or its explicit opt-in into this component's
+  // internal resolve-and-share flow. Without either, the host simply doesn't
+  // support AI Interview invites from this table (or is deliberately hiding
+  // it for a reason of its own, e.g. a disabled job) — never assumed as a
+  // fallback, since that could silently bypass a host-specific gate.
+  const mayInviteAIInterview =
+    (!!onInviteAIInterview || enableInternalAIInterviewInvite) &&
+    (hasPermission('canShareAIInterviews') || hasPermission('canInviteAIInterviews')) &&
+    hasPlanFeature('ai_interview') &&
+    isFeatureEnabled('ai_interview');
 
   /* Invite gating. An entry is offered when the viewer may use it AND the JD
      has something to invite to; `undefined` from the host means unknown, which
      is treated as "don't gate" so the global scoring view is unchanged.
      With neither entry available the trigger itself goes disabled — matching
      the Assessment / AI Interview sections' own Send Invite buttons on the Job
-     Details page, which read the same two flags. */
+     Details page, which read the same two flags.
+
+     AI Interview specifically: when the host supplies its own
+     `onInviteAIInterview` (e.g. JobDetailView, resolving against its one
+     fixed job), that handler runs as before. When it doesn't — the cross-job
+     global list, where every row belongs to a different job — this
+     component resolves and shares the invite itself per row (see
+     `aiInterviewInviteCandidate` below), the same "resolve on click, then
+     explain why not" pattern already used for Assessment via
+     InviteShareModal, just extended to AI Interview. Either way the option
+     is only ever offered when `mayInviteAIInterview` is true. */
   const canInviteAssessment = canCreateAssessments && assessmentConfigured !== false;
-  const canInviteAIInterview = !!onInviteAIInterview && aiInterviewConfigured !== false;
+  const canInviteAIInterview = mayInviteAIInterview && aiInterviewConfigured !== false;
   const inviteDisabled = !canInviteAssessment && !canInviteAIInterview;
   const inviteDisabledTitle =
-    canCreateAssessments || onInviteAIInterview
+    canCreateAssessments || mayInviteAIInterview
       ? 'No published assessment or AI interview for this job yet'
       : undefined;
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
@@ -432,6 +483,42 @@ Best regards`);
   const [showFilters, setShowFilters] = useState(false);
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteCandidate, setInviteCandidate] = useState<ScoredResume | null>(null);
+
+  // Self-contained "Invite -> AI Interview" flow for a row whose host didn't
+  // supply its own `onInviteAIInterview` (the cross-job global list) —
+  // resolves the CLICKED ROW's own job's live AI interview config, the same
+  // "resolve then share, or explain why not" pattern InviteShareModal already
+  // uses for Assessment just below. Never runs when a host DOES supply
+  // `onInviteAIInterview` — that path is untouched.
+  const [aiInterviewInviteCandidate, setAiInterviewInviteCandidate] = useState<ScoredResume | null>(null);
+  const [resolvedAIInterviewConfig, setResolvedAIInterviewConfig] = useState<AIInterviewResponse | null>(null);
+  const [resolvingAIInterviewInvite, setResolvingAIInterviewInvite] = useState(false);
+
+  useEffect(() => {
+    if (!aiInterviewInviteCandidate) return;
+    let cancelled = false;
+    const targetJdId = aiInterviewInviteCandidate.jdId || jobId;
+    setResolvingAIInterviewInvite(true);
+    (async () => {
+      try {
+        const liveConfig = targetJdId ? await aiInterviewService.findLiveConfigForJd(targetJdId) : null;
+        if (cancelled) return;
+        if (!liveConfig) {
+          toast.error('No published AI interview for this job yet.');
+          setAiInterviewInviteCandidate(null);
+          return;
+        }
+        setResolvedAIInterviewConfig(liveConfig);
+      } catch {
+        if (cancelled) return;
+        toast.error('Could not load the AI interview for this job. Please try again.');
+        setAiInterviewInviteCandidate(null);
+      } finally {
+        if (!cancelled) setResolvingAIInterviewInvite(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [aiInterviewInviteCandidate, jobId]);
   const [showBulkInviteModal, setShowBulkInviteModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
@@ -1265,7 +1352,7 @@ Best regards`);
   // control. Neither configured → the button is disabled.
   const renderInviteCell = (resume: ScoredResume) => (
   <td className="py-3 px-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-    {(canCreateAssessments || onInviteAIInterview) ? (
+    {(canCreateAssessments || mayInviteAIInterview) ? (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -1307,24 +1394,30 @@ Best regards`);
               <span className={MENU_ITEM_SCALE_CLASS}>Assessment</span>
             </DropdownMenuItem>
           )}
-          {onInviteAIInterview && (
+          {mayInviteAIInterview && (
             <DropdownMenuItem
               className={scoredResumesMenuItemClass}
               /* Same rule on the interview side: nothing live on
                  this JD means nothing to invite the candidate to. */
-              disabled={!canInviteAIInterview}
+              disabled={!canInviteAIInterview || resolvingAIInterviewInvite}
               title={
                 !canInviteAIInterview
                   ? 'No published AI interview for this job yet'
                   : undefined
               }
-              onSelect={() =>
-                onInviteAIInterview({
-                  name: resume.candidateName || 'Unknown',
-                  email: resume.email || '',
-                  resumeId: resume.resumeId,
-                })
-              }
+              onSelect={() => {
+                if (onInviteAIInterview) {
+                  onInviteAIInterview({
+                    name: resume.candidateName || 'Unknown',
+                    email: resume.email || '',
+                    resumeId: resume.resumeId,
+                  });
+                } else {
+                  // No host-supplied handler (the cross-job global list) —
+                  // resolve and share THIS ROW's own job's AI interview.
+                  setAiInterviewInviteCandidate(resume);
+                }
+              }}
             >
               <Video className="w-4 h-4 text-menu-icon-share" />
               <span className={MENU_ITEM_SCALE_CLASS}>AI Interview</span>
@@ -2463,13 +2556,42 @@ Best regards`);
       )}
 
       {/* Invite to Assessment Modal — opens the shared ShareAssessmentModal
-          used by the Assessment module (resolves the JD's assessment first). */}
+          used by the Assessment module (resolves the JD's assessment first).
+          Uses the CLICKED ROW's own job (falling back to the table-level one
+          for a single-job host, where every row already shares it) — the
+          global cross-job list's rows each belong to a different job, and
+          resolving against the table's own "global" placeholder job id
+          instead of the real one meant this could never find a real
+          assessment, so the candidate never even reached the share form. */}
       {showInviteModal && inviteCandidate && (
         <InviteShareModal
           candidate={inviteCandidate}
-          jobId={jobId}
-          jobTitle={jobTitle}
+          jobId={inviteCandidate.jdId || jobId}
+          jobTitle={inviteCandidate.jobTitle || jobTitle}
           onClose={() => setShowInviteModal(false)}
+        />
+      )}
+
+      {/* Invite to AI Interview — self-contained counterpart to the Assessment
+          modal above, for a row whose host didn't supply its own
+          onInviteAIInterview (see aiInterviewInviteCandidate's effect above). */}
+      {resolvedAIInterviewConfig && aiInterviewInviteCandidate && (
+        <ShareAIInterviewModal
+          isOpen
+          config={resolvedAIInterviewConfig}
+          onClose={() => {
+            setResolvedAIInterviewConfig(null);
+            setAiInterviewInviteCandidate(null);
+          }}
+          onInviteSent={() => {
+            setResolvedAIInterviewConfig(null);
+            setAiInterviewInviteCandidate(null);
+          }}
+          initialCandidates={[{
+            name: aiInterviewInviteCandidate.candidateName || 'Unknown',
+            email: aiInterviewInviteCandidate.email || '',
+            resumeId: aiInterviewInviteCandidate.resumeId,
+          }]}
         />
       )}
 
