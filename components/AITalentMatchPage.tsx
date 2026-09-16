@@ -95,6 +95,10 @@ interface MatchHistory {
   jdStatus?: string;
   jdDepartment?: string;
   jdCurrentVersion?: number;
+  // Best candidate rating (1-10 scale), precomputed server-side from stored
+  // results — lets "Top Match Rating" / "Top Matching Jobs" render from the
+  // summary list alone, before any per-session candidate detail has loaded.
+  topRating?: number | null;
 }
 
 /** Set just before leaving for a resume, so returning keeps the active filters. */
@@ -311,16 +315,10 @@ export default function AITalentMatchPage({
         const details = await aiMatchService.getSession(item.id);
         const candidates = details.candidates as MatchedCandidateWithVersions[];
         setHistoryCandidatesById(prev => ({ ...prev, [item.id]: candidates }));
-        // A retry that succeeds after an earlier failure — this session is no
-        // longer "failed", it's loaded.
-        setFailedHistorySessionIds(prev => (prev.has(item.id) ? (() => {
-          const next = new Set(prev); next.delete(item.id); return next;
-        })() : prev));
         return candidates;
       } catch (error) {
         console.error('[AITalentMatch] Failed to fetch session details:', error);
         if (!silent) toast.error('Failed to load matched candidates');
-        setFailedHistorySessionIds(prev => (prev.has(item.id) ? prev : new Set(prev).add(item.id)));
         return [] as MatchedCandidateWithVersions[];
       } finally {
         historyCandidateRequests.current.delete(item.id);
@@ -850,13 +848,6 @@ export default function AITalentMatchPage({
   const [scoringVersions, setScoringVersions] = useState<any[]>([]);
   const [historyCandidatesById, setHistoryCandidatesById] = useState<Record<string, MatchedCandidateWithVersions[]>>({});
   const [loadingHistorySessionId, setLoadingHistorySessionId] = useState<string | null>(null);
-  // Sessions whose candidate fetch failed. Kept separate from
-  // `historyCandidatesById` so a failure never gets cached as "0 candidates" —
-  // opening that job later still retries — but "Top Match Rating"/"Top
-  // Matching Jobs" (via `topStatsReady`) need to know a session is done being
-  // waited on even when it errored, or a single failed fetch would leave
-  // those tiles on their loading skeleton forever.
-  const [failedHistorySessionIds, setFailedHistorySessionIds] = useState<Set<string>>(new Set());
 
   // Scored resume IDs for current JD
   const [scoredResumeIds, setScoredResumeIds] = useState<Set<string>>(new Set());
@@ -1746,9 +1737,17 @@ export default function AITalentMatchPage({
   // available for it — lazy-loaded rows once fetched, else the initial prop
   // data. Shared by the exact-match job filter below and the "Top Match
   // Rating" / "Top Matching Jobs" stats so both read the same number.
+  // Falls back to `topRating` (precomputed server-side from stored results,
+  // present as soon as the session list itself has loaded) when per-session
+  // candidate detail hasn't been fetched yet, so the stats are correct
+  // immediately on module open instead of only once every session's full
+  // candidate list (and each candidate's resume-detail enrichment) resolves.
   const getJobBestScore = (item: MatchHistory): number => {
-    const candidates = historyCandidatesById[item.id] ?? item.matchedCandidates ?? [];
-    return candidates.reduce((best, c) => Math.max(best, c.matchScore ?? 0), 0);
+    const candidates = historyCandidatesById[item.id] ?? item.matchedCandidates;
+    if (candidates && candidates.length > 0) {
+      return candidates.reduce((best, c) => Math.max(best, c.matchScore ?? 0), 0);
+    }
+    return (item.topRating ?? 0) * 10;
   };
 
   const filteredHistory = matchHistory.filter(item => {
@@ -1792,9 +1791,9 @@ export default function AITalentMatchPage({
         });
 
     // "Top Matching Jobs" drill-down: same "rating 10" definition
-    // `topMatchingJobsCount` counts. A job whose candidates haven't loaded yet
-    // scores 0 here (see getJobBestScore) and is correctly excluded until its
-    // real data arrives, rather than shown permissively.
+    // `topMatchingJobsCount` counts. Uses the same server-precomputed
+    // `topRating` fallback as `getJobBestScore` for a job whose candidates
+    // haven't loaded yet.
     const matchesExactOnly = !showOnlyExactMatchJobs ||
       toMatchRating(getJobBestScore(item)) === 10;
 
@@ -1880,17 +1879,6 @@ export default function AITalentMatchPage({
     const topMatchRating = bestScorePerJob.length ? Math.max(...bestScorePerJob) : 0;
     // Exact Match = a rating of 10, same bucket the Match History popup counts.
     const topMatchingJobsCount = bestScorePerJob.filter(score => toMatchRating(score) === 10).length;
-    // Every session's candidates load in individually (in the background — see
-    // the prefetch effect above), so `bestScorePerJob` fills in one job at a
-    // time rather than all at once. Rendering the count as each one lands made
-    // "Top Match Rating"/"Top Matching Jobs" visibly count up (1, 2, 3, ...) as
-    // sessions resolved. Holding the real number back until every session has
-    // resolved means the tiles show only their final, correct value.
-    const topStatsReady = matchHistory.every(
-      item => (item.totalMatches || 0) <= 0 ||
-        historyCandidatesById[item.id] !== undefined ||
-        failedHistorySessionIds.has(item.id)
-    );
 
     // Candidate roll-up search matches the person or any job they matched.
     const candidateQuery = candidateSearchQuery.trim().toLowerCase();
@@ -2208,12 +2196,7 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={Award}
             label="Top Match Rating"
-            // Shown only once every session has resolved — see `topStatsReady`
-            // — so this renders the final rating directly instead of visibly
-            // counting up as sessions load in one by one.
-            value={topStatsReady ? `${toMatchRating(topMatchRating)}` : (
-              <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
-            )}
+            value={`${toMatchRating(topMatchRating)}`}
             sparkline={false}
             // Drills into the real candidates holding this exact rating — same
             // "All Resumes" view + rating-band filter the pills below use, so
@@ -2230,12 +2213,7 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={Briefcase}
             label="Top Matching Jobs"
-            // Same "hold until every session has resolved" rule as Top Match
-            // Rating above, so this shows the final count directly rather than
-            // counting up (1, 2, 3, ...) as sessions load in.
-            value={topStatsReady ? topMatchingJobsCount : (
-              <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
-            )}
+            value={topMatchingJobsCount}
             sparkline={false}
             // Drills into the real jobs behind this count — View by Job,
             // narrowed to jobs whose best candidate is a perfect 10/10 (the

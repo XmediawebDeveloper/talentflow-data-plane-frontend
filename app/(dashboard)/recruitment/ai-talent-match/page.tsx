@@ -43,6 +43,10 @@ interface MatchHistory {
   jdStatus?: string;
   jdDepartment?: string;
   jdCurrentVersion?: number;
+  // Best candidate rating (1-10 scale), precomputed server-side from stored
+  // results — lets "Top Match Rating" / "Top Matching Jobs" render from the
+  // summary list alone, before any per-session candidate detail has loaded.
+  topRating?: number | null;
 }
 
 // Transform JD API response to Job format for the component
@@ -143,6 +147,7 @@ export default function AITalentMatchRoute() {
             jdStatus: session.jd_status || job?.status,
             jdDepartment: session.jd_department || job?.department,
             jdCurrentVersion: session.jd_current_version ?? job?.currentVersion,
+            topRating: session.top_rating,
           };
         });
 
