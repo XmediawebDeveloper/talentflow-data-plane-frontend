@@ -1130,7 +1130,14 @@ Best regards`);
               // is not a real Job Details page to link to.
               if (activeTab !== 'viewjd' || !jobId || jobId === 'global') return base;
 
-              const jdDetailsHref = `/recruitment/job-details?id=${jobId}`;
+              // Tags the destination with where it came from, so that page's
+              // own breadcrumb (app/(dashboard)/recruitment/job-details/page.tsx)
+              // can show a Resume-Scoring-flavored trail - with a crumb back to
+              // THIS exact candidate - instead of resetting to the generic Job
+              // Openings trail every other route lands there with.
+              const scoreId = fullResumeData.id || resume.id;
+              const candidateName = fullResumeData.candidateName || resume.candidateName || '';
+              const jdDetailsHref = `/recruitment/job-details?id=${jobId}&from=resume-scoring&score_id=${encodeURIComponent(scoreId)}&candidate_name=${encodeURIComponent(candidateName)}`;
               const existingJobCrumbIndex = base.findIndex(
                 (item, i) => item.label === jobTitle && i !== base.length - 1
               );
