@@ -22,6 +22,7 @@ import ScoreTableModal from './ScoreTableModal';
 import ListPagination from './ListPagination';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
 import { formatIST, formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import {
@@ -311,6 +312,26 @@ export default function ScoredResumesTable({
     hasPlanFeature('ai_interview') &&
     isFeatureEnabled('ai_interview');
 
+  // Only the cross-job global list needs this — a single-job host (JobDetailView,
+  // or this page's own per-job "Scoring History" list) already knows its one
+  // answer via the assessmentConfigured/aiInterviewConfigured props above,
+  // computed once for the whole table by useJobInviteTargets.
+  const needsBulkInviteTargets =
+    enableInternalAIInterviewInvite && assessmentConfigured === undefined && aiInterviewConfigured === undefined;
+  const bulkInviteTargets = useAllJobInviteTargets(needsBulkInviteTargets);
+
+  /* Per-row invite availability. A row that carries its own `jdId` (the
+     cross-job global list) is answered from the bulk map above, keyed by
+     THAT row's job — never the table-level assessmentConfigured/
+     aiInterviewConfigured, which for that list is `undefined` (spans many
+     jobs, nothing to hand down). A row without its own `jdId` (every
+     single-job table) falls back to the table-level flag, unchanged.
+     `undefined` either way keeps meaning "unknown, don't gate". */
+  const resolveAssessmentConfigured = (resume: ScoredResume): boolean | undefined =>
+    resume.jdId && needsBulkInviteTargets ? bulkInviteTargets.hasAssessment(resume.jdId) : assessmentConfigured;
+  const resolveAIInterviewConfigured = (resume: ScoredResume): boolean | undefined =>
+    resume.jdId && needsBulkInviteTargets ? bulkInviteTargets.hasAIInterview(resume.jdId) : aiInterviewConfigured;
+
   /* Invite gating. An entry is offered when the viewer may use it AND the JD
      has something to invite to; `undefined` from the host means unknown, which
      is treated as "don't gate" so the global scoring view is unchanged.
@@ -326,7 +347,13 @@ export default function ScoredResumesTable({
      `aiInterviewInviteCandidate` below), the same "resolve on click, then
      explain why not" pattern already used for Assessment via
      InviteShareModal, just extended to AI Interview. Either way the option
-     is only ever offered when `mayInviteAIInterview` is true. */
+     is only ever offered when `mayInviteAIInterview` is true.
+
+     `canInviteAssessment`/`canInviteAIInterview`/`inviteDisabled` below stay
+     table-wide — used only by the bulk-selection invite flow further down,
+     which acts on the table's own job, not a specific row. The per-row
+     dropdown in renderInviteCell computes its own row-scoped versions from
+     resolveAssessmentConfigured/resolveAIInterviewConfigured above instead. */
   const canInviteAssessment = canCreateAssessments && assessmentConfigured !== false;
   const canInviteAIInterview = mayInviteAIInterview && aiInterviewConfigured !== false;
   const inviteDisabled = !canInviteAssessment && !canInviteAIInterview;
@@ -1350,15 +1377,31 @@ Best regards`);
   // candidate can be invited to; each entry is gated by its own permission and
   // by whether that section exists on this JD, rather than hiding the whole
   // control. Neither configured → the button is disabled.
-  const renderInviteCell = (resume: ScoredResume) => (
+  const renderInviteCell = (resume: ScoredResume) => {
+    // Row-scoped: for the cross-job global list this reads THIS row's own
+    // job from the bulk map: resolveAssessmentConfigured/
+    // resolveAIInterviewConfigured (see above), not the table-wide flags,
+    // which are `undefined` for that list. A single-job table's rows all
+    // resolve to the same table-wide flag, same as before this existed.
+    const rowAssessmentConfigured = resolveAssessmentConfigured(resume);
+    const rowAIInterviewConfigured = resolveAIInterviewConfigured(resume);
+    const rowCanInviteAssessment = canCreateAssessments && rowAssessmentConfigured !== false;
+    const rowCanInviteAIInterview = mayInviteAIInterview && rowAIInterviewConfigured !== false;
+    const rowInviteDisabled = !rowCanInviteAssessment && !rowCanInviteAIInterview;
+    const rowInviteDisabledTitle =
+      canCreateAssessments || mayInviteAIInterview
+        ? 'No published assessment or AI interview for this job yet'
+        : undefined;
+
+    return (
   <td className="py-3 px-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
     {(canCreateAssessments || mayInviteAIInterview) ? (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
             aria-label="Invite"
-            disabled={inviteDisabled}
-            title={inviteDisabled ? inviteDisabledTitle : 'Invite'}
+            disabled={rowInviteDisabled}
+            title={rowInviteDisabled ? rowInviteDisabledTitle : 'Invite'}
             className="px-3 py-1.5 text-xs text-white rounded-md transition-all flex items-center gap-1.5 shadow-sm hover:shadow-md bg-brand-blue hover:bg-brand-blue-2 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:bg-brand-blue"
           >
             <UserPlus className="w-3.5 h-3.5" />
@@ -1377,9 +1420,9 @@ Best regards`);
                  and assessment invites spend a unit, so the entry
                  also goes quiet when there are none left rather
                  than opening a form that cannot be submitted. */
-              disabled={!canInviteAssessment || availableUnits === 0}
+              disabled={!rowCanInviteAssessment || availableUnits === 0}
               title={
-                !canInviteAssessment
+                !rowCanInviteAssessment
                   ? 'No published assessment for this job yet'
                   : availableUnits === 0
                     ? 'No assessment units available'
@@ -1399,9 +1442,9 @@ Best regards`);
               className={scoredResumesMenuItemClass}
               /* Same rule on the interview side: nothing live on
                  this JD means nothing to invite the candidate to. */
-              disabled={!canInviteAIInterview || resolvingAIInterviewInvite}
+              disabled={!rowCanInviteAIInterview || resolvingAIInterviewInvite}
               title={
-                !canInviteAIInterview
+                !rowCanInviteAIInterview
                   ? 'No published AI interview for this job yet'
                   : undefined
               }
@@ -1429,7 +1472,8 @@ Best regards`);
       <span className="text-xs text-gray-400">-</span>
     )}
   </td>
-  );
+    );
+  };
 
   /**
    * The Actions dropdown's items for one resume — factored out so the

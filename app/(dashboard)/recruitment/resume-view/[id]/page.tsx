@@ -2406,7 +2406,10 @@ Best regards`);
         </div>
       )}
 
-      {/* Invite — step 2a: share the JD's assessment */}
+      {/* Invite — step 2a: share the JD's assessment. Prefilled with the
+          resume this page is showing — was opening blank, leaving the
+          recruiter to retype the name and email of the candidate whose
+          resume they were already looking at. */}
       {showShareAssessmentModal && shareAssessments.length > 0 && (
         <ShareAssessmentModal
           isOpen={showShareAssessmentModal}
@@ -2414,6 +2417,18 @@ Best regards`);
             setShowShareAssessmentModal(false);
             setShareAssessments([]);
           }}
+          prefilledCandidates={
+            resume?.email
+              ? [{
+                  id: resumeId,
+                  name: getCandidateName(),
+                  email: resume.email,
+                  phone: resume.phone,
+                  source: 'manual',
+                  resumeId,
+                }]
+              : undefined
+          }
           assessment={{
             id: shareAssessments[0].id,
             title: shareAssessments[0].title,
@@ -2442,13 +2457,19 @@ Best regards`);
         />
       )}
 
-      {/* Invite — step 2b: share the JD's AI interview */}
+      {/* Invite — step 2b: share the JD's AI interview. Same prefill as the
+          Assessment modal above. */}
       {shareAIConfig && (
         <ShareAIInterviewModal
           isOpen={!!shareAIConfig}
           onClose={() => setShareAIConfig(null)}
           config={shareAIConfig}
           onInviteSent={() => setShareAIConfig(null)}
+          initialCandidates={
+            resume?.email
+              ? [{ name: getCandidateName(), email: resume.email, resumeId }]
+              : undefined
+          }
         />
       )}
 

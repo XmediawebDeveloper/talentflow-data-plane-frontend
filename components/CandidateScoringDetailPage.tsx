@@ -2905,7 +2905,12 @@ Best regards`);
           )}
 
           {/* Share Assessment via Email — the same modal the JD and assessment
-              pages use, opened here without leaving the candidate page. */}
+              pages use, opened here without leaving the candidate page.
+              Prefilled with THIS candidate, same as the row-level Invite in
+              ScoredResumesTable — this page's own Invite button was opening
+              both share modals with a blank candidate form; the recruiter had
+              to retype the name and email of the very candidate they were
+              already looking at. */}
           {showShareAssessmentModal && shareAssessments.length > 0 && (
             <ShareAssessmentModal
               isOpen={showShareAssessmentModal}
@@ -2913,6 +2918,18 @@ Best regards`);
                 setShowShareAssessmentModal(false);
                 setShareAssessments([]);
               }}
+              prefilledCandidates={
+                (fullResumeData.email || resume.email)
+                  ? [{
+                      id: fullResumeData.resumeId || resume.resumeId || resume.id,
+                      name: fullResumeData.candidateName || resume.candidateName || 'Unknown',
+                      email: fullResumeData.email || resume.email || '',
+                      phone: fullResumeData.phone || resume.phone,
+                      source: 'manual',
+                      resumeId: fullResumeData.resumeId || resume.resumeId,
+                    }]
+                  : undefined
+              }
               assessment={{
                 id: shareAssessments[0].id,
                 title: shareAssessments[0].title,
@@ -2943,13 +2960,24 @@ Best regards`);
             />
           )}
 
-          {/* Share AI Interview — same modal the AI Interviews page opens. */}
+          {/* Share AI Interview — same modal the AI Interviews page opens.
+              Prefilled with THIS candidate, same reasoning as the Assessment
+              modal above. */}
           {shareAIConfig && (
             <ShareAIInterviewModal
               isOpen={!!shareAIConfig}
               onClose={() => setShareAIConfig(null)}
               config={shareAIConfig}
               onInviteSent={() => setShareAIConfig(null)}
+              initialCandidates={
+                (fullResumeData.email || resume.email)
+                  ? [{
+                      name: fullResumeData.candidateName || resume.candidateName || 'Unknown',
+                      email: fullResumeData.email || resume.email || '',
+                      resumeId: fullResumeData.resumeId || resume.resumeId,
+                    }]
+                  : undefined
+              }
             />
           )}
 
