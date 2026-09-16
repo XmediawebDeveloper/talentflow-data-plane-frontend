@@ -35,6 +35,18 @@ interface MatchHistory {
   matchedAt: Date;
   totalMatches: number;
   matchedCandidates: any[];
+  // Carried straight from the session's server-side join to job_descriptions,
+  // so the card can show real job info even when the job isn't present in
+  // this page's separately-paginated `jobs` list (see transformedJobs.find
+  // below — capped to the 100 most-recently-updated JDs).
+  jdJobId?: string;
+  jdStatus?: string;
+  jdDepartment?: string;
+  jdCurrentVersion?: number;
+  // Best candidate rating (1-10 scale), precomputed server-side from stored
+  // results — lets "Top Match Rating" / "Top Matching Jobs" render from the
+  // summary list alone, before any per-session candidate detail has loaded.
+  topRating?: number | null;
 }
 
 // Transform JD API response to Job format for the component
@@ -106,7 +118,7 @@ export default function AITalentMatchRoute() {
         for (const session of historyResponse.items) {
           const jobId = session.jd_id || session.search_query || 'unknown';
           const ownerJob = transformedJobs.find(j => j.id === session.jd_id);
-          const countKey = ownerJob?.jobId || jobId;
+          const countKey = session.jd_job_id || ownerJob?.jobId || jobId;
           sessionCounts[countKey] = (sessionCounts[countKey] || 0) + 1;
           const existing = sessionsByJob.get(jobId);
           // Keep the most recent session for each job
@@ -124,10 +136,18 @@ export default function AITalentMatchRoute() {
           return {
             id: session.id,
             jobId: session.jd_id || '',
-            jobTitle: job?.title || session.search_query || 'Unknown Job',
+            // Prefer the title the backend already joined from job_descriptions
+            // — it's authoritative and doesn't depend on the job being present
+            // in this page's capped `jobs` fetch.
+            jobTitle: session.jd_title || job?.title || session.search_query || 'Unknown Job',
             matchedAt: new Date(session.created_at),
             totalMatches: session.total_matches,
             matchedCandidates: [],
+            jdJobId: session.jd_job_id || job?.jobId,
+            jdStatus: session.jd_status || job?.status,
+            jdDepartment: session.jd_department || job?.department,
+            jdCurrentVersion: session.jd_current_version ?? job?.currentVersion,
+            topRating: session.top_rating,
           };
         });
 

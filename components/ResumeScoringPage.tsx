@@ -3,7 +3,7 @@
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { WorkInProgressIcon } from '@/components/icons/nav-icons';
 import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Award, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronRight, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList } from 'lucide-react';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useId } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
@@ -16,7 +16,7 @@ import { normalizeMatchResult } from '@/lib/utils/matchStatus';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import api, { dispatchUnitsConsumed } from '@/lib/services/api';
-import { scoringService } from '@/lib/services/scoringService';
+import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
 import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
@@ -371,12 +371,15 @@ export default function ResumeScoringPage({
     getJobProgress,
     hasActiveScoring,
     setOnRestorePanel,
-    setMainPanelOpen,
+    setPanelVisibility,
     setMinimized: setContextMinimized,
     clearJob,
     activeScoringJobs,
     syncScoringJob,
   } = useScoringProgress();
+  // Stable per-instance id for the ref-counted panel-visibility registry —
+  // see `setPanelVisibility` on ScoringProgressContext.
+  const panelOwnerId = useId();
 
   // Use props directly - data is fetched by the page route
   const jobs = propJobs;
@@ -482,20 +485,8 @@ export default function ResumeScoringPage({
 
   // State for real-time scoring status panel
   const [showScoringPanel, setShowScoringPanel] = useState(false);
-  const [isScoringMinimized, setIsScoringMinimized] = useState(false);
   const [resumesToScore, setResumesToScore] = useState<Array<{ id: string; name: string }>>([]);
   const [scoringSource, setScoringSource] = useState<'my-resumes' | 'database'>('database');
-
-  // Register restore callback when scoring panel is minimized
-  useEffect(() => {
-    if (showScoringPanel && isScoringMinimized) {
-      // When minimized, clicking floating indicator should restore the panel
-      setOnRestorePanel(() => setIsScoringMinimized(false));
-    } else {
-      setOnRestorePanel(undefined);
-    }
-    return () => setOnRestorePanel(undefined);
-  }, [showScoringPanel, isScoringMinimized, setOnRestorePanel]);
 
   // Scoring History Modal
   const [historyModalItem, setHistoryModalItem] = useState<ScoredResumeData | null>(null);
@@ -605,8 +596,6 @@ export default function ResumeScoringPage({
   const jobPickerListRef = useRef<HTMLDivElement | null>(null);
   const [jobPickerScrollRequest, setJobPickerScrollRequest] = useState(0);
   const requestJobPickerScroll = () => setJobPickerScrollRequest((request) => request + 1);
-  // Whether the floating Progress Tables icon has revealed its label.
-  const [showProgressLabel, setShowProgressLabel] = useState(false);
 
   /* The JD itself, read-only, over this page. The scoring detail page names the
      job and its version but shows nothing OF it — the description, skills and
@@ -619,12 +608,6 @@ export default function ResumeScoringPage({
   // State for Progress Tables Modal
   const [showProgressModal, setShowProgressModal] = useState(false);
   const [progressData, setProgressData] = useState<ScoringProgressItem[]>([]);
-  /* Closing the progress popup is a dismissal, not a hide: it puts away the
-     finished run AND the floating button that reopens it, so a completed run
-     stops following the recruiter around the page. It stays dismissed until
-     something new happens — every run start below clears this, which is what
-     brings the popup and the button back for the next task. */
-  const [progressDismissed, setProgressDismissed] = useState(false);
   const [filterByJobId, setFilterByJobId] = useState<string | undefined>(undefined);
   const [showJobTitleColumn, setShowJobTitleColumn] = useState(false);
   /* The "View Progress" popup on a job row in View by Job spans the job's
@@ -637,21 +620,11 @@ export default function ResumeScoringPage({
   const [loadingProgressJobId, setLoadingProgressJobId] = useState<string | null>(null);
   const [isBulkProgressMinimized, setIsBulkProgressMinimized] = useState(false);
 
-  // Hide global floating widget when BulkScoringProgressModal is open and NOT minimized
-  /* Any new scoring work anywhere lifts the dismissal — "if another task
-     starts, the popup works as its flow". Keyed on the context rather than on
-     this component's own run-start handlers, because a run begun from the
-     source picker never touches those, and the floating button would otherwise
-     stay hidden for the rest of the session after one close. */
+  // When minimized, releasing this owner's registration lets GlobalScoringProgressIndicator show
   useEffect(() => {
-    if (hasActiveScoring) setProgressDismissed(false);
-  }, [hasActiveScoring]);
-
-  // When minimized, setMainPanelOpen(false) lets GlobalScoringProgressIndicator show
-  useEffect(() => {
-    setMainPanelOpen(showProgressModal && !isBulkProgressMinimized);
-    return () => { setMainPanelOpen(false); };
-  }, [showProgressModal, isBulkProgressMinimized, setMainPanelOpen]);
+    setPanelVisibility(panelOwnerId, showProgressModal && !isBulkProgressMinimized);
+    return () => { setPanelVisibility(panelOwnerId, false); };
+  }, [showProgressModal, isBulkProgressMinimized, setPanelVisibility, panelOwnerId]);
 
   // Helper: Convert job progress items to ScoringProgressItem[] for BulkScoringProgressModal
   const showBulkProgressFromJob = (jobId: string, jobTitle: string, items: any[], source: 'Internal DB' | 'My Resumes' = 'Internal DB') => {
@@ -662,20 +635,25 @@ export default function ResumeScoringPage({
       jobTitle: jobTitle,
       jobId: jobId,
       source: source,
-      status: item.status === 'completed'
-        ? 'Scored successfully' as const
-        : item.status === 'already_scored'
+      // 'already_scored' is a frontend-only sentinel (pre-scored items pulled
+      // from sessionStorage, never a live backend status) so it's checked
+      // before normalizing; everything else goes through normalizeScoringStatus
+      // so a backend value like 'pending' or 'in_progress' still maps
+      // correctly instead of silently falling through to 'Queued' forever.
+      status: item.status === 'already_scored'
         ? 'Already Scored - Skipped' as const
-        : item.status === 'failed'
+        : normalizeScoringStatus(item.status) === 'completed'
+        ? 'Scored successfully' as const
+        : normalizeScoringStatus(item.status) === 'failed'
         ? 'Failed' as const
-        : item.status === 'processing'
+        : normalizeScoringStatus(item.status) === 'processing'
         ? 'Scoring in progress' as const
         : 'Queued' as const,
       errorReason: item.errorMessage,
       score: item.score,
       scoredDateTime: item.status === 'already_scored' && item.scoredAt
         ? new Date(item.scoredAt)
-        : item.status === 'completed'
+        : normalizeScoringStatus(item.status) === 'completed'
         ? new Date()
         : undefined,
       matchResult: item.matchStatus
@@ -685,9 +663,71 @@ export default function ResumeScoringPage({
     setProgressData(progressItems);
     setFilterByJobId(jobId);
     setShowJobTitleColumn(false);
-    setProgressDismissed(false); // a new run un-dismisses the popup
     setShowProgressModal(true);
   };
+
+  /* Keep the global widget's restore callback pointing at this page's job
+     whenever its progress isn't the thing currently on screen — either
+     because no popup was opened yet this visit (the job is only tracked in
+     the shared context) or because it WAS open and got minimized.
+     Previously `onRestorePanel` was only registered inside each `onMinimize`
+     handler below, so restoring worked right after an explicit minimize but
+     not for a job merely sitting in the shared context — e.g. navigating to
+     this page fresh while a run finishes elsewhere. Clicking the widget then
+     fell back to GlobalScoringProgressIndicator's own
+     `router.push(...&show_progress=true)`, which does nothing on a same-route
+     navigation: the resume-scoring route's search-params effect only runs
+     once on mount, so a later `?show_progress=true` added via client-side
+     navigation is never re-read. Registering this reactively, keyed on the
+     same `showProgressModal && !isBulkProgressMinimized` condition that
+     drives panel visibility above, makes restore work regardless of how the
+     recruiter got to this page. */
+  useEffect(() => {
+    if (showProgressModal && !isBulkProgressMinimized) {
+      setOnRestorePanel(undefined);
+      return;
+    }
+    const job = activeScoringJobs[0];
+    if (!job) {
+      setOnRestorePanel(undefined);
+      return;
+    }
+    /* One arrow, not two: `setOnRestorePanel`'s own wrapper (in
+       ScoringProgressContext) already does the `setState(() => value)` trick
+       needed to store a function safely — wrapping it again here made the
+       stored "callback" a function that RETURNS this restore function
+       instead of one that RUNS it, so calling it from the global widget
+       silently did nothing. */
+    setOnRestorePanel(() => {
+      if (showProgressModal) {
+        // Already built for this job — just bring it back on screen.
+        setIsBulkProgressMinimized(false);
+        setContextMinimized(false);
+        return;
+      }
+      const historyItem = scoredHistory.find(h => h.jobId === job.jobId);
+      const items = historyItem
+        ? (historyItem.scoredResumes || []).map((r: any) => ({
+            resumeId: r.resumeId || r.id,
+            candidateName: r.candidateName || r.name || 'Unknown',
+            status: 'completed' as const,
+            score: r.overallScore ?? r.overall_score ?? 0,
+          }))
+        : job.items.map(i => ({
+            resumeId: i.resumeId,
+            candidateName: i.candidateName,
+            status: i.status === 'Scored successfully' ? ('completed' as const)
+              : i.status === 'Failed' ? ('failed' as const)
+              : i.status === 'Scoring in progress' ? ('processing' as const)
+              : ('queued' as const),
+            score: i.score,
+          }));
+      const source = job.items[0]?.source === 'My Resumes' ? 'My Resumes' : 'Internal DB';
+      showBulkProgressFromJob(job.jobId, job.jobTitle, items, source);
+      setContextMinimized(false);
+    });
+    return () => setOnRestorePanel(undefined);
+  }, [showProgressModal, isBulkProgressMinimized, activeScoringJobs, scoredHistory, setOnRestorePanel, setContextMinimized]);
 
   // History search + filters, in the shared hook.
   const [showHistoryFilters, setShowHistoryFilters] = useState(false);
@@ -861,6 +901,7 @@ export default function ResumeScoringPage({
         phone: item.phone || '',
         matchStatus: item.match_status || 'No Match',
         scorePercentage: Math.round(item.overall_score || 0),
+        overallRating10: item.overall_rating_10,
         scoredDate: item.created_at || new Date().toISOString(),
         scoredBy: item.scored_by_name || item.scored_by || 'AI Engine',
         // Source, Status, Error Reason fields
@@ -1280,20 +1321,20 @@ export default function ResumeScoringPage({
         jobTitle: jobTitle,
         jobId: jobId,
         source: source,
-        status: item.status === 'completed'
-          ? 'Scored successfully' as const
-          : item.status === 'already_scored'
+        status: item.status === 'already_scored'
           ? 'Already Scored - Skipped' as const
-          : item.status === 'failed'
+          : normalizeScoringStatus(item.status) === 'completed'
+          ? 'Scored successfully' as const
+          : normalizeScoringStatus(item.status) === 'failed'
           ? 'Failed' as const
-          : item.status === 'processing'
+          : normalizeScoringStatus(item.status) === 'processing'
           ? 'Scoring in progress' as const
           : 'Queued' as const,
         errorReason: item.errorMessage,
         score: item.score,
         scoredDateTime: item.status === 'already_scored' && item.scoredAt
           ? new Date(item.scoredAt)
-          : item.status === 'completed'
+          : normalizeScoringStatus(item.status) === 'completed'
           ? new Date()
           : undefined,
         // Always derive the match result from the backend's authoritative
@@ -1357,8 +1398,9 @@ export default function ResumeScoringPage({
                 const idx = resumeIdToIndex.get(item.resume_id);
                 if (idx === undefined) continue;
                 const itemId = `${jobId}-${item.resume_id}`;
+                const itemStatus = normalizeScoringStatus(item.status);
 
-                if (item.status === 'completed' && newItemStatuses[idx].status !== 'completed') {
+                if (itemStatus === 'completed' && newItemStatuses[idx].status !== 'completed') {
                   newItemStatuses[idx].status = 'completed';
                   newItemStatuses[idx].score = item.overall_score ?? 0;
                   newItemStatuses[idx].matchStatus = item.match_status;
@@ -1367,13 +1409,13 @@ export default function ResumeScoringPage({
                     matchResult: convertMatchStatus(item.match_status),
                     scoredDateTime: new Date().toISOString(),
                   });
-                } else if (item.status === 'failed' && newItemStatuses[idx].status !== 'failed') {
+                } else if (itemStatus === 'failed' && newItemStatuses[idx].status !== 'failed') {
                   newItemStatuses[idx].status = 'failed';
                   newItemStatuses[idx].errorMessage = item.error_message || 'Scoring failed';
                   updateItemStatus(jobId, itemId, 'Failed', {
                     errorReason: item.error_message || 'Scoring failed',
                   });
-                } else if (item.status === 'processing' && newItemStatuses[idx].status === 'queued') {
+                } else if (itemStatus === 'processing' && newItemStatuses[idx].status === 'queued') {
                   newItemStatuses[idx].status = 'processing';
                   updateItemStatus(jobId, itemId, 'Scoring in progress');
                 }
@@ -1479,13 +1521,13 @@ export default function ResumeScoringPage({
       jobTitle: batchProgress.jobTitle,
       jobId: batchProgress.jobId,
       source: batchSource,
-      status: item.status === 'completed'
-        ? 'Scored successfully' as const
-        : item.status === 'already_scored'
+      status: item.status === 'already_scored'
         ? 'Already Scored - Skipped' as const
-        : item.status === 'failed'
+        : normalizeScoringStatus(item.status) === 'completed'
+        ? 'Scored successfully' as const
+        : normalizeScoringStatus(item.status) === 'failed'
         ? 'Failed' as const
-        : item.status === 'processing'
+        : normalizeScoringStatus(item.status) === 'processing'
         ? 'Scoring in progress' as const
         : 'Queued' as const,
       errorReason: item.errorMessage,
@@ -1537,7 +1579,6 @@ export default function ResumeScoringPage({
     // Only show modal for NEW jobs, not for updates to jobs already shown
     if (!shownJobsRef.current.has(batchProgress.jobId)) {
       shownJobsRef.current.add(batchProgress.jobId);
-      setProgressDismissed(false); // a new run un-dismisses the popup
       setShowProgressModal(true);
     }
 
@@ -1763,6 +1804,7 @@ export default function ResumeScoringPage({
         phone: resume.phone || 'N/A',
         matchStatus: matchStatus,
         scorePercentage: Math.round(scoreValue),
+        overallRating10: resume.overallRating10 ?? resume.overall_rating_10,
         // Keep ISO string for timestamp - let display component format it
         scoredDate: resume.scoredDate || resume.created_at || scoredData.scoredAt,
         // Use scored_by_name from API for recruiter attribution
@@ -2209,6 +2251,10 @@ export default function ResumeScoringPage({
           /* Nothing published on this JD → nothing to invite to, so the row's
              Invite goes disabled rather than opening a menu that dead-ends. */
           assessmentConfigured={jdInviteTargets.known ? jdInviteTargets.assessmentConfigured : undefined}
+          aiInterviewConfigured={jdInviteTargets.known ? jdInviteTargets.aiInterviewConfigured : undefined}
+          /* This page has no AI-interview share modal of its own — let the
+             table resolve and share it, same as the global list below. */
+          enableInternalAIInterviewInvite
           /* Same "skip the job picker, land straight on Select Applicants to
              Score" shortcut as the header's own Score New Resumes button —
              this is what powers the empty state's Score Resumes action. Kept
@@ -2261,10 +2307,9 @@ export default function ResumeScoringPage({
             progressData={progressData}
             onClose={() => {
               setShowProgressModal(false);
-              setProgressDismissed(true);
               /* Every job, not just the settled ones. Clearing only finished
                  work kept anything still queued or processing, which left
-                 the floating button in the corner after an X meant to
+                 the global widget in the corner after an X meant to
                  dismiss it. Closing says "done with this", so it goes too. */
               activeScoringJobs.forEach(job => clearJob(job.jobId));
             }}
@@ -2279,15 +2324,13 @@ export default function ResumeScoringPage({
             showScoredByColumn={progressSpansJob}
             minimized={isBulkProgressMinimized}
             onMinimize={() => {
-              setIsBulkProgressMinimized(true);
               /* Deliberately NOT setMinimized(true) here. The indicator
                  shows the full card first and shrinks itself after 3s;
                  flipping it to the pill in this same tick is what made
-                 the run appear to vanish into the corner instantly. */
-              setOnRestorePanel(() => () => {
-                setIsBulkProgressMinimized(false);
-                setContextMinimized(false);
-              });
+                 the run appear to vanish into the corner instantly.
+                 The restore callback itself is registered by the effect
+                 above, reactively, once this flips true. */
+              setIsBulkProgressMinimized(true);
             }}
             onRetryFailed={async (item) => {
               try {
@@ -2598,97 +2641,13 @@ export default function ResumeScoringPage({
         {/* Overview cards — always visible; the active card is highlighted
             once its list is open below. */}
           <div className="mb-4 sm:mb-5">
-            {/* Progress Tables — floating action button at the bottom-right
-                corner. Clicking it reveals its label and opens the modal. */}
-            {/* Stood down only while a run is actually RUNNING — the floating
-                widget is carrying it then, and two clock buttons in one corner
-                is one too many. Not gated on `activeScoringJobs.length`: a
-                finished job now stays in that list for a day, which kept this
-                button hidden long after the run it deferred to had ended. */}
-            {/* bottom-24, not bottom-6: GlobalScoringProgressIndicator anchors
-                its own shrunk button/card to bottom-6 in this same corner and
-                can still be showing a recently-finished run (its retention
-                window keeps it up to a day), so bottom-6 here would stack this
-                button directly underneath it — a dead, invisible tap target. */}
-            {scoredHistory.length > 0 && !progressDismissed && !hasActiveScoring && (
-              <div className="pointer-events-none fixed inset-x-0 bottom-24 z-30">
-                <div className="mx-auto flex max-w-[1400px] justify-end px-6 md:px-10">
-                  <div className="pointer-events-auto flex flex-col items-center gap-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowProgressLabel(true);
-                    /* The CURRENT run only — the newest entry — not every job
-                       ever scored. Flattening the whole of `scoredHistory` here
-                       put hundreds of long-finished rows behind a button that
-                       sits beside a running job, so "207/207 complete" was the
-                       library rather than the task the recruiter had just
-                       started. Newest is read from `scoredAt` rather than taken
-                       from the array's order, which nothing here guarantees.
-                       Per-job and per-version history is still reachable from
-                       the rows themselves, which open this same modal scoped. */
-                    const currentRun = [...scoredHistory].sort(
-                      (a, b) => new Date(b.scoredAt).getTime() - new Date(a.scoredAt).getTime(),
-                    )[0];
-                    const allProgressData = (currentRun ? [currentRun] : []).flatMap(item =>
-                      item.scoredResumes.map(resume => ({
-                        id: resume.id,
-                        // required by ScoringProgressItem and used by the modal's Retry
-                        // action; it was omitted, so retry had no resume to re-score.
-                        resumeId: resume.resumeId || resume.id,
-                        candidateName: resume.candidateName || resume.name || 'Unknown',
-                        jobTitle: item.jobTitle,
-                        /* The JD's readable code and version, for the popup's
-                           header chips. Without them the header had only the
-                           internal uuid to show, which is what put
-                           "2f6a0dc3-1fbc-..." where "JD-164  v2" belongs. */
-                        jobCode: item.jdJobId,
-                        jobVersion: item.jdCurrentVersion,
-                        /* Shown under the candidate's name. The same three
-                           spellings the rest of this file reads, because the
-                           history rows come from more than one endpoint. */
-                        email: resume.candidateEmail || resume.candidate_email || resume.email,
-                        jobId: item.jobId,
-                        // This resume's own source, not the JD's aggregate — a job
-                        // scored from both My Resumes and the internal database
-                        // would otherwise show every row under one source.
-                        source: resume.source === 'my-resumes' ? 'My Resumes' : 'Internal DB' as 'My Resumes' | 'Internal DB',
-                        status: 'Scored successfully' as const,
-                        // Each candidate's own scored date, not the job's aggregate
-                        // `scoredAt` — that would show every row under one job with
-                        // the same timestamp regardless of when it was actually scored.
-                        scoredDateTime: resume.scoredDate ? new Date(resume.scoredDate) : new Date(item.scoredAt),
-                        matchResult: (resume.matchStatus === 'exact_match' || resume.matchStatus === 'Exact Match' ? 'Exact Match'
-                                     : resume.matchStatus === 'partial_match' || resume.matchStatus === 'Partial Match' ? 'Partial Match'
-                                     : resume.matchStatus === 'no_match' || resume.matchStatus === 'No Match' ? 'No Match'
-                                     : (resume.overall_score || resume.scorePercentage || 0) >= 85 ? 'Exact Match'
-                                     : (resume.overall_score || resume.scorePercentage || 0) >= 70 ? 'Partial Match'
-                                     : 'No Match') as 'Exact Match' | 'Partial Match' | 'No Match',
-                        score: resume.overall_score || resume.scorePercentage || 0,
-                      }))
-                    );
-                    setProgressData(allProgressData);
-                    setProgressSpansJob(false);
-                  setProgressSpansJob(false);
-                    setShowJobTitleColumn(true);
-                    setFilterByJobId(undefined);
-                    setShowProgressModal(true);
-                  }}
-                  aria-label="Current scoring progress"
-                  title="Current scoring progress"
-                  className="h-12 w-12 rounded-full bg-brand-blue text-white flex items-center justify-center shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 hover:bg-brand-blue-2 transition-colors"
-                >
-                  <Clock className="w-5 h-5" />
-                </button>
-                {showProgressLabel && (
-                  <span className="order-first rounded-full bg-white px-2 py-0.5 text-[10px] font-medium text-brand-blue shadow-sm ring-1 ring-brand-blue/15">
-                    Progress Tables
-                  </span>
-                )}
-                  </div>
-                </div>
-              </div>
-            )}
+            {/* The page used to also render its own "reopen last progress" floating
+                clock button here (bottom-24, offset above GlobalScoringProgressIndicator's
+                bottom-6 widget). GlobalScoringProgressIndicator already keeps a
+                finished run's round button up for a day and restores this exact
+                popup on click, so the two were showing side by side for the same
+                purpose — the visible "duplicate clock" bug. Removed in favor of
+                the single global widget everywhere, this page included. */}
 
             {/* One clickable card — Total Resumes Scored, which opens the list —
                 followed by the verdict breakdown, which is read-only. Switching
@@ -2842,6 +2801,13 @@ export default function ResumeScoringPage({
                 jobTitle="All Jobs"
                 jobId="global"
                 availableUnits={availableASUnits ?? 10}
+                /* This list spans every job, so neither invite target can be
+                   pre-checked (no single jd_id to ask) - each row resolves
+                   its OWN job's Assessment/AI Interview when actually
+                   clicked (InviteShareModal already does this for
+                   Assessment; this opts the same row into it for AI
+                   Interview too), rather than being pre-gated here. */
+                enableInternalAIInterviewInvite
                 onViewCandidate={(resume) => {
                   setSelectedCandidateForView(resume);
                   setViewMode('candidateView');
@@ -3012,7 +2978,7 @@ export default function ResumeScoringPage({
         {/* History List or Empty State */}
         {displayHistory.length > 0 ? (
           <>
-          <div className={historyViewMode === 'grid' ? 'grid gap-4' : 'space-y-3'}>
+          <div className={historyViewMode === 'grid' ? 'flex flex-col gap-4' : 'space-y-3'}>
             {displayHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage).map((item) => {
               const avgScore = item.scoredResumes.length > 0
                 ? Math.round(item.scoredResumes.reduce((sum, r) => sum + (r.overall_score || r.scorePercentage || 0), 0) / item.scoredResumes.length)
@@ -3460,26 +3426,36 @@ export default function ResumeScoringPage({
                   // lets the version-history table's min-w-[960px] (see below)
                   // force the whole card wider than its grid track, bleeding
                   // past the rounded border instead of scrolling internally.
-                  className="min-w-0 bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all p-4 group hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5"
+                  className="min-w-0 bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden transition-all group hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5"
                 >
-                  <div className="flex flex-col sm:flex-row items-start gap-3">
-                    <div
-                      className="flex-1 min-w-0 cursor-pointer w-full"
-                      onClick={() => {
-                        setSelectedHistoryItem(item);
-                        setViewMode('details');
-                        onLoadJdScores?.(item.jobId, item.jobTitle);
-                        router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
-                      }}
-                    >
-                      {/* Card header — matches JD grid card */}
-                      <div className="p-0 mb-3">
-                        {/* Top: icon + badges */}
-                        <div className="flex items-start justify-between mb-3">
-                          <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Briefcase className="h-4 w-4 text-brand-blue" />
+                  <div className="p-4 sm:p-6 lg:p-8">
+                    <div className="flex flex-col sm:flex-row items-start justify-between gap-3 mb-3">
+                      {/* Icon + job id + title + badges */}
+                      <div
+                        className="flex items-start gap-3 min-w-0 cursor-pointer"
+                        onClick={() => {
+                          setSelectedHistoryItem(item);
+                          setViewMode('details');
+                          onLoadJdScores?.(item.jobId, item.jobTitle);
+                          router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
+                        }}
+                      >
+                        <div className="h-10 w-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0">
+                          <Briefcase className="h-5 w-5 text-brand-blue" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
+                            {item.jdJobId && (
+                              <JobIdBadge className="inline-flex h-6 items-center">{item.jdJobId}</JobIdBadge>
+                            )}
+                            <h3
+                              className="text-base font-semibold text-gray-900 dark:text-slate-50 line-clamp-2 min-w-0"
+                              title={item.jobTitle}
+                            >
+                              {item.jobTitle}
+                            </h3>
                           </div>
-                          <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                          <div className="flex items-center gap-1.5 flex-wrap">
                             {(() => {
                               const s = (item.jdStatus || 'published').toLowerCase();
                               const cfg: Record<string, { label: string; bg: string; text: string; border: string; dot: string }> = {
@@ -3492,14 +3468,14 @@ export default function ResumeScoringPage({
                               };
                               const c = cfg[s] || cfg.published;
                               return (
-                                <span className={`inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs ${c.bg} ${c.text} border ${c.border} gap-1.5`}>
+                                <span className={`inline-flex h-6 items-center px-2 py-0.5 rounded-full text-xs ${c.bg} ${c.text} border ${c.border} gap-1.5`}>
                                   <div className={`w-1.5 h-1.5 rounded-full ${c.dot}`}></div>
                                   {c.label}
                                 </span>
                               );
                             })()}
                             {displayVersionNumber && displayVersionNumber >= 1 && (
-                              <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5">
+                              <span className="inline-flex h-6 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5">
                                 <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
                                 v{displayVersionNumber}
                               </span>
@@ -3507,116 +3483,36 @@ export default function ResumeScoringPage({
                             {/* History icon button */}
                             <button
                               onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
-                              className="inline-flex h-7 w-7 items-center justify-center p-1.5 rounded-lg border border-brand-cyan/20 bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan/15 transition-colors flex-shrink-0"
+                              className="inline-flex h-6 w-6 items-center justify-center rounded-lg border border-brand-cyan/20 bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan/15 transition-colors flex-shrink-0"
                               aria-label="Scoring History" title="Scoring History"
                             >
                               <History className="w-3.5 h-3.5" />
                             </button>
-                          </div>
-                        </div>
-
-                        {/* job_id + title */}
-                        <div className="flex items-center gap-2 mb-3">
-                          {item.jdJobId && (
-                            <JobIdBadge className="inline-flex h-7 items-center">{item.jdJobId}</JobIdBadge>
-                          )}
-                          <h3
-                            className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 line-clamp-2 min-w-0"
-                            title={item.jobTitle}
-                          >
-                            {item.jobTitle}
-                          </h3>
-                        </div>
-
-                        {/* Info rows — matches JD grid card body */}
-                        <div className="space-y-2">
-                          {item.jdDepartment && (
-                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                              <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                              <span className="truncate">{item.jdDepartment}</span>
-                            </div>
-                          )}
-                          {item.jdIndustryType && (
-                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                              <Building2 className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                              <span className="truncate">{formatIndustryType(item.jdIndustryType)}</span>
-                            </div>
-                          )}
-                          {item.jdLocation && (
-                          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                            <MapPin className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                            <span className="truncate">{item.jdLocation}</span>
-                          </div>
-                          )}
-                          {item.jdEmploymentType && (
-                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                              <Clock className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                              <span className="truncate">{formatEmploymentType(item.jdEmploymentType)}</span>
-                            </div>
-                          )}
-                          {item.jdRemoteType && (
-                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                              <Users className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                              <span className="capitalize">{item.jdRemoteType}</span>
-                            </div>
-                          )}
-                          {item.jdPublishedAt && (
-                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                              <Calendar className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                              <span>Posted {formatISTDate(item.jdPublishedAt)}</span>
-                            </div>
-                          )}
-                          {item.jdCreatedByName && (
-                            <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                              <User className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                              <span className="truncate">By {item.jdCreatedByName}</span>
-                            </div>
-                          )}
-                          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                            <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
-                            <span>{item.totalScored} {item.totalScored === 1 ? 'candidate' : 'candidates'} scored</span>
+                            {item.jdEmploymentType && (
+                              <span className="inline-flex h-6 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700">
+                                {formatEmploymentType(item.jdEmploymentType)}
+                              </span>
+                            )}
+                            {item.jdRemoteType && (
+                              <span className="inline-flex h-6 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700 capitalize">
+                                {item.jdRemoteType}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div className="bg-gradient-to-br from-green-50 to-green-50/40 border border-green-200/70 ring-1 ring-green-100 rounded-lg p-3">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-700 dark:text-slate-300 font-medium">Exact Match</span>
-                            <Award className="w-4 h-4 text-green-600" />
-                          </div>
-                          <div className="text-2xl text-green-700 font-bold tracking-tight">{exactMatchCount}</div>
+                      {/* Avg score + actions */}
+                      <div className="flex-shrink-0 flex items-start gap-3 self-start">
+                        <div className="text-right">
+                          <div className="text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium">Avg Score</div>
+                          <div className={`text-2xl sm:text-3xl font-bold tracking-tight ${getScoreColor(avgScore)}`}>{avgScore}%</div>
+                          <div className="text-xs text-gray-500 dark:text-slate-400">{item.totalScored} {item.totalScored === 1 ? 'candidate' : 'candidates'} scored</div>
                         </div>
-                        <div className="bg-gradient-to-br from-brand-cyan/10 to-brand-cyan/5 border border-brand-cyan/20 ring-1 ring-brand-cyan/10 rounded-lg p-3">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-700 dark:text-slate-300 font-medium">Partial Match</span>
-                            <CheckCircle className="w-4 h-4 text-brand-cyan" />
-                          </div>
-                          <div className="text-2xl text-brand-cyan font-bold tracking-tight">{partialMatchCount}</div>
-                        </div>
-                        <div className="bg-gradient-to-br from-brand-orange/10 to-brand-orange/5 border border-brand-orange/20 ring-1 ring-brand-orange/10 rounded-lg p-3">
-                          <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs text-gray-700 dark:text-slate-300 font-medium">No Match</span>
-                            <XCircle className="w-4 h-4 text-brand-orange-deep" />
-                          </div>
-                          <div className="text-2xl text-brand-orange-deep font-bold tracking-tight">{noMatchCount}</div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex-shrink-0 text-center w-full sm:w-auto">
-                      <div className="text-xs text-gray-600 dark:text-slate-400 mb-1 font-medium">Avg Score</div>
-                      <div className={`text-2xl sm:text-3xl lg:text-4xl font-bold mb-2 tracking-tight ${getScoreColor(avgScore)}`}>
-                        {avgScore}%
-                      </div>
-                      {/* View Progress / View Details are icon-only: the card
-                          above already carries the job title, status and
-                          version badges, so a text label here repeated what
-                          the tooltip already says. */}
-                      <div className="mt-4 flex flex-col gap-2 w-full">
-                        <div className="flex items-center justify-end gap-1.5">
+                        <div className="flex items-center gap-1.5 pt-0.5">
                           <button
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               setSelectedHistoryItem(item);
                               setViewMode('details');
                               onLoadJdScores?.(item.jobId, item.jobTitle);
@@ -3652,25 +3548,114 @@ export default function ResumeScoringPage({
                               : <WorkInProgressIcon className="w-4 h-4" />}
                           </button>
                         </div>
-                        {hasVersionHistory && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); versionLineage.toggle(versionKey, item.jobId); }}
-                            aria-expanded={versionsExpanded}
-                            title={versionsExpanded ? 'Hide version history' : 'View version history'}
-                            className={`py-2 rounded-lg transition-all text-sm font-medium flex items-center gap-1.5 justify-center cursor-pointer text-white ring-1 ring-white/10 ${
-                              versionsExpanded
-                                ? 'bg-brand-blue-2 shadow-md shadow-brand-blue/30'
-                                : 'bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 hover:shadow-md hover:shadow-brand-blue/30'
-                            }`}
-                          >
-                            {versionsExpanded ? 'Hide Versions' : 'View Versions'}
-                            <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
-                          </button>
-                        )}
                       </div>
                     </div>
+
+                    {/* Info strip */}
+                    <div className="flex flex-wrap items-start gap-x-5 gap-y-2 py-2.5 border-t border-b border-gray-100 dark:border-slate-800 mb-3">
+                      {item.jdIndustryType && (
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium mb-1">
+                            <Building2 className="w-3.5 h-3.5 flex-shrink-0" /> Specialty
+                          </div>
+                          <div className="text-sm font-semibold text-gray-800 dark:text-slate-200 truncate">{formatIndustryType(item.jdIndustryType)}</div>
+                        </div>
+                      )}
+                      {item.jdLocation && (
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium mb-1">
+                            <MapPin className="w-3.5 h-3.5 flex-shrink-0" /> Location
+                          </div>
+                          <div className="text-sm font-semibold text-gray-800 dark:text-slate-200 truncate">{item.jdLocation}</div>
+                        </div>
+                      )}
+                      {(item.jdEmploymentType || item.jdRemoteType) && (
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium mb-1">
+                            <Clock className="w-3.5 h-3.5 flex-shrink-0" /> Employment
+                          </div>
+                          <div className="text-sm font-semibold text-gray-800 dark:text-slate-200 capitalize truncate">
+                            {[item.jdEmploymentType && formatEmploymentType(item.jdEmploymentType), item.jdRemoteType].filter(Boolean).join(' · ')}
+                          </div>
+                        </div>
+                      )}
+                      {item.jdPublishedAt && (
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium mb-1">
+                            <Calendar className="w-3.5 h-3.5 flex-shrink-0" /> Posted
+                          </div>
+                          <div className="text-sm font-semibold text-gray-800 dark:text-slate-200 truncate">{formatISTDate(item.jdPublishedAt)}</div>
+                        </div>
+                      )}
+                      {item.jdCreatedByName && (
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium mb-1">
+                            <User className="w-3.5 h-3.5 flex-shrink-0" /> Recruiter
+                          </div>
+                          <div className="text-sm font-semibold text-gray-800 dark:text-slate-200 truncate">{item.jdCreatedByName}</div>
+                        </div>
+                      )}
+                      <div className="min-w-0 sm:ml-auto">
+                        <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium mb-1">
+                          <FileText className="w-3.5 h-3.5 flex-shrink-0" /> Evaluation
+                        </div>
+                        <div className="text-sm font-semibold text-brand-blue truncate">{item.totalScored} Scored</div>
+                      </div>
+                    </div>
+
+                    {/* Match tiles */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                      <div className="bg-green-50/60 dark:bg-green-950/20 border border-green-200/70 dark:border-green-900/40 rounded-lg p-2.5">
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <div>
+                            <div className="text-xs font-semibold text-gray-800 dark:text-slate-200">Exact Match</div>
+                            <div className="text-[11px] text-gray-500 dark:text-slate-400">Fit score &ge; 90%</div>
+                          </div>
+                          <Award className="w-4 h-4 text-green-600 flex-shrink-0" />
+                        </div>
+                        <div className="text-xl text-green-700 dark:text-green-400 font-bold tracking-tight">{exactMatchCount}</div>
+                      </div>
+                      <div className="bg-brand-cyan/5 border border-brand-cyan/20 rounded-lg p-2.5">
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <div>
+                            <div className="text-xs font-semibold text-gray-800 dark:text-slate-200">Partial Match</div>
+                            <div className="text-[11px] text-gray-500 dark:text-slate-400">Fit score 60% – 89%</div>
+                          </div>
+                          <CheckCircle className="w-4 h-4 text-brand-cyan flex-shrink-0" />
+                        </div>
+                        <div className="text-xl text-brand-cyan font-bold tracking-tight">{partialMatchCount}</div>
+                      </div>
+                      <div className="bg-brand-orange/5 border border-brand-orange/20 rounded-lg p-2.5">
+                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                          <div>
+                            <div className="text-xs font-semibold text-gray-800 dark:text-slate-200">No Match</div>
+                            <div className="text-[11px] text-gray-500 dark:text-slate-400">Fit score &lt; 60%</div>
+                          </div>
+                          <XCircle className="w-4 h-4 text-brand-orange-deep flex-shrink-0" />
+                        </div>
+                        <div className="text-xl text-brand-orange-deep font-bold tracking-tight">{noMatchCount}</div>
+                      </div>
+                    </div>
+
+                    {hasVersionHistory && (
+                      <div className="flex justify-end">
+                        <button
+                          onClick={(e) => { e.stopPropagation(); versionLineage.toggle(versionKey, item.jobId); }}
+                          aria-expanded={versionsExpanded}
+                          title={versionsExpanded ? 'Hide version history' : 'View version history'}
+                          className={`mt-3 px-3.5 py-1.5 rounded-lg transition-all text-xs font-medium flex items-center gap-1.5 justify-center cursor-pointer text-white ring-1 ring-white/10 ${
+                            versionsExpanded
+                              ? 'bg-brand-blue-2 shadow-md shadow-brand-blue/30'
+                              : 'bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 hover:shadow-md hover:shadow-brand-blue/30'
+                          }`}
+                        >
+                          {versionsExpanded ? 'Hide Versions' : 'View Versions'}
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+                    )}
+                    {versionHistoryPanel}
                   </div>
-                  {versionHistoryPanel}
                 </div>
               );
             })}
@@ -3751,10 +3736,9 @@ export default function ResumeScoringPage({
             progressData={progressData}
             onClose={() => {
               setShowProgressModal(false);
-              setProgressDismissed(true);
               /* Every job, not just the settled ones. Clearing only finished
                  work kept anything still queued or processing, which left
-                 the floating button in the corner after an X meant to
+                 the global widget in the corner after an X meant to
                  dismiss it. Closing says "done with this", so it goes too. */
               activeScoringJobs.forEach(job => clearJob(job.jobId));
             }}
@@ -3769,15 +3753,13 @@ export default function ResumeScoringPage({
             showScoredByColumn={progressSpansJob}
             minimized={isBulkProgressMinimized}
             onMinimize={() => {
-              setIsBulkProgressMinimized(true);
               /* Deliberately NOT setMinimized(true) here. The indicator
                  shows the full card first and shrinks itself after 3s;
                  flipping it to the pill in this same tick is what made
-                 the run appear to vanish into the corner instantly. */
-              setOnRestorePanel(() => () => {
-                setIsBulkProgressMinimized(false);
-                setContextMinimized(false);
-              });
+                 the run appear to vanish into the corner instantly.
+                 The restore callback itself is registered by the effect
+                 above, reactively, once this flips true. */
+              setIsBulkProgressMinimized(true);
             }}
             onRetryFailed={async (item) => {
               try {
@@ -4544,7 +4526,6 @@ export default function ResumeScoringPage({
           progressData={progressData}
           onClose={() => {
             setShowProgressModal(false);
-            setProgressDismissed(true);
             /* The corner widget is a second face of this same run — leaving it
                behind would make the X look like it had not worked. Only settled
                jobs are dropped, and the modal only offers a close once every row
@@ -4563,12 +4544,10 @@ export default function ResumeScoringPage({
           showScoreColumn
           minimized={isBulkProgressMinimized}
           onMinimize={() => {
+            /* See above — the indicator owns the card-then-pill timing, and
+               the restore callback is registered reactively by the effect
+               near showBulkProgressFromJob once this flips true. */
             setIsBulkProgressMinimized(true);
-            /* See above — the indicator owns the card-then-pill timing. */
-            setOnRestorePanel(() => () => {
-              setIsBulkProgressMinimized(false);
-              setContextMinimized(false);
-            });
           }}
           onRetryFailed={async (item) => {
             try {

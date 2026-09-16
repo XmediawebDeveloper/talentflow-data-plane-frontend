@@ -154,8 +154,11 @@ const addUnderNote = (page: Page) =>
 const mharRow = (page: Page) => page.getByTitle("Click to edit").filter({ hasText: NOTE_TEXT }).first();
 const missedPanel = (page: Page) =>
   page.locator("div").filter({ hasText: /^Possibly missed from the JD/ }).first();
+/** One CHIP of the panel: the phrase and the three actions that belong to it. Phrases
+ *  are grouped under the JD line they came from, so the chip - not the row - is what
+ *  owns a phrase's buttons. */
 const missedRow = (page: Page, phrase: string) =>
-  missedPanel(page).getByText(phrase, { exact: true }).locator("xpath=ancestor::div[1]");
+  missedPanel(page).getByText(phrase, { exact: true }).locator("xpath=ancestor::span[1]");
 
 async function open(page: Page, jd = draftJd()) {
   await mockJd(page, jd);
@@ -330,5 +333,51 @@ test.describe("JD Creation Step 2 — an added line reads as a line", () => {
     await addUnderNote(page).click();
     await expect(mharRow(page)).toBeVisible();
     await expect(mharRow(page)).toHaveText(/^5 years/);   // already starts with a figure
+  });
+});
+
+test.describe("JD Creation Step 2 — the missed panel is readable", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockApiFallback(page);
+    await mockLoginApi(page);
+    await mockDashboardApis(page);
+  });
+
+  /** Five phrases from ONE bullet plus one from another: the shape that produced a wall
+   *  of seventeen rows, each repeating the same quotation. */
+  const NOISY = [
+    ...["defect reporting", "triage", "root cause investigation", "retesting", "closure"].map(p => ({
+      survivor: "", removed: [p], reasons: [`The JD asks for "${p}".`],
+      removed_sources: ["Experience in Defect Management, including defect reporting, triage, root cause investigation, retesting, and closure."],
+      restore_lists: ["must_have_skills"], sources: ["possibly-missed"], survivor_source: null,
+      list: "must_have_skills", kind: "skill", source: "possibly-missed",
+    })),
+    {
+      survivor: "", removed: ["SOAP services"], reasons: ['The JD asks for "SOAP services".'],
+      removed_sources: ["Hands-on experience with REST APIs and SOAP services."],
+      restore_lists: ["must_have_skills"], sources: ["possibly-missed"], survivor_source: null,
+      list: "must_have_skills", kind: "skill", source: "possibly-missed",
+    },
+  ];
+
+  test("phrases from one JD line are quoted once, not once each", async ({ page }) => {
+    await open(page, draftJd({ skill_merge_trail: NOISY }));
+    // Five chips, ONE quotation.
+    await expect(missedPanel(page).getByText(/^From the JD: .Experience in Defect Management/)).toHaveCount(1);
+    for (const p of ["Defect reporting", "triage", "Root cause investigation", "retesting", "closure"]) {
+      await expect(missedPanel(page).getByText(p, { exact: true })).toBeVisible();
+    }
+  });
+
+  test("each chip still carries its own three actions", async ({ page }) => {
+    await open(page, draftJd({ skill_merge_trail: NOISY }));
+    const chip = missedRow(page, "triage");
+    await expect(chip.getByRole("button", { name: "Add to Must-Have" })).toBeVisible();
+    await expect(chip.getByRole("button", { name: "Add to Nice-to-Have" })).toBeVisible();
+    await expect(chip.getByRole("button", { name: "Dismiss" })).toBeVisible();
+
+    await chip.getByRole("button", { name: "Add to Must-Have" }).click();
+    // One word, so the JD's own spelling stands - the same guard that protects "npm".
+    await expect(page.getByTitle("triage", { exact: true })).toBeVisible();
   });
 });

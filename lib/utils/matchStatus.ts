@@ -69,3 +69,26 @@ export const matchBadgeClass = (value?: string | null): string => {
     ? MATCH_BADGE_CLASS[result]
     : 'bg-gray-100 text-gray-600 border-gray-300 dark:bg-slate-800 dark:text-slate-400 dark:border-slate-700';
 };
+
+/**
+ * Resume Match Rating Mechanism (client doc, "Final Version A", Sept 2026):
+ * the Overall Score is a rating out of 10, not a percentage, everywhere it is
+ * printed as plain text (table cells, share messages, PDF/attachment
+ * subtitles). Every such surface goes through this one function so the format
+ * never has to be re-decided per file. `scorePercentage` is only a fallback
+ * for a record fetched before `overallRating10` existed.
+ */
+export const formatOverallScore = (overallRating10?: number | null, scorePercentage?: number | null): string =>
+  overallRating10 != null ? `${overallRating10.toFixed(1)}/10` : `${scorePercentage ?? 0}%`;
+
+/**
+ * Same value, without the "/10" — for a table's own Score column, whose
+ * header already reads "Score out of 10" (see e.g. ScoredResumesTable's
+ * DEFAULT_COLUMNS), so repeating the scale in every row would be redundant.
+ * Plain-text mentions elsewhere (share messages, subtitles) keep using
+ * formatOverallScore() above instead, since nothing else there states the
+ * scale. `scorePercentage` is still the fallback for a record fetched before
+ * `overallRating10` existed.
+ */
+export const formatOverallScoreValue = (overallRating10?: number | null, scorePercentage?: number | null): string =>
+  overallRating10 != null ? overallRating10.toFixed(1) : `${scorePercentage ?? 0}%`;

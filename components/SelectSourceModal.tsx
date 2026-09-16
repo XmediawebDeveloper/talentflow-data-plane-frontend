@@ -1,7 +1,7 @@
 'use client';
 
 import { X, Users, Database, Search, CheckSquare, Square, MinusSquare, Loader2, ClipboardList, Upload, Trash2, ShieldAlert, Lock, AlertCircle, HelpCircle } from 'lucide-react';
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useId } from 'react';
 import { useRouter } from 'next/navigation';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -22,7 +22,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { convertApiResumeToRow, convertApiFolderToTree } from '@/lib/utils/resumeMappers';
-import { scoringService } from '@/lib/services/scoringService';
+import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
+import { formatOverallScore } from '@/lib/utils/matchStatus';
 import { dispatchUnitsConsumed } from '@/lib/services/api';
 import { toast } from 'sonner';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
@@ -67,6 +68,9 @@ interface ProgressItem {
   candidateName: string;
   status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored';
   score?: number;
+  // Resume Match Rating Mechanism (client doc, Sept 2026): the 0-10 Overall
+  // Rating shown instead of `score`(%) - see formatOverallScore().
+  overallRating10?: number;
   matchStatus?: string;
   errorMessage?: string;
 }
@@ -86,7 +90,11 @@ export default function SelectSourceModal({
 }: SelectSourceModalProps) {
   const router = useRouter();
   const { user, tenant, isTenantAdmin, hasPermissionCode } = useAuth();
-  const { startScoringJob, updateItemStatus, setMainPanelOpen, setOnRestorePanel, setMinimized, clearJob, activeScoringJobs } = useScoringProgress();
+  const { startScoringJob, updateItemStatus, setPanelVisibility, setOnRestorePanel, setMinimized, clearJob, activeScoringJobs } = useScoringProgress();
+  // Stable per-instance id for the ref-counted panel-visibility registry —
+  // see `setPanelVisibility` on ScoringProgressContext for why this can't be
+  // a hardcoded string (two instances would clobber each other's registration).
+  const panelOwnerId = useId();
 
   // Check if user has Internal DB access permission
   const hasInternalDBAccess = user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false;
@@ -166,16 +174,22 @@ export default function SelectSourceModal({
   // GlobalScoringProgressIndicator bails out on `isMainPanelOpen` and the user
   // gets no floating pill at all.
   useEffect(() => {
-    setMainPanelOpen(showProgressModal && !isBulkProgressMinimized);
-    return () => { setMainPanelOpen(false); };
-  }, [showProgressModal, isBulkProgressMinimized, setMainPanelOpen]);
+    setPanelVisibility(panelOwnerId, showProgressModal && !isBulkProgressMinimized);
+    return () => { setPanelVisibility(panelOwnerId, false); };
+  }, [showProgressModal, isBulkProgressMinimized, setPanelVisibility, panelOwnerId]);
 
   // Register how the floating indicator restores this popup. Without this the
   // indicator falls back to setMinimized(false) and only ever shows its own
   // small card — the popup the user minimized never comes back.
   useEffect(() => {
     if (showProgressModal && isBulkProgressMinimized) {
-      setOnRestorePanel(() => () => {
+      /* One arrow, not two: `setOnRestorePanel`'s own wrapper (in
+         ScoringProgressContext) already does the `setState(() => value)`
+         trick needed to store a function safely — wrapping it again here
+         made the stored "callback" a function that RETURNS this restore
+         function instead of one that RUNS it, so calling it from the
+         global widget silently did nothing. */
+      setOnRestorePanel(() => {
         setIsBulkProgressMinimized(false);
         setMinimized(false);
       });
@@ -495,7 +509,7 @@ export default function SelectSourceModal({
       const checkResult = await scoringService.checkExistingScores(jobId, resumesToScore);
       if (checkResult.existing_count > 0) {
         const alreadyScoredNames = checkResult.existing_scores
-          .map((s: any) => `${s.candidate_name} (${s.overall_score}%)`)
+          .map((s: any) => `${s.candidate_name} (${formatOverallScore(s.overall_rating_10, s.overall_score)})`)
           .join(', ');
 
         if (checkResult.new_count === 0) {
@@ -564,16 +578,17 @@ export default function SelectSourceModal({
         try {
           const batchStatus = await scoringService.getBatchStatus(batchId);
 
-          // Update progress items from batch status
+          // Update progress items from batch status. `items` guarded the same
+          // way the context-sync loop below already does — an undefined
+          // `items` here used to throw before ever reaching that loop or the
+          // `allDone` check, so every poll tick silently failed into the
+          // catch block below and retried forever: the popup stayed stuck on
+          // "Queued" indefinitely with no visible error.
           setProgressItems(prev => prev.map(item => {
-            const batchItem = batchStatus.items.find((b: any) => b.resume_id === item.resumeId);
+            const batchItem = (batchStatus.items || []).find((b: any) => b.resume_id === item.resumeId);
             if (!batchItem) return item;
-            let status: ProgressItem['status'] = item.status;
-            if (batchItem.status === 'completed') status = 'completed';
-            else if (batchItem.status === 'failed') status = 'failed';
-            else if (batchItem.status === 'processing') status = 'processing';
-            else status = 'queued';
-            return { ...item, status, score: batchItem.overall_score, matchStatus: batchItem.match_status };
+            const status = normalizeScoringStatus(batchItem.status) as ProgressItem['status'];
+            return { ...item, status, score: batchItem.overall_score, overallRating10: batchItem.overall_rating_10, matchStatus: batchItem.match_status };
           }));
           setScoringStats({
             queued: batchStatus.queued,
@@ -585,16 +600,18 @@ export default function SelectSourceModal({
           // Sync status updates into the persistent context (drives GlobalScoringProgressIndicator)
           for (const batchItem of (batchStatus.items || [])) {
             const itemId = `${jobId}-${batchItem.resume_id}`;
-            if (batchItem.status === 'completed') {
-              updateItemStatus(jobId, itemId, 'Scored successfully', { score: batchItem.overall_score });
-            } else if (batchItem.status === 'failed') {
+            const itemStatus = normalizeScoringStatus(batchItem.status);
+            if (itemStatus === 'completed') {
+              updateItemStatus(jobId, itemId, 'Scored successfully', { score: batchItem.overall_score, overallRating10: batchItem.overall_rating_10 });
+            } else if (itemStatus === 'failed') {
               updateItemStatus(jobId, itemId, 'Failed', { errorReason: batchItem.error_message || 'Scoring failed' });
-            } else if (batchItem.status === 'processing') {
+            } else if (itemStatus === 'processing') {
               updateItemStatus(jobId, itemId, 'Scoring in progress');
             }
           }
 
-          const allDone = batchStatus.status === 'completed' || batchStatus.status === 'failed' ||
+          const aggregateStatus = normalizeScoringStatus(batchStatus.status);
+          const allDone = aggregateStatus === 'completed' || aggregateStatus === 'failed' ||
             (batchStatus.queued === 0 && batchStatus.processing === 0);
 
           if (allDone) {
@@ -618,7 +635,11 @@ export default function SelectSourceModal({
           } else {
             setTimeout(poll, 3000);
           }
-        } catch {
+        } catch (pollError) {
+          // Was silently swallowed — a poll tick that keeps throwing (like the
+          // undefined-`items` case above used to) retried forever with no
+          // trace of why, which is exactly what made this bug invisible.
+          console.error('[SelectSourceModal] Error polling batch status:', pollError);
           setTimeout(poll, 5000);
         }
       };
@@ -646,7 +667,7 @@ export default function SelectSourceModal({
       const result = await scoringService.scoreResume(jobId, resumeId);
       setProgressItems(prev => prev.map(i =>
         i.resumeId === resumeId
-          ? { ...i, status: 'completed' as const, score: Math.round(result.overall_score), matchStatus: result.match_status }
+          ? { ...i, status: 'completed' as const, score: Math.round(result.overall_score), overallRating10: result.overall_rating_10, matchStatus: result.match_status }
           : i
       ));
       setScoringStats(prev => ({ ...prev, processing: prev.processing - 1, completed: prev.completed + 1 }));
@@ -1270,6 +1291,7 @@ export default function SelectSourceModal({
                 : undefined
               : undefined,
             score: item.score,
+            overallRating10: item.overallRating10,
           }))}
           filterByJobId={jobId}
           showJobTitleColumn={false}

@@ -858,6 +858,10 @@ const step2Fingerprint = (data: unknown, jobTitle: string): string =>
 // How many skills a category shows before the rest collapse behind "+N more".
 const SKILL_PREVIEW_LIMIT = 10;
 
+// How many JD lines the "possibly missed" panel shows before folding the rest away. The
+// panel is a warning, not a worklist: past a handful of lines it stops being read at all.
+const MISSED_SOURCE_PREVIEW = 4;
+
 // The child kinds that EXPLAIN something rather than record a merge: a skill whose
 // wording is shorter than the JD's, a skill the JD listed in both sections, and (JD24)
 // what the JD SAYS about a skill - "executed more than 3,000 test cases", "1 million
@@ -1886,6 +1890,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [editingRecruiterCommentValue, setEditingRecruiterCommentValue] = useState('');
   const [newRecruiterComment, setNewRecruiterComment] = useState('');
   const [showDragTips, setShowDragTips] = useState(true);
+  /** The missed panel shows a few source lines and folds the rest away. */
+  const [showAllMissed, setShowAllMissed] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [isPublished, setIsPublished] = useState(false);
   const [publishedJdId, setPublishedJdId] = useState<string | null>(null);
@@ -7534,6 +7540,14 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     && !onScreenWordings.has(String(e.removed?.[0] || '').trim().toLowerCase()),
                 );
                 if (missed.length === 0) return null;
+                // One entry per JD line, holding every phrase that came from it.
+                const bySource = new Map<string, typeof missed>();
+                for (const e of missed) {
+                  const src = e.removed_sources?.[0] || '';
+                  bySource.set(src, [...(bySource.get(src) || []), e]);
+                }
+                const groups = [...bySource.entries()];
+                const shownGroups = showAllMissed ? groups : groups.slice(0, MISSED_SOURCE_PREVIEW);
                 return (
                   <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50/60 dark:border-amber-900 dark:bg-amber-950/30 p-3 sm:p-4">
                     <div className="flex items-start gap-2 mb-2">
@@ -7547,50 +7561,89 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                         </p>
                       </div>
                     </div>
-                    <div className="space-y-2 pl-6">
-                      {missed.map((e) => {
-                        const phrase = e.removed[0];
-                        const suggestNice = e.list === 'nice_to_have_skills';
-                        return (
-                          <div key={phrase} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-                            {/* Shown the way it will READ once added - the verbatim JD
-                                text is on the "From the JD" line beside it. */}
-                            <span className="text-sm text-gray-800 dark:text-slate-200">{sentenceCaseForList(phrase, "must_have_skills")}</span>
-                            {e.removed_sources?.[0] && (
-                              <span className="text-[11px] text-gray-500 dark:text-slate-500 italic">
-                                From the JD: &ldquo;{e.removed_sources[0]}&rdquo;
-                              </span>
-                            )}
-                            {!isRegenerating && (
-                              <span className="inline-flex items-center gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleResolvePossiblyMissed(phrase, suggestNice ? 'niceToHaveSkills' : 'mustHaveSkills')}
-                                  className="inline-flex items-center gap-0.5 text-[11px] font-medium text-brand-blue hover:underline"
+                    {/* GROUPED BY THE JD LINE THEY CAME FROM.
+                        One bullet can yield several phrases, and a flat list repeated
+                        that same quotation under every one of them - five identical
+                        "From the JD: Experience in Defect Management, including..." lines
+                        in a row, each followed by three text links. The quotation is the
+                        longest thing on the row and the only thing they had in common, so
+                        it is now said once per source and the phrases sit under it as
+                        chips. */}
+                    <div className="space-y-3 pl-6">
+                      {shownGroups.map(([source, items]) => (
+                        <div key={source || items[0].removed[0]}>
+                          {source && (
+                            <p className="text-[11px] text-gray-500 dark:text-slate-500 italic mb-1 break-words">
+                              From the JD: &ldquo;{source}&rdquo;
+                            </p>
+                          )}
+                          <div className="flex flex-wrap gap-1.5">
+                            {items.map((e) => {
+                              const phrase = e.removed[0];
+                              const suggestNice = e.list === 'nice_to_have_skills';
+                              const primary = suggestNice ? 'niceToHaveSkills' : 'mustHaveSkills';
+                              const secondary = suggestNice ? 'mustHaveSkills' : 'niceToHaveSkills';
+                              return (
+                                <span
+                                  key={phrase}
+                                  className="inline-flex items-center gap-1.5 rounded-full border border-amber-300 dark:border-amber-800 bg-white dark:bg-slate-900 pl-2.5 pr-1 py-1"
                                 >
-                                  <Plus className="w-3 h-3" />
-                                  Add to {suggestNice ? 'Nice-to-Have' : 'Must-Have'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleResolvePossiblyMissed(phrase, suggestNice ? 'mustHaveSkills' : 'niceToHaveSkills')}
-                                  className="text-[11px] text-gray-500 hover:text-gray-800 hover:underline"
-                                >
-                                  Add to {suggestNice ? 'Must-Have' : 'Nice-to-Have'}
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleResolvePossiblyMissed(phrase, null)}
-                                  className="text-[11px] text-gray-500 hover:text-gray-800 hover:underline"
-                                >
-                                  Dismiss
-                                </button>
-                              </span>
-                            )}
+                                  <span className="text-[13px] text-gray-800 dark:text-slate-200">
+                                    {sentenceCaseForList(phrase, 'must_have_skills')}
+                                  </span>
+                                  {!isRegenerating && (
+                                    <>
+                                      {/* Short labels, full names for screen readers and
+                                          tooltips - the action must stay obvious without
+                                          spending a line of the panel on it. */}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleResolvePossiblyMissed(phrase, primary)}
+                                        aria-label={`Add to ${suggestNice ? 'Nice-to-Have' : 'Must-Have'}`}
+                                        title={`Add to ${suggestNice ? 'Nice-to-Have' : 'Must-Have'} Skills`}
+                                        className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium text-brand-blue hover:bg-brand-blue/10"
+                                      >
+                                        <Plus className="w-3 h-3" />
+                                        {suggestNice ? 'Nice' : 'Must'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleResolvePossiblyMissed(phrase, secondary)}
+                                        aria-label={`Add to ${suggestNice ? 'Must-Have' : 'Nice-to-Have'}`}
+                                        title={`Add to ${suggestNice ? 'Must-Have' : 'Nice-to-Have'} Skills`}
+                                        className="rounded-full px-1.5 py-0.5 text-[11px] text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-800"
+                                      >
+                                        {suggestNice ? 'Must' : 'Nice'}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleResolvePossiblyMissed(phrase, null)}
+                                        aria-label="Dismiss"
+                                        title="Not needed for this role"
+                                        className="rounded-full p-0.5 text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-700"
+                                      >
+                                        <X className="w-3 h-3" />
+                                      </button>
+                                    </>
+                                  )}
+                                </span>
+                              );
+                            })}
                           </div>
-                        );
-                      })}
+                        </div>
+                      ))}
                     </div>
+                    {groups.length > MISSED_SOURCE_PREVIEW && (
+                      <button
+                        type="button"
+                        onClick={() => setShowAllMissed(v => !v)}
+                        className="ml-6 mt-2 text-[11px] font-medium text-brand-blue hover:underline"
+                      >
+                        {showAllMissed
+                          ? 'Show fewer'
+                          : `Show all ${groups.length} JD lines`}
+                      </button>
+                    )}
                   </div>
                 );
               })()}

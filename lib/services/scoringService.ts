@@ -4,6 +4,33 @@
 
 import api, { handleApiError, dispatchUnitsConsumed } from './api';
 
+/**
+ * Normalizes a scoring batch/item status string from the backend into one of
+ * the four states this app actually branches on.
+ *
+ * This file's own type declarations disagree with each other on the batch
+ * vocabulary — `BatchScoringItem.status` is typed `'queued' | 'processing' |
+ * 'completed' | 'failed'` while `BatchScoringStatus.status` (the aggregate
+ * field on the SAME response) is typed `'pending' | 'processing' |
+ * 'completed' | 'failed'` — which means the real API contract for these
+ * fields was never pinned down consistently. Every poll loop across the app
+ * used to compare the raw string with exact `===` checks (`item.status ===
+ * 'processing'`); if the backend ever sends a value outside the exact set
+ * each call site guessed at (different casing, `pending`/`in_progress`
+ * instead of `queued`/`processing`, etc.) NONE of the branches match and the
+ * item's displayed status silently never advances past its initial "Queued"
+ * — indistinguishable from a genuinely stuck backend, but purely a frontend
+ * string-matching gap. Route every status read through this instead of a
+ * bare `===` chain.
+ */
+export function normalizeScoringStatus(raw: string | null | undefined): 'queued' | 'processing' | 'completed' | 'failed' {
+  const s = (raw || '').toLowerCase().trim();
+  if (['completed', 'complete', 'success', 'succeeded', 'done', 'scored'].includes(s)) return 'completed';
+  if (['failed', 'failure', 'error', 'errored'].includes(s)) return 'failed';
+  if (['processing', 'in_progress', 'in-progress', 'inprogress', 'running', 'started', 'active'].includes(s)) return 'processing';
+  return 'queued'; // 'queued', 'pending', 'not_started', empty/unknown — all treated as not-yet-started
+}
+
 export interface ScoreBreakdownItem {
   category: string;
   rating: number;
@@ -67,6 +94,17 @@ export interface ScoringResponse {
   // Exact Match from Partial Match (>= 8 vs < 8), so it is displayed beside the
   // classification. Null when the JD defines no Required criteria.
   essential_average?: number | null;
+  // Resume Match Rating Mechanism (client doc, "Final Version A", Sept 2026):
+  // the 0-10 Overall Rating and its two components. Additive alongside
+  // overall_score/essential_average above - match_status is never redecided
+  // by these, only read. non_essential_rating_10/combined_average_10 are null
+  // for No Match and for a JD with no Preferred criteria.
+  essential_rating_10?: number;
+  non_essential_rating_10?: number | null;
+  combined_average_10?: number | null;
+  overall_rating_10?: number;
+  rating_cap_applied?: boolean;
+  rating_summary_text?: string;
   match_status: 'excellent' | 'partial' | 'no_match' | 'exact_match' | 'partial_match';
   ai_summary?: string;
   strengths: string[];
@@ -127,6 +165,9 @@ export interface BatchScoringItem {
   status: 'queued' | 'processing' | 'completed' | 'failed';
   score_id?: string;
   overall_score?: number;
+  // Resume Match Rating Mechanism (client doc, Sept 2026): the 0-10 Overall
+  // Rating for a completed item's progress row.
+  overall_rating_10?: number;
   match_status?: string;
   error_message?: string;
 }
@@ -163,6 +204,9 @@ export const scoringService = {
       candidate_name: string;
       candidate_email: string;
       overall_score: number;
+      // Resume Match Rating Mechanism (client doc, Sept 2026): the 0-10
+      // Overall Rating shown in the "already scored" warning message.
+      overall_rating_10?: number;
       match_status: string;
       scored_at: string | null;
     }>;

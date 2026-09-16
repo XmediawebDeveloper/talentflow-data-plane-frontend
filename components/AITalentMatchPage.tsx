@@ -88,6 +88,17 @@ interface MatchHistory {
   matchedAt: Date;
   totalMatches: number;
   matchedCandidates: MatchedCandidateWithVersions[];
+  // Carried from the session's server-side join to job_descriptions — used
+  // as a fallback when `jobData` (looked up from the page's capped `jobs`
+  // list) can't find the job, e.g. an older/superseded republished version.
+  jdJobId?: string;
+  jdStatus?: string;
+  jdDepartment?: string;
+  jdCurrentVersion?: number;
+  // Best candidate rating (1-10 scale), precomputed server-side from stored
+  // results — lets "Top Match Rating" / "Top Matching Jobs" render from the
+  // summary list alone, before any per-session candidate detail has loaded.
+  topRating?: number | null;
 }
 
 /** Set just before leaving for a resume, so returning keeps the active filters. */
@@ -304,16 +315,10 @@ export default function AITalentMatchPage({
         const details = await aiMatchService.getSession(item.id);
         const candidates = details.candidates as MatchedCandidateWithVersions[];
         setHistoryCandidatesById(prev => ({ ...prev, [item.id]: candidates }));
-        // A retry that succeeds after an earlier failure — this session is no
-        // longer "failed", it's loaded.
-        setFailedHistorySessionIds(prev => (prev.has(item.id) ? (() => {
-          const next = new Set(prev); next.delete(item.id); return next;
-        })() : prev));
         return candidates;
       } catch (error) {
         console.error('[AITalentMatch] Failed to fetch session details:', error);
         if (!silent) toast.error('Failed to load matched candidates');
-        setFailedHistorySessionIds(prev => (prev.has(item.id) ? prev : new Set(prev).add(item.id)));
         return [] as MatchedCandidateWithVersions[];
       } finally {
         historyCandidateRequests.current.delete(item.id);
@@ -843,13 +848,6 @@ export default function AITalentMatchPage({
   const [scoringVersions, setScoringVersions] = useState<any[]>([]);
   const [historyCandidatesById, setHistoryCandidatesById] = useState<Record<string, MatchedCandidateWithVersions[]>>({});
   const [loadingHistorySessionId, setLoadingHistorySessionId] = useState<string | null>(null);
-  // Sessions whose candidate fetch failed. Kept separate from
-  // `historyCandidatesById` so a failure never gets cached as "0 candidates" —
-  // opening that job later still retries — but "Top Match Rating"/"Top
-  // Matching Jobs" (via `topStatsReady`) need to know a session is done being
-  // waited on even when it errored, or a single failed fetch would leave
-  // those tiles on their loading skeleton forever.
-  const [failedHistorySessionIds, setFailedHistorySessionIds] = useState<Set<string>>(new Set());
 
   // Scored resume IDs for current JD
   const [scoredResumeIds, setScoredResumeIds] = useState<Set<string>>(new Set());
@@ -1739,9 +1737,17 @@ export default function AITalentMatchPage({
   // available for it — lazy-loaded rows once fetched, else the initial prop
   // data. Shared by the exact-match job filter below and the "Top Match
   // Rating" / "Top Matching Jobs" stats so both read the same number.
+  // Falls back to `topRating` (precomputed server-side from stored results,
+  // present as soon as the session list itself has loaded) when per-session
+  // candidate detail hasn't been fetched yet, so the stats are correct
+  // immediately on module open instead of only once every session's full
+  // candidate list (and each candidate's resume-detail enrichment) resolves.
   const getJobBestScore = (item: MatchHistory): number => {
-    const candidates = historyCandidatesById[item.id] ?? item.matchedCandidates ?? [];
-    return candidates.reduce((best, c) => Math.max(best, c.matchScore ?? 0), 0);
+    const candidates = historyCandidatesById[item.id] ?? item.matchedCandidates;
+    if (candidates && candidates.length > 0) {
+      return candidates.reduce((best, c) => Math.max(best, c.matchScore ?? 0), 0);
+    }
+    return (item.topRating ?? 0) * 10;
   };
 
   const filteredHistory = matchHistory.filter(item => {
@@ -1785,9 +1791,9 @@ export default function AITalentMatchPage({
         });
 
     // "Top Matching Jobs" drill-down: same "rating 10" definition
-    // `topMatchingJobsCount` counts. A job whose candidates haven't loaded yet
-    // scores 0 here (see getJobBestScore) and is correctly excluded until its
-    // real data arrives, rather than shown permissively.
+    // `topMatchingJobsCount` counts. Uses the same server-precomputed
+    // `topRating` fallback as `getJobBestScore` for a job whose candidates
+    // haven't loaded yet.
     const matchesExactOnly = !showOnlyExactMatchJobs ||
       toMatchRating(getJobBestScore(item)) === 10;
 
@@ -1873,17 +1879,6 @@ export default function AITalentMatchPage({
     const topMatchRating = bestScorePerJob.length ? Math.max(...bestScorePerJob) : 0;
     // Exact Match = a rating of 10, same bucket the Match History popup counts.
     const topMatchingJobsCount = bestScorePerJob.filter(score => toMatchRating(score) === 10).length;
-    // Every session's candidates load in individually (in the background — see
-    // the prefetch effect above), so `bestScorePerJob` fills in one job at a
-    // time rather than all at once. Rendering the count as each one lands made
-    // "Top Match Rating"/"Top Matching Jobs" visibly count up (1, 2, 3, ...) as
-    // sessions resolved. Holding the real number back until every session has
-    // resolved means the tiles show only their final, correct value.
-    const topStatsReady = matchHistory.every(
-      item => (item.totalMatches || 0) <= 0 ||
-        historyCandidatesById[item.id] !== undefined ||
-        failedHistorySessionIds.has(item.id)
-    );
 
     // Candidate roll-up search matches the person or any job they matched.
     const candidateQuery = candidateSearchQuery.trim().toLowerCase();
@@ -2201,12 +2196,7 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={Award}
             label="Top Match Rating"
-            // Shown only once every session has resolved — see `topStatsReady`
-            // — so this renders the final rating directly instead of visibly
-            // counting up as sessions load in one by one.
-            value={topStatsReady ? `${toMatchRating(topMatchRating)}` : (
-              <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
-            )}
+            value={`${toMatchRating(topMatchRating)}`}
             sparkline={false}
             // Drills into the real candidates holding this exact rating — same
             // "All Resumes" view + rating-band filter the pills below use, so
@@ -2223,12 +2213,7 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={Briefcase}
             label="Top Matching Jobs"
-            // Same "hold until every session has resolved" rule as Top Match
-            // Rating above, so this shows the final count directly rather than
-            // counting up (1, 2, 3, ...) as sessions load in.
-            value={topStatsReady ? topMatchingJobsCount : (
-              <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
-            )}
+            value={topMatchingJobsCount}
             sparkline={false}
             // Drills into the real jobs behind this count — View by Job,
             // narrowed to jobs whose best candidate is a perfect 10/10 (the
@@ -3536,10 +3521,15 @@ export default function AITalentMatchPage({
             <div className="grid gap-3 sm:gap-4">
             {sortedHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage).map((item) => {
               const jobData = jobs.find(j => j.id === item.jobId);
+              // Fall back to the session's own joined job fields when the job
+              // isn't in this page's capped `jobs` list (see MatchHistory.jdJobId).
+              const jobIdCode = jobData?.jobId || item.jdJobId;
+              const currentVersion = jobData?.currentVersion ?? item.jdCurrentVersion;
+              const department = jobData?.department || item.jdDepartment;
               // Version history is cached/keyed by the human JD-xxx code, not
               // this row's id — every republished version of the same job
               // shares one history key so their runs aren't split across cards.
-              const historyKey = jobData?.jobId || item.jobId;
+              const historyKey = jobIdCode || item.jobId;
 
               return (
                 <div
@@ -3561,8 +3551,8 @@ export default function AITalentMatchPage({
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
-                          {jobData?.jobId && (
-                            <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{jobData.jobId}</JobIdBadge>
+                          {jobIdCode && (
+                            <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{jobIdCode}</JobIdBadge>
                           )}
                           <h3
                             className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 truncate min-w-0 group-hover:text-brand-blue transition-colors"
@@ -3570,23 +3560,23 @@ export default function AITalentMatchPage({
                           >
                             {item.jobTitle}
                           </h3>
-                          {jobData?.currentVersion && (
+                          {currentVersion && (
                             <span className={`inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs gap-1.5 border flex-shrink-0 ${
-                              jobData.currentVersion > 1
+                              currentVersion > 1
                                 ? 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20'
                                 : 'bg-green-50 text-green-700 border-green-200'
                             }`}>
-                              <div className={`w-1.5 h-1.5 rounded-full ${jobData.currentVersion > 1 ? 'bg-brand-orange' : 'bg-green-500'}`}></div>
-                              {jobData.currentVersion > 1 ? 'Republished' : 'Published'}
+                              <div className={`w-1.5 h-1.5 rounded-full ${currentVersion > 1 ? 'bg-brand-orange' : 'bg-green-500'}`}></div>
+                              {currentVersion > 1 ? 'Republished' : 'Published'}
                             </span>
                           )}
-                          {jobData?.currentVersion && (
+                          {currentVersion && (
                             <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
                               <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
-                              v{jobData.currentVersion}
+                              v{currentVersion}
                             </span>
                           )}
-                          <JDVersionHistory jdId={item.jobId} version={jobData?.currentVersion} />
+                          <JDVersionHistory jdId={item.jobId} version={currentVersion} />
                           {/* Match History — every run across this job's whole
                               lineage, with the Exact/Partial/No Match roll-up
                               Resume Scoring's own History icon opens. */}
@@ -3599,10 +3589,10 @@ export default function AITalentMatchPage({
                           </button>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
-                        {jobData?.department && (
+                        {department && (
                           <span className="flex items-center gap-1.5">
                             <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                            {jobData.department}
+                            {department}
                           </span>
                         )}
                         {jobData?.industryType && (

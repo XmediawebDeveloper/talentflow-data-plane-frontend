@@ -3,6 +3,7 @@
 import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2, Sparkles, UserPlus, History, File, HardDrive, User, X, Eye, Share2, Paperclip, Send } from 'lucide-react';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import ViewResumeButton from '@/components/ui/view-resume-button';
+import { Tooltip } from '@/components/ui/tooltip';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
 import { useState, useEffect, useRef } from 'react';
@@ -19,6 +20,7 @@ import { formatIST } from '@/lib/utils/dateUtils';
 import { buildUnifiedDiff, buildDiffSidePairs } from '@/lib/utils/textDiff';
 import { formatJobExperienceText, formatJobExperienceBadge } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
+import { formatOverallScore } from '@/lib/utils/matchStatus';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 
 interface ScoredResume {
@@ -38,6 +40,15 @@ interface ScoredResume {
   // Exact Match needs >= 8, Partial Match is below 8 - so this is the only value
   // that explains which of the two a passing candidate received.
   essentialAverage?: number | null;
+  // Resume Match Rating Mechanism (client doc, Sept 2026): the 0-10 Overall
+  // Rating and its components, read straight from the API - additive
+  // alongside scorePercentage/essentialAverage above, never replacing them.
+  essentialRating10?: number;
+  nonEssentialRating10?: number | null;
+  combinedAverage10?: number | null;
+  overallRating10?: number;
+  ratingCapApplied?: boolean;
+  ratingSummaryText?: string;
   scoredDate: string;
   scoredBy: string;
   experience?: string;
@@ -481,6 +492,12 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
               // is a real value (every Required criterion rated 0), while null means
               // the JD has no Required criteria at all.
               essentialAverage: resume.essentialAverage ?? completeResumeData.essential_average,
+              essentialRating10: resume.essentialRating10 ?? completeResumeData.essential_rating_10,
+              nonEssentialRating10: resume.nonEssentialRating10 ?? completeResumeData.non_essential_rating_10,
+              combinedAverage10: resume.combinedAverage10 ?? completeResumeData.combined_average_10,
+              overallRating10: resume.overallRating10 ?? completeResumeData.overall_rating_10,
+              ratingCapApplied: resume.ratingCapApplied ?? completeResumeData.rating_cap_applied,
+              ratingSummaryText: resume.ratingSummaryText ?? completeResumeData.rating_summary_text,
               criteriaScores: completeResumeData.criteria_scores || {},
               scoreBreakdown: completeResumeData.score_breakdown || [],
               aiSummary: resume.aiSummary || completeResumeData.ai_summary,
@@ -829,7 +846,7 @@ Candidate Details:
 - Experience: ${fullResumeData.experience || 'N/A'}
 - Location: ${fullResumeData.location || 'N/A'}
 - Match: ${fullResumeData.matchStatus || resume.matchStatus || 'N/A'}${
-      fullResumeData.scorePercentage != null ? ` (${fullResumeData.scorePercentage}%)` : ''
+      fullResumeData.scorePercentage != null ? ` (${formatOverallScore(fullResumeData.overallRating10, fullResumeData.scorePercentage)})` : ''
     }
 
 You can view the full resume at: ${resumeLink}
@@ -1238,10 +1255,24 @@ Best regards`);
           {/* Score Display - Compact */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 bg-gray-50 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200">
             <div className="flex flex-wrap items-center gap-2 sm:gap-4">
-              <div className={`text-2xl sm:text-3xl font-bold ${getOverallScoreColor(fullResumeData.matchStatus || resume.matchStatus)}`}>{fullResumeData.scorePercentage}%</div>
-              <span className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium border whitespace-nowrap ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
-                {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
-              </span>
+              <div className={`text-2xl sm:text-3xl font-bold ${getOverallScoreColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
+                {fullResumeData.overallRating10 != null ? (
+                  <>{fullResumeData.overallRating10.toFixed(1)}<span className="text-sm sm:text-base font-semibold text-gray-500">/10</span></>
+                ) : (
+                  `${fullResumeData.scorePercentage}%`
+                )}
+              </div>
+              {fullResumeData.ratingSummaryText ? (
+                <Tooltip content={fullResumeData.ratingSummaryText} position="bottom">
+                  <span className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium border whitespace-nowrap cursor-help ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
+                    {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
+                  </span>
+                </Tooltip>
+              ) : (
+                <span className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium border whitespace-nowrap ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
+                  {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
+                </span>
+              )}
               <span className="hidden sm:inline text-gray-400">|</span>
               {/* The title is the shortcut into the View JD tab — recruiters
                   reading a score reach for the JD from here constantly. */}
@@ -1482,6 +1513,12 @@ Best regards`);
                 scorePercentage: fullResumeData.scorePercentage,
                 scoreFormula: fullResumeData.scoreFormula,
                 essentialAverage: fullResumeData.essentialAverage,
+                essentialRating10: fullResumeData.essentialRating10,
+                nonEssentialRating10: fullResumeData.nonEssentialRating10,
+                combinedAverage10: fullResumeData.combinedAverage10,
+                overallRating10: fullResumeData.overallRating10,
+                ratingCapApplied: fullResumeData.ratingCapApplied,
+                ratingSummaryText: fullResumeData.ratingSummaryText,
                 matchStatus: fullResumeData.matchStatus || resume.matchStatus,
                 scoredDate: fullResumeData.scoredDate,
                 scoredBy: fullResumeData.scoredBy,
@@ -2742,7 +2779,7 @@ Best regards`);
                             </div>
                             <div className="text-xs text-gray-500 truncate">
                               Scorecard &middot; PDF
-                              {fullResumeData.scorePercentage != null && <> &middot; {fullResumeData.scorePercentage}%</>}
+                              {fullResumeData.scorePercentage != null && <> &middot; {formatOverallScore(fullResumeData.overallRating10, fullResumeData.scorePercentage)}</>}
                             </div>
                           </div>
                           <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
@@ -2842,7 +2879,7 @@ Best regards`);
                       <h2 className="text-lg font-semibold text-gray-900 tracking-tight truncate">Scorecard</h2>
                       <p className="text-sm text-gray-500 truncate">
                         {fullResumeData.candidateName}
-                        {fullResumeData.scorePercentage != null && <> &middot; {fullResumeData.scorePercentage}%</>}
+                        {fullResumeData.scorePercentage != null && <> &middot; {formatOverallScore(fullResumeData.overallRating10, fullResumeData.scorePercentage)}</>}
                       </p>
                     </div>
                   </div>
@@ -2877,7 +2914,12 @@ Best regards`);
           )}
 
           {/* Share Assessment via Email — the same modal the JD and assessment
-              pages use, opened here without leaving the candidate page. */}
+              pages use, opened here without leaving the candidate page.
+              Prefilled with THIS candidate, same as the row-level Invite in
+              ScoredResumesTable — this page's own Invite button was opening
+              both share modals with a blank candidate form; the recruiter had
+              to retype the name and email of the very candidate they were
+              already looking at. */}
           {showShareAssessmentModal && shareAssessments.length > 0 && (
             <ShareAssessmentModal
               isOpen={showShareAssessmentModal}
@@ -2885,6 +2927,18 @@ Best regards`);
                 setShowShareAssessmentModal(false);
                 setShareAssessments([]);
               }}
+              prefilledCandidates={
+                (fullResumeData.email || resume.email)
+                  ? [{
+                      id: fullResumeData.resumeId || resume.resumeId || resume.id,
+                      name: fullResumeData.candidateName || resume.candidateName || 'Unknown',
+                      email: fullResumeData.email || resume.email || '',
+                      phone: fullResumeData.phone || resume.phone,
+                      source: 'manual',
+                      resumeId: fullResumeData.resumeId || resume.resumeId,
+                    }]
+                  : undefined
+              }
               assessment={{
                 id: shareAssessments[0].id,
                 title: shareAssessments[0].title,
@@ -2915,13 +2969,24 @@ Best regards`);
             />
           )}
 
-          {/* Share AI Interview — same modal the AI Interviews page opens. */}
+          {/* Share AI Interview — same modal the AI Interviews page opens.
+              Prefilled with THIS candidate, same reasoning as the Assessment
+              modal above. */}
           {shareAIConfig && (
             <ShareAIInterviewModal
               isOpen={!!shareAIConfig}
               onClose={() => setShareAIConfig(null)}
               config={shareAIConfig}
               onInviteSent={() => setShareAIConfig(null)}
+              initialCandidates={
+                (fullResumeData.email || resume.email)
+                  ? [{
+                      name: fullResumeData.candidateName || resume.candidateName || 'Unknown',
+                      email: fullResumeData.email || resume.email || '',
+                      resumeId: fullResumeData.resumeId || resume.resumeId,
+                    }]
+                  : undefined
+              }
             />
           )}
 
