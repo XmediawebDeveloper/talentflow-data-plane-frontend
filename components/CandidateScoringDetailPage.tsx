@@ -249,17 +249,27 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const tabsSectionRef = useRef<HTMLDivElement>(null);
 
   /**
+   * The real Job Details page's URL, tagged with where it came from so that
+   * page's own breadcrumb (app/(dashboard)/recruitment/job-details/page.tsx)
+   * shows a Resume-Scoring-flavored trail - with a crumb back to THIS exact
+   * candidate - instead of resetting to the generic Job Openings one every
+   * other route lands there with. Shared by the "Job Title" link below and
+   * the breadcrumb's own trailing JD crumb, so the two can never disagree.
+   */
+  const buildJdDetailsHref = () => {
+    const scoreId = fullResumeData.id || resume.id;
+    const candidateName = fullResumeData.candidateName || resume.candidateName || '';
+    return `/recruitment/job-details?id=${jobId}&from=resume-scoring&score_id=${encodeURIComponent(scoreId)}&candidate_name=${encodeURIComponent(candidateName)}`;
+  };
+
+  /**
    * Job title → the real Job Details page (a genuine navigation, not the
    * in-page "View JD" tab - that tab is still reachable from the tab strip
-   * itself for a look without leaving this candidate). Tags the destination
-   * with `from=resume-scoring` so that page's own breadcrumb
-   * (app/(dashboard)/recruitment/job-details/page.tsx) shows a
-   * Resume-Scoring-flavored trail instead of resetting to the generic Job
-   * Openings one every other route lands there with.
+   * itself for a look without leaving this candidate).
    */
   const handleOpenJobDescription = () => {
     if (!jobId || jobId === 'global') return;
-    router.push(`/recruitment/job-details?id=${jobId}&from=resume-scoring`);
+    router.push(buildJdDetailsHref());
   };
   const [isDataReady, setIsDataReady] = useState(false);
   const [fullResumeData, setFullResumeData] = useState<ScoredResume>(resume);
@@ -1118,21 +1128,17 @@ Best regards`);
                 { label: jobTitle, href: `/recruitment/resume-scoring?jd_id=${jobId}` },
                 { label: resume.candidateName || 'Candidate' },
               ];
-              // A trailing crumb for the real Job Details page - always
-              // present (not tied to which tab is open), genuinely last, and
-              // still a working link via `forceLink` (PageBreadcrumb's own
-              // rule would otherwise flatten the last item to plain text).
-              // Requires a real jobId: the cross-job global list's candidate
-              // view passes the 'global' sentinel (no single JD) when a row
-              // somehow lacks its own jdId, which is not a real page to link to.
-              if (!jobId || jobId === 'global') return base;
+              // A trailing crumb for the real Job Details page - only added
+              // once the View JD tab is actually open (not shown by default),
+              // genuinely last, and still a working link via `forceLink`
+              // (PageBreadcrumb's own rule would otherwise flatten the last
+              // item to plain text). Requires a real jobId: the cross-job
+              // global list's candidate view passes the 'global' sentinel
+              // (no single JD) when a row somehow lacks its own jdId, which
+              // is not a real page to link to.
+              if (activeTab !== 'viewjd' || !jobId || jobId === 'global') return base;
 
-              // Tags the destination with where it came from, so that page's
-              // own breadcrumb (app/(dashboard)/recruitment/job-details/page.tsx)
-              // shows a Resume-Scoring-flavored trail instead of resetting to
-              // the generic Job Openings one every other route lands there with.
-              const jdDetailsHref = `/recruitment/job-details?id=${jobId}&from=resume-scoring`;
-              return [...base, { label: jobTitle, href: jdDetailsHref, forceLink: true }];
+              return [...base, { label: jobTitle, href: buildJdDetailsHref(), forceLink: true }];
             })()}
           />
 
