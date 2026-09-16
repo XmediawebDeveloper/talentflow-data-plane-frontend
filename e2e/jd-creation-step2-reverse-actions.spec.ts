@@ -53,6 +53,30 @@ const MERGE_TRAIL = [
   },
   {
     survivor: "",
+    removed: ["conducting test case reviews"],
+    reasons: ['The JD asks for "conducting test case reviews", and it is not in any list.'],
+    removed_sources: ["Proficient in test case design and conducting test case reviews."],
+    restore_lists: ["must_have_skills"],
+    sources: ["possibly-missed"],
+    survivor_source: null,
+    list: "must_have_skills",
+    kind: "skill",
+    source: "possibly-missed",
+  },
+  {
+    survivor: "",
+    removed: ["npm"],
+    reasons: ['The JD asks for "npm", and it is not in any list.'],
+    removed_sources: ["Build tooling with npm."],
+    restore_lists: ["must_have_skills"],
+    sources: ["possibly-missed"],
+    survivor_source: null,
+    list: "must_have_skills",
+    kind: "skill",
+    source: "possibly-missed",
+  },
+  {
+    survivor: "",
     removed: ["REST APIs"],
     reasons: ['The JD asks for "REST APIs", and it is not in any list. Add it if it matters for this role.'],
     removed_sources: ["3 years of experience in API Testing using REST APIs."],
@@ -130,6 +154,11 @@ const addUnderNote = (page: Page) =>
 const mharRow = (page: Page) => page.getByTitle("Click to edit").filter({ hasText: NOTE_TEXT }).first();
 const missedPanel = (page: Page) =>
   page.locator("div").filter({ hasText: /^Possibly missed from the JD/ }).first();
+/** One CHIP of the panel: the phrase and the three actions that belong to it. Phrases
+ *  are grouped under the JD line they came from, so the chip - not the row - is what
+ *  owns a phrase's buttons. */
+const missedRow = (page: Page, phrase: string) =>
+  missedPanel(page).getByText(phrase, { exact: true }).locator("xpath=ancestor::span[1]");
 
 async function open(page: Page, jd = draftJd()) {
   await mockJd(page, jd);
@@ -189,22 +218,24 @@ test.describe("JD Creation Step 2 — reverse actions", () => {
 
   test("a possibly-missed phrase comes back when the skill it created is deleted", async ({ page }) => {
     await open(page);
-    await expect(missedPanel(page)).toBeVisible();
+    await expect(missedRow(page, "REST APIs")).toBeVisible();
 
-    await page.getByRole("button", { name: "Add to Must-Have" }).first().click();
-    await expect(missedPanel(page)).toHaveCount(0);
+    await missedRow(page, "REST APIs").getByRole("button", { name: "Add to Must-Have" }).click();
+    await expect(missedRow(page, "REST APIs")).toHaveCount(0);
 
-    await page.getByTitle("REST APIs").first()
+    await page.getByTitle("REST APIs", { exact: true }).first()
       .locator("xpath=ancestor::div[2]").getByRole("button", { name: "Delete" }).first().click();
-    await expect(missedPanel(page)).toBeVisible();
+    await expect(missedRow(page, "REST APIs")).toBeVisible();
   });
 
   test("Dismiss is final - that one is a decision, not a move", async ({ page }) => {
     await open(page);
-    await expect(missedPanel(page)).toBeVisible();
-    // Scoped: the Pro Tips banner has a "Dismiss" of its own.
-    await missedPanel(page).getByRole("button", { name: "Dismiss" }).first().click();
-    await expect(missedPanel(page)).toHaveCount(0);
+    await expect(missedRow(page, "REST APIs")).toBeVisible();
+    // Scoped twice over: the Pro Tips banner has a "Dismiss" of its own, and the panel
+    // lists several phrases - dismissing one must not touch the others.
+    await missedRow(page, "REST APIs").getByRole("button", { name: "Dismiss" }).click();
+    await expect(missedRow(page, "REST APIs")).toHaveCount(0);
+    await expect(missedRow(page, "Conducting test case reviews")).toBeVisible();
   });
 });
 
@@ -256,5 +287,97 @@ test.describe("JD Creation Step 2 — the tree survives edits to its item", () =
 
     await expect(missedPanel(page)).toBeVisible();
     await expect(missedPanel(page).getByText("Server-Side Programming", { exact: true })).toBeVisible();
+  });
+});
+
+test.describe("JD Creation Step 2 — an added line reads as a line", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockApiFallback(page);
+    await mockLoginApi(page);
+    await mockDashboardApis(page);
+  });
+
+  test("a missed JD fragment is capitalised when it becomes a skill", async ({ page }) => {
+    // The phrases in the panel are fragments of the JD's sentences, so they start
+    // lower-case: "conducting test case reviews". Added verbatim, the recruiter's skills
+    // list had rows starting mid-sentence.
+    await open(page);
+    await missedRow(page, "Conducting test case reviews")
+      .getByRole("button", { name: "Add to Must-Have" }).click();
+
+    await expect(page.getByTitle("Conducting test case reviews", { exact: true })).toBeVisible();
+    await expect(page.getByTitle("conducting test case reviews", { exact: true })).toHaveCount(0);
+  });
+
+  test("a one-word tool name is left exactly as the JD spells it", async ({ page }) => {
+    // "npm", "nginx", "pandas", "kubectl" are lower-case on purpose, and capitalising a
+    // name is a mistake the recruiter cannot correct by retyping - extraction would keep
+    // supplying the lower-case form.
+    await open(page);
+    await missedRow(page, "npm").getByRole("button", { name: "Add to Must-Have" }).click();
+
+    await expect(page.getByTitle("npm", { exact: true })).toBeVisible();
+    await expect(page.getByTitle("Npm", { exact: true })).toHaveCount(0);
+  });
+
+  test("the panel shows the phrase the way it will be added", async ({ page }) => {
+    // What you see is what lands in the list; the verbatim JD text is still quoted on the
+    // "From the JD" line beside it.
+    await open(page);
+    await expect(missedPanel(page).getByText("Conducting test case reviews", { exact: true })).toBeVisible();
+    await expect(missedPanel(page).getByText(/Proficient in test case design/)).toBeVisible();
+  });
+
+  test("a requirement promoted out of a group is capitalised too", async ({ page }) => {
+    await open(page);
+    await addUnderNote(page).click();
+    await expect(mharRow(page)).toBeVisible();
+    await expect(mharRow(page)).toHaveText(/^5 years/);   // already starts with a figure
+  });
+});
+
+test.describe("JD Creation Step 2 — the missed panel is readable", () => {
+  test.beforeEach(async ({ page }) => {
+    await mockApiFallback(page);
+    await mockLoginApi(page);
+    await mockDashboardApis(page);
+  });
+
+  /** Five phrases from ONE bullet plus one from another: the shape that produced a wall
+   *  of seventeen rows, each repeating the same quotation. */
+  const NOISY = [
+    ...["defect reporting", "triage", "root cause investigation", "retesting", "closure"].map(p => ({
+      survivor: "", removed: [p], reasons: [`The JD asks for "${p}".`],
+      removed_sources: ["Experience in Defect Management, including defect reporting, triage, root cause investigation, retesting, and closure."],
+      restore_lists: ["must_have_skills"], sources: ["possibly-missed"], survivor_source: null,
+      list: "must_have_skills", kind: "skill", source: "possibly-missed",
+    })),
+    {
+      survivor: "", removed: ["SOAP services"], reasons: ['The JD asks for "SOAP services".'],
+      removed_sources: ["Hands-on experience with REST APIs and SOAP services."],
+      restore_lists: ["must_have_skills"], sources: ["possibly-missed"], survivor_source: null,
+      list: "must_have_skills", kind: "skill", source: "possibly-missed",
+    },
+  ];
+
+  test("phrases from one JD line are quoted once, not once each", async ({ page }) => {
+    await open(page, draftJd({ skill_merge_trail: NOISY }));
+    // Five chips, ONE quotation.
+    await expect(missedPanel(page).getByText(/^From the JD: .Experience in Defect Management/)).toHaveCount(1);
+    for (const p of ["Defect reporting", "triage", "Root cause investigation", "retesting", "closure"]) {
+      await expect(missedPanel(page).getByText(p, { exact: true })).toBeVisible();
+    }
+  });
+
+  test("each chip still carries its own three actions", async ({ page }) => {
+    await open(page, draftJd({ skill_merge_trail: NOISY }));
+    const chip = missedRow(page, "triage");
+    await expect(chip.getByRole("button", { name: "Add to Must-Have" })).toBeVisible();
+    await expect(chip.getByRole("button", { name: "Add to Nice-to-Have" })).toBeVisible();
+    await expect(chip.getByRole("button", { name: "Dismiss" })).toBeVisible();
+
+    await chip.getByRole("button", { name: "Add to Must-Have" }).click();
+    // One word, so the JD's own spelling stands - the same guard that protects "npm".
+    await expect(page.getByTitle("triage", { exact: true })).toBeVisible();
   });
 });

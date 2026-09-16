@@ -8,6 +8,7 @@ import { jdService, JDResponse } from '@/lib/services/jdService';
 import { assessmentService, AssessmentResponse } from '@/lib/services/assessmentService';
 import VersionBadge from '@/components/VersionBadge';
 import { aiInterviewService, AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { formatDateTimeIST } from '@/lib/utils/timezone';
 
 interface GlobalSearchProps {
   className?: string;

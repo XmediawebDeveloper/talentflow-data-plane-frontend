@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import ResumeScoringPage from '@/components/ResumeScoringPage';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { resumeService, folderService } from '@/lib/services/resumeService';
-import { scoringService } from '@/lib/services/scoringService';
+import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
 import { Resume, Folder } from '@/lib/types/types';
 import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -303,6 +303,16 @@ export default function ResumeScoringRoute() {
       });
     });
 
+    // Circuit breaker to match the upload-batch poll further down this file:
+    // if the backend never settles this batch, stop polling it forever rather
+    // than leaving the popup stuck at "Processing" with nothing the recruiter
+    // can do about it.
+    const pollTimeout = setTimeout(() => {
+      console.warn('[ResumeScoringRoute] Batch poll timed out after 10 minutes, stopping');
+      clearInterval(pollInterval);
+      setPendingBatchId(null);
+    }, 600000);
+
     const pollInterval = setInterval(async () => {
       try {
         const status = await scoringService.getBatchStatus(pendingBatchId);
@@ -313,7 +323,7 @@ export default function ResumeScoringRoute() {
             accumulatedItems.set(item.resume_id, {
               resumeId: item.resume_id,
               candidateName: candidateNameMap.get(item.resume_id) || item.candidate_name || 'Unknown',
-              status: item.status,
+              status: normalizeScoringStatus(item.status),
               score: item.overall_score,
               matchStatus: item.match_status,
               errorMessage: item.error_message,
@@ -335,10 +345,19 @@ export default function ResumeScoringRoute() {
           items: allItems,
         });
 
-        // Stop polling when batch is complete
-        if (status.status === 'completed' || status.status === 'failed') {
+        // Stop polling when batch is complete. The `status.status` string is
+        // the primary signal, but SelectSourceModal.tsx's own poll (the
+        // Score-Resumes flow's equivalent of this one) also falls back to the
+        // counts reaching zero — this copy was missing that fallback, so a
+        // batch whose aggregate `status` field never flipped to
+        // 'completed'/'failed' (queued/processing both already at 0) polled
+        // forever, stuck at "Processing: 1" / 0% with no way to close it.
+        const aggregateStatus = normalizeScoringStatus(status.status);
+        if (aggregateStatus === 'completed' || aggregateStatus === 'failed' ||
+            (status.queued === 0 && status.processing === 0)) {
           console.log('[ResumeScoringRoute] Batch completed, stopping poll');
           clearInterval(pollInterval);
+          clearTimeout(pollTimeout);
           setPendingBatchId(null);
 
           // Reload scored history to show new results
@@ -360,7 +379,10 @@ export default function ResumeScoringRoute() {
       }
     }, 2000); // Poll every 2 seconds
 
-    return () => clearInterval(pollInterval);
+    return () => {
+      clearInterval(pollInterval);
+      clearTimeout(pollTimeout);
+    };
   }, [pendingBatchId]);
 
   const loadScoredHistory = async () => {
@@ -451,6 +473,7 @@ export default function ResumeScoringRoute() {
           matchScore: matchScore,
           matchStatus: matchStatus,
           scorePercentage: matchScore,
+          overallRating10: item.overall_rating_10,
           scoredDate: item.created_at || new Date().toISOString(),
           scoredBy: item.scored_by_name || item.scored_by || 'System',
           // The scorer's own account identifier — for the Scoring History
@@ -593,6 +616,7 @@ export default function ResumeScoringRoute() {
           matchScore: matchScore,
           matchStatus: matchStatus,
           scorePercentage: matchScore,
+          overallRating10: item.overall_rating_10,
           scoredDate: item.created_at || new Date().toISOString(),
           scoredBy: item.scored_by_name || item.scored_by || 'System',
           scoredByEmail: item.scored_by,

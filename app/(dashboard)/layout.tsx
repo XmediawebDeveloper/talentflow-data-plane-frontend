@@ -25,6 +25,7 @@ import PlanChangeSuspendedBlock from '@/components/plan-change/PlanChangeSuspend
 import { AdminAssignedPlanProvider } from '@/components/providers/AdminAssignedPlanProvider';
 import AdminAssignedPlanBanner from '@/components/admin-assigned-plan/AdminAssignedPlanBanner';
 import AdminAssignedPlanModal from '@/components/admin-assigned-plan/AdminAssignedPlanModal';
+import GlobalScoringProgressIndicator from '@/components/GlobalScoringProgressIndicator';
 
 // Admin-only routes that require tenant_admin role
 const adminRoutes = [
@@ -462,6 +463,12 @@ export default function DashboardLayout({
 
             {/* Admin-assigned plan payment modal - z-[88] */}
             <AdminAssignedPlanModal />
+
+            {/* Global scoring progress indicator - floating bottom-right widget.
+                Scoped to this (dashboard) layout, not the root layout, so it
+                never mounts on the (public) candidate-facing pages (assessment/
+                AI-interview token links) or the (auth)/(marketing) routes. */}
+            <GlobalScoringProgressIndicator />
 
             {/* Plan change suspended overlay - z-[98], above terms z-[95], below generic suspension z-[100] */}
             <PlanChangeSuspendedOverlay />

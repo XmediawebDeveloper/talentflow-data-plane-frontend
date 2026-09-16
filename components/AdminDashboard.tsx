@@ -9,6 +9,7 @@ import WelcomeBanner from '@/components/dashboard/WelcomeBanner';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { formatOverallScore } from '@/lib/utils/matchStatus';
 
 interface AdminDashboardProps {
   user?: User;
@@ -659,8 +660,11 @@ export default function AdminDashboard({
                     const jdNum = details.jd_number;
                     const jdTitle = details.jd_title;
                     const score = details.score || details.overall_score;
-                    if (jdNum && candidate && score !== undefined) return `${jdNum} - ${candidate} (${score}%)`;
-                    if (candidate && score !== undefined) return `${candidate} - Score: ${score}%`;
+                    // Resume Match Rating Mechanism (client doc, Sept 2026): prefer
+                    // the 0-10 Overall Rating when the audit log entry carries one.
+                    const scoreDisplay = score !== undefined ? formatOverallScore(details.overall_rating_10, score) : undefined;
+                    if (jdNum && candidate && scoreDisplay !== undefined) return `${jdNum} - ${candidate} (${scoreDisplay})`;
+                    if (candidate && scoreDisplay !== undefined) return `${candidate} - Score: ${scoreDisplay}`;
                     return candidate || jdTitle || '';
                   }
                   if (actionLower.includes('resume_')) {
