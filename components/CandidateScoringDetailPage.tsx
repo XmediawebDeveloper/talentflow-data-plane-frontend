@@ -1506,6 +1506,7 @@ Best regards`);
                 essentialAverage: fullResumeData.essentialAverage,
                 essentialRating10: fullResumeData.essentialRating10,
                 nonEssentialRating10: fullResumeData.nonEssentialRating10,
+                combinedAverage10: fullResumeData.combinedAverage10,
                 overallRating10: fullResumeData.overallRating10,
                 ratingCapApplied: fullResumeData.ratingCapApplied,
                 ratingSummaryText: fullResumeData.ratingSummaryText,

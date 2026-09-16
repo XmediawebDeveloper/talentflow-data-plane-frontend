@@ -69,6 +69,9 @@ interface ScoredResumeDetail {
   // its value and scale is affected.
   essentialRating10?: number;
   nonEssentialRating10?: number | null;
+  // Internal step only (Essential + Non-Essential) / 2 - used for the Overall
+  // Rating tooltip's worked-through explanation, never displayed on its own.
+  combinedAverage10?: number | null;
   overallRating10?: number;
   ratingCapApplied?: boolean;
   ratingSummaryText?: string;
@@ -519,6 +522,48 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     return 'text-red-600';
   };
 
+  // Worked-through explanation for the Overall Rating tooltip, per the
+  // client's 10-point rating document ("Final Version A", Sept 2026). This
+  // REPLACES the old Required%/Preferred% weighted-credit explanation
+  // (`weightedScoreExplanation` above, now unused here) that used to sit
+  // under this same label - that explained a different calculation the
+  // headline number no longer uses, so showing it here would describe math
+  // that doesn't match the number displayed next to it.
+  let overallRatingExplanation: ReactNode = null;
+  if (resume.essentialRating10 != null) {
+    const normalizedStatus = resume.matchStatus?.toLowerCase().replace(/[_\s]/g, '') || '';
+    const isNoMatch = normalizedStatus === 'nomatch';
+    const isPartial = normalizedStatus === 'partialmatch';
+
+    overallRatingExplanation = (
+      <div className="space-y-1.5">
+        <p>Must-Have Average: {resume.essentialRating10.toFixed(1)}/10 - the average of every Must-Have criterion (a rating below 7 counts as 0 but still counts toward the average).</p>
+        {isNoMatch ? (
+          <p>One or more Must-Have requirements failed, so the Overall Rating is the Must-Have Average. Nice-to-Have criteria are not used.</p>
+        ) : resume.nonEssentialRating10 == null ? (
+          <p>This job has no Nice-to-Have criteria, so the Overall Rating is the Must-Have Average.</p>
+        ) : (
+          <>
+            <p>
+              Nice-to-Have Average: {resume.nonEssentialRating10.toFixed(1)}/10.
+              {resume.combinedAverage10 != null && (
+                <> Combined Average: ({resume.essentialRating10.toFixed(1)} + {resume.nonEssentialRating10.toFixed(1)}) / 2 = {resume.combinedAverage10.toFixed(2)}.</>
+              )}
+            </p>
+            <p>
+              Overall Rating takes the higher of the Must-Have Average and the Combined Average.
+              {resume.ratingCapApplied && (
+                isPartial
+                  ? ' A Partial Match is never shown at 8.00 or above, so it is capped down to 7.9.'
+                  : ' The Combined Average was 8.00 or below, so an Exact Match here is capped down to 9.00.'
+              )}
+            </p>
+          </>
+        )}
+      </div>
+    );
+  }
+
   const getRatingRangeColor = (rating: number): string => {
     if (rating === 10) return 'text-green-700 font-semibold';
     if (rating === 9) return 'text-green-700 font-semibold';
@@ -537,8 +582,8 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
               keying off match status is untouched. `scorePercentage` stays as a
               fallback only for a response that predates this field. */}
           Overall Rating:
-          {(weightedScoreExplanation || resume.scoreFormula) && (
-            <Tooltip content={weightedScoreExplanation || resume.scoreFormula} position="bottom">
+          {(overallRatingExplanation || resume.ratingSummaryText || resume.scoreFormula) && (
+            <Tooltip content={overallRatingExplanation || resume.ratingSummaryText || resume.scoreFormula} position="bottom">
               <Info className="w-3.5 h-3.5 text-gray-400 hover:text-gray-600 cursor-help" />
             </Tooltip>
           )}

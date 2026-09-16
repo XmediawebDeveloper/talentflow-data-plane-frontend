@@ -162,6 +162,7 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobTitle, onCl
                 overallRating10: detail?.overall_rating_10 ?? resume.overallRating10,
                 essentialRating10: detail?.essential_rating_10,
                 nonEssentialRating10: detail?.non_essential_rating_10,
+                combinedAverage10: detail?.combined_average_10,
                 ratingCapApplied: detail?.rating_cap_applied,
                 ratingSummaryText: detail?.rating_summary_text,
                 matchStatus,
