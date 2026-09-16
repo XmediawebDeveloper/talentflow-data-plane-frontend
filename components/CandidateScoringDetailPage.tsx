@@ -1128,17 +1128,31 @@ Best regards`);
                 { label: jobTitle, href: `/recruitment/resume-scoring?jd_id=${jobId}` },
                 { label: resume.candidateName || 'Candidate' },
               ];
-              // A trailing crumb for the real Job Details page - only added
-              // once the View JD tab is actually open (not shown by default),
-              // genuinely last, and still a working link via `forceLink`
-              // (PageBreadcrumb's own rule would otherwise flatten the last
-              // item to plain text). Requires a real jobId: the cross-job
-              // global list's candidate view passes the 'global' sentinel
-              // (no single JD) when a row somehow lacks its own jdId, which
-              // is not a real page to link to.
-              if (activeTab !== 'viewjd' || !jobId || jobId === 'global') return base;
+              // Requires a real jobId: the cross-job global list's candidate
+              // view passes the 'global' sentinel (no single JD) when a row
+              // somehow lacks its own jdId, which is not a real page to link to.
+              if (!jobId || jobId === 'global') return base;
 
-              return [...base, { label: jobTitle, href: buildJdDetailsHref(), forceLink: true }];
+              // Always APPENDED, never used to replace or drop an existing
+              // mid-trail crumb with the same label - a mid-trail "Job
+              // Title" crumb from a per-job entry point (Resume Scoring's
+              // "back to this job's resume list", or JobDetailView's own
+              // "close this candidate and return to the Job Details tabs
+              // you were on") means something different from THIS crumb
+              // (a fresh navigation to the standalone JD page), even though
+              // the text can read the same - so both are kept, each doing
+              // its own distinct thing, rather than one being silently
+              // treated as a duplicate of the other and removed.
+              //
+              // Plain text on every other tab; a working link (via
+              // `forceLink`, since PageBreadcrumb otherwise always flattens
+              // the last item to plain text) only once the View JD tab is
+              // actually open.
+              const jdCrumb =
+                activeTab === 'viewjd'
+                  ? { label: jobTitle, href: buildJdDetailsHref(), forceLink: true }
+                  : { label: jobTitle };
+              return [...base, jdCrumb];
             })()}
           />
 
