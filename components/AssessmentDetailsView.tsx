@@ -15,6 +15,7 @@ import { formatIST } from '@/lib/utils/dateUtils';
 import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
+import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
 
 interface AssessmentDetailsViewProps {
   assessment: any;
@@ -526,8 +527,7 @@ export default function AssessmentDetailsView({
    * section); "Preferred" criteria share the 40% block and never fail a candidate
    * on their own.
    */
-  const jdRequirementLabel = (mandatory?: boolean) =>
-    mandatory ? '✓ Required (Essential)' : '○ Preferred';
+  const jdRequirementLabel = requirementBadge;
 
   const jdNiceToHaveComments = jdData?.nice_to_have_comments || [];
   const jdExperienceText = formatJobExperienceText({
@@ -2970,7 +2970,11 @@ export default function AssessmentDetailsView({
                                   place its Required status is visible. */}
                               <h4 className="text-sm text-gray-700 mb-3">
                                 Must-Have Additional Requirements ({jdMustHaveComments.length})
-                                <span className="ml-2 text-xs font-normal text-gray-500">✓ Required (Essential)</span>
+                                {/* See JobDetailView: the badge is a scoring claim, so it
+                                    only appears when there are lines for it to apply to. */}
+                                {jdMustHaveComments.length > 0 && (
+                                  <span className="ml-2 text-xs font-normal text-gray-500">✓ Required (Essential)</span>
+                                )}
                               </h4>
                               {jdMustHaveComments.length > 0 ? (
                                 <div className="space-y-2">
@@ -2988,7 +2992,9 @@ export default function AssessmentDetailsView({
                             <div>
                               <h4 className="text-sm text-gray-700 mb-3">
                                 Nice-to-Have Additional Requirements ({jdNiceToHaveComments.length})
-                                <span className="ml-2 text-xs font-normal text-gray-500">○ Preferred</span>
+                                {jdNiceToHaveComments.length > 0 && (
+                                  <span className="ml-2 text-xs font-normal text-gray-500">○ Preferred</span>
+                                )}
                               </h4>
                               {jdNiceToHaveComments.length > 0 ? (
                                 <div className="space-y-2">
@@ -3014,7 +3020,9 @@ export default function AssessmentDetailsView({
                           <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
                             <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Experience</h4>
                             <p className="text-sm sm:text-base text-gray-900">{jdExperienceText || 'Not specified'}</p>
-                            <p className="text-xs text-gray-500 mt-1">{jdRequirementLabel(jdData.experience_mandatory)}</p>
+                            {jdExperienceText && (
+                              <p className="text-xs text-gray-500 mt-1">{jdRequirementLabel(jdData.experience_mandatory)}</p>
+                            )}
                           </div>
                           {/* Education tile REMOVED 2026-08-21. Same Requirements grid
                               as JobDetailView, same reason: education is a line inside
@@ -3024,14 +3032,15 @@ export default function AssessmentDetailsView({
                             <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
                               <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Industry Type</h4>
                               <p className="text-sm sm:text-base text-gray-900">{prettifyCode(jdData.industry_type)}</p>
-                              <p className="text-xs text-gray-500 mt-1">{jdRequirementLabel(jdData.industry_mandatory)}</p>
+                              {/* See JobDetailView: "Others" is never scored. */}
+                              <p className="text-xs text-gray-500 mt-1">{criterionScoringLabel(jdData.industry_type, jdData.industry_mandatory, { isIndustry: true })}</p>
                             </div>
                           )}
                           {jdData.location && (
                             <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
                               <h4 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Location</h4>
                               <p className="text-sm sm:text-base text-gray-900">{jdData.location}</p>
-                              <p className="text-xs text-gray-500 mt-1">{jdRequirementLabel(jdData.location_mandatory)}</p>
+                              <p className="text-xs text-gray-500 mt-1">{criterionScoringLabel(jdData.location, jdData.location_mandatory)}</p>
                             </div>
                           )}
                           <div className="bg-gray-50 p-3 sm:p-4 rounded-lg">
