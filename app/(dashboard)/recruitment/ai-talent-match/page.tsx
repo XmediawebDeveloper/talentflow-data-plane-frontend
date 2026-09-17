@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import AITalentMatchPage from '@/components/AITalentMatchPage';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { aiMatchService, AIMatchSessionResponse } from '@/lib/services/aiMatchService';
+import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
 import { Loader2 } from 'lucide-react';
 import FeatureGate from '@/components/shared/FeatureGate';
 
@@ -18,6 +19,11 @@ interface Job {
   experience?: string;
   jobId?: string;
   currentVersion?: number;
+  /** The raw lineage version number (same JD-ID, one entry per republish) —
+   *  separate from `currentVersion` above, which blends in the publish
+   *  counter for display. "View Versions" (job list) needs the real number
+   *  to group and count a job's sibling versions correctly. */
+  versionNumber?: number;
   /* Carried so the job rows can show what the Resume Scoring job rows show.
      All four already exist on the JD record; they were simply never mapped. */
   industryType?: string;
@@ -26,6 +32,9 @@ interface Job {
   postedDate?: string;
   /** Drives the AI / Manual badge next to Status in the version history table. */
   creationMethod?: string;
+  /** ISO timestamp — "View Versions" tie-breaks same-version-number siblings
+   *  by recency, the same way groupByLineage does everywhere else. */
+  createdAt?: string;
 }
 
 interface MatchHistory {
@@ -38,36 +47,37 @@ interface MatchHistory {
 }
 
 // Transform JD API response to Job format for the component
+//
+// `currentVersion` (this page's own field, badge-visible as "vN" on every
+// job card) takes the LINEAGE version first, exactly like Resume Scoring's
+// own `toPageJob` mapping in ResumeScoringPage.tsx: routed through the same
+// shared `mapJDToJob`, whose `versionNumber` is the lineage's v1/v2/v3 (same
+// JD-ID, one entry per republish) while `currentVersion` there is the
+// separate publish COUNTER (bumped by republishing without necessarily
+// forking a new lineage entry). Reading the raw publish counter directly, as
+// this used to, showed a job at a different version here than the identical
+// JD showed on the Resume Scoring / Job Openings pages — this mapping is
+// what keeps the two in agreement.
 function transformJDToJob(jd: JDResponse): Job {
-  // Map status to display format
-  const statusMap: Record<string, string> = {
-    'published': 'Published',
-    'draft': 'Draft',
-    'disabled': 'Disabled',
-    'archived': 'Archived',
-    'active': 'Active',
-  };
-
+  const mapped = mapJDToJob(jd);
   return {
-    id: jd.id,
-    title: jd.title,
-    department: jd.department,
-    location: jd.location || '',
-    status: statusMap[jd.status?.toLowerCase()] || jd.status,
-    applicants: jd.applicants_count || 0,
-    employmentType: jd.employment_type,
-    experience: jd.experience_min && jd.experience_max
-      ? `${jd.experience_min}-${jd.experience_max} years`
-      : jd.experience_min
-        ? `${jd.experience_min}+ years`
-        : undefined,
-    jobId: jd.job_id,
-    currentVersion: jd.current_version,
-    industryType: jd.industry_type,
-    remoteType: jd.remote_type,
-    postedBy: jd.created_by_name,
-    postedDate: jd.published_at,
-    creationMethod: jd.creation_method,
+    id: mapped.id,
+    title: mapped.title,
+    department: mapped.department,
+    location: mapped.location || '',
+    status: mapped.status,
+    applicants: mapped.applicants ?? 0,
+    employmentType: mapped.employmentType,
+    experience: mapped.experience,
+    jobId: mapped.job_id,
+    currentVersion: mapped.versionNumber ?? mapped.currentVersion,
+    versionNumber: mapped.versionNumber,
+    industryType: mapped.industry_type,
+    remoteType: mapped.workMode,
+    postedBy: mapped.postedBy,
+    postedDate: mapped.postedDate,
+    creationMethod: mapped.creation_method,
+    createdAt: mapped.created_at,
   };
 }
 

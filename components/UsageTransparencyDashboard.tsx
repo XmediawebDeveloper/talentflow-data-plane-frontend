@@ -9,7 +9,7 @@ import { ArrowLeft,
   Eye, Download, X, BarChart3,
   CheckCircle2, XCircle, AlertCircle, Loader2, Clock,
   ClipboardList, Video, ClipboardCheck, FileText, TrendingUp, TrendingDown,
-  Layers, Minus, RefreshCw
+  Layers, Minus, RefreshCw, ChevronLeft, ChevronRight
 } from 'lucide-react';
 import {
   unitPoolService,
@@ -65,6 +65,23 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
     includeNonDeductions,
   } = search.filters;
   const [limit] = useState(50);
+
+  const totalPages = Math.max(1, Math.ceil((data?.total ?? 0) / limit));
+
+  // 1-based text for the Go-to-page input — page itself stays 0-based.
+  const [goToPage, setGoToPage] = useState(String(page + 1));
+  useEffect(() => {
+    setGoToPage(String(page + 1));
+  }, [page]);
+
+  const commitGoToPage = () => {
+    const target = Math.round(Number(goToPage));
+    if (Number.isFinite(target) && target >= 1 && target <= totalPages) {
+      setPage(target - 1);
+    } else {
+      setGoToPage(String(page + 1));
+    }
+  };
 
   // Fetch data
   const fetchData = async () => {
@@ -585,23 +602,44 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
               <div className="text-sm text-gray-600">
                 Showing {page * limit + 1} - {Math.min((page + 1) * limit, data.total)} of {data.total}
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={goToPage}
+                    onChange={(e) => setGoToPage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.currentTarget.blur();
+                        commitGoToPage();
+                      }
+                    }}
+                    onBlur={commitGoToPage}
+                    aria-label="Go to page"
+                    className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+                  />
+                </div>
                 <button
                   onClick={() => setPage(Math.max(0, page - 1))}
                   disabled={page === 0}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+                  aria-label="Previous page" title="Previous page"
                 >
-                  Previous
+                  <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
-                <span className="px-4 py-2 text-sm text-gray-600">
-                  Page {page + 1} of {Math.ceil(data.total / limit)}
+                <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+                  <span className="text-brand-blue font-semibold">{page + 1}</span> / {totalPages}
                 </span>
                 <button
                   onClick={() => setPage(page + 1)}
                   disabled={(page + 1) * limit >= data.total}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+                  aria-label="Next page" title="Next page"
                 >
-                  Next
+                  <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
               </div>
             </div>

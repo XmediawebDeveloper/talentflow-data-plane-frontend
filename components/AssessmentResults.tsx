@@ -30,6 +30,75 @@ interface AssessmentResultsProps {
   totalCount?: number;
 }
 
+/** The canonical "Go to [input] · Previous · page/total · Next" control from
+ *  components/Pagination.tsx, reused inline since this table's pagination
+ *  footer also carries a "First"/"Last" pair and page-size-driven export
+ *  wiring that don't fit that component's props as-is. */
+function InlinePageNav({ page, totalPages, onPageChange }: { page: number; totalPages: number; onPageChange: (page: number) => void }) {
+  const [goToPage, setGoToPage] = useState(String(page));
+  useEffect(() => {
+    setGoToPage(String(page));
+  }, [page]);
+
+  const commitGoToPage = () => {
+    const target = Math.round(Number(goToPage));
+    if (Number.isFinite(target) && target >= 1 && target <= totalPages) {
+      onPageChange(target);
+    } else {
+      setGoToPage(String(page));
+    }
+  };
+
+  const navBtnClass =
+    "inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors";
+
+  return (
+    <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+        <input
+          type="number"
+          min={1}
+          max={totalPages}
+          value={goToPage}
+          onChange={(e) => setGoToPage(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.currentTarget.blur();
+              commitGoToPage();
+            }
+          }}
+          onBlur={commitGoToPage}
+          aria-label="Go to page"
+          className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+        />
+      </div>
+
+      <button
+        onClick={() => onPageChange(page - 1)}
+        disabled={page === 1}
+        className={navBtnClass}
+        aria-label="Previous page" title="Previous page"
+      >
+        <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+      </button>
+
+      <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+        <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
+      </span>
+
+      <button
+        onClick={() => onPageChange(page + 1)}
+        disabled={page === totalPages}
+        className={navBtnClass}
+        aria-label="Next page" title="Next page"
+      >
+        <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+      </button>
+    </div>
+  );
+}
+
 interface CandidateResult {
   id: string;
   invitation_id: string;  // For pending candidates without attempt
@@ -1789,66 +1858,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <div className="text-xs sm:text-sm text-gray-600">
                 Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} results
               </div>
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <button
-                  onClick={() => setCurrentPage(1)}
-                  disabled={currentPage === 1}
-                  className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                >
-                  First
-                </button>
-                <button
-                  onClick={() => setCurrentPage(currentPage - 1)}
-                  disabled={currentPage === 1}
-                  className="p-1 sm:p-1.5 border border-gray-200 bg-white text-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                >
-                  <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
-
-                {/* Page Numbers */}
-                <div className="flex items-center gap-1">
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    let pageNum;
-                    if (totalPages <= 5) {
-                      pageNum = i + 1;
-                    } else if (currentPage <= 3) {
-                      pageNum = i + 1;
-                    } else if (currentPage >= totalPages - 2) {
-                      pageNum = totalPages - 4 + i;
-                    } else {
-                      pageNum = currentPage - 2 + i;
-                    }
-                    return (
-                      <button
-                        key={pageNum}
-                        onClick={() => setCurrentPage(pageNum)}
-                        className={`min-w-[28px] sm:min-w-[34px] px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm rounded-md transition-colors ${
-                          currentPage === pageNum
-                            ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
-                            : 'border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-                        }`}
-                      >
-                        {pageNum}
-                      </button>
-                    );
-                  })}
-                </div>
-
-                <button
-                  onClick={() => setCurrentPage(currentPage + 1)}
-                  disabled={currentPage === totalPages}
-                  className="p-1 sm:p-1.5 border border-gray-200 bg-white text-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                >
-                  <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                </button>
-                <button
-                  onClick={() => setCurrentPage(totalPages)}
-                  disabled={currentPage === totalPages}
-                  className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 rounded-md disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                >
-                  Last
-                </button>
-              </div>
+              <InlinePageNav
+                page={currentPage}
+                totalPages={totalPages}
+                onPageChange={setCurrentPage}
+              />
             </div>
           )}
         </div>
