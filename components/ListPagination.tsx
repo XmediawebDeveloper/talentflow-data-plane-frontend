@@ -1,7 +1,6 @@
 'use client';
 
 import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useEffect, useState } from 'react';
 
 interface ListPaginationProps {
   currentPage: number;
@@ -55,20 +54,10 @@ export default function ListPagination({
   pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
   alwaysShow = false,
 }: ListPaginationProps) {
-  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
-  const safePage = Math.min(currentPage, totalPages);
-
-  // Local text so a partial edit doesn't get clobbered by the currentPage
-  // prop until Enter/blur commits it.
-  const [goToPage, setGoToPage] = useState(String(safePage));
-  useEffect(() => {
-    setGoToPage(String(safePage));
-  }, [safePage]);
-
   if (totalItems <= 5 && !alwaysShow) return null;
 
   /* One place per dimension, so the two builds can't drift: shell padding,
-     label type scale, the select, and the go-to/step controls. */
+     label type scale, the select, and the page/step buttons. */
   const shellClass = compact ? 'p-2' : 'rounded-xl border border-gray-200 bg-white p-3 sm:p-4 mt-4 sm:mt-6';
   const labelClass = compact ? 'text-xs' : 'text-sm';
   const groupGapClass = compact ? 'gap-2 sm:gap-3' : 'gap-3 sm:gap-4';
@@ -76,9 +65,31 @@ export default function ListPagination({
     ? 'h-7 px-1.5 rounded-md text-xs'
     : 'h-9 px-2.5 sm:px-3 rounded-xl text-sm';
   const stepButtonClass = compact ? 'w-7 h-7' : 'w-9 h-9';
-  const goToInputClass = compact
-    ? 'w-10 h-7 text-xs rounded-md'
-    : 'w-14 h-9 text-sm rounded-xl';
+  const pageButtonClass = compact
+    ? 'min-w-[28px] h-7 px-1.5 text-xs'
+    : 'min-w-[36px] h-9 px-2.5 sm:px-3 text-sm';
+
+  const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
+  const safePage = Math.min(currentPage, totalPages);
+
+  const getPageNumbers = (): (number | string)[] => {
+    const pages: (number | string)[] = [];
+    const maxPagesToShow = 5;
+
+    if (totalPages <= maxPagesToShow + 2) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+      return pages;
+    }
+
+    pages.push(1);
+    if (safePage > 3) pages.push('...');
+    const startPage = Math.max(2, safePage - 1);
+    const endPage = Math.min(totalPages - 1, safePage + 1);
+    for (let i = startPage; i <= endPage; i++) pages.push(i);
+    if (safePage < totalPages - 2) pages.push('...');
+    if (totalPages > 1) pages.push(totalPages);
+    return pages;
+  };
 
   const handlePageClick = (page: number) => {
     if (page < 1 || page > totalPages || page === safePage) return;
@@ -88,15 +99,6 @@ export default function ListPagination({
       container.scrollTo({ top: 0, behavior: 'smooth' });
     } else if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    }
-  };
-
-  const commitGoToPage = () => {
-    const page = Math.round(Number(goToPage));
-    if (Number.isFinite(page) && page >= 1 && page <= totalPages) {
-      handlePageClick(page);
-    } else {
-      setGoToPage(String(safePage));
     }
   };
 
@@ -130,27 +132,7 @@ export default function ListPagination({
           </span>
         </div>
 
-        <div className={`flex items-center justify-center sm:justify-end ${compact ? 'gap-1.5' : 'gap-2'}`}>
-          <div className={`flex items-center ${compact ? 'gap-1' : 'gap-1.5'}`}>
-            <span className={`${labelClass} text-gray-600 whitespace-nowrap`}>Go to</span>
-            <input
-              type="number"
-              min={1}
-              max={totalPages}
-              value={goToPage}
-              onChange={(e) => setGoToPage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') {
-                  e.currentTarget.blur();
-                  commitGoToPage();
-                }
-              }}
-              onBlur={commitGoToPage}
-              aria-label="Go to page"
-              className={`${goToInputClass} px-1.5 text-center border border-gray-200 bg-white text-gray-900 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue`}
-            />
-          </div>
-
+        <div className={`flex items-center justify-center sm:justify-end ${compact ? 'gap-1' : 'gap-1 sm:gap-1.5'}`}>
           <button
             onClick={() => handlePageClick(safePage - 1)}
             disabled={safePage === 1}
@@ -164,9 +146,24 @@ export default function ListPagination({
             <ChevronLeft className="w-4 h-4" />
           </button>
 
-          <span className={`${labelClass} font-medium text-gray-700 whitespace-nowrap px-1`}>
-            <span className="text-brand-blue font-semibold">{safePage}</span> / {totalPages}
-          </span>
+          <div className={`flex items-center ${compact ? 'gap-1' : 'gap-1 sm:gap-1.5'}`}>
+            {getPageNumbers().map((page, index) => (
+              <button
+                key={`${page}-${index}`}
+                onClick={() => typeof page === 'number' && handlePageClick(page)}
+                disabled={page === '...'}
+                className={`inline-flex items-center justify-center ${pageButtonClass} rounded-md font-medium transition-colors ${
+                  page === safePage
+                    ? 'bg-brand-blue text-white'
+                    : page === '...'
+                    ? 'text-gray-400 cursor-default'
+                    : 'border border-gray-200 text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
+                }`}
+              >
+                {page}
+              </button>
+            ))}
+          </div>
 
           <button
             onClick={() => handlePageClick(safePage + 1)}

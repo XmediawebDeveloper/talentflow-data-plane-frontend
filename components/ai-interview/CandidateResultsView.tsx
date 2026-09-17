@@ -4138,6 +4138,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   candidateImage={identityPhotoUrl}
                   avgResponseSeconds={avgResponseSeconds}
                   evaluationId={liveSession.display_id || null}
+                  sessionId={liveSession.id}
                 />
               );
             })()}

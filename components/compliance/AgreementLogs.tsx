@@ -6,8 +6,6 @@ import {
   FileCheck,
   Search,
   RefreshCw,
-  ChevronLeft,
-  ChevronRight,
   Calendar,
   Monitor,
   Globe,
@@ -151,21 +149,6 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
   };
 
   const totalPages = Math.ceil(total / limit);
-
-  // 1-based text for the Go-to-page input — page itself stays 0-based.
-  const [goToPage, setGoToPage] = useState(String(page + 1));
-  useEffect(() => {
-    setGoToPage(String(page + 1));
-  }, [page]);
-
-  const commitGoToPage = () => {
-    const target = Math.round(Number(goToPage));
-    if (Number.isFinite(target) && target >= 1 && target <= totalPages) {
-      setPage(target - 1);
-    } else {
-      setGoToPage(String(page + 1));
-    }
-  };
 
   if (isLoading && logs.length === 0) {
     return (
@@ -382,44 +365,20 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
           <p className="text-sm text-gray-500">
             Showing {page * limit + 1} to {Math.min((page + 1) * limit, total)} of {total}
           </p>
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="flex items-center gap-1.5">
-              <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
-              <input
-                type="number"
-                min={1}
-                max={totalPages}
-                value={goToPage}
-                onChange={(e) => setGoToPage(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.currentTarget.blur();
-                    commitGoToPage();
-                  }
-                }}
-                onBlur={commitGoToPage}
-                aria-label="Go to page"
-                className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
-              />
-            </div>
+          <div className="flex gap-2">
             <button
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-              aria-label="Previous page" title="Previous page"
+              className="px-3 py-1.5 text-sm border rounded-lg disabled:opacity-50"
             >
-              <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              Previous
             </button>
-            <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
-              <span className="text-brand-blue font-semibold">{page + 1}</span> / {totalPages}
-            </span>
             <button
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
-              className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-              aria-label="Next page" title="Next page"
+              className="px-3 py-1.5 text-sm border rounded-lg disabled:opacity-50"
             >
-              <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              Next
             </button>
           </div>
         </div>

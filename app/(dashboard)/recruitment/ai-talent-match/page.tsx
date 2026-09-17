@@ -1,10 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import AITalentMatchPage from '@/components/AITalentMatchPage';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { aiMatchService, AIMatchSessionResponse } from '@/lib/services/aiMatchService';
-import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
 import { Loader2 } from 'lucide-react';
 import FeatureGate from '@/components/shared/FeatureGate';
 
@@ -19,11 +18,6 @@ interface Job {
   experience?: string;
   jobId?: string;
   currentVersion?: number;
-  /** The raw lineage version number (same JD-ID, one entry per republish) —
-   *  separate from `currentVersion` above, which blends in the publish
-   *  counter for display. "View Versions" (job list) needs the real number
-   *  to group and count a job's sibling versions correctly. */
-  versionNumber?: number;
   /* Carried so the job rows can show what the Resume Scoring job rows show.
      All four already exist on the JD record; they were simply never mapped. */
   industryType?: string;
@@ -32,9 +26,6 @@ interface Job {
   postedDate?: string;
   /** Drives the AI / Manual badge next to Status in the version history table. */
   creationMethod?: string;
-  /** ISO timestamp — "View Versions" tie-breaks same-version-number siblings
-   *  by recency, the same way groupByLineage does everywhere else. */
-  createdAt?: string;
 }
 
 interface MatchHistory {
@@ -44,40 +35,51 @@ interface MatchHistory {
   matchedAt: Date;
   totalMatches: number;
   matchedCandidates: any[];
+  // Carried straight from the session's server-side join to job_descriptions,
+  // so the card can show real job info even when the job isn't present in
+  // this page's separately-paginated `jobs` list (see transformedJobs.find
+  // below — capped to the 100 most-recently-updated JDs).
+  jdJobId?: string;
+  jdStatus?: string;
+  jdDepartment?: string;
+  jdCurrentVersion?: number;
+  // Best candidate rating (1-10 scale), precomputed server-side from stored
+  // results — lets "Top Match Rating" / "Top Matching Jobs" render from the
+  // summary list alone, before any per-session candidate detail has loaded.
+  topRating?: number | null;
 }
 
 // Transform JD API response to Job format for the component
-//
-// `currentVersion` (this page's own field, badge-visible as "vN" on every
-// job card) takes the LINEAGE version first, exactly like Resume Scoring's
-// own `toPageJob` mapping in ResumeScoringPage.tsx: routed through the same
-// shared `mapJDToJob`, whose `versionNumber` is the lineage's v1/v2/v3 (same
-// JD-ID, one entry per republish) while `currentVersion` there is the
-// separate publish COUNTER (bumped by republishing without necessarily
-// forking a new lineage entry). Reading the raw publish counter directly, as
-// this used to, showed a job at a different version here than the identical
-// JD showed on the Resume Scoring / Job Openings pages — this mapping is
-// what keeps the two in agreement.
 function transformJDToJob(jd: JDResponse): Job {
-  const mapped = mapJDToJob(jd);
+  // Map status to display format
+  const statusMap: Record<string, string> = {
+    'published': 'Published',
+    'draft': 'Draft',
+    'disabled': 'Disabled',
+    'archived': 'Archived',
+    'active': 'Active',
+  };
+
   return {
-    id: mapped.id,
-    title: mapped.title,
-    department: mapped.department,
-    location: mapped.location || '',
-    status: mapped.status,
-    applicants: mapped.applicants ?? 0,
-    employmentType: mapped.employmentType,
-    experience: mapped.experience,
-    jobId: mapped.job_id,
-    currentVersion: mapped.versionNumber ?? mapped.currentVersion,
-    versionNumber: mapped.versionNumber,
-    industryType: mapped.industry_type,
-    remoteType: mapped.workMode,
-    postedBy: mapped.postedBy,
-    postedDate: mapped.postedDate,
-    creationMethod: mapped.creation_method,
-    createdAt: mapped.created_at,
+    id: jd.id,
+    title: jd.title,
+    department: jd.department,
+    location: jd.location || '',
+    status: statusMap[jd.status?.toLowerCase()] || jd.status,
+    applicants: jd.applicants_count || 0,
+    employmentType: jd.employment_type,
+    experience: jd.experience_min && jd.experience_max
+      ? `${jd.experience_min}-${jd.experience_max} years`
+      : jd.experience_min
+        ? `${jd.experience_min}+ years`
+        : undefined,
+    jobId: jd.job_id,
+    currentVersion: jd.current_version,
+    industryType: jd.industry_type,
+    remoteType: jd.remote_type,
+    postedBy: jd.created_by_name,
+    postedDate: jd.published_at,
+    creationMethod: jd.creation_method,
   };
 }
 
@@ -88,16 +90,10 @@ export default function AITalentMatchRoute() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  /* Extracted so a completed match can trigger the same fetch again instead of
-     only ever running once per mount. `matchHistory`/`jobs`/`matchSessionCounts`
-     used to go stale after the FIRST match run because nothing re-called this —
-     running a match only updated AITalentMatchPage's own local state. It looked
-     like it "worked once" only because navigating away to create a JD and back
-     happened to remount this route the first time; a second round trip hit
-     Next's client-side route cache and reused the same (still stale) instance. */
-  const fetchData = useCallback(async (opts?: { silent?: boolean }) => {
+  useEffect(() => {
+    const fetchData = async () => {
       try {
-        if (!opts?.silent) setIsLoading(true);
+        setIsLoading(true);
 
         // Fetch ALL jobs (not just published) so we can show disabled jobs in history
         // and match history in parallel
@@ -122,7 +118,7 @@ export default function AITalentMatchRoute() {
         for (const session of historyResponse.items) {
           const jobId = session.jd_id || session.search_query || 'unknown';
           const ownerJob = transformedJobs.find(j => j.id === session.jd_id);
-          const countKey = ownerJob?.jobId || jobId;
+          const countKey = session.jd_job_id || ownerJob?.jobId || jobId;
           sessionCounts[countKey] = (sessionCounts[countKey] || 0) + 1;
           const existing = sessionsByJob.get(jobId);
           // Keep the most recent session for each job
@@ -140,10 +136,18 @@ export default function AITalentMatchRoute() {
           return {
             id: session.id,
             jobId: session.jd_id || '',
-            jobTitle: job?.title || session.search_query || 'Unknown Job',
+            // Prefer the title the backend already joined from job_descriptions
+            // — it's authoritative and doesn't depend on the job being present
+            // in this page's capped `jobs` fetch.
+            jobTitle: session.jd_title || job?.title || session.search_query || 'Unknown Job',
             matchedAt: new Date(session.created_at),
             totalMatches: session.total_matches,
             matchedCandidates: [],
+            jdJobId: session.jd_job_id || job?.jobId,
+            jdStatus: session.jd_status || job?.status,
+            jdDepartment: session.jd_department || job?.department,
+            jdCurrentVersion: session.jd_current_version ?? job?.currentVersion,
+            topRating: session.top_rating,
           };
         });
 
@@ -154,46 +158,16 @@ export default function AITalentMatchRoute() {
         setError(null);
       } catch (err) {
         console.error('Failed to fetch data:', err);
-        // A silent background refresh (after a match completes) failing
-        // shouldn't wipe out the good data already on screen — only the
-        // initial load clears state on error.
-        if (!opts?.silent) {
-          setError(err instanceof Error ? err.message : 'Failed to load data');
-          setJobs([]);
-          setMatchHistory([]);
-          setMatchSessionCounts({});
-        }
+        setError(err instanceof Error ? err.message : 'Failed to load data');
+        setJobs([]);
+        setMatchHistory([]);
+        setMatchSessionCounts({});
       } finally {
         setIsLoading(false);
       }
-  }, []);
+    };
 
-  useEffect(() => {
     fetchData();
-  }, [fetchData]);
-
-  /* Update matchHistory the INSTANT a match finishes, rather than waiting on
-     the silent server refetch (`onMatchComplete` below) to pick it up. The
-     refetch hits GET /ai-match/sessions right after the match completes —
-     if the backend writes that session record slightly after responding
-     with the match results (a plausible async/eventual-consistency gap),
-     the refetch can win the race and come back with the OLD list, so
-     "Matched Jobs" still reads its pre-match count even though the match
-     genuinely just ran. This optimistic update doesn't depend on that
-     timing at all — it uses the same MatchHistory object the child already
-     built locally. The silent refetch stays in place as a background
-     reconciliation (candidate counts, session de-dup) but is no longer the
-     only source for the stat the user is actually watching. */
-  const handleSaveMatch = useCallback((newMatch: MatchHistory) => {
-    setMatchHistory(prev => {
-      const existingIndex = prev.findIndex(h => h.jobId === newMatch.jobId);
-      if (existingIndex >= 0) {
-        const updated = [...prev];
-        updated[existingIndex] = newMatch;
-        return updated;
-      }
-      return [newMatch, ...prev];
-    });
   }, []);
 
   if (isLoading) {
@@ -230,13 +204,7 @@ export default function AITalentMatchRoute() {
   return (
     <FeatureGate feature="ai_talent_match">
       <div className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
-        <AITalentMatchPage
-          jobs={jobs}
-          matchHistory={matchHistory}
-          matchSessionCounts={matchSessionCounts}
-          onSaveMatch={handleSaveMatch}
-          onMatchComplete={() => fetchData({ silent: true })}
-        />
+        <AITalentMatchPage jobs={jobs} matchHistory={matchHistory} matchSessionCounts={matchSessionCounts} />
       </div>
     </FeatureGate>
   );

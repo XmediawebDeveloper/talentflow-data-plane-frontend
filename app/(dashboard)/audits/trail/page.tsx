@@ -244,19 +244,14 @@ export default function AuditTrailPage() {
   const [total, setTotal] = useState(0);
   // Text typed into the "jump to page" box; kept separate from `page` so the
   // input can hold invalid/in-progress text without touching the fetched data.
-  // Synced back to `page` whenever it changes elsewhere (Previous/Next, filters).
-  const [pageJumpInput, setPageJumpInput] = useState('1');
-  useEffect(() => {
-    setPageJumpInput(String(page));
-  }, [page]);
+  const [pageJumpInput, setPageJumpInput] = useState('');
 
   const jumpToPage = () => {
     const target = parseInt(pageJumpInput, 10);
-    if (Number.isInteger(target) && target >= 1 && target <= totalPages) {
+    if (Number.isInteger(target) && target >= 1 && target <= totalPages && target !== page) {
       setPage(target);
-    } else {
-      setPageJumpInput(String(page));
     }
+    setPageJumpInput('');
   };
 
   // Reset every active filter back to "show everything". The date range is kept
@@ -1420,47 +1415,47 @@ export default function AuditTrailPage() {
                 </p>
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2 self-end sm:self-auto">
-                <div className="flex items-center gap-1.5">
-                  <span className="hidden sm:inline text-[10px] sm:text-xs md:text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">Go to</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={totalPages}
-                    value={pageJumpInput}
-                    onChange={(e) => setPageJumpInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.currentTarget.blur();
-                        jumpToPage();
-                      }
-                    }}
-                    onBlur={jumpToPage}
-                    aria-label="Go to page"
-                    className="w-12 sm:w-14 h-7 sm:h-8 px-1.5 sm:px-2 text-[10px] sm:text-xs md:text-sm text-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-900 dark:text-slate-50"
-                  />
-                </div>
-
                 <button
                   onClick={() => setPage(p => Math.max(1, p - 1))}
                   disabled={page === 1}
-                  className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                  aria-label="Previous page" title="Previous page"
+                  className="flex items-center gap-0.5 sm:gap-1 px-2 sm:px-3 py-1.5 sm:py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-gray-300 dark:hover:border-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-[10px] sm:text-xs md:text-sm font-medium text-gray-700 dark:text-slate-300"
                 >
-                  <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <ChevronLeft className="w-3 h-3 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Previous</span>
                 </button>
-
-                <span className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-700 dark:text-slate-300 px-1 whitespace-nowrap">
-                  <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
+                <span className="text-[10px] sm:text-xs md:text-sm text-gray-600 dark:text-slate-400 px-1 sm:px-2">
+                  {page}/{totalPages}
                 </span>
-
                 <button
                   onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                   disabled={page === totalPages}
-                  className="inline-flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                  aria-label="Next page" title="Next page"
+                  className="flex items-center gap-0.5 sm:gap-1 px-2 sm:px-3 py-1.5 sm:py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-gray-300 dark:hover:border-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all text-[10px] sm:text-xs md:text-sm font-medium text-gray-700 dark:text-slate-300"
                 >
-                  <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <span className="hidden sm:inline">Next</span>
+                  <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
                 </button>
+                {totalPages > 2 && (
+                  <div className="flex items-center gap-1 sm:gap-1.5 pl-1.5 sm:pl-2 ml-0.5 sm:ml-1 border-l border-gray-200 dark:border-slate-700">
+                    <span className="hidden sm:inline text-[10px] sm:text-xs md:text-sm text-gray-500 dark:text-slate-400">Go to</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={totalPages}
+                      value={pageJumpInput}
+                      onChange={(e) => setPageJumpInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') jumpToPage(); }}
+                      placeholder={`${page}`}
+                      aria-label="Go to page"
+                      className="w-12 sm:w-14 h-7 sm:h-8 px-1.5 sm:px-2 text-[10px] sm:text-xs md:text-sm text-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue text-gray-900 dark:text-slate-50"
+                    />
+                    <button
+                      onClick={jumpToPage}
+                      className="px-2 sm:px-3 py-1.5 sm:py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-gray-300 dark:hover:border-slate-700 transition-all text-[10px] sm:text-xs md:text-sm font-medium text-gray-700 dark:text-slate-300"
+                    >
+                      Go
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}

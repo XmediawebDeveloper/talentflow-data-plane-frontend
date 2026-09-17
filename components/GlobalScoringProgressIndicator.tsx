@@ -46,6 +46,7 @@ export default function GlobalScoringProgressIndicator() {
       scoredDateTime: item.scoredDateTime ? new Date(item.scoredDateTime) : undefined,
       matchResult: item.matchResult,
       score: item.score,
+      overallRating10: item.overallRating10,
     }));
 
   /* Minimising the main popup hands the run to this widget, which has three

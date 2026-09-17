@@ -200,10 +200,6 @@ export default function CandidateResultDetails({
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [eventsPage, setEventsPage] = useState(1);
   const EVENTS_PER_PAGE = 10;
-  const [eventsGoToPage, setEventsGoToPage] = useState('1');
-  useEffect(() => {
-    setEventsGoToPage(String(eventsPage));
-  }, [eventsPage]);
 
   // View Resume — same flow the resume-scoring candidate page uses
   // (CandidateScoringDetailPage): pull the resume record, run it through
@@ -295,15 +291,6 @@ export default function CandidateResultDetails({
     (eventsPage - 1) * EVENTS_PER_PAGE,
     eventsPage * EVENTS_PER_PAGE
   );
-
-  const commitEventsGoToPage = () => {
-    const target = Math.round(Number(eventsGoToPage));
-    if (Number.isFinite(target) && target >= 1 && target <= eventsTotalPages) {
-      setEventsPage(target);
-    } else {
-      setEventsGoToPage(String(eventsPage));
-    }
-  };
 
   // Fetch detailed results
   useEffect(() => {
@@ -2723,44 +2710,42 @@ export default function CandidateResultDetails({
                               <span className="text-xs text-gray-500">
                                 Showing {(eventsPage - 1) * EVENTS_PER_PAGE + 1}–{Math.min(eventsPage * EVENTS_PER_PAGE, groupedEvents.length)} of {groupedEvents.length} rows ({proctoringEvents.length} total events)
                               </span>
-                              <div className="flex items-center justify-center sm:justify-end gap-2">
-                                <div className="flex items-center gap-1.5">
-                                  <span className="text-xs text-gray-600 whitespace-nowrap">Go to</span>
-                                  <input
-                                    type="number"
-                                    min={1}
-                                    max={eventsTotalPages}
-                                    value={eventsGoToPage}
-                                    onChange={(e) => setEventsGoToPage(e.target.value)}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        e.currentTarget.blur();
-                                        commitEventsGoToPage();
-                                      }
-                                    }}
-                                    onBlur={commitEventsGoToPage}
-                                    aria-label="Go to page"
-                                    className="w-12 h-8 px-1.5 text-xs text-center border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
-                                  />
-                                </div>
+                              <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5">
                                 <button
                                   onClick={() => setEventsPage(p => Math.max(1, p - 1))}
                                   disabled={eventsPage === 1}
-                                  className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                  aria-label="Previous page" title="Previous page"
+                                  className="inline-flex items-center justify-center min-w-[64px] h-8 px-3 rounded-md text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                                 >
-                                  <ChevronLeft className="w-3.5 h-3.5" />
+                                  ‹ Prev
                                 </button>
-                                <span className="text-xs font-medium text-gray-700 px-1 whitespace-nowrap">
-                                  <span className="text-brand-blue font-semibold">{eventsPage}</span> / {eventsTotalPages}
-                                </span>
+                                {Array.from({ length: eventsTotalPages }, (_, i) => i + 1).map(page => {
+                                  const show = page === 1 || page === eventsTotalPages || Math.abs(page - eventsPage) <= 1;
+                                  const showEllipsisBefore = page === eventsPage - 2 && eventsPage - 2 > 1;
+                                  const showEllipsisAfter  = page === eventsPage + 2 && eventsPage + 2 < eventsTotalPages;
+                                  if (!show && !showEllipsisBefore && !showEllipsisAfter) return null;
+                                  if (showEllipsisBefore || showEllipsisAfter) {
+                                    return <span key={`ellipsis-${page}`} className="px-1 text-gray-400 text-xs">…</span>;
+                                  }
+                                  return (
+                                    <button
+                                      key={page}
+                                      onClick={() => setEventsPage(page)}
+                                      className={`inline-flex items-center justify-center min-w-[32px] h-8 px-2 rounded-md text-xs font-medium border transition-colors ${
+                                        page === eventsPage
+                                          ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/25'
+                                          : 'bg-white text-gray-700 border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                                      }`}
+                                    >
+                                      {page}
+                                    </button>
+                                  );
+                                })}
                                 <button
                                   onClick={() => setEventsPage(p => Math.min(eventsTotalPages, p + 1))}
                                   disabled={eventsPage === eventsTotalPages}
-                                  className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-                                  aria-label="Next page" title="Next page"
+                                  className="inline-flex items-center justify-center min-w-[64px] h-8 px-3 rounded-md text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
                                 >
-                                  <ChevronRight className="w-3.5 h-3.5" />
+                                  Next ›
                                 </button>
                               </div>
                             </div>

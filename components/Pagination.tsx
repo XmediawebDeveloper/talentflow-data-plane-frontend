@@ -1,7 +1,6 @@
 'use client'
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 
 interface PaginationProps {
   currentPage: number;
@@ -25,20 +24,42 @@ export default function Pagination({
   const startItem = (currentPage - 1) * itemsPerPage + 1;
   const endItem = Math.min(currentPage * itemsPerPage, totalItems);
 
-  // Local text so a partial edit ("1" while typing "12") doesn't get clobbered
-  // by the currentPage prop until Enter/blur commits it.
-  const [goToPage, setGoToPage] = useState(String(currentPage));
-  useEffect(() => {
-    setGoToPage(String(currentPage));
-  }, [currentPage]);
+  const getPageNumbers = () => {
+    const pages: (number | string)[] = [];
+    const showPages = 5; // Show 5 page numbers at a time
 
-  const commitGoToPage = () => {
-    const page = Math.round(Number(goToPage));
-    if (Number.isFinite(page) && page >= 1 && page <= totalPages) {
-      onPageChange(page);
+    if (totalPages <= showPages + 2) {
+      // Show all pages if total is small
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
     } else {
-      setGoToPage(String(currentPage));
+      // Always show first page
+      pages.push(1);
+
+      if (currentPage > 3) {
+        pages.push('...');
+      }
+
+      // Show pages around current page
+      const start = Math.max(2, currentPage - 1);
+      const end = Math.min(totalPages - 1, currentPage + 1);
+
+      for (let i = start; i <= end; i++) {
+        pages.push(i);
+      }
+
+      if (currentPage < totalPages - 2) {
+        pages.push('...');
+      }
+
+      // Always show last page
+      if (totalPages > 1) {
+        pages.push(totalPages);
+      }
     }
+
+    return pages;
   };
 
   const navBtnClass =
@@ -72,27 +93,16 @@ export default function Pagination({
       </div>
 
       {/* Right: Pagination controls */}
-      <div className="flex items-center gap-2 sm:gap-3">
-        {/* Go to page */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
-          <input
-            type="number"
-            min={1}
-            max={totalPages}
-            value={goToPage}
-            onChange={(e) => setGoToPage(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                e.currentTarget.blur();
-                commitGoToPage();
-              }
-            }}
-            onBlur={commitGoToPage}
-            aria-label="Go to page"
-            className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
-          />
-        </div>
+      <div className="flex items-center gap-1 sm:gap-1.5">
+        {/* First page */}
+        <button
+          onClick={() => onPageChange(1)}
+          disabled={currentPage === 1}
+          className={navBtnClass}
+          aria-label="First page" title="First page"
+        >
+          <ChevronsLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+        </button>
 
         {/* Previous page */}
         <button
@@ -104,8 +114,27 @@ export default function Pagination({
           <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>
 
-        {/* Current / total */}
-        <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+        {/* Page numbers */}
+        <div className="hidden sm:flex items-center gap-1">
+          {getPageNumbers().map((page, index) => (
+            <button
+              key={index}
+              onClick={() => typeof page === 'number' && onPageChange(page)}
+              disabled={page === '...'}
+              className={`inline-flex items-center justify-center min-w-[36px] h-9 px-2.5 text-sm font-medium rounded-lg transition-colors ${
+                page === currentPage
+                  ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                  : page === '...'
+                  ? 'cursor-default text-gray-400'
+                  : 'border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+              }`}
+            >
+              {page}
+            </button>
+          ))}
+        </div>
+        {/* Mobile: Show current page / total */}
+        <span className="sm:hidden text-sm text-gray-600 px-2 font-medium">
           <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
         </span>
 
@@ -117,6 +146,16 @@ export default function Pagination({
           aria-label="Next page" title="Next page"
         >
           <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+        </button>
+
+        {/* Last page */}
+        <button
+          onClick={() => onPageChange(totalPages)}
+          disabled={currentPage === totalPages}
+          className={navBtnClass}
+          aria-label="Last page" title="Last page"
+        >
+          <ChevronsRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>
       </div>
     </div>

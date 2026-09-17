@@ -75,7 +75,6 @@ export default function TeamManagementPage() {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTeamLead, setFilterTeamLead] = useState<string>('');
   const [currentPage, setCurrentPage] = useState(1);
-  const [teamsGoToPage, setTeamsGoToPage] = useState('1');
   // Drill-in pattern: 'cards' shows only the 3 stat tiles; clicking one expands
   // into a focused list view. Each card maps to its own listView so the panel
   // reflects what was clicked. Mirrors /recruitment/job-openings and
@@ -184,19 +183,6 @@ export default function TeamManagementPage() {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     return filteredTeams.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredTeams, currentPage]);
-
-  useEffect(() => {
-    setTeamsGoToPage(String(currentPage));
-  }, [currentPage]);
-
-  const commitTeamsGoToPage = () => {
-    const page = Math.round(Number(teamsGoToPage));
-    if (Number.isFinite(page) && page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-    } else {
-      setTeamsGoToPage(String(currentPage));
-    }
-  };
 
   // Team Members view: flatten members across all teams, tag each with their team.
   // Search filters by member name/email or the team they belong to.
@@ -735,44 +721,37 @@ export default function TeamManagementPage() {
                     <p className="text-sm text-gray-600 dark:text-slate-400">
                       Showing {(currentPage - 1) * ITEMS_PER_PAGE + 1} to {Math.min(currentPage * ITEMS_PER_PAGE, filteredTeams.length)} of {filteredTeams.length} teams
                     </p>
-                    <div className="flex items-center gap-2 sm:gap-3">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
-                        <input
-                          type="number"
-                          min={1}
-                          max={totalPages}
-                          value={teamsGoToPage}
-                          onChange={(e) => setTeamsGoToPage(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                              e.currentTarget.blur();
-                              commitTeamsGoToPage();
-                            }
-                          }}
-                          onBlur={commitTeamsGoToPage}
-                          aria-label="Go to page"
-                          className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100"
-                        />
-                      </div>
+                    <div className="flex items-center gap-2">
                       <button
                         onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
                         disabled={currentPage === 1}
-                        className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-400 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                        aria-label="Previous page" title="Previous page"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 transition-all hover:bg-brand-blue/[0.04] hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label="Previous page"
                       >
-                        <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        <ChevronLeft className="w-5 h-5" />
                       </button>
-                      <span className="text-sm font-medium text-gray-700 dark:text-slate-300 px-1 whitespace-nowrap">
-                        <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
-                      </span>
+                      <div className="flex gap-1">
+                        {Array.from({ length: totalPages }, (_, index) => index + 1).map((page) => (
+                          <button
+                            key={page}
+                            onClick={() => setCurrentPage(page)}
+                            className={`h-10 w-10 rounded-xl font-medium transition-all ${
+                              currentPage === page
+                                ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
+                                : 'text-gray-700 dark:text-slate-300 hover:bg-brand-blue/[0.04]'
+                            }`}
+                          >
+                            {page}
+                          </button>
+                        ))}
+                      </div>
                       <button
                         onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
                         disabled={currentPage === totalPages}
-                        className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-400 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                        aria-label="Next page" title="Next page"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 transition-all hover:bg-brand-blue/[0.04] hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label="Next page"
                       >
-                        <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                        <ChevronRight className="w-5 h-5" />
                       </button>
                     </div>
                   </div>

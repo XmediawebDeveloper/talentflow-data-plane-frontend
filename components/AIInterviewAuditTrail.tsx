@@ -2,8 +2,7 @@ import { useState, useEffect, Fragment } from 'react';
 import {
   Download, CheckCircle, Clock,
   FileText, Eye, Mail, User, Activity,
-  Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff, Archive, Loader2,
-  ChevronLeft, ChevronRight
+  Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff, Archive, Loader2
 } from 'lucide-react';
 import { aiInterviewService, AIInterviewAuditActivity } from '@/lib/services/aiInterviewService';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -50,21 +49,6 @@ export default function AIInterviewAuditTrail() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const pageSize = 50;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  // Local text for the "Go to" box so a partial edit doesn't get clobbered by
-  // `page` until Enter/blur commits it.
-  const [goToPage, setGoToPage] = useState(String(page));
-  useEffect(() => {
-    setGoToPage(String(page));
-  }, [page]);
-  const commitGoToPage = () => {
-    const target = Math.round(Number(goToPage));
-    if (Number.isFinite(target) && target >= 1 && target <= totalPages) {
-      setPage(target);
-    } else {
-      setGoToPage(String(page));
-    }
-  };
 
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
   const [showFilters, setShowFilters] = useState(false);
@@ -420,44 +404,23 @@ export default function AIInterviewAuditTrail() {
             Showing {activities.length} of {total} activity entries
           </div>
           {total > pageSize && (
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="flex items-center gap-1.5">
-                <span className="hidden sm:inline text-sm text-gray-600 whitespace-nowrap">Go to</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={totalPages}
-                  value={goToPage}
-                  onChange={(e) => setGoToPage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.currentTarget.blur();
-                      commitGoToPage();
-                    }
-                  }}
-                  onBlur={commitGoToPage}
-                  aria-label="Go to page"
-                  className="w-14 h-8 px-2 text-sm text-center border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
-                />
-              </div>
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => setPage(Math.max(1, page - 1))}
                 disabled={page === 1}
-                className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 disabled:hover:text-gray-700 transition-colors"
-                aria-label="Previous page" title="Previous page"
+                className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <ChevronLeft className="w-4 h-4" />
+                Previous
               </button>
-              <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
-                <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
+              <span className="text-sm text-gray-600">
+                Page {page} of {Math.ceil(total / pageSize)}
               </span>
               <button
-                onClick={() => setPage(Math.min(totalPages, page + 1))}
-                disabled={page >= totalPages}
-                className="inline-flex items-center justify-center w-8 h-8 rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-300 disabled:hover:text-gray-700 transition-colors"
-                aria-label="Next page" title="Next page"
+                onClick={() => setPage(Math.min(Math.ceil(total / pageSize), page + 1))}
+                disabled={page >= Math.ceil(total / pageSize)}
+                className="px-3 py-1 text-sm border border-gray-300 rounded-md hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <ChevronRight className="w-4 h-4" />
+                Next
               </button>
             </div>
           )}

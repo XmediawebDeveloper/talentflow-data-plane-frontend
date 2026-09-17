@@ -901,6 +901,7 @@ export default function ResumeScoringPage({
         phone: item.phone || '',
         matchStatus: item.match_status || 'No Match',
         scorePercentage: Math.round(item.overall_score || 0),
+        overallRating10: item.overall_rating_10,
         scoredDate: item.created_at || new Date().toISOString(),
         scoredBy: item.scored_by_name || item.scored_by || 'AI Engine',
         // Source, Status, Error Reason fields
@@ -1803,6 +1804,7 @@ export default function ResumeScoringPage({
         phone: resume.phone || 'N/A',
         matchStatus: matchStatus,
         scorePercentage: Math.round(scoreValue),
+        overallRating10: resume.overallRating10 ?? resume.overall_rating_10,
         // Keep ISO string for timestamp - let display component format it
         scoredDate: resume.scoredDate || resume.created_at || scoredData.scoredAt,
         // Use scored_by_name from API for recruiter attribution
@@ -2249,6 +2251,10 @@ export default function ResumeScoringPage({
           /* Nothing published on this JD → nothing to invite to, so the row's
              Invite goes disabled rather than opening a menu that dead-ends. */
           assessmentConfigured={jdInviteTargets.known ? jdInviteTargets.assessmentConfigured : undefined}
+          aiInterviewConfigured={jdInviteTargets.known ? jdInviteTargets.aiInterviewConfigured : undefined}
+          /* This page has no AI-interview share modal of its own — let the
+             table resolve and share it, same as the global list below. */
+          enableInternalAIInterviewInvite
           /* Same "skip the job picker, land straight on Select Applicants to
              Score" shortcut as the header's own Score New Resumes button —
              this is what powers the empty state's Score Resumes action. Kept
@@ -2795,6 +2801,13 @@ export default function ResumeScoringPage({
                 jobTitle="All Jobs"
                 jobId="global"
                 availableUnits={availableASUnits ?? 10}
+                /* This list spans every job, so neither invite target can be
+                   pre-checked (no single jd_id to ask) - each row resolves
+                   its OWN job's Assessment/AI Interview when actually
+                   clicked (InviteShareModal already does this for
+                   Assessment; this opts the same row into it for AI
+                   Interview too), rather than being pre-gated here. */
+                enableInternalAIInterviewInvite
                 onViewCandidate={(resume) => {
                   setSelectedCandidateForView(resume);
                   setViewMode('candidateView');

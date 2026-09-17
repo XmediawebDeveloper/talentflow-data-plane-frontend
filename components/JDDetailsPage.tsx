@@ -35,15 +35,10 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
   const [passedFilter, setPassedFilter] = useState<'all' | 'passed' | 'failed'>('all');
   const [page, setPage] = useState(1);
   const pageSize = 10;
-  const [goToPage, setGoToPage] = useState('1');
 
   useEffect(() => {
     fetchResults();
   }, [jdId, page, statusFilter, passedFilter]);
-
-  useEffect(() => {
-    setGoToPage(String(page));
-  }, [page]);
 
   const fetchResults = async () => {
     setLoading(true);
@@ -162,15 +157,6 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
   }
 
   const totalPages = Math.ceil(results.total / pageSize);
-
-  const commitGoToPage = () => {
-    const target = Math.round(Number(goToPage));
-    if (Number.isFinite(target) && target >= 1 && target <= totalPages) {
-      setPage(target);
-    } else {
-      setGoToPage(String(page));
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -367,44 +353,23 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
                 <div className="text-sm text-gray-500">
                   Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, results.total)} of {results.total} results
                 </div>
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={totalPages}
-                      value={goToPage}
-                      onChange={(e) => setGoToPage(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.currentTarget.blur();
-                          commitGoToPage();
-                        }
-                      }}
-                      onBlur={commitGoToPage}
-                      aria-label="Go to page"
-                      className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
-                    />
-                  </div>
+                <div className="flex items-center gap-2">
                   <button
                     onClick={() => setPage(page - 1)}
                     disabled={page === 1}
-                    className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                    aria-label="Previous page" title="Previous page"
+                    className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <ChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
-                    <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
+                  <span className="text-sm text-gray-600">
+                    Page {page} of {totalPages}
                   </span>
                   <button
                     onClick={() => setPage(page + 1)}
                     disabled={page === totalPages}
-                    className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                    aria-label="Next page" title="Next page"
+                    className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>
@@ -423,15 +388,10 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
   const [searchQuery, setSearchQuery] = useState('');
   const [page, setPage] = useState(1);
   const pageSize = 10;
-  const [goToPage, setGoToPage] = useState('1');
 
   useEffect(() => {
     fetchResumes();
   }, [jdId, page]);
-
-  useEffect(() => {
-    setGoToPage(String(page));
-  }, [page]);
 
   const fetchResumes = async () => {
     setLoading(true);
@@ -490,15 +450,6 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
   }
 
   const totalPages = Math.ceil(resumes.total / pageSize);
-
-  const commitGoToPage = () => {
-    const target = Math.round(Number(goToPage));
-    if (Number.isFinite(target) && target >= 1 && target <= totalPages) {
-      setPage(target);
-    } else {
-      setGoToPage(String(page));
-    }
-  };
 
   return (
     <div className="space-y-6">
@@ -588,44 +539,23 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
                 <div className="text-sm text-gray-500">
                   Showing {(page - 1) * pageSize + 1} to {Math.min(page * pageSize, resumes.total)} of {resumes.total} results
                 </div>
-                <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
-                    <input
-                      type="number"
-                      min={1}
-                      max={totalPages}
-                      value={goToPage}
-                      onChange={(e) => setGoToPage(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') {
-                          e.currentTarget.blur();
-                          commitGoToPage();
-                        }
-                      }}
-                      onBlur={commitGoToPage}
-                      aria-label="Go to page"
-                      className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
-                    />
-                  </div>
+                <div className="flex items-center gap-2">
                   <button
                     onClick={() => setPage(page - 1)}
                     disabled={page === 1}
-                    className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                    aria-label="Previous page" title="Previous page"
+                    className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <ChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
-                    <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
+                  <span className="text-sm text-gray-600">
+                    Page {page} of {totalPages}
                   </span>
                   <button
                     onClick={() => setPage(page + 1)}
                     disabled={page === totalPages}
-                    className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                    aria-label="Next page" title="Next page"
+                    className="p-2 rounded-lg border border-gray-300 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                    <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
               </div>

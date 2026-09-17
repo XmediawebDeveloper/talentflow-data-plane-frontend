@@ -28,9 +28,7 @@ import {
   Archive,
   Power,
   AlertCircle,
-  X,
-  ChevronLeft,
-  ChevronRight
+  X
 } from 'lucide-react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
@@ -58,20 +56,6 @@ export default function JobOpeningsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
-  // "Go to page" input — local text so a partial edit isn't clobbered by the
-  // currentPage state until Enter/blur commits it.
-  const [goToPage, setGoToPage] = useState('1');
-  useEffect(() => {
-    setGoToPage(String(currentPage));
-  }, [currentPage]);
-  const commitGoToPage = () => {
-    const page = Math.round(Number(goToPage));
-    if (Number.isFinite(page) && page >= 1 && page <= totalPages) {
-      setCurrentPage(page);
-    } else {
-      setGoToPage(String(currentPage));
-    }
-  };
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [refetchKey, setRefetchKey] = useState(0);
@@ -800,44 +784,23 @@ export default function JobOpeningsPage() {
             <p className="text-xs sm:text-sm text-gray-600">
               Showing {(currentPage - 1) * 12 + 1} to {Math.min(currentPage * 12, total)} of {total} jobs
             </p>
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={totalPages}
-                  value={goToPage}
-                  onChange={(e) => setGoToPage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.currentTarget.blur();
-                      commitGoToPage();
-                    }
-                  }}
-                  onBlur={commitGoToPage}
-                  aria-label="Go to page"
-                  className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
-                />
-              </div>
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
                 disabled={currentPage === 1}
-                className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                aria-label="Previous page" title="Previous page"
+                className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 text-sm"
               >
-                <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                Previous
               </button>
-              <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
-                <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
+              <span className="px-3 py-2 text-sm text-gray-600">
+                Page {currentPage} of {totalPages}
               </span>
               <button
                 onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
                 disabled={currentPage === totalPages}
-                className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                aria-label="Next page" title="Next page"
+                className="px-3 py-2 border border-gray-300 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 text-sm"
               >
-                <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                Next
               </button>
             </div>
           </div>

@@ -1,29 +1,19 @@
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Sparkles, MapPin, Briefcase, Building2, Calendar, FileText, User, Users, Clock, ArrowRight, History, DollarSign, Award, TrendingUp, Search, Filter, ChevronDown, X, LayoutGrid, List as ListIcon } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useState } from 'react';
 import { formatISTDate } from '@/lib/utils/dateUtils';
-import type { Job as SharedJob } from '@/lib/types/types';
 /* The shared formatters, not local copies. Both fields arrive snake-cased from
    the JD record ("information_technology", "full_time"), and these are what the
    Resume Scoring rows this list was modelled on already run them through — so
    the same JD reads identically in both modules. */
-import {
-  formatEmploymentType,
-  formatIndustryType,
-  getDisplayStatus,
-  getStatusConfig,
-  groupByLineage,
-  isVersionVisibleForScoring,
-  lineageKey,
-} from '@/lib/utils/jobOpeningDisplay';
+import { formatEmploymentType, formatIndustryType, getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
 import ListPagination from '@/components/ListPagination';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
-import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
+import JDVersionHistory from '@/components/JDVersionHistory';
 
 interface Job {
   id: string;
@@ -36,48 +26,12 @@ interface Job {
   experience?: string;
   jobId?: string;
   currentVersion?: number;
-  /** Raw lineage version number — see the route's own field of the same
-   *  name. "View Versions" below groups/counts a job's siblings by this,
-   *  not by `currentVersion` (which blends in the publish counter). */
-  versionNumber?: number;
   /* Carried so the job rows can show what the Resume Scoring job rows show.
      All four already exist on the JD record; they were simply never mapped. */
   industryType?: string;
   remoteType?: string;
   postedBy?: string;
   postedDate?: string;
-  createdAt?: string;
-}
-
-/**
- * This page's own `Job` → the shared `Job` type "View Versions" is built on
- * (`JobVersionHistoryPanel`, `groupByLineage`, `useJobVersionLineage` — the
- * exact same ones Resume Scoring's job picker uses), so the version history
- * shown here is that same, single implementation rather than a second one
- * that could drift from it. `daysActive`/`requiredMatch` are required by the
- * shared type but unused by anything version-history reads; 0 is a safe,
- * inert default.
- */
-function toSharedJob(job: Job): SharedJob {
-  return {
-    id: job.id,
-    job_id: job.jobId,
-    title: job.title,
-    status: job.status as SharedJob['status'],
-    location: job.location,
-    daysActive: 0,
-    requiredMatch: 0,
-    department: job.department,
-    industry_type: job.industryType,
-    experience: job.experience,
-    applicants: job.applicants,
-    postedDate: job.postedDate,
-    postedBy: job.postedBy,
-    employmentType: job.employmentType,
-    workMode: job.remoteType,
-    versionNumber: job.versionNumber,
-    created_at: job.createdAt,
-  };
 }
 
 interface MatchHistory {
@@ -117,25 +71,6 @@ export default function AITalentMatchPageJobsList({
     setSelectedJobId(prev => (prev === jobId ? null : jobId));
   };
 
-  // "View Versions" — the identical mechanism Resume Scoring's job picker
-  // uses (JobOpeningPickerList): the shared hook/panel/lineage-grouping, over
-  // EVERY version this page was handed (unfiltered — a lineage's older
-  // versions are what the grouping needs to count, even though the cards
-  // below only ever show the latest one per job).
-  const sharedJobs = useMemo(() => jobs.map(toSharedJob), [jobs]);
-  const versionGroups = useMemo(() => groupByLineage(sharedJobs), [sharedJobs]);
-  const versionLineage = useJobVersionLineage();
-  const { ensureVersionApplicants } = versionLineage;
-  const archivedOrDisabledVersionIds = useMemo(
-    () => sharedJobs
-      .filter(v => ['archived', 'disabled'].includes((v.status || '').toLowerCase()))
-      .map(v => v.id),
-    [sharedJobs],
-  );
-  useEffect(() => {
-    ensureVersionApplicants(archivedOrDisabledVersionIds);
-  }, [archivedOrDisabledVersionIds, ensureVersionApplicants]);
-
   // Shared search/filter state. The selects commit as you pick, so this uses
   // `setFilter`; `onChange` returns to page 1 on every narrowing.
   const search = useListSearch({
@@ -150,26 +85,10 @@ export default function AITalentMatchPageJobsList({
   } = search.filters;
 
 
-  // One row per JD LINEAGE — its latest version — kept only when THAT version
-  // is Published/Active. Filtering `jobs` directly by status (the old code)
-  // showed a lineage twice whenever an older version's own record was still
-  // marked Published/Active in the backend even after being superseded (JD-141
-  // v3 and v4 both read "Republished" and both passed the raw status test).
-  // Collapsing to the latest version FIRST — the same `versionGroups` "View
-  // Versions" above already builds — is what a lineage can only ever answer
-  // once for.
-  const publishedJobs = useMemo(() => {
-    const reps: Job[] = [];
-    versionGroups.forEach((bucket) => {
-      // `bucket` is newest-version-first (groupByLineage's own sort).
-      const latest = bucket[0];
-      const localJob = jobs.find(j => j.id === latest.id);
-      if (localJob && (localJob.status === 'Published' || localJob.status === 'Active')) {
-        reps.push(localJob);
-      }
-    });
-    return reps;
-  }, [versionGroups, jobs]);
+  // Filter jobs: Only show Published/Active jobs, exclude Disabled jobs
+  const publishedJobs = jobs.filter(j =>
+    j.status === 'Published' || j.status === 'Active'
+  );
 
   // Apply filters
   const filteredJobs = publishedJobs.filter(job => {
@@ -369,19 +288,6 @@ export default function AITalentMatchPageJobsList({
               const isSelected = effectiveSelectedJobId === job.id;
               const isDisabled = effectiveSelectedJobId !== null && !isSelected;
 
-              // "View Versions" — see the setup above this list for what each
-              // of these reads.
-              const sharedJob = toSharedJob(job);
-              const versionKey = lineageKey(sharedJob);
-              const versionsExpanded = versionLineage.isExpanded(versionKey);
-              const lineageSiblings = versionGroups.get(versionKey) ?? [sharedJob];
-              const visibleVersionCount = new Set(
-                lineageSiblings
-                  .filter(sibling => isVersionVisibleForScoring(sibling.status, sibling.id, versionLineage.versionApplicants))
-                  .map(sibling => sibling.versionNumber ?? 1),
-              ).size;
-              const hasVersionHistory = visibleVersionCount > 1;
-
               return (
                 <div
                   key={job.id}
@@ -508,42 +414,6 @@ export default function AITalentMatchPageJobsList({
                       </div>
                     )}
 
-                    {/* View Versions — same button/panel Resume Scoring's job
-                        picker uses, only offered when this job actually has
-                        more than one version worth showing. */}
-                    {hasVersionHistory && (
-                      <div className="mb-3 flex items-center justify-end">
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); versionLineage.toggle(versionKey, job.id); }}
-                          aria-expanded={versionsExpanded}
-                          className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 ${
-                            versionsExpanded
-                              ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-800 dark:text-slate-100 dark:border-brand-blue/50'
-                              : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
-                          }`}
-                          title={versionsExpanded ? 'Hide version history' : 'View version history'}
-                        >
-                          {versionsExpanded ? 'Hide Versions' : 'View Versions'}
-                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
-                        </button>
-                      </div>
-                    )}
-                    {versionsExpanded && (
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <JobVersionHistoryPanel
-                          job={sharedJob}
-                          versions={versionLineage.lineages[versionKey]}
-                          loading={versionLineage.isLoading(versionKey)}
-                          versionDetails={versionLineage.versionDetails}
-                          versionApplicants={versionLineage.versionApplicants}
-                          openInNewTab
-                          staticRows
-                          publishedOnly
-                        />
-                      </div>
-                    )}
-
                     {/* Action Button - pinned to bottom, only once this job
                         is checked. Every other job is disabled until it's
                         unchecked again, so there is never more than one to
@@ -575,19 +445,6 @@ export default function AITalentMatchPageJobsList({
                    "Republished" here exactly as it does on the JD list. */
                 const statusLabel = getDisplayStatus(job.status || 'Published', job.currentVersion);
                 const statusBadge = getStatusConfig(statusLabel);
-
-                // "View Versions" — see the setup above this list for what
-                // each of these reads.
-                const sharedJob = toSharedJob(job);
-                const versionKey = lineageKey(sharedJob);
-                const versionsExpanded = versionLineage.isExpanded(versionKey);
-                const lineageSiblings = versionGroups.get(versionKey) ?? [sharedJob];
-                const visibleVersionCount = new Set(
-                  lineageSiblings
-                    .filter(sibling => isVersionVisibleForScoring(sibling.status, sibling.id, versionLineage.versionApplicants))
-                    .map(sibling => sibling.versionNumber ?? 1),
-                ).size;
-                const hasVersionHistory = visibleVersionCount > 1;
 
                 return (
                   <div
@@ -712,41 +569,7 @@ export default function AITalentMatchPageJobsList({
                           )}
                         </div>
 
-                        {/* View Versions — same button/panel Resume Scoring's
-                            job picker uses, only offered when this job
-                            actually has more than one version worth showing. */}
-                        {hasVersionHistory && (
-                          <div className="mt-2 flex items-center justify-end">
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); versionLineage.toggle(versionKey, job.id); }}
-                              aria-expanded={versionsExpanded}
-                              className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 ${
-                                versionsExpanded
-                                  ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-800 dark:text-slate-100 dark:border-brand-blue/50'
-                                  : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
-                              }`}
-                              title={versionsExpanded ? 'Hide version history' : 'View version history'}
-                            >
-                              {versionsExpanded ? 'Hide Versions' : 'View Versions'}
-                              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
-                            </button>
-                          </div>
-                        )}
-                        {versionsExpanded && (
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <JobVersionHistoryPanel
-                              job={sharedJob}
-                              versions={versionLineage.lineages[versionKey]}
-                              loading={versionLineage.isLoading(versionKey)}
-                              versionDetails={versionLineage.versionDetails}
-                              versionApplicants={versionLineage.versionApplicants}
-                              openInNewTab
-                              staticRows
-                              publishedOnly
-                            />
-                          </div>
-                        )}
+                        <JDVersionHistory jdId={job.id} version={job.currentVersion} className="mt-2" />
                       </div>
 
                       {/* Actions, right-aligned and stacked as on the reference

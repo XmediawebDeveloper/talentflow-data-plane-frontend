@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { convertApiResumeToRow, convertApiFolderToTree } from '@/lib/utils/resumeMappers';
 import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
+import { formatOverallScore } from '@/lib/utils/matchStatus';
 import { dispatchUnitsConsumed } from '@/lib/services/api';
 import { toast } from 'sonner';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
@@ -67,6 +68,9 @@ interface ProgressItem {
   candidateName: string;
   status: 'queued' | 'processing' | 'completed' | 'failed' | 'already_scored';
   score?: number;
+  // Resume Match Rating Mechanism (client doc, Sept 2026): the 0-10 Overall
+  // Rating shown instead of `score`(%) - see formatOverallScore().
+  overallRating10?: number;
   matchStatus?: string;
   errorMessage?: string;
 }
@@ -505,7 +509,7 @@ export default function SelectSourceModal({
       const checkResult = await scoringService.checkExistingScores(jobId, resumesToScore);
       if (checkResult.existing_count > 0) {
         const alreadyScoredNames = checkResult.existing_scores
-          .map((s: any) => `${s.candidate_name} (${s.overall_score}%)`)
+          .map((s: any) => `${s.candidate_name} (${formatOverallScore(s.overall_rating_10, s.overall_score)})`)
           .join(', ');
 
         if (checkResult.new_count === 0) {
@@ -584,7 +588,7 @@ export default function SelectSourceModal({
             const batchItem = (batchStatus.items || []).find((b: any) => b.resume_id === item.resumeId);
             if (!batchItem) return item;
             const status = normalizeScoringStatus(batchItem.status) as ProgressItem['status'];
-            return { ...item, status, score: batchItem.overall_score, matchStatus: batchItem.match_status };
+            return { ...item, status, score: batchItem.overall_score, overallRating10: batchItem.overall_rating_10, matchStatus: batchItem.match_status };
           }));
           setScoringStats({
             queued: batchStatus.queued,
@@ -598,7 +602,7 @@ export default function SelectSourceModal({
             const itemId = `${jobId}-${batchItem.resume_id}`;
             const itemStatus = normalizeScoringStatus(batchItem.status);
             if (itemStatus === 'completed') {
-              updateItemStatus(jobId, itemId, 'Scored successfully', { score: batchItem.overall_score });
+              updateItemStatus(jobId, itemId, 'Scored successfully', { score: batchItem.overall_score, overallRating10: batchItem.overall_rating_10 });
             } else if (itemStatus === 'failed') {
               updateItemStatus(jobId, itemId, 'Failed', { errorReason: batchItem.error_message || 'Scoring failed' });
             } else if (itemStatus === 'processing') {
@@ -663,7 +667,7 @@ export default function SelectSourceModal({
       const result = await scoringService.scoreResume(jobId, resumeId);
       setProgressItems(prev => prev.map(i =>
         i.resumeId === resumeId
-          ? { ...i, status: 'completed' as const, score: Math.round(result.overall_score), matchStatus: result.match_status }
+          ? { ...i, status: 'completed' as const, score: Math.round(result.overall_score), overallRating10: result.overall_rating_10, matchStatus: result.match_status }
           : i
       ));
       setScoringStats(prev => ({ ...prev, processing: prev.processing - 1, completed: prev.completed + 1 }));
@@ -1287,6 +1291,7 @@ export default function SelectSourceModal({
                 : undefined
               : undefined,
             score: item.score,
+            overallRating10: item.overallRating10,
           }))}
           filterByJobId={jobId}
           showJobTitleColumn={false}

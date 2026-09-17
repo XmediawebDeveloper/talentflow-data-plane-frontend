@@ -61,20 +61,6 @@ export default function AIInterviewTrackInvitesModal({
   const [isLoading, setIsLoading] = useState(true);
   const [invitations, setInvitations] = useState<any[]>([]);
   const [page, setPage] = useState(1);
-  // "Go to page" input for the footer — buffered locally so a partial edit
-  // doesn't get clobbered by `page` until Enter/blur commits it.
-  const [goToPage, setGoToPage] = useState('1');
-  useEffect(() => {
-    setGoToPage(String(page));
-  }, [page]);
-  const commitGoToPage = () => {
-    const target = Math.round(Number(goToPage));
-    if (Number.isFinite(target) && target >= 1 && target <= totalPages) {
-      setPage(target);
-    } else {
-      setGoToPage(String(page));
-    }
-  };
   /* Same filter contract the AI Interviews page's tracker uses. The endpoint
      already accepted search/status/date — this tracker just never passed them,
      so it always showed the unfiltered first page. */
@@ -421,25 +407,9 @@ export default function AIInterviewTrackInvitesModal({
           <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
             {totalPages > 1 && (
               <>
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={totalPages}
-                    value={goToPage}
-                    onChange={(e) => setGoToPage(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.currentTarget.blur();
-                        commitGoToPage();
-                      }
-                    }}
-                    onBlur={commitGoToPage}
-                    aria-label="Go to page"
-                    className="w-12 sm:w-14 h-8 px-1.5 sm:px-2 text-xs sm:text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                  />
-                </div>
+                <button onClick={() => setPage(1)} disabled={page === 1} className={`hidden sm:inline-flex ${pageBtn}`}>
+                  First
+                </button>
                 <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} className={pageBtn}>
                   Prev
                 </button>
@@ -448,6 +418,9 @@ export default function AIInterviewTrackInvitesModal({
                 </span>
                 <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} className={pageBtn}>
                   Next
+                </button>
+                <button onClick={() => setPage(totalPages)} disabled={page === totalPages} className={`hidden sm:inline-flex ${pageBtn}`}>
+                  Last
                 </button>
               </>
             )}

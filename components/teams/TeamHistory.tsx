@@ -36,24 +36,10 @@ export default function TeamHistory() {
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<string>('ALL');
   const [page, setPage] = useState(1);
-  const [goToPage, setGoToPage] = useState('1');
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
   const from = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
   const to = Math.min(page * PAGE_SIZE, total);
-
-  useEffect(() => {
-    setGoToPage(String(page));
-  }, [page]);
-
-  const commitGoToPage = () => {
-    const target = Math.round(Number(goToPage));
-    if (Number.isFinite(target) && target >= 1 && target <= totalPages) {
-      setPage(target);
-    } else {
-      setGoToPage(String(page));
-    }
-  };
 
   const fetchHistory = useCallback(async () => {
     setLoading(true);
@@ -206,44 +192,48 @@ export default function TeamHistory() {
                 Showing <span className="font-medium">{from}-{to}</span> of <span className="font-medium">{total}</span>{' '}
                 {filter !== 'ALL' ? `${EVENT_CONFIG[filter]?.label ?? filter} ` : ''}activities
               </p>
-              <div className="flex items-center gap-2 sm:gap-3">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
-                  <input
-                    type="number"
-                    min={1}
-                    max={totalPages}
-                    value={goToPage}
-                    onChange={(e) => setGoToPage(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') {
-                        e.currentTarget.blur();
-                        commitGoToPage();
-                      }
-                    }}
-                    onBlur={commitGoToPage}
-                    aria-label="Go to page"
-                    className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
-                  />
-                </div>
+              <div className="flex items-center gap-2">
                 <button
                   onClick={() => setPage((current) => Math.max(1, current - 1))}
                   disabled={page === 1}
-                  className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                  aria-label="Previous page" title="Previous page"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 text-gray-600 transition-all hover:bg-brand-blue/[0.04] hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <ChevronLeft className="h-4 w-4" />
                 </button>
-                <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
-                  <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
-                </span>
+                <div className="flex gap-1">
+                  {Array.from({ length: totalPages }, (_, index) => index + 1)
+                    .filter((pageNumber) => pageNumber === 1 || pageNumber === totalPages || Math.abs(pageNumber - page) <= 1)
+                    .reduce<(number | '...')[]>((accumulator, pageNumber, index, pages) => {
+                      if (index > 0 && pageNumber - (pages[index - 1] as number) > 1) accumulator.push('...');
+                      accumulator.push(pageNumber);
+                      return accumulator;
+                    }, [])
+                    .map((pageNumber, index) =>
+                      pageNumber === '...' ? (
+                        <span key={`ellipsis-${index}`} className="flex h-9 w-9 items-center justify-center text-sm text-gray-400">
+                          ...
+                        </span>
+                      ) : (
+                        <button
+                          key={pageNumber}
+                          onClick={() => setPage(pageNumber as number)}
+                          className={`h-9 w-9 rounded-xl text-sm font-medium transition-all ${
+                            page === pageNumber
+                              ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/20'
+                              : 'text-gray-700 hover:bg-brand-blue/[0.04]'
+                          }`}
+                        >
+                          {pageNumber}
+                        </button>
+                      )
+                    )}
+                </div>
                 <button
                   onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
                   disabled={page === totalPages}
-                  className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                  aria-label="Next page" title="Next page"
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-gray-200 text-gray-600 transition-all hover:bg-brand-blue/[0.04] hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-40"
                 >
-                  <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                  <ChevronRight className="h-4 w-4" />
                 </button>
               </div>
             </div>

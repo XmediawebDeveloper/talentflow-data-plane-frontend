@@ -2,8 +2,7 @@ import { useState, useEffect, Fragment } from 'react';
 import {
   Download, CheckCircle, XCircle, Clock, AlertTriangle,
   FileText, RefreshCw, Eye, Calendar, Mail, User, Building2, Hash, Activity,
-  Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff, Loader2,
-  ChevronLeft, ChevronRight
+  Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff, Loader2
 } from 'lucide-react';
 import { assessmentService, CombinedAuditActivity, CombinedAuditTrailResponse } from '@/lib/services';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -59,21 +58,6 @@ export default function AssessmentAuditTrail() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const pageSize = 50;
-  const totalPages = Math.max(1, Math.ceil(total / pageSize));
-  // Local text for the "Go to" box so a partial edit doesn't get clobbered by
-  // `page` until Enter/blur commits it.
-  const [goToPage, setGoToPage] = useState(String(page));
-  useEffect(() => {
-    setGoToPage(String(page));
-  }, [page]);
-  const commitGoToPage = () => {
-    const target = Math.round(Number(goToPage));
-    if (Number.isFinite(target) && target >= 1 && target <= totalPages) {
-      setPage(target);
-    } else {
-      setGoToPage(String(page));
-    }
-  };
 
   // Filters
   const [categoryFilter, setCategoryFilter] = useState<CategoryFilter>('all');
@@ -538,44 +522,23 @@ export default function AssessmentAuditTrail() {
             Showing {activities.length} of {total} entries
           </div>
           {total > pageSize && (
-            <div className="flex items-center gap-2 sm:gap-3">
-              <div className="flex items-center gap-1.5">
-                <span className="hidden sm:inline text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
-                <input
-                  type="number"
-                  min={1}
-                  max={totalPages}
-                  value={goToPage}
-                  onChange={(e) => setGoToPage(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.currentTarget.blur();
-                      commitGoToPage();
-                    }
-                  }}
-                  onBlur={commitGoToPage}
-                  aria-label="Go to page"
-                  className="w-14 h-8 px-2 text-xs sm:text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
-                />
-              </div>
+            <div className="flex items-center gap-2">
               <button
                 onClick={() => setPage(Math.max(1, page - 1))}
                 disabled={page === 1}
-                className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                aria-label="Previous page" title="Previous page"
+                className="px-2.5 sm:px-3 py-1 text-xs sm:text-sm border border-gray-200 bg-white rounded-lg hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700"
               >
-                <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                Prev
               </button>
-              <span className="text-xs sm:text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
-                <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
+              <span className="text-xs sm:text-sm text-gray-600">
+                {page} / {Math.ceil(total / pageSize)}
               </span>
               <button
-                onClick={() => setPage(Math.min(totalPages, page + 1))}
-                disabled={page >= totalPages}
-                className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
-                aria-label="Next page" title="Next page"
+                onClick={() => setPage(Math.min(Math.ceil(total / pageSize), page + 1))}
+                disabled={page >= Math.ceil(total / pageSize)}
+                className="px-2.5 sm:px-3 py-1 text-xs sm:text-sm border border-gray-200 bg-white rounded-lg hover:bg-slate-100 disabled:opacity-50 disabled:cursor-not-allowed text-gray-700"
               >
-                <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+                Next
               </button>
             </div>
           )}
