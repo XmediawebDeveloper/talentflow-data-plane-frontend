@@ -109,6 +109,22 @@ export default function UnitDisputesPage() {
   const [logPage, setLogPage] = useState(0);
   const [logTotal, setLogTotal] = useState(0);
   const LOG_PAGE_SIZE = 10;
+  const logTotalPages = Math.max(1, Math.ceil(logTotal / LOG_PAGE_SIZE));
+
+  // 1-based text for the Go-to-page input — logPage itself stays 0-based.
+  const [logGoToPage, setLogGoToPage] = useState(String(logPage + 1));
+  useEffect(() => {
+    setLogGoToPage(String(logPage + 1));
+  }, [logPage]);
+
+  const commitLogGoToPage = () => {
+    const target = Math.round(Number(logGoToPage));
+    if (Number.isFinite(target) && target >= 1 && target <= logTotalPages) {
+      fetchConsumptionLogs(target - 1);
+    } else {
+      setLogGoToPage(String(logPage + 1));
+    }
+  };
 
   // Pagination state for the main disputes list
   const [currentPage, setCurrentPage] = useState(1);
@@ -969,7 +985,26 @@ export default function UnitDisputesPage() {
                           <p className="text-xs text-gray-500 dark:text-slate-500">
                             {logTotal} total record{logTotal !== 1 ? 's' : ''}
                           </p>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                              <input
+                                type="number"
+                                min={1}
+                                max={logTotalPages}
+                                value={logGoToPage}
+                                onChange={(e) => setLogGoToPage(e.target.value)}
+                                onKeyDown={(e) => {
+                                  if (e.key === 'Enter') {
+                                    e.currentTarget.blur();
+                                    commitLogGoToPage();
+                                  }
+                                }}
+                                onBlur={commitLogGoToPage}
+                                aria-label="Go to page"
+                                className="w-12 h-8 px-1.5 text-xs text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                              />
+                            </div>
                             <button
                               onClick={() => fetchConsumptionLogs(logPage - 1)}
                               disabled={logPage === 0}
@@ -977,8 +1012,8 @@ export default function UnitDisputesPage() {
                             >
                               <ChevronLeft className="h-4 w-4" />
                             </button>
-                            <span className="text-xs font-medium text-gray-600 dark:text-slate-400">
-                              Page {logPage + 1} of {Math.max(1, Math.ceil(logTotal / LOG_PAGE_SIZE))}
+                            <span className="text-xs font-medium text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                              <span className="text-brand-blue font-semibold">{logPage + 1}</span> / {logTotalPages}
                             </span>
                             <button
                               onClick={() => fetchConsumptionLogs(logPage + 1)}

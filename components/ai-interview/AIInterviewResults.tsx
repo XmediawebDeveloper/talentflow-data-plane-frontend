@@ -149,6 +149,20 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 15;
 
+  // Local text so a partial edit doesn't get clobbered by currentPage until Enter/blur commits it.
+  const [goToPage, setGoToPage] = useState(String(currentPage));
+  useEffect(() => {
+    setGoToPage(String(currentPage));
+  }, [currentPage]);
+  const commitGoToPage = () => {
+    const page = Math.round(Number(goToPage));
+    if (Number.isFinite(page) && page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    } else {
+      setGoToPage(String(currentPage));
+    }
+  };
+
   // Search and filters live in the shared hook. This view queries the SERVER,
   // so `appliedQuery` matters twice over: it keeps one request per pause rather
   // than per keystroke, and it is what the request is built from.
@@ -583,6 +597,25 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                   Showing {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, totalSessions)} of {totalSessions}
                 </div>
                 <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm text-gray-500 whitespace-nowrap">Go to</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={totalPages}
+                      value={goToPage}
+                      onChange={(e) => setGoToPage(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.currentTarget.blur();
+                          commitGoToPage();
+                        }
+                      }}
+                      onBlur={commitGoToPage}
+                      aria-label="Go to page"
+                      className="w-14 h-8 px-2 text-sm text-center border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    />
+                  </div>
                   <button
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}

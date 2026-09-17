@@ -57,7 +57,7 @@ import { scoringService } from '@/lib/services/scoringService';
 import { recordAssessment } from '@/lib/services/usageTrackingService';
 import api from '@/lib/services/api';
 import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/services/proctoringService';
-import { AlertTriangle, RefreshCw, Send, Ban, Layers, Briefcase, ChevronDown, Radar, Search } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Send, Ban, Layers, Briefcase, ChevronDown, Radar, Search, ChevronLeft } from 'lucide-react';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -76,6 +76,75 @@ import { groupByLineage, latestVersionNumber } from '@/lib/utils/jobOpeningDispl
  *  rows themselves are the untyped shape `mapAssessmentFromApi` returns, so
  *  this names the three fields rather than widening to `any`. */
 type AssessmentLineageRef = { id: string; jd_id?: string };
+
+/** The canonical "Go to [input] · Previous · page/total · Next" control from
+ *  components/Pagination.tsx, reused inline for this file's popup footers
+ *  (Tracking Invitations, Completed Candidates, Invite Status Tracking) which
+ *  don't otherwise fit that component's items-per-page/"Showing X-Y" shape. */
+function InlinePageNav({ page, totalPages, onPageChange }: { page: number; totalPages: number; onPageChange: (page: number) => void }) {
+  const [goToPage, setGoToPage] = useState(String(page));
+  useEffect(() => {
+    setGoToPage(String(page));
+  }, [page]);
+
+  const commitGoToPage = () => {
+    const target = Math.round(Number(goToPage));
+    if (Number.isFinite(target) && target >= 1 && target <= totalPages) {
+      onPageChange(target);
+    } else {
+      setGoToPage(String(page));
+    }
+  };
+
+  const navBtnClass =
+    "inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors";
+
+  return (
+    <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+        <input
+          type="number"
+          min={1}
+          max={totalPages}
+          value={goToPage}
+          onChange={(e) => setGoToPage(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.currentTarget.blur();
+              commitGoToPage();
+            }
+          }}
+          onBlur={commitGoToPage}
+          aria-label="Go to page"
+          className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+        />
+      </div>
+
+      <button
+        onClick={() => onPageChange(page - 1)}
+        disabled={page === 1}
+        className={navBtnClass}
+        aria-label="Previous page" title="Previous page"
+      >
+        <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+      </button>
+
+      <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+        <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
+      </span>
+
+      <button
+        onClick={() => onPageChange(page + 1)}
+        disabled={page === totalPages}
+        className={navBtnClass}
+        aria-label="Next page" title="Next page"
+      >
+        <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+      </button>
+    </div>
+  );
+}
 
 /* ── Send Invite: the job list, shared with Total Jobs ─────────────────────
    The dialog used to own a job list of its own: assessments grouped into a
@@ -5432,24 +5501,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       {total > COMPLETED_PAGE_SIZE && (
                         <div className="mt-4 flex items-center justify-between gap-3">
                           <span className="text-xs text-gray-600 dark:text-slate-400">
-                            Page {safePage} of {totalPages} · {total.toLocaleString()} total
+                            {total.toLocaleString()} total
                           </span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => setCompletedCandidatesPage(p => Math.max(1, p - 1))}
-                              disabled={safePage === 1}
-                              className="px-3 py-1.5 text-xs border border-gray-200 dark:border-slate-700 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-slate-300 transition-colors"
-                            >
-                              Previous
-                            </button>
-                            <button
-                              onClick={() => setCompletedCandidatesPage(p => Math.min(totalPages, p + 1))}
-                              disabled={safePage === totalPages}
-                              className="px-3 py-1.5 text-xs border border-gray-200 dark:border-slate-700 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-slate-300 transition-colors"
-                            >
-                              Next
-                            </button>
-                          </div>
+                          <InlinePageNav
+                            page={safePage}
+                            totalPages={totalPages}
+                            onPageChange={setCompletedCandidatesPage}
+                          />
                         </div>
                       )}
                     </>
@@ -6094,24 +6152,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       {total > INVITE_STATUS_PAGE_SIZE && (
                         <div className="mt-4 flex items-center justify-between gap-3">
                           <span className="text-xs text-gray-600 dark:text-slate-400">
-                            Page {safePage} of {totalPages} · {total.toLocaleString()} total
+                            {total.toLocaleString()} total
                           </span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => setInviteStatusPage(p => Math.max(1, p - 1))}
-                              disabled={safePage === 1}
-                              className="px-3 py-1.5 text-xs border border-gray-200 dark:border-slate-700 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-slate-300 transition-colors"
-                            >
-                              Previous
-                            </button>
-                            <button
-                              onClick={() => setInviteStatusPage(p => Math.min(totalPages, p + 1))}
-                              disabled={safePage === totalPages}
-                              className="px-3 py-1.5 text-xs border border-gray-200 dark:border-slate-700 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-slate-300 transition-colors"
-                            >
-                              Next
-                            </button>
-                          </div>
+                          <InlinePageNav
+                            page={safePage}
+                            totalPages={totalPages}
+                            onPageChange={setInviteStatusPage}
+                          />
                         </div>
                       )}
 
@@ -8330,39 +8377,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </p>
               <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
                 {trackingPaginationVisible && (
-                  <>
-                    <button
-                      onClick={() => setTrackingCurrentPage(1)}
-                      disabled={trackingCurrentPage === 1}
-                      className="hidden sm:inline-flex px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                    >
-                      First
-                    </button>
-                    <button
-                      onClick={() => setTrackingCurrentPage(trackingCurrentPage - 1)}
-                      disabled={trackingCurrentPage === 1}
-                      className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                    >
-                      Prev
-                    </button>
-                    <span className="px-1 sm:px-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
-                      Page {trackingCurrentPage} of {trackingTotalPages}
-                    </span>
-                    <button
-                      onClick={() => setTrackingCurrentPage(trackingCurrentPage + 1)}
-                      disabled={trackingCurrentPage === trackingTotalPages}
-                      className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                    >
-                      Next
-                    </button>
-                    <button
-                      onClick={() => setTrackingCurrentPage(trackingTotalPages)}
-                      disabled={trackingCurrentPage === trackingTotalPages}
-                      className="hidden sm:inline-flex px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                    >
-                      Last
-                    </button>
-                  </>
+                  <InlinePageNav
+                    page={trackingCurrentPage}
+                    totalPages={trackingTotalPages}
+                    onPageChange={setTrackingCurrentPage}
+                  />
                 )}
                 <button
                   onClick={closeTrackInvitesModal}
