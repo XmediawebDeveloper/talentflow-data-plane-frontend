@@ -242,6 +242,17 @@ export default function AuditTrailPage() {
   const [pageSize] = useState(20);
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
+  // Text typed into the "jump to page" box; kept separate from `page` so the
+  // input can hold invalid/in-progress text without touching the fetched data.
+  const [pageJumpInput, setPageJumpInput] = useState('');
+
+  const jumpToPage = () => {
+    const target = parseInt(pageJumpInput, 10);
+    if (Number.isInteger(target) && target >= 1 && target <= totalPages && target !== page) {
+      setPage(target);
+    }
+    setPageJumpInput('');
+  };
 
   // Reset every active filter back to "show everything". The date range is kept
   // because the Total Actions count is computed over that window — clearing the
@@ -1249,9 +1260,13 @@ export default function AuditTrailPage() {
                 );
               })}
             </div>
-            {/* Desktop Table — capped height with sticky header so the body scrolls
-                independently of the page. */}
-            <div className="hidden md:block max-h-[600px] overflow-auto tf-table-shell">
+            {/* Desktop Table — sideways scroll only (many columns); the page
+                itself is the sole vertical scroller, so its scrollbar stays at
+                the true edge of the viewport instead of a second one drawn
+                around this table. See the `.tf-table-shell` note in
+                globals.css: giving a table its own vertical scroll cap here is
+                exactly the nested-scroller problem that class documents. */}
+            <div className="hidden md:block table-responsive">
               <table className="w-full">
                 <thead className="sticky top-0 z-10">
                   <tr className="bg-gray-50/95 dark:bg-slate-800/95 backdrop-blur-sm shadow-[inset_0_-1px_0_0_rgb(229_231_235)] dark:shadow-[inset_0_-1px_0_0_rgb(51_65_85_/_0.6)]">
@@ -1419,6 +1434,28 @@ export default function AuditTrailPage() {
                   <span className="hidden sm:inline">Next</span>
                   <ChevronRight className="w-3 h-3 sm:w-4 sm:h-4" />
                 </button>
+                {totalPages > 2 && (
+                  <div className="flex items-center gap-1 sm:gap-1.5 pl-1.5 sm:pl-2 ml-0.5 sm:ml-1 border-l border-gray-200 dark:border-slate-700">
+                    <span className="hidden sm:inline text-[10px] sm:text-xs md:text-sm text-gray-500 dark:text-slate-400">Go to</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={totalPages}
+                      value={pageJumpInput}
+                      onChange={(e) => setPageJumpInput(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') jumpToPage(); }}
+                      placeholder={`${page}`}
+                      aria-label="Go to page"
+                      className="w-12 sm:w-14 h-7 sm:h-8 px-1.5 sm:px-2 text-[10px] sm:text-xs md:text-sm text-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue text-gray-900 dark:text-slate-50"
+                    />
+                    <button
+                      onClick={jumpToPage}
+                      className="px-2 sm:px-3 py-1.5 sm:py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-gray-300 dark:hover:border-slate-700 transition-all text-[10px] sm:text-xs md:text-sm font-medium text-gray-700 dark:text-slate-300"
+                    >
+                      Go
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
