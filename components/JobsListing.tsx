@@ -24,7 +24,6 @@ import {
   collapseToLatestVersions,
   groupByLineage,
   sortJobs,
-  formatJobVersionLabel,
 } from '@/lib/utils/jobOpeningDisplay';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
@@ -36,7 +35,6 @@ import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import AITalentMatchConfirmModal from '@/components/AITalentMatchConfirmModal';
 /* Radix menu rather than the hand-rolled absolute dropdown the job rows use:
    the version table sits inside an overflow-x-auto shell, which would clip an
    absolutely positioned menu — Radix portals it out of the scroll container. */
@@ -200,29 +198,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showAIMatchModal, setShowAIMatchModal] = useState(false);
   const [selectedJobForAIMatch, setSelectedJobForAIMatch] = useState<Job | null>(null);
-  /* AI Talent Match trigger from the three-dot menu asks first, same
-     ConfirmationDialog / copy / Yes-No pattern as the Job Details page's own
-     AI Talent Match confirm — set here, proceeds into the existing
-     onAIMatch(job) navigation only on Yes. */
-  const [aiMatchConfirmJob, setAiMatchConfirmJob] = useState<Job | null>(null);
-  // Closing the three-dot menu and opening the confirm live in one function so
-  // they always land in the same state update/paint — every trigger (grid row,
-  // list row, expanded version row) goes through this, so the menu can never
-  // be caught mid-close while the popup is still mounting.
-  const requestAIMatch = (job: Job) => {
-    setActiveDropdown(null);
-    setAiMatchConfirmJob(job);
-  };
-  const confirmAIMatch = () => {
-    const job = aiMatchConfirmJob;
-    setAiMatchConfirmJob(null);
-    if (job) onAIMatch?.(job);
-  };
-  /* Same one-function rule as requestAIMatch above, for the same reason: the
-     menu close and the confirmation open are a single state update, so the
-     three-dot menu can never be caught still painted while the "Disable Job
-     Description?" dialog is coming up. Every Disable Job trigger — grid card,
-     list row and the expanded version rows — goes through here. */
+  /* Closing the three-dot menu and opening the confirmation live in one
+     function so they always land in the same state update/paint — the menu
+     can never be caught still painted while the "Disable Job Description?"
+     dialog is coming up. Every Disable Job trigger — grid card, list row and
+     the expanded version rows — goes through here. */
   const requestDisableJob = (job: Job) => {
     setActiveDropdown(null);
     onDisableJob?.(job);
@@ -1354,7 +1334,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    requestAIMatch(job);
+                                    setActiveDropdown(null);
+                                    onAIMatch(job);
                                   }}
                                   className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
                                 >
@@ -1578,7 +1559,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    requestAIMatch(job);
+                                    setActiveDropdown(null);
+                                    onAIMatch(job);
                                   }}
                                   className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                 >
@@ -1757,7 +1739,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                 )}
                                 {/* Quick Actions — same gates as the latest-version menu */}
                                 {onAIMatch && !['draft', 'disabled', 'archived'].includes(versionJob.status.toLowerCase()) && (
-                                  <DropdownMenuItem onSelect={() => requestAIMatch(versionJob)} className={viewVersionsMenuItemClass}>
+                                  <DropdownMenuItem onSelect={() => onAIMatch(versionJob)} className={viewVersionsMenuItemClass}>
                                     <Brain className="w-4 h-4 text-menu-icon-ai" />
                                     <span className={MENU_ITEM_SCALE_CLASS}>AI Talent Match</span>
                                   </DropdownMenuItem>
@@ -1940,22 +1922,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       </div>
       </div>
 
-      {/* Confirm before running AI Talent Match — same copy, layout and
-          Yes/No behavior as the Job Details page's AI Talent Match confirm.
-          No is the do-nothing path: closing this never calls onAIMatch. */}
       <ArchiveJobModal
         isOpen={bulkArchiveOpen}
         count={selectedJobs.size}
         jobLabel={`${selectedJobs.size} job description${selectedJobs.size === 1 ? '' : 's'} selected`}
         onConfirm={confirmBulkArchive}
         onCancel={() => setBulkArchiveOpen(false)}
-      />
-
-      <AITalentMatchConfirmModal
-        isOpen={!!aiMatchConfirmJob}
-        jobTitle={aiMatchConfirmJob ? formatJobVersionLabel(aiMatchConfirmJob) : ''}
-        onConfirm={confirmAIMatch}
-        onCancel={() => setAiMatchConfirmJob(null)}
       />
 
       {/* AI Match Modal */}

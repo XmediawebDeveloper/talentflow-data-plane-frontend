@@ -882,7 +882,10 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                       const isUnlimited = !!(quota as any).is_unlimited;
                       const remaining = isUnlimited ? null : ((quota.total_remaining as number) || 0);
                       const limit = isUnlimited ? null : ((quota.subscription?.limit as number || 0) + (quota.addon?.total_purchased || 0));
-                      const used = (limit != null && remaining != null) ? limit - remaining : 0;
+                      // Raw counters, not `limit - remaining` — `remaining` is floored at 0
+                      // by the API, so that derivation silently caps "used" at `limit` and
+                      // hides real consumption once a tenant goes over quota.
+                      const used = isUnlimited ? 0 : ((quota.subscription?.used as number ?? 0) + (quota.addon?.total_consumed as number ?? 0));
                       const pct = limit && limit > 0 ? Math.min((used / limit) * 100, 100) : 0;
                       return (
                         <div key={key} className="py-2 sm:py-2.5 flex items-center gap-2">

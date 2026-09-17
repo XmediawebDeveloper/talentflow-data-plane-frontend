@@ -539,7 +539,10 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
       <div className="space-y-1.5">
         <p>Must-Have Average: {resume.essentialRating10.toFixed(1)}/10 - the average of every Must-Have criterion (a rating below 7 counts as 0 but still counts toward the average).</p>
         {isNoMatch ? (
-          <p>One or more Must-Have requirements failed, so the Overall Rating is the Must-Have Average. Nice-to-Have criteria are not used.</p>
+          <p>
+            One or more Must-Have requirements failed, so the Overall Rating is the Must-Have Average. Nice-to-Have criteria are not used.
+            {resume.ratingCapApplied && ' A No Match is never shown above 6.9, so it is capped down to 6.9.'}
+          </p>
         ) : resume.nonEssentialRating10 == null ? (
           <p>This job has no Nice-to-Have criteria, so the Overall Rating is the Must-Have Average.</p>
         ) : (
