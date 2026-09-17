@@ -4649,6 +4649,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 isUnlimited={isUnlimited}
               />
             )}
+            {canAccessHRQuestionBank && (
+              <button
+                onClick={() => {
+                  // Tells the question bank which module to name in its breadcrumb.
+                  try { sessionStorage.setItem('questionBankSource', 'assessments'); } catch { /* ignore */ }
+                  router.push('/recruitment/hr-question-bank');
+                }}
+                className="flex items-center gap-1.5 border border-brand-blue/30 text-brand-blue bg-white dark:bg-slate-900 px-3 py-2 rounded-lg hover:bg-brand-blue/5 transition-colors shadow-sm text-sm"
+              >
+                <ClipboardList className="w-4 h-4" />
+                <span className="hidden sm:inline">HR Question Bank</span>
+                <span className="sm:hidden">Questions</span>
+              </button>
+            )}
             {/* Send Invite — same permission as the per-row Share action. */}
             {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
               <button
@@ -4668,20 +4682,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <Mail className="w-4 h-4" />
                 <span className="hidden sm:inline">Send Invite</span>
                 <span className="sm:hidden">Invite</span>
-              </button>
-            )}
-            {canAccessHRQuestionBank && (
-              <button
-                onClick={() => {
-                  // Tells the question bank which module to name in its breadcrumb.
-                  try { sessionStorage.setItem('questionBankSource', 'assessments'); } catch { /* ignore */ }
-                  router.push('/recruitment/hr-question-bank');
-                }}
-                className="flex items-center gap-1.5 border border-brand-blue/30 text-brand-blue bg-white dark:bg-slate-900 px-3 py-2 rounded-lg hover:bg-brand-blue/5 transition-colors shadow-sm text-sm"
-              >
-                <ClipboardList className="w-4 h-4" />
-                <span className="hidden sm:inline">HR Question Bank</span>
-                <span className="sm:hidden">Questions</span>
               </button>
             )}
             {onOpenCandidateView && (
