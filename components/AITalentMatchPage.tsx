@@ -2266,109 +2266,6 @@ export default function AITalentMatchPage({
           />
         </StatsCardGrid>
 
-        {/* View pills — same control Resume Scoring uses for its "Show:" row,
-            so the two modules switch views the same way. "View by Job" and
-            "View by Candidates" select what the two clickable cards above do;
-            "All Resumes" has no card of its own — it's the flat, un-deduped
-            counterpart to the candidate roll-up (every candidate-to-job match
-            as its own row), the same relationship Resume Scoring's "All
-            Resumes" pill has to its "View by Candidates" pill. The three
-            rating pills continue the same row, exactly like Resume Scoring's
-            Exact/Partial/No Match pills next to its own "All Resumes". */}
-        {historyPageView !== 'cards' && (
-          <div className="flex items-center gap-2 flex-wrap mb-3">
-            <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
-            {([
-              { id: 'list', label: 'View by Job', active: historyPageView === 'list' && !candidateRatingBand, open: openHistoryListView },
-              { id: 'candidates', label: 'View by Candidates', active: historyPageView === 'candidates' && !candidateRatingBand, open: openCandidatesView },
-              { id: 'resumes', label: 'All Resumes', active: historyPageView === 'resumes' && !candidateRatingBand, open: openAllResumesView },
-            ] as const).map(view => (
-              <button
-                key={view.id}
-                type="button"
-                onClick={() => { setCandidateRatingBand(null); void view.open(); }}
-                aria-pressed={view.active}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
-                  view.active
-                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                    : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
-                }`}
-              >
-                {view.label}
-              </button>
-            ))}
-
-            {/* Rating-band filters — same toggle as "All Resumes" itself:
-                clicking one narrows that view to just this band; clicking the
-                active one again clears back to the unfiltered list. */}
-            {([
-              { id: 'exact', label: 'Rating-10' },
-              { id: 'partial', label: 'Rating-9-7' },
-              { id: 'no_match', label: 'Rating Below 7' },
-            ] as const).map(band => (
-              <button
-                key={band.id}
-                type="button"
-                onClick={() => {
-                  setCandidateRatingBand(candidateRatingBand === band.id ? null : band.id);
-                  void openAllResumesView();
-                }}
-                aria-pressed={candidateRatingBand === band.id}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
-                  candidateRatingBand === band.id
-                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                    : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
-                }`}
-              >
-                {band.label}
-              </button>
-            ))}
-
-            {/* Score / Invite for the "All Resumes" table's own checkbox
-                selection — the only one of these three sub-views that has a
-                selection at all. Sits at the row's right end via ml-auto,
-                same treatment the single-job results toolbar's own
-                Score/Invite group uses. */}
-            {historyPageView === 'resumes' && selectedAllResumeEntries.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-                {canRunScoring && (
-                  <button
-                    onClick={() => { void handleScoreSelectedAllResumes(); }}
-                    className="px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
-                  >
-                    <ClipboardList className="w-3.5 h-3.5" />
-                    Score ({selectedAllResumeEntries.length})
-                  </button>
-                )}
-                {(hasPermission('canCreateAssessments') || isTenantAdmin || canCreateAIInterviews) && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                        <Send className="w-3.5 h-3.5" />
-                        Invite ({selectedAllResumeEntries.length})
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                      {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
-                        <DropdownMenuItem className={actionsMenuItemClass} onSelect={handleInviteAssessmentSelectedAllResumes}>
-                          <BarChart3 className="w-4 h-4 text-menu-icon-score" />
-                          <span className={MENU_ITEM_SCALE_CLASS}>Invite Assessment</span>
-                        </DropdownMenuItem>
-                      )}
-                      {canCreateAIInterviews && (
-                        <DropdownMenuItem className={actionsMenuItemClass} onSelect={handleInviteAIInterviewSelectedAllResumes}>
-                          <Video className="w-4 h-4 text-menu-icon-view" />
-                          <span className={MENU_ITEM_SCALE_CLASS}>Invite AI Interview</span>
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-              </div>
-            )}
-          </div>
-        )}
-
         {/* ── Match by Candidate (in-page) ───────────────────────────────── */}
         {historyPageView === 'candidates' && (
           <>
@@ -2378,7 +2275,6 @@ export default function AITalentMatchPage({
                 rides inside it as a pill rather than floating above. */}
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
               <ListToolbar
-                className={showCandidateFilters ? 'mb-3' : 'mb-0'}
                 searchValue={candidateSearchQuery}
                 onSearchChange={candidateSearch.setQuery}
                 // The hook debounces into `appliedQuery`, so keystrokes pass through.
@@ -2427,6 +2323,78 @@ export default function AITalentMatchPage({
                   </div>
                 </div>
               </ListToolbar>
+
+              {/* View pills — merged into this same toolbar card, right after
+                  the search row and before the expanded filter panel, the
+                  same order Job Openings uses for its own "Show:" row — one
+                  bordered card rather than two stacked ones. Same control
+                  Resume Scoring uses for its "Show:" row, so the two modules
+                  switch views the same way — one copy per view (list/
+                  candidates/resumes) since each has its own toolbar card to
+                  merge into, rather than one copy shared above all three.
+                  "View by Job" and "View by Candidates" select what the two
+                  clickable cards higher up the page do; "All Resumes" has no
+                  card of its own — it's the flat, un-deduped counterpart to
+                  the candidate roll-up (every candidate-to-job match as its
+                  own row), the same relationship Resume Scoring's "All
+                  Resumes" pill has to its "View by Candidates" pill. The
+                  three rating pills continue the same row, exactly like
+                  Resume Scoring's Exact/Partial/No Match pills next to its
+                  own "All Resumes". */}
+              <div className="flex items-center gap-2 flex-wrap mb-3">
+                <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
+                {([
+                  /* This copy renders only while historyPageView === 'candidates'
+                     (its enclosing branch), which TS then narrows to that one
+                     literal — comparing it against the other two here would be
+                     flagged as an impossible comparison, so those two are
+                     simply false rather than re-testing what the branch already
+                     guarantees. */
+                  { id: 'list', label: 'View by Job', active: false, open: openHistoryListView },
+                  { id: 'candidates', label: 'View by Candidates', active: !candidateRatingBand, open: openCandidatesView },
+                  { id: 'resumes', label: 'All Resumes', active: false, open: openAllResumesView },
+                ] as const).map(view => (
+                  <button
+                    key={view.id}
+                    type="button"
+                    onClick={() => { setCandidateRatingBand(null); void view.open(); }}
+                    aria-pressed={view.active}
+                    className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+                      view.active
+                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                        : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
+                    }`}
+                  >
+                    {view.label}
+                  </button>
+                ))}
+
+                {/* Rating-band filters — same toggle as "All Resumes" itself:
+                    clicking one narrows that view to just this band; clicking
+                    the active one again clears back to the unfiltered list. */}
+                {([
+                  { id: 'exact', label: 'Rating-10' },
+                  { id: 'partial', label: 'Rating-9-7' },
+                  { id: 'no_match', label: 'Rating Below 7' },
+                ] as const).map(band => (
+                  <button
+                    key={band.id}
+                    type="button"
+                    onClick={() => {
+                      setCandidateRatingBand(candidateRatingBand === band.id ? null : band.id);
+                      void openAllResumesView();
+                    }}
+                    aria-pressed={candidateRatingBand === band.id}
+                    className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+                      candidateRatingBand === band.id
+                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                        : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
+                    }`}
+                  >
+                    {band.label}
+                  </button>
+                ))}
+              </div>
 
               {showCandidateFilters && (
                 <div className="pt-3 border-t border-brand-blue/10">
@@ -2934,7 +2902,6 @@ export default function AITalentMatchPage({
 
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
               <ListToolbar
-                className={showCandidateFilters ? 'mb-3' : 'mb-0'}
                 searchValue={candidateSearchQuery}
                 onSearchChange={candidateSearch.setQuery}
                 searchDebounceMs={0}
@@ -2981,6 +2948,100 @@ export default function AITalentMatchPage({
                   </div>
                 </div>
               </ListToolbar>
+
+              {/* View pills — merged into this same toolbar card; see the
+                  "candidates" view's own copy for why this is duplicated per
+                  view rather than shared. This copy also carries Score/Invite
+                  for the table's checkbox selection — the only one of the
+                  three sub-views that has a selection at all — sitting at the
+                  row's right end via ml-auto, same treatment the single-job
+                  results toolbar's own Score/Invite group uses. */}
+              <div className="flex items-center gap-2 flex-wrap mb-3">
+                <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
+                {([
+                  // This copy renders only while historyPageView === 'resumes' —
+                  // see the "candidates" copy's comment for why the other two
+                  // are hardcoded false rather than re-tested here.
+                  { id: 'list', label: 'View by Job', active: false, open: openHistoryListView },
+                  { id: 'candidates', label: 'View by Candidates', active: false, open: openCandidatesView },
+                  { id: 'resumes', label: 'All Resumes', active: !candidateRatingBand, open: openAllResumesView },
+                ] as const).map(view => (
+                  <button
+                    key={view.id}
+                    type="button"
+                    onClick={() => { setCandidateRatingBand(null); void view.open(); }}
+                    aria-pressed={view.active}
+                    className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+                      view.active
+                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                        : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
+                    }`}
+                  >
+                    {view.label}
+                  </button>
+                ))}
+
+                {([
+                  { id: 'exact', label: 'Rating-10' },
+                  { id: 'partial', label: 'Rating-9-7' },
+                  { id: 'no_match', label: 'Rating Below 7' },
+                ] as const).map(band => (
+                  <button
+                    key={band.id}
+                    type="button"
+                    onClick={() => {
+                      setCandidateRatingBand(candidateRatingBand === band.id ? null : band.id);
+                      void openAllResumesView();
+                    }}
+                    aria-pressed={candidateRatingBand === band.id}
+                    className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+                      candidateRatingBand === band.id
+                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                        : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
+                    }`}
+                  >
+                    {band.label}
+                  </button>
+                ))}
+
+                {selectedAllResumeEntries.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+                    {canRunScoring && (
+                      <button
+                        onClick={() => { void handleScoreSelectedAllResumes(); }}
+                        className="px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                      >
+                        <ClipboardList className="w-3.5 h-3.5" />
+                        Score ({selectedAllResumeEntries.length})
+                      </button>
+                    )}
+                    {(hasPermission('canCreateAssessments') || isTenantAdmin || canCreateAIInterviews) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                            <Send className="w-3.5 h-3.5" />
+                            Invite ({selectedAllResumeEntries.length})
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                          {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
+                            <DropdownMenuItem className={actionsMenuItemClass} onSelect={handleInviteAssessmentSelectedAllResumes}>
+                              <BarChart3 className="w-4 h-4 text-menu-icon-score" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Invite Assessment</span>
+                            </DropdownMenuItem>
+                          )}
+                          {canCreateAIInterviews && (
+                            <DropdownMenuItem className={actionsMenuItemClass} onSelect={handleInviteAIInterviewSelectedAllResumes}>
+                              <Video className="w-4 h-4 text-menu-icon-view" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Invite AI Interview</span>
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Same filter panel as "View by Candidates" — one filter set
                   for both, since "All Resumes" is that view's rows un-collapsed. */}
@@ -3383,7 +3444,6 @@ export default function AITalentMatchPage({
             activeFilterCount={activeFiltersCount}
             filtersApplied={historySearch.isNarrowed}
             onClearFilters={clearHistoryFilters}
-            className="mb-0"
             /* The history list is "Matched Jobs", so it counts in jobs too. */
             countBadge={
               <ListCountBadge
@@ -3421,6 +3481,58 @@ export default function AITalentMatchPage({
             </div>
 
           </ListToolbar>
+
+          {/* View pills — merged into this same toolbar card; see the
+              "candidates" view's own copy for why this is duplicated per
+              view rather than shared. */}
+          <div className="flex items-center gap-2 flex-wrap mb-3">
+            <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
+            {([
+              // This copy renders only while historyPageView === 'list' — see
+              // the "candidates" copy's comment for why the other two are
+              // hardcoded false rather than re-tested here.
+              { id: 'list', label: 'View by Job', active: !candidateRatingBand, open: openHistoryListView },
+              { id: 'candidates', label: 'View by Candidates', active: false, open: openCandidatesView },
+              { id: 'resumes', label: 'All Resumes', active: false, open: openAllResumesView },
+            ] as const).map(view => (
+              <button
+                key={view.id}
+                type="button"
+                onClick={() => { setCandidateRatingBand(null); void view.open(); }}
+                aria-pressed={view.active}
+                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+                  view.active
+                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                    : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
+                }`}
+              >
+                {view.label}
+              </button>
+            ))}
+
+            {([
+              { id: 'exact', label: 'Rating-10' },
+              { id: 'partial', label: 'Rating-9-7' },
+              { id: 'no_match', label: 'Rating Below 7' },
+            ] as const).map(band => (
+              <button
+                key={band.id}
+                type="button"
+                onClick={() => {
+                  setCandidateRatingBand(candidateRatingBand === band.id ? null : band.id);
+                  void openAllResumesView();
+                }}
+                aria-pressed={candidateRatingBand === band.id}
+                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+                  candidateRatingBand === band.id
+                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                    : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
+                }`}
+              >
+                {band.label}
+              </button>
+            ))}
+          </div>
 
           {showHistoryFilters && (
             <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-brand-blue/10">
