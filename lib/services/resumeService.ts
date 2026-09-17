@@ -521,6 +521,10 @@ export const resumeService = {
         batch_item_id: batchItemId,
         action,
       });
+      // 'overwrite'/'version' consume a unit (and 'version' also credits one
+      // back for the version it supersedes) — refresh the header immediately
+      // rather than leaving it stale until the next unrelated trigger.
+      if (action !== 'discard') dispatchUnitsConsumed();
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
@@ -548,6 +552,8 @@ export const resumeService = {
     const response = await api.post<Resume>('/resumes/upload/resolve-duplicate-upload', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     });
+    // Same reasoning as resolveDuplicate above.
+    if (action !== 'discard') dispatchUnitsConsumed();
     return response.data;
   },
 
@@ -651,6 +657,9 @@ export const resumeService = {
       const response = await api.put(`/resumes/${resumeId}/archive`, {
         is_archived: isArchived,
       });
+      // Archiving/unarchiving moves the resume in or out of RU's active
+      // count server-side — refresh the header immediately.
+      dispatchUnitsConsumed();
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

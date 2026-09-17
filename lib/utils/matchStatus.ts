@@ -80,3 +80,15 @@ export const matchBadgeClass = (value?: string | null): string => {
  */
 export const formatOverallScore = (overallRating10?: number | null, scorePercentage?: number | null): string =>
   overallRating10 != null ? `${overallRating10.toFixed(1)}/10` : `${scorePercentage ?? 0}%`;
+
+/**
+ * Same value, without the "/10" — for a table's own Score column, whose
+ * header already reads "Score out of 10" (see e.g. ScoredResumesTable's
+ * DEFAULT_COLUMNS), so repeating the scale in every row would be redundant.
+ * Plain-text mentions elsewhere (share messages, subtitles) keep using
+ * formatOverallScore() above instead, since nothing else there states the
+ * scale. `scorePercentage` is still the fallback for a record fetched before
+ * `overallRating10` existed.
+ */
+export const formatOverallScoreValue = (overallRating10?: number | null, scorePercentage?: number | null): string =>
+  overallRating10 != null ? overallRating10.toFixed(1) : `${scorePercentage ?? 0}%`;

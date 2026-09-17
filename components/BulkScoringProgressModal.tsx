@@ -6,7 +6,7 @@ import api from '@/lib/services/api';
 import { toast } from 'sonner';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
-import { formatOverallScore } from '@/lib/utils/matchStatus';
+import { formatOverallScore, formatOverallScoreValue } from '@/lib/utils/matchStatus';
 
 // Utility function to format date to IST (Asia/Kolkata timezone)
 function formatDateTimeIST(date: Date | string | undefined): { date: string; time: string } {
@@ -893,7 +893,7 @@ export default function BulkScoringProgressModal({
                       {showScoredByColumn && <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Scored By</th>}
                       <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Scored Date &amp; Time</th>
                       <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Match Result</th>
-                      {showScoreColumn && <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Score</th>}
+                      {showScoreColumn && <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 whitespace-nowrap bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700">Score out of 10</th>}
                       <th className="text-left py-3 px-4 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border-b-2 border-gray-200 dark:border-slate-700 tf-sticky-col">Actions</th>
                     </tr>
                   </thead>
@@ -996,7 +996,7 @@ export default function BulkScoringProgressModal({
                             {/* Same three colours the Match Result badge uses,
                                 so the number and the verdict read as one. */}
                             {item.score !== undefined && item.matchResult ? (
-                              <span className={SCORE_TEXT_CLASS[item.matchResult]}>{formatOverallScore(item.overallRating10, item.score)}</span>
+                              <span className={SCORE_TEXT_CLASS[item.matchResult]}>{formatOverallScoreValue(item.overallRating10, item.score)}</span>
                             ) : (
                               <span className="text-sm text-gray-400 dark:text-slate-500">&mdash;</span>
                             )}

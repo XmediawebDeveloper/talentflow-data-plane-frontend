@@ -3,11 +3,14 @@
 import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2, Sparkles, UserPlus, History, File, HardDrive, User, X, Eye, Share2, Paperclip, Send } from 'lucide-react';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import ViewResumeButton from '@/components/ui/view-resume-button';
+import { Tooltip } from '@/components/ui/tooltip';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
 import { useState, useEffect, useRef } from 'react';
+import { useRouter } from 'next/navigation';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
+import ConfirmationDialog from '@/components/ConfirmationDialog';
 import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
 import ReactMarkdown from 'react-markdown';
@@ -162,6 +165,12 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const { hasPlanFeature } = usePlanFeatures();
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
   const canShareResume = isTenantAdmin || hasPermissionCode('my_resumes:share');
+
+  // View JD tab: clicking the JD id/title asks before leaving this page for
+  // the standalone JD Details page, since it navigates away from the
+  // candidate scorecard rather than just switching tabs in place.
+  const router = useRouter();
+  const [showJdNavConfirm, setShowJdNavConfirm] = useState(false);
 
   /* The sticky tab bar below pins directly under the sticky breadcrumb, so its
      offset is the breadcrumb's real height — re-measured on resize, because the
@@ -1261,9 +1270,17 @@ Best regards`);
                   `${fullResumeData.scorePercentage}%`
                 )}
               </div>
-              <span className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium border whitespace-nowrap ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
-                {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
-              </span>
+              {fullResumeData.ratingSummaryText ? (
+                <Tooltip content={fullResumeData.ratingSummaryText} position="bottom">
+                  <span className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium border whitespace-nowrap cursor-help ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
+                    {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
+                  </span>
+                </Tooltip>
+              ) : (
+                <span className={`px-2 sm:px-3 py-1 rounded-md text-xs sm:text-sm font-medium border whitespace-nowrap ${getMatchStatusColor(fullResumeData.matchStatus || resume.matchStatus)}`}>
+                  {formatMatchStatus(fullResumeData.matchStatus || resume.matchStatus)}
+                </span>
+              )}
               <span className="hidden sm:inline text-gray-400">|</span>
               {/* The title is the shortcut into the View JD tab — recruiters
                   reading a score reach for the JD from here constantly. */}
@@ -2318,11 +2335,20 @@ Best regards`);
                   <div className="bg-gray-50 border border-gray-300 rounded-xl p-4 sm:p-5">
                     <div className="flex flex-wrap items-center gap-2 mb-2">
                       {jdDetails.job_id && (
-                        <span className="inline-flex items-center px-2 py-0.5 bg-blue-600 text-white rounded-md text-xs font-semibold font-mono tracking-wide">
+                        <button
+                          type="button"
+                          onClick={() => setShowJdNavConfirm(true)}
+                          className="inline-flex items-center px-2 py-0.5 bg-blue-600 text-white rounded-md text-xs font-semibold font-mono tracking-wide hover:bg-blue-700 transition-colors cursor-pointer"
+                        >
                           {jdDetails.job_id}
-                        </span>
+                        </button>
                       )}
-                      <h3 className="text-base sm:text-lg font-semibold text-gray-900">{jdDetails.title || jobTitle}</h3>
+                      <h3
+                        onClick={() => setShowJdNavConfirm(true)}
+                        className="text-base sm:text-lg font-semibold text-gray-900 hover:text-brand-blue transition-colors cursor-pointer"
+                      >
+                        {jdDetails.title || jobTitle}
+                      </h3>
                       {jdDetails.status && (
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${jdStatusBadgeClass(jdDetails.status)}`}>
                           {prettifyCode(jdDetails.status)}
@@ -2905,7 +2931,12 @@ Best regards`);
           )}
 
           {/* Share Assessment via Email — the same modal the JD and assessment
-              pages use, opened here without leaving the candidate page. */}
+              pages use, opened here without leaving the candidate page.
+              Prefilled with THIS candidate, same as the row-level Invite in
+              ScoredResumesTable — this page's own Invite button was opening
+              both share modals with a blank candidate form; the recruiter had
+              to retype the name and email of the very candidate they were
+              already looking at. */}
           {showShareAssessmentModal && shareAssessments.length > 0 && (
             <ShareAssessmentModal
               isOpen={showShareAssessmentModal}
@@ -2913,6 +2944,18 @@ Best regards`);
                 setShowShareAssessmentModal(false);
                 setShareAssessments([]);
               }}
+              prefilledCandidates={
+                (fullResumeData.email || resume.email)
+                  ? [{
+                      id: fullResumeData.resumeId || resume.resumeId || resume.id,
+                      name: fullResumeData.candidateName || resume.candidateName || 'Unknown',
+                      email: fullResumeData.email || resume.email || '',
+                      phone: fullResumeData.phone || resume.phone,
+                      source: 'manual',
+                      resumeId: fullResumeData.resumeId || resume.resumeId,
+                    }]
+                  : undefined
+              }
               assessment={{
                 id: shareAssessments[0].id,
                 title: shareAssessments[0].title,
@@ -2943,15 +2986,42 @@ Best regards`);
             />
           )}
 
-          {/* Share AI Interview — same modal the AI Interviews page opens. */}
+          {/* Share AI Interview — same modal the AI Interviews page opens.
+              Prefilled with THIS candidate, same reasoning as the Assessment
+              modal above. */}
           {shareAIConfig && (
             <ShareAIInterviewModal
               isOpen={!!shareAIConfig}
               onClose={() => setShareAIConfig(null)}
               config={shareAIConfig}
               onInviteSent={() => setShareAIConfig(null)}
+              initialCandidates={
+                (fullResumeData.email || resume.email)
+                  ? [{
+                      name: fullResumeData.candidateName || resume.candidateName || 'Unknown',
+                      email: fullResumeData.email || resume.email || '',
+                      resumeId: fullResumeData.resumeId || resume.resumeId,
+                    }]
+                  : undefined
+              }
             />
           )}
+
+          {/* View JD tab: confirm before leaving the candidate scorecard for
+              the standalone JD Details page. */}
+          <ConfirmationDialog
+            isOpen={showJdNavConfirm}
+            title="Go to Job Description?"
+            message={`This will take you away from this candidate's scorecard to the JD page for "${jdDetails?.title || jobTitle}".`}
+            type="info"
+            confirmText="Yes, go to JD"
+            cancelText="Cancel"
+            onCancel={() => setShowJdNavConfirm(false)}
+            onConfirm={() => {
+              setShowJdNavConfirm(false);
+              router.push(`/recruitment/job-details?id=${jobId}`);
+            }}
+          />
 
           {/* Version Comparison — the same side-by-side / unified diff
               resume-view shows, on the shared textDiff helpers so both views

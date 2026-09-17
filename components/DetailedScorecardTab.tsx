@@ -550,14 +550,20 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                 <> Combined Average: ({resume.essentialRating10.toFixed(1)} + {resume.nonEssentialRating10.toFixed(1)}) / 2 = {resume.combinedAverage10.toFixed(2)}.</>
               )}
             </p>
-            <p>
-              Overall Rating takes the higher of the Must-Have Average and the Combined Average.
-              {resume.ratingCapApplied && (
-                isPartial
-                  ? ' A Partial Match is never shown at 8.00 or above, so it is capped down to 7.9.'
-                  : ' The Combined Average was 8.00 or below, so an Exact Match here is capped down to 9.00.'
-              )}
-            </p>
+            {resume.combinedAverage10 != null && (
+              <p>
+                {/* Spelled out the same way the document's own worked
+                    examples state it - "Starting Overall Rating: MAX(8.17,
+                    8.59) = 8.59" - rather than only describing the rule in
+                    words, so a recruiter can see which side actually won. */}
+                Starting Overall Rating: MAX({resume.essentialRating10.toFixed(1)}, {resume.combinedAverage10.toFixed(2)}) = {Math.max(resume.essentialRating10, resume.combinedAverage10).toFixed(2)}.
+                {resume.ratingCapApplied && (
+                  isPartial
+                    ? ' A Partial Match is never shown at 8.00 or above, so it is capped down to 7.9.'
+                    : ' The Combined Average was 8.00 or below, so an Exact Match here is capped down to 9.00.'
+                )}
+              </p>
+            )}
           </>
         )}
       </div>
@@ -609,6 +615,25 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             Nice-to-Have Avg: <span className="font-semibold text-gray-900">{resume.nonEssentialRating10.toFixed(1)}</span>
             <span className="text-gray-500">/10</span>
           </span>
+        )}
+        {/* Internal step in the Overall Rating calculation - (Must-Have +
+            Nice-to-Have) / 2 - only ever exists for a Partial/Exact Match
+            with Nice-to-Have criteria on the JD (the same condition
+            Nice-to-Have Avg above already gates on). The document itself
+            doesn't list this as one of the numbers to show (section 9), but
+            showing it lets a recruiter verify the Overall Rating's own
+            arithmetic instead of taking it on faith - kept at 2 decimals,
+            matching how the document itself always writes this figure in
+            its own worked examples (e.g. "8.59"), rather than the 1-decimal
+            format the other three ratings use. */}
+        {resume.combinedAverage10 != null && (
+          <>
+            <span className="text-gray-400">|</span>
+            <span className="text-gray-700 flex items-center gap-1">
+              Combined Average: <span className="font-semibold text-gray-900">{resume.combinedAverage10.toFixed(2)}</span>
+              <span className="text-gray-500">/10</span>
+            </span>
+          </>
         )}
         {/* Required %/Preferred % and the old Required Avg Rating used to show
             here too, but they duplicated Must-Have Avg/Nice-to-Have Avg/Overall

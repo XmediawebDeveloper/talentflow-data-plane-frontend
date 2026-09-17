@@ -463,6 +463,8 @@ export default function JDVersionHistoryModal({
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
+
+    jdService.logVersionDownload(jdId, version.id);
   };
 
   if (!isOpen) return null;
