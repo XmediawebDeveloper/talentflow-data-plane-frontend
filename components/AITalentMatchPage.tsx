@@ -710,6 +710,16 @@ export default function AITalentMatchPage({
     return 'bg-red-100 text-red-700 border-red-300';
   };
 
+  // Same three colours as candidateScoreBadgeClass, for the entered-job
+  // "Matched Rating" badge — which already carries a 1-10 rank rather than a
+  // raw score, so it bands directly instead of going through toMatchRating.
+  const rankBadgeClass = (rank: number) => {
+    const band = matchBandForRating(rank);
+    if (band === 'exact') return 'bg-green-100 text-green-700 border-2 border-green-300';
+    if (band === 'partial') return 'bg-brand-orange/10 text-brand-orange-deep border-2 border-brand-orange/20';
+    return 'bg-red-100 text-red-700 border-2 border-red-300';
+  };
+
   const clearCandidateFilters = candidateSearch.reset;
 
   // One clear for the whole Matched Jobs list — shared by the panel's "Reset
@@ -4359,12 +4369,7 @@ export default function AITalentMatchPage({
                       />
                     </td>
                     <td className="px-4 py-4">
-                      <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full font-bold text-base ${
-                        (candidate.rank || 0) >= 9 ? 'bg-brand-blue/10 text-brand-blue border-2 border-brand-blue/30' :
-                        (candidate.rank || 0) >= 7 ? 'bg-brand-cyan/10 text-brand-cyan border-2 border-brand-cyan/30' :
-                        (candidate.rank || 0) >= 5 ? 'bg-brand-orange/10 text-brand-orange-deep border-2 border-brand-orange/30' :
-                        'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 border-2 border-gray-200 dark:border-slate-700'
-                      }`}>
+                      <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full font-bold text-base ${rankBadgeClass(candidate.rank || 0)}`}>
                         {candidate.rank || '-'}
                       </div>
                     </td>
@@ -4567,12 +4572,7 @@ export default function AITalentMatchPage({
                         </div>
                       </div>
                     </div>
-                    <div className={`inline-flex items-center justify-center w-9 h-9 rounded-full font-bold text-sm flex-shrink-0 ${
-                      (candidate.rank || 0) >= 9 ? 'bg-brand-blue/10 text-brand-blue border-2 border-brand-blue/30' :
-                      (candidate.rank || 0) >= 7 ? 'bg-brand-cyan/10 text-brand-cyan border-2 border-brand-cyan/30' :
-                      (candidate.rank || 0) >= 5 ? 'bg-brand-orange/10 text-brand-orange-deep border-2 border-brand-orange/30' :
-                      'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 border-2 border-gray-200 dark:border-slate-700'
-                    }`}>
+                    <div className={`inline-flex items-center justify-center w-9 h-9 rounded-full font-bold text-sm flex-shrink-0 ${rankBadgeClass(candidate.rank || 0)}`}>
                       {candidate.rank || '-'}
                     </div>
                   </div>
