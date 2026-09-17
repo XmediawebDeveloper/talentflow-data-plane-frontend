@@ -204,7 +204,14 @@ export default function AITalentMatchPageJobsList({
   // every remaining row would then sit disabled with nothing checked in sight
   // to undo it. Derived rather than mirrored into its own state-plus-effect:
   // once the checked job scrolls back into view, it's still checked.
-  const effectiveSelectedJobId = selectedJobId && filteredJobs.some(j => j.id === selectedJobId)
+  //
+  // `selectedJobId` can now name a specific OLDER version picked from inside
+  // "View Versions", not just a card's own (latest) id — so this checks the
+  // whole lineage each filtered job represents, not just its own id.
+  const effectiveSelectedJobId = selectedJobId && filteredJobs.some(j =>
+    j.id === selectedJobId ||
+    (versionGroups.get(lineageKey(toSharedJob(j))) ?? []).some(v => v.id === selectedJobId)
+  )
     ? selectedJobId
     : null;
 
@@ -366,8 +373,6 @@ export default function AITalentMatchPageJobsList({
               const jobHistory = getJobMatchHistory(job.id);
               const hasHistory = jobHistory.length > 0;
               const latestMatch = hasHistory ? jobHistory[jobHistory.length - 1] : null;
-              const isSelected = effectiveSelectedJobId === job.id;
-              const isDisabled = effectiveSelectedJobId !== null && !isSelected;
 
               // "View Versions" — see the setup above this list for what each
               // of these reads.
@@ -381,6 +386,16 @@ export default function AITalentMatchPageJobsList({
                   .map(sibling => sibling.versionNumber ?? 1),
               ).size;
               const hasVersionHistory = visibleVersionCount > 1;
+
+              // A version's own radio (inside "View Versions") can check this
+              // job in place of the card's own radio — both write the same
+              // `selectedJobId`, so the card reads as checked and Run AI
+              // Match targets the right id whichever radio was clicked.
+              const lineageIds = new Set(lineageSiblings.map(sibling => sibling.id));
+              lineageIds.add(job.id);
+              const isSelected = effectiveSelectedJobId !== null && lineageIds.has(effectiveSelectedJobId);
+              const isDisabled = effectiveSelectedJobId !== null && !isSelected;
+              const selectedTargetId = isSelected ? (effectiveSelectedJobId as string) : job.id;
 
               return (
                 <div
@@ -540,17 +555,23 @@ export default function AITalentMatchPageJobsList({
                           openInNewTab
                           staticRows
                           publishedOnly
+                          stickyVersionColumn
+                          onSelectVersion={(versionJob) => { if (!isDisabled) handleToggleJob(versionJob.id); }}
+                          selectedVersionId={effectiveSelectedJobId}
+                          selectionDisabled={isDisabled}
+                          selectionDisabledReason="Deselect the currently checked job first"
+                          selectHint={(versionJob) => `Run AI Match against v${versionJob.versionNumber ?? 1}`}
                         />
                       </div>
                     )}
 
                     {/* Action Button - pinned to bottom, only once this job
-                        is checked. Every other job is disabled until it's
-                        unchecked again, so there is never more than one to
-                        show a button for. */}
+                        (or one of its versions) is checked. Every other job
+                        is disabled until it's unchecked again, so there is
+                        never more than one to show a button for. */}
                     {isSelected && (
                       <button
-                        onClick={(e) => { e.stopPropagation(); onSelectJob(job.id); }}
+                        onClick={(e) => { e.stopPropagation(); onSelectJob(selectedTargetId); }}
                         className="mt-auto w-full px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 flex items-center justify-center gap-2 whitespace-nowrap text-sm"
                       >
                         <Sparkles className="w-4 h-4" />
@@ -568,8 +589,6 @@ export default function AITalentMatchPageJobsList({
               {paginatedJobs.map((job) => {
                 const jobHistory = getJobMatchHistory(job.id);
                 const latestMatch = jobHistory.length > 0 ? jobHistory[jobHistory.length - 1] : null;
-                const isSelected = effectiveSelectedJobId === job.id;
-                const isDisabled = effectiveSelectedJobId !== null && !isSelected;
 
                 /* The shared vocabulary, so a republished JD reads
                    "Republished" here exactly as it does on the JD list. */
@@ -588,6 +607,16 @@ export default function AITalentMatchPageJobsList({
                     .map(sibling => sibling.versionNumber ?? 1),
                 ).size;
                 const hasVersionHistory = visibleVersionCount > 1;
+
+                // A version's own radio (inside "View Versions") can check
+                // this job in place of the row's own radio — both write the
+                // same `selectedJobId`, so the row reads as checked and Run
+                // AI Match targets the right id whichever radio was clicked.
+                const lineageIds = new Set(lineageSiblings.map(sibling => sibling.id));
+                lineageIds.add(job.id);
+                const isSelected = effectiveSelectedJobId !== null && lineageIds.has(effectiveSelectedJobId);
+                const isDisabled = effectiveSelectedJobId !== null && !isSelected;
+                const selectedTargetId = isSelected ? (effectiveSelectedJobId as string) : job.id;
 
                 return (
                   <div
@@ -744,6 +773,12 @@ export default function AITalentMatchPageJobsList({
                               openInNewTab
                               staticRows
                               publishedOnly
+                              stickyVersionColumn
+                              onSelectVersion={(versionJob) => { if (!isDisabled) handleToggleJob(versionJob.id); }}
+                              selectedVersionId={effectiveSelectedJobId}
+                              selectionDisabled={isDisabled}
+                              selectionDisabledReason="Deselect the currently checked job first"
+                              selectHint={(versionJob) => `Run AI Match against v${versionJob.versionNumber ?? 1}`}
                             />
                           </div>
                         )}
@@ -751,13 +786,14 @@ export default function AITalentMatchPageJobsList({
 
                       {/* Actions, right-aligned and stacked as on the reference
                           rows. Run AI Match stays the row's primary action,
-                          but only appears once this job is checked — every
-                          other row is disabled until it's unchecked again. */}
+                          but only appears once this job (or one of its
+                          versions) is checked — every other row is disabled
+                          until it's unchecked again. */}
                       {isSelected && (
                         <div className="flex flex-col gap-2 flex-shrink-0 w-full sm:w-auto">
                           <button
                             type="button"
-                            onClick={(event) => { event.stopPropagation(); onSelectJob(job.id); }}
+                            onClick={(event) => { event.stopPropagation(); onSelectJob(selectedTargetId); }}
                             className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-blue px-3 py-2 text-sm font-medium text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-all hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30"
                           >
                             <Sparkles className="h-4 w-4" />

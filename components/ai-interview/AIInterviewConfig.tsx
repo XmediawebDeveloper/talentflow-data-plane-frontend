@@ -26,6 +26,7 @@ import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { modeFromConfig, durationFromMode } from '@/lib/constants/aiInterviewMode';
 import { STT_MODELS, DEFAULT_STT_MODEL } from '@/lib/constants/aiInterviewSttModels';
+import { PROXY_INTEGRITY_VERIFICATION_ENABLED } from '@/lib/constants/featureFlags';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
 import AIInterviewFlowLoader from './AIInterviewFlowLoader';
 import {
@@ -1261,6 +1262,13 @@ export default function AIInterviewConfig() {
   // through the handoff instead of flashing an empty page.
   const [redirecting, setRedirecting] = useState(false);
   const existingDraftIdRef = useRef<string | null>(null); // track draft id for auto-save updates
+  // True only when existingDraftIdRef was populated from a draft that already
+  // existed before this page loaded (resumed via "Continue Editing" / found by
+  // jd_id) — as opposed to one `ensureDraftId` creates fresh during this
+  // session. Discard must delete the latter (nothing to go back to) but never
+  // the former, or resuming a saved draft and discarding an in-session edit
+  // deletes the recruiter's actual saved work, not just the edit.
+  const draftExistedOnLoadRef = useRef(false);
   const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   // In-flight POST /ai-interview/ for this wizard, shared by every path that
   // may need the draft to exist. See ensureDraftId.
@@ -1508,6 +1516,7 @@ export default function AIInterviewConfig() {
         // when the user navigates back from the Clusters page.
         if (existingDraft) {
           existingDraftIdRef.current = existingDraft.id;
+          draftExistedOnLoadRef.current = true;
           setMode(modeFromConfig(
             (existingDraft as any).special_instructions,
             existingDraft.duration_minutes ?? 30,
@@ -1518,7 +1527,15 @@ export default function AIInterviewConfig() {
           if ((existingDraft as any).introduction_video_url) {
             setIntroVideoUrl((existingDraft as any).introduction_video_url);
           }
-          if ((existingDraft as any).environment_verification_enabled !== undefined) {
+          if (
+            PROXY_INTEGRITY_VERIFICATION_ENABLED
+            && (existingDraft as any).environment_verification_enabled !== undefined
+          ) {
+            // Restored ONLY while the feature is visible. With the flag off the
+            // toggle is hidden, so rehydrating a saved `true` would leave the
+            // recruiter re-saving a setting they can no longer see — and the
+            // interview would still fire the QR. Staying false means the next
+            // save through this wizard also clears it in the database.
             setEnvironmentVerificationEnabled(Boolean((existingDraft as any).environment_verification_enabled));
           }
         }
@@ -1975,7 +1992,7 @@ export default function AIInterviewConfig() {
           duration_minutes: mode === 'flexible' ? 30 : totalFixed,
           rounds_config: rounds,
           recording_enabled: recordingEnabled,
-          environment_verification_enabled: environmentVerificationEnabled,
+          environment_verification_enabled: PROXY_INTEGRITY_VERIFICATION_ENABLED && environmentVerificationEnabled,
           available_languages: availableLanguages,
           title: `${selectedJd.title} - AI Interview`,
           save_as_draft: true,
@@ -2418,7 +2435,7 @@ export default function AIInterviewConfig() {
         duration_minutes: mode === 'flexible' ? 30 : totalFixed,
         rounds_config: buildRounds(true, overrides),
         recording_enabled: recordingEnabled,
-        environment_verification_enabled: environmentVerificationEnabled,
+        environment_verification_enabled: PROXY_INTEGRITY_VERIFICATION_ENABLED && environmentVerificationEnabled,
         available_languages: availableLanguages,
         title: `${selectedJd.title} - AI Interview`,
         save_as_draft: true,
@@ -2689,8 +2706,12 @@ export default function AIInterviewConfig() {
   const handleDiscardAndNavigate = async () => {
     setShowUnsavedDialog(false);
     isNavigatingRef.current = true;
-    // Delete draft if it exists
-    if (existingDraftIdRef.current) {
+    // Only delete a draft this session created itself (e.g. auto-save's
+    // optimistic create with no prior save to fall back to). A draft that
+    // already existed on load — resumed via "Continue Editing" — must survive
+    // discard: the recruiter is discarding this session's unsaved edits, not
+    // asking to remove the draft from the AI Interviews list.
+    if (existingDraftIdRef.current && !draftExistedOnLoadRef.current) {
       try {
         await aiInterviewService.delete(existingDraftIdRef.current);
         existingDraftIdRef.current = null;
@@ -3279,7 +3300,12 @@ export default function AIInterviewConfig() {
               {/* Add language – hidden */}
             </div>
 
-            {/* Mobile Environment Verification */}
+            {/* Mobile Environment Verification — hidden until the client approves
+                the feature; see PROXY_INTEGRITY_VERIFICATION_ENABLED. Hiding the
+                toggle only stops NEW configs from setting it; the backend's
+                AI_ENVIRONMENT_VERIFICATION_ENABLED is what stops an already-saved
+                `true` from firing mid-interview. */}
+            {PROXY_INTEGRITY_VERIFICATION_ENABLED && (
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
@@ -3302,6 +3328,7 @@ export default function AIInterviewConfig() {
                 Pause the interview once, after the first must-have-skills question, to verify the candidate's physical environment via a QR code and their phone's camera.
               </p>
             </div>
+            )}
           </div>
 
           {/* ── Right: Summary sidebar ── */}

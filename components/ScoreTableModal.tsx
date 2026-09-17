@@ -154,6 +154,17 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobTitle, onCl
             <DetailedScorecardTab
               resume={{
                 scorePercentage,
+                // Resume Match Rating Mechanism (client doc, Sept 2026): same
+                // fields DetailedScorecardTab reads on the full detail page -
+                // `detail` (this candidate's fetched score record) is the
+                // authoritative source; `resume` (the row this modal opened
+                // from) only carries overallRating10, used as a fallback.
+                overallRating10: detail?.overall_rating_10 ?? resume.overallRating10,
+                essentialRating10: detail?.essential_rating_10,
+                nonEssentialRating10: detail?.non_essential_rating_10,
+                combinedAverage10: detail?.combined_average_10,
+                ratingCapApplied: detail?.rating_cap_applied,
+                ratingSummaryText: detail?.rating_summary_text,
                 matchStatus,
                 scoredDate: resume.scoredDate || detail?.created_at || '',
                 scoredBy: resume.scoredBy || detail?.scored_by_name || detail?.scored_by || 'System',

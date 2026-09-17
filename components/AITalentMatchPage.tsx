@@ -183,6 +183,9 @@ interface AITalentMatchPageProps {
    *  shows at all. */
   matchSessionCounts?: Record<string, number>;
   onSaveMatch?: (data: MatchHistory) => void;
+  /** Background reconciliation after a match completes — see the route's own
+   *  fetchData({ silent: true }) for why this exists alongside onSaveMatch. */
+  onMatchComplete?: () => void;
   onSubmitToScoring?: (jobId: string, candidateIds: string[]) => void;
   onBack?: () => void;
 }
@@ -192,6 +195,7 @@ export default function AITalentMatchPage({
   matchHistory = [],
   matchSessionCounts = {},
   onSaveMatch,
+  onMatchComplete,
   onSubmitToScoring,
   onBack
 }: AITalentMatchPageProps) {
@@ -1323,6 +1327,7 @@ export default function AITalentMatchPage({
         setHistoryCandidatesById(prev => ({ ...prev, [newMatchHistory.id]: candidatesWithVersions }));
       }
       onSaveMatch?.(newMatchHistory);
+      onMatchComplete?.();
     }
   };
 
@@ -3988,7 +3993,7 @@ export default function AITalentMatchPage({
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-[96vw] xl:max-w-6xl max-h-[94dvh] flex flex-col tf-round-edges">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-[96vw] xl:max-w-6xl h-[85dvh] flex flex-col tf-round-edges">
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-11 h-11 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0">
@@ -4045,17 +4050,27 @@ export default function AITalentMatchPage({
 
                     {/* Filter row — Search/Matched By/Version/Rating Range/Date
                         Range narrow the table below live, as each one changes
-                        — no Apply step. Always one line: every field is a
-                        fixed width (never flexible, never wrapping), and the
-                        row scrolls horizontally on its own rather than
-                        breaking onto a second line if the modal is ever
-                        narrower than the row's natural width. Reset only
-                        appears once some field is actually narrowing the
-                        table, so the row doesn't carry a control with
-                        nothing to undo. */}
+                        — no Apply step. Always one line: Search/Matched By/
+                        Version/Rating Range stretch (flex-1) to fill the row's
+                        width with no dead space, while Date Range and Reset
+                        stay fixed-width on the right; the row scrolls
+                        horizontally on its own rather than breaking onto a
+                        second line if it's ever narrower than the fields'
+                        combined min-width. Reset only appears once some field
+                        is actually narrowing the table, so the row doesn't
+                        carry a control with nothing to undo. */}
                     <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3 mb-3">
-                      <div className="flex items-end gap-2 overflow-x-auto">
-                        <div className="w-48 flex-shrink-0">
+                      {/* py-1 -my-1: a horizontally-scrolling flex row forces
+                          its overflow-y to `auto` as well (CSS overflow rule:
+                          one axis non-visible pulls the other off `visible`
+                          too), which otherwise clips every field's focus ring
+                          and the Reset pill's border right at this row's own
+                          top/bottom edge. The padding pushes that clip
+                          boundary out past them; the matching negative margin
+                          cancels the padding's effect on layout, so the row's
+                          rendered position is unchanged. */}
+                      <div className="flex items-end gap-2 overflow-x-auto py-1 -my-1">
+                        <div className="flex-1 min-w-[11rem]">
                           <label className={filterLabelClass}>Search</label>
                           <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
@@ -4064,27 +4079,27 @@ export default function AITalentMatchPage({
                               value={historyModalFilter.search}
                               onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, search: e.target.value }))}
                               placeholder="Search by candidate name..."
-                              className={`${filterInputClass} pl-9`}
+                              className={`${filterInputClass} pl-9 w-full`}
                             />
                           </div>
                         </div>
-                        <div className="w-32 flex-shrink-0">
+                        <div className="flex-1 min-w-[8rem]">
                           <label className={filterLabelClass}>Matched By</label>
                           <select
                             value={historyModalFilter.matchedBy}
                             onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, matchedBy: e.target.value as MatchHistoryModalFilters['matchedBy'] }))}
-                            className={filterInputClass}
+                            className={`${filterInputClass} w-full`}
                           >
                             <option value="all">All Sources</option>
                             <option value="system">System</option>
                           </select>
                         </div>
-                        <div className="w-24 flex-shrink-0">
+                        <div className="flex-1 min-w-[7rem]">
                           <label className={filterLabelClass}>Version</label>
                           <select
                             value={historyModalFilter.version === 'all' ? 'all' : String(historyModalFilter.version)}
                             onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, version: e.target.value === 'all' ? 'all' : Number(e.target.value) }))}
-                            className={filterInputClass}
+                            className={`${filterInputClass} w-full`}
                           >
                             <option value="all">All Versions</option>
                             {versionList.map(v => (
@@ -4092,12 +4107,12 @@ export default function AITalentMatchPage({
                             ))}
                           </select>
                         </div>
-                        <div className="w-36 flex-shrink-0">
+                        <div className="flex-1 min-w-[9rem]">
                           <label className={filterLabelClass}>Rating Range</label>
                           <select
                             value={historyModalFilter.rating}
                             onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, rating: e.target.value as MatchHistoryModalFilters['rating'] }))}
-                            className={filterInputClass}
+                            className={`${filterInputClass} w-full`}
                           >
                             <option value="all">All Ratings</option>
                             <option value="exact">Rating 10</option>
@@ -4130,8 +4145,9 @@ export default function AITalentMatchPage({
                             <button
                               type="button"
                               onClick={resetModalFilters}
-                              className="px-4 py-2 text-sm font-medium border border-gray-200 dark:border-slate-700 rounded-lg text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap"
+                              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium border border-red-200 dark:border-red-900/50 rounded-full text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors whitespace-nowrap"
                             >
+                              <XCircle className="w-4 h-4" />
                               Reset
                             </button>
                           </div>
@@ -4142,15 +4158,16 @@ export default function AITalentMatchPage({
                     <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
                       {/* Version table — Rating Breakdown gives each version's
                           10 / 9-7 / Below 7 split alongside its candidate count.
-                          Capped at roughly 4 rows — this is what keeps the
-                          table's own height in line with the sidebar next to
-                          it instead of growing past it as more versions pile
-                          up; past that the body scrolls internally so the
-                          modal itself never has to. */}
+                          Fixed height (not a cap) — matching the sidebar next
+                          to it regardless of how many or few versions there
+                          are, so switching jobs/filters never reflows the
+                          modal around it; the body scrolls internally
+                          instead. The header is sticky within that scroll
+                          area so it stays put while the body scrolls. */}
                       <div className="xl:col-span-2">
-                        <div className="hidden md:block overflow-auto max-h-[266px] rounded-lg border border-gray-200 dark:border-slate-700">
+                        <div className="hidden md:block overflow-auto h-[266px] rounded-lg border border-gray-200 dark:border-slate-700">
                           <table className="w-full text-xs">
-                            <thead>
+                            <thead className="sticky top-0 z-10">
                               <tr className="text-left bg-brand-sky dark:bg-slate-800">
                                 <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">Version</th>
                                 <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">Matched By</th>
