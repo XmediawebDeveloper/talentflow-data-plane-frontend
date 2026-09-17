@@ -17,7 +17,6 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import SuccessAnimation from '@/components/ui/success-animation';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
-import UnsavedChangesModal from '@/components/UnsavedChangesModal';
 import JDFullViewModal from '@/components/jobs/JDFullViewModal';
 import CodingRoundLanguageModal from '@/components/assessments/CodingRoundLanguageModal';
 import LanguageLogo from '@/components/assessments/LanguageLogo';
@@ -668,11 +667,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
    */
   const [editLoadSettled, setEditLoadSettled] = useState(false);
   const [editingAssessment, setEditingAssessment] = useState<any>(null);
-  // "Leave without saving?" prompt for the Configure step's own exit link,
-  // shown only while editing an already-saved draft AND that draft has
-  // actually been changed (see `isDirty`) — a click that leaves an unchanged
-  // draft needs no confirmation at all.
-  const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [jdSearch, setJdSearch] = useState('');
   /* JD picker paging. The page is stored WITH the search it belongs to — the
      same trick the Apply to Job dialog uses — so a new query starts back at
@@ -927,7 +921,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       // navigate to the route it is already on — nothing happened, and the
       // crumb looked broken. `onBack` closes the inline view, and on the
       // standalone /assessments/create route it navigates back for real.
-      { label: 'Assessments', onClick: handleLeaveAttempt },
+      { label: 'Assessments', onClick: onBack },
       ...buildStepCrumbs(),
     ];
   };
@@ -2602,64 +2596,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
       }
       return [...prev, lang];
     });
-  };
-
-  /**
-   * True only while editing an already-saved draft AND the current form
-   * state actually disagrees with what was loaded from it — re-derives the
-   * same shape `handleGenerateAssessment` sends the API, compared against
-   * the raw saved fields, rather than a snapshot ref: the HR/coding/section
-   * state populates across a couple of async effects (HR bank load,
-   * assessment load) that don't resolve in a fixed order, so there is no
-   * single instant to safely snapshot "the loaded baseline" from.
-   */
-  const isDirty = useMemo(() => {
-    if (!isEditMode || !editingAssessment || !editLoadSettled) return false;
-
-    const sameSet = (a: string[], b: string[]): boolean => {
-      const as = [...a].map(v => v.trim().toLowerCase()).sort();
-      const bs = [...b].map(v => v.trim().toLowerCase()).sort();
-      return as.length === bs.length && as.every((v, i) => v === bs[i]);
-    };
-
-    const hrSection = sections.find(s => s.name === 'HR');
-    const technicalSection = sections.find(s => s.name === 'Technical');
-    const codingSection = sections.find(s => s.name === 'Coding');
-
-    if ((hrSection?.enabled ?? true) !== (editingAssessment.hr_enabled ?? true)) return true;
-    const currentHRTexts = (hrSection?.enabled ? selectedHRQuestions : [])
-      .map(id => hrQuestionBank.find(q => q.id === id)?.text)
-      .filter((t): t is string => !!t);
-    const savedHRTexts = (Array.isArray(editingAssessment.hr_topics) ? editingAssessment.hr_topics : [])
-      .map((t: any) => t?.text)
-      .filter((t: any): t is string => !!t);
-    if (!sameSet(currentHRTexts, savedHRTexts)) return true;
-
-    if ((technicalSection?.enabled ?? false) !== (editingAssessment.technical_enabled ?? false)) return true;
-    if ((technicalSection?.percentage ?? 0) !== (editingAssessment.technical_percentage ?? 0)) return true;
-    if (!sameSet((technicalSection?.topics as unknown as string[]) || [], editingAssessment.technical_topics || [])) return true;
-
-    if ((codingSection?.enabled ?? false) !== (editingAssessment.coding_enabled ?? false)) return true;
-    if ((codingSection?.percentage ?? 0) !== (editingAssessment.coding_percentage ?? 0)) return true;
-    if (!sameSet((codingSection?.topics as unknown as string[]) || [], editingAssessment.coding_topics || [])) return true;
-    if (!sameSet(selectedCodingLanguages, editingAssessment.coding_languages || [])) return true;
-
-    if (proctoringEnabled !== (editingAssessment.proctoring_enabled ?? true)) return true;
-
-    return false;
-  }, [
-    isEditMode, editingAssessment, editLoadSettled,
-    sections, selectedHRQuestions, hrQuestionBank, selectedCodingLanguages, proctoringEnabled,
-  ]);
-
-  // The Configure step's only exit link while editing (`buildStepCrumbs`
-  // gives edit mode a single non-clickable "Edit Assessment" crumb — see the
-  // comment on that function) is the root "Assessments" breadcrumb. Route it
-  // through here instead of calling `onBack` directly so an actual edit
-  // prompts Save/Discard, and a click with nothing changed just leaves.
-  const handleLeaveAttempt = () => {
-    if (isDirty) setShowUnsavedDialog(true);
-    else onBack();
   };
 
   /**
@@ -5100,18 +5036,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
             }
           />
         )}
-
-        <UnsavedChangesModal
-          isOpen={showUnsavedDialog}
-          description="You have unsaved changes to this draft. Would you like to save them before leaving?"
-          onClose={() => setShowUnsavedDialog(false)}
-          onDiscard={() => {
-            setShowUnsavedDialog(false);
-            onBack();
-          }}
-          onSave={() => handleGenerateAssessment(true)}
-          isSaving={isGenerating}
-        />
           </div>
         </div>
       </div>

@@ -918,21 +918,6 @@ export const jdService = {
     }
   },
 
-  /**
-   * The "Download this version as a Word document" button in
-   * JDVersionHistoryModal builds the .docx entirely in the browser - there's
-   * no file-generation request for the backend to audit, so it calls this
-   * immediately after the download starts. Best-effort: a logging failure
-   * should never surface as a download error.
-   */
-  async logVersionDownload(jdId: string, versionId: string): Promise<void> {
-    try {
-      await api.post(`/jd/${jdId}/versions/${versionId}/log-download`);
-    } catch (error) {
-      console.error('Failed to log JD version download activity:', error);
-    }
-  },
-
   // ==================== JD13: Usage Status ====================
 
   /**

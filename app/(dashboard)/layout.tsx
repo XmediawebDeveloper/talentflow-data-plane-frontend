@@ -9,8 +9,7 @@ import SubscriptionInactiveModal from '@/components/SubscriptionInactiveModal';
 import { SessionTimeoutProvider } from '@/components/SessionTimeoutProvider';
 import { toast } from 'sonner';
 import { scoringService } from '@/lib/services/scoringService';
-import { resumeService } from '@/lib/services/resumeService';
-import { QuotaProvider, useQuota } from '@/contexts/QuotaContext';
+import { QuotaProvider } from '@/contexts/QuotaContext';
 import { PlanFeaturesProvider } from '@/components/providers/PlanFeaturesProvider';
 import { TermsProvider } from '@/components/providers/TermsProvider';
 import { PlanChangeProvider, usePlanChange } from '@/components/providers/PlanChangeProvider';
@@ -97,34 +96,6 @@ function SearchParamsErrorHandler() {
       window.history.replaceState({}, '', url.toString());
     }
   }, [searchParams]);
-
-  return null;
-}
-
-/**
- * Resume Storage (RU) usage can drift from the tenant's actual active resume
- * count (refund-path bugs, absorbed reservations, etc. — see usage_tracking's
- * `reconcile_resume_usage`). Until now the only thing that corrected it was
- * visiting My Resumes or Resume Database, which call `reconcileUsage()` on
- * their own mount — so a tenant who logged in and looked at the header's
- * plan/units widget without ever opening one of those two pages kept seeing
- * the stale, drifted number. Mounted once per login (this layout persists
- * across dashboard navigation), so the correction — and the refetch that
- * surfaces it in the widget — happens right away regardless of which page the
- * tenant lands on.
- */
-function ResumeUsageReconciler() {
-  const { refetch } = useQuota();
-  const ranRef = useRef(false);
-
-  useEffect(() => {
-    if (ranRef.current) return;
-    ranRef.current = true;
-    (async () => {
-      await resumeService.reconcileUsage();
-      await refetch();
-    })();
-  }, [refetch]);
 
   return null;
 }
@@ -450,7 +421,6 @@ export default function DashboardLayout({
 
   return (
     <QuotaProvider>
-      <ResumeUsageReconciler />
       <PlanFeaturesProvider>
         <PlanChangeProvider>
         <AdminAssignedPlanProvider>

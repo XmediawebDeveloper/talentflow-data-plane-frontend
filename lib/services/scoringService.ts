@@ -94,17 +94,6 @@ export interface ScoringResponse {
   // Exact Match from Partial Match (>= 8 vs < 8), so it is displayed beside the
   // classification. Null when the JD defines no Required criteria.
   essential_average?: number | null;
-  // Resume Match Rating Mechanism (client doc, "Final Version A", Sept 2026):
-  // the 0-10 Overall Rating and its two components. Additive alongside
-  // overall_score/essential_average above - match_status is never redecided
-  // by these, only read. non_essential_rating_10/combined_average_10 are null
-  // for No Match and for a JD with no Preferred criteria.
-  essential_rating_10?: number;
-  non_essential_rating_10?: number | null;
-  combined_average_10?: number | null;
-  overall_rating_10?: number;
-  rating_cap_applied?: boolean;
-  rating_summary_text?: string;
   match_status: 'excellent' | 'partial' | 'no_match' | 'exact_match' | 'partial_match';
   ai_summary?: string;
   strengths: string[];
@@ -165,9 +154,6 @@ export interface BatchScoringItem {
   status: 'queued' | 'processing' | 'completed' | 'failed';
   score_id?: string;
   overall_score?: number;
-  // Resume Match Rating Mechanism (client doc, Sept 2026): the 0-10 Overall
-  // Rating for a completed item's progress row.
-  overall_rating_10?: number;
   match_status?: string;
   error_message?: string;
 }
@@ -204,9 +190,6 @@ export const scoringService = {
       candidate_name: string;
       candidate_email: string;
       overall_score: number;
-      // Resume Match Rating Mechanism (client doc, Sept 2026): the 0-10
-      // Overall Rating shown in the "already scored" warning message.
-      overall_rating_10?: number;
       match_status: string;
       scored_at: string | null;
     }>;
@@ -349,25 +332,6 @@ export const scoringService = {
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
-    }
-  },
-
-  /**
-   * The CSV/XLS "Export" button on the scored-resumes table builds the file
-   * entirely in the browser (see exportToCSV/exportToXLS in
-   * ScoredResumesTable.tsx) - there's no file-generation request for the
-   * backend to audit, so it fires this immediately after the download starts.
-   * Best-effort: a logging failure should never surface as an export error.
-   */
-  async logClientExport(format: 'csv' | 'excel', recordCount: number, jdId?: string): Promise<void> {
-    try {
-      await api.post('/scoring/export/log', {
-        format,
-        record_count: recordCount,
-        jd_id: jdId,
-      });
-    } catch (error) {
-      console.error('Failed to log export activity:', error);
     }
   },
 };
