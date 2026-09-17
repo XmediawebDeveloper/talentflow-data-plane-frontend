@@ -1133,17 +1133,22 @@ Best regards`);
               // somehow lacks its own jdId, which is not a real page to link to.
               if (!jobId || jobId === 'global') return base;
 
-              // Always APPENDED, never used to replace or drop an existing
-              // mid-trail crumb with the same label - a mid-trail "Job
-              // Title" crumb from a per-job entry point (Resume Scoring's
-              // "back to this job's resume list", or JobDetailView's own
-              // "close this candidate and return to the Job Details tabs
-              // you were on") means something different from THIS crumb
-              // (a fresh navigation to the standalone JD page), even though
-              // the text can read the same - so both are kept, each doing
-              // its own distinct thing, rather than one being silently
-              // treated as a duplicate of the other and removed.
+              // Always ends in Job Title, with Candidate Name (or whatever
+              // the caller's own last crumb represents) directly before it -
+              // ONE consistent order, matching the real Job Details page's
+              // own breadcrumb once you get there (which also reads
+              // Candidate > Job Title) - rather than this page showing Job
+              // Title BEFORE Candidate Name while that page shows the
+              // reverse, which read as the two crumbs randomly swapping
+              // places depending on which page you were looking at.
               //
+              // Drops any EXISTING mid-trail job-title crumb some entry
+              // points supply (e.g. a per-job list's own "back to this job's
+              // resume list" crumb), rather than showing the same text twice
+              // in one trail.
+              const withoutMidJobCrumb = base.filter(
+                (item, i) => !(item.label === jobTitle && i !== base.length - 1)
+              );
               // Plain text on every other tab; a working link (via
               // `forceLink`, since PageBreadcrumb otherwise always flattens
               // the last item to plain text) only once the View JD tab is
@@ -1152,7 +1157,7 @@ Best regards`);
                 activeTab === 'viewjd'
                   ? { label: jobTitle, href: buildJdDetailsHref(), forceLink: true }
                   : { label: jobTitle };
-              return [...base, jdCrumb];
+              return [...withoutMidJobCrumb, jdCrumb];
             })()}
           />
 
