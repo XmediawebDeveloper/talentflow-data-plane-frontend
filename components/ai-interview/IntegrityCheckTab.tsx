@@ -18,6 +18,7 @@ import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   ShieldAlert, ShieldCheck, Users, Eye, Camera, Clipboard,
   Play, ChevronDown, ChevronRight, AudioLines, Smartphone, QrCode,
+  X, Download,
 } from 'lucide-react';
 import api from '@/lib/services/api';
 import {
@@ -60,6 +61,23 @@ interface IntegrityCheckTabProps {
     interview_screen_present?: boolean;
     checked_at?: string;
   };
+  /**
+   * Every "I've hidden it — Continue" attempt the candidate made on the
+   * share-bar step, oldest first (system_check_results.share_bar_check_attempts
+   * on the session row) — lets a recruiter see how many tries it took and
+   * inspect the screenshots from each one, not just the final successful try.
+   * Falls back to just `shareBarCheck` (as a single implicit attempt) when
+   * absent, for sessions recorded before this history was tracked.
+   */
+  shareBarCheckAttempts?: Array<{
+    hidden?: boolean;
+    pip_detected?: boolean;
+    recorder_overlay_detected?: boolean;
+    foreign_app_detected?: boolean;
+    foreign_app_label?: string;
+    interview_screen_present?: boolean;
+    checked_at?: string;
+  }>;
 }
 
 /* ── local time helpers (kept self-contained) ─────────────────────────────── */
@@ -220,7 +238,13 @@ interface TypeGroup {
 
 export default function IntegrityCheckTab({
   violations, startTs, completedAt, hasRecording, onJumpToRecording, interviewId, shareBarCheck,
+  shareBarCheckAttempts,
 }: IntegrityCheckTabProps) {
+  // Fall back to a single implicit attempt (the legacy "only latest kept"
+  // shape) for sessions recorded before per-attempt history was tracked.
+  const shareBarAttempts = shareBarCheckAttempts && shareBarCheckAttempts.length > 0
+    ? shareBarCheckAttempts
+    : (shareBarCheck ? [shareBarCheck] : []);
   const summary = useMemo(() => summarizeViolations(violations), [violations]);
 
   // Group by event_type (which already distinguishes the confidence tiers) —
@@ -581,44 +605,65 @@ export default function IntegrityCheckTab({
       </div>
 
       {/* ── SCREEN-SHARE VERIFICATION ───────────────────────────────────── */}
-      {shareBarCheck && (
+      {shareBarAttempts.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">Screen-share verification</h3>
           <p className="text-[11px] text-gray-400 mb-3">
-            The two images sent to the AI before this interview was allowed to start — the original screen capture and
-            a locally sharpened/contrast-boosted copy of the same capture, used to catch small or collapsed icons.
-            Only the most recent check attempt is kept. Click a thumbnail to enlarge.
+            {shareBarAttempts.length > 1
+              ? `The candidate needed ${shareBarAttempts.length} attempts on the "hide the sharing bar" step before the interview was allowed to start. Each attempt below shows the original screen capture and a locally sharpened/contrast-boosted copy sent to the AI at that moment. Click a thumbnail to enlarge.`
+              : 'The two images sent to the AI before this interview was allowed to start — the original screen capture and a locally sharpened/contrast-boosted copy of the same capture, used to catch small or collapsed icons. Click a thumbnail to enlarge.'}
           </p>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl">
-            <ShareBarScreenshotCard interviewId={interviewId} which="original" label="Original capture" />
-            <ShareBarScreenshotCard interviewId={interviewId} which="enhanced" label="Enhanced (sharpened/contrast)" />
+          <div className="space-y-5">
+            {shareBarAttempts.map((attempt, i) => {
+              const isLatest = i === shareBarAttempts.length - 1;
+              const clean = attempt.hidden && !attempt.pip_detected && !attempt.recorder_overlay_detected
+                && !attempt.foreign_app_detected && attempt.interview_screen_present !== false;
+              return (
+                <div key={i} className={shareBarAttempts.length > 1 ? 'pl-3 border-l-2 border-gray-100' : ''}>
+                  {shareBarAttempts.length > 1 && (
+                    <div className="text-xs font-semibold text-gray-600 mb-2">
+                      Attempt {i + 1}{isLatest ? ' (final — interview started)' : ' (blocked)'}
+                    </div>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 max-w-2xl">
+                    <ShareBarScreenshotCard
+                      interviewId={interviewId} which="original" label="Original capture"
+                      attemptIndex={shareBarAttempts.length > 1 ? i : undefined}
+                    />
+                    <ShareBarScreenshotCard
+                      interviewId={interviewId} which="enhanced" label="Enhanced (sharpened/contrast)"
+                      attemptIndex={shareBarAttempts.length > 1 ? i : undefined}
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {attempt.hidden === false && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Sharing bar was still visible</span>
+                    )}
+                    {attempt.pip_detected && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Picture-in-Picture detected</span>
+                    )}
+                    {attempt.recorder_overlay_detected && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Screen-recorder overlay detected</span>
+                    )}
+                    {attempt.foreign_app_detected && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">
+                        Foreign app/window detected{attempt.foreign_app_label ? `: ${attempt.foreign_app_label}` : ''}
+                      </span>
+                    )}
+                    {attempt.interview_screen_present === false && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Interview screen not detected</span>
+                    )}
+                    {clean && (
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">Clean — no issues found</span>
+                    )}
+                  </div>
+                  {attempt.checked_at && (
+                    <p className="text-[11px] text-gray-400 mt-2">Checked at {formatClock(attempt.checked_at)}</p>
+                  )}
+                </div>
+              );
+            })}
           </div>
-          <div className="flex flex-wrap gap-2 mt-3">
-            {shareBarCheck.hidden === false && (
-              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Sharing bar was still visible</span>
-            )}
-            {shareBarCheck.pip_detected && (
-              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Picture-in-Picture detected</span>
-            )}
-            {shareBarCheck.recorder_overlay_detected && (
-              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Screen-recorder overlay detected</span>
-            )}
-            {shareBarCheck.foreign_app_detected && (
-              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">
-                Foreign app/window detected{shareBarCheck.foreign_app_label ? `: ${shareBarCheck.foreign_app_label}` : ''}
-              </span>
-            )}
-            {shareBarCheck.interview_screen_present === false && (
-              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Interview screen not detected</span>
-            )}
-            {shareBarCheck.hidden && !shareBarCheck.pip_detected && !shareBarCheck.recorder_overlay_detected
-              && !shareBarCheck.foreign_app_detected && shareBarCheck.interview_screen_present !== false && (
-              <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">Clean — no issues found</span>
-            )}
-          </div>
-          {shareBarCheck.checked_at && (
-            <p className="text-[11px] text-gray-400 mt-2">Checked at {formatClock(shareBarCheck.checked_at)}</p>
-          )}
         </div>
       )}
 
@@ -641,13 +686,62 @@ export default function IntegrityCheckTab({
 }
 
 /**
+ * Shared full-screen image overlay used by both EvidenceCard and
+ * ShareBarScreenshotCard below. Closes on Escape, on an explicit X button, or
+ * on clicking the backdrop (clicking the image itself does not close, so the
+ * download button is reachable). `downloadName` drives the saved filename.
+ */
+function ImageLightbox({ url, alt, downloadName, onClose }: {
+  url: string; alt: string; downloadName: string; onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6 cursor-zoom-out"
+      onClick={onClose}
+    >
+      <div className="absolute top-4 right-4 flex items-center gap-2">
+        <a
+          href={url}
+          download={downloadName}
+          onClick={(e) => e.stopPropagation()}
+          className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+          aria-label="Download image"
+        >
+          <Download className="w-5 h-5" />
+        </a>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onClose(); }}
+          className="p-2 rounded-full bg-white/10 hover:bg-white/20 text-white transition-colors"
+          aria-label="Close"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={url}
+        alt={alt}
+        onClick={(e) => e.stopPropagation()}
+        className="max-w-full max-h-full rounded-lg shadow-2xl cursor-default"
+      />
+    </div>
+  );
+}
+
+/**
  * One evidence card: fetches the screenshot through the authenticated
  * GET /ai-interview/{interviewId}/proctor-event-screenshot endpoint (mirrors
  * the identity-photo fetch-on-mount pattern elsewhere in this app — the
  * backend never hands back a raw/presigned URL, so this call is required),
- * shows the AI summary underneath, and click-to-enlarges into a simple
- * full-screen overlay (no existing lightbox component in this codebase to
- * reuse, so a minimal one is built inline here).
+ * shows the AI summary underneath, and click-to-enlarges into a shared
+ * ImageLightbox overlay with close and download controls.
  */
 function EvidenceCard({ interviewId, record, label }: {
   interviewId: string; record: ViolationRecord; label: string;
@@ -695,26 +789,26 @@ function EvidenceCard({ interviewId, record, label }: {
         </div>
       </div>
       {enlarged && url && (
-        <div
-          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6 cursor-zoom-out"
-          onClick={() => setEnlarged(false)}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={url} alt={label} className="max-w-full max-h-full rounded-lg shadow-2xl" />
-        </div>
+        <ImageLightbox
+          url={url}
+          alt={label}
+          downloadName={`${record.event_type}-${interviewId}.jpg`}
+          onClose={() => setEnlarged(false)}
+        />
       )}
     </>
   );
 }
 
 /**
- * One of the two "Screen-share verification" thumbnails (original / enhanced),
- * fetched through the authenticated GET /ai-interview/{interviewId}/share-bar-
- * screenshot?which=... endpoint — same fetch-on-mount + click-to-enlarge
- * pattern as EvidenceCard above.
+ * One of the two "Screen-share verification" thumbnails (original / enhanced)
+ * for a single check attempt, fetched through the authenticated GET
+ * /ai-interview/{interviewId}/share-bar-screenshot?which=...&attempt=...
+ * endpoint. Omitting `attemptIndex` fetches the latest attempt (backward
+ * compatible with the endpoint's pre-history default).
  */
-function ShareBarScreenshotCard({ interviewId, which, label }: {
-  interviewId: string; which: 'original' | 'enhanced'; label: string;
+function ShareBarScreenshotCard({ interviewId, which, label, attemptIndex }: {
+  interviewId: string; which: 'original' | 'enhanced'; label: string; attemptIndex?: number;
 }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -723,11 +817,13 @@ function ShareBarScreenshotCard({ interviewId, which, label }: {
   useEffect(() => {
     if (url || failed) return;
     let cancelled = false;
-    api.get(`/ai-interview/${interviewId}/share-bar-screenshot?which=${which}`, { responseType: 'blob' })
+    const params = new URLSearchParams({ which });
+    if (attemptIndex !== undefined) params.set('attempt', String(attemptIndex));
+    api.get(`/ai-interview/${interviewId}/share-bar-screenshot?${params.toString()}`, { responseType: 'blob' })
       .then((res) => { if (!cancelled) setUrl(URL.createObjectURL(res.data)); })
       .catch(() => { if (!cancelled) setFailed(true); });
     return () => { cancelled = true; };
-  }, [interviewId, which, url, failed]);
+  }, [interviewId, which, attemptIndex, url, failed]);
 
   if (failed) return null;
 
@@ -752,13 +848,12 @@ function ShareBarScreenshotCard({ interviewId, which, label }: {
         </div>
       </div>
       {enlarged && url && (
-        <div
-          className="fixed inset-0 z-50 bg-black/70 flex items-center justify-center p-6 cursor-zoom-out"
-          onClick={() => setEnlarged(false)}
-        >
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img src={url} alt={label} className="max-w-full max-h-full rounded-lg shadow-2xl" />
-        </div>
+        <ImageLightbox
+          url={url}
+          alt={label}
+          downloadName={`sharebar-${which}-${attemptIndex ?? 'latest'}-${interviewId}.jpg`}
+          onClose={() => setEnlarged(false)}
+        />
       )}
     </>
   );

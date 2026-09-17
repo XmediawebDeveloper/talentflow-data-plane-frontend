@@ -4492,6 +4492,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 completedAt={liveSession.completed_at}
                 interviewId={liveSession.id}
                 shareBarCheck={liveSession.system_check_results?.share_bar_check}
+                shareBarCheckAttempts={liveSession.system_check_results?.share_bar_check_attempts}
                 hasRecording={!!(liveSession.recording_file_path || liveSession.screen_recording_file_path)}
                 onJumpToRecording={(seconds) => {
                   seekNonceRef.current += 1;
