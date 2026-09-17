@@ -183,6 +183,9 @@ interface AITalentMatchPageProps {
    *  shows at all. */
   matchSessionCounts?: Record<string, number>;
   onSaveMatch?: (data: MatchHistory) => void;
+  /** Background reconciliation after a match completes — see the route's own
+   *  fetchData({ silent: true }) for why this exists alongside onSaveMatch. */
+  onMatchComplete?: () => void;
   onSubmitToScoring?: (jobId: string, candidateIds: string[]) => void;
   onBack?: () => void;
 }
@@ -192,6 +195,7 @@ export default function AITalentMatchPage({
   matchHistory = [],
   matchSessionCounts = {},
   onSaveMatch,
+  onMatchComplete,
   onSubmitToScoring,
   onBack
 }: AITalentMatchPageProps) {
@@ -1323,6 +1327,7 @@ export default function AITalentMatchPage({
         setHistoryCandidatesById(prev => ({ ...prev, [newMatchHistory.id]: candidatesWithVersions }));
       }
       onSaveMatch?.(newMatchHistory);
+      onMatchComplete?.();
     }
   };
 
