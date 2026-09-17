@@ -473,7 +473,6 @@ export default function ResumeScoringRoute() {
           matchScore: matchScore,
           matchStatus: matchStatus,
           scorePercentage: matchScore,
-          overallRating10: item.overall_rating_10,
           scoredDate: item.created_at || new Date().toISOString(),
           scoredBy: item.scored_by_name || item.scored_by || 'System',
           // The scorer's own account identifier — for the Scoring History
@@ -616,7 +615,6 @@ export default function ResumeScoringRoute() {
           matchScore: matchScore,
           matchStatus: matchStatus,
           scorePercentage: matchScore,
-          overallRating10: item.overall_rating_10,
           scoredDate: item.created_at || new Date().toISOString(),
           scoredBy: item.scored_by_name || item.scored_by || 'System',
           scoredByEmail: item.scored_by,

@@ -51,19 +51,6 @@ export interface AIMatchSessionResponse {
   created_at: string;
   completed_at?: string;
   results: AIMatchResultItem[];
-  // Joined from job_descriptions server-side so the job's identity is always
-  // available, even when the job isn't in the caller's separately-paginated
-  // JD list (e.g. an older/superseded republished version).
-  jd_title?: string;
-  jd_job_id?: string;
-  jd_status?: string;
-  jd_department?: string;
-  jd_current_version?: number;
-  // Best candidate rating (1-10 scale) for this session, precomputed
-  // server-side so "Top Match Rating" / "Top Matching Jobs" can be shown
-  // immediately from the session list, without waiting for per-session
-  // candidate detail to load.
-  top_rating?: number | null;
 }
 
 export interface AIMatchSessionListResponse {

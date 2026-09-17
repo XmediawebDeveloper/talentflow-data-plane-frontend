@@ -20,7 +20,6 @@ import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModa
 import VersionHistoryModal from '@/components/VersionHistoryModal';
 import InviteToAIInterviewFlow from '@/components/InviteToAIInterviewFlow';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import { formatOverallScore } from '@/lib/utils/matchStatus';
 import { Resume, Folder, Job } from '@/lib/types/types';
 import { resumeService, folderService, ResumeSearchParams } from '@/lib/services/resumeService';
 import { Resume as ApiResume, Folder as ApiFolder } from '@/lib/services/resumeService';
@@ -740,7 +739,7 @@ export default function ResumeDatabasePage() {
 
       if (checkResult.existing_count > 0) {
         const alreadyScoredNames = checkResult.existing_scores
-          .map((s: any) => `${s.candidate_name} (${formatOverallScore(s.overall_rating_10, s.overall_score)})`)
+          .map((s: any) => `${s.candidate_name} (${s.overall_score}%)`)
           .join(', ');
 
         if (checkResult.new_count === 0) {
@@ -907,34 +906,19 @@ export default function ResumeDatabasePage() {
     }
   };
 
-  // Generate page numbers for pagination
-  const getPageNumbers = () => {
-    const pages: (number | string)[] = [];
-    const maxVisiblePages = 5;
-    const total = calculatedTotalPages;
-
-    if (total <= maxVisiblePages) {
-      for (let i = 1; i <= total; i++) {
-        pages.push(i);
-      }
+  // "Go to page" input — local text so a partial edit isn't clobbered by the
+  // currentPage state until Enter/blur commits it.
+  const [goToPage, setGoToPage] = useState(String(currentPage));
+  useEffect(() => {
+    setGoToPage(String(currentPage));
+  }, [currentPage]);
+  const commitGoToPage = () => {
+    const page = Math.round(Number(goToPage));
+    if (Number.isFinite(page) && page >= 1 && page <= calculatedTotalPages) {
+      handlePageChange(page);
     } else {
-      if (currentPage <= 3) {
-        for (let i = 1; i <= 4; i++) pages.push(i);
-        pages.push('...');
-        pages.push(total);
-      } else if (currentPage >= total - 2) {
-        pages.push(1);
-        pages.push('...');
-        for (let i = total - 3; i <= total; i++) pages.push(i);
-      } else {
-        pages.push(1);
-        pages.push('...');
-        for (let i = currentPage - 1; i <= currentPage + 1; i++) pages.push(i);
-        pages.push('...');
-        pages.push(total);
-      }
+      setGoToPage(String(currentPage));
     }
-    return pages;
   };
 
   // Handle showing version history
@@ -1096,39 +1080,47 @@ export default function ResumeDatabasePage() {
             <div className="text-sm text-gray-600 dark:text-slate-400">
               Showing {((currentPage - 1) * pageSize) + 1} - {Math.min(currentPage * pageSize, filteredAndSortedResumes.length)} of {filteredAndSortedResumes.length.toLocaleString()} resumes
             </div>
-            <div className="flex items-center gap-1">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={calculatedTotalPages}
+                  value={goToPage}
+                  onChange={(e) => setGoToPage(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.currentTarget.blur();
+                      commitGoToPage();
+                    }
+                  }}
+                  onBlur={commitGoToPage}
+                  aria-label="Go to page"
+                  className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100"
+                />
+              </div>
+
               <button
                 onClick={() => handlePageChange(currentPage - 1)}
                 disabled={currentPage === 1}
-                className="p-2 rounded-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                aria-label="Previous page" title="Previous page"
               >
-                <ChevronLeft className="w-4 h-4" />
+                <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
 
-              {getPageNumbers().map((page, index) => (
-                typeof page === 'number' ? (
-                  <button
-                    key={index}
-                    onClick={() => handlePageChange(page)}
-                    className={`px-3 py-1 rounded-md text-sm transition-all ${
-                      currentPage === page
-                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
-                        : 'border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30'
-                    }`}
-                  >
-                    {page}
-                  </button>
-                ) : (
-                  <span key={index} className="px-2 text-gray-500 dark:text-slate-500">...</span>
-                )
-              ))}
+              <span className="text-sm font-medium text-gray-700 dark:text-slate-300 px-1 whitespace-nowrap">
+                <span className="text-brand-blue font-semibold">{currentPage}</span> / {calculatedTotalPages}
+              </span>
 
               <button
                 onClick={() => handlePageChange(currentPage + 1)}
                 disabled={currentPage === calculatedTotalPages}
-                className="p-2 rounded-md border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                aria-label="Next page" title="Next page"
               >
-                <ChevronRight className="w-4 h-4" />
+                <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               </button>
             </div>
           </div>

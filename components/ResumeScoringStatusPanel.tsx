@@ -6,7 +6,6 @@ import { useRouter } from 'next/navigation';
 import { scoringService } from '@/lib/services';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
-import { formatOverallScore } from '@/lib/utils/matchStatus';
 
 // Helper function to convert backend match_status to frontend format
 const convertMatchStatus = (status: string | undefined): 'Exact Match' | 'Partial Match' | 'No Match' => {
@@ -33,9 +32,6 @@ interface AttemptHistory {
   status: 'Success' | 'Failed';
   errorReason?: string;
   score?: number;
-  // Resume Match Rating Mechanism (client doc, Sept 2026): the 0-10 Overall
-  // Rating shown instead of `score`(%) - see formatOverallScore().
-  overallRating10?: number;
 }
 
 interface ScoreBreakdownItem {
@@ -49,9 +45,6 @@ interface ScoringResume {
   name: string;
   status: 'pending' | 'scoring' | 'completed' | 'error';
   score?: number;
-  // Resume Match Rating Mechanism (client doc, Sept 2026): the 0-10 Overall
-  // Rating shown instead of `score`(%) - see formatOverallScore().
-  overallRating10?: number;
   errorReason?: string;
   attemptHistory?: AttemptHistory[];
   currentAttempt?: number;
@@ -246,7 +239,6 @@ export default function ResumeScoringStatusPanel({
             timestamp: new Date(),
             status: 'Success',
             score: result.overall_score,
-            overallRating10: result.overall_rating_10,
           };
 
           // Update with real score and breakdown from API
@@ -255,7 +247,6 @@ export default function ResumeScoringStatusPanel({
               ...r,
               status: 'completed' as const,
               score: result.overall_score,
-              overallRating10: result.overall_rating_10,
               aiSummary: result.ai_summary,
               strengths: result.strengths,
               gaps: result.gaps,
@@ -289,7 +280,6 @@ export default function ResumeScoringStatusPanel({
           // Update global context with success
           updateItemStatus(jobId, itemId, 'Scored successfully', {
             score: result.overall_score,
-            overallRating10: result.overall_rating_10,
             matchResult: convertMatchStatus(result.match_status),
             scoredDateTime: new Date().toISOString(),
           });
@@ -834,7 +824,7 @@ export default function ResumeScoringStatusPanel({
                       <div className="text-sm text-gray-600 mt-1">
                         {resume.status === 'completed' && resume.score && (
                           <span>
-                            AI Analysis Complete - Score: <span className={`font-semibold ${getScoreColor(resume.score)}`}>{formatOverallScore(resume.overallRating10, resume.score)}</span>
+                            AI Analysis Complete - Score: <span className={`font-semibold ${getScoreColor(resume.score)}`}>{resume.score}%</span>
                           </span>
                         )}
                         {resume.status === 'scoring' && 'Evaluating skills, experience, and job fit...'}
@@ -852,7 +842,7 @@ export default function ResumeScoringStatusPanel({
                     {resume.status === 'completed' && resume.score && (
                       <div className="flex-shrink-0 text-right animate-in fade-in slide-in-from-right duration-300">
                         <div className={`text-3xl font-bold ${getScoreColor(resume.score)}`}>
-                          {formatOverallScore(resume.overallRating10, resume.score)}
+                          {resume.score}%
                         </div>
                         <div className="text-xs text-gray-600 mt-1">
                           {resume.score >= 85 ? 'Excellent' : resume.score >= 70 ? 'Good' : 'Moderate'}
@@ -918,7 +908,7 @@ export default function ResumeScoringStatusPanel({
                               )}
                               {attempt.score && (
                                 <div className="text-xs text-gray-700 mt-2">
-                                  Score: <span className="font-semibold">{formatOverallScore(attempt.overallRating10, attempt.score)}</span>
+                                  Score: <span className="font-semibold">{attempt.score}%</span>
                                 </div>
                               )}
                             </div>

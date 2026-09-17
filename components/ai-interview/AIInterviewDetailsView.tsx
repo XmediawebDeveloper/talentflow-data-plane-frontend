@@ -22,7 +22,6 @@ import CandidateResultsView from './CandidateResultsView';
 import AIInterviewResults from './AIInterviewResults';
 import ShareAIInterviewModal from './ShareAIInterviewModal';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
-import { PROXY_INTEGRITY_VERIFICATION_ENABLED } from '@/lib/constants/featureFlags';
 import { formatIST, formatISTDate, parseIST } from '@/lib/utils/dateUtils';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromConfig, modeFromDuration } from '@/lib/constants/aiInterviewMode';
@@ -797,10 +796,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 </div>
               </SectionCard>
 
-              {/* Mobile Environment Verification — hidden with the Configure-step
-                  toggle while the feature is unapproved, so the client never sees
-                  the feature named anywhere. */}
-              {PROXY_INTEGRITY_VERIFICATION_ENABLED && (
+              {/* Mobile Environment Verification */}
               <SectionCard title="Mobile Environment Verification" icon={QrCode}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
@@ -821,7 +817,6 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   </span>
                 </div>
               </SectionCard>
-              )}
 
               {/* Time Allocation Table (fixed mode only) */}
               {mode === 'fixed' && enabledRounds.length > 0 && (

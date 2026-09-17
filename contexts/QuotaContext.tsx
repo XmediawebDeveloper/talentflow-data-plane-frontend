@@ -133,7 +133,7 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
     quotaDataRef.current = quotaData;
   }, [lastFetchTime, quotaData]);
 
-  const fetchQuotaData = useCallback(async (force = false, tokenRetriesLeft = 5) => {
+  const fetchQuotaData = useCallback(async (force = false) => {
     // Skip if already fetching
     if (fetchingRef.current) {
       console.log('[QuotaContext] Already fetching, skipping duplicate call');
@@ -148,21 +148,7 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
 
     const token = localStorage.getItem('accessToken');
     if (!token) {
-      // Right after login, this provider's mount effect can run before the
-      // token write it depends on is visible — a genuinely logged-out visitor
-      // and "the token isn't there YET" look identical here, so a bare return
-      // used to leave `loading` stuck at its initial `true` forever: nothing
-      // in this file retries or listens for the token appearing, so the
-      // header's plan/units widget spun indefinitely instead of showing data
-      // or an empty state. Retry briefly for the racy case; only give up (and
-      // stop the spinner) once retries are exhausted.
-      if (tokenRetriesLeft > 0) {
-        console.log('[QuotaContext] No token yet, retrying shortly', { tokenRetriesLeft });
-        window.setTimeout(() => fetchQuotaData(force, tokenRetriesLeft - 1), 300);
-        return;
-      }
-      console.log('[QuotaContext] No token after retries, giving up');
-      setLoading(false);
+      console.log('[QuotaContext] No token, skipping fetch');
       return;
     }
 

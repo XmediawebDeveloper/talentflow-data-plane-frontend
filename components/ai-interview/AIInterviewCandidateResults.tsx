@@ -157,6 +157,20 @@ export default function AIInterviewCandidateResults() {
   const safePage = Math.min(currentPage, totalPages);
   const pageRows = filteredRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
+  // Local text so a partial edit doesn't get clobbered by safePage until Enter/blur commits it.
+  const [goToPage, setGoToPage] = useState(String(safePage));
+  useEffect(() => {
+    setGoToPage(String(safePage));
+  }, [safePage]);
+  const commitGoToPage = () => {
+    const page = Math.round(Number(goToPage));
+    if (Number.isFinite(page) && page >= 1 && page <= totalPages) {
+      setCurrentPage(page);
+    } else {
+      setGoToPage(String(safePage));
+    }
+  };
+
   /**
    * Opens that candidate's result view. Seeds the same nav list key the details
    * route reads for Previous/Next, scoped to rows from the SAME interview —
@@ -425,6 +439,25 @@ export default function AIInterviewCandidateResults() {
                   Showing {((safePage - 1) * PAGE_SIZE) + 1}–{Math.min(safePage * PAGE_SIZE, filteredRows.length)} of {filteredRows.length}
                 </div>
                 <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={totalPages}
+                      value={goToPage}
+                      onChange={(e) => setGoToPage(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.currentTarget.blur();
+                          commitGoToPage();
+                        }
+                      }}
+                      onBlur={commitGoToPage}
+                      aria-label="Go to page"
+                      className="w-14 h-8 px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    />
+                  </div>
                   <button
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={safePage === 1}

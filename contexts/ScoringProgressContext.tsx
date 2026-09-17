@@ -14,9 +14,6 @@ export interface ScoringProgressItem {
   scoredDateTime?: string;
   matchResult?: 'Exact Match' | 'Partial Match' | 'No Match';
   score?: number;
-  // Resume Match Rating Mechanism (client doc, Sept 2026): the 0-10 Overall
-  // Rating shown instead of `score`(%) wherever this item is rendered.
-  overallRating10?: number;
 }
 
 export interface ScoringJob {

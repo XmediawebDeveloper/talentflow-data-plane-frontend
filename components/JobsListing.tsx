@@ -736,45 +736,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
     setCurrentPage(1); // Reset to first page when view mode changes
   }, [viewMode]);
 
-  // Generate page numbers to display
-  const getPageNumbers = () => {
-    const pages: (number | string)[] = [];
-    const maxPagesToShow = 5;
-    
-    if (totalPages <= maxPagesToShow + 2) {
-      // Show all pages if total is small
-      for (let i = 1; i <= totalPages; i++) {
-        pages.push(i);
-      }
-    } else {
-      // Always show first page
-      pages.push(1);
-      
-      if (currentPage > 3) {
-        pages.push('...');
-      }
-      
-      // Show pages around current page
-      const startPage = Math.max(2, currentPage - 1);
-      const endPage = Math.min(totalPages - 1, currentPage + 1);
-      
-      for (let i = startPage; i <= endPage; i++) {
-        pages.push(i);
-      }
-      
-      if (currentPage < totalPages - 2) {
-        pages.push('...');
-      }
-      
-      // Always show last page
-      if (totalPages > 1) {
-        pages.push(totalPages);
-      }
-    }
-    
-    return pages;
-  };
-
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -783,6 +744,22 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   const handleItemsPerPageChange = (value: number) => {
     setItemsPerPage(value);
     setCurrentPage(1);
+  };
+
+  // "Go to page" input — local text so a partial edit isn't clobbered by the
+  // currentPage prop until Enter/blur commits it.
+  const [goToPage, setGoToPage] = useState(String(currentPage));
+  useEffect(() => {
+    setGoToPage(String(currentPage));
+  }, [currentPage]);
+
+  const commitGoToPage = () => {
+    const page = Math.round(Number(goToPage));
+    if (Number.isFinite(page) && page >= 1 && page <= totalPages) {
+      handlePageChange(page);
+    } else {
+      setGoToPage(String(currentPage));
+    }
   };
 
   return (
@@ -1908,53 +1885,51 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
               </div>
 
               {/* Right: Page navigation */}
-              <div className="flex items-center justify-center sm:justify-end gap-1.5">
+              <div className="flex items-center justify-center sm:justify-end gap-2 sm:gap-3">
+                {/* Go to page */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={goToPage}
+                    onChange={(e) => setGoToPage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.currentTarget.blur();
+                        commitGoToPage();
+                      }
+                    }}
+                    onBlur={commitGoToPage}
+                    aria-label="Go to page"
+                    className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+                  />
+                </div>
+
                 {/* Previous Button */}
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className={`p-2.5 rounded-lg border transition-all ${
-                    currentPage === 1
-                      ? 'border-gray-300 text-gray-400 cursor-not-allowed'
-                      : 'border-gray-300 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-                  }`}
+                  className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
                   aria-label="Previous page" title="Previous page"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
 
-                {/* Page Numbers */}
-                <div className="flex items-center gap-1">
-                  {getPageNumbers().map((page, index) => (
-                    <button
-                      key={index}
-                      onClick={() => typeof page === 'number' && handlePageChange(page)}
-                      disabled={page === '...'}
-                      className={`min-w-[40px] h-10 px-2 rounded-lg text-sm transition-all ${
-                        page === currentPage
-                          ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                          : page === '...'
-                          ? 'text-gray-400 cursor-default'
-                          : 'border border-gray-300 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
-                </div>
+                {/* Current / total */}
+                <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+                  <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
+                </span>
 
                 {/* Next Button */}
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className={`p-2.5 rounded-lg border transition-all ${
-                    currentPage === totalPages
-                      ? 'border-gray-300 text-gray-400 cursor-not-allowed'
-                      : 'border-gray-300 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-                  }`}
+                  className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
                   aria-label="Next page" title="Next page"
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
               </div>
             </div>

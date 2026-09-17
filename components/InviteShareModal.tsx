@@ -110,13 +110,9 @@ export default function InviteShareModal({ candidate, jobId, jobTitle, onClose }
     };
   }, [jobId]);
 
-  // Only email is actually required to prefill — a candidate scored without a
-  // name on file used to blank the WHOLE form (name AND email empty) because
-  // this required both, when only the email is what an invite can't be sent
-  // without. Missing just the name shouldn't cost the email too.
   const candidateName = candidate.candidateName || candidate.name || '';
   const prefilledCandidates =
-    candidate.email
+    candidateName && candidate.email
       ? [{
           id: candidate.resumeId || candidate.id || '1',
           name: candidateName,

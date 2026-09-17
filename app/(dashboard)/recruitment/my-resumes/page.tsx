@@ -63,7 +63,6 @@ import {
 import FeatureGate from '@/components/shared/FeatureGate';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
-import { formatOverallScore } from '@/lib/utils/matchStatus';
 
 const formatDateIST = formatISTDate;
 const formatDateTimeIST = formatIST;
@@ -991,9 +990,6 @@ export default function MyResumesPage() {
       resume_id: string;
       candidate_name: string;
       overall_score: number;
-      // Resume Match Rating Mechanism (client doc, Sept 2026): the 0-10
-      // Overall Rating for the duplicate-scoring warning list.
-      overall_rating_10?: number;
       match_status: string;
       scored_at: string | null;
     }>;
@@ -4850,7 +4846,7 @@ export default function MyResumesPage() {
                           </div>
                         </div>
                         <div className="text-right">
-                          <div className="text-sm font-semibold text-gray-900">{formatOverallScore(score.overall_rating_10, score.overall_score)}</div>
+                          <div className="text-sm font-semibold text-gray-900">{score.overall_score}%</div>
                           <div className="text-xs text-gray-500 capitalize">{score.match_status}</div>
                         </div>
                       </div>
