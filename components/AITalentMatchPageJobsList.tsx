@@ -555,7 +555,6 @@ export default function AITalentMatchPageJobsList({
                           openInNewTab
                           staticRows
                           publishedOnly
-                          stickyVersionColumn
                           onSelectVersion={(versionJob) => { if (!isDisabled) handleToggleJob(versionJob.id); }}
                           selectedVersionId={effectiveSelectedJobId}
                           selectionDisabled={isDisabled}
@@ -740,48 +739,6 @@ export default function AITalentMatchPageJobsList({
                             </span>
                           )}
                         </div>
-
-                        {/* View Versions — same button/panel Resume Scoring's
-                            job picker uses, only offered when this job
-                            actually has more than one version worth showing. */}
-                        {hasVersionHistory && (
-                          <div className="mt-2 flex items-center justify-end">
-                            <button
-                              type="button"
-                              onClick={(e) => { e.stopPropagation(); versionLineage.toggle(versionKey, job.id); }}
-                              aria-expanded={versionsExpanded}
-                              className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 ${
-                                versionsExpanded
-                                  ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-800 dark:text-slate-100 dark:border-brand-blue/50'
-                                  : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
-                              }`}
-                              title={versionsExpanded ? 'Hide version history' : 'View version history'}
-                            >
-                              {versionsExpanded ? 'Hide Versions' : 'View Versions'}
-                              <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
-                            </button>
-                          </div>
-                        )}
-                        {versionsExpanded && (
-                          <div onClick={(e) => e.stopPropagation()}>
-                            <JobVersionHistoryPanel
-                              job={sharedJob}
-                              versions={versionLineage.lineages[versionKey]}
-                              loading={versionLineage.isLoading(versionKey)}
-                              versionDetails={versionLineage.versionDetails}
-                              versionApplicants={versionLineage.versionApplicants}
-                              openInNewTab
-                              staticRows
-                              publishedOnly
-                              stickyVersionColumn
-                              onSelectVersion={(versionJob) => { if (!isDisabled) handleToggleJob(versionJob.id); }}
-                              selectedVersionId={effectiveSelectedJobId}
-                              selectionDisabled={isDisabled}
-                              selectionDisabledReason="Deselect the currently checked job first"
-                              selectHint={(versionJob) => `Run AI Match against v${versionJob.versionNumber ?? 1}`}
-                            />
-                          </div>
-                        )}
                       </div>
 
                       {/* Actions, right-aligned and stacked as on the reference
@@ -802,6 +759,54 @@ export default function AITalentMatchPageJobsList({
                         </div>
                       )}
                     </div>
+
+                    {/* View Versions — same button/panel Resume Scoring's job
+                        picker uses, only offered when this job actually has
+                        more than one version worth showing. A sibling of the
+                        radio/content/action row above, NOT nested inside its
+                        flex-1 column — so the table below always gets the
+                        row's full width. Nested there, Run AI Match appearing
+                        as a third flex item shrank that column (and the
+                        table inside it) the moment a job got checked, which
+                        is why the version table visibly narrowed and lost
+                        columns to horizontal scroll only after selecting. */}
+                    {hasVersionHistory && (
+                      <div className="mt-2 flex items-center justify-end">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); versionLineage.toggle(versionKey, job.id); }}
+                          aria-expanded={versionsExpanded}
+                          className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 ${
+                            versionsExpanded
+                              ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-800 dark:text-slate-100 dark:border-brand-blue/50'
+                              : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
+                          }`}
+                          title={versionsExpanded ? 'Hide version history' : 'View version history'}
+                        >
+                          {versionsExpanded ? 'Hide Versions' : 'View Versions'}
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+                    )}
+                    {versionsExpanded && (
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <JobVersionHistoryPanel
+                          job={sharedJob}
+                          versions={versionLineage.lineages[versionKey]}
+                          loading={versionLineage.isLoading(versionKey)}
+                          versionDetails={versionLineage.versionDetails}
+                          versionApplicants={versionLineage.versionApplicants}
+                          openInNewTab
+                          staticRows
+                          publishedOnly
+                          onSelectVersion={(versionJob) => { if (!isDisabled) handleToggleJob(versionJob.id); }}
+                          selectedVersionId={effectiveSelectedJobId}
+                          selectionDisabled={isDisabled}
+                          selectionDisabledReason="Deselect the currently checked job first"
+                          selectHint={(versionJob) => `Run AI Match against v${versionJob.versionNumber ?? 1}`}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               })}

@@ -253,9 +253,14 @@ export default function JobOpeningsPage() {
     router.push(`/recruitment/job-details?id=${job.id}&tab=scored-resumes`);
   };
 
+  // Same deep-link pattern as handleScoreResumes below: land on the job's own
+  // detail page, not the standalone AI Talent Match picker. JobDetailView's
+  // `initialAction === 'ai-talent-match'` effect picks this up and opens the
+  // same confirm prompt Run AI Match uses there, then — on Yes — runs the
+  // match inline and switches to that job's own "AI Talent Match Results"
+  // tab, instead of navigating away to a different page entirely.
   const handleAIMatch = (job: Job) => {
-    sessionStorage.setItem('preselectedJobId', job.id);
-    router.push('/recruitment/ai-talent-match');
+    router.push(`/recruitment/job-details?id=${job.id}&action=ai-talent-match`);
   };
 
   const handleScoreResumes = (job: Job) => {

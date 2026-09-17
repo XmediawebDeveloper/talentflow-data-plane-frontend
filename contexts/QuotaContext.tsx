@@ -1,7 +1,7 @@
 'use client';
 
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import api, { handleUnauthorized } from '@/lib/services/api';
+import api, { handleUnauthorized, UNITS_CONSUMED_EVENT } from '@/lib/services/api';
 
 interface FeatureItem {
   feature_key: string;
@@ -237,6 +237,15 @@ export function QuotaProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     fetchQuotaData();
   }, []);
+
+  // Refresh when any service reports units consumed, so the header doesn't
+  // keep showing whatever was fetched at mount time (was dispatched but had
+  // no listener, so quota stayed stale until a full page reload).
+  useEffect(() => {
+    const handleUnitsConsumed = () => fetchQuotaData(true);
+    window.addEventListener(UNITS_CONSUMED_EVENT, handleUnitsConsumed);
+    return () => window.removeEventListener(UNITS_CONSUMED_EVENT, handleUnitsConsumed);
+  }, [fetchQuotaData]);
 
   const refetch = useCallback(async () => {
     await fetchQuotaData(true);
