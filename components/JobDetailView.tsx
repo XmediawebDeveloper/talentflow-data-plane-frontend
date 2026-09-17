@@ -50,6 +50,7 @@ import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
+import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
 
 // Legacy aliases — both now use the centralized IST formatter
 const formatToIST = formatIST;
@@ -583,8 +584,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
    * the 60% block, and a rating below 7 on it fails the whole Essential section.
    * "Preferred" criteria share the 40% block and never fail a candidate on their own.
    */
-  const requirementLabel = (mandatory?: boolean) =>
-    mandatory ? '✓ Required (Essential)' : '○ Preferred';
+  const requirementLabel = requirementBadge;
   /* ---- The two sticky layers on this page ----------------------------------
      The breadcrumb pins at top-0 (z-30) and the tab bar pins below it (z-20).
      The tab bar's offset used to be a hardcoded `top-[52px]`, a guess at the
@@ -3215,7 +3215,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                               published JD whether the degree is Required. */}
                           <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">
                             Must-Have Additional Requirements ({mustHaveComments.length})
-                            <span className="ml-2 text-xs font-normal text-gray-500 dark:text-slate-500">✓ Required (Essential)</span>
+                            {/* Only when the list HAS something. The badge is a claim about how these
+                                lines are SCORED - "Required (Essential)" on an empty section told the
+                                recruiter a rule was in force over nothing, right beside the word
+                                "None". A label with no subject is worse than no label. */}
+                            {mustHaveComments.length > 0 && (
+                              <span className="ml-2 text-xs font-normal text-gray-500 dark:text-slate-500">✓ Required (Essential)</span>
+                            )}
                           </h4>
                           {mustHaveComments.length > 0 ? (
                             <div className="space-y-2">
@@ -3233,7 +3239,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         <div>
                           <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">
                             Nice-to-Have Additional Requirements ({niceToHaveComments.length})
-                            <span className="ml-2 text-xs font-normal text-gray-500 dark:text-slate-500">○ Preferred</span>
+                            {niceToHaveComments.length > 0 && (
+                              <span className="ml-2 text-xs font-normal text-gray-500 dark:text-slate-500">○ Preferred</span>
+                            )}
                           </h4>
                           {niceToHaveComments.length > 0 ? (
                             <div className="space-y-2">
@@ -3259,7 +3267,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
                         <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Experience</h4>
                         <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{job.experience || 'Not specified'}</p>
-                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{requirementLabel(job.experienceMandatory)}</p>
+                        {/* Same rule as the two lists above: an unstated experience range
+                            is not Required or Preferred, it is simply absent. */}
+                        {job.experience && (
+                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{requirementLabel(job.experienceMandatory)}</p>
+                        )}
                       </div>
                       {/* Education tile REMOVED 2026-08-21 - see the chip note above.
                           The requirement is listed in Must-Have / Nice-to-Have
@@ -3271,14 +3283,17 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
                           <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Industry Type</h4>
                           <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{prettifyCode(job.industry_type)}</p>
-                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{requirementLabel(job.industryMandatory)}</p>
+                          {/* "Others" is the catch-all, and Resume Scoring skips it by
+                              name - so a Required/Preferred badge here would describe a
+                              criterion that is never graded. */}
+                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{criterionScoringLabel(job.industry_type, job.industryMandatory, { isIndustry: true })}</p>
                         </div>
                       )}
                       {job.location && (
                         <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
                           <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Location</h4>
                           <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{job.location}</p>
-                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{requirementLabel(job.locationMandatory)}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{criterionScoringLabel(job.location, job.locationMandatory)}</p>
                         </div>
                       )}
                       <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">

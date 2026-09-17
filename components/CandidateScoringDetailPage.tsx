@@ -24,6 +24,7 @@ import { formatJobExperienceText, formatJobExperienceBadge } from '@/lib/utils/j
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
+import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
 
 interface ScoredResume {
   id: string;  // This is the SCORE ID, not resume ID!
@@ -714,8 +715,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
    * the 60% block and a rating below 7 on it fails the whole Essential section.
    * "Preferred" criteria share the 40% block and never fail a candidate alone.
    */
-  const jdRequirementLabel = (mandatory?: boolean) =>
-    mandatory ? '✓ Required (Essential)' : '○ Preferred';
+  const jdRequirementLabel = requirementBadge;
 
   const jdMustHaveComments: string[] = jdDetails?.must_have_comments || [];
   const jdNiceToHaveComments: string[] = jdDetails?.nice_to_have_comments || [];
@@ -2520,7 +2520,11 @@ Best regards`);
                               only place a Required degree is visible. */}
                           <h5 className="text-sm text-gray-700 mb-3">
                             Must-Have Additional Requirements ({jdMustHaveComments.length})
-                            <span className="ml-2 text-xs font-normal text-gray-500">✓ Required (Essential)</span>
+                            {/* See JobDetailView: the badge is a scoring claim, so it
+                                only appears when there are lines for it to apply to. */}
+                            {jdMustHaveComments.length > 0 && (
+                              <span className="ml-2 text-xs font-normal text-gray-500">✓ Required (Essential)</span>
+                            )}
                           </h5>
                           {jdMustHaveComments.length > 0 ? (
                             <div className="space-y-2">
@@ -2538,7 +2542,9 @@ Best regards`);
                         <div>
                           <h5 className="text-sm text-gray-700 mb-3">
                             Nice-to-Have Additional Requirements ({jdNiceToHaveComments.length})
-                            <span className="ml-2 text-xs font-normal text-gray-500">○ Preferred</span>
+                            {jdNiceToHaveComments.length > 0 && (
+                              <span className="ml-2 text-xs font-normal text-gray-500">○ Preferred</span>
+                            )}
                           </h5>
                           {jdNiceToHaveComments.length > 0 ? (
                             <div className="space-y-2">
@@ -2564,7 +2570,11 @@ Best regards`);
                       <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
                         <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Experience</h5>
                         <p className="text-sm sm:text-base text-gray-900">{jdExperienceLabel}</p>
-                        <p className="text-xs text-gray-500 mt-1">{jdRequirementLabel(jdDetails.experience_mandatory)}</p>
+                        {/* `jdExperienceLabel` falls back to the words "Not specified",
+                            so the badge is gated on the RANGE, not on the label. */}
+                        {(jdDetails?.experience_min != null || jdDetails?.experience_max != null) && (
+                          <p className="text-xs text-gray-500 mt-1">{jdRequirementLabel(jdDetails.experience_mandatory)}</p>
+                        )}
                       </div>
                       {/* Education tile REMOVED 2026-08-21 - see the chip note above.
                           `education_mandatory` decides which of the two Additional
@@ -2574,14 +2584,15 @@ Best regards`);
                         <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
                           <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Industry Type</h5>
                           <p className="text-sm sm:text-base text-gray-900">{prettifyCode(jdDetails.industry_type)}</p>
-                          <p className="text-xs text-gray-500 mt-1">{jdRequirementLabel(jdDetails.industry_mandatory)}</p>
+                          {/* See JobDetailView: "Others" is never scored. */}
+                          <p className="text-xs text-gray-500 mt-1">{criterionScoringLabel(jdDetails.industry_type, jdDetails.industry_mandatory, { isIndustry: true })}</p>
                         </div>
                       )}
                       {jdLocation && (
                         <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
                           <h5 className="text-xs sm:text-sm text-gray-600 mb-1 sm:mb-2">Location</h5>
                           <p className="text-sm sm:text-base text-gray-900">{jdLocation}</p>
-                          <p className="text-xs text-gray-500 mt-1">{jdRequirementLabel(jdDetails.location_mandatory)}</p>
+                          <p className="text-xs text-gray-500 mt-1">{criterionScoringLabel(jdLocation, jdDetails.location_mandatory)}</p>
                         </div>
                       )}
                       <div className="bg-white border border-gray-200 p-3 sm:p-4 rounded-lg">
