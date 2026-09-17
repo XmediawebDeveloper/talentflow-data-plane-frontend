@@ -73,13 +73,6 @@ function JobDetailsContent() {
      page"), which anchors the breadcrumb to that flow instead of resetting to
      the Job Descriptions trail. Same mechanism as `from=ai-interview`. */
   const fromAssessment = searchParams.get('from') === 'assessment';
-  /* Opened from a candidate's Score Table "Job Title" link, so the breadcrumb
-     stays in the Resume Scoring flow instead of resetting to the generic Job
-     Openings trail. Same mechanism as `from=ai-interview`/`from=assessment`
-     above. */
-  const fromResumeScoring = searchParams.get('from') === 'resume-scoring';
-  const resumeScoringScoreId = searchParams.get('score_id');
-  const resumeScoringCandidateName = searchParams.get('candidate_name');
   const tabParam = searchParams.get('tab') as 'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | 'ai-interview-results' | null;
   const actionParam = searchParams.get('action') as 'ai-talent-match' | 'score-resumes' | 'invite-assessment' | 'assessment-status' | 'create-ai-interview' | 'invite-ai-interview' | 'ai-interview-status' | null;
 
@@ -560,24 +553,6 @@ function JobDetailsContent() {
           ? [{
               label: 'Configure Assessment',
               href: `/recruitment/assessments/create?step=configure&jd_id=${encodeURIComponent(jobId)}`,
-            }]
-          : []),
-        { label: job.title || 'Job Details' },
-      ]
-    : fromResumeScoring
-    ? /* Same shape as the two flows above: this JD as the plain (non-clickable)
-         leaf, with a clickable step ahead of it that jumps straight back to
-         the exact candidate this page was opened from. The candidate's own
-         page now reads job-title-last too (Resume Scoring > ... > Candidate >
-         Job Title), so this stays in the same relative order rather than
-         flipping it. */
-      [
-        { label: 'Dashboard', href: '/dashboard' },
-        { label: 'Resume Scoring', href: '/recruitment/resume-scoring' },
-        ...(jobId && resumeScoringScoreId
-          ? [{
-              label: resumeScoringCandidateName || 'Candidate',
-              href: `/recruitment/resume-scoring?jd_id=${encodeURIComponent(jobId)}&score_id=${encodeURIComponent(resumeScoringScoreId)}`,
             }]
           : []),
         { label: job.title || 'Job Details' },

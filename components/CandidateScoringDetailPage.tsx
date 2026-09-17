@@ -10,6 +10,7 @@ import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
+import ConfirmationDialog from '@/components/ConfirmationDialog';
 import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
 import ReactMarkdown from 'react-markdown';
@@ -160,11 +161,16 @@ function byNewestVersion(a: any, b: any): number {
 }
 
 export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, onMinimize, currentIndex, totalCount, onPrev, onNext, breadcrumbItems, assessmentConfigured, aiInterviewConfigured }: CandidateScoringDetailPageProps) {
-  const router = useRouter();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const { hasPlanFeature } = usePlanFeatures();
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
   const canShareResume = isTenantAdmin || hasPermissionCode('my_resumes:share');
+
+  // View JD tab: clicking the JD id/title asks before leaving this page for
+  // the standalone JD Details page, since it navigates away from the
+  // candidate scorecard rather than just switching tabs in place.
+  const router = useRouter();
+  const [showJdNavConfirm, setShowJdNavConfirm] = useState(false);
 
   /* The sticky tab bar below pins directly under the sticky breadcrumb, so its
      offset is the breadcrumb's real height — re-measured on resize, because the
@@ -249,27 +255,20 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const tabsSectionRef = useRef<HTMLDivElement>(null);
 
   /**
-   * The real Job Details page's URL, tagged with where it came from so that
-   * page's own breadcrumb (app/(dashboard)/recruitment/job-details/page.tsx)
-   * shows a Resume-Scoring-flavored trail - with a crumb back to THIS exact
-   * candidate - instead of resetting to the generic Job Openings one every
-   * other route lands there with. Shared by the "Job Title" link below and
-   * the breadcrumb's own trailing JD crumb, so the two can never disagree.
-   */
-  const buildJdDetailsHref = () => {
-    const scoreId = fullResumeData.id || resume.id;
-    const candidateName = fullResumeData.candidateName || resume.candidateName || '';
-    return `/recruitment/job-details?id=${jobId}&from=resume-scoring&score_id=${encodeURIComponent(scoreId)}&candidate_name=${encodeURIComponent(candidateName)}`;
-  };
-
-  /**
-   * Job title → the real Job Details page (a genuine navigation, not the
-   * in-page "View JD" tab - that tab is still reachable from the tab strip
-   * itself for a look without leaving this candidate).
+   * Job title → the full job description.
+   *
+   * Switching the tab alone isn't enough: the click usually happens well down
+   * the Overview tab, so the JD would open mid-document. Scrolls to the tab
+   * strip — not the page top — so the JD starts right under the tabs.
+   *
+   * `scrollIntoView` rather than `window.scrollTo` because the page scrolls
+   * inside `<main>` (and the dashboard shell around it), not the window — it
+   * walks every scrollable ancestor. The landing point is set by the section's
+   * `scroll-mt-*`, which keeps it clear of the sticky breadcrumb.
    */
   const handleOpenJobDescription = () => {
-    if (!jobId || jobId === 'global') return;
-    router.push(buildJdDetailsHref());
+    setActiveTab('viewjd');
+    tabsSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   };
   const [isDataReady, setIsDataReady] = useState(false);
   const [fullResumeData, setFullResumeData] = useState<ScoredResume>(resume);
@@ -1119,46 +1118,14 @@ Best regards`);
                 onNext={onNext}
               />
             }
-            items={(() => {
-              const base = breadcrumbItems ?? [
-                // Deepest crumb names the record being viewed (the candidate),
-                // not a generic page label.
-                { label: 'Dashboard', href: '/dashboard' },
-                { label: 'Resume Scoring', href: '/recruitment/resume-scoring' },
-                { label: jobTitle, href: `/recruitment/resume-scoring?jd_id=${jobId}` },
-                { label: resume.candidateName || 'Candidate' },
-              ];
-              // Requires a real jobId: the cross-job global list's candidate
-              // view passes the 'global' sentinel (no single JD) when a row
-              // somehow lacks its own jdId, which is not a real page to link to.
-              if (!jobId || jobId === 'global') return base;
-
-              // Always ends in Job Title, with Candidate Name (or whatever
-              // the caller's own last crumb represents) directly before it -
-              // ONE consistent order, matching the real Job Details page's
-              // own breadcrumb once you get there (which also reads
-              // Candidate > Job Title) - rather than this page showing Job
-              // Title BEFORE Candidate Name while that page shows the
-              // reverse, which read as the two crumbs randomly swapping
-              // places depending on which page you were looking at.
-              //
-              // Drops any EXISTING mid-trail job-title crumb some entry
-              // points supply (e.g. a per-job list's own "back to this job's
-              // resume list" crumb), rather than showing the same text twice
-              // in one trail.
-              const withoutMidJobCrumb = base.filter(
-                (item, i) => !(item.label === jobTitle && i !== base.length - 1)
-              );
-              // Plain text on every other tab; a working link (via
-              // `forceLink`, since PageBreadcrumb otherwise always flattens
-              // the last item to plain text) only once the View JD tab is
-              // actually open.
-              const jdCrumb =
-                activeTab === 'viewjd'
-                  ? { label: jobTitle, href: buildJdDetailsHref(), forceLink: true }
-                  : { label: jobTitle };
-              return [...withoutMidJobCrumb, jdCrumb];
-            })()}
+            items={breadcrumbItems ?? [
+              // Deepest crumb names the record being viewed (the candidate),
+              // not a generic page label.
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'Resume Scoring', href: '/recruitment/resume-scoring' },
+              { label: jobTitle, href: `/recruitment/resume-scoring?jd_id=${jobId}` },
+              { label: resume.candidateName || 'Candidate' },
+            ]}
           />
 
           <>
@@ -2368,11 +2335,20 @@ Best regards`);
                   <div className="bg-gray-50 border border-gray-300 rounded-xl p-4 sm:p-5">
                     <div className="flex flex-wrap items-center gap-2 mb-2">
                       {jdDetails.job_id && (
-                        <span className="inline-flex items-center px-2 py-0.5 bg-blue-600 text-white rounded-md text-xs font-semibold font-mono tracking-wide">
+                        <button
+                          type="button"
+                          onClick={() => setShowJdNavConfirm(true)}
+                          className="inline-flex items-center px-2 py-0.5 bg-blue-600 text-white rounded-md text-xs font-semibold font-mono tracking-wide hover:bg-blue-700 transition-colors cursor-pointer"
+                        >
                           {jdDetails.job_id}
-                        </span>
+                        </button>
                       )}
-                      <h3 className="text-base sm:text-lg font-semibold text-gray-900">{jdDetails.title || jobTitle}</h3>
+                      <h3
+                        onClick={() => setShowJdNavConfirm(true)}
+                        className="text-base sm:text-lg font-semibold text-gray-900 hover:text-brand-blue transition-colors cursor-pointer"
+                      >
+                        {jdDetails.title || jobTitle}
+                      </h3>
                       {jdDetails.status && (
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${jdStatusBadgeClass(jdDetails.status)}`}>
                           {prettifyCode(jdDetails.status)}
@@ -3030,6 +3006,22 @@ Best regards`);
               }
             />
           )}
+
+          {/* View JD tab: confirm before leaving the candidate scorecard for
+              the standalone JD Details page. */}
+          <ConfirmationDialog
+            isOpen={showJdNavConfirm}
+            title="Go to Job Description?"
+            message={`This will take you away from this candidate's scorecard to the JD page for "${jdDetails?.title || jobTitle}".`}
+            type="info"
+            confirmText="Yes, go to JD"
+            cancelText="Cancel"
+            onCancel={() => setShowJdNavConfirm(false)}
+            onConfirm={() => {
+              setShowJdNavConfirm(false);
+              router.push(`/recruitment/job-details?id=${jobId}`);
+            }}
+          />
 
           {/* Version Comparison — the same side-by-side / unified diff
               resume-view shows, on the shared textDiff helpers so both views
