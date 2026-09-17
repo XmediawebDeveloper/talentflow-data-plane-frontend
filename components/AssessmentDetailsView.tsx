@@ -36,6 +36,75 @@ interface AssessmentDetailsViewProps {
   breadcrumbItems?: BreadcrumbCrumb[];
 }
 
+/** The canonical "Go to [input] · Previous · page/total · Next" control from
+ *  components/Pagination.tsx, reused inline for the Recent Activity tab's
+ *  in-memory list, which doesn't otherwise fit that component's
+ *  items-per-page/"Showing X-Y" shape. */
+function InlinePageNav({ page, totalPages, onPageChange }: { page: number; totalPages: number; onPageChange: (page: number) => void }) {
+  const [goToPage, setGoToPage] = useState(String(page));
+  useEffect(() => {
+    setGoToPage(String(page));
+  }, [page]);
+
+  const commitGoToPage = () => {
+    const target = Math.round(Number(goToPage));
+    if (Number.isFinite(target) && target >= 1 && target <= totalPages) {
+      onPageChange(target);
+    } else {
+      setGoToPage(String(page));
+    }
+  };
+
+  const navBtnClass =
+    "inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors";
+
+  return (
+    <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+        <input
+          type="number"
+          min={1}
+          max={totalPages}
+          value={goToPage}
+          onChange={(e) => setGoToPage(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.currentTarget.blur();
+              commitGoToPage();
+            }
+          }}
+          onBlur={commitGoToPage}
+          aria-label="Go to page"
+          className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+        />
+      </div>
+
+      <button
+        onClick={() => onPageChange(page - 1)}
+        disabled={page === 1}
+        className={navBtnClass}
+        aria-label="Previous page" title="Previous page"
+      >
+        <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+      </button>
+
+      <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+        <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
+      </span>
+
+      <button
+        onClick={() => onPageChange(page + 1)}
+        disabled={page === totalPages}
+        className={navBtnClass}
+        aria-label="Next page" title="Next page"
+      >
+        <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+      </button>
+    </div>
+  );
+}
+
 interface Section {
   name: string;
   type: 'hr' | 'technical' | 'coding';
@@ -2253,27 +2322,11 @@ export default function AssessmentDetailsView({
                       <span>
                         Showing {startIdx + 1}–{Math.min(startIdx + ACTIVITY_PAGE_SIZE, recentActivity.length)} of {recentActivity.length}
                       </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => setActivityPage(p => Math.max(1, p - 1))}
-                          disabled={activityPage <= 1}
-                          className="px-3 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          Previous
-                        </button>
-                        <span className="px-2">
-                          Page {activityPage} of {totalPages}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setActivityPage(p => Math.min(totalPages, p + 1))}
-                          disabled={activityPage >= totalPages}
-                          className="px-3 py-1 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          Next
-                        </button>
-                      </div>
+                      <InlinePageNav
+                        page={activityPage}
+                        totalPages={totalPages}
+                        onPageChange={setActivityPage}
+                      />
                     </div>
                   )}
                 </>

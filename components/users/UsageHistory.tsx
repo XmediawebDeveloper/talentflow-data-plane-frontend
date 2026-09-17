@@ -175,46 +175,64 @@ function Pagination({
 }) {
   const start = (page - 1) * pageSize + 1;
   const end = Math.min(page * pageSize, total);
+
+  const [goToPage, setGoToPage] = useState(String(page));
+  useEffect(() => {
+    setGoToPage(String(page));
+  }, [page]);
+
+  const commitGoToPage = () => {
+    const target = Math.round(Number(goToPage));
+    if (Number.isFinite(target) && target >= 1 && target <= totalPages) {
+      onPageChange(target);
+    } else {
+      setGoToPage(String(page));
+    }
+  };
+
   return (
     <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-gradient-to-b from-white to-slate-50/50">
       <p className="text-sm text-gray-500">
         Showing <span className="font-medium text-gray-900">{start}–{end}</span> of <span className="font-medium text-gray-900">{total}</span> records
       </p>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-2 sm:gap-3">
+        <div className="flex items-center gap-1.5">
+          <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+          <input
+            type="number"
+            min={1}
+            max={totalPages}
+            value={goToPage}
+            onChange={(e) => setGoToPage(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.currentTarget.blur();
+                commitGoToPage();
+              }
+            }}
+            onBlur={commitGoToPage}
+            aria-label="Go to page"
+            className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+          />
+        </div>
         <button
           onClick={() => onPageChange(page - 1)}
           disabled={page === 1}
-          className="p-1.5 rounded-lg border border-gray-200 hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed text-gray-600 transition-all"
+          className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+          aria-label="Previous page" title="Previous page"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>
-        {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-          let pageNum: number;
-          if (totalPages <= 5) {
-            pageNum = i + 1;
-          } else if (page <= 3) {
-            pageNum = i + 1;
-          } else if (page >= totalPages - 2) {
-            pageNum = totalPages - 4 + i;
-          } else {
-            pageNum = page - 2 + i;
-          }
-          return (
-            <button
-              key={pageNum}
-              onClick={() => onPageChange(pageNum)}
-              className={`w-8 h-8 text-sm rounded-lg transition-all ${pageNum === page ? 'bg-brand-blue text-white font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'}`}
-            >
-              {pageNum}
-            </button>
-          );
-        })}
+        <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+          <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
+        </span>
         <button
           onClick={() => onPageChange(page + 1)}
           disabled={page === totalPages}
-          className="p-1.5 rounded-lg border border-gray-200 hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed text-gray-600 transition-all"
+          className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
+          aria-label="Next page" title="Next page"
         >
-          <ChevronRight className="w-4 h-4" />
+          <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
         </button>
       </div>
     </div>
