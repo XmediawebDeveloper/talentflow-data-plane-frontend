@@ -469,7 +469,12 @@ export default function JobVersionHistoryPanel({
                     )}
                     <td className={`py-2.5 px-3 whitespace-nowrap align-middle ${
                       stickyVersionColumn
-                        ? 'sticky left-0 z-[5] bg-[#eff3f9] shadow-[1px_0_0_0_#e5e7eb] transition-colors duration-200 dark:bg-slate-900 dark:shadow-[1px_0_0_0_#334155]'
+                        /* Opaque (not the row's own translucent tint) so cells
+                           sliding underneath never show through — but plain
+                           white/slate, NOT the #eff3f9 tint, which is
+                           reserved for the Select column so the two sticky
+                           columns don't read as one merged block. */
+                        ? 'sticky left-0 z-[5] bg-white shadow-[1px_0_0_0_#e5e7eb] transition-colors duration-200 dark:bg-slate-900 dark:shadow-[1px_0_0_0_#334155]'
                         : ''
                     }`}>
                       <span className="inline-flex items-center gap-1.5">
