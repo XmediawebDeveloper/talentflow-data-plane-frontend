@@ -2600,6 +2600,11 @@ export default function AIInterviewClusters() {
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
         rounds_config: buildUpdatedRoundsConfig(),
+        // Audit-log hint: this IS the recruiter explicitly saving and leaving
+        // (as opposed to the silent saves elsewhere on this page), so the
+        // trail should show "Saved as Draft" / "Draft Updated" once — see
+        // update_interview in routers/ai_interview.py.
+        save_and_exit: true,
       });
       toast.success('Draft saved!');
       router.push(exitHref);
