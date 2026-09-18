@@ -520,7 +520,7 @@ export default function CandidateResultDetails({
       const { convertApiResume } = await import('@/lib/utils/resumeMapper');
       // The API record is snake_case — ResumeDetailView needs the mapped shape.
       const [data, versions] = await Promise.all([
-        resumeService.get(id),
+        resumeService.get(id, true), // handleViewResume - a genuine user view
         resumeService.getVersions(id).catch(() => []),
       ]);
       setResumeDetail(convertApiResume(data, versions || []));

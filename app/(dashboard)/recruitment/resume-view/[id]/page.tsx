@@ -495,7 +495,9 @@ export default function ResumeViewPage() {
     setPreviewLoading(true);
     setVersionPreviewLabel(label);
     try {
-      const data = await resumeService.get(versionId);
+      // User explicitly asked to preview this version, so it counts as a
+      // real view for the Audit Log.
+      const data = await resumeService.get(versionId, true);
       if (data?.extracted_text) {
         setFetchedPreviewText(data.extracted_text);
         setVersionPreviewUrl(versionId);
@@ -522,9 +524,11 @@ export default function ResumeViewPage() {
     setLoading(true);
     setError(null);
     try {
-      // Fetch resume and versions in parallel
+      // Fetch resume and versions in parallel. This IS the user opening the
+      // Resume Details page, so - and only so - this first call counts as a
+      // real "Resume viewed" for the Audit Log.
       const [r, versionsData] = await Promise.all([
-        resumeService.get(resumeId),
+        resumeService.get(resumeId, true),
         resumeService.getVersions(resumeId).catch(() => [])
       ]);
 
@@ -533,29 +537,38 @@ export default function ResumeViewPage() {
       let versionsWithFullData = versionsData;
       if (versionsData && versionsData.length > 0) {
         try {
-          // Fetch full data for each version (limit to last 5 versions to avoid too many requests)
-          const versionsToFetch = versionsData.slice(0, 5);
+          // Fetch full data for each version (limit to last 5 versions to avoid too many requests).
+          // Skip resumeId itself - already fetched above as `r` - so this
+          // incidental backfill never re-requests (and re-audits) the same
+          // resume a second time in one page load.
+          const versionsToFetch = versionsData.slice(0, 5).filter((v: any) => v.id !== resumeId);
           const fullVersionsData = await Promise.all(
             versionsToFetch.map((v: any) =>
               resumeService.get(v.id).catch(() => v) // Fallback to original if fetch fails
             )
           );
 
-          // Merge full data with original version data
-          versionsWithFullData = versionsData.map((v: any, index: number) => {
-            if (index < fullVersionsData.length && fullVersionsData[index]) {
+          // Merge full data with original version data, matched by id rather
+          // than position - versionsToFetch skips resumeId (already fetched
+          // as `r` above), so it's no longer a same-length prefix of
+          // versionsData and can't be zipped by index.
+          const fullById = new Map<string, any>(fullVersionsData.map((fv: any) => [fv.id, fv]));
+          fullById.set(resumeId, r);
+          versionsWithFullData = versionsData.map((v: any) => {
+            const full = fullById.get(v.id);
+            if (full) {
               return {
                 ...v,
-                extracted_text: fullVersionsData[index].extracted_text,
-                skills: fullVersionsData[index].skills || v.skills,
-                technical_skills: fullVersionsData[index].technical_skills || v.technical_skills,
-                experience: fullVersionsData[index].experience || v.experience,
-                education: fullVersionsData[index].education || v.education,
-                certifications: fullVersionsData[index].certifications || v.certifications,
-                current_title: fullVersionsData[index].current_title || v.current_title,
-                current_company: fullVersionsData[index].current_company || v.current_company,
-                location: fullVersionsData[index].location || v.location,
-                professional_summary: fullVersionsData[index].professional_summary || v.professional_summary,
+                extracted_text: full.extracted_text,
+                skills: full.skills || v.skills,
+                technical_skills: full.technical_skills || v.technical_skills,
+                experience: full.experience || v.experience,
+                education: full.education || v.education,
+                certifications: full.certifications || v.certifications,
+                current_title: full.current_title || v.current_title,
+                current_company: full.current_company || v.current_company,
+                location: full.location || v.location,
+                professional_summary: full.professional_summary || v.professional_summary,
               };
             }
             return v;

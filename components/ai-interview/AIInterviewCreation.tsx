@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { PublishedJD, AIInterviewRoundConfig } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
+import { findInvalidSkillPunctuation } from '@/lib/skillDuplicates';
 
 interface RoundConfig {
   type: string;
@@ -63,6 +64,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
   const [savingDraft, setSavingDraft] = useState(false);
   const [suggestingTopics, setSuggestingTopics] = useState<string | null>(null);
   const [topicWeightErrors, setTopicWeightErrors] = useState<Record<string, boolean>>({});
+  const [topicInputErrors, setTopicInputErrors] = useState<Record<number, string>>({});
 
   // Load published JDs
   const loadJDs = useCallback(async () => {
@@ -151,14 +153,37 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
     setRounds(prev => prev.map((r, i) => i === index ? { ...r, percentage: clamped } : r));
   };
 
-  const handleAddTopic = (roundIndex: number, topic: string) => {
-    if (!topic.trim()) return;
+  // Returns whether the topic was accepted, so the input that called this can
+  // decide whether to clear itself (an Enter that got rejected should leave
+  // the recruiter's text in place so they can see what to fix).
+  const handleAddTopic = (roundIndex: number, topic: string): boolean => {
+    if (!topic.trim()) return false;
     const trimmed = topic.trim();
+    // Reject decorative punctuation before anything else — a trailing "." or
+    // "!" etc. doesn't change what skill is meant, so letting it through here
+    // (unlike the Configure page's must/nice-to-have list, this list has no
+    // duplicate check at all) would silently let two differently-punctuated
+    // spellings of the same topic both survive.
+    const invalidChar = findInvalidSkillPunctuation(trimmed);
+    if (invalidChar) {
+      setTopicInputErrors(prev => ({
+        ...prev,
+        [roundIndex]: `"${invalidChar}" is not allowed in a skill name — use letters, numbers and spaces only`,
+      }));
+      return false;
+    }
+    setTopicInputErrors(prev => {
+      if (!(roundIndex in prev)) return prev;
+      const next = { ...prev };
+      delete next[roundIndex];
+      return next;
+    });
     setRounds(prev => prev.map((r, i) => {
       if (i !== roundIndex || r.topics.includes(trimmed)) return r;
       const newTopics = [...r.topics, trimmed];
       return { ...r, topics: newTopics, topicWeights: distributeWeights(newTopics) };
     }));
+    return true;
   };
 
   const handleRemoveTopic = (roundIndex: number, topic: string) => {
@@ -643,14 +668,32 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                 <input
                                   type="text"
                                   placeholder="Type a skill name and press Enter to add..."
-                                  className="w-full px-3 py-1.5 text-xs border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                                  className={`w-full px-3 py-1.5 text-xs border rounded-lg focus:outline-none focus:ring-2 ${
+                                    topicInputErrors[index]
+                                      ? 'border-red-300 focus:ring-red-400'
+                                      : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
+                                  }`}
+                                  onChange={() => {
+                                    if (topicInputErrors[index]) {
+                                      setTopicInputErrors(prev => {
+                                        const next = { ...prev };
+                                        delete next[index];
+                                        return next;
+                                      });
+                                    }
+                                  }}
                                   onKeyDown={e => {
                                     if (e.key === 'Enter') {
-                                      handleAddTopic(index, (e.target as HTMLInputElement).value);
-                                      (e.target as HTMLInputElement).value = '';
+                                      const input = e.target as HTMLInputElement;
+                                      if (handleAddTopic(index, input.value)) {
+                                        input.value = '';
+                                      }
                                     }
                                   }}
                                 />
+                                {topicInputErrors[index] && (
+                                  <p className="text-[11px] text-red-500 mt-0.5">{topicInputErrors[index]}</p>
+                                )}
                               </div>
                             </>
                           )}

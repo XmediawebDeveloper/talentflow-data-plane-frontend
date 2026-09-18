@@ -318,7 +318,11 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     setVersionPreviewLoadingId(version.id);
     try {
       const { resumeService } = await import('@/lib/services/resumeService');
-      const data: any = await resumeService.get(version.id);
+      // This IS the user viewing the resume's content (via "View Resume" or a
+      // version-history preview click), so - unlike the incidental fetches
+      // above that just backfill Personal Info fields - it counts as a real
+      // "Resume viewed" for the Audit Log.
+      const data: any = await resumeService.get(version.id, true);
       const text = data?.extracted_text || '';
       if (!text) toast.info('Preview not available for this file.');
       setVersionPreview({ id: version.id, versionNumber, fileName: version.fileName, text });
@@ -411,19 +415,23 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
           // the compare needs. Pull the full record for the most recent few —
           // capped at 5, same as resume-view, so a resume with a long history
           // doesn't fire a request per version. Beyond that the row still lists
-          // fine; only its diff is unavailable.
+          // fine; only its diff is unavailable. actualResumeId is skipped here
+          // since it was already fetched as `fullResume` above - refetching it
+          // was a redundant second request (and, worse, a second uncounted
+          // "Resume viewed" audit entry for the same page load).
           let versionsWithText: any[] = versionsData || [];
           if (versionsWithText.length > 0) {
             try {
-              const toFetch = versionsWithText.slice(0, 5);
+              const toFetch = versionsWithText.slice(0, 5).filter((v: any) => v.id !== actualResumeId);
               const fullVersions = await Promise.all(
                 toFetch.map((v: any) => resumeService.get(v.id).catch(() => v))
               );
-              versionsWithText = versionsWithText.map((v: any, index: number) =>
-                index < fullVersions.length && fullVersions[index]
-                  ? { ...v, extracted_text: (fullVersions[index] as any).extracted_text }
-                  : v
-              );
+              const fullById = new Map<string, any>(fullVersions.map((fv: any) => [fv.id, fv]));
+              if (fullResume) fullById.set(actualResumeId, fullResume);
+              versionsWithText = versionsWithText.map((v: any) => {
+                const full = fullById.get(v.id);
+                return full ? { ...v, extracted_text: full.extracted_text } : v;
+              });
             } catch (err) {
               console.warn('[CandidateScoringDetailPage] Failed to fetch full version data:', err);
             }
