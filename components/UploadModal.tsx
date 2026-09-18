@@ -809,7 +809,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
       } else if (error?.response?.status === 400 && error?.response?.data?.detail) {
         const detail = error.response.data.detail;
 
-        if (detail.error === 'INVALID_RESUME') {
+        if (detail.error === 'INVALID_RESUME' || detail.error === 'NON_ENGLISH_RESUME') {
           errorMessage = detail.message || 'Invalid Resume. The uploaded file does not appear to be a valid resume.';
           fileName = detail.file_name || fileName;
 
