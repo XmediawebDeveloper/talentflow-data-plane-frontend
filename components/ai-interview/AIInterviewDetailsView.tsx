@@ -416,6 +416,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     a.click();
     URL.revokeObjectURL(url);
     toast.success('Exported to CSV');
+    void aiInterviewService.logConfigExport(config.id);
   };
 
   const getStatusBadge = (status: string) => {
