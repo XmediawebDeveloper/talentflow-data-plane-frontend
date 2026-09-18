@@ -182,6 +182,11 @@ interface AITalentMatchPageProps {
    *  share a JD code but not an id). Drives whether "View Version History"
    *  shows at all. */
   matchSessionCounts?: Record<string, number>;
+  /** Tenant-wide "Top Match Rating" band counts, precomputed server-side in
+   *  the same session-list call so these two stat cards render immediately
+   *  instead of waiting on every session's full candidate detail. `null`
+   *  while that initial call is still in flight. */
+  ratingBandCounts?: { exact: number; partial: number } | null;
   onSaveMatch?: (data: MatchHistory) => void;
   /** Background reconciliation after a match completes — see the route's own
    *  fetchData({ silent: true }) for why this exists alongside onSaveMatch. */
@@ -194,6 +199,7 @@ export default function AITalentMatchPage({
   jobs,
   matchHistory = [],
   matchSessionCounts = {},
+  ratingBandCounts = null,
   onSaveMatch,
   onMatchComplete,
   onSubmitToScoring,
@@ -1978,12 +1984,18 @@ export default function AITalentMatchPage({
     // "Top Match Rating (10)"/"Top Match Rating (9-7)" cards: how many scored
     // resumes land in each band, out of the same un-deduped rows "All Resumes"
     // itself lists — so a card's count and its drill-down list never disagree.
+    // This client-side tally is only a fallback for when the server-computed
+    // `ratingBandCounts` prop isn't available yet (or at all) — normally the
+    // cards render straight from that prop below, without waiting on it.
     const topRatingExactCount = allResumeRows.filter(
       ({ job }) => matchBandForRating(toMatchRating(job.score)) === 'exact'
     ).length;
     const topRatingPartialCount = allResumeRows.filter(
       ({ job }) => matchBandForRating(toMatchRating(job.score)) === 'partial'
     ).length;
+    const statsReady = ratingBandCounts !== null || topStatsReady;
+    const displayedExactCount = ratingBandCounts?.exact ?? topRatingExactCount;
+    const displayedPartialCount = ratingBandCounts?.partial ?? topRatingPartialCount;
 
     const filteredAllResumeRows = allResumeRows.filter(({ row, job }) => {
       const matchesSearch = !candidateQuery ||
@@ -2242,10 +2254,12 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={CheckCircle2}
             label="Top Match Rating (10)"
-            // Shown only once every session has resolved — see `topStatsReady`
-            // — so this renders the final count directly instead of visibly
-            // counting up as sessions load in one by one.
-            value={topStatsReady ? topRatingExactCount : (
+            // Renders straight from the server-computed `ratingBandCounts` prop
+            // (available from the same fast session-list call as the other two
+            // cards); only falls back to the slower per-session tally + its
+            // "wait for every session" gate (`statsReady`) if that prop is
+            // unavailable, so the skeleton is no longer the common case.
+            value={statsReady ? displayedExactCount : (
               <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
             )}
             sparkline={false}
@@ -2263,10 +2277,8 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={PieChart}
             label="Top Match Rating (9-7)"
-            // Same "hold until every session has resolved" rule as the 10-band
-            // card above, so this shows the final count directly rather than
-            // counting up (1, 2, 3, ...) as sessions load in.
-            value={topStatsReady ? topRatingPartialCount : (
+            // Same server-computed-prop-first rule as the 10-band card above.
+            value={statsReady ? displayedPartialCount : (
               <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
             )}
             sparkline={false}
