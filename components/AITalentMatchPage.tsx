@@ -19,7 +19,7 @@ import ResumeVersionsModal from './ResumeVersionsModal';
 import Pagination from './Pagination';
 import ListPagination from './ListPagination';
 import { recordUsage } from '@/lib/services/usageTrackingService';
-import { aiMatchService, MatchedCandidate } from '@/lib/services/aiMatchService';
+import { aiMatchService, MatchedCandidate, AIMatchSessionResponse } from '@/lib/services/aiMatchService';
 import AIMatchVersionHistoryTable, { AIMatchSessionVersion, buildAIMatchVersions } from './AIMatchVersionHistoryTable';
 import { scoringService } from '@/lib/services/scoringService';
 import { resumeService } from '@/lib/services/resumeService';
@@ -187,6 +187,11 @@ interface AITalentMatchPageProps {
    *  instead of waiting on every session's full candidate detail. `null`
    *  while that initial call is still in flight. */
   ratingBandCounts?: { exact: number; partial: number } | null;
+  /** Every session from the same initial /ai-match/sessions call `matchHistory`
+   *  is already built from — kept raw (not collapsed to one-per-job) so "View
+   *  Versions" can paint instantly from data already in memory instead of
+   *  re-fetching per version. See `getOptimisticAIMatchVersions`. */
+  allMatchSessions?: AIMatchSessionResponse[];
   onSaveMatch?: (data: MatchHistory) => void;
   /** Background reconciliation after a match completes — see the route's own
    *  fetchData({ silent: true }) for why this exists alongside onSaveMatch. */
@@ -200,6 +205,7 @@ export default function AITalentMatchPage({
   matchHistory = [],
   matchSessionCounts = {},
   ratingBandCounts = null,
+  allMatchSessions = [],
   onSaveMatch,
   onMatchComplete,
   onSubmitToScoring,
@@ -859,6 +865,28 @@ export default function AITalentMatchPage({
     } finally {
       setLoadingHistoryJobId(current => current === historyKey ? null : current);
     }
+  };
+
+  /**
+   * Best-effort version rows for "View Versions"' FIRST paint, built entirely
+   * from data already in memory — no request. `allMatchSessions` is the raw,
+   * un-collapsed reply from the same /ai-match/sessions call `matchHistory`
+   * itself comes from, and every field `AIMatchVersionHistoryTable` reads off
+   * `session` (`total_matches`, `created_at`, `jd_id`) is already present on
+   * those summary records — unlike the full hydration `loadAIMatchVersionHistory`
+   * does, nothing here needs `session.results`.
+   *
+   * `loadAIMatchVersionHistory` still runs every time regardless (see
+   * `toggleAIMatchVersionHistory`) and overwrites `historyVersionsByJob` the
+   * moment it resolves — this is only ever a head start, corrected the moment
+   * the authoritative, fully-hydrated fetch lands (that fetch is also what the
+   * "Match History" modal's Exact/Partial/No-Match roll-up depends on, so it
+   * can't be skipped, only no longer blocking this table's first paint).
+   */
+  const getOptimisticAIMatchVersions = (historyKey: string): AIMatchSessionVersion[] => {
+    const lineageIds = new Set(jobs.filter(j => j.jobId === historyKey).map(j => j.id));
+    const knownSessions = allMatchSessions.filter(s => s.jd_id && lineageIds.has(s.jd_id));
+    return buildAIMatchVersions(knownSessions);
   };
 
   const toggleAIMatchVersionHistory = (historyKey: string, anyRowId: string) => {
@@ -3694,6 +3722,11 @@ export default function AITalentMatchPage({
               // this row's id — every republished version of the same job
               // shares one history key so their runs aren't split across cards.
               const historyKey = jobData?.jobId || item.jobId;
+              // The real, fully-hydrated versions once loadAIMatchVersionHistory
+              // lands; an instant, data-already-in-memory guess until then — see
+              // getOptimisticAIMatchVersions's own doc comment.
+              const displayedHistoryVersions = historyVersionsByJob[historyKey] ?? getOptimisticAIMatchVersions(historyKey);
+              const hasHistoryVersionsToShow = !!historyVersionsByJob[historyKey] || displayedHistoryVersions.length > 0;
 
               return (
                 <div
@@ -3868,9 +3901,13 @@ export default function AITalentMatchPage({
                         <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Version History</p>
                       </div>
                       <AIMatchVersionHistoryTable
-                        loading={loadingHistoryJobId === historyKey}
-                        failed={failedHistoryJobId === historyKey}
-                        versions={historyVersionsByJob[historyKey] ?? null}
+                        loading={!hasHistoryVersionsToShow && loadingHistoryJobId === historyKey}
+                        /* A background hydration failure (fetching the fully
+                           accurate version) must not blank out a perfectly good
+                           optimistic table already on screen — only shown when
+                           there is nothing else to fall back on. */
+                        failed={failedHistoryJobId === historyKey && !hasHistoryVersionsToShow}
+                        versions={hasHistoryVersionsToShow ? displayedHistoryVersions : null}
                         /* Resolved per session, not per card: the rows span the
                            job's whole lineage, so each one may be a different
                            JD record with its own status. Falls back to this

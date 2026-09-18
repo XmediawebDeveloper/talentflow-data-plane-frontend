@@ -798,6 +798,37 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     );
   };
 
+  /* mapAssessmentFromApi (below) turns the backend's raw status into a
+     display word for the rest of the page. AssessmentVersionRow.status is
+     documented as "straight off assessmentService.list" — i.e. the RAW word —
+     so reusing apiAssessments for the optimistic paint below has to translate
+     back, or `assessmentStatusLabel` (which expects 'published'/'draft'/...)
+     would read "Active" as an unrecognised status and render it as Draft. */
+  const DISPLAY_TO_RAW_ASSESSMENT_STATUS: Record<string, string> = {
+    Active: 'published', Completed: 'closed', Archived: 'archived', Draft: 'draft',
+  };
+
+  /**
+   * Best-effort assessment rows for the version panel's FIRST paint, read
+   * from the full assessment list (`apiAssessments`) this page already has in
+   * memory — filtered to this job's known version ids, straight off
+   * `jdLineage.lineages` if that lineage happens to already be cached (e.g.
+   * from the "LATEST badge" prefetch), else just this row's own JD id.
+   *
+   * Complete and correct whenever the page has no status/search filter active
+   * (the default "Total Jobs" view — see `getAssessmentStatusFilter`), and
+   * merely a head start otherwise: `loadAssessmentLineage`'s own per-version
+   * fetch still runs regardless and overwrites `assessmentLineages[jdId]` the
+   * moment it resolves, so a filtered tab or an unknown lineage self-corrects
+   * rather than getting stuck on a guess.
+   */
+  const getOptimisticAssessmentRows = (jdId: string): AssessmentVersionRow[] => {
+    const knownVersionIds = new Set<string>([jdId, ...(jdLineage.lineages[jdId] || []).map(v => v.id)]);
+    return apiAssessments
+      .filter(a => a.jd_id && knownVersionIds.has(a.jd_id))
+      .map(a => ({ ...a, status: DISPLAY_TO_RAW_ASSESSMENT_STATUS[a.status] || a.status })) as AssessmentVersionRow[];
+  };
+
   const toggleAssessmentVersions = (assessment: AssessmentLineageRef) => {
     const opening = openVersionsFor !== assessment.id;
     setOpenVersionsFor(opening ? assessment.id : null);
@@ -4006,16 +4037,26 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           here: a click on a version row must not bubble to the
           row behind it, which would collapse the panel it was
           aimed at. */}
-      {openVersionsFor === assessment.id && assessment.jd_id && (
+      {openVersionsFor === assessment.id && assessment.jd_id && (() => {
+        const jdId = assessment.jd_id!;
+        /* The real, authoritative rows once loadAssessmentLineage's own fetch
+           lands; the best-effort optimistic guess (see its own doc comment)
+           until then, so the panel has something to show on first paint
+           instead of a spinner. Every lookup below reads this one value, so
+           the panel and its row actions never disagree about what's on
+           screen. */
+        const displayedRows = assessmentLineages[jdId] ?? getOptimisticAssessmentRows(jdId);
+        const hasRowsToShow = !!assessmentLineages[jdId] || displayedRows.length > 0;
+        return (
         <div onClick={(e) => e.stopPropagation()}>
           <AssessmentVersionHistoryPanel
             jobVersions={jdLineage.lineages[assessment.jd_id]}
             jobVersionDetails={jdLineage.versionDetails}
-            assessments={assessmentLineages[assessment.jd_id]}
+            assessments={displayedRows}
             /* The backend's per-version "has an assessment" index,
                read beside the rows - see the prop for why both. */
             jdsWithAssessments={jdsWithAssessments}
-            loading={!!loadingLineages[assessment.jd_id] || jdLineage.isLoading(assessment.jd_id)}
+            loading={!hasRowsToShow && (!!loadingLineages[assessment.jd_id] || jdLineage.isLoading(assessment.jd_id))}
             currentAssessmentId={assessment.id}
             latestJobVersion={getLatestJobVersion(assessment)}
             /* Opened on the page the ROW's own status calls for -
@@ -4033,8 +4074,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                panel still LISTS the versions, which is what
                View Versions is reached for. */
             onRowClick={selectMode ? undefined : (versionId) => {
-              const raw = (assessmentLineages[assessment.jd_id!] || [])
-                .find((v) => v.id === versionId);
+              const raw = displayedRows.find((v) => v.id === versionId);
               openAssessment(raw ? mapAssessmentFromApi(raw, 0) : { id: versionId });
             }}
             /* Every version gets the card's own menu, keyed
@@ -4064,8 +4104,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                Preview action opens, so there is one assessment-details view
                in the app and this is it. */
             onViewAssessment={(version) => {
-              const raw = (assessmentLineages[assessment.jd_id!] || [])
-                .find((v) => v.id === version.id);
+              const raw = displayedRows.find((v) => v.id === version.id);
               if (!raw) return;
               setSelectedAssessmentForPreview(mapAssessmentFromApi(raw, 0));
               setShowPreviewModal(true);
@@ -4138,8 +4177,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                one control that answers "which of these am I picking?", so in
                the dialog the column holds that alone. */
             renderAction={selectMode ? undefined : (version) => {
-              const raw = (assessmentLineages[assessment.jd_id!] || [])
-                .find((v) => v.id === version.id);
+              const raw = displayedRows.find((v) => v.id === version.id);
               if (!raw) return null;
               const mapped = mapAssessmentFromApi(raw, 0);
               return (
@@ -4151,7 +4189,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             }}
           />
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 

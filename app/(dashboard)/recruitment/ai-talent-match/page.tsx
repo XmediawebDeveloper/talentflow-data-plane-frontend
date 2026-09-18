@@ -90,6 +90,11 @@ export default function AITalentMatchRoute() {
   // stat cards render immediately instead of waiting on every session's
   // full candidate detail to be fetched and bucket-counted client-side.
   const [ratingBandCounts, setRatingBandCounts] = useState<{ exact: number; partial: number } | null>(null);
+  // Every session from the same call, kept raw (not collapsed to one-per-job
+  // like `matchHistory`) so "View Versions" can build its table straight from
+  // memory instead of re-fetching per job version — see
+  // AITalentMatchPage's getOptimisticAIMatchVersions.
+  const [allMatchSessions, setAllMatchSessions] = useState<AIMatchSessionResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -142,6 +147,7 @@ export default function AITalentMatchRoute() {
           exact: historyResponse.top_rating_exact_count ?? 0,
           partial: historyResponse.top_rating_partial_count ?? 0,
         });
+        setAllMatchSessions(historyResponse.items || []);
 
         // Keep route load summary-only.
         // Candidate details are fetched lazily when the user opens a specific session.
@@ -174,6 +180,7 @@ export default function AITalentMatchRoute() {
           setMatchHistory([]);
           setMatchSessionCounts({});
           setRatingBandCounts(null);
+          setAllMatchSessions([]);
         }
       } finally {
         setIsLoading(false);
@@ -247,6 +254,7 @@ export default function AITalentMatchRoute() {
           matchHistory={matchHistory}
           matchSessionCounts={matchSessionCounts}
           ratingBandCounts={ratingBandCounts}
+          allMatchSessions={allMatchSessions}
           onSaveMatch={handleSaveMatch}
           onMatchComplete={() => fetchData({ silent: true })}
         />
