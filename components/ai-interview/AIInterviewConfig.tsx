@@ -31,6 +31,7 @@ import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
 import AIInterviewFlowLoader from './AIInterviewFlowLoader';
 import {
   closestDuplicate,
+  findInvalidSkillPunctuation,
   normalizeSkillName as normalizeSkillNameShared,
 } from '@/lib/skillDuplicates';
 
@@ -446,6 +447,19 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
     const trimmed = newSkillName.trim().replace(/\s+/g, ' ');
     if (!trimmed) {
       setAddSkillError('Enter a skill name');
+      return;
+    }
+
+    // Reject decorative punctuation before anything else runs — a trailing
+    // "." or "!" etc. doesn't change what skill is meant, but letting it
+    // through made duplicate detection inconsistent (the same skill was
+    // caught or missed purely based on whether it had one). Blocking it here
+    // is clearer than silently stripping it: the recruiter sees why.
+    const invalidChar = findInvalidSkillPunctuation(trimmed);
+    if (invalidChar) {
+      const msg = `"${invalidChar}" is not allowed in a skill name — use letters, numbers and spaces only`;
+      setAddSkillError(msg);
+      toast.error(msg);
       return;
     }
 
