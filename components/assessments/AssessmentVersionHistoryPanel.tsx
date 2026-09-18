@@ -151,6 +151,21 @@ interface AssessmentVersionHistoryPanelProps {
    */
   headerAction?: ReactNode;
   /**
+   * What the child rows are CALLED. Omitted, the assessment wording stands —
+   * see `ASSESSMENT_VOCABULARY`.
+   */
+  vocabulary?: VersionHistoryVocabulary;
+  /**
+   * The child table's one descriptive cell, paired with
+   * `vocabulary.detailColumn`. Omitted, it is Round Weightage, which reads the
+   * three `<section>_enabled` / `<section>_percentage` fields off the row.
+   *
+   * A slot because that cell is the only part of this table that is about what
+   * the child IS rather than about its version, state or provenance — and so
+   * the only part a different kind of child cannot share.
+   */
+  renderChildDetail?: (child: AssessmentVersionRow) => ReactNode;
+  /**
    * The trailing controls for one assessment — the host's own three-dot menu
    * and quick actions. Given that assessment's record so the host's existing
    * per-assessment handlers work unchanged. Omit it and the Actions column
@@ -401,9 +416,45 @@ export function JobStatusChip({ status, currentVersion }: { status?: string; cur
   );
 }
 
+/**
+ * What the nested level is CALLED, and what its one descriptive column holds.
+ *
+ * Every word this panel puts on screen for the child rows comes from here. It
+ * exists because the AI Interviews list opens the same two-level history over
+ * the same job lineage, with interview configs where this page has assessments
+ * — the same table, a different noun. Defaulted to the assessment wording, so
+ * a caller that says nothing gets exactly what this panel has always rendered.
+ */
+export interface VersionHistoryVocabulary {
+  /** Outer table's count column — how many children hang off a job version. */
+  childPlural: string;
+  /** Heading over the nested table, with its count appended. */
+  childVersionsHeading: string;
+  /** Said in the Actions cell of a job version that has no child at all. */
+  childNone: string;
+  /** The child table's one descriptive column — see `renderChildDetail`. */
+  detailColumn: { label: string; minW: string };
+  /**
+   * One child's status, in the words its own list uses. Keyed straight into
+   * `STATUS_STYLES` by the chip, so a word outside Active / Draft / Completed /
+   * Archived / Disabled renders in the neutral tone rather than a wrong one.
+   */
+  statusLabel: (status?: string) => string;
+}
+
+export const ASSESSMENT_VOCABULARY: VersionHistoryVocabulary = {
+  childPlural: 'Assessments',
+  childVersionsHeading: 'Assessment Versions',
+  childNone: 'No assessment',
+  /* Where Questions used to be. Wider than the column it replaced, because it
+     holds three labelled lines rather than one number. */
+  detailColumn: { label: 'Round Weightage', minW: 'min-w-[170px]' },
+  statusLabel: assessmentStatusLabel,
+};
+
 /* Outer table: the job version, its state, its provenance, its totals.
    `Actions` is appended by the renderer so it can be pinned separately. */
-const JOB_COLUMNS: { label: string; minW: string }[] = [
+const jobColumnsFor = (vocabulary: VersionHistoryVocabulary): { label: string; minW: string }[] => [
   { label: 'Version', minW: 'min-w-[150px]' },
   { label: 'Status', minW: 'min-w-[110px]' },
   { label: 'Experience', minW: 'min-w-[130px]' },
@@ -411,21 +462,19 @@ const JOB_COLUMNS: { label: string; minW: string }[] = [
      Narrower combined than the 250px the pair took, and the two lines read as
      the one statement they are: who made this version, and when. */
   { label: 'Created', minW: 'min-w-[200px]' },
-  { label: 'Assessments', minW: 'min-w-[110px]' },
+  { label: vocabulary.childPlural, minW: 'min-w-[110px]' },
   { label: 'Invitations Sent', minW: 'min-w-[120px]' },
   { label: 'Completed', minW: 'min-w-[120px]' },
 ];
 
-/* Inner table: the same shape minus Assessments — an assessment version is
+/* Inner table: the same shape minus the count column — a child version is
    itself the thing that column counts. */
-const ASSESSMENT_COLUMNS: { label: string; minW: string }[] = [
+const childColumnsFor = (vocabulary: VersionHistoryVocabulary): { label: string; minW: string }[] => [
   { label: 'Version', minW: 'min-w-[150px]' },
   { label: 'Status', minW: 'min-w-[110px]' },
   { label: 'Created On', minW: 'min-w-[130px]' },
   { label: 'Created By', minW: 'min-w-[120px]' },
-  /* Where Questions used to be. Wider than the column it replaced, because it
-     holds three labelled lines rather than one number. */
-  { label: 'Round Weightage', minW: 'min-w-[170px]' },
+  vocabulary.detailColumn,
   { label: 'Invitations Sent', minW: 'min-w-[120px]' },
 ];
 
@@ -649,7 +698,10 @@ export default function AssessmentVersionHistoryPanel({
   activeSelection,
   onViewAssessment,
   selectionGroupName = 'assessment-version-selection',
+  vocabulary = ASSESSMENT_VOCABULARY,
+  renderChildDetail,
 }: AssessmentVersionHistoryPanelProps) {
+  const childColumns = childColumnsFor(vocabulary);
   /* Which job versions have their assessment table open. Local to the panel:
      nothing outside it needs to know, and the state dies with the panel when
      the row is collapsed - which is the right lifetime for it. */
@@ -712,7 +764,7 @@ export default function AssessmentVersionHistoryPanel({
      Assessment", so reserving the full 280px leaves a ragged gap on the right
      of every row. Measured against what this host can actually render. */
   const jobColumns = [
-    ...JOB_COLUMNS,
+    ...jobColumnsFor(vocabulary),
     { label: 'Actions', minW: onCreateAssessment ? 'min-w-[280px]' : 'min-w-[180px]' },
   ];
   const assessmentRows = assessments ?? [];
@@ -1098,7 +1150,7 @@ export default function AssessmentVersionHistoryPanel({
                                 );
                               })()
                             ) : (
-                              <span className="text-xs text-gray-500 dark:text-slate-400">No assessment</span>
+                              <span className="text-xs text-gray-500 dark:text-slate-400">{vocabulary.childNone}</span>
                             )}
                           </div>
                         </td>
@@ -1124,7 +1176,7 @@ export default function AssessmentVersionHistoryPanel({
                                   <div className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 overflow-hidden">
                                     <div className="px-3 pt-2.5 pb-1.5">
                                       <h5 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
-                                        Assessment Versions{' '}
+                                        {vocabulary.childVersionsHeading}{' '}
                                         <span className="font-normal text-gray-500 dark:text-slate-400">({count})</span>
                                       </h5>
                                     </div>
@@ -1148,7 +1200,7 @@ export default function AssessmentVersionHistoryPanel({
                                               ...(showsAssessmentSelect
                                                 ? [{ label: 'Select', minW: 'min-w-[70px]' }]
                                                 : []),
-                                              ...ASSESSMENT_COLUMNS,
+                                              ...childColumns,
                                               ...(showsAssessmentActions
                                                 ? [{ label: 'Actions', minW: assessmentActionsMinW }]
                                                 : []),
@@ -1174,7 +1226,7 @@ export default function AssessmentVersionHistoryPanel({
                                             <tr>
                                               <td
                                                 colSpan={
-                                                  ASSESSMENT_COLUMNS.length +
+                                                  childColumns.length +
                                                   (showsAssessmentSelect ? 1 : 0) +
                                                   (showsAssessmentActions ? 1 : 0)
                                                 }
@@ -1187,7 +1239,7 @@ export default function AssessmentVersionHistoryPanel({
                                           )}
                                           {group.assessments.map((assessment) => {
                                             const isCurrent = !!currentAssessmentId && assessment.id === currentAssessmentId;
-                                            const statusLabel = assessmentStatusLabel(assessment.status);
+                                            const statusLabel = vocabulary.statusLabel(assessment.status);
                                             const invitations = assessment.invitations_count ?? 0;
                                             const isPicked = selectedAssessmentId === assessment.id;
                                             /* The one row still in play once a
@@ -1281,7 +1333,7 @@ export default function AssessmentVersionHistoryPanel({
                                                   {assessment.created_by_name || '—'}
                                                 </td>
                                                 <td className="py-2.5 px-3 whitespace-nowrap align-middle">
-                                                  <RoundWeightageCell assessment={assessment} />
+                                                  {renderChildDetail ? renderChildDetail(assessment) : <RoundWeightageCell assessment={assessment} />}
                                                 </td>
                                                 <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                                                   <MetricCell value={invitations} label={invitations === 1 ? 'Invitation' : 'Invitations'} />
