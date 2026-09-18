@@ -2,7 +2,7 @@
 
 import Image from 'next/image';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { ArrowUpDown, Sparkles, BarChart3, Search, ChevronDown, ChevronRight, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Award, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video } from 'lucide-react';
+import { ArrowUpDown, Sparkles, BarChart3, Search, ChevronDown, ChevronRight, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -88,17 +88,6 @@ interface MatchHistory {
   matchedAt: Date;
   totalMatches: number;
   matchedCandidates: MatchedCandidateWithVersions[];
-  // Carried from the session's server-side join to job_descriptions — used
-  // as a fallback when `jobData` (looked up from the page's capped `jobs`
-  // list) can't find the job, e.g. an older/superseded republished version.
-  jdJobId?: string;
-  jdStatus?: string;
-  jdDepartment?: string;
-  jdCurrentVersion?: number;
-  // Best candidate rating (1-10 scale), precomputed server-side from stored
-  // results — lets "Top Match Rating" / "Top Matching Jobs" render from the
-  // summary list alone, before any per-session candidate detail has loaded.
-  topRating?: number | null;
 }
 
 /** Set just before leaving for a resume, so returning keeps the active filters. */
@@ -142,6 +131,31 @@ function matchBandForRating(rating: number): 'exact' | 'partial' | 'no_match' {
   return 'no_match';
 }
 
+/**
+ * Match History modal's own filter row (Search / Matched By / Version /
+ * Rating Range / Date Range). Draft edits live separately from the applied
+ * values so typing/picking doesn't narrow the table until Apply — Reset
+ * clears both back to this. "Matched By" only ever has one real value (the
+ * API carries no per-run user attribution — every match is system-triggered)
+ * so its options are honest rather than inventing names.
+ */
+interface MatchHistoryModalFilters {
+  search: string;
+  matchedBy: 'all' | 'system';
+  version: 'all' | number;
+  rating: 'all' | 'exact' | 'partial' | 'no_match';
+  dateFrom: string;
+  dateTo: string;
+}
+const EMPTY_HISTORY_MODAL_FILTERS: MatchHistoryModalFilters = {
+  search: '',
+  matchedBy: 'all',
+  version: 'all',
+  rating: 'all',
+  dateFrom: '',
+  dateTo: '',
+};
+
 /** One candidate, plus every job they were matched against. */
 interface CandidateMatchRow {
   key: string;
@@ -169,6 +183,9 @@ interface AITalentMatchPageProps {
    *  shows at all. */
   matchSessionCounts?: Record<string, number>;
   onSaveMatch?: (data: MatchHistory) => void;
+  /** Background reconciliation after a match completes — see the route's own
+   *  fetchData({ silent: true }) for why this exists alongside onSaveMatch. */
+  onMatchComplete?: () => void;
   onSubmitToScoring?: (jobId: string, candidateIds: string[]) => void;
   onBack?: () => void;
 }
@@ -178,6 +195,7 @@ export default function AITalentMatchPage({
   matchHistory = [],
   matchSessionCounts = {},
   onSaveMatch,
+  onMatchComplete,
   onSubmitToScoring,
   onBack
 }: AITalentMatchPageProps) {
@@ -315,10 +333,16 @@ export default function AITalentMatchPage({
         const details = await aiMatchService.getSession(item.id);
         const candidates = details.candidates as MatchedCandidateWithVersions[];
         setHistoryCandidatesById(prev => ({ ...prev, [item.id]: candidates }));
+        // A retry that succeeds after an earlier failure — this session is no
+        // longer "failed", it's loaded.
+        setFailedHistorySessionIds(prev => (prev.has(item.id) ? (() => {
+          const next = new Set(prev); next.delete(item.id); return next;
+        })() : prev));
         return candidates;
       } catch (error) {
         console.error('[AITalentMatch] Failed to fetch session details:', error);
         if (!silent) toast.error('Failed to load matched candidates');
+        setFailedHistorySessionIds(prev => (prev.has(item.id) ? prev : new Set(prev).add(item.id)));
         return [] as MatchedCandidateWithVersions[];
       } finally {
         historyCandidateRequests.current.delete(item.id);
@@ -566,13 +590,6 @@ export default function AITalentMatchPage({
   // Scoring's Exact/Partial/No Match pills, continuing the same button group
   // and narrowing "All Resumes" to one band at a time.
   const [candidateRatingBand, setCandidateRatingBand] = useState<'exact' | 'partial' | 'no_match' | null>(null);
-  // "Top Matching Jobs" card drill-down: narrows the Matched Jobs list (View by
-  // Job) to only jobs whose best candidate hit a perfect 10/10 — the same
-  // definition `topMatchingJobsCount` below counts. Separate from
-  // `candidateRatingBand` because that one narrows the candidate-level "All
-  // Resumes" view instead; the two views group by different things (job vs.
-  // candidate-per-job), so each needs its own filter flag.
-  const [showOnlyExactMatchJobs, setShowOnlyExactMatchJobs] = useState(false);
 
   // "Match by Candidate" roll-up: every matched candidate across all jobs, with
   // the jobs they matched. Built in-page — no navigation away.
@@ -604,6 +621,11 @@ export default function AITalentMatchPage({
   // grouped "View by Candidates" uses.
   const [candidateCurrentPage, setCandidateCurrentPage] = useState(1);
   const [candidateItemsPerPage, setCandidateItemsPerPage] = useState(20);
+  // Separate page/size for the "View by Resumes" flat table — same filter
+  // and sort state as "View by Candidates" above, but its own row grouping,
+  // so the two views paginate independently.
+  const [resumeCurrentPage, setResumeCurrentPage] = useState(1);
+  const [resumeItemsPerPage, setResumeItemsPerPage] = useState(20);
   const [expandedCandidateGroups, setExpandedCandidateGroups] = useState<Set<string>>(new Set());
   const toggleCandidateGroupExpanded = (key: string) => {
     setExpandedCandidateGroups(prev => {
@@ -625,7 +647,7 @@ export default function AITalentMatchPage({
       dateFrom: '',
       dateTo: '',
     },
-    onChange: () => setCandidateCurrentPage(1),
+    onChange: () => { setCandidateCurrentPage(1); setResumeCurrentPage(1); },
   });
   const candidateSearchQuery = candidateSearch.appliedQuery;
   const {
@@ -644,6 +666,7 @@ export default function AITalentMatchPage({
 
   useEffect(() => {
     setCandidateCurrentPage(1);
+    setResumeCurrentPage(1);
   }, [candidateSortBy, candidateSortOrder]);
 
   const openCandidateMatch = (historyId: string) => {
@@ -715,15 +738,22 @@ export default function AITalentMatchPage({
     return 'bg-red-100 text-red-700 border-red-300';
   };
 
+  // Same three colours as candidateScoreBadgeClass, for the entered-job
+  // "Matched Rating" badge — which already carries a 1-10 rank rather than a
+  // raw score, so it bands directly instead of going through toMatchRating.
+  const rankBadgeClass = (rank: number) => {
+    const band = matchBandForRating(rank);
+    if (band === 'exact') return 'bg-green-100 text-green-700 border-green-300';
+    if (band === 'partial') return 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20';
+    return 'bg-red-100 text-red-700 border-red-300';
+  };
+
   const clearCandidateFilters = candidateSearch.reset;
 
   // One clear for the whole Matched Jobs list — shared by the panel's "Reset
   // all" and the empty state's button, which used to reset only three of them.
-  // Also drops the "Top Matching Jobs" card's exact-match narrowing, so
-  // "Clear All Filters" really does return to every matched job.
   const clearHistoryFilters = () => {
     historySearch.reset();
-    setShowOnlyExactMatchJobs(false);
   };
 
   const openHistoryListView = () => {
@@ -837,8 +867,12 @@ export default function AITalentMatchPage({
   // there already carries its full `results`), so opening the popup for a job
   // whose versions are already expanded costs no extra request.
   const [matchHistoryModal, setMatchHistoryModal] = useState<{ item: MatchHistory; historyKey: string } | null>(null);
+  // Live — every change narrows the table immediately, no Apply step. Fresh
+  // on every open so a filter set for one job doesn't leak into the next.
+  const [historyModalFilter, setHistoryModalFilter] = useState<MatchHistoryModalFilters>(EMPTY_HISTORY_MODAL_FILTERS);
   const openMatchHistoryModal = (item: MatchHistory, historyKey: string) => {
     setMatchHistoryModal({ item, historyKey });
+    setHistoryModalFilter(EMPTY_HISTORY_MODAL_FILTERS);
     if (!historyVersionsByJob[historyKey]) void loadAIMatchVersionHistory(historyKey, item.jobId);
   };
 
@@ -848,6 +882,13 @@ export default function AITalentMatchPage({
   const [scoringVersions, setScoringVersions] = useState<any[]>([]);
   const [historyCandidatesById, setHistoryCandidatesById] = useState<Record<string, MatchedCandidateWithVersions[]>>({});
   const [loadingHistorySessionId, setLoadingHistorySessionId] = useState<string | null>(null);
+  // Sessions whose candidate fetch failed. Kept separate from
+  // `historyCandidatesById` so a failure never gets cached as "0 candidates" —
+  // opening that job later still retries — but "Top Match Rating"/"Top
+  // Matching Jobs" (via `topStatsReady`) need to know a session is done being
+  // waited on even when it errored, or a single failed fetch would leave
+  // those tiles on their loading skeleton forever.
+  const [failedHistorySessionIds, setFailedHistorySessionIds] = useState<Set<string>>(new Set());
 
   // Scored resume IDs for current JD
   const [scoredResumeIds, setScoredResumeIds] = useState<Set<string>>(new Set());
@@ -1292,6 +1333,7 @@ export default function AITalentMatchPage({
         setHistoryCandidatesById(prev => ({ ...prev, [newMatchHistory.id]: candidatesWithVersions }));
       }
       onSaveMatch?.(newMatchHistory);
+      onMatchComplete?.();
     }
   };
 
@@ -1737,17 +1779,9 @@ export default function AITalentMatchPage({
   // available for it — lazy-loaded rows once fetched, else the initial prop
   // data. Shared by the exact-match job filter below and the "Top Match
   // Rating" / "Top Matching Jobs" stats so both read the same number.
-  // Falls back to `topRating` (precomputed server-side from stored results,
-  // present as soon as the session list itself has loaded) when per-session
-  // candidate detail hasn't been fetched yet, so the stats are correct
-  // immediately on module open instead of only once every session's full
-  // candidate list (and each candidate's resume-detail enrichment) resolves.
   const getJobBestScore = (item: MatchHistory): number => {
-    const candidates = historyCandidatesById[item.id] ?? item.matchedCandidates;
-    if (candidates && candidates.length > 0) {
-      return candidates.reduce((best, c) => Math.max(best, c.matchScore ?? 0), 0);
-    }
-    return (item.topRating ?? 0) * 10;
+    const candidates = historyCandidatesById[item.id] ?? item.matchedCandidates ?? [];
+    return candidates.reduce((best, c) => Math.max(best, c.matchScore ?? 0), 0);
   };
 
   const filteredHistory = matchHistory.filter(item => {
@@ -1790,14 +1824,7 @@ export default function AITalentMatchPage({
           return matchesPhone && matchesLocation && matchesExpMin && matchesExpMax;
         });
 
-    // "Top Matching Jobs" drill-down: same "rating 10" definition
-    // `topMatchingJobsCount` counts. Uses the same server-precomputed
-    // `topRating` fallback as `getJobBestScore` for a job whose candidates
-    // haven't loaded yet.
-    const matchesExactOnly = !showOnlyExactMatchJobs ||
-      toMatchRating(getJobBestScore(item)) === 10;
-
-    return matchesSearch && matchesDateFrom && matchesDateTo && matchesMinMatches && matchesCandidateFilters && matchesExactOnly;
+    return matchesSearch && matchesDateFrom && matchesDateTo && matchesMinMatches && matchesCandidateFilters;
   });
 
   const sortedHistory = [...filteredHistory].sort((a, b) => {
@@ -1873,12 +1900,18 @@ export default function AITalentMatchPage({
   if (viewMode === 'history') {
     const totalMatchedCandidates = matchHistory.reduce((sum, item) => sum + (item.totalMatches || 0), 0);
 
-    // Best score per job — shared with the "Top Matching Jobs" filter above,
-    // so the card's count and its drill-down list can never disagree.
-    const bestScorePerJob = matchHistory.map(getJobBestScore);
-    const topMatchRating = bestScorePerJob.length ? Math.max(...bestScorePerJob) : 0;
-    // Exact Match = a rating of 10, same bucket the Match History popup counts.
-    const topMatchingJobsCount = bestScorePerJob.filter(score => toMatchRating(score) === 10).length;
+    // Every session's candidates load in individually (in the background — see
+    // the prefetch effect above), so the rating-band counts below fill in one
+    // job at a time rather than all at once. Rendering the count as each one
+    // lands made "Top Match Rating (10)"/"Top Match Rating (9-7)" visibly count
+    // up (1, 2, 3, ...) as sessions resolved. Holding the real number back
+    // until every session has resolved means the tiles show only their final,
+    // correct value.
+    const topStatsReady = matchHistory.every(
+      item => (item.totalMatches || 0) <= 0 ||
+        historyCandidatesById[item.id] !== undefined ||
+        failedHistorySessionIds.has(item.id)
+    );
 
     // Candidate roll-up search matches the person or any job they matched.
     const candidateQuery = candidateSearchQuery.trim().toLowerCase();
@@ -1942,6 +1975,16 @@ export default function AITalentMatchPage({
       row.jobs.map(job => ({ key: `${row.key}::${job.historyId}`, row, job }))
     );
 
+    // "Top Match Rating (10)"/"Top Match Rating (9-7)" cards: how many scored
+    // resumes land in each band, out of the same un-deduped rows "All Resumes"
+    // itself lists — so a card's count and its drill-down list never disagree.
+    const topRatingExactCount = allResumeRows.filter(
+      ({ job }) => matchBandForRating(toMatchRating(job.score)) === 'exact'
+    ).length;
+    const topRatingPartialCount = allResumeRows.filter(
+      ({ job }) => matchBandForRating(toMatchRating(job.score)) === 'partial'
+    ).length;
+
     const filteredAllResumeRows = allResumeRows.filter(({ row, job }) => {
       const matchesSearch = !candidateQuery ||
         row.name?.toLowerCase().includes(candidateQuery) ||
@@ -1981,6 +2024,11 @@ export default function AITalentMatchPage({
       // falls back to score, same as the default 'score' option.
       return (a.job.score - b.job.score) * direction;
     });
+
+    const paginatedAllResumeRows = sortedAllResumeRows.slice(
+      (resumeCurrentPage - 1) * resumeItemsPerPage,
+      resumeCurrentPage * resumeItemsPerPage,
+    );
 
     // Options come from the loaded rows, so only real values are offered.
     const candidateLocations = Array.from(
@@ -2170,15 +2218,13 @@ export default function AITalentMatchPage({
         <StatsCardGrid className="mb-5">
           <StatsCard
             tone="neutral"
-            active={historyPageView === 'list' && !showOnlyExactMatchJobs}
+            active={historyPageView === 'list'}
             showClickArrow
             icon={History}
             label="Matched Jobs"
             value={matchHistory.length}
             sparkline={false}
-            // Every matched job — drops any narrowing left by "Top Matching
-            // Jobs" so this always shows the full count it displays.
-            onClick={() => { setCandidateRatingBand(null); setShowOnlyExactMatchJobs(false); openHistoryListView(); }}
+            onClick={() => { setCandidateRatingBand(null); openHistoryListView(); }}
           />
           <StatsCard
             tone="neutral"
@@ -2188,147 +2234,48 @@ export default function AITalentMatchPage({
             label="Match by Candidate"
             value={totalMatchedCandidates}
             sparkline={false}
-            onClick={() => { setCandidateRatingBand(null); setShowOnlyExactMatchJobs(false); void openCandidatesView(); }}
+            onClick={() => { setCandidateRatingBand(null); void openCandidatesView(); }}
           />
           <StatsCard
             tone="neutral"
-            active={historyPageView === 'resumes' && candidateRatingBand === matchBandForRating(toMatchRating(topMatchRating))}
+            active={historyPageView === 'resumes' && candidateRatingBand === 'exact'}
             showClickArrow
-            icon={Award}
-            label="Top Match Rating"
-            value={`${toMatchRating(topMatchRating)}`}
+            icon={CheckCircle2}
+            label="Top Match Rating (10)"
+            // Shown only once every session has resolved — see `topStatsReady`
+            // — so this renders the final count directly instead of visibly
+            // counting up as sessions load in one by one.
+            value={topStatsReady ? topRatingExactCount : (
+              <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
+            )}
             sparkline={false}
-            // Drills into the real candidates holding this exact rating — same
+            // Drills into the real scored resumes holding this rating — same
             // "All Resumes" view + rating-band filter the pills below use, so
             // there is exactly one filtering mechanism, not a second one.
             onClick={() => {
-              setShowOnlyExactMatchJobs(false);
-              setCandidateRatingBand(matchBandForRating(toMatchRating(topMatchRating)));
+              setCandidateRatingBand('exact');
               void openAllResumesView();
             }}
           />
           <StatsCard
             tone="neutral"
-            active={historyPageView === 'list' && showOnlyExactMatchJobs}
+            active={historyPageView === 'resumes' && candidateRatingBand === 'partial'}
             showClickArrow
-            icon={Briefcase}
-            label="Top Matching Jobs"
-            value={topMatchingJobsCount}
+            icon={PieChart}
+            label="Top Match Rating (9-7)"
+            // Same "hold until every session has resolved" rule as the 10-band
+            // card above, so this shows the final count directly rather than
+            // counting up (1, 2, 3, ...) as sessions load in.
+            value={topStatsReady ? topRatingPartialCount : (
+              <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
+            )}
             sparkline={false}
-            // Drills into the real jobs behind this count — View by Job,
-            // narrowed to jobs whose best candidate is a perfect 10/10 (the
-            // same definition the count above uses).
             onClick={() => {
-              setCandidateRatingBand(null);
-              setShowOnlyExactMatchJobs(true);
-              openHistoryListView();
+              setCandidateRatingBand('partial');
+              void openAllResumesView();
             }}
           />
         </StatsCardGrid>
-
-        {/* View pills — same control Resume Scoring uses for its "Show:" row,
-            so the two modules switch views the same way. "View by Job" and
-            "View by Candidates" select what the two clickable cards above do;
-            "All Resumes" has no card of its own — it's the flat, un-deduped
-            counterpart to the candidate roll-up (every candidate-to-job match
-            as its own row), the same relationship Resume Scoring's "All
-            Resumes" pill has to its "View by Candidates" pill. The three
-            rating pills continue the same row, exactly like Resume Scoring's
-            Exact/Partial/No Match pills next to its own "All Resumes". */}
-        {historyPageView !== 'cards' && (
-          <div className="flex items-center gap-2 flex-wrap mb-3">
-            <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
-            {([
-              { id: 'list', label: 'View by Job', active: historyPageView === 'list' && !candidateRatingBand && !showOnlyExactMatchJobs, open: openHistoryListView },
-              { id: 'candidates', label: 'View by Candidates', active: historyPageView === 'candidates' && !candidateRatingBand, open: openCandidatesView },
-              { id: 'resumes', label: 'All Resumes', active: historyPageView === 'resumes' && !candidateRatingBand, open: openAllResumesView },
-            ] as const).map(view => (
-              <button
-                key={view.id}
-                type="button"
-                onClick={() => { setCandidateRatingBand(null); setShowOnlyExactMatchJobs(false); void view.open(); }}
-                aria-pressed={view.active}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
-                  view.active
-                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                    : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
-                }`}
-              >
-                {view.label}
-              </button>
-            ))}
-
-            {/* Rating-band filters — same toggle as "All Resumes" itself:
-                clicking one narrows that view to just this band; clicking the
-                active one again clears back to the unfiltered list. */}
-            {([
-              { id: 'exact', label: 'Rating-10' },
-              { id: 'partial', label: 'Rating-9-7' },
-              { id: 'no_match', label: 'Rating Below 7' },
-            ] as const).map(band => (
-              <button
-                key={band.id}
-                type="button"
-                onClick={() => {
-                  setCandidateRatingBand(candidateRatingBand === band.id ? null : band.id);
-                  setShowOnlyExactMatchJobs(false);
-                  void openAllResumesView();
-                }}
-                aria-pressed={candidateRatingBand === band.id}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
-                  candidateRatingBand === band.id
-                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                    : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
-                }`}
-              >
-                {band.label}
-              </button>
-            ))}
-
-            {/* Score / Invite for the "All Resumes" table's own checkbox
-                selection — the only one of these three sub-views that has a
-                selection at all. Sits at the row's right end via ml-auto,
-                same treatment the single-job results toolbar's own
-                Score/Invite group uses. */}
-            {historyPageView === 'resumes' && selectedAllResumeEntries.length > 0 && (
-              <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-                {canRunScoring && (
-                  <button
-                    onClick={() => { void handleScoreSelectedAllResumes(); }}
-                    className="px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
-                  >
-                    <ClipboardList className="w-3.5 h-3.5" />
-                    Score ({selectedAllResumeEntries.length})
-                  </button>
-                )}
-                {(hasPermission('canCreateAssessments') || isTenantAdmin || canCreateAIInterviews) && (
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <button className="px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                        <Send className="w-3.5 h-3.5" />
-                        Invite ({selectedAllResumeEntries.length})
-                      </button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end" className="w-56 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                      {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
-                        <DropdownMenuItem className={actionsMenuItemClass} onSelect={handleInviteAssessmentSelectedAllResumes}>
-                          <BarChart3 className="w-4 h-4 text-menu-icon-score" />
-                          <span className={MENU_ITEM_SCALE_CLASS}>Invite Assessment</span>
-                        </DropdownMenuItem>
-                      )}
-                      {canCreateAIInterviews && (
-                        <DropdownMenuItem className={actionsMenuItemClass} onSelect={handleInviteAIInterviewSelectedAllResumes}>
-                          <Video className="w-4 h-4 text-menu-icon-view" />
-                          <span className={MENU_ITEM_SCALE_CLASS}>Invite AI Interview</span>
-                        </DropdownMenuItem>
-                      )}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                )}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* ── Match by Candidate (in-page) ───────────────────────────────── */}
         {historyPageView === 'candidates' && (
@@ -2339,7 +2286,6 @@ export default function AITalentMatchPage({
                 rides inside it as a pill rather than floating above. */}
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
               <ListToolbar
-                className={showCandidateFilters ? 'mb-3' : 'mb-0'}
                 searchValue={candidateSearchQuery}
                 onSearchChange={candidateSearch.setQuery}
                 // The hook debounces into `appliedQuery`, so keystrokes pass through.
@@ -2388,6 +2334,78 @@ export default function AITalentMatchPage({
                   </div>
                 </div>
               </ListToolbar>
+
+              {/* View pills — merged into this same toolbar card, right after
+                  the search row and before the expanded filter panel, the
+                  same order Job Openings uses for its own "Show:" row — one
+                  bordered card rather than two stacked ones. Same control
+                  Resume Scoring uses for its "Show:" row, so the two modules
+                  switch views the same way — one copy per view (list/
+                  candidates/resumes) since each has its own toolbar card to
+                  merge into, rather than one copy shared above all three.
+                  "View by Job" and "View by Candidates" select what the two
+                  clickable cards higher up the page do; "All Resumes" has no
+                  card of its own — it's the flat, un-deduped counterpart to
+                  the candidate roll-up (every candidate-to-job match as its
+                  own row), the same relationship Resume Scoring's "All
+                  Resumes" pill has to its "View by Candidates" pill. The
+                  three rating pills continue the same row, exactly like
+                  Resume Scoring's Exact/Partial/No Match pills next to its
+                  own "All Resumes". */}
+              <div className="flex items-center gap-2 flex-wrap mb-3">
+                <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
+                {([
+                  /* This copy renders only while historyPageView === 'candidates'
+                     (its enclosing branch), which TS then narrows to that one
+                     literal — comparing it against the other two here would be
+                     flagged as an impossible comparison, so those two are
+                     simply false rather than re-testing what the branch already
+                     guarantees. */
+                  { id: 'list', label: 'View by Job', active: false, open: openHistoryListView },
+                  { id: 'candidates', label: 'View by Candidates', active: !candidateRatingBand, open: openCandidatesView },
+                  { id: 'resumes', label: 'All Resumes', active: false, open: openAllResumesView },
+                ] as const).map(view => (
+                  <button
+                    key={view.id}
+                    type="button"
+                    onClick={() => { setCandidateRatingBand(null); void view.open(); }}
+                    aria-pressed={view.active}
+                    className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+                      view.active
+                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                        : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
+                    }`}
+                  >
+                    {view.label}
+                  </button>
+                ))}
+
+                {/* Rating-band filters — same toggle as "All Resumes" itself:
+                    clicking one narrows that view to just this band; clicking
+                    the active one again clears back to the unfiltered list. */}
+                {([
+                  { id: 'exact', label: 'Rating-10' },
+                  { id: 'partial', label: 'Rating-9-7' },
+                  { id: 'no_match', label: 'Rating Below 7' },
+                ] as const).map(band => (
+                  <button
+                    key={band.id}
+                    type="button"
+                    onClick={() => {
+                      setCandidateRatingBand(candidateRatingBand === band.id ? null : band.id);
+                      void openAllResumesView();
+                    }}
+                    aria-pressed={candidateRatingBand === band.id}
+                    className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+                      candidateRatingBand === band.id
+                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                        : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
+                    }`}
+                  >
+                    {band.label}
+                  </button>
+                ))}
+              </div>
 
               {showCandidateFilters && (
                 <div className="pt-3 border-t border-brand-blue/10">
@@ -2686,7 +2704,7 @@ export default function AITalentMatchPage({
                                             return (
                                               <tr key={job.historyId} className="bg-white dark:bg-slate-900">
                                                 <td className="py-2.5 px-4 align-middle tf-sticky-col-left">
-                                                  <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${candidateScoreBadgeClass(job.score)}`}>
+                                                  <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border ${candidateScoreBadgeClass(job.score)}`}>
                                                     {toMatchRating(job.score)}
                                                   </span>
                                                 </td>
@@ -2851,7 +2869,7 @@ export default function AITalentMatchPage({
                                 <div className="min-w-0">
                                   <div className="text-sm text-gray-700 dark:text-slate-300 truncate">{job.jobTitle}</div>
                                   <div className="flex items-center gap-2 mt-0.5">
-                                    <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${candidateScoreBadgeClass(job.score)}`}>
+                                    <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border ${candidateScoreBadgeClass(job.score)}`}>
                                       {toMatchRating(job.score)}
                                     </span>
                                     <span className="text-xs text-gray-500 dark:text-slate-500">
@@ -2895,7 +2913,6 @@ export default function AITalentMatchPage({
 
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
               <ListToolbar
-                className={showCandidateFilters ? 'mb-3' : 'mb-0'}
                 searchValue={candidateSearchQuery}
                 onSearchChange={candidateSearch.setQuery}
                 searchDebounceMs={0}
@@ -2942,6 +2959,100 @@ export default function AITalentMatchPage({
                   </div>
                 </div>
               </ListToolbar>
+
+              {/* View pills — merged into this same toolbar card; see the
+                  "candidates" view's own copy for why this is duplicated per
+                  view rather than shared. This copy also carries Score/Invite
+                  for the table's checkbox selection — the only one of the
+                  three sub-views that has a selection at all — sitting at the
+                  row's right end via ml-auto, same treatment the single-job
+                  results toolbar's own Score/Invite group uses. */}
+              <div className="flex items-center gap-2 flex-wrap mb-3">
+                <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
+                {([
+                  // This copy renders only while historyPageView === 'resumes' —
+                  // see the "candidates" copy's comment for why the other two
+                  // are hardcoded false rather than re-tested here.
+                  { id: 'list', label: 'View by Job', active: false, open: openHistoryListView },
+                  { id: 'candidates', label: 'View by Candidates', active: false, open: openCandidatesView },
+                  { id: 'resumes', label: 'All Resumes', active: !candidateRatingBand, open: openAllResumesView },
+                ] as const).map(view => (
+                  <button
+                    key={view.id}
+                    type="button"
+                    onClick={() => { setCandidateRatingBand(null); void view.open(); }}
+                    aria-pressed={view.active}
+                    className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+                      view.active
+                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                        : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
+                    }`}
+                  >
+                    {view.label}
+                  </button>
+                ))}
+
+                {([
+                  { id: 'exact', label: 'Rating-10' },
+                  { id: 'partial', label: 'Rating-9-7' },
+                  { id: 'no_match', label: 'Rating Below 7' },
+                ] as const).map(band => (
+                  <button
+                    key={band.id}
+                    type="button"
+                    onClick={() => {
+                      setCandidateRatingBand(candidateRatingBand === band.id ? null : band.id);
+                      void openAllResumesView();
+                    }}
+                    aria-pressed={candidateRatingBand === band.id}
+                    className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+                      candidateRatingBand === band.id
+                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                        : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
+                    }`}
+                  >
+                    {band.label}
+                  </button>
+                ))}
+
+                {selectedAllResumeEntries.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+                    {canRunScoring && (
+                      <button
+                        onClick={() => { void handleScoreSelectedAllResumes(); }}
+                        className="px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                      >
+                        <ClipboardList className="w-3.5 h-3.5" />
+                        Score ({selectedAllResumeEntries.length})
+                      </button>
+                    )}
+                    {(hasPermission('canCreateAssessments') || isTenantAdmin || canCreateAIInterviews) && (
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <button className="px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                            <Send className="w-3.5 h-3.5" />
+                            Invite ({selectedAllResumeEntries.length})
+                          </button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="w-56 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                          {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
+                            <DropdownMenuItem className={actionsMenuItemClass} onSelect={handleInviteAssessmentSelectedAllResumes}>
+                              <BarChart3 className="w-4 h-4 text-menu-icon-score" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Invite Assessment</span>
+                            </DropdownMenuItem>
+                          )}
+                          {canCreateAIInterviews && (
+                            <DropdownMenuItem className={actionsMenuItemClass} onSelect={handleInviteAIInterviewSelectedAllResumes}>
+                              <Video className="w-4 h-4 text-menu-icon-view" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Invite AI Interview</span>
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    )}
+                  </div>
+                )}
+              </div>
 
               {/* Same filter panel as "View by Candidates" — one filter set
                   for both, since "All Resumes" is that view's rows un-collapsed. */}
@@ -3146,7 +3257,7 @@ export default function AITalentMatchPage({
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedAllResumeRows.map(({ key, row, job }, index) => (
+                      {paginatedAllResumeRows.map(({ key, row, job }, index) => (
                         <tr
                           key={key}
                           onClick={() => openCandidateResume(row, sortedAllResumeRows.map(entry => entry.row))}
@@ -3172,7 +3283,7 @@ export default function AITalentMatchPage({
                               index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-gray-50 dark:bg-slate-800'
                             }`}
                           >
-                            <span className={`inline-flex px-2 py-1 rounded-full text-xs border ${candidateScoreBadgeClass(job.score)}`}>
+                            <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border ${candidateScoreBadgeClass(job.score)}`}>
                               {toMatchRating(job.score)}
                             </span>
                           </td>
@@ -3296,7 +3407,7 @@ export default function AITalentMatchPage({
 
                 {/* Mobile cards — the table is too wide below md */}
                 <div className="md:hidden space-y-3">
-                  {sortedAllResumeRows.map(({ key, row, job }) => (
+                  {paginatedAllResumeRows.map(({ key, row, job }) => (
                     <div
                       key={key}
                       onClick={() => openCandidateResume(row, sortedAllResumeRows.map(entry => entry.row))}
@@ -3307,7 +3418,7 @@ export default function AITalentMatchPage({
                           <div className="text-sm font-medium text-blue-600 truncate">{row.name}</div>
                           <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{job.jobTitle}</div>
                         </div>
-                        <span className={`inline-flex px-2 py-1 rounded-full text-xs border flex-shrink-0 ${candidateScoreBadgeClass(job.score)}`}>
+                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(job.score)}`}>
                           {toMatchRating(job.score)}
                         </span>
                       </div>
@@ -3319,6 +3430,15 @@ export default function AITalentMatchPage({
                     </div>
                   ))}
                 </div>
+
+                <ListPagination
+                  currentPage={resumeCurrentPage}
+                  itemsPerPage={resumeItemsPerPage}
+                  totalItems={sortedAllResumeRows.length}
+                  onPageChange={setResumeCurrentPage}
+                  onItemsPerPageChange={setResumeItemsPerPage}
+                  itemLabel="resumes"
+                />
               </>
             )}
           </>
@@ -3344,7 +3464,6 @@ export default function AITalentMatchPage({
             activeFilterCount={activeFiltersCount}
             filtersApplied={historySearch.isNarrowed}
             onClearFilters={clearHistoryFilters}
-            className="mb-0"
             /* The history list is "Matched Jobs", so it counts in jobs too. */
             countBadge={
               <ListCountBadge
@@ -3382,6 +3501,58 @@ export default function AITalentMatchPage({
             </div>
 
           </ListToolbar>
+
+          {/* View pills — merged into this same toolbar card; see the
+              "candidates" view's own copy for why this is duplicated per
+              view rather than shared. */}
+          <div className="flex items-center gap-2 flex-wrap mb-3">
+            <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
+            {([
+              // This copy renders only while historyPageView === 'list' — see
+              // the "candidates" copy's comment for why the other two are
+              // hardcoded false rather than re-tested here.
+              { id: 'list', label: 'View by Job', active: !candidateRatingBand, open: openHistoryListView },
+              { id: 'candidates', label: 'View by Candidates', active: false, open: openCandidatesView },
+              { id: 'resumes', label: 'All Resumes', active: false, open: openAllResumesView },
+            ] as const).map(view => (
+              <button
+                key={view.id}
+                type="button"
+                onClick={() => { setCandidateRatingBand(null); void view.open(); }}
+                aria-pressed={view.active}
+                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+                  view.active
+                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                    : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
+                }`}
+              >
+                {view.label}
+              </button>
+            ))}
+
+            {([
+              { id: 'exact', label: 'Rating-10' },
+              { id: 'partial', label: 'Rating-9-7' },
+              { id: 'no_match', label: 'Rating Below 7' },
+            ] as const).map(band => (
+              <button
+                key={band.id}
+                type="button"
+                onClick={() => {
+                  setCandidateRatingBand(candidateRatingBand === band.id ? null : band.id);
+                  void openAllResumesView();
+                }}
+                aria-pressed={candidateRatingBand === band.id}
+                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all ${
+                  candidateRatingBand === band.id
+                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                    : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
+                }`}
+              >
+                {band.label}
+              </button>
+            ))}
+          </div>
 
           {showHistoryFilters && (
             <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-brand-blue/10">
@@ -3501,35 +3672,16 @@ export default function AITalentMatchPage({
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 sm:gap-0 mb-3">
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-base sm:text-lg text-gray-900 dark:text-slate-50 font-medium">Matched Jobs ({filteredHistory.length})</h2>
-                {/* Set by the "Top Matching Jobs" card — makes the narrowing
-                    visible and reversible instead of a silent filter. */}
-                {showOnlyExactMatchJobs && (
-                  <button
-                    type="button"
-                    onClick={() => setShowOnlyExactMatchJobs(false)}
-                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20 hover:bg-brand-blue/15 transition-colors"
-                    title="Clear this filter"
-                  >
-                    <Award className="w-3 h-3" />
-                    Perfect (10/10) matches only
-                    <X className="w-3 h-3" />
-                  </button>
-                )}
               </div>
               <p className="text-sm text-gray-600 dark:text-slate-400">Click any job to view matched candidates</p>
             </div>
             <div className="grid gap-3 sm:gap-4">
             {sortedHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage).map((item) => {
               const jobData = jobs.find(j => j.id === item.jobId);
-              // Fall back to the session's own joined job fields when the job
-              // isn't in this page's capped `jobs` list (see MatchHistory.jdJobId).
-              const jobIdCode = jobData?.jobId || item.jdJobId;
-              const currentVersion = jobData?.currentVersion ?? item.jdCurrentVersion;
-              const department = jobData?.department || item.jdDepartment;
               // Version history is cached/keyed by the human JD-xxx code, not
               // this row's id — every republished version of the same job
               // shares one history key so their runs aren't split across cards.
-              const historyKey = jobIdCode || item.jobId;
+              const historyKey = jobData?.jobId || item.jobId;
 
               return (
                 <div
@@ -3551,8 +3703,8 @@ export default function AITalentMatchPage({
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-wrap items-center gap-2 mb-1">
-                          {jobIdCode && (
-                            <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{jobIdCode}</JobIdBadge>
+                          {jobData?.jobId && (
+                            <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{jobData.jobId}</JobIdBadge>
                           )}
                           <h3
                             className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 truncate min-w-0 group-hover:text-brand-blue transition-colors"
@@ -3560,23 +3712,23 @@ export default function AITalentMatchPage({
                           >
                             {item.jobTitle}
                           </h3>
-                          {currentVersion && (
+                          {jobData?.currentVersion && (
                             <span className={`inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs gap-1.5 border flex-shrink-0 ${
-                              currentVersion > 1
+                              jobData.currentVersion > 1
                                 ? 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20'
                                 : 'bg-green-50 text-green-700 border-green-200'
                             }`}>
-                              <div className={`w-1.5 h-1.5 rounded-full ${currentVersion > 1 ? 'bg-brand-orange' : 'bg-green-500'}`}></div>
-                              {currentVersion > 1 ? 'Republished' : 'Published'}
+                              <div className={`w-1.5 h-1.5 rounded-full ${jobData.currentVersion > 1 ? 'bg-brand-orange' : 'bg-green-500'}`}></div>
+                              {jobData.currentVersion > 1 ? 'Republished' : 'Published'}
                             </span>
                           )}
-                          {currentVersion && (
+                          {jobData?.currentVersion && (
                             <span className="inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5 flex-shrink-0">
                               <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
-                              v{currentVersion}
+                              v{jobData.currentVersion}
                             </span>
                           )}
-                          <JDVersionHistory jdId={item.jobId} version={currentVersion} />
+                          <JDVersionHistory jdId={item.jobId} version={jobData?.currentVersion} />
                           {/* Match History — every run across this job's whole
                               lineage, with the Exact/Partial/No Match roll-up
                               Resume Scoring's own History icon opens. */}
@@ -3589,10 +3741,10 @@ export default function AITalentMatchPage({
                           </button>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
-                        {department && (
+                        {jobData?.department && (
                           <span className="flex items-center gap-1.5">
                             <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                            {department}
+                            {jobData.department}
                           </span>
                         )}
                         {jobData?.industryType && (
@@ -3840,20 +3992,25 @@ export default function AITalentMatchPage({
         />
       )}
 
-      {/* Match History Modal — reference: Resume Scoring's own "Scoring
-          History" popup (same header/stat-cards/close shape), adapted to AI
-          Talent Match's data: sessions instead of scoring runs, a 1-10 rating
-          instead of a percentage, and the existing AIMatchVersionHistoryTable
-          for the body instead of a bespoke table. */}
+      {/* Match History Modal — reference: the mocked-up "AI Talent Match
+          History" design (stat cards, filter row, Rating Breakdown columns,
+          a Rating Distribution + Latest Run Summary sidebar) adapted to this
+          data: sessions instead of scoring runs, a 1-10 rating instead of a
+          percentage. "Matched By" always reads System — the API carries no
+          per-run user attribution, so that column states the honest single
+          value rather than inventing a name. A bespoke table replaces
+          AIMatchVersionHistoryTable here (still used, unchanged, by "View
+          Versions" elsewhere) since the column set genuinely differs. */}
       {matchHistoryModal && (() => {
         const { item: modalItem, historyKey: modalKey } = matchHistoryModal;
         const modalJobData = jobs.find(j => j.id === modalItem.jobId);
         const versions = historyVersionsByJob[modalKey] ?? null;
         const isLoadingModal = loadingHistoryJobId === modalKey && !versions;
-        const allResults = (versions ?? []).flatMap(v => v.session.results || []);
+        const versionList = versions ?? [];
+        const allResults = versionList.flatMap(v => v.session.results || []);
         const ratingFor = (r: typeof allResults[number]) =>
           toMatchRating(r.final_score ?? ((r.similarity_score || 0) * 100));
-        const totalMatched = (versions ?? []).reduce(
+        const totalMatched = versionList.reduce(
           (sum, v) => sum + (v.session.total_matches ?? (v.session.results?.length || 0)),
           0,
         );
@@ -3862,22 +4019,120 @@ export default function AITalentMatchPage({
         const noMatchCount = allResults.filter(r => matchBandForRating(ratingFor(r)) === 'no_match').length;
 
         const statCards: { label: string; value: number; icon: typeof FileText; iconBg: string; iconColor: string; valueColor: string }[] = [
-          { label: 'Total Resumes Matched', value: totalMatched, icon: FileText, iconBg: 'bg-brand-blue/10', iconColor: 'text-brand-blue', valueColor: 'text-gray-900 dark:text-slate-50' },
-          { label: '10', value: exactCount, icon: CheckCircle2, iconBg: 'bg-green-100', iconColor: 'text-green-700', valueColor: 'text-green-700' },
-          { label: '9-7', value: partialCount, icon: PieChart, iconBg: 'bg-brand-orange/10', iconColor: 'text-brand-orange-deep', valueColor: 'text-brand-orange-deep' },
-          { label: 'Below 7', value: noMatchCount, icon: XCircle, iconBg: 'bg-red-100', iconColor: 'text-red-600', valueColor: 'text-red-600' },
+          { label: 'Total Candidates Matched', value: totalMatched, icon: FileText, iconBg: 'bg-brand-blue/10', iconColor: 'text-brand-blue', valueColor: 'text-gray-900 dark:text-slate-50' },
+          { label: 'Rating 10', value: exactCount, icon: Star, iconBg: 'bg-green-100', iconColor: 'text-green-700', valueColor: 'text-green-700' },
+          { label: 'Rating 9 – 7', value: partialCount, icon: Users, iconBg: 'bg-brand-orange/10', iconColor: 'text-brand-orange-deep', valueColor: 'text-brand-orange-deep' },
+          { label: 'Rating Below 7', value: noMatchCount, icon: AlertCircle, iconBg: 'bg-red-100', iconColor: 'text-red-600', valueColor: 'text-red-600' },
         ];
+
+        // One row per version, with its own Rating Breakdown — computed once
+        // so the table and the Version filter's options read the same data.
+        const versionRows = versionList.map(version => {
+          const results = version.session.results || [];
+          const v10 = results.filter(r => matchBandForRating(ratingFor(r)) === 'exact').length;
+          const v9to7 = results.filter(r => matchBandForRating(ratingFor(r)) === 'partial').length;
+          const vBelow7 = results.filter(r => matchBandForRating(ratingFor(r)) === 'no_match').length;
+          const candidateCount = results.length || version.session.total_matches || 0;
+          return { version, v10, v9to7, vBelow7, candidateCount };
+        });
+
+        const searchTerm = historyModalFilter.search.trim().toLowerCase();
+        const filteredVersionRows = versionRows.filter(({ version, v10, v9to7, vBelow7 }) => {
+          const f = historyModalFilter;
+          const matchesSearch = !searchTerm || (version.session.results || []).some(r =>
+            r.candidate_name?.toLowerCase().includes(searchTerm)
+          );
+          const matchesVersion = f.version === 'all' || f.version === version.versionNumber;
+          const matchesRating = f.rating === 'all' ||
+            (f.rating === 'exact' && v10 > 0) ||
+            (f.rating === 'partial' && v9to7 > 0) ||
+            (f.rating === 'no_match' && vBelow7 > 0);
+          const lastMatchedDay = version.lastMatchedAt ? version.lastMatchedAt.slice(0, 10) : '';
+          const matchesDateFrom = !f.dateFrom || (!!lastMatchedDay && lastMatchedDay >= f.dateFrom);
+          const matchesDateTo = !f.dateTo || (!!lastMatchedDay && lastMatchedDay <= f.dateTo);
+          // matchedBy has one real value today, so it never narrows anything.
+          return matchesSearch && matchesVersion && matchesRating && matchesDateFrom && matchesDateTo;
+        });
+
+        const isHistoryModalFilterActive =
+          historyModalFilter.search.trim() !== '' ||
+          historyModalFilter.matchedBy !== 'all' ||
+          historyModalFilter.version !== 'all' ||
+          historyModalFilter.rating !== 'all' ||
+          historyModalFilter.dateFrom !== '' ||
+          historyModalFilter.dateTo !== '';
+        const resetModalFilters = () => setHistoryModalFilter(EMPTY_HISTORY_MODAL_FILTERS);
+        const filterInputClass = 'w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black dark:text-slate-100 bg-white dark:bg-slate-900';
+        const filterLabelClass = 'block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1';
+
+        const distributionRows: { label: string; value: number; barClass: string; textClass: string }[] = [
+          { label: 'Rating 10', value: exactCount, barClass: 'bg-green-500', textClass: 'text-green-700' },
+          { label: 'Rating 9 – 7', value: partialCount, barClass: 'bg-brand-orange', textClass: 'text-brand-orange-deep' },
+          { label: 'Below 7', value: noMatchCount, barClass: 'bg-red-500', textClass: 'text-red-600' },
+        ];
+
+        const renderVersionActions = (session: AIMatchSessionVersion['session']) => (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Actions"
+                title="Actions"
+                className="p-1.5 bg-white dark:bg-slate-900 rounded-md border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+              >
+                <MoreVertical className="w-3.5 h-3.5 text-gray-600 dark:text-slate-300" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+              <DropdownMenuItem
+                className={actionsMenuItemClass}
+                onSelect={() => {
+                  userChangedView.current = true; // Prevent useEffect from resetting view
+                  const targetJobId = session.jd_id || modalItem.jobId;
+                  const targetJob = jobs.find(j => j.id === targetJobId);
+                  openMatchResults({
+                    id: session.id,
+                    jobId: targetJobId,
+                    jobTitle: targetJob?.title || modalItem.jobTitle,
+                    matchedAt: new Date(session.created_at),
+                    totalMatches: session.total_matches,
+                    matchedCandidates: [],
+                  }, targetJobId);
+                  updateUrlParams({ jdId: targetJobId, view: 'results' });
+                  setMatchHistoryModal(null);
+                }}
+              >
+                <Eye className="w-4 h-4 text-menu-icon-view" />
+                <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                className={actionsMenuItemClass}
+                onSelect={() => {
+                  if (!canRunAiMatch) {
+                    toast.error('You do not have permission to run AI matching operations');
+                    return;
+                  }
+                  handleRunAIMatch(session.jd_id || modalItem.jobId);
+                  setMatchHistoryModal(null);
+                }}
+              >
+                <Sparkles className="w-4 h-4 text-menu-icon-ai" />
+                <span className={MENU_ITEM_SCALE_CLASS}>Run AI Match</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        );
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-[96vw] sm:max-w-4xl max-h-[94dvh] flex flex-col tf-round-edges">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-[96vw] xl:max-w-6xl h-[85dvh] flex flex-col tf-round-edges">
               <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-11 h-11 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0">
                     <History className="w-5 h-5 text-brand-blue" />
                   </div>
                   <div className="min-w-0">
-                    <h3 className="font-bold text-gray-900 dark:text-slate-50">Match History</h3>
+                    <h3 className="font-bold text-gray-900 dark:text-slate-50">AI Talent Match History</h3>
                     <p className="text-sm text-gray-500 dark:text-slate-500 truncate max-w-[360px]">
                       {modalItem.jobTitle}
                       {modalJobData?.jobId && ` (${modalJobData.jobId})`}
@@ -3910,71 +4165,295 @@ export default function AITalentMatchPage({
                     Loading match history...
                   </div>
                 ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                    {statCards.map(card => (
-                      <div key={card.label} className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
-                        <div className="flex items-center gap-2 mb-1.5">
-                          <div className={`h-7 w-7 rounded-lg ${card.iconBg} flex items-center justify-center flex-shrink-0`}>
-                            <card.icon className={`w-3.5 h-3.5 ${card.iconColor}`} />
+                  <>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                      {statCards.map(card => (
+                        <div key={card.label} className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <div className={`h-7 w-7 rounded-lg ${card.iconBg} flex items-center justify-center flex-shrink-0`}>
+                              <card.icon className={`w-3.5 h-3.5 ${card.iconColor}`} />
+                            </div>
+                            <span className="text-xs text-gray-600 dark:text-slate-400">{card.label}</span>
                           </div>
-                          <span className="text-xs text-gray-600 dark:text-slate-400">{card.label}</span>
+                          <div className={`text-xl font-bold ${card.valueColor}`}>{card.value}</div>
                         </div>
-                        <div className={`text-xl font-bold ${card.valueColor}`}>{card.value}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
 
-                <AIMatchVersionHistoryTable
-                  loading={loadingHistoryJobId === modalKey}
-                  failed={failedHistoryJobId === modalKey}
-                  versions={versions}
-                  resolveJob={(session) => {
-                    const j = jobs.find(x => x.id === (session.jd_id || modalItem.jobId));
-                    return j ? {
-                      status: j.status,
-                      currentVersion: j.currentVersion,
-                      experience: j.experience,
-                      industryType: j.industryType,
-                      location: j.location,
-                      employmentType: j.employmentType,
-                      remoteType: j.remoteType,
-                      creationMethod: j.creationMethod,
-                      postedBy: j.postedBy,
-                      postedDate: j.postedDate,
-                    } : undefined;
-                  }}
-                  onRetry={() => loadAIMatchVersionHistory(modalKey, modalItem.jobId)}
-                  onViewSession={(session) => {
-                    userChangedView.current = true; // Prevent useEffect from resetting view
-                    const targetJobId = session.jd_id || modalItem.jobId;
-                    const targetJob = jobs.find(j => j.id === targetJobId);
-                    openMatchResults({
-                      id: session.id,
-                      jobId: targetJobId,
-                      jobTitle: targetJob?.title || modalItem.jobTitle,
-                      matchedAt: new Date(session.created_at),
-                      totalMatches: session.total_matches,
-                      matchedCandidates: [],
-                    }, targetJobId);
-                    updateUrlParams({ jdId: targetJobId, view: 'results' });
-                    setMatchHistoryModal(null);
-                  }}
-                  onRunMatch={(session) => {
-                    if (!canRunAiMatch) {
-                      toast.error('You do not have permission to run AI matching operations');
-                      return;
-                    }
-                    handleRunAIMatch(session.jd_id || modalItem.jobId);
-                    setMatchHistoryModal(null);
-                  }}
-                />
+                    {/* Filter row — Search/Matched By/Version/Rating Range/Date
+                        Range narrow the table below live, as each one changes
+                        — no Apply step. Always one line: Search/Matched By/
+                        Version/Rating Range stretch (flex-1) to fill the row's
+                        width with no dead space, while Date Range and Reset
+                        stay fixed-width on the right; the row scrolls
+                        horizontally on its own rather than breaking onto a
+                        second line if it's ever narrower than the fields'
+                        combined min-width. Reset only appears once some field
+                        is actually narrowing the table, so the row doesn't
+                        carry a control with nothing to undo. */}
+                    <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3 mb-3">
+                      {/* py-1 -my-1: a horizontally-scrolling flex row forces
+                          its overflow-y to `auto` as well (CSS overflow rule:
+                          one axis non-visible pulls the other off `visible`
+                          too), which otherwise clips every field's focus ring
+                          and the Reset pill's border right at this row's own
+                          top/bottom edge. The padding pushes that clip
+                          boundary out past them; the matching negative margin
+                          cancels the padding's effect on layout, so the row's
+                          rendered position is unchanged. */}
+                      <div className="flex items-end gap-2 overflow-x-auto py-1 -my-1">
+                        <div className="flex-1 min-w-[11rem]">
+                          <label className={filterLabelClass}>Search</label>
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
+                            <input
+                              type="text"
+                              value={historyModalFilter.search}
+                              onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, search: e.target.value }))}
+                              placeholder="Search by candidate name..."
+                              className={`${filterInputClass} pl-9 w-full`}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex-1 min-w-[8rem]">
+                          <label className={filterLabelClass}>Matched By</label>
+                          <select
+                            value={historyModalFilter.matchedBy}
+                            onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, matchedBy: e.target.value as MatchHistoryModalFilters['matchedBy'] }))}
+                            className={`${filterInputClass} w-full`}
+                          >
+                            <option value="all">All Sources</option>
+                            <option value="system">System</option>
+                          </select>
+                        </div>
+                        <div className="flex-1 min-w-[7rem]">
+                          <label className={filterLabelClass}>Version</label>
+                          <select
+                            value={historyModalFilter.version === 'all' ? 'all' : String(historyModalFilter.version)}
+                            onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, version: e.target.value === 'all' ? 'all' : Number(e.target.value) }))}
+                            className={`${filterInputClass} w-full`}
+                          >
+                            <option value="all">All Versions</option>
+                            {versionList.map(v => (
+                              <option key={v.versionNumber} value={v.versionNumber}>v{v.versionNumber}</option>
+                            ))}
+                          </select>
+                        </div>
+                        <div className="flex-1 min-w-[9rem]">
+                          <label className={filterLabelClass}>Rating Range</label>
+                          <select
+                            value={historyModalFilter.rating}
+                            onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, rating: e.target.value as MatchHistoryModalFilters['rating'] }))}
+                            className={`${filterInputClass} w-full`}
+                          >
+                            <option value="all">All Ratings</option>
+                            <option value="exact">Rating 10</option>
+                            <option value="partial">Rating 9 – 7</option>
+                            <option value="no_match">Rating Below 7</option>
+                          </select>
+                        </div>
+                        <div className="flex-shrink-0">
+                          <label className={filterLabelClass}>Date Range</label>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="date"
+                              value={historyModalFilter.dateFrom}
+                              max={historyModalFilter.dateTo || undefined}
+                              onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, dateFrom: e.target.value }))}
+                              className={`${filterInputClass} w-[8.5rem]`}
+                            />
+                            <span className="text-xs text-gray-400 dark:text-slate-500 flex-shrink-0">to</span>
+                            <input
+                              type="date"
+                              value={historyModalFilter.dateTo}
+                              min={historyModalFilter.dateFrom || undefined}
+                              onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, dateTo: e.target.value }))}
+                              className={`${filterInputClass} w-[8.5rem]`}
+                            />
+                          </div>
+                        </div>
+                        {isHistoryModalFilterActive && (
+                          <div className="flex-shrink-0">
+                            <button
+                              type="button"
+                              onClick={resetModalFilters}
+                              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium border border-red-200 dark:border-red-900/50 rounded-full text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors whitespace-nowrap"
+                            >
+                              <XCircle className="w-4 h-4" />
+                              Reset
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 items-start">
+                      {/* Version table — Rating Breakdown gives each version's
+                          10 / 9-7 / Below 7 split alongside its candidate count.
+                          Fixed height (not a cap) — matching the sidebar next
+                          to it regardless of how many or few versions there
+                          are, so switching jobs/filters never reflows the
+                          modal around it; the body scrolls internally
+                          instead. The header is sticky within that scroll
+                          area so it stays put while the body scrolls. */}
+                      <div className="xl:col-span-2">
+                        <div className="hidden md:block overflow-auto h-[266px] rounded-lg border border-gray-200 dark:border-slate-700">
+                          <table className="w-full text-xs">
+                            <thead className="sticky top-0 z-10">
+                              <tr className="text-left bg-brand-sky dark:bg-slate-800">
+                                <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">Version</th>
+                                <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">Matched By</th>
+                                <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">Date</th>
+                                <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">Candidates</th>
+                                <th colSpan={3} className="py-1.5 px-3 font-bold text-gray-900 dark:text-slate-100 text-center border-b border-gray-200 dark:border-slate-700">Rating Breakdown</th>
+                                <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">Status</th>
+                                <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom text-right">Action</th>
+                              </tr>
+                              <tr className="text-left bg-brand-sky dark:bg-slate-800">
+                                <th className="py-1.5 px-3 font-semibold text-green-700">10</th>
+                                <th className="py-1.5 px-3 font-semibold text-brand-orange-deep">9 – 7</th>
+                                <th className="py-1.5 px-3 font-semibold text-red-600">Below 7</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
+                              {filteredVersionRows.length === 0 ? (
+                                <tr>
+                                  <td colSpan={9} className="py-6 text-center text-gray-500 dark:text-slate-500">
+                                    No match runs found for the selected filters.
+                                  </td>
+                                </tr>
+                              ) : filteredVersionRows.map(({ version, v10, v9to7, vBelow7, candidateCount }) => {
+                                const isCompleted = version.session.status?.toLowerCase() === 'completed';
+                                const statusLabel = version.session.status
+                                  ? version.session.status.charAt(0).toUpperCase() + version.session.status.slice(1)
+                                  : 'Unknown';
+                                return (
+                                  <tr key={version.session.id} className="hover:bg-brand-blue/[0.03] dark:hover:bg-brand-blue/[0.06]">
+                                    <td className="py-2.5 px-3 whitespace-nowrap">
+                                      <span className="px-2 py-0.5 rounded-md font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
+                                        v{version.versionNumber}
+                                      </span>
+                                    </td>
+                                    <td className="py-2.5 px-3 whitespace-nowrap text-gray-700 dark:text-slate-300">
+                                      <span className="inline-flex items-center gap-1.5">
+                                        <Sparkles className="w-3.5 h-3.5 text-brand-cyan" />
+                                        System
+                                      </span>
+                                    </td>
+                                    <td className="py-2.5 px-3 whitespace-nowrap text-gray-600 dark:text-slate-400">
+                                      <div>{formatISTDate(version.lastMatchedAt)}</div>
+                                      <div className="text-gray-400 dark:text-slate-600">{formatISTTime(version.lastMatchedAt)}</div>
+                                    </td>
+                                    <td className="py-2.5 px-3">
+                                      <span className="inline-flex px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue font-semibold">{candidateCount}</span>
+                                    </td>
+                                    <td className="py-2.5 px-3 text-center font-semibold text-green-700 bg-green-50/60 dark:bg-green-500/10">{v10}</td>
+                                    <td className="py-2.5 px-3 text-center font-semibold text-brand-orange-deep bg-orange-50/60 dark:bg-orange-500/10">{v9to7}</td>
+                                    <td className="py-2.5 px-3 text-center font-semibold text-red-600 bg-red-50/60 dark:bg-red-500/10">{vBelow7}</td>
+                                    <td className="py-2.5 px-3 whitespace-nowrap">
+                                      <span className={`inline-flex items-center gap-1.5 ${isCompleted ? 'text-green-700' : 'text-gray-500'}`}>
+                                        <span className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-green-500' : 'bg-gray-400'}`} />
+                                        {statusLabel}
+                                      </span>
+                                    </td>
+                                    <td className="py-2.5 px-3 text-right">
+                                      {renderVersionActions(version.session)}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+
+                        {/* Mobile cards — the table above is too wide below md.
+                            Same ~4-cards-then-scroll cap as the table. */}
+                        <div className="md:hidden space-y-2 overflow-y-auto max-h-[520px]">
+                          {filteredVersionRows.length === 0 ? (
+                            <p className="text-center text-xs text-gray-500 dark:text-slate-500 py-4">
+                              No match runs found for the selected filters.
+                            </p>
+                          ) : filteredVersionRows.map(({ version, v10, v9to7, vBelow7, candidateCount }) => {
+                            const isCompleted = version.session.status?.toLowerCase() === 'completed';
+                            const statusLabel = version.session.status
+                              ? version.session.status.charAt(0).toUpperCase() + version.session.status.slice(1)
+                              : 'Unknown';
+                            return (
+                              <div key={version.session.id} className="rounded-lg border border-gray-200 dark:border-slate-700 p-3 text-xs">
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="px-2 py-0.5 rounded-md font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
+                                    v{version.versionNumber}
+                                  </span>
+                                  <span className={`inline-flex items-center gap-1.5 ${isCompleted ? 'text-green-700' : 'text-gray-500'}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-green-500' : 'bg-gray-400'}`} />
+                                    {statusLabel}
+                                  </span>
+                                </div>
+                                <div className="flex items-center justify-between text-gray-600 dark:text-slate-400 mb-2">
+                                  <span className="inline-flex items-center gap-1"><Sparkles className="w-3 h-3 text-brand-cyan" />System</span>
+                                  <span>{formatISTDate(version.lastMatchedAt)} · {formatISTTime(version.lastMatchedAt)}</span>
+                                </div>
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="text-gray-500 dark:text-slate-500">Candidates:</span>
+                                  <span className="font-semibold text-gray-900 dark:text-slate-100">{candidateCount}</span>
+                                </div>
+                                <div className="grid grid-cols-3 gap-2 mb-2 text-center">
+                                  <div className="rounded bg-green-50 dark:bg-green-500/10 py-1">
+                                    <div className="font-semibold text-green-700">{v10}</div>
+                                    <div className="text-[10px] text-gray-500 dark:text-slate-500">10</div>
+                                  </div>
+                                  <div className="rounded bg-orange-50 dark:bg-orange-500/10 py-1">
+                                    <div className="font-semibold text-brand-orange-deep">{v9to7}</div>
+                                    <div className="text-[10px] text-gray-500 dark:text-slate-500">9–7</div>
+                                  </div>
+                                  <div className="rounded bg-red-50 dark:bg-red-500/10 py-1">
+                                    <div className="font-semibold text-red-600">{vBelow7}</div>
+                                    <div className="text-[10px] text-gray-500 dark:text-slate-500">Below 7</div>
+                                  </div>
+                                </div>
+                                <div className="flex justify-end">
+                                  {renderVersionActions(version.session)}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      {/* Sidebar — distribution across every version, always
+                          unfiltered (its own heading says so). */}
+                      <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-4">
+                        <div className="flex items-center justify-between mb-1">
+                          <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Rating Distribution (All Versions)</h4>
+                          <BarChart3 className="w-4 h-4 text-gray-400 dark:text-slate-500 flex-shrink-0" />
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-slate-500 mb-3">Total candidates: {totalMatched}</p>
+                        <div className="space-y-3">
+                          {distributionRows.map(row => {
+                            const pct = totalMatched > 0 ? Math.round((row.value / totalMatched) * 100) : 0;
+                            return (
+                              <div key={row.label}>
+                                <div className="flex items-center justify-between text-xs text-gray-600 dark:text-slate-400 mb-1">
+                                  <span>{row.label}</span>
+                                  <span className={`font-medium ${row.textClass}`}>{row.value} ({pct}%)</span>
+                                </div>
+                                <div className="h-2 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden">
+                                  <div className={`h-full rounded-full ${row.barClass}`} style={{ width: `${pct}%` }} />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
 
               <div className="px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-between gap-3 shrink-0">
                 <p className="text-xs text-gray-500 dark:text-slate-500 flex items-center gap-1.5">
                   <Info className="w-3.5 h-3.5 flex-shrink-0" />
-                  Match status is based on the candidate&apos;s AI match rating (1-10 scale).
+                  Match rating is based on AI similarity between candidate resumes and the job description (1 - 10 scale).
                 </p>
                 <button
                   onClick={() => setMatchHistoryModal(null)}
@@ -4349,14 +4828,9 @@ export default function AITalentMatchPage({
                       />
                     </td>
                     <td className="px-4 py-4">
-                      <div className={`inline-flex items-center justify-center w-10 h-10 rounded-full font-bold text-base ${
-                        (candidate.rank || 0) >= 9 ? 'bg-brand-blue/10 text-brand-blue border-2 border-brand-blue/30' :
-                        (candidate.rank || 0) >= 7 ? 'bg-brand-cyan/10 text-brand-cyan border-2 border-brand-cyan/30' :
-                        (candidate.rank || 0) >= 5 ? 'bg-brand-orange/10 text-brand-orange-deep border-2 border-brand-orange/30' :
-                        'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 border-2 border-gray-200 dark:border-slate-700'
-                      }`}>
+                      <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border ${rankBadgeClass(candidate.rank || 0)}`}>
                         {candidate.rank || '-'}
-                      </div>
+                      </span>
                     </td>
                     <td className="px-4 py-4">
                       <div className="flex items-center gap-3">
@@ -4557,14 +5031,9 @@ export default function AITalentMatchPage({
                         </div>
                       </div>
                     </div>
-                    <div className={`inline-flex items-center justify-center w-9 h-9 rounded-full font-bold text-sm flex-shrink-0 ${
-                      (candidate.rank || 0) >= 9 ? 'bg-brand-blue/10 text-brand-blue border-2 border-brand-blue/30' :
-                      (candidate.rank || 0) >= 7 ? 'bg-brand-cyan/10 text-brand-cyan border-2 border-brand-cyan/30' :
-                      (candidate.rank || 0) >= 5 ? 'bg-brand-orange/10 text-brand-orange-deep border-2 border-brand-orange/30' :
-                      'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 border-2 border-gray-200 dark:border-slate-700'
-                    }`}>
+                    <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${rankBadgeClass(candidate.rank || 0)}`}>
                       {candidate.rank || '-'}
-                    </div>
+                    </span>
                   </div>
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-600 dark:text-slate-400 mb-2">
                     {candidate.email && <span className="flex items-center gap-1 min-w-0"><Mail className="w-3 h-3 flex-shrink-0" /><span className="truncate">{candidate.email}</span></span>}

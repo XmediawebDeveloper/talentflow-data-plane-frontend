@@ -60,7 +60,7 @@ export default function DuplicateResolutionModal({ duplicateFiles, onResolve, on
         });
       } catch (err) {
         console.error('DOCX render error:', err);
-        docxContainerRef.current.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#666;">Failed to render document</div>';
+        docxContainerRef.current.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--raw-666666);">Failed to render document</div>';
       }
     }
   }, []);

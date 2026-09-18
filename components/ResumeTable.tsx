@@ -124,7 +124,7 @@ function DraggableResumeRow({ resume, selectedResumes, children, className, onVi
       {draggable && (
         <td
           className={`sticky left-0 z-0 w-10 min-w-[40px] max-w-[40px] px-2 py-3 ${
-            selectedResumes.includes(resume.id) ? 'bg-[#e7ecf5] dark:bg-transparent' : 'bg-white group-hover:bg-[#f3f5fa]'
+            selectedResumes.includes(resume.id) ? 'bg-[var(--raw-e7ecf5)] dark:bg-transparent' : 'bg-white group-hover:bg-[var(--raw-f3f5fa)]'
           }`}
         >
           <div ref={drag as unknown as React.Ref<HTMLDivElement>} className="cursor-grab hover:bg-gray-100 rounded p-1 flex items-center justify-center">
@@ -649,8 +649,8 @@ export default function ResumeTable({
                 <td
                   className={`sticky ${draggable ? 'left-10' : 'left-0'} z-0 px-4 py-3 align-middle border-r border-gray-200 ${
                     selectedResumes.includes(resume.id)
-                      ? 'bg-[#e7ecf5] dark:bg-transparent'
-                      : 'bg-white group-hover:bg-[#f3f5fa]'
+                      ? 'bg-[var(--raw-e7ecf5)] dark:bg-transparent'
+                      : 'bg-white group-hover:bg-[var(--raw-f3f5fa)]'
                   }`}
                   onClick={(e) => e.stopPropagation()}
                 >

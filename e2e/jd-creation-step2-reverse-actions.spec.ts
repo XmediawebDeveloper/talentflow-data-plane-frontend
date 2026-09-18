@@ -160,6 +160,16 @@ const missedPanel = (page: Page) =>
 const missedRow = (page: Page, phrase: string) =>
   missedPanel(page).getByText(phrase, { exact: true }).locator("xpath=ancestor::span[1]");
 
+/** A row in either Additional Requirements column - an editable line. */
+const requirementRow = (page: Page, text: string) =>
+  page.getByTitle("Click to edit").filter({ hasText: text }).first();
+
+/** Open a chip's Add menu and choose one of the FOUR lists. */
+async function addMissedTo(page: Page, phrase: string, listLabel: string) {
+  await missedRow(page, phrase).getByRole("button", { name: /^Add/ }).click();
+  await page.getByRole("menuitem", { name: listLabel }).click();
+}
+
 async function open(page: Page, jd = draftJd()) {
   await mockJd(page, jd);
   await loginViaUi(page);
@@ -220,7 +230,7 @@ test.describe("JD Creation Step 2 — reverse actions", () => {
     await open(page);
     await expect(missedRow(page, "REST APIs")).toBeVisible();
 
-    await missedRow(page, "REST APIs").getByRole("button", { name: "Add to Must-Have" }).click();
+    await addMissedTo(page, "REST APIs", "Must-Have Skills");
     await expect(missedRow(page, "REST APIs")).toHaveCount(0);
 
     await page.getByTitle("REST APIs", { exact: true }).first()
@@ -302,8 +312,7 @@ test.describe("JD Creation Step 2 — an added line reads as a line", () => {
     // lower-case: "conducting test case reviews". Added verbatim, the recruiter's skills
     // list had rows starting mid-sentence.
     await open(page);
-    await missedRow(page, "Conducting test case reviews")
-      .getByRole("button", { name: "Add to Must-Have" }).click();
+    await addMissedTo(page, "Conducting test case reviews", "Must-Have Skills");
 
     await expect(page.getByTitle("Conducting test case reviews", { exact: true })).toBeVisible();
     await expect(page.getByTitle("conducting test case reviews", { exact: true })).toHaveCount(0);
@@ -314,7 +323,7 @@ test.describe("JD Creation Step 2 — an added line reads as a line", () => {
     // name is a mistake the recruiter cannot correct by retyping - extraction would keep
     // supplying the lower-case form.
     await open(page);
-    await missedRow(page, "npm").getByRole("button", { name: "Add to Must-Have" }).click();
+    await addMissedTo(page, "npm", "Must-Have Skills");
 
     await expect(page.getByTitle("npm", { exact: true })).toBeVisible();
     await expect(page.getByTitle("Npm", { exact: true })).toHaveCount(0);
@@ -369,15 +378,63 @@ test.describe("JD Creation Step 2 — the missed panel is readable", () => {
     }
   });
 
-  test("each chip still carries its own three actions", async ({ page }) => {
+  test("each chip still carries its own actions", async ({ page }) => {
     await open(page, draftJd({ skill_merge_trail: NOISY }));
     const chip = missedRow(page, "triage");
-    await expect(chip.getByRole("button", { name: "Add to Must-Have" })).toBeVisible();
-    await expect(chip.getByRole("button", { name: "Add to Nice-to-Have" })).toBeVisible();
+    await expect(chip.getByRole("button", { name: /^Add/ })).toBeVisible();
     await expect(chip.getByRole("button", { name: "Dismiss" })).toBeVisible();
 
-    await chip.getByRole("button", { name: "Add to Must-Have" }).click();
+    await addMissedTo(page, "triage", "Must-Have Skills");
     // One word, so the JD's own spelling stands - the same guard that protects "npm".
     await expect(page.getByTitle("triage", { exact: true })).toBeVisible();
+  });
+
+  test("the menu offers all FOUR lists, not just the two skills ones", async ({ page }) => {
+    // Reported 2026-09-18: "there is 4 sections right? but there is only two options to
+    // add... what should i do if i want to add that in any one of Additional
+    // requirements". The phrases this panel reports are as often requirement SENTENCES
+    // ("Team Player: Ability to work collaboratively within a team environment") as skill
+    // names, and the only route to Additional Requirements was retyping the line into the
+    // column's own Add box - the retyping this panel exists to save.
+    await open(page, draftJd({ skill_merge_trail: NOISY }));
+    await missedRow(page, "triage").getByRole("button", { name: /^Add/ }).click();
+    for (const label of [
+      "Must-Have Skills", "Nice-to-Have Skills",
+      "Must-Have Additional Requirements", "Nice-to-Have Additional Requirements",
+    ]) {
+      await expect(page.getByRole("menuitem", { name: label })).toBeVisible();
+    }
+  });
+
+  test("a phrase can be added straight into Must-Have Additional Requirements", async ({ page }) => {
+    await open(page, draftJd({ skill_merge_trail: NOISY }));
+    await addMissedTo(page, "SOAP services", "Must-Have Additional Requirements");
+
+    await expect(
+      page.getByRole("heading", { name: /Must-Have Additional Requirements\s*\(1\)/ }),
+    ).toBeVisible();
+    // Capitalised, because a requirement is a line - and the chip is gone, because the
+    // wording is on screen now.
+    await expect(requirementRow(page, "SOAP services")).toBeVisible();
+    await expect(missedRow(page, "SOAP services")).toHaveCount(0);
+  });
+
+  test("and into Nice-to-Have Additional Requirements", async ({ page }) => {
+    await open(page, draftJd({ skill_merge_trail: NOISY }));
+    await addMissedTo(page, "closure", "Nice-to-Have Additional Requirements");
+    await expect(
+      page.getByRole("heading", { name: /Nice-to-Have Additional Requirements\s*\(1\)/ }),
+    ).toBeVisible();
+  });
+
+  test("a requirement added this way can be undone by deleting it", async ({ page }) => {
+    // The reverse action has to hold for the two new destinations too.
+    await open(page, draftJd({ skill_merge_trail: NOISY }));
+    await addMissedTo(page, "SOAP services", "Must-Have Additional Requirements");
+    await expect(missedRow(page, "SOAP services")).toHaveCount(0);
+
+    await requirementRow(page, "SOAP services")
+      .locator("xpath=ancestor::div[2]").getByRole("button", { name: "Delete" }).first().click();
+    await expect(missedRow(page, "SOAP services")).toBeVisible();
   });
 });

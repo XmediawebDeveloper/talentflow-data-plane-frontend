@@ -25,6 +25,7 @@ import InviteToAssessmentModal from './InviteToAssessmentModal';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import SelectSourceModal from './SelectSourceModal';
 import AssessmentResultsTable from './AssessmentResultsTable';
+import Pagination from './Pagination';
 import JDVersionHistoryModal from './JDVersionHistoryModal';
 import ResumeDetailView from './ResumeDetailView';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
@@ -50,6 +51,7 @@ import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
+import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
 
 // Legacy aliases — both now use the centralized IST formatter
 const formatToIST = formatIST;
@@ -583,8 +585,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
    * the 60% block, and a rating below 7 on it fails the whole Essential section.
    * "Preferred" criteria share the 40% block and never fail a candidate on their own.
    */
-  const requirementLabel = (mandatory?: boolean) =>
-    mandatory ? '✓ Required (Essential)' : '○ Preferred';
+  const requirementLabel = requirementBadge;
   /* ---- The two sticky layers on this page ----------------------------------
      The breadcrumb pins at top-0 (z-30) and the tab bar pins below it (z-20).
      The tab bar's offset used to be a hardcoded `top-[52px]`, a guess at the
@@ -815,7 +816,19 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // AI Talent Match state
   const [aiMatchSessions, setAiMatchSessions] = useState<AIMatchSessionResponse[]>([]);
   const [aiMatchCandidates, setAiMatchCandidates] = useState<MatchedCandidate[]>([]);
-  const [loadingAiMatch, setLoadingAiMatch] = useState(false);
+  /* Starts true, not false: the mount effect below always fetches this (when
+     the plan has the feature) before the first paint settles, so a `false`
+     default let the tab badge and empty state read "0 / No AI Talent Match
+     Results" for one frame before flipping to the real count — exactly the
+     flash the count is supposed to never show. */
+  const [loadingAiMatch, setLoadingAiMatch] = useState(true);
+  /* True as soon as `listSessions` — ONE call — comes back, well before
+     `loadingAiMatch` goes false (which waits on a `getSession` per session,
+     fetched to dedupe candidates across every run). The tab badge uses this
+     to show a real number as fast as the Scored Resumes badge does, instead
+     of sitting on a skeleton for the whole dedup fetch — see
+     `aiMatchBadgeCount` below for how the two numbers hand off. */
+  const [aiMatchSessionsLoaded, setAiMatchSessionsLoaded] = useState(false);
 
   // ✅ PERMISSIONS: Permission checking function
   const hasPermission = (permission: string): boolean => {
@@ -1674,6 +1687,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       const response = await aiMatchService.listSessions({ jd_id: job.id, page_size: 100 });
       const sessions = response.items || [];
       setAiMatchSessions(sessions);
+      setAiMatchSessionsLoaded(true);
 
       // listSessions returns sessions with results: [] — fetch each session individually for enriched candidates
       const allCandidatesMap = new Map<string, MatchedCandidate>();
@@ -1701,6 +1715,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       console.error('Failed to fetch AI match data:', error);
       setAiMatchSessions([]);
       setAiMatchCandidates([]);
+      setAiMatchSessionsLoaded(true);
     } finally {
       setLoadingAiMatch(false);
     }
@@ -2428,6 +2443,22 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     ? aiInterviewInviteAction
     : aiInterviewCreateAction;
 
+  /* AI Talent Match Results tab badge — shows a real number as soon as
+     `listSessions` (one call) resolves, the same speed the Scored Resumes
+     badge already has, rather than waiting out the slower per-session dedup
+     fetch that only the tab's own candidate list actually needs.
+     `total_matches` is precomputed server-side per session (the same field
+     "Top Match Rating" already reads for an instant number elsewhere), so
+     summing it is free once sessions are in. It's an upper bound — a
+     candidate matched in two sessions of this job is counted twice — so once
+     the exact deduplicated list finishes loading, the badge switches to
+     `aiMatchCandidates.length`, which can only ever be equal or lower. */
+  const aiMatchBadgeCount = !aiMatchSessionsLoaded
+    ? null
+    : loadingAiMatch
+      ? aiMatchSessions.reduce((sum, s) => sum + (s.total_matches ?? 0), 0)
+      : aiMatchCandidates.length;
+
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
@@ -2876,7 +2907,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
               }`}>
-                {aiMatchCandidates.length}
+                {/* aiMatchBadgeCount is null only for the instant before
+                    listSessions itself (one call) has come back — same tiny
+                    window every other tab's badge has, which is why this is
+                    the only case that still needs a placeholder. */}
+                {aiMatchBadgeCount === null ? (
+                  <span className="inline-block h-3 w-4 rounded bg-current opacity-30 animate-pulse align-middle" aria-label="Loading count" />
+                ) : (
+                  aiMatchBadgeCount
+                )}
               </span>
               {activeTab === 'ai-talent-match' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
@@ -3215,7 +3254,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                               published JD whether the degree is Required. */}
                           <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">
                             Must-Have Additional Requirements ({mustHaveComments.length})
-                            <span className="ml-2 text-xs font-normal text-gray-500 dark:text-slate-500">✓ Required (Essential)</span>
+                            {/* Only when the list HAS something. The badge is a claim about how these
+                                lines are SCORED - "Required (Essential)" on an empty section told the
+                                recruiter a rule was in force over nothing, right beside the word
+                                "None". A label with no subject is worse than no label. */}
+                            {mustHaveComments.length > 0 && (
+                              <span className="ml-2 text-xs font-normal text-gray-500 dark:text-slate-500">✓ Required (Essential)</span>
+                            )}
                           </h4>
                           {mustHaveComments.length > 0 ? (
                             <div className="space-y-2">
@@ -3233,7 +3278,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         <div>
                           <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">
                             Nice-to-Have Additional Requirements ({niceToHaveComments.length})
-                            <span className="ml-2 text-xs font-normal text-gray-500 dark:text-slate-500">○ Preferred</span>
+                            {niceToHaveComments.length > 0 && (
+                              <span className="ml-2 text-xs font-normal text-gray-500 dark:text-slate-500">○ Preferred</span>
+                            )}
                           </h4>
                           {niceToHaveComments.length > 0 ? (
                             <div className="space-y-2">
@@ -3259,7 +3306,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
                         <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Experience</h4>
                         <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{job.experience || 'Not specified'}</p>
-                        <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{requirementLabel(job.experienceMandatory)}</p>
+                        {/* Same rule as the two lists above: an unstated experience range
+                            is not Required or Preferred, it is simply absent. */}
+                        {job.experience && (
+                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{requirementLabel(job.experienceMandatory)}</p>
+                        )}
                       </div>
                       {/* Education tile REMOVED 2026-08-21 - see the chip note above.
                           The requirement is listed in Must-Have / Nice-to-Have
@@ -3271,14 +3322,17 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
                           <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Industry Type</h4>
                           <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{prettifyCode(job.industry_type)}</p>
-                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{requirementLabel(job.industryMandatory)}</p>
+                          {/* "Others" is the catch-all, and Resume Scoring skips it by
+                              name - so a Required/Preferred badge here would describe a
+                              criterion that is never graded. */}
+                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{criterionScoringLabel(job.industry_type, job.industryMandatory, { isIndustry: true })}</p>
                         </div>
                       )}
                       {job.location && (
                         <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
                           <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Location</h4>
                           <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{job.location}</p>
-                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{requirementLabel(job.locationMandatory)}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">{criterionScoringLabel(job.location, job.locationMandatory)}</p>
                         </div>
                       )}
                       <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
@@ -4572,6 +4626,8 @@ function AIMatchTabContent({
   const [filterExperienceMin, setFilterExperienceMin] = useState<number | ''>('');
   const [filterExperienceMax, setFilterExperienceMax] = useState<number | ''>('');
   const [sortBy, setSortBy] = useState<'rank' | 'name' | 'score' | 'experience'>('rank');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   // Attachments column → Version History popup. Same fetch-and-fallback
   // pattern as the standalone AI Talent Match page's handleAttachmentsClick:
@@ -4659,6 +4715,19 @@ function AIMatchTabContent({
     }
     return sorted;
   }, [candidates, searchQuery, filterThreshold, filterPhone, filterLocation, filterExperienceMin, filterExperienceMax, sortBy]);
+
+  // Reset to page 1 whenever the filtered/sorted set changes shape, so a
+  // narrowing filter never leaves the view stranded on a now-empty page.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterThreshold, filterPhone, filterLocation, filterExperienceMin, filterExperienceMax, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredCandidates.length / itemsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedCandidates = filteredCandidates.slice(
+    (safeCurrentPage - 1) * itemsPerPage,
+    safeCurrentPage * itemsPerPage
+  );
 
   const toggleSelect = (resumeId: string) => {
     setSelectedIds((prev) => {
@@ -4842,7 +4911,7 @@ function AIMatchTabContent({
                   </td>
                 </tr>
               ) : (
-                filteredCandidates.map((candidate, idx) => {
+                paginatedCandidates.map((candidate, idx) => {
                   const isScored = scoredResumeIds.has(candidate.resumeId);
                   const score = candidate.matchScore;
                   const scoreColor = score >= 70 ? 'bg-green-500' : score >= 45 ? 'bg-yellow-500' : 'bg-red-400';
@@ -4946,6 +5015,16 @@ function AIMatchTabContent({
             </tbody>
           </table>
         </div>
+        {filteredCandidates.length > 0 && (
+          <Pagination
+            currentPage={safeCurrentPage}
+            totalPages={totalPages}
+            totalItems={filteredCandidates.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={(size) => { setItemsPerPage(size); setCurrentPage(1); }}
+          />
+        )}
       </div>
 
       {/* Version History popup — same component and behavior as the

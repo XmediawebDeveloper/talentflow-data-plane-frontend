@@ -913,22 +913,22 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
     && !['loading', 'expired', 'error', 'permission_denied', 'instructions', 'requesting_permission', 'ready_to_submit', 'uploading', 'done'].includes(phase);
 
   return (
-    <div className={`min-h-[100dvh] bg-[#0F1929] text-white flex flex-col items-center justify-center p-6 landscape:px-6 landscape:py-3 text-center overflow-y-auto ${showLinkTimer ? 'pt-28 landscape:pt-20' : ''}`}>
+    <div className={`min-h-[100dvh] bg-[var(--raw-0f1929)] text-white flex flex-col items-center justify-center p-6 landscape:px-6 landscape:py-3 text-center overflow-y-auto ${showLinkTimer ? 'pt-28 landscape:pt-20' : ''}`}>
       {showLinkTimer && (
-        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[400] flex flex-col items-center gap-1 rounded-xl border border-amber-400/30 bg-[#0F1929]/95 backdrop-blur px-6 py-3 shadow-lg shadow-black/30">
+        <div className="fixed top-3 left-1/2 -translate-x-1/2 z-[400] flex flex-col items-center gap-1 rounded-xl border border-amber-400/30 bg-[var(--raw-0f1929)]/95 backdrop-blur px-6 py-3 shadow-lg shadow-black/30">
           <span className="font-mono font-bold text-3xl tracking-wider text-amber-400 tabular-nums">
             {String(Math.floor((linkSecondsRemaining ?? 0) / 60)).padStart(2, '0')}:
             {String((linkSecondsRemaining ?? 0) % 60).padStart(2, '0')}
           </span>
-          <span className="text-[11px] text-[#94a3b8]">Link will expire when the timer ends</span>
+          <span className="text-[11px] text-[var(--raw-94a3b8)]">Link will expire when the timer ends</span>
         </div>
       )}
 
       {orientationGateActive && (
-        <div className="fixed inset-0 z-[500] bg-[#0F1929] flex flex-col items-center justify-center gap-4 p-6 text-center">
+        <div className="fixed inset-0 z-[500] bg-[var(--raw-0f1929)] flex flex-col items-center justify-center gap-4 p-6 text-center">
           <span className="text-5xl inline-block animate-[tf-rotate-device_1.6s_ease-in-out_infinite]">📱</span>
           <h1 className="text-lg font-semibold">Rotate your phone to landscape</h1>
-          <p className="text-sm text-[#94a3b8] max-w-xs">
+          <p className="text-sm text-[var(--raw-94a3b8)] max-w-xs">
             Environment verification must be recorded in landscape mode. Turn your phone sideways to continue.
           </p>
           <button
@@ -952,12 +952,12 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
         </div>
       )}
 
-      {phase === 'loading' && <p className="text-[#94a3b8]">Loading verification…</p>}
+      {phase === 'loading' && <p className="text-[var(--raw-94a3b8)]">Loading verification…</p>}
 
       {(phase === 'expired' || phase === 'error') && (
         <div className="max-w-sm space-y-4">
           <h1 className="text-lg font-semibold">Unable to verify</h1>
-          <p className="text-sm text-[#94a3b8]">{errorMessage}</p>
+          <p className="text-sm text-[var(--raw-94a3b8)]">{errorMessage}</p>
           {canRetryUpload && (
             <button
               type="button"
@@ -973,7 +973,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       {phase === 'instructions' && (
         <div className="max-w-sm space-y-5">
           <h1 className="text-2xl font-semibold">Environment Verification</h1>
-          <div className="text-base text-[#cbd5e1] leading-relaxed text-left space-y-4 bg-white/5 rounded-xl p-4 border border-white/10">
+          <div className="text-base text-[var(--raw-cbd5e1)] leading-relaxed text-left space-y-4 bg-white/5 rounded-xl p-4 border border-white/10">
             <p>
               You'll record a <strong className="text-white">10-second video</strong> in{' '}
               <strong className="text-white">landscape mode</strong>, in two steps:
@@ -997,12 +997,12 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
                   <li className="flex items-center gap-1.5"><span className="text-brand-blue">•</span> Left to Right</li>
                   <li className="flex items-center gap-1.5"><span className="text-brand-blue">•</span> Right to Left</li>
                 </ul>
-                <p className="mt-1.5 text-[13px] text-[#94a3b8]">
+                <p className="mt-1.5 text-[13px] text-[var(--raw-94a3b8)]">
                   Move slowly and keep the phone steady — no sudden movements.
                 </p>
                 <div className="mt-2 flex items-center gap-1.5 px-2">
                   <span className="text-xl inline-block animate-[tf-instr-curve_1.6s_ease-in-out_infinite_alternate]">📱</span>
-                  <span className="text-[11px] text-[#94a3b8]">left → right → left</span>
+                  <span className="text-[11px] text-[var(--raw-94a3b8)]">left → right → left</span>
                 </div>
               </div>
             </div>
@@ -1025,13 +1025,13 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
       )}
 
       {phase === 'requesting_permission' && (
-        <p className="text-[#94a3b8]">Requesting camera access…</p>
+        <p className="text-[var(--raw-94a3b8)]">Requesting camera access…</p>
       )}
 
       {phase === 'permission_denied' && (
         <div className="max-w-sm space-y-2">
           <h1 className="text-lg font-semibold">Camera access needed</h1>
-          <p className="text-sm text-[#94a3b8]">
+          <p className="text-sm text-[var(--raw-94a3b8)]">
             Please allow camera and microphone access in your browser settings, then rescan the QR code.
           </p>
         </div>
@@ -1055,7 +1055,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/50 rounded-xl px-4 text-center">
               <span className="w-3 h-3 rounded-full bg-amber-400 animate-pulse" />
               <p className="text-sm font-medium text-white">Align your phone with your laptop screen…</p>
-              <p className="text-xs text-[#cbd5e1]">Center it, hold steady, and make sure the whole screen is in view.</p>
+              <p className="text-xs text-[var(--raw-cbd5e1)]">Center it, hold steady, and make sure the whole screen is in view.</p>
             </div>
           )}
           {phase === 'pan_instructions' && (
@@ -1101,7 +1101,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
               Screen aligned
             </div>
           ) : (
-            <p className="text-sm leading-relaxed text-[#94a3b8] landscape:max-w-sm">
+            <p className="text-sm leading-relaxed text-[var(--raw-94a3b8)] landscape:max-w-sm">
               Waiting for your laptop screen to be clearly visible and centered in the camera…
             </p>
           )
@@ -1141,7 +1141,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             <span className="text-2xl">✓</span>
           </div>
           <h1 className="text-lg font-semibold">Recording complete</h1>
-          <p className="text-sm text-[#94a3b8]">
+          <p className="text-sm text-[var(--raw-94a3b8)]">
             Your 10-second verification video is ready. Tap Submit to send it and resume your interview.
           </p>
           <button
@@ -1154,12 +1154,12 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
         </div>
       )}
 
-      {phase === 'uploading' && <p className="text-[#94a3b8]">Uploading…</p>}
+      {phase === 'uploading' && <p className="text-[var(--raw-94a3b8)]">Uploading…</p>}
 
       {phase === 'done' && (
         <div className="max-w-sm space-y-2">
           <h1 className="text-lg font-semibold">Recordings uploaded successfully.</h1>
-          <p className="text-sm text-[#94a3b8]">
+          <p className="text-sm text-[var(--raw-94a3b8)]">
             You can put your phone down — your interview is resuming on your laptop.
           </p>
         </div>

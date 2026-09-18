@@ -50,8 +50,8 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
 
   const pageStyle: React.CSSProperties = {
     minHeight: '100vh',
-    backgroundColor: isDark ? '#0F172A' : '#ffffff',
-    color: isDark ? '#ffffff' : '#111827',
+    backgroundColor: isDark ? 'var(--raw-0f172a)' : 'var(--raw-ffffff)',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
   };
 
   const containerStyle: React.CSSProperties = {
@@ -71,8 +71,8 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
     gap: '8px',
     padding: '8px 16px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(34, 197, 94, 0.2)' : '#DCFCE7',
-    color: isDark ? '#86EFAC' : '#16A34A',
+    backgroundColor: isDark ? 'rgba(34, 197, 94, 0.2)' : 'var(--raw-dcfce7)',
+    color: isDark ? 'var(--raw-86efac)' : 'var(--raw-16a34a)',
     fontSize: '14px',
     fontWeight: 600,
     marginBottom: '16px',
@@ -81,14 +81,14 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
   const titleStyle: React.CSSProperties = {
     fontSize: isMobile ? '28px' : isTablet ? '40px' : '56px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '16px',
     lineHeight: 1.1,
   };
 
   const subtitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     maxWidth: '672px',
     margin: '0 auto',
     lineHeight: 1.6,
@@ -112,8 +112,8 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
     gap: '16px',
     padding: '24px',
     borderRadius: '16px',
-    border: `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
-    backgroundColor: isDark ? '#1E293B' : '#ffffff',
+    border: `1px solid ${isDark ? 'var(--raw-1e293b)' : 'var(--raw-e5e7eb)'}`,
+    backgroundColor: isDark ? 'var(--raw-1e293b)' : 'var(--raw-ffffff)',
   };
 
   const contactIconStyle = (gradient: string): React.CSSProperties => ({
@@ -130,18 +130,18 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
   const contactTitleStyle: React.CSSProperties = {
     fontSize: '18px',
     fontWeight: 600,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '4px',
   };
 
   const contactDescStyle: React.CSSProperties = {
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     fontSize: '14px',
     marginBottom: '8px',
   };
 
   const contactLinkStyle: React.CSSProperties = {
-    color: isDark ? '#A78BFA' : '#7C3AED',
+    color: isDark ? 'var(--raw-a78bfa)' : 'var(--raw-7c3aed)',
     fontWeight: 500,
     textDecoration: 'none',
   };
@@ -149,14 +149,14 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
   const formStyle: React.CSSProperties = {
     padding: isMobile ? '20px' : '32px',
     borderRadius: isMobile ? '16px' : '24px',
-    border: `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
-    backgroundColor: isDark ? '#1E293B' : '#ffffff',
+    border: `1px solid ${isDark ? 'var(--raw-1e293b)' : 'var(--raw-e5e7eb)'}`,
+    backgroundColor: isDark ? 'var(--raw-1e293b)' : 'var(--raw-ffffff)',
   };
 
   const formTitleStyle: React.CSSProperties = {
     fontSize: '24px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '24px',
   };
 
@@ -168,7 +168,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
     display: 'block',
     fontSize: '14px',
     fontWeight: 500,
-    color: isDark ? '#D1D5DB' : '#374151',
+    color: isDark ? 'var(--raw-d1d5db)' : 'var(--raw-374151)',
     marginBottom: '8px',
   };
 
@@ -176,9 +176,9 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
     width: '100%',
     padding: '12px 16px',
     borderRadius: '10px',
-    border: `1px solid ${isDark ? '#4B5563' : '#D1D5DB'}`,
-    backgroundColor: isDark ? '#374151' : '#ffffff',
-    color: isDark ? '#F9FAFB' : '#111827',
+    border: `1px solid ${isDark ? 'var(--raw-4b5563)' : 'var(--raw-d1d5db)'}`,
+    backgroundColor: isDark ? 'var(--raw-374151)' : 'var(--raw-ffffff)',
+    color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)',
     fontSize: '16px',
     outline: 'none',
     boxSizing: 'border-box',
@@ -205,8 +205,8 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
     fontSize: '16px',
     fontWeight: 500,
     borderRadius: '12px',
-    background: 'linear-gradient(135deg, #667EEA, #764BA2)',
-    color: '#ffffff',
+    background: 'linear-gradient(135deg, var(--raw-667eea), var(--raw-764ba2))',
+    color: 'var(--raw-ffffff)',
     border: 'none',
     cursor: 'pointer',
   };
@@ -220,7 +220,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
     width: '80px',
     height: '80px',
     borderRadius: '50%',
-    background: 'linear-gradient(135deg, #22C55E, #14B8A6)',
+    background: 'linear-gradient(135deg, var(--raw-22c55e), var(--raw-14b8a6))',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -237,8 +237,8 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
   const officeCardStyle: React.CSSProperties = {
     padding: isMobile ? '20px' : '32px',
     borderRadius: '16px',
-    border: `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
-    backgroundColor: isDark ? '#1E293B' : '#ffffff',
+    border: `1px solid ${isDark ? 'var(--raw-1e293b)' : 'var(--raw-e5e7eb)'}`,
+    backgroundColor: isDark ? 'var(--raw-1e293b)' : 'var(--raw-ffffff)',
     textAlign: 'center',
   };
 
@@ -246,7 +246,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
     width: '64px',
     height: '64px',
     borderRadius: '16px',
-    background: 'linear-gradient(135deg, #667EEA, #764BA2)',
+    background: 'linear-gradient(135deg, var(--raw-667eea), var(--raw-764ba2))',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -256,19 +256,19 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
   const officeTitleStyle: React.CSSProperties = {
     fontSize: '20px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '8px',
   };
 
   const officeAddressStyle: React.CSSProperties = {
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     lineHeight: 1.6,
   };
 
   const faqSectionStyle: React.CSSProperties = {
     padding: isMobile ? '32px 20px' : isTablet ? '48px 32px' : '60px 40px',
     borderRadius: isMobile ? '16px' : '24px',
-    backgroundColor: isDark ? '#1E293B' : '#F9FAFB',
+    backgroundColor: isDark ? 'var(--raw-1e293b)' : 'var(--raw-f9fafb)',
     textAlign: 'center',
   };
 
@@ -278,21 +278,21 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
       title: "Email Us",
       description: "Send us an email anytime",
       link: "hello@talentflow.com",
-      gradient: "linear-gradient(135deg, #3B82F6, #8B5CF6)",
+      gradient: "linear-gradient(135deg, var(--raw-3b82f6), var(--raw-8b5cf6))",
     },
     {
       icon: Phone,
       title: "Call Us",
       description: "Mon-Fri from 9am to 6pm EST",
       link: "+1 (555) 123-4567",
-      gradient: "linear-gradient(135deg, #22C55E, #14B8A6)",
+      gradient: "linear-gradient(135deg, var(--raw-22c55e), var(--raw-14b8a6))",
     },
     {
       icon: MessageSquare,
       title: "Live Chat",
       description: "We're here to help",
       link: "Start a conversation",
-      gradient: "linear-gradient(135deg, #EC4899, #F43F5E)",
+      gradient: "linear-gradient(135deg, var(--raw-ec4899), var(--raw-f43f5e))",
     },
   ];
 
@@ -326,7 +326,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
               return (
                 <div key={index} style={contactCardStyle}>
                   <div style={contactIconStyle(contact.gradient)}>
-                    <Icon style={{ width: 24, height: 24, color: '#ffffff' }} />
+                    <Icon style={{ width: 24, height: 24, color: 'var(--raw-ffffff)' }} />
                   </div>
                   <div>
                     <h3 style={contactTitleStyle}>{contact.title}</h3>
@@ -342,14 +342,14 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
               padding: '24px',
               borderRadius: '16px',
               background: 'linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1))',
-              border: `1px solid ${isDark ? '#334155' : '#E5E7EB'}`,
+              border: `1px solid ${isDark ? 'var(--raw-334155)' : 'var(--raw-e5e7eb)'}`,
             }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '12px' }}>
-                <Clock style={{ width: 24, height: 24, color: '#667EEA' }} />
-                <span style={{ fontWeight: 600, color: isDark ? '#ffffff' : '#111827' }}>Average Response Time</span>
+                <Clock style={{ width: 24, height: 24, color: 'var(--raw-667eea)' }} />
+                <span style={{ fontWeight: 600, color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)' }}>Average Response Time</span>
               </div>
-              <p style={{ color: isDark ? '#94A3B8' : '#6B7280', margin: 0 }}>
-                We typically respond within <strong style={{ color: isDark ? '#A78BFA' : '#7C3AED' }}>2 hours</strong> during business hours.
+              <p style={{ color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)', margin: 0 }}>
+                We typically respond within <strong style={{ color: isDark ? 'var(--raw-a78bfa)' : 'var(--raw-7c3aed)' }}>2 hours</strong> during business hours.
               </p>
             </div>
           </div>
@@ -359,12 +359,12 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
             {isSubmitted ? (
               <div style={successStyle}>
                 <div style={successIconStyle}>
-                  <CheckCircle2 style={{ width: 40, height: 40, color: '#ffffff' }} />
+                  <CheckCircle2 style={{ width: 40, height: 40, color: 'var(--raw-ffffff)' }} />
                 </div>
-                <h3 style={{ fontSize: '24px', fontWeight: 700, color: isDark ? '#ffffff' : '#111827', marginBottom: '12px' }}>
+                <h3 style={{ fontSize: '24px', fontWeight: 700, color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)', marginBottom: '12px' }}>
                   Message Sent!
                 </h3>
-                <p style={{ color: isDark ? '#94A3B8' : '#6B7280', marginBottom: '24px' }}>
+                <p style={{ color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)', marginBottom: '24px' }}>
                   Thank you for reaching out. We'll get back to you within 24 hours.
                 </p>
                 <button
@@ -447,14 +447,14 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
         </div>
 
         {/* Offices */}
-        <h2 style={{ fontSize: '32px', fontWeight: 700, color: isDark ? '#ffffff' : '#111827', textAlign: 'center', marginBottom: '32px' }}>
+        <h2 style={{ fontSize: '32px', fontWeight: 700, color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)', textAlign: 'center', marginBottom: '32px' }}>
           Our Offices
         </h2>
         <div style={officesGridStyle}>
           {offices.map((office, index) => (
             <div key={index} style={officeCardStyle}>
               <div style={officeIconStyle}>
-                <Building style={{ width: 32, height: 32, color: '#ffffff' }} />
+                <Building style={{ width: 32, height: 32, color: 'var(--raw-ffffff)' }} />
               </div>
               <h3 style={officeTitleStyle}>{office.city}</h3>
               <p style={officeAddressStyle}>{office.address.split('\n').map((line, i) => (
@@ -466,7 +466,7 @@ export default function ContactPage({ onNavigate }: ContactPageProps) {
 
         {/* FAQ */}
         <div style={faqSectionStyle}>
-          <h2 style={{ fontSize: '28px', fontWeight: 700, color: isDark ? '#ffffff' : '#111827', marginBottom: '16px' }}>
+          <h2 style={{ fontSize: '28px', fontWeight: 700, color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)', marginBottom: '16px' }}>
             Need quick answers?
           </h2>
           <p style={{ ...subtitleStyle, marginBottom: '24px' }}>

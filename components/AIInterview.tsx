@@ -1,9 +1,9 @@
 'use client';
 
-import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronRight, Search, ArrowUpDown, Plus, Sparkles, ClipboardList, Mic, Ban, XCircle, Check, Info, RefreshCw } from 'lucide-react';
+import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronRight, ChevronDown, Search, ArrowUpDown, Plus, Sparkles, ClipboardList, Mic, Ban, XCircle, Check, Info, RefreshCw } from 'lucide-react';
 import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
-import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo, type ComponentType } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { TRACKER_DIALOG_PANEL_CLASS } from '@/lib/constants/trackerDialog';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -31,7 +31,13 @@ import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import QuotaBadge from '@/components/ui/quota-badge';
-import JDVersionHistory from '@/components/JDVersionHistory';
+import AssessmentVersionHistoryPanel, {
+  ASSESSMENT_VOCABULARY,
+  type AssessmentVersionRow,
+  type VersionHistoryVocabulary,
+} from '@/components/assessments/AssessmentVersionHistoryPanel';
+import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
 
 // Returns the effective interview duration string.
 // New configs store the real 30 / 35 / N value in duration_minutes.
@@ -190,6 +196,20 @@ export default function AIInterview() {
   const [processingPage, setProcessingPage] = useState(1);
   const [processingItemsPerPage, setProcessingItemsPerPage] = useState(10);
   const [invitationPage, setInvitationPage] = useState(1);
+  // "Go to page" input for the Invite Status Tracking footer — buffered locally
+  // so a partial edit doesn't get clobbered by invitationPage until Enter/blur commits it.
+  const [goToInvitationPage, setGoToInvitationPage] = useState('1');
+  useEffect(() => {
+    setGoToInvitationPage(String(invitationPage));
+  }, [invitationPage]);
+  const commitGoToInvitationPage = () => {
+    const page = Math.round(Number(goToInvitationPage));
+    if (Number.isFinite(page) && page >= 1 && page <= invitationTotalPages) {
+      setInvitationPage(page);
+    } else {
+      setGoToInvitationPage(String(invitationPage));
+    }
+  };
 
   // Candidate detail view (from Track Invites modal)
   const [candidateDetailFromModal, setCandidateDetailFromModal] = useState<AIInterviewResponse | null>(null);
@@ -197,6 +217,15 @@ export default function AIInterview() {
 
   // 3-dot menu
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
+  /* Which row has its JD version history open — one at a time, keyed by config
+     id, exactly as the Assessments Job List holds its own. Persisted with the
+     rest of the list state below so coming back from an interview page finds
+     the panel as it was left, which is what that list does. */
+  const [openVersionsFor, setOpenVersionsFor] = useState<string | null>(null);
+  /* The job lineage behind that panel — the shared hook the Assessments list,
+     Job Openings and Resume Scoring all read, so the version rows here are the
+     same rows those pages show, fetched once per job and cached per mount. */
+  const jdLineage = useJobVersionLineage();
   // Whether the action menu should open UPWARD (flip) — set when there isn't
   // enough room below the trigger (last cards / near the viewport bottom) so the
   // menu isn't clipped off-screen.
@@ -533,6 +562,7 @@ export default function AIInterview() {
     { activeTab, invitedOnly, modeFilter, searchQuery, sortBy,
       creatorFilter, dateFilter, customDateFrom, customDateTo,
       configListPage, configListItemsPerPage, processingPage, processingItemsPerPage,
+      openVersionsFor,
       // The cards<->list drill-in. Without it the tab, filters and page were
       // all restored but pageView fell back to 'cards', so returning from an
       // interview page showed only the stat tiles — the list looked gone.
@@ -542,6 +572,7 @@ export default function AIInterview() {
       // 'consent' tab was removed — never restore onto it.
       if (typeof s.activeTab === 'string' && s.activeTab !== 'consent') setActiveTab(s.activeTab as TabKey);
       if (typeof s.invitedOnly === 'boolean') setInvitedOnly(s.invitedOnly);
+      if (typeof s.openVersionsFor === 'string') setOpenVersionsFor(s.openVersionsFor);
       if (typeof s.modeFilter === 'string') setModeFilter(s.modeFilter as typeof modeFilter);
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
       if (typeof s.sortBy === 'string') setSortBy(s.sortBy as typeof sortBy);
@@ -1059,6 +1090,87 @@ export default function AIInterview() {
     (configListPage - 1) * configListItemsPerPage,
     configListPage * configListItemsPerPage,
   );
+  /* ── View Versions: interview configs as the version panel's child rows ──
+     The panel joins a child to a job version on `jd_id` — every job version is
+     a JD row of its own, so that id names one version exactly. Configs are
+     bucketed by it here once per render rather than scanned per version. Both
+     lists, because archiving an interview does not unmake the version it was
+     authored against. */
+  const configsByJobVersionId = useMemo(() => {
+    const byJobVersion = new Map<string, AIInterviewResponse[]>();
+    for (const config of [...configs, ...archivedConfigs]) {
+      if (!config.jd_id) continue;
+      const bucket = byJobVersion.get(config.jd_id);
+      if (bucket) bucket.push(config);
+      else byJobVersion.set(config.jd_id, [config]);
+    }
+    return byJobVersion;
+  }, [configs, archivedConfigs]);
+
+  /**
+   * One interview config in the shape the version panel reads.
+   *
+   * `version` is the ORDINAL within its job version, oldest first — the second
+   * interview authored against job V3 is v2 there. Derived rather than read,
+   * because an interview config carries no version number of its own; it is the
+   * same rule the panel documents for assessments, whose numbers likewise
+   * restart per job version, applied to the one fact this data does have.
+   *
+   * `completed_count` is left unset: the list endpoint returns no
+   * finished-session figure, and a zero would read as "nobody finished" rather
+   * than "not counted".
+   */
+  const toInterviewVersionRow = (config: AIInterviewResponse, ordinal: number): AssessmentVersionRow => ({
+    id: config.id,
+    short_id: config.display_id,
+    title: config.jd_title || config.position,
+    version: ordinal,
+    status: normalizeConfigStatus(config.status),
+    created_at: config.created_at,
+    created_by_name: config.created_by_name,
+    invitations_count: config.invitations_count,
+    jd_id: config.jd_id,
+    jd_version: config.jd_version,
+  });
+
+  /** Every interview in one job's lineage, numbered per job version. */
+  const interviewVersionRows = (jdId?: string): AssessmentVersionRow[] => {
+    if (!jdId) return [];
+    const lineage = jdLineage.lineages[jdId];
+    if (!lineage) return [];
+    return lineage.flatMap((jobVersion) =>
+      (configsByJobVersionId.get(jobVersion.id) ?? [])
+        .slice()
+        .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
+        .map((config, index) => toInterviewVersionRow(config, index + 1)),
+    );
+  };
+
+  /* A row restored open by list-state persistence was never clicked, so the
+     toggle's fetch never ran and its panel would sit on a spinner forever. This
+     fills the lineage once the configs themselves have landed. The loader
+     no-ops on a cache hit, so re-running is free. The same effect, for the same
+     reason, as the one on the Assessments list. */
+  useEffect(() => {
+    if (!openVersionsFor) return;
+    const row = [...configs, ...archivedConfigs].find((config) => config.id === openVersionsFor);
+    if (!row?.jd_id) return;
+    jdLineage.ensureLoaded(row.jd_id, row.jd_id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openVersionsFor, configs, archivedConfigs]);
+
+  /* The panel's wording for this page. Everything else about it — columns,
+     spacing, chips, date format, the nesting — is the Assessments page's and is
+     not restated here. */
+  const INTERVIEW_VOCABULARY: VersionHistoryVocabulary = {
+    ...ASSESSMENT_VOCABULARY,
+    childPlural: 'Interviews',
+    childVersionsHeading: 'Interview Versions',
+    childNone: 'No interview',
+    detailColumn: { label: 'Rounds', minW: 'min-w-[170px]' },
+    statusLabel: (status?: string) => getStatusLabel(String(status ?? '')),
+  };
+
   const processingTotalPages = Math.max(1, Math.ceil(processingSessions.length / processingItemsPerPage));
   const paginatedProcessingSessions = processingSessions.slice(
     (processingPage - 1) * processingItemsPerPage,
@@ -1586,159 +1698,165 @@ export default function AIInterview() {
                   )}
                 </div>
               ) : (
-                <div className="space-y-3 sm:space-y-4">
+                <div className="space-y-3">
                   {paginatedConfigs.map((config) => {
                     const enabledRounds = config.rounds_config
                       ? config.rounds_config.filter((r: any) => r.enabled !== false)
                       : [];
                     const normalizedStatus = normalizeConfigStatus(config.status);
-                    const statusStyles: Record<string, { dot: string; chip: string; label: string }> = {
-                      // The brand-tinted chips already work in dark mode (they
-                      // are alpha over the surface); only the flat green/red
-                      // 100-level fills needed a dark counterpart.
-                      published: { dot: 'bg-green-500', chip: 'bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300 ring-1 ring-green-200 dark:ring-green-500/25', label: 'Active' },
-                      draft: { dot: 'bg-brand-orange', chip: 'bg-brand-orange/10 text-brand-orange-deep dark:text-brand-orange ring-1 ring-brand-orange/20', label: 'Draft' },
-                      completed: { dot: 'bg-brand-blue', chip: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20', label: 'Completed' },
-                      cancelled: { dot: 'bg-red-500', chip: 'bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-1 ring-red-200 dark:ring-red-500/25', label: 'Cancelled' },
-                      archived: { dot: 'bg-brand-orange', chip: 'bg-brand-orange/10 text-brand-orange-deep dark:text-brand-orange ring-1 ring-brand-orange/20', label: 'Archived' },
+                    /* The Assessments Job List row's pill, matched rather than
+                       re-invented: one `ring-1` chip, a `bg-current` dot, and the
+                       same fixed-width box so the metric columns start on the same
+                       line in every row however long the status word is. The pair
+                       this replaced spelled its own colour for the dot, which is
+                       the one thing that row's pill does not do. */
+                    const statusPillStyles: Record<string, string> = {
+                      published: 'bg-green-100 text-green-700 ring-green-200 dark:bg-green-500/15 dark:text-green-300 dark:ring-green-500/25',
+                      draft: 'bg-brand-orange/10 text-brand-orange-deep dark:text-brand-orange ring-brand-orange/20',
+                      completed: 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20',
+                      cancelled: 'bg-red-100 text-red-700 ring-red-200 dark:bg-red-500/15 dark:text-red-300 dark:ring-red-500/25',
+                      archived: 'bg-brand-orange/10 text-brand-orange-deep dark:text-brand-orange ring-brand-orange/20',
                     };
-                    const statusStyle = statusStyles[normalizedStatus] || { dot: 'bg-gray-400', chip: 'bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700', label: getStatusLabel(config.status) };
+                    const statusPillLabels: Record<string, string> = {
+                      published: 'Active',
+                      draft: 'Draft',
+                      completed: 'Completed',
+                      cancelled: 'Cancelled',
+                      archived: 'Archived',
+                    };
+                    const statusPill = statusPillStyles[normalizedStatus]
+                      || 'bg-slate-100 text-gray-700 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700';
+                    const statusPillLabel = statusPillLabels[normalizedStatus] || getStatusLabel(config.status);
+                    /* Three columns where the Job List row has four. An interview
+                       config has no completed-sessions figure on the list response
+                       (`AIInterviewResponse` carries `invitations_count` and nothing
+                       that counts finished sessions), and a fourth column filled
+                       with something that is not a total would read as one. */
+                    const rowMetrics = [
+                      { key: 'rounds', icon: GitBranch, iconClass: 'text-brand-blue', value: enabledRounds.length, label: 'Rounds' },
+                      { key: 'duration', icon: Clock, iconClass: 'text-brand-cyan', value: getInterviewDuration(config.duration_minutes, (config as any).special_instructions), label: 'Duration' },
+                      { key: 'invitations', icon: Send, iconClass: 'text-brand-orange', value: config.invitations_count ?? 0, label: 'Invitations Sent' },
+                    ];
 
                     return (
                       <div
                         key={config.id}
                         onClick={() => router.push(`/recruitment/ai-interviews/${config.id}`)}
-                        className={`group relative flex flex-col lg:flex-row lg:items-center justify-between p-4 sm:p-5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-2xl bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5 transition-all duration-200 cursor-pointer gap-4 overflow-visible ${
+                        /* `@container/ai-row` and the `@4xl` breakpoints below are
+                           the Job List row's, and for its reason: the row is
+                           measured against ITSELF rather than the window, so it
+                           takes the stacked layout whenever it is narrow — in a
+                           dialog, in a split pane — not only on a narrow screen.
+                           See the note on `renderJobListRow` in Assessments.tsx. */
+                        className={`@container/ai-row relative p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 cursor-pointer hover:border-brand-blue/30 ${
                           openMenuId === config.id ? 'z-40' : 'z-0'
                         }`}
                       >
-                        {normalizedStatus === 'published' && (
-                          <span className="absolute left-0 top-4 bottom-4 w-1 rounded-r-full bg-gradient-to-b from-brand-blue to-brand-cyan" aria-hidden />
-                        )}
-                        <div className="flex items-start gap-3 sm:gap-4 flex-1 min-w-0">
-                          <div className={`w-11 h-11 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center flex-shrink-0 transition-colors ring-1 ${
-                            normalizedStatus === 'published'
-                              ? 'bg-gradient-to-br from-green-100 to-green-50 text-green-600 ring-green-200 group-hover:from-green-200 dark:bg-none dark:bg-green-500/12 dark:text-green-300 dark:ring-green-500/25 dark:group-hover:bg-green-500/20'
-                              : 'bg-brand-blue/10 text-brand-blue ring-brand-blue/15 group-hover:bg-brand-blue/15'
-                          }`}>
-                            <Video className="w-5 h-5 sm:w-6 sm:h-6" />
-                          </div>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                              {config.display_id && (
-                                <span className="px-2 py-0.5 text-[11px] font-mono font-semibold bg-brand-blue text-white rounded-md shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                                  {config.display_id}
-                                </span>
-                              )}
-                              <h3 className="font-semibold text-gray-900 dark:text-slate-50 text-[15px] truncate tracking-tight">
-                                {config.jd_title || config.position || 'Untitled'}
-                              </h3>
-                              {config.jd_version && (
-                                <span className="px-1.5 py-0.5 text-[10px] font-medium bg-slate-100 text-gray-500 dark:text-slate-500 rounded ring-1 ring-gray-200">
-                                  v{config.jd_version}
-                                </span>
-                              )}
-                            </div>
-                            <div className="flex items-center gap-1.5 flex-wrap mb-2.5">
-                              <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[11px] font-medium ${statusStyle.chip}`}>
-                                <span className={`w-1.5 h-1.5 rounded-full ${statusStyle.dot}`} />
-                                {statusStyle.label}
-                              </span>
-                              {(() => {
-                                const mode = modeFromConfig(config.special_instructions, config.duration_minutes);
-                                let hasBuffer = false;
-                                try {
-                                  const si = JSON.parse(config.special_instructions || '{}');
-                                  hasBuffer = !!si.buffer_enabled;
-                                } catch {}
-                                if (mode === 'fixed') {
-                                  return (
-                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20">
-                                      <Clock className="w-3 h-3" />
-                                      Timed
-                                    </span>
-                                  );
-                                }
-                                return (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
-                                    <MessageSquare className="w-3 h-3" />
-                                    {hasBuffer ? 'Conversational + Buffer' : 'Conversational'}
-                                  </span>
-                                );
-                              })()}
-                              {enabledRounds.length > 0 && (
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20">
-                                  <GitBranch className="w-3 h-3" />
-                                  {enabledRounds.length} rounds
-                                </span>
-                              )}
-                              {(() => {
-                                // Speech-to-Text model chosen for this interview
-                                // (special_instructions.stt_model). Only shown when
-                                // explicitly set so legacy configs (env-default ASR)
-                                // don't imply a choice that wasn't made.
-                                let sttModel: string | undefined;
-                                try {
-                                  sttModel = JSON.parse(config.special_instructions || '{}').stt_model;
-                                } catch {}
-                                if (!sttModel) return null;
-                                const opt = getSttModelOption(sttModel);
-                                return (
-                                  <span
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 ring-1 ring-indigo-500/20"
-                                    title={`Speech-to-Text model: ${opt.label}`}
-                                  >
-                                    <Mic className="w-3 h-3" />
-                                    {opt.label}
-                                  </span>
-                                );
-                              })()}
+                        <div className="flex flex-col gap-3 @4xl/ai-row:flex-row @4xl/ai-row:items-center @4xl/ai-row:gap-4">
+                          {/* Identity — icon, Job ID, title */}
+                          <div className="flex items-center gap-2.5 min-w-0 @4xl/ai-row:w-[360px] @4xl/ai-row:flex-shrink-0">
+                            <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
+                              <Video className="h-4 w-4 text-brand-blue" />
                             </div>
                             {config.jd_short_id && (
-                              <div className="text-xs text-gray-500 dark:text-slate-500 mb-2">
-                                <span className="font-mono">{config.jd_short_id}</span>
-                                {(config.jd_title || config.position) && (
-                                  <span className="ml-1.5 text-gray-400 dark:text-slate-500">· {config.jd_title || config.position}</span>
-                                )}
-                                <JDVersionHistory
-                                  jdId={config.jd_id}
-                                  version={config.jd_version}
-                                  className="mt-1.5"
-                                />
-                              </div>
+                              /* The shared house chip, not the hand-rolled solid
+                                 blue span this row used to draw — same identifier,
+                                 one definition, the same one the Assessments row
+                                 carries. */
+                              <JobIdBadge className="flex-shrink-0">{config.jd_short_id}</JobIdBadge>
                             )}
-                            <div className="flex items-center gap-x-4 gap-y-1 text-xs text-gray-500 dark:text-slate-500 flex-wrap">
-                              <span className="inline-flex items-center gap-1.5">
-                                <Clock className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
-                                {getInterviewDuration(config.duration_minutes, (config as any).special_instructions)}
+                            {config.display_id && (
+                              /* The config's OWN id, which the Job List row has no
+                                 equivalent of: one row there is one job, one row
+                                 here is one interview, so this is the row's handle
+                                 and it would be lost with nowhere else to read it.
+                                 Muted to the `vN` chip's weight so the Job ID
+                                 beside it stays the loud one. */
+                              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded ring-1 ring-gray-200 dark:ring-slate-700 flex-shrink-0">
+                                {config.display_id}
                               </span>
-                              {enabledRounds.length > 0 && (
-                                <span className="hidden sm:inline-flex items-center gap-1.5 text-gray-400 dark:text-slate-500">
-                                  <span className="w-1 h-1 rounded-full bg-gray-300" />
-                                  {enabledRounds.map((r: any) => ROUND_LABELS[r.type] || r.type).join(' · ')}
-                                </span>
-                              )}
-                              <span className="inline-flex items-center gap-1.5">
-                                <Calendar className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
-                                {formatIST(config.created_at)}
-                              </span>
-                              {config.created_by_name && (
-                                <span className="inline-flex items-center gap-1 text-gray-400 dark:text-slate-500">
-                                  by <span className="text-gray-500 dark:text-slate-500">{config.created_by_name}</span>
-                                </span>
-                              )}
-                            </div>
-                            {/* Skills strip removed from the list card per product feedback (2026-05-13).
-                              Skills are still visible inside the AI Interview details view. */}
+                            )}
+                            <h3
+                              className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate min-w-0"
+                              title={config.jd_title || config.position || 'Untitled'}
+                            >
+                              {config.jd_title || config.position || 'Untitled'}
+                            </h3>
                           </div>
-                        </div>
 
-                        <div className="flex items-center gap-2 flex-wrap lg:flex-nowrap lg:justify-end w-full lg:w-auto" onClick={(e) => e.stopPropagation()}>
+                          {/* Status — boxed to a fixed width so the metric columns
+                              line up down the list. */}
+                          <div className="flex-shrink-0 @4xl/ai-row:w-[104px]">
+                            <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ring-1 ${statusPill}`}>
+                              <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
+                              {statusPillLabel}
+                            </span>
+                          </div>
+
+                          {/* Metrics. Two columns on a phone, three in a divided
+                              row once there is width for them. */}
+                          <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-3 sm:gap-x-0 sm:gap-y-0 @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0">
+                            {rowMetrics.map(({ key, icon: MetricIcon, iconClass, value, label }) => (
+                              <div
+                                key={key}
+                                className="min-w-0 sm:px-3 sm:border-l sm:border-gray-100 dark:sm:border-slate-700/60 sm:first:border-l-0 sm:first:pl-0"
+                              >
+                                <div className="flex items-center gap-1.5 min-w-0">
+                                  <MetricIcon className={`w-4 h-4 flex-shrink-0 ${iconClass}`} />
+                                  <span className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{value}</span>
+                                </div>
+                                <p className="text-[11px] text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
+                              </div>
+                            ))}
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex items-center gap-2 flex-shrink-0 self-start @4xl/ai-row:self-auto @4xl/ai-row:ml-auto" onClick={(e) => e.stopPropagation()}>
+                          {/* View Versions — trigger only; the history it opens is
+                              rendered below the row. First in the cluster and
+                              wearing the row's own button shape, which is where
+                              and how the Assessments Job List row carries it.
+
+                              Gated on having a job behind the row at all — the
+                              same test `hasVersionHistory` makes on the
+                              Assessments list. A v1 job still has a history worth
+                              opening here, because the panel lists the interviews
+                              authored against that version, not only the versions
+                              themselves. */}
+                          {!!config.jd_id && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const opening = openVersionsFor !== config.id;
+                                setOpenVersionsFor(opening ? config.id : null);
+                                /* Fetched on the way open, never on render — the
+                                   loader no-ops on a cache hit, so reopening a
+                                   row, or opening a sibling row of the same job,
+                                   costs no second request. */
+                                if (opening && config.jd_id) jdLineage.ensureLoaded(config.jd_id, config.jd_id);
+                              }}
+                              aria-expanded={openVersionsFor === config.id}
+                              title={openVersionsFor === config.id ? 'Hide version history' : 'View version history'}
+                              className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
+                                openVersionsFor === config.id
+                                  ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30'
+                                  : 'bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5'
+                              }`}
+                            >
+                              {openVersionsFor === config.id ? 'Hide' : 'View'} Versions
+                              <ChevronDown
+                                className={`w-3.5 h-3.5 transition-transform ${
+                                  openVersionsFor === config.id ? 'rotate-180' : ''
+                                }`}
+                              />
+                            </button>
+                          )}
+
                           {/* Edit — draft only (primary action) */}
                           {config.status === 'draft' && config.jd_id && canUpdateAIInterviews && (
                             <button
                               onClick={() => router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`)}
-                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 transition-all duration-200 whitespace-nowrap"
+                              className="h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5"
                             >
                               <Pencil className="w-3.5 h-3.5 flex-shrink-0" />
                               <span className="hidden sm:inline">Continue Editing</span>
@@ -1750,7 +1868,7 @@ export default function AIInterview() {
                           {normalizedStatus === 'published' && canShareAIInterviews && (
                             <button
                               onClick={() => setShareConfig(config)}
-                              className="hidden sm:inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[40px] text-xs font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-all duration-200 whitespace-nowrap"
+                              className="hidden sm:inline-flex h-8 px-3 items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all bg-white dark:bg-slate-900 text-brand-cyan border-brand-cyan/30 hover:bg-brand-cyan/5"
                             >
                               <Send className="w-3.5 h-3.5 flex-shrink-0" />
                               Share
@@ -1761,7 +1879,7 @@ export default function AIInterview() {
                           {normalizedStatus === 'published' && canInviteAIInterviews && (
                             <button
                               onClick={() => handleViewInvitations(config)}
-                              className="inline-flex items-center justify-center gap-1.5 px-3 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-all duration-200 whitespace-nowrap"
+                              className="h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all bg-white dark:bg-slate-900 text-brand-cyan border-brand-cyan/30 hover:bg-brand-cyan/5"
                               aria-label="Track invitation status" title="Track invitation status"
                             >
                               <Users className="w-3.5 h-3.5 flex-shrink-0" />
@@ -1773,7 +1891,7 @@ export default function AIInterview() {
                           {normalizedStatus === 'published' && (
                             <button
                               onClick={() => router.push(`/recruitment/ai-interviews/${config.id}/results`)}
-                              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 min-h-[40px] flex-1 sm:flex-none text-xs font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 transition-all duration-200 whitespace-nowrap"
+                              className="h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5"
                               aria-label="View interview results" title="View interview results"
                             >
                               <BarChart2 className="w-3.5 h-3.5 flex-shrink-0" />
@@ -1796,7 +1914,7 @@ export default function AIInterview() {
                                 }
                                 setOpenMenuId(willOpen ? config.id : null);
                               }}
-                              className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-all"
+                              className="h-8 w-8 inline-flex items-center justify-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 transition-all"
                               aria-label="More actions"
                             >
                               <MoreVertical className="w-4 h-4 text-gray-600" />
@@ -1872,6 +1990,133 @@ export default function AIInterview() {
                             )}
                           </div>
                         </div>
+                        </div>
+
+                        {/* Secondary detail. The Job List row carries nothing like
+                            this — it says the job once and stops — but one row
+                            there is one JOB, where one row here is one CONFIG, and
+                            mode, ASR model, authorship and the JD lineage have no
+                            second home on this page the way a job's do in View
+                            Versions. Kept below the row and at label weight so the
+                            four zones above still read as the Assessments row. */}
+                        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60 flex items-center gap-x-3 gap-y-1.5 flex-wrap text-[11px] text-gray-500 dark:text-slate-500">
+                          {(() => {
+                            const mode = modeFromConfig(config.special_instructions, config.duration_minutes);
+                            let hasBuffer = false;
+                            try {
+                              const si = JSON.parse(config.special_instructions || '{}');
+                              hasBuffer = !!si.buffer_enabled;
+                            } catch {}
+                            if (mode === 'fixed') {
+                              return (
+                                <span className="inline-flex items-center gap-1 text-brand-orange-deep dark:text-brand-orange">
+                                  <Clock className="w-3 h-3 flex-shrink-0" />
+                                  Timed
+                                </span>
+                              );
+                            }
+                            return (
+                              <span className="inline-flex items-center gap-1 text-brand-cyan">
+                                <MessageSquare className="w-3 h-3 flex-shrink-0" />
+                                {hasBuffer ? 'Conversational + Buffer' : 'Conversational'}
+                              </span>
+                            );
+                          })()}
+                          {(() => {
+                            // Speech-to-Text model chosen for this interview
+                            // (special_instructions.stt_model). Only shown when
+                            // explicitly set so legacy configs (env-default ASR)
+                            // don't imply a choice that wasn't made.
+                            let sttModel: string | undefined;
+                            try {
+                              sttModel = JSON.parse(config.special_instructions || '{}').stt_model;
+                            } catch {}
+                            if (!sttModel) return null;
+                            const opt = getSttModelOption(sttModel);
+                            return (
+                              <span
+                                className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400"
+                                title={`Speech-to-Text model: ${opt.label}`}
+                              >
+                                <Mic className="w-3 h-3 flex-shrink-0" />
+                                {opt.label}
+                              </span>
+                            );
+                          })()}
+                          {enabledRounds.length > 0 && (
+                            <span className="hidden sm:inline-flex items-center gap-1.5">
+                              <GitBranch className="w-3 h-3 flex-shrink-0 text-gray-400 dark:text-slate-500" />
+                              {enabledRounds.map((r: any) => ROUND_LABELS[r.type] || r.type).join(' · ')}
+                            </span>
+                          )}
+                          <span className="inline-flex items-center gap-1.5">
+                            <Calendar className="w-3 h-3 flex-shrink-0 text-gray-400 dark:text-slate-500" />
+                            {formatIST(config.created_at)}
+                          </span>
+                          {config.created_by_name && (
+                            <span className="inline-flex items-center gap-1 text-gray-400 dark:text-slate-500">
+                              by <span className="text-gray-500 dark:text-slate-500">{config.created_by_name}</span>
+                            </span>
+                          )}
+                          {config.jd_version && (
+                            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded ring-1 ring-gray-200 dark:ring-slate-700">
+                              v{config.jd_version}
+                            </span>
+                          )}
+                        </div>
+
+                        {/* Version history. The Assessments Job List row's own
+                            panel, not a second table written to look like it —
+                            same two nested levels, columns, chips, date cells and
+                            expand animation, with this page's nouns supplied
+                            through `vocabulary`.
+
+                            Below the whole row rather than inside one of its
+                            columns, which is where that list puts it. Click is
+                            stopped here: a click on a version row must not bubble
+                            to the card behind it and navigate to the interview. */}
+                        {openVersionsFor === config.id && config.jd_id && (
+                          <div
+                            className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <AssessmentVersionHistoryPanel
+                              jobVersions={jdLineage.lineages[config.jd_id]}
+                              jobVersionDetails={jdLineage.versionDetails}
+                              assessments={interviewVersionRows(config.jd_id)}
+                              loading={jdLineage.isLoading(config.jd_id)}
+                              currentAssessmentId={config.id}
+                              vocabulary={INTERVIEW_VOCABULARY}
+                              /* The Rounds cell, in place of the assessment
+                                 panel's Round Weightage: an interview's shape is
+                                 which rounds it runs, and there is no percentage
+                                 split behind them to state. */
+                              renderChildDetail={(child) => {
+                                const source = configsByJobVersionId.get(child.jd_id || '')
+                                  ?.find((candidate) => candidate.id === child.id);
+                                const rounds = (source?.rounds_config || [])
+                                  .filter((round) => round.enabled !== false);
+                                if (rounds.length === 0) {
+                                  return <span className="text-sm text-gray-500 dark:text-slate-400">&mdash;</span>;
+                                }
+                                return (
+                                  <div className="flex flex-col gap-0.5">
+                                    {rounds.map((round, index) => (
+                                      <div key={`${round.type}-${index}`} className="text-xs whitespace-nowrap leading-snug">
+                                        <span className="font-semibold text-gray-900 dark:text-slate-100">
+                                          {ROUND_LABELS[round.type] || round.type}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              }}
+                              /* Opens the interview the row names, the same thing
+                                 clicking the card does. */
+                              onRowClick={(interviewId) => router.push(`/recruitment/ai-interviews/${interviewId}`)}
+                            />
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -2631,9 +2876,25 @@ export default function AIInterview() {
                 <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
                   {invitationTotalPages > 1 && (
                     <>
-                      <button onClick={() => setInvitationPage(1)} disabled={invitationPage === 1} className={`hidden sm:inline-flex ${pageBtn}`}>
-                        First
-                      </button>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                        <input
+                          type="number"
+                          min={1}
+                          max={invitationTotalPages}
+                          value={goToInvitationPage}
+                          onChange={(e) => setGoToInvitationPage(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.currentTarget.blur();
+                              commitGoToInvitationPage();
+                            }
+                          }}
+                          onBlur={commitGoToInvitationPage}
+                          aria-label="Go to page"
+                          className="w-12 sm:w-14 h-8 px-1.5 sm:px-2 text-xs sm:text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                        />
+                      </div>
                       <button onClick={() => setInvitationPage((p) => Math.max(1, p - 1))} disabled={invitationPage === 1} className={pageBtn}>
                         Prev
                       </button>
@@ -2642,9 +2903,6 @@ export default function AIInterview() {
                       </span>
                       <button onClick={() => setInvitationPage((p) => Math.min(invitationTotalPages, p + 1))} disabled={invitationPage === invitationTotalPages} className={pageBtn}>
                         Next
-                      </button>
-                      <button onClick={() => setInvitationPage(invitationTotalPages)} disabled={invitationPage === invitationTotalPages} className={`hidden sm:inline-flex ${pageBtn}`}>
-                        Last
                       </button>
                     </>
                   )}

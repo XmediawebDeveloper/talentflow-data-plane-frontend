@@ -2439,6 +2439,13 @@ export default function AIInterviewConfig() {
   const saveDraft = async (
     silent = false,
     overrides?: { mth?: SkillEntry[]; nth?: SkillEntry[] },
+    // True only when this save represents the recruiter explicitly leaving
+    // the wizard (Save as Draft / the unsaved-changes dialog's Save option),
+    // as opposed to a silent autosave or a "Continue" save that stays
+    // mid-wizard. Threaded to the backend purely as an audit-log hint — it
+    // decides whether this config's audit trail gets a "Saved as Draft" /
+    // "Draft Updated" row, not whether anything here is saved differently.
+    isExiting = false,
   ): Promise<boolean> => {
     if (!selectedJd) return false;
     setSavingDraft(true);
@@ -2453,6 +2460,7 @@ export default function AIInterviewConfig() {
         available_languages: availableLanguages,
         title: `${selectedJd.title} - AI Interview`,
         save_as_draft: true,
+        save_and_exit: isExiting,
         special_instructions: buildClusterJson(),
         introduction_video_url: introVideoUrl || undefined,
       };
@@ -2479,7 +2487,7 @@ export default function AIInterviewConfig() {
   };
 
   const handleSaveAsDraft = async () => {
-    const ok = await saveDraft();
+    const ok = await saveDraft(false, undefined, true);
     if (!ok) return;
     // Started on a JD's Job Details page (including from its draft prompt) —
     // return there rather than to the AI Interviews list, matching the
@@ -2706,7 +2714,7 @@ export default function AIInterviewConfig() {
   const handleSaveAndNavigate = async () => {
     setShowUnsavedDialog(false);
     isNavigatingRef.current = true;
-    const ok = await saveDraft(true);
+    const ok = await saveDraft(true, undefined, true);
     if (!ok) {
       isNavigatingRef.current = false;
       return;

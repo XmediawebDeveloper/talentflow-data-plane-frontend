@@ -1761,7 +1761,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       const scale = targetW / vw;
       const cw = Math.max(1, Math.round(vw * scale)), ch = Math.max(1, Math.round(vh * scale));
 
-      const grabFrame = async (): Promise<Blob | null> => {
+      const grabCanvas = (): HTMLCanvasElement | null => {
         const canvas = document.createElement('canvas');
         canvas.width = cw; canvas.height = ch;
         const ctx = canvas.getContext('2d');
@@ -1769,11 +1769,45 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         ctx.imageSmoothingEnabled = true;
         try { (ctx as CanvasRenderingContext2D).imageSmoothingQuality = 'high'; } catch { /* not all browsers */ }
         ctx.drawImage(video, 0, 0, cw, ch);
-        return await new Promise<Blob | null>((resolve) => canvas.toBlob((b) => resolve(b), 'image/jpeg', 0.9));
+        return canvas;
+      };
+      // Is this grabbed frame ACTUALLY showing the blanked-white page, or did
+      // we race the compositor and capture the real (colored, card-visible)
+      // page instead? requestVideoFrameCallback only proves the <video>
+      // decoded a new frame from the stream — not that the frame reflects our
+      // just-applied background change, and on a slow machine/GPU the OS
+      // screen-capture pipeline can lag well past that. Sample a strip near
+      // the top of the frame — well outside the centered card in every layout
+      // — and check it's actually near-white; a still-colored strip means the
+      // blank hasn't visually landed yet.
+      const looksBlank = (canvas: HTMLCanvasElement): boolean => {
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return true; // can't verify — don't block the flow on it
+        const sy = Math.round(canvas.height * 0.03), sh = Math.max(1, Math.round(canvas.height * 0.03));
+        const sx = Math.round(canvas.width * 0.1), sw = Math.round(canvas.width * 0.8);
+        let data: Uint8ClampedArray;
+        try { data = ctx.getImageData(sx, sy, sw, sh).data; } catch { return true; }
+        let sum = 0;
+        const pixels = data.length / 4;
+        for (let i = 0; i < data.length; i += 4) sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
+        return pixels > 0 && sum / pixels > 235;
+      };
+      const grabFrame = async (): Promise<Blob | null> => {
+        let canvas = grabCanvas();
+        // Up to 4 extra retries (~1.4s worst case) waiting for the blank to
+        // actually land before giving up and using whatever's latest — better
+        // than an unbounded wait, but closes the gap the fixed rVFC wait left
+        // open on slower hardware.
+        for (let attempt = 0; canvas && !looksBlank(canvas) && attempt < 4; attempt++) {
+          await new Promise<void>((r) => window.setTimeout(r, 350));
+          canvas = grabCanvas();
+        }
+        if (!canvas) return null;
+        return await new Promise<Blob | null>((resolve) => canvas!.toBlob((b) => resolve(b), 'image/jpeg', 0.9));
       };
 
       // Page background WHITE for the capture.
-      if (pageEl) pageEl.style.background = '#ffffff';
+      if (pageEl) pageEl.style.background = 'var(--raw-ffffff)';
       if (hideEls.length || pageEl) {
         // Wait for ACTUAL new decoded frames, not a fixed wall-clock delay —
         // that's what silently failed before (see root-cause comment above).

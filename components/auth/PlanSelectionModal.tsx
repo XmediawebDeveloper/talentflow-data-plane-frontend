@@ -456,7 +456,7 @@ export default function PlanSelectionModal({ isOpen, onPlanSelected, onClose }: 
                 className="mt-3 sm:mt-4 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm"
                 style={{
                   backgroundColor: 'var(--tf-brand)',
-                  color: '#fff',
+                  color: 'var(--raw-ffffff)',
                   border: 'none',
                   borderRadius: '8px',
                   cursor: 'pointer',

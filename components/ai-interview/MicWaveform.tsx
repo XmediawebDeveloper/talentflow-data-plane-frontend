@@ -28,7 +28,7 @@ function MicWaveformBase({
   bars = 22,
   width = 132,
   height = 30,
-  color = "#34d399",
+  color = "var(--raw-34d399)",
   className,
 }: MicWaveformProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);

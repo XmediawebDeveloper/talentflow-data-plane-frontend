@@ -30,7 +30,7 @@ export function CircularProgress({ value, max, size = 200, strokeWidth = 12 }: C
         <defs>
           <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="var(--score-high)" />
-            <stop offset="100%" stopColor="#059669" />
+            <stop offset="100%" stopColor="var(--raw-059669)" />
           </linearGradient>
         </defs>
       </svg>

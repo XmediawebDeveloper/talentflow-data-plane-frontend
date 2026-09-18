@@ -278,7 +278,7 @@ export default function GlobalScoringProgressIndicator() {
         title={isAllComplete ? 'Scoring complete' : `Scoring ${overallProgress}%`}
         className="fixed bottom-6 right-6 z-[10050] h-12 w-12 rounded-full p-[3px] shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-transform hover:scale-105 animate-in zoom-in duration-200"
         style={{
-          background: `conic-gradient(${isAllComplete ? '#22c55e' : '#ffffff'} ${overallProgress * 3.6}deg, rgba(255,255,255,0.25) 0deg)`,
+          background: `conic-gradient(${isAllComplete ? 'var(--raw-22c55e)' : 'var(--raw-ffffff)'} ${overallProgress * 3.6}deg, rgba(255,255,255,0.25) 0deg)`,
         }}
       >
         <span className="relative flex h-full w-full items-center justify-center rounded-full bg-brand-blue text-white">

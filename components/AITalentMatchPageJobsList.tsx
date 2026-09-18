@@ -1,19 +1,28 @@
-import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Sparkles, MapPin, Briefcase, Building2, Calendar, FileText, User, Users, Clock, ArrowRight, History, DollarSign, Award, TrendingUp, Search, Filter, ChevronDown, X, LayoutGrid, List as ListIcon } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import type { Job as SharedJob } from '@/lib/types/types';
 /* The shared formatters, not local copies. Both fields arrive snake-cased from
    the JD record ("information_technology", "full_time"), and these are what the
    Resume Scoring rows this list was modelled on already run them through — so
    the same JD reads identically in both modules. */
-import { formatEmploymentType, formatIndustryType, getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
+import {
+  formatEmploymentType,
+  formatIndustryType,
+  getDisplayStatus,
+  getStatusConfig,
+  groupByLineage,
+  isVersionVisibleForScoring,
+  lineageKey,
+} from '@/lib/utils/jobOpeningDisplay';
 import ListPagination from '@/components/ListPagination';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import JDVersionHistory from '@/components/JDVersionHistory';
+import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
+import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 
 interface Job {
   id: string;
@@ -26,12 +35,48 @@ interface Job {
   experience?: string;
   jobId?: string;
   currentVersion?: number;
+  /** Raw lineage version number — see the route's own field of the same
+   *  name. "View Versions" below groups/counts a job's siblings by this,
+   *  not by `currentVersion` (which blends in the publish counter). */
+  versionNumber?: number;
   /* Carried so the job rows can show what the Resume Scoring job rows show.
      All four already exist on the JD record; they were simply never mapped. */
   industryType?: string;
   remoteType?: string;
   postedBy?: string;
   postedDate?: string;
+  createdAt?: string;
+}
+
+/**
+ * This page's own `Job` → the shared `Job` type "View Versions" is built on
+ * (`JobVersionHistoryPanel`, `groupByLineage`, `useJobVersionLineage` — the
+ * exact same ones Resume Scoring's job picker uses), so the version history
+ * shown here is that same, single implementation rather than a second one
+ * that could drift from it. `daysActive`/`requiredMatch` are required by the
+ * shared type but unused by anything version-history reads; 0 is a safe,
+ * inert default.
+ */
+function toSharedJob(job: Job): SharedJob {
+  return {
+    id: job.id,
+    job_id: job.jobId,
+    title: job.title,
+    status: job.status as SharedJob['status'],
+    location: job.location,
+    daysActive: 0,
+    requiredMatch: 0,
+    department: job.department,
+    industry_type: job.industryType,
+    experience: job.experience,
+    applicants: job.applicants,
+    postedDate: job.postedDate,
+    postedBy: job.postedBy,
+    employmentType: job.employmentType,
+    workMode: job.remoteType,
+    versionNumber: job.versionNumber,
+    created_at: job.createdAt,
+  };
 }
 
 interface MatchHistory {
@@ -59,7 +104,6 @@ export default function AITalentMatchPageJobsList({
   onBack
 }: AITalentMatchPageJobsListProps) {
   const [showFilters, setShowFilters] = useState(false);
-  const [jobsView, setJobsView] = useState<'grid' | 'list'>('list');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
@@ -70,6 +114,25 @@ export default function AITalentMatchPageJobsList({
   const handleToggleJob = (jobId: string) => {
     setSelectedJobId(prev => (prev === jobId ? null : jobId));
   };
+
+  // "View Versions" — the identical mechanism Resume Scoring's job picker
+  // uses (JobOpeningPickerList): the shared hook/panel/lineage-grouping, over
+  // EVERY version this page was handed (unfiltered — a lineage's older
+  // versions are what the grouping needs to count, even though the cards
+  // below only ever show the latest one per job).
+  const sharedJobs = useMemo(() => jobs.map(toSharedJob), [jobs]);
+  const versionGroups = useMemo(() => groupByLineage(sharedJobs), [sharedJobs]);
+  const versionLineage = useJobVersionLineage();
+  const { ensureVersionApplicants } = versionLineage;
+  const archivedOrDisabledVersionIds = useMemo(
+    () => sharedJobs
+      .filter(v => ['archived', 'disabled'].includes((v.status || '').toLowerCase()))
+      .map(v => v.id),
+    [sharedJobs],
+  );
+  useEffect(() => {
+    ensureVersionApplicants(archivedOrDisabledVersionIds);
+  }, [archivedOrDisabledVersionIds, ensureVersionApplicants]);
 
   // Shared search/filter state. The selects commit as you pick, so this uses
   // `setFilter`; `onChange` returns to page 1 on every narrowing.
@@ -85,10 +148,26 @@ export default function AITalentMatchPageJobsList({
   } = search.filters;
 
 
-  // Filter jobs: Only show Published/Active jobs, exclude Disabled jobs
-  const publishedJobs = jobs.filter(j =>
-    j.status === 'Published' || j.status === 'Active'
-  );
+  // One row per JD LINEAGE — its latest version — kept only when THAT version
+  // is Published/Active. Filtering `jobs` directly by status (the old code)
+  // showed a lineage twice whenever an older version's own record was still
+  // marked Published/Active in the backend even after being superseded (JD-141
+  // v3 and v4 both read "Republished" and both passed the raw status test).
+  // Collapsing to the latest version FIRST — the same `versionGroups` "View
+  // Versions" above already builds — is what a lineage can only ever answer
+  // once for.
+  const publishedJobs = useMemo(() => {
+    const reps: Job[] = [];
+    versionGroups.forEach((bucket) => {
+      // `bucket` is newest-version-first (groupByLineage's own sort).
+      const latest = bucket[0];
+      const localJob = jobs.find(j => j.id === latest.id);
+      if (localJob && (localJob.status === 'Published' || localJob.status === 'Active')) {
+        reps.push(localJob);
+      }
+    });
+    return reps;
+  }, [versionGroups, jobs]);
 
   // Apply filters
   const filteredJobs = publishedJobs.filter(job => {
@@ -123,7 +202,14 @@ export default function AITalentMatchPageJobsList({
   // every remaining row would then sit disabled with nothing checked in sight
   // to undo it. Derived rather than mirrored into its own state-plus-effect:
   // once the checked job scrolls back into view, it's still checked.
-  const effectiveSelectedJobId = selectedJobId && filteredJobs.some(j => j.id === selectedJobId)
+  //
+  // `selectedJobId` can now name a specific OLDER version picked from inside
+  // "View Versions", not just a card's own (latest) id — so this checks the
+  // whole lineage each filtered job represents, not just its own id.
+  const effectiveSelectedJobId = selectedJobId && filteredJobs.some(j =>
+    j.id === selectedJobId ||
+    (versionGroups.get(lineageKey(toSharedJob(j))) ?? []).some(v => v.id === selectedJobId)
+  )
     ? selectedJobId
     : null;
 
@@ -169,8 +255,6 @@ export default function AITalentMatchPageJobsList({
           // The hook debounces into `appliedQuery`, so keystrokes pass through.
           searchDebounceMs={0}
           searchPlaceholder="Search by job title, department, or location..."
-          viewMode={jobsView}
-          onViewModeChange={setJobsView}
           onToggleFilters={() => setShowFilters(!showFilters)}
           filtersOpen={showFilters}
           activeFilterCount={search.activeFilterCount}
@@ -279,172 +363,38 @@ export default function AITalentMatchPageJobsList({
             )}
           </div>
 
-          {jobsView === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {paginatedJobs.map((job) => {
-              const jobHistory = getJobMatchHistory(job.id);
-              const hasHistory = jobHistory.length > 0;
-              const latestMatch = hasHistory ? jobHistory[jobHistory.length - 1] : null;
-              const isSelected = effectiveSelectedJobId === job.id;
-              const isDisabled = effectiveSelectedJobId !== null && !isSelected;
-
-              return (
-                <div
-                  key={job.id}
-                  className={`rounded-xl border transition-all duration-150 flex flex-col ${
-                    isDisabled
-                      ? 'bg-gray-50 dark:bg-slate-900/60 border-gray-100 dark:border-slate-800 opacity-50 cursor-not-allowed'
-                      : `bg-white dark:bg-slate-900 cursor-pointer ${
-                          isSelected
-                            ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30'
-                            : 'border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'
-                        }`
-                  }`}
-                  onClick={() => { if (!isDisabled) handleToggleJob(job.id); }}
-                >
-                  {/* Card Header */}
-                  <div className="p-4 border-b border-gray-100">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); if (!isDisabled) handleToggleJob(job.id); }}
-                          disabled={isDisabled}
-                          className="flex h-9 w-9 flex-shrink-0 items-center justify-center"
-                          title={isSelected ? 'Deselect' : 'Select'}
-                          aria-label={isSelected ? 'Deselect job' : 'Select job'}
-                        >
-                          <input
-                            type="radio"
-                            checked={isSelected}
-                            disabled={isDisabled}
-                            readOnly
-                            className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40 cursor-pointer pointer-events-none disabled:cursor-not-allowed"
-                          />
-                        </button>
-                        <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <Briefcase className="h-4 w-4 text-brand-blue" />
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                        {job.currentVersion && (
-                          <span className="px-2 py-0.5 rounded-full text-xs bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20 flex items-center gap-1.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-brand-cyan"></div>
-                            v{job.currentVersion}
-                          </span>
-                        )}
-                        {job.currentVersion && (
-                          <span className={`px-2 py-0.5 rounded-full text-xs flex items-center gap-1.5 border ${
-                            job.currentVersion > 1
-                              ? 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20'
-                              : 'bg-green-50 text-green-700 border-green-200'
-                          }`}>
-                            <div className={`w-1.5 h-1.5 rounded-full ${job.currentVersion > 1 ? 'bg-brand-orange' : 'bg-green-500'}`}></div>
-                            {job.currentVersion > 1 ? 'Republished' : 'Published'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      {job.jobId && (
-                        <JobIdBadge>{job.jobId}</JobIdBadge>
-                      )}
-                      <h3
-                        className="text-sm sm:text-base font-medium text-gray-900 line-clamp-2 flex-1 min-w-0"
-                        title={job.title}
-                      >
-                        {job.title}
-                      </h3>
-                    </div>
-                  </div>
-
-                  {/* Card Body */}
-                  <div className="p-4 flex-1 flex flex-col">
-                    <div className="space-y-2 mb-4">
-                      {job.department && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Briefcase className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                          <span className="truncate">{job.department}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        <span className="truncate">{job.location && job.location.trim() ? job.location : '-'}</span>
-                      </div>
-                      {job.employmentType && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Briefcase className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                          <span className="truncate">{job.employmentType}</span>
-                        </div>
-                      )}
-                      {job.experience && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <TrendingUp className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                          <span>{job.experience}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Applicants */}
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-brand-blue/5 ring-1 ring-brand-blue/15 rounded-lg mb-3">
-                      <User className="w-4 h-4 text-brand-blue" />
-                      <span className="text-sm text-brand-blue font-medium">
-                        {job.applicants} {job.applicants === 1 ? 'applicant' : 'applicants'}
-                      </span>
-                    </div>
-
-                    {/* Match History */}
-                    {hasHistory && latestMatch && (
-                      <div className="bg-green-50 ring-1 ring-green-200 rounded-lg p-2.5 mb-3">
-                        <div className="flex items-center justify-between">
-                          <div className="min-w-0">
-                            <div className="text-[10px] text-gray-600 mb-0.5">Last Matched</div>
-                            <div className="flex items-center gap-1.5">
-                              <Clock className="w-3 h-3 text-gray-500 flex-shrink-0" />
-                              <span className="text-xs text-gray-700 font-medium truncate">
-                                {formatISTDate(latestMatch.matchedAt.toISOString())}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="text-center flex-shrink-0 ml-2">
-                            <div className="text-[10px] text-gray-600 mb-0.5">Candidates</div>
-                            <div className="text-base font-bold text-green-700">{latestMatch.totalMatches}</div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Action Button - pinned to bottom, only once this job
-                        is checked. Every other job is disabled until it's
-                        unchecked again, so there is never more than one to
-                        show a button for. */}
-                    {isSelected && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onSelectJob(job.id); }}
-                        className="mt-auto w-full px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 flex items-center justify-center gap-2 whitespace-nowrap text-sm"
-                      >
-                        <Sparkles className="w-4 h-4" />
-                        Run AI Match
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          ) : (
             <div className="space-y-3">
               {paginatedJobs.map((job) => {
                 const jobHistory = getJobMatchHistory(job.id);
                 const latestMatch = jobHistory.length > 0 ? jobHistory[jobHistory.length - 1] : null;
-                const isSelected = effectiveSelectedJobId === job.id;
-                const isDisabled = effectiveSelectedJobId !== null && !isSelected;
 
                 /* The shared vocabulary, so a republished JD reads
                    "Republished" here exactly as it does on the JD list. */
                 const statusLabel = getDisplayStatus(job.status || 'Published', job.currentVersion);
                 const statusBadge = getStatusConfig(statusLabel);
+
+                // "View Versions" — see the setup above this list for what
+                // each of these reads.
+                const sharedJob = toSharedJob(job);
+                const versionKey = lineageKey(sharedJob);
+                const versionsExpanded = versionLineage.isExpanded(versionKey);
+                const lineageSiblings = versionGroups.get(versionKey) ?? [sharedJob];
+                const visibleVersionCount = new Set(
+                  lineageSiblings
+                    .filter(sibling => isVersionVisibleForScoring(sibling.status, sibling.id, versionLineage.versionApplicants))
+                    .map(sibling => sibling.versionNumber ?? 1),
+                ).size;
+                const hasVersionHistory = visibleVersionCount > 1;
+
+                // A version's own radio (inside "View Versions") can check
+                // this job in place of the row's own radio — both write the
+                // same `selectedJobId`, so the row reads as checked and Run
+                // AI Match targets the right id whichever radio was clicked.
+                const lineageIds = new Set(lineageSiblings.map(sibling => sibling.id));
+                lineageIds.add(job.id);
+                const isSelected = effectiveSelectedJobId !== null && lineageIds.has(effectiveSelectedJobId);
+                const isDisabled = effectiveSelectedJobId !== null && !isSelected;
+                const selectedTargetId = isSelected ? (effectiveSelectedJobId as string) : job.id;
 
                 return (
                   <div
@@ -568,19 +518,18 @@ export default function AITalentMatchPageJobsList({
                             </span>
                           )}
                         </div>
-
-                        <JDVersionHistory jdId={job.id} version={job.currentVersion} className="mt-2" />
                       </div>
 
                       {/* Actions, right-aligned and stacked as on the reference
                           rows. Run AI Match stays the row's primary action,
-                          but only appears once this job is checked — every
-                          other row is disabled until it's unchecked again. */}
+                          but only appears once this job (or one of its
+                          versions) is checked — every other row is disabled
+                          until it's unchecked again. */}
                       {isSelected && (
                         <div className="flex flex-col gap-2 flex-shrink-0 w-full sm:w-auto">
                           <button
                             type="button"
-                            onClick={(event) => { event.stopPropagation(); onSelectJob(job.id); }}
+                            onClick={(event) => { event.stopPropagation(); onSelectJob(selectedTargetId); }}
                             className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-blue px-3 py-2 text-sm font-medium text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-all hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30"
                           >
                             <Sparkles className="h-4 w-4" />
@@ -589,11 +538,58 @@ export default function AITalentMatchPageJobsList({
                         </div>
                       )}
                     </div>
+
+                    {/* View Versions — same button/panel Resume Scoring's job
+                        picker uses, only offered when this job actually has
+                        more than one version worth showing. A sibling of the
+                        radio/content/action row above, NOT nested inside its
+                        flex-1 column — so the table below always gets the
+                        row's full width. Nested there, Run AI Match appearing
+                        as a third flex item shrank that column (and the
+                        table inside it) the moment a job got checked, which
+                        is why the version table visibly narrowed and lost
+                        columns to horizontal scroll only after selecting. */}
+                    {hasVersionHistory && (
+                      <div className="mt-2 flex items-center justify-end">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); versionLineage.toggle(versionKey, job.id); }}
+                          aria-expanded={versionsExpanded}
+                          className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 ${
+                            versionsExpanded
+                              ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-800 dark:text-slate-100 dark:border-brand-blue/50'
+                              : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
+                          }`}
+                          title={versionsExpanded ? 'Hide version history' : 'View version history'}
+                        >
+                          {versionsExpanded ? 'Hide Versions' : 'View Versions'}
+                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
+                        </button>
+                      </div>
+                    )}
+                    {versionsExpanded && (
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <JobVersionHistoryPanel
+                          job={sharedJob}
+                          versions={versionLineage.lineages[versionKey]}
+                          loading={versionLineage.isLoading(versionKey)}
+                          versionDetails={versionLineage.versionDetails}
+                          versionApplicants={versionLineage.versionApplicants}
+                          openInNewTab
+                          staticRows
+                          publishedOnly
+                          onSelectVersion={(versionJob) => { if (!isDisabled) handleToggleJob(versionJob.id); }}
+                          selectedVersionId={effectiveSelectedJobId}
+                          selectionDisabled={isDisabled}
+                          selectionDisabledReason="Deselect the currently checked job first"
+                          selectHint={(versionJob) => `Run AI Match against v${versionJob.versionNumber ?? 1}`}
+                        />
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
-          )}
 
           <ListPagination
             currentPage={currentPage}

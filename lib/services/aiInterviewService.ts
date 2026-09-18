@@ -56,6 +56,10 @@ export interface AIInterviewCreate {
   rounds_config?: AIInterviewRoundConfig[];
   title?: string;
   save_as_draft?: boolean;
+  // Audit-log hint only: true when this create call is itself the recruiter
+  // explicitly leaving the wizard right after creating (no autosave fired
+  // first). See routers/ai_interview.py's create_interview.
+  save_and_exit?: boolean;
   introduction_video_url?: string;
 }
 
@@ -77,6 +81,12 @@ export interface AIInterviewUpdate {
   status?: string;
   rounds_config?: AIInterviewRoundConfig[];
   save_as_draft?: boolean;
+  // Audit-log hint only, never persisted on the config: true when this save
+  // is the recruiter explicitly leaving the wizard (Save as Draft / the
+  // unsaved-changes dialog's Save option), as opposed to a silent autosave or
+  // a "Continue" save that stays mid-wizard. See update_interview in
+  // routers/ai_interview.py.
+  save_and_exit?: boolean;
   introduction_video_url?: string;
 }
 
@@ -784,6 +794,22 @@ export const aiInterviewService = {
       await api.post(`/ai-interview/${sessionId}/reports/log-download?report_type=${reportType}`);
     } catch (error) {
       console.error('Failed to log AI interview report download activity:', error);
+    }
+  },
+
+  /**
+   * The "Export to CSV" button on the interview detail page header
+   * (AIInterviewDetailsView.tsx) builds the CSV entirely client-side from
+   * data already on screen - there's no file-generation request for the
+   * backend to audit, so it calls this immediately after triggering the
+   * download. Best-effort: a logging failure should never surface as a
+   * download error.
+   */
+  async logConfigExport(interviewId: string): Promise<void> {
+    try {
+      await api.post(`/ai-interview/${interviewId}/config/log-export`);
+    } catch (error) {
+      console.error('Failed to log AI interview config export activity:', error);
     }
   },
 

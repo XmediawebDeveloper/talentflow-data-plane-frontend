@@ -233,6 +233,25 @@ class ChatService {
   }
 
   /**
+   * Upload an image attachment to a channel (delivered as a 'file' message).
+   * Images only — the backend re-validates MIME type/extension/size regardless
+   * of what the browser reports.
+   */
+  async uploadAttachment(channelId: string, file: File): Promise<Message> {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      const response = await api.post(`/chat/channels/${channelId}/attachments`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      return response.data;
+    } catch (error) {
+      console.error('Error uploading attachment:', error);
+      throw error;
+    }
+  }
+
+  /**
    * Update a message
    */
   async updateMessage(messageId: string, content: string): Promise<Message> {

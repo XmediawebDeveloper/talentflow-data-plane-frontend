@@ -348,9 +348,9 @@ const formatTimeMMSS = (seconds: number): string => {
 };
 
 // ── DEV: Debug overlay row helper (remove with overlay) ─────────────────
-const Row = ({ label, value, color = '#e2e8f0' }: { label: string; value: string; color?: string }) => (
+const Row = ({ label, value, color = 'var(--raw-e2e8f0)' }: { label: string; value: string; color?: string }) => (
   <div className="flex justify-between gap-2">
-    <span style={{ color: '#64748b' }}>{label}</span>
+    <span style={{ color: 'var(--raw-64748b)' }}>{label}</span>
     <span style={{ color }} className="text-right">{value}</span>
   </div>
 );
@@ -359,7 +359,7 @@ const Section = ({ label }: { label: string }) => (
   <div className="text-purple-300 font-semibold pt-1 pb-0.5" style={{ borderBottom: '1px solid rgba(255,255,255,0.07)' }}>{label}</div>
 );
 
-const Bar = ({ pct, color = '#818cf8' }: { pct: number; color?: string }) => (
+const Bar = ({ pct, color = 'var(--raw-818cf8)' }: { pct: number; color?: string }) => (
   <div className="mt-0.5 mb-0.5 h-1.5 rounded-full overflow-hidden" style={{ background: 'rgba(255,255,255,0.08)' }}>
     <div className="h-full rounded-full transition-all duration-300" style={{ width: `${Math.min(100, Math.max(0, pct))}%`, background: color }} />
   </div>
@@ -2533,9 +2533,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               try { relayCtx.drawImage(src, 0, 0, relayCanvas.width, relayCanvas.height); } catch { /* frame skipped */ }
             } else {
               const w = relayCanvas.width, h = relayCanvas.height;
-              relayCtx.fillStyle = '#0F1929';
+              relayCtx.fillStyle = 'var(--raw-0f1929)';
               relayCtx.fillRect(0, 0, w, h);
-              relayCtx.fillStyle = '#94A3B8';
+              relayCtx.fillStyle = 'var(--raw-94a3b8)';
               relayCtx.textAlign = 'center';
               relayCtx.textBaseline = 'middle';
               relayCtx.font = `${Math.max(12, Math.round(h / 18))}px system-ui, sans-serif`;
@@ -9615,21 +9615,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Interview completion modal (Req 16) ── */}
       {showCompletionModal && (
         <div className="fixed inset-0 z-[110] bg-black/70 flex items-center justify-center backdrop-blur-sm animate-in fade-in duration-300">
-          <div className="bg-[#0A1020] border border-[#10B981]/30 rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
-            <div className="w-16 h-16 rounded-full bg-[#10B981]/15 flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-[#10B981]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+          <div className="bg-[var(--raw-0a1020)] border border-[var(--raw-10b981)]/30 rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
+            <div className="w-16 h-16 rounded-full bg-[var(--raw-10b981)]/15 flex items-center justify-center mx-auto mb-4">
+              <svg className="w-8 h-8 text-[var(--raw-10b981)]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
               </svg>
             </div>
             <h2 className="text-white font-bold mb-3" style={{ fontSize: 20 }}>
               {closingReason === "candidate_ended" ? "Interview Ended" : "Interview Complete"}
             </h2>
-            <p className="text-[#94A3B8] mb-6" style={{ fontSize: 15, lineHeight: 1.6 }}>
+            <p className="text-[var(--raw-94a3b8)] mb-6" style={{ fontSize: 15, lineHeight: 1.6 }}>
               {completionMessage}
             </p>
             <button
               onClick={() => setShowCompletionModal(false)}
-              className="px-8 py-3 rounded-xl bg-[#10B981] hover:bg-[#059669] text-white font-semibold transition-colors"
+              className="px-8 py-3 rounded-xl bg-[var(--raw-10b981)] hover:bg-[var(--raw-059669)] text-white font-semibold transition-colors"
               style={{ fontSize: 15 }}
             >
               Done
@@ -9652,13 +9652,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* AIU72: Repeat-request overlay */}
       {showRepeatRequest && (
         <div className="fixed inset-0 z-[106] flex items-center justify-center pointer-events-none">
-          <div className="flex items-center gap-3 px-5 py-3.5 rounded-2xl border border-blue-400/50 bg-[#0A1020]/95 backdrop-blur-xl shadow-2xl animate-in fade-in slide-in-from-top-4 duration-300">
+          <div className="flex items-center gap-3 px-5 py-3.5 rounded-2xl border border-blue-400/50 bg-[var(--raw-0a1020)]/95 backdrop-blur-xl shadow-2xl animate-in fade-in slide-in-from-top-4 duration-300">
             <div className="w-8 h-8 rounded-full bg-blue-500/20 flex items-center justify-center shrink-0">
               <Mic className="w-4 h-4 text-blue-400" />
             </div>
             <div>
               <span className="text-blue-300 font-semibold block" style={{ fontSize: 14 }}>Could you repeat that?</span>
-              <span className="text-[#94a3b8] text-[11px]">We had trouble hearing you clearly</span>
+              <span className="text-[var(--raw-94a3b8)] text-[11px]">We had trouble hearing you clearly</span>
             </div>
           </div>
         </div>
@@ -9691,7 +9691,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             const silenceSec = debugStats.silenceSince != null
               ? ((Date.now() - debugStats.silenceSince) / 1000).toFixed(1) : null;
             const silenceLimit = (debugStats.silenceDurationMs / 1000).toFixed(1);
-            const wsColor = debugStats.wsState === 'OPEN' ? '#34d399' : debugStats.wsState === 'CONNECTING' ? '#fbbf24' : '#f87171';
+            const wsColor = debugStats.wsState === 'OPEN' ? 'var(--raw-34d399)' : debugStats.wsState === 'CONNECTING' ? 'var(--raw-fbbf24)' : 'var(--raw-f87171)';
             const levelPct = Math.min(100, (debugStats.avgLevel / Math.max(debugStats.silenceThresh * 3, 0.001)) * 100);
             const sysRamPct = debugStats.sysRamTotal > 0 ? (debugStats.sysRamUsed / debugStats.sysRamTotal) * 100 : 0;
             const jsHeapPct = debugStats.heapTotal > 0 ? (debugStats.heapUsed / debugStats.heapTotal) * 100 : 0;
@@ -9703,23 +9703,23 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 <Section label="SERVER" />
                 {debugStats.sysCpu >= 0 ? (
                   <>
-                    <Row label="CPU" value={`${debugStats.sysCpu}%`} color={debugStats.sysCpu > 80 ? '#f87171' : '#e2e8f0'} />
-                    <Bar pct={debugStats.sysCpu} color={debugStats.sysCpu > 80 ? '#f87171' : '#34d399'} />
-                    <Row label="System RAM" value={`${debugStats.sysRamUsed} / ${debugStats.sysRamTotal} MB  (${debugStats.sysRamPct}%)`} color={sysRamPct > 85 ? '#f87171' : '#e2e8f0'} />
-                    <Bar pct={sysRamPct} color={sysRamPct > 85 ? '#f87171' : '#818cf8'} />
+                    <Row label="CPU" value={`${debugStats.sysCpu}%`} color={debugStats.sysCpu > 80 ? 'var(--raw-f87171)' : 'var(--raw-e2e8f0)'} />
+                    <Bar pct={debugStats.sysCpu} color={debugStats.sysCpu > 80 ? 'var(--raw-f87171)' : 'var(--raw-34d399)'} />
+                    <Row label="System RAM" value={`${debugStats.sysRamUsed} / ${debugStats.sysRamTotal} MB  (${debugStats.sysRamPct}%)`} color={sysRamPct > 85 ? 'var(--raw-f87171)' : 'var(--raw-e2e8f0)'} />
+                    <Bar pct={sysRamPct} color={sysRamPct > 85 ? 'var(--raw-f87171)' : 'var(--raw-818cf8)'} />
                     <Row label="Process RSS" value={`${debugStats.procRss} MB`} />
                   </>
-                ) : <Row label="Server" value="polling…" color="#64748b" />}
+                ) : <Row label="Server" value="polling…" color="var(--raw-64748b)" />}
 
                 {/* ── BROWSER memory ── */}
                 <Section label="BROWSER" />
                 {debugStats.heapUsed >= 0 ? (
                   <>
-                    <Row label="JS Heap" value={`${debugStats.heapUsed} / ${debugStats.heapTotal} MB`} color={jsHeapPct > 80 ? '#f87171' : '#e2e8f0'} />
-                    <Bar pct={jsHeapPct} color={jsHeapPct > 80 ? '#f87171' : '#818cf8'} />
-                    <Row label="Heap Limit" value={`${debugStats.heapLimit} MB`} color="#64748b" />
+                    <Row label="JS Heap" value={`${debugStats.heapUsed} / ${debugStats.heapTotal} MB`} color={jsHeapPct > 80 ? 'var(--raw-f87171)' : 'var(--raw-e2e8f0)'} />
+                    <Bar pct={jsHeapPct} color={jsHeapPct > 80 ? 'var(--raw-f87171)' : 'var(--raw-818cf8)'} />
+                    <Row label="Heap Limit" value={`${debugStats.heapLimit} MB`} color="var(--raw-64748b)" />
                   </>
-                ) : <Row label="JS Heap" value="N/A (Chrome only)" color="#64748b" />}
+                ) : <Row label="JS Heap" value="N/A (Chrome only)" color="var(--raw-64748b)" />}
 
                 {/* ── WEBSOCKET ── */}
                 <Section label="WEBSOCKET" />
@@ -9729,17 +9729,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
                 {/* ── VAD ── */}
                 <Section label="VAD" />
-                <Row label="Speech" value={debugStats.speechDetected ? 'YES ●' : 'no'} color={debugStats.speechDetected ? '#34d399' : '#94a3b8'} />
+                <Row label="Speech" value={debugStats.speechDetected ? 'YES ●' : 'no'} color={debugStats.speechDetected ? 'var(--raw-34d399)' : 'var(--raw-94a3b8)'} />
                 <Row label="InTurn frames" value={`${debugStats.inTurnFrames}`} />
                 <Row label="Level" value={debugStats.avgLevel.toFixed(4)} />
                 <Row label="Threshold" value={debugStats.silenceThresh.toFixed(4)} />
                 <Row label="Ambient" value={debugStats.ambient.toFixed(4)} />
                 <Row label="VoiceRatio" value={`${debugStats.voiceRatio.toFixed(2)} ${debugStats.voiceRatio >= 0.35 ? '✓voice' : '✗noise'}`} />
-                <Bar pct={levelPct} color={debugStats.speechDetected ? '#34d399' : '#fbbf24'} />
+                <Bar pct={levelPct} color={debugStats.speechDetected ? 'var(--raw-34d399)' : 'var(--raw-fbbf24)'} />
                 <Row
                   label="Silence timer"
                   value={silenceSec != null ? `${silenceSec}s / ${silenceLimit}s` : `– / ${silenceLimit}s`}
-                  color={silenceSec != null && parseFloat(silenceSec) > debugStats.silenceDurationMs * 0.7 / 1000 ? '#f87171' : '#94a3b8'}
+                  color={silenceSec != null && parseFloat(silenceSec) > debugStats.silenceDurationMs * 0.7 / 1000 ? 'var(--raw-f87171)' : 'var(--raw-94a3b8)'}
                 />
               </div>
             );
@@ -9750,10 +9750,10 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── END DEV DEBUG OVERLAY ── */}
 
       {/* ── Main interview UI ── */}
-      <div className="flex h-[100dvh] overflow-hidden bg-[#0F1117]">
+      <div className="flex h-[100dvh] overflow-hidden bg-[var(--raw-0f1117)]">
 
         {/* ════ LEFT PANEL: Video feeds (dark) — 40% ════ */}
-        <div className="w-[40%] flex-shrink-0 flex flex-col bg-[#0F1117] overflow-hidden" style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>
+        <div className="w-[40%] flex-shrink-0 flex flex-col bg-[var(--raw-0f1117)] overflow-hidden" style={{ borderRight: '1px solid rgba(255,255,255,0.06)' }}>
 
           {/* ── Top half: BINA AI Avatar ── */}
           <div className="relative flex-1 min-h-0 flex flex-col overflow-hidden" style={{ borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
@@ -9878,7 +9878,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             </div>
 
             {/* Webcam feed fills this half */}
-            <div className="absolute inset-0 mt-8 mx-3 mb-3 rounded-xl overflow-hidden bg-[#1a1f2e]">
+            <div className="absolute inset-0 mt-8 mx-3 mb-3 rounded-xl overflow-hidden bg-[var(--raw-1a1f2e)]">
               <Webcam
                 ref={webcamRef}
                 className="w-full h-full object-cover"
@@ -9952,7 +9952,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               lighter background. */}
           <div
             className="flex-shrink-0 flex items-center justify-between px-4 py-3"
-            style={{ background: '#7dd3fc' }}
+            style={{ background: 'var(--raw-7dd3fc)' }}
           >
             <div className="flex items-center gap-2.5">
               <div className="w-8 h-8 rounded-full bg-white/60 flex items-center justify-center shrink-0">
@@ -10118,7 +10118,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               // message + loading bubble render BEHIND the banner.
               bannerVisible ? 'pb-52' : 'pb-4'
             }`}
-            style={{ scrollbarWidth: 'thin', scrollbarColor: '#d1d5db transparent' }}
+            style={{ scrollbarWidth: 'thin', scrollbarColor: 'var(--raw-d1d5db) transparent' }}
           >
             {messages.length === 0 && !currentAiText && !currentTranscript && !isProcessing && !isCandidateTranscriptProcessing && (
               <div className="flex items-center justify-center h-full">
@@ -10605,15 +10605,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             onClick={() => setShowEndConfirm(false)}
           />
           {/* Modal */}
-          <div className="relative w-full max-w-[95vw] sm:max-w-md bg-[#0F1929] border border-white/[0.10] rounded-2xl shadow-2xl shadow-black/60 p-6 flex flex-col gap-5">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md bg-[var(--raw-0f1929)] border border-white/[0.10] rounded-2xl shadow-2xl shadow-black/60 p-6 flex flex-col gap-5">
             {/* Icon */}
-            <div className="flex items-center justify-center w-12 h-12 mx-auto rounded-full bg-[#DC2626]/15 border border-[#DC2626]/30">
-              <LogOut className="w-5 h-5 text-[#EF4444]" />
+            <div className="flex items-center justify-center w-12 h-12 mx-auto rounded-full bg-[var(--raw-dc2626)]/15 border border-[var(--raw-dc2626)]/30">
+              <LogOut className="w-5 h-5 text-[var(--raw-ef4444)]" />
             </div>
             {/* Text */}
             <div className="text-center">
               <h3 className="text-white font-semibold mb-1.5" style={{ fontSize: 16 }}>End the interview?</h3>
-              <p className="text-[#64748B]" style={{ fontSize: 13, lineHeight: 1.6 }}>
+              <p className="text-[var(--raw-64748b)]" style={{ fontSize: 13, lineHeight: 1.6 }}>
                 Are you sure you want to end this interview session? This action cannot be undone.
               </p>
             </div>
@@ -10621,7 +10621,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             <div className="flex gap-3">
               <button
                 onClick={() => setShowEndConfirm(false)}
-                className="flex-1 py-2.5 rounded-xl border border-white/[0.10] text-[#94A3B8] hover:bg-white/[0.05] hover:text-white transition-all duration-200"
+                className="flex-1 py-2.5 rounded-xl border border-white/[0.10] text-[var(--raw-94a3b8)] hover:bg-white/[0.05] hover:text-white transition-all duration-200"
                 style={{ fontSize: 13, fontWeight: 500 }}
               >
                 Continue Interview
@@ -10645,7 +10645,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                     wsRef.current.send(JSON.stringify({ type: 'end_interview' }));
                   }
                 }}
-                className="flex-1 py-2.5 rounded-xl bg-[#DC2626] hover:bg-[#B91C1C] text-white transition-all duration-200 shadow-lg shadow-red-500/20"
+                className="flex-1 py-2.5 rounded-xl bg-[var(--raw-dc2626)] hover:bg-[var(--raw-b91c1c)] text-white transition-all duration-200 shadow-lg shadow-red-500/20"
                 style={{ fontSize: 13, fontWeight: 600 }}
               >
                 End Interview
@@ -10658,7 +10658,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── Fullscreen exit overlay — shows when candidate leaves fullscreen mid-interview ── */}
       {isFullscreenExited && isConnected && !isClosing && (
         <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/80 backdrop-blur-sm">
-          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-white/10 rounded-2xl shadow-2xl shadow-black/60 p-7 flex flex-col items-center gap-5">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[var(--raw-0f1929)] border border-white/10 rounded-2xl shadow-2xl shadow-black/60 p-7 flex flex-col items-center gap-5">
             {/* Warning icon */}
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-amber-500/15 border border-amber-400/30">
               <Maximize className="w-6 h-6 text-amber-400" />
@@ -10666,7 +10666,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             {/* Heading */}
             <div className="text-center">
               <h3 className="text-white font-semibold text-base mb-1">Fullscreen Required</h3>
-              <p className="text-[#94A3B8] text-sm leading-relaxed">
+              <p className="text-[var(--raw-94a3b8)] text-sm leading-relaxed">
                 Your interview is still running. Please return to fullscreen to continue.
               </p>
             </div>
@@ -10692,15 +10692,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             <div className="w-full grid grid-cols-2 gap-3">
               {/* Global timer */}
               <div className="flex flex-col items-center gap-1 rounded-xl bg-white/5 border border-white/10 px-4 py-3">
-                <span className="text-[10px] font-semibold text-[#64748B] uppercase tracking-widest">Interview Time</span>
+                <span className="text-[10px] font-semibold text-[var(--raw-64748b)] uppercase tracking-widest">Interview Time</span>
                 <span className={`font-mono font-bold text-xl tabular-nums ${remainingSeconds <= 60 ? 'text-red-400' : 'text-white'}`}>
                   {formatTime(remainingSeconds)}
                 </span>
-                <span className="text-[9px] text-[#475569] font-medium">remaining</span>
+                <span className="text-[9px] text-[var(--raw-475569)] font-medium">remaining</span>
               </div>
               {/* Question timer */}
               <div className="flex flex-col items-center gap-1 rounded-xl bg-white/5 border border-white/10 px-4 py-3">
-                <span className="text-[10px] font-semibold text-[#64748B] uppercase tracking-widest">Question Time</span>
+                <span className="text-[10px] font-semibold text-[var(--raw-64748b)] uppercase tracking-widest">Question Time</span>
                 {questionTimerSeconds !== null ? (
                   <>
                     <span className={`font-mono font-bold text-xl tabular-nums ${
@@ -10710,11 +10710,11 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       {(questionTimerExpired || questionTimerSeconds <= 0) ? '00:00' : formatTime(questionTimerSeconds)}
                     </span>
                     {questionNumber !== null && totalQuestions !== null && (
-                      <span className="text-[9px] text-[#475569] font-medium">Q {questionNumber} / {totalQuestions}</span>
+                      <span className="text-[9px] text-[var(--raw-475569)] font-medium">Q {questionNumber} / {totalQuestions}</span>
                     )}
                   </>
                 ) : (
-                  <span className="font-mono font-bold text-xl tabular-nums text-[#475569]">--:--</span>
+                  <span className="font-mono font-bold text-xl tabular-nums text-[var(--raw-475569)]">--:--</span>
                 )}
               </div>
             </div>
@@ -10775,7 +10775,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             ? 'pointer-events-none'
             : 'pointer-events-auto bg-black/70 backdrop-blur-sm'
         }`}>
-          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-red-500/30 rounded-2xl shadow-2xl shadow-black/60 p-7 flex flex-col items-center gap-5 pointer-events-auto">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[var(--raw-0f1929)] border border-red-500/30 rounded-2xl shadow-2xl shadow-black/60 p-7 flex flex-col items-center gap-5 pointer-events-auto">
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/15 border border-red-400/30">
               {_camDown
                 ? <Camera className="w-6 h-6 text-red-400" />
@@ -10791,7 +10791,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   ? "Camera Disconnected"
                   : "Microphone Disconnected"}
               </h3>
-              <p className="text-[#94A3B8] text-sm leading-relaxed">
+              <p className="text-[var(--raw-94a3b8)] text-sm leading-relaxed">
                 {_camDown && _micDown
                   ? "Your interview is paused. Please reconnect your camera and microphone — it will resume automatically."
                   : _camUnapproved
@@ -10816,7 +10816,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 </span>
               </div>
             )}
-            <div className="text-xs text-[#64748B]">This event has been recorded</div>
+            <div className="text-xs text-[var(--raw-64748b)]">This event has been recorded</div>
           </div>
         </div>
         );
@@ -10837,17 +10837,17 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           hook) — no separate "resume" flow needed. ── */}
       {proctoringState.isPiPActive && isConnected && !isClosing && (
         <div className="fixed inset-0 z-[250] flex items-center justify-center bg-black/90 backdrop-blur-md">
-          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-900/40 p-7 flex flex-col items-center gap-5">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[var(--raw-0f1929)] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-900/40 p-7 flex flex-col items-center gap-5">
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/20 border border-red-400/40">
               <PictureInPicture2 className="w-6 h-6 text-red-400" />
             </div>
             <div className="text-center">
               <h3 className="text-white font-semibold text-base mb-1">Picture-in-Picture Detected</h3>
-              <p className="text-[#cbd5e1] text-sm leading-relaxed">
+              <p className="text-[var(--raw-cbd5e1)] text-sm leading-relaxed">
                 A video was detached into a floating window. This has been logged
                 as a proctoring violation.
               </p>
-              <p className="text-[#94A3B8] text-sm leading-relaxed mt-2">
+              <p className="text-[var(--raw-94a3b8)] text-sm leading-relaxed mt-2">
                 Please exit Picture-in-Picture mode to continue the interview.
               </p>
             </div>
@@ -10857,7 +10857,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
 
       {mediaBlocked && (
         <div className="fixed inset-0 z-[300] flex items-center justify-center bg-black/90 backdrop-blur-md">
-          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-900/40 p-7 flex flex-col items-center gap-5">
+          <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[var(--raw-0f1929)] border border-red-500/40 rounded-2xl shadow-2xl shadow-red-900/40 p-7 flex flex-col items-center gap-5">
             <div className="flex items-center justify-center w-14 h-14 rounded-full bg-red-500/20 border border-red-400/40">
               <MicOff className="w-7 h-7 text-red-400" />
             </div>
@@ -10867,7 +10867,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 {mediaBlocked.kind === 'microphone' && 'Microphone access blocked'}
                 {mediaBlocked.kind === 'both' && 'Camera & microphone access blocked'}
               </h3>
-              <p className="text-[#cbd5e1] text-sm leading-relaxed">
+              <p className="text-[var(--raw-cbd5e1)] text-sm leading-relaxed">
                 Your interview has been suspended because the required
                 {' '}
                 {mediaBlocked.kind === 'both'
@@ -10875,7 +10875,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   : `${mediaBlocked.kind} permission was`}
                 {' '}revoked.
               </p>
-              <p className="text-[#94a3b8] text-xs leading-relaxed mt-3">
+              <p className="text-[var(--raw-94a3b8)] text-xs leading-relaxed mt-3">
                 This action has been logged as a proctoring violation.
                 You cannot resume this session. Please close this tab and
                 contact your recruiter if this was accidental.

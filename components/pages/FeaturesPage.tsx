@@ -61,8 +61,8 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
 
   const pageStyle: React.CSSProperties = {
     minHeight: '100vh',
-    backgroundColor: isDark ? '#0F172A' : '#ffffff',
-    color: isDark ? '#ffffff' : '#111827',
+    backgroundColor: isDark ? 'var(--raw-0f172a)' : 'var(--raw-ffffff)',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
   };
 
   const containerStyle: React.CSSProperties = {
@@ -82,8 +82,8 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
     gap: '8px',
     padding: '8px 16px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : '#EDE9FE',
-    color: isDark ? '#C4B5FD' : '#7C3AED',
+    backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'var(--raw-ede9fe)',
+    color: isDark ? 'var(--raw-c4b5fd)' : 'var(--raw-7c3aed)',
     fontSize: '14px',
     fontWeight: 600,
     marginBottom: '16px',
@@ -92,14 +92,14 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
   const titleStyle: React.CSSProperties = {
     fontSize: isMobile ? '28px' : isTablet ? '40px' : '56px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '16px',
     lineHeight: 1.1,
   };
 
   const subtitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     maxWidth: '672px',
     margin: '0 auto',
     lineHeight: 1.6,
@@ -115,8 +115,8 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
   const cardStyle: React.CSSProperties = {
     padding: isMobile ? '20px' : '32px',
     borderRadius: '16px',
-    border: `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
-    backgroundColor: isDark ? '#1E293B' : '#ffffff',
+    border: `1px solid ${isDark ? 'var(--raw-1e293b)' : 'var(--raw-e5e7eb)'}`,
+    backgroundColor: isDark ? 'var(--raw-1e293b)' : 'var(--raw-ffffff)',
     transition: 'all 0.2s',
   };
 
@@ -135,12 +135,12 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
   const cardTitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '20px' : '24px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '12px',
   };
 
   const cardDescStyle: React.CSSProperties = {
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     lineHeight: 1.6,
     marginBottom: '16px',
   };
@@ -156,7 +156,7 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
     alignItems: 'center',
     gap: '8px',
     marginBottom: '8px',
-    color: isDark ? '#CBD5E1' : '#374151',
+    color: isDark ? 'var(--raw-cbd5e1)' : 'var(--raw-374151)',
     fontSize: '14px',
   };
 
@@ -164,13 +164,13 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
     textAlign: 'center',
     padding: isMobile ? '40px 20px' : isTablet ? '60px 20px' : '80px 0',
     borderRadius: isMobile ? '16px' : '24px',
-    background: 'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+    background: 'linear-gradient(135deg, var(--raw-667eea) 0%, var(--raw-764ba2) 100%)',
   };
 
   const ctaTitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '24px' : isTablet ? '36px' : '48px',
     fontWeight: 700,
-    color: '#ffffff',
+    color: 'var(--raw-ffffff)',
     marginBottom: '16px',
   };
 
@@ -188,8 +188,8 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
     fontSize: isMobile ? '16px' : '18px',
     fontWeight: 500,
     borderRadius: '12px',
-    backgroundColor: '#ffffff',
-    color: '#7C3AED',
+    backgroundColor: 'var(--raw-ffffff)',
+    color: 'var(--raw-7c3aed)',
     border: 'none',
     cursor: 'pointer',
     boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
@@ -200,63 +200,63 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
       icon: Brain,
       title: "AI Resume Scoring",
       description: "Our AI analyzes resumes against job requirements with 95% accuracy, saving hours of manual screening.",
-      gradient: "linear-gradient(135deg, #3B82F6, #8B5CF6)",
+      gradient: "linear-gradient(135deg, var(--raw-3b82f6), var(--raw-8b5cf6))",
       points: ["Smart keyword matching", "Skills gap analysis", "Experience validation", "Cultural fit scoring"],
     },
     {
       icon: Video,
       title: "Video Interviews",
       description: "Conduct live or async video interviews with AI-powered analysis of verbal and non-verbal cues.",
-      gradient: "linear-gradient(135deg, #8B5CF6, #EC4899)",
+      gradient: "linear-gradient(135deg, var(--raw-8b5cf6), var(--raw-ec4899))",
       points: ["One-way video responses", "Live interview rooms", "AI sentiment analysis", "Automatic transcription"],
     },
     {
       icon: FileText,
       title: "Smart Assessments",
       description: "Create custom skill assessments with automatic grading and detailed candidate insights.",
-      gradient: "linear-gradient(135deg, #F97316, #EF4444)",
+      gradient: "linear-gradient(135deg, var(--raw-f97316), var(--raw-ef4444))",
       points: ["Custom test builder", "Code challenges", "Personality tests", "Auto-grading"],
     },
     {
       icon: BarChart3,
       title: "Advanced Analytics",
       description: "Get real-time insights into your hiring pipeline with comprehensive dashboards and reports.",
-      gradient: "linear-gradient(135deg, #22C55E, #14B8A6)",
+      gradient: "linear-gradient(135deg, var(--raw-22c55e), var(--raw-14b8a6))",
       points: ["Pipeline metrics", "Time-to-hire tracking", "Source analytics", "Team performance"],
     },
     {
       icon: Users,
       title: "Team Collaboration",
       description: "Work seamlessly with hiring managers and team members with shared feedback and scorecards.",
-      gradient: "linear-gradient(135deg, #EC4899, #8B5CF6)",
+      gradient: "linear-gradient(135deg, var(--raw-ec4899), var(--raw-8b5cf6))",
       points: ["Shared scorecards", "Interview scheduling", "Feedback collection", "Role-based access"],
     },
     {
       icon: Shield,
       title: "Enterprise Security",
       description: "Bank-level security with SOC 2 Type II certification and GDPR compliance built-in.",
-      gradient: "linear-gradient(135deg, #14B8A6, #3B82F6)",
+      gradient: "linear-gradient(135deg, var(--raw-14b8a6), var(--raw-3b82f6))",
       points: ["SOC 2 certified", "GDPR compliant", "SSO integration", "Data encryption"],
     },
     {
       icon: Globe,
       title: "Global Hiring",
       description: "Hire from anywhere with multi-language support and localized compliance features.",
-      gradient: "linear-gradient(135deg, #6366F1, #8B5CF6)",
+      gradient: "linear-gradient(135deg, var(--raw-6366f1), var(--raw-8b5cf6))",
       points: ["Multi-language UI", "Local compliance", "Time zone support", "Currency conversion"],
     },
     {
       icon: Cpu,
       title: "ATS Integration",
       description: "Seamlessly connect with your existing tools and workflows through our robust API.",
-      gradient: "linear-gradient(135deg, #F59E0B, #F97316)",
+      gradient: "linear-gradient(135deg, var(--raw-f59e0b), var(--raw-f97316))",
       points: ["REST API access", "Webhook support", "Popular ATS integrations", "Custom workflows"],
     },
     {
       icon: MessageSquare,
       title: "Candidate Communication",
       description: "Engage candidates with automated emails, SMS, and in-app messaging throughout the process.",
-      gradient: "linear-gradient(135deg, #10B981, #22C55E)",
+      gradient: "linear-gradient(135deg, var(--raw-10b981), var(--raw-22c55e))",
       points: ["Email templates", "SMS notifications", "Bulk messaging", "Response tracking"],
     },
   ];
@@ -283,14 +283,14 @@ export default function FeaturesPage({ onNavigate }: FeaturesPageProps) {
             return (
               <div key={index} style={cardStyle}>
                 <div style={iconBoxStyle(feature.gradient)}>
-                  <Icon style={{ width: 32, height: 32, color: '#ffffff' }} />
+                  <Icon style={{ width: 32, height: 32, color: 'var(--raw-ffffff)' }} />
                 </div>
                 <h3 style={cardTitleStyle}>{feature.title}</h3>
                 <p style={cardDescStyle}>{feature.description}</p>
                 <ul style={featureListStyle}>
                   {feature.points.map((point, idx) => (
                     <li key={idx} style={featureItemStyle}>
-                      <CheckCircle2 style={{ width: 16, height: 16, color: '#22C55E', flexShrink: 0 }} />
+                      <CheckCircle2 style={{ width: 16, height: 16, color: 'var(--raw-22c55e)', flexShrink: 0 }} />
                       {point}
                     </li>
                   ))}

@@ -737,10 +737,10 @@ export default function StepIdentity({
                         {/* Circular countdown */}
                         <div className="relative flex-shrink-0 w-9 h-9">
                           <svg className="w-9 h-9 -rotate-90" viewBox="0 0 36 36">
-                            <circle cx="18" cy="18" r="15" fill="none" stroke="#e5e7eb" strokeWidth="3" />
+                            <circle cx="18" cy="18" r="15" fill="none" stroke="var(--raw-e5e7eb)" strokeWidth="3" />
                             <circle
                               cx="18" cy="18" r="15" fill="none"
-                              stroke="#374151" strokeWidth="3"
+                              stroke="var(--raw-374151)" strokeWidth="3"
                               strokeLinecap="round"
                               strokeDasharray={2 * Math.PI * 15}
                               strokeDashoffset={2 * Math.PI * 15 * (1 - resendCooldown / 60)}

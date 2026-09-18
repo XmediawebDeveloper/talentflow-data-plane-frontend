@@ -1,7 +1,7 @@
 'use client';
 
 import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { Plus, Clock, Calendar, Users, CheckCircle, FileText, ArrowDown, ArrowRight, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, LayoutGrid, List, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
+import { Plus, Clock, Calendar, Users, CheckCircle, FileText, ArrowDown, ArrowRight, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef } from 'react';
@@ -57,7 +57,7 @@ import { scoringService } from '@/lib/services/scoringService';
 import { recordAssessment } from '@/lib/services/usageTrackingService';
 import api from '@/lib/services/api';
 import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/services/proctoringService';
-import { AlertTriangle, RefreshCw, Send, Ban, Layers, Briefcase, ChevronDown, Radar, Search } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Send, Ban, Layers, Briefcase, ChevronDown, Radar, Search, ChevronLeft } from 'lucide-react';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -76,6 +76,75 @@ import { groupByLineage, latestVersionNumber } from '@/lib/utils/jobOpeningDispl
  *  rows themselves are the untyped shape `mapAssessmentFromApi` returns, so
  *  this names the three fields rather than widening to `any`. */
 type AssessmentLineageRef = { id: string; jd_id?: string };
+
+/** The canonical "Go to [input] · Previous · page/total · Next" control from
+ *  components/Pagination.tsx, reused inline for this file's popup footers
+ *  (Tracking Invitations, Completed Candidates, Invite Status Tracking) which
+ *  don't otherwise fit that component's items-per-page/"Showing X-Y" shape. */
+function InlinePageNav({ page, totalPages, onPageChange }: { page: number; totalPages: number; onPageChange: (page: number) => void }) {
+  const [goToPage, setGoToPage] = useState(String(page));
+  useEffect(() => {
+    setGoToPage(String(page));
+  }, [page]);
+
+  const commitGoToPage = () => {
+    const target = Math.round(Number(goToPage));
+    if (Number.isFinite(target) && target >= 1 && target <= totalPages) {
+      onPageChange(target);
+    } else {
+      setGoToPage(String(page));
+    }
+  };
+
+  const navBtnClass =
+    "inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors";
+
+  return (
+    <div className="flex items-center gap-2 sm:gap-3">
+      <div className="flex items-center gap-1.5">
+        <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+        <input
+          type="number"
+          min={1}
+          max={totalPages}
+          value={goToPage}
+          onChange={(e) => setGoToPage(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.currentTarget.blur();
+              commitGoToPage();
+            }
+          }}
+          onBlur={commitGoToPage}
+          aria-label="Go to page"
+          className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+        />
+      </div>
+
+      <button
+        onClick={() => onPageChange(page - 1)}
+        disabled={page === 1}
+        className={navBtnClass}
+        aria-label="Previous page" title="Previous page"
+      >
+        <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+      </button>
+
+      <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+        <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
+      </span>
+
+      <button
+        onClick={() => onPageChange(page + 1)}
+        disabled={page === totalPages}
+        className={navBtnClass}
+        aria-label="Next page" title="Next page"
+      >
+        <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+      </button>
+    </div>
+  );
+}
 
 /* ── Send Invite: the job list, shared with Total Jobs ─────────────────────
    The dialog used to own a job list of its own: assessments grouped into a
@@ -449,7 +518,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [apiAssessments, setApiAssessments] = useState<any[]>([]);
   const [assessmentCurrentPage, setAssessmentCurrentPage] = useState(1);
   const [assessmentItemsPerPage, setAssessmentItemsPerPage] = useState(10);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
 
   /* ── Assessment version history ────────────────────────────────────────
      The list is flat: an assessment duplicated to V2 and V3 puts three
@@ -1046,7 +1114,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     {
       activeTab,
       settingsSubTab,
-      viewMode,
       assessmentCurrentPage,
       assessmentItemsPerPage,
       assessmentSearch,
@@ -1073,7 +1140,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
          restoring the last visit's cards view, Draft tab, page 3 or leftover
          search would land them anywhere but there — intermittently, depending
          on what they happened to be doing last. What still restores is display
-         preference: grid vs table, rows per page, the settings sub-tab. */
+         preference: rows per page, the settings sub-tab. */
       if (!initialListTab) {
         if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
         if (typeof s.activeTab === 'string') setActiveTab(s.activeTab as typeof activeTab);
@@ -1092,7 +1159,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         });
       }
       if (s.settingsSubTab === 'proctoring' || s.settingsSubTab === 'topics') setSettingsSubTab(s.settingsSubTab);
-      if (s.viewMode === 'grid' || s.viewMode === 'list') setViewMode(s.viewMode);
       if (typeof s.assessmentItemsPerPage === 'number') setAssessmentItemsPerPage(s.assessmentItemsPerPage);
     },
   );
@@ -4649,6 +4715,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 isUnlimited={isUnlimited}
               />
             )}
+            {canAccessHRQuestionBank && (
+              <button
+                onClick={() => {
+                  // Tells the question bank which module to name in its breadcrumb.
+                  try { sessionStorage.setItem('questionBankSource', 'assessments'); } catch { /* ignore */ }
+                  router.push('/recruitment/hr-question-bank');
+                }}
+                className="flex items-center gap-1.5 border border-brand-blue/30 text-brand-blue bg-white dark:bg-slate-900 px-3 py-2 rounded-lg hover:bg-brand-blue/5 transition-colors shadow-sm text-sm"
+              >
+                <ClipboardList className="w-4 h-4" />
+                <span className="hidden sm:inline">HR Question Bank</span>
+                <span className="sm:hidden">Questions</span>
+              </button>
+            )}
             {/* Send Invite — same permission as the per-row Share action. */}
             {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
               <button
@@ -4668,20 +4748,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <Mail className="w-4 h-4" />
                 <span className="hidden sm:inline">Send Invite</span>
                 <span className="sm:hidden">Invite</span>
-              </button>
-            )}
-            {canAccessHRQuestionBank && (
-              <button
-                onClick={() => {
-                  // Tells the question bank which module to name in its breadcrumb.
-                  try { sessionStorage.setItem('questionBankSource', 'assessments'); } catch { /* ignore */ }
-                  router.push('/recruitment/hr-question-bank');
-                }}
-                className="flex items-center gap-1.5 border border-brand-blue/30 text-brand-blue bg-white dark:bg-slate-900 px-3 py-2 rounded-lg hover:bg-brand-blue/5 transition-colors shadow-sm text-sm"
-              >
-                <ClipboardList className="w-4 h-4" />
-                <span className="hidden sm:inline">HR Question Bank</span>
-                <span className="sm:hidden">Questions</span>
               </button>
             )}
             {onOpenCandidateView && (
@@ -5166,40 +5232,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           {/* Assessment List */}
           <div className="p-3 sm:p-6">
 
-            {/* Job List header — the section title and the view toggle, which
-                moved here off the tabs bar. It only renders for the tabs that
-                actually list jobs, so Settings and the log tabs no longer carry
-                a view switch that does nothing for them. */}
+            {/* Job List header — just the section title now that the view
+                toggle is gone. It only renders for the tabs that actually
+                list jobs, so Settings and the log tabs no longer carry a
+                heading that does nothing for them. */}
             {!activeTabOwnsListContent && !assessmentListEmpty && (
               <div className="flex items-center justify-between gap-3 mb-3 sm:mb-4">
                 <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
                   Job List{' '}
                   <span className="font-normal text-gray-500 dark:text-slate-500">({assessmentResultCount})</span>
                 </h2>
-                <div className="flex items-center gap-1 border border-gray-200 dark:border-slate-700 rounded-lg p-1 bg-white dark:bg-slate-900 flex-shrink-0">
-                  <button
-                    onClick={() => setViewMode('list')}
-                    className={`p-1.5 rounded transition-colors ${
-                      viewMode === 'list'
-                        ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
-                        : 'text-gray-400 hover:text-brand-blue'
-                    }`}
-                    aria-label="List View" title="List View"
-                  >
-                    <List className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => setViewMode('grid')}
-                    className={`p-1.5 rounded transition-colors ${
-                      viewMode === 'grid'
-                        ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
-                        : 'text-gray-400 hover:text-brand-blue'
-                    }`}
-                    aria-label="Grid View" title="Grid View"
-                  >
-                    <LayoutGrid className="w-4 h-4" />
-                  </button>
-                </div>
               </div>
             )}
 
@@ -5432,24 +5474,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       {total > COMPLETED_PAGE_SIZE && (
                         <div className="mt-4 flex items-center justify-between gap-3">
                           <span className="text-xs text-gray-600 dark:text-slate-400">
-                            Page {safePage} of {totalPages} · {total.toLocaleString()} total
+                            {total.toLocaleString()} total
                           </span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => setCompletedCandidatesPage(p => Math.max(1, p - 1))}
-                              disabled={safePage === 1}
-                              className="px-3 py-1.5 text-xs border border-gray-200 dark:border-slate-700 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-slate-300 transition-colors"
-                            >
-                              Previous
-                            </button>
-                            <button
-                              onClick={() => setCompletedCandidatesPage(p => Math.min(totalPages, p + 1))}
-                              disabled={safePage === totalPages}
-                              className="px-3 py-1.5 text-xs border border-gray-200 dark:border-slate-700 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-slate-300 transition-colors"
-                            >
-                              Next
-                            </button>
-                          </div>
+                          <InlinePageNav
+                            page={safePage}
+                            totalPages={totalPages}
+                            onPageChange={setCompletedCandidatesPage}
+                          />
                         </div>
                       )}
                     </>
@@ -6094,24 +6125,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       {total > INVITE_STATUS_PAGE_SIZE && (
                         <div className="mt-4 flex items-center justify-between gap-3">
                           <span className="text-xs text-gray-600 dark:text-slate-400">
-                            Page {safePage} of {totalPages} · {total.toLocaleString()} total
+                            {total.toLocaleString()} total
                           </span>
-                          <div className="flex items-center gap-2">
-                            <button
-                              onClick={() => setInviteStatusPage(p => Math.max(1, p - 1))}
-                              disabled={safePage === 1}
-                              className="px-3 py-1.5 text-xs border border-gray-200 dark:border-slate-700 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-slate-300 transition-colors"
-                            >
-                              Previous
-                            </button>
-                            <button
-                              onClick={() => setInviteStatusPage(p => Math.min(totalPages, p + 1))}
-                              disabled={safePage === totalPages}
-                              className="px-3 py-1.5 text-xs border border-gray-200 dark:border-slate-700 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed text-gray-700 dark:text-slate-300 transition-colors"
-                            >
-                              Next
-                            </button>
-                          </div>
+                          <InlinePageNav
+                            page={safePage}
+                            totalPages={totalPages}
+                            onPageChange={setInviteStatusPage}
+                          />
                         </div>
                       )}
 
@@ -6859,401 +6879,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 />
               );
             })()
-            : viewMode === 'grid' ? (
-              /* Grid View */
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-                {visibleAssessments.map((assessment) => (
-                  <div
-                    key={assessment.id}
-                    /* Draft → the draft page to carry on editing, anything else
-                       → the details page. The rule lives in `openAssessment`
-                       so this card and the version panel's rows cannot drift
-                       apart on it. */
-                    onClick={() => openAssessment(assessment)}
-                    /* `relative` so the dropdown anchors to its own card — it
-                       used to resolve against a far ancestor, which is what put
-                       it over neighbouring cards. The raised z-index keeps it
-                       above sibling cards while open. */
-                    className={`p-4 sm:p-5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all bg-white dark:bg-slate-900 cursor-pointer ${
-                      openMenuId === assessment.id ? 'relative z-30' : 'relative'
-                    }`}
-                  >
-                    {/* Grid Card Header — icon only. A second action cluster
-                        used to sit here, so Share, Results and the ⋮ menu each
-                        appeared twice on every card. The row at the foot of the
-                        card is the one kept: it lays the buttons out full width
-                        and carries the fuller Share gating (revoked invites). */}
-                    <div className="mb-3 flex items-start justify-between gap-2" onClick={(e) => e.stopPropagation()}>
-                      <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                        <FileText className="w-5 h-5 text-brand-blue" />
-                      </div>
-                    </div>
-
-                    {/* Grid Card Title */}
-                    <div className="mb-3">
-                      {/* Line 1: the JOB, and it is now the only thing named on the
-                          card - JD-025 Senior Software Engineer [AI] [Active]. A
-                          recruiter reading this list is looking for a job first, and one
-                          row is one job.
-
-                          The assessment's OWN name used to sit on a line of its own
-                          below. It was near enough the job's title in every real case
-                          ("Senior Software Engineer - Assessment") to be a second copy
-                          of the line above it rather than a second fact, so the card
-                          says the job once and stops. The card still ACTS on that
-                          assessment - Share, Results and the menu are unchanged, and its
-                          full title is on the detail page and in View Versions.
-
-                          Nothing about job or assessment VERSION here either - not the
-                          two "vN" badges, and not the LATEST pill that qualified the job
-                          one, which had lost its referent once the version it qualified
-                          was gone.
-
-                          View Versions is where versions are read. It still lists every
-                          one of them with its number and still badges its own newest row
-                          LATEST, off `getLatestJobVersion`, which is kept for exactly
-                          that. Only rendering left this card - no data behind these
-                          rows, and no lineage fetch, changed. */}
-                      <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                        {assessment.jd_short_id && (
-                          <JobIdBadge className="inline-flex items-center">{assessment.jd_short_id}</JobIdBadge>
-                        )}
-                        <h3
-                          className="text-sm font-medium text-gray-900 dark:text-slate-50 line-clamp-2 min-w-0"
-                          title={assessment.job?.title || stripVersionFromTitle(assessment.title)}
-                        >
-                          {assessment.job?.title || stripVersionFromTitle(assessment.title)}
-                        </h3>
-                        {assessment.sections && (
-                          <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue rounded text-xs flex items-center gap-1 flex-shrink-0 ring-1 ring-brand-blue/20">
-                            <Sparkles className="w-3 h-3" />
-                            AI
-                          </span>
-                        )}
-                        <span
-                          className={`px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ring-1 ${
-                            assessment.status === 'Active'
-                              ? 'bg-green-100 text-green-700 ring-green-200'
-                              : assessment.status === 'Draft'
-                              ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
-                              : assessment.status === 'Archived'
-                              ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
-                              : assessment.status === 'Completed'
-                              ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
-                              : 'bg-slate-100 text-gray-700 ring-gray-200'
-                          }`}
-                        >
-                          {assessment.status}
-                        </span>
-                      </div>
-
-                      {/* Line 2: created by + Created date + Last Updated */}
-                      <div className="text-xs text-gray-600 dark:text-slate-400 mb-1.5 line-clamp-2">
-                        {assessment.created_by_name && (
-                          <span>created by: {assessment.created_by_name}</span>
-                        )}
-                        {assessment.created_at && (
-                          <span className={assessment.created_by_name ? " ml-1" : ""}>
-                            {assessment.created_by_name ? "• " : ""}Created: {formatISTDate(assessment.created_at)}
-                          </span>
-                        )}
-                        {assessment.updated_at && (
-                          <span className="block">Last Updated: {formatISTDate(assessment.updated_at)}</span>
-                        )}
-                      </div>
-
-                      {/* Line 3: 30 min 1 Invitations Sent */}
-                      <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-slate-500">
-                        <span>{assessment.duration}</span>
-                        <span>{assessment.candidates} Invitations</span>
-                      </div>
-                    </div>
-
-                    {/* Grid Card Actions */}
-                    <div className="flex items-center gap-2 pt-3 border-t border-gray-100" onClick={(e) => e.stopPropagation()}>
-                      {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (() => {
-                        // Share is blocked for Draft (must publish first), Archived
-                        // (out of circulation), and once invites have been revoked
-                        // (assessment is sealed — recruiter should clone a new
-                        // version to start a fresh invite round).
-                        const shareBlockedReason =
-                          assessment.status === 'Draft' ? 'Publish assessment first to share' :
-                          assessment.status === 'Archived' ? 'Archived assessments cannot be shared' :
-                          assessment.has_revoked_invites ? 'Invites for this assessment have been revoked. Duplicate it to start fresh.' :
-                          '';
-                        const isShareBlocked = !!shareBlockedReason;
-                        return (
-                          <button
-                            onClick={() => {
-                              if (assessment.status === 'Draft') {
-                                toast.warning('Please publish the assessment before sharing');
-                                return;
-                              }
-                              if (assessment.status === 'Archived') {
-                                toast.warning('Archived assessments cannot be shared');
-                                return;
-                              }
-                              if (assessment.has_revoked_invites) {
-                                toast.warning('Invites for this assessment have been revoked. Duplicate it to start fresh.');
-                                return;
-                              }
-                              setSelectedAssessmentForShare(assessment);
-                              setShowShareModal(true);
-                            }}
-                            disabled={isShareBlocked}
-                            className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 border rounded-lg transition-all text-xs ${
-                              isShareBlocked
-                                ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                                : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-                            }`}
-                            title={shareBlockedReason || 'Share via email'}
-                          >
-                            <Mail className="w-3.5 h-3.5" />
-                            Share
-                          </button>
-                        );
-                      })()}
-                      {/* Track invites — moved down from the removed header
-                          cluster, which was the only place the grid offered it. */}
-                      {assessment.candidates > 0 && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleTrackInvites(assessment);
-                          }}
-                          className="flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-all text-xs whitespace-nowrap"
-                          aria-label="Track invitation status" title="Track invitation status"
-                        >
-                          <Mail className="w-3.5 h-3.5" />
-                          Track ({assessment.candidates})
-                        </button>
-                      )}
-                      {/* Results disabled for Draft — a draft has no candidates,
-                          so the results page is empty. */}
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          if (assessment.status === 'Draft') return;
-                          router.push(`/recruitment/assessments/${assessment.id}/results`);
-                        }}
-                        disabled={assessment.status === 'Draft'}
-                        title={assessment.status === 'Draft' ? 'Publish the assessment to view results' : ''}
-                        className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg transition-all text-xs ${
-                          assessment.status === 'Draft'
-                            ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                            : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
-                        }`}
-                      >
-                        <BarChart className="w-3.5 h-3.5" />
-                        Results
-                      </button>
-                      <button
-                        data-assessment-menu-trigger
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          const willOpen = openMenuId !== assessment.id;
-                          if (willOpen) {
-                            const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                            setMenuDropUp(window.innerHeight - rect.bottom < 280);
-                          }
-                          setOpenMenuId(willOpen ? assessment.id : null);
-                        }}
-                        className="p-2 bg-white rounded-lg hover:bg-gray-50 transition-all"
-                      >
-                        <MoreVertical className="w-4 h-4 text-gray-600" />
-                      </button>
-                    </div>
-
-                    {/* Grid Card Dropdown Menu */}
-                    {openMenuId === assessment.id && (
-                      <>
-                        <div
-                          ref={openMenuRef}
-                          className={`absolute right-0 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999] max-h-[70dvh] overflow-y-auto ${
-                            menuDropUp ? 'bottom-full mb-1' : 'top-full mt-1'
-                          }`}
-                        >
-                          {/* Draft assessments hide Activate/Archive — drafts go
-                              through the configure-page Publish button, and an
-                              unpublished row has nothing meaningful to archive. */}
-                          {canUpdateAssessment && assessment.status !== 'Active' && assessment.status !== 'Draft' && (
-                            <button
-                              onClick={() => handleActivateAssessment(assessment.id)}
-                              className="group w-full px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 flex items-center gap-2 transition-colors"
-                            >
-                              <Play className="w-4 h-4 text-menu-icon-activate flex-shrink-0" />
-                              <span className={MENU_ITEM_SCALE_CLASS}>Activate</span>
-                            </button>
-                          )}
-                          {assessment.status !== 'Archived' && assessment.status !== 'Draft' && (
-                          <button
-                            onClick={() => {
-                              if (!canDeleteAssessment) {
-                                toast.error('You do not have permission to archive assessments');
-                                return;
-                              }
-                              handleArchiveAssessment(assessment.id);
-                            }}
-                            disabled={!canDeleteAssessment}
-                            title={!canDeleteAssessment ? 'You do not have permission to archive assessments' : ''}
-                            className={`group w-full px-4 py-2.5 text-sm flex items-center gap-2 ${
-                              !canDeleteAssessment
-                                ? 'text-gray-400 cursor-not-allowed opacity-60'
-                                : 'text-gray-700 hover:bg-gray-50'
-                            }`}
-                          >
-                            <Archive className="w-4 h-4 text-menu-icon-archive flex-shrink-0" />
-                            <span className={MENU_ITEM_SCALE_CLASS}>Archive</span>
-                          </button>
-                          )}
-                          {assessment.status !== 'Archived' && (hasPermission('canDeleteAssessments') || isTenantAdmin) && (() => {
-                            const hasCandidates = assessment.invitations_count > 0;
-                            const isDisabled = !canDeleteAssessment || hasCandidates;
-                            const disabledReason = !canDeleteAssessment
-                              ? 'You do not have permission to delete assessments'
-                              : hasCandidates
-                                ? 'Cannot delete — candidates have already been invited to this assessment'
-                                : '';
-                            return (
-                              <button
-                                onClick={() => {
-                                  if (isDisabled) {
-                                    toast.error(disabledReason);
-                                    return;
-                                  }
-                                  handleDeleteAssessment(assessment.id);
-                                }}
-                                disabled={isDisabled}
-                                title={disabledReason}
-                                className={`group w-full px-4 py-2.5 text-sm flex items-center gap-2 ${
-                                  isDisabled
-                                    ? 'text-gray-400 cursor-not-allowed opacity-60'
-                                    : 'text-red-600 hover:bg-red-50'
-                                }`}
-                              >
-                                <Trash2 className="w-4 h-4 flex-shrink-0" />
-                                <span className={MENU_ITEM_SCALE_CLASS}>Delete</span>
-                              </button>
-                            );
-                          })()}
-                        </div>
-                      </>
-                    )}
-                    {/* Assessment Versions — the same control and the same
-                        panel as the list view, so a lineage reads identically
-                        whichever view the recruiter is in. Full width at the
-                        foot of the card; the grid's columns give the table
-                        less room, which is what its own horizontal scroll is
-                        for. */}
-                    {hasVersionHistory(assessment) && (
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <button
-                          type="button"
-                          onClick={() => toggleAssessmentVersions(assessment)}
-                          aria-expanded={openVersionsFor === assessment.id}
-                          title={openVersionsFor === assessment.id ? 'Hide version history' : 'View version history'}
-                          className={`mt-3 h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-all ${
-                            openVersionsFor === assessment.id
-                              ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30'
-                              : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700 dark:hover:bg-slate-800'
-                          }`}
-                        >
-                          <Layers className="w-3.5 h-3.5" />
-                          {openVersionsFor === assessment.id ? 'Hide' : 'View'} Versions
-                        </button>
-                        {openVersionsFor === assessment.id && (
-                          <AssessmentVersionHistoryPanel
-                            jobVersions={jdLineage.lineages[assessment.jd_id]}
-                            jobVersionDetails={jdLineage.versionDetails}
-                            assessments={assessmentLineages[assessment.jd_id]}
-                            /* The backend's per-version "has an assessment" index,
-                               read beside the rows - see the prop for why both. */
-                            jdsWithAssessments={jdsWithAssessments}
-                            loading={!!loadingLineages[assessment.jd_id] || jdLineage.isLoading(assessment.jd_id)}
-                            currentAssessmentId={assessment.id}
-                            latestJobVersion={getLatestJobVersion(assessment)}
-                            /* Same selection as the list view's panel, off the
-                               same per-job state, so switching the view toggle
-                               does not lose which version was picked. */
-                            selectionGroupName="job-list-assessment-version"
-                            selectedAssessmentId={selectedAssessmentVersionByJob[assessment.jd_id!]}
-                            onSelectAssessment={(assessmentId) =>
-                              setSelectedAssessmentVersionByJob((current) => ({
-                                ...current,
-                                [assessment.jd_id!]: assessmentId,
-                              }))
-                            }
-                              /* Opened on the page the ROW's own status calls for -
-                                 a Draft on the draft page, everything else on the
-                                 details page. The row is found by ASSESSMENT id in
-                                 the lineage, the same lookup `renderAction` makes,
-                                 so two assessments on one job version each open
-                                 themselves. */
-                              onRowClick={(versionId) => {
-                                const raw = (assessmentLineages[assessment.jd_id!] || [])
-                                  .find((v) => v.id === versionId);
-                                openAssessment(raw ? mapAssessmentFromApi(raw, 0) : { id: versionId });
-                              }}
-                            onCreateAssessment={handleCreateAssessmentForJobVersion}
-                            headerAction={
-                              /* The job version details popup, pinned to the
-                                 table's top-right corner. Opens on the version
-                                 LIST, from which any one version can be read;
-                                 each row's own eye opens a single version
-                                 directly.
-
-                                 Gated on `jd_id` - a row with no job behind it
-                                 (the `__unlinked__` case) has no job to open,
-                                 and the panel simply gets no header control. */
-                              assessment.jd_id ? (
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    openJobDetails(
-                                      assessment.jd_id!,
-                                      assessment.job?.title || stripVersionFromTitle(assessment.title),
-                                    );
-                                  }}
-                                  className="h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
-                                  aria-label="View job version details"
-                                  title="View job version details"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                </button>
-                              ) : undefined
-                            }
-                            /* Opens the same popup the header eye opens, landing
-                               on THIS version rather than on the version list. */
-                            onViewJobVersion={(jobVersionId, jobVersion) =>
-                              openJobDetails(
-                                jobVersionId,
-                                assessment.job?.title || stripVersionFromTitle(assessment.title),
-                                jobVersion,
-                              )
-                            }
-                            /* Same actions the list view's rows get, so a job
-                               version reads the same in either view. */
-                            renderAction={(version) => {
-                              const raw = (assessmentLineages[assessment.jd_id!] || [])
-                                .find((v) => v.id === version.id);
-                              if (!raw) return null;
-                              const mapped = mapAssessmentFromApi(raw, 0);
-                              return (
-                                <>
-                                  {renderAssessmentQuickActions(mapped)}
-                                  {renderAssessmentMenu(mapped, `version:${version.id}`, 'compact')}
-                                </>
-                              );
-                            }}
-                          />
-                        )}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            ) : (
+            : (
               /* List View */
               <div className="space-y-3">
                 {visibleAssessments.map((assessment) => renderJobListRow(assessment))}
@@ -8330,39 +7956,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </p>
               <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
                 {trackingPaginationVisible && (
-                  <>
-                    <button
-                      onClick={() => setTrackingCurrentPage(1)}
-                      disabled={trackingCurrentPage === 1}
-                      className="hidden sm:inline-flex px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                    >
-                      First
-                    </button>
-                    <button
-                      onClick={() => setTrackingCurrentPage(trackingCurrentPage - 1)}
-                      disabled={trackingCurrentPage === 1}
-                      className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                    >
-                      Prev
-                    </button>
-                    <span className="px-1 sm:px-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
-                      Page {trackingCurrentPage} of {trackingTotalPages}
-                    </span>
-                    <button
-                      onClick={() => setTrackingCurrentPage(trackingCurrentPage + 1)}
-                      disabled={trackingCurrentPage === trackingTotalPages}
-                      className="px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                    >
-                      Next
-                    </button>
-                    <button
-                      onClick={() => setTrackingCurrentPage(trackingTotalPages)}
-                      disabled={trackingCurrentPage === trackingTotalPages}
-                      className="hidden sm:inline-flex px-2 sm:px-3 py-1 sm:py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                    >
-                      Last
-                    </button>
-                  </>
+                  <InlinePageNav
+                    page={trackingCurrentPage}
+                    totalPages={trackingTotalPages}
+                    onPageChange={setTrackingCurrentPage}
+                  />
                 )}
                 <button
                   onClick={closeTrackInvitesModal}

@@ -1,7 +1,6 @@
 'use client'
 
-import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList, Layers } from 'lucide-react';
+import { Plus, Search, MapPin, Eye, MoreVertical, Briefcase, Users, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, AlertCircle, ArrowUpRight, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -11,20 +10,14 @@ import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
-import { formatISTDate } from '@/lib/utils/dateUtils';
 import {
   formatEmploymentType,
   formatIndustryType,
-  formatLastUpdated,
-  getCreationMethodConfig,
-  getDisplayStatus,
   matchesStatusFilter,
   getPublishedJobs,
-  getStatusConfig,
   collapseToLatestVersions,
   groupByLineage,
   sortJobs,
-  formatJobVersionLabel,
 } from '@/lib/utils/jobOpeningDisplay';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
@@ -36,7 +29,6 @@ import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import AITalentMatchConfirmModal from '@/components/AITalentMatchConfirmModal';
 /* Radix menu rather than the hand-rolled absolute dropdown the job rows use:
    the version table sits inside an overflow-x-auto shell, which would clip an
    absolutely positioned menu — Radix portals it out of the scroll container. */
@@ -185,7 +177,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialStatusFilter]);
 
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   /* Version history — expand state, lineage, per-version JD records and
      applicant counts, all from the shared hook so the Apply to Job dialog opens
@@ -200,29 +191,11 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
   const [showAIMatchModal, setShowAIMatchModal] = useState(false);
   const [selectedJobForAIMatch, setSelectedJobForAIMatch] = useState<Job | null>(null);
-  /* AI Talent Match trigger from the three-dot menu asks first, same
-     ConfirmationDialog / copy / Yes-No pattern as the Job Details page's own
-     AI Talent Match confirm — set here, proceeds into the existing
-     onAIMatch(job) navigation only on Yes. */
-  const [aiMatchConfirmJob, setAiMatchConfirmJob] = useState<Job | null>(null);
-  // Closing the three-dot menu and opening the confirm live in one function so
-  // they always land in the same state update/paint — every trigger (grid row,
-  // list row, expanded version row) goes through this, so the menu can never
-  // be caught mid-close while the popup is still mounting.
-  const requestAIMatch = (job: Job) => {
-    setActiveDropdown(null);
-    setAiMatchConfirmJob(job);
-  };
-  const confirmAIMatch = () => {
-    const job = aiMatchConfirmJob;
-    setAiMatchConfirmJob(null);
-    if (job) onAIMatch?.(job);
-  };
-  /* Same one-function rule as requestAIMatch above, for the same reason: the
-     menu close and the confirmation open are a single state update, so the
-     three-dot menu can never be caught still painted while the "Disable Job
-     Description?" dialog is coming up. Every Disable Job trigger — grid card,
-     list row and the expanded version rows — goes through here. */
+  /* Closing the three-dot menu and opening the confirmation live in one
+     function so they always land in the same state update/paint — the menu
+     can never be caught still painted while the "Disable Job Description?"
+     dialog is coming up. Every Disable Job trigger — grid card, list row and
+     the expanded version rows — goes through here. */
   const requestDisableJob = (job: Job) => {
     setActiveDropdown(null);
     onDisableJob?.(job);
@@ -290,7 +263,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   useListStatePersistence(
     'job-openings-list',
     {
-      searchQuery, statusFilter, creationMethodFilter, locationFilter, viewMode,
+      searchQuery, statusFilter, creationMethodFilter, locationFilter,
       departmentFilter, industryFilter, experienceFilter, employmentTypeFilter,
       applicantsFilter, salaryRangeFilter, datePostedFromFilter, datePostedToFilter,
       sortBy, sortOrder, currentPage, itemsPerPage, pageView,
@@ -300,7 +273,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       // status or page here is what hid a just-published JD behind the previous
       // narrowed view. Everything else (sort, density, column prefs) still restores.
       if (typeof s.searchQuery === 'string') search.setQuery(forceListView ? '' : s.searchQuery);
-      if (s.viewMode === 'grid' || s.viewMode === 'list') setViewMode(s.viewMode);
       // Restore the two-step view too. Without this, coming back from a
       // job-details page always remounted on 'cards' — the filters and page
       // were restored but the whole list stayed hidden behind the stat tiles,
@@ -727,54 +699,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
     setCurrentPage(1);
   }, [searchQuery, statusFilter, creationMethodFilter, locationFilter, departmentFilter, industryFilter, experienceFilter, employmentTypeFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter, sortBy, sortOrder]);
 
-  // Update items per page based on view mode. Also skipped on mount, so it
-  // can't overwrite a restored page size / page number either.
-  const skipViewModeResetRef = useRef(true);
-  useEffect(() => {
-    if (skipViewModeResetRef.current) { skipViewModeResetRef.current = false; return; }
-    setItemsPerPage(10);
-    setCurrentPage(1); // Reset to first page when view mode changes
-  }, [viewMode]);
-
-  // Generate page numbers to display
-  const getPageNumbers = () => {
-    const pages: (number | string)[] = [];
-    const maxPagesToShow = 5;
-    
-    if (totalPages <= maxPagesToShow + 2) {
-      // Show all pages if total is small
-      for (let i = 1; i <= totalPages; i++) {
-        pages.push(i);
-      }
-    } else {
-      // Always show first page
-      pages.push(1);
-      
-      if (currentPage > 3) {
-        pages.push('...');
-      }
-      
-      // Show pages around current page
-      const startPage = Math.max(2, currentPage - 1);
-      const endPage = Math.min(totalPages - 1, currentPage + 1);
-      
-      for (let i = startPage; i <= endPage; i++) {
-        pages.push(i);
-      }
-      
-      if (currentPage < totalPages - 2) {
-        pages.push('...');
-      }
-      
-      // Always show last page
-      if (totalPages > 1) {
-        pages.push(totalPages);
-      }
-    }
-    
-    return pages;
-  };
-
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -783,6 +707,22 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   const handleItemsPerPageChange = (value: number) => {
     setItemsPerPage(value);
     setCurrentPage(1);
+  };
+
+  // "Go to page" input — local text so a partial edit isn't clobbered by the
+  // currentPage prop until Enter/blur commits it.
+  const [goToPage, setGoToPage] = useState(String(currentPage));
+  useEffect(() => {
+    setGoToPage(String(currentPage));
+  }, [currentPage]);
+
+  const commitGoToPage = () => {
+    const page = Math.round(Number(goToPage));
+    if (Number.isFinite(page) && page >= 1 && page <= totalPages) {
+      handlePageChange(page);
+    } else {
+      setGoToPage(String(currentPage));
+    }
   };
 
   return (
@@ -860,16 +800,14 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
         {/* Consolidated toolbar: Search + Filters + Tabs + Select all + Sort */}
         <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
-          {/* Row 1: Search + View toggle + More Filters — the canonical toolbar,
-              now shared via <ListToolbar> so other list pages match this one. */}
+          {/* Row 1: Search + More Filters — the canonical toolbar, now shared
+              via <ListToolbar> so other list pages match this one. */}
           <ListToolbar
             searchValue={search.query}
             onSearchChange={search.setQuery}
             // The hook debounces into `appliedQuery`, so keystrokes pass through.
             searchDebounceMs={0}
             searchPlaceholder="Search jobs..."
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
             onToggleFilters={() => setShowAdvancedFilters(!showAdvancedFilters)}
             filtersOpen={showAdvancedFilters}
             activeFilterCount={activeFiltersCount}
@@ -1178,315 +1116,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
         {/* Jobs Grid/List */}
         {currentJobs.length > 0 ? (
-          viewMode === 'grid' ? (
-            // Grid View
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {currentJobs.map(job => {
-                const displayStatus = getDisplayStatus(job.status, job.currentVersion);
-                const statusConfig = getStatusConfig(displayStatus);
-                const creationMethodConfig = getCreationMethodConfig(job.creation_method);
-
-                return (
-                  <div
-                    key={job.id}
-                    className={`relative bg-white rounded-xl border transition-[transform,box-shadow,border-color] duration-150 cursor-pointer h-full flex flex-col ${activeDropdown === job.id ? 'z-30' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
-                    onClick={() => job.status.toLowerCase() === 'draft' && onEditJob ? onEditJob(job) : onViewJob(job)}
-                  >
-                    {/* Card Header */}
-                    <div className="p-4 border-b border-gray-100">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          {/* Individual Select */}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
-                            className="flex-shrink-0"
-                            title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
-                          >
-                            {selectedJobs.has(job.id)
-                              ? <CheckSquare className="w-4 h-4 text-brand-blue" />
-                              : <Square className="w-4 h-4 text-gray-400 hover:text-brand-blue" />
-                            }
-                          </button>
-                          <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Briefcase className="h-4 w-4 text-brand-blue" />
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                          <span className={`px-2 py-0.5 rounded-full text-xs ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-1.5`}>
-                            <div className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`}></div>
-                            {displayStatus}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded-full text-xs ${creationMethodConfig.bg} ${creationMethodConfig.text} border ${creationMethodConfig.border} flex items-center gap-1.5`}>
-                            <div className={`w-1.5 h-1.5 rounded-full ${creationMethodConfig.dot}`}></div>
-                            {creationMethodConfig.label}
-                          </span>
-                          {job.versionNumber && job.versionNumber >= 1 && (
-                            <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5">
-                              <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
-                              v{job.versionNumber}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 mb-2">
-                        {job.job_id && (
-                          <JobIdBadge>{job.job_id}</JobIdBadge>
-                        )}
-                        {/* Two lines on a card, one line in a row - a card
-                            gives the name its own width, a row shares it. Full
-                            name on hover either way. */}
-                        <h3
-                          className="text-sm sm:text-base font-medium text-gray-900 line-clamp-2 min-w-0"
-                          title={job.title}
-                        >
-                          {job.title}
-                        </h3>
-                      </div>
-                    </div>
-
-                    {/* Card Body */}
-                    <div className="p-4 flex-1 flex flex-col">
-                      <div className="flex-1">
-                      <div className="space-y-2 mb-4">
-                        {job.department && (
-                          <div className="flex items-center justify-between gap-2 text-sm">
-                            <span className="flex items-center gap-2 text-gray-500">
-                              <Layers className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              Department
-                            </span>
-                            <span className="font-medium text-gray-800 truncate">{job.department}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between gap-2 text-sm">
-                          <span className="flex items-center gap-2 text-gray-500">
-                            <Briefcase className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            Employment Type
-                          </span>
-                          <span className="font-medium text-gray-800 truncate">{formatEmploymentType(job.employmentType)}</span>
-                        </div>
-                        {(job as any).workMode && (
-                          <div className="flex items-center justify-between gap-2 text-sm">
-                            <span className="flex items-center gap-2 text-gray-500">
-                              <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              Workplace
-                            </span>
-                            <span className="font-medium text-gray-800 capitalize truncate">{(job as any).workMode}</span>
-                          </div>
-                        )}
-                        {job.experience && (
-                          <div className="flex items-center justify-between gap-2 text-sm">
-                            <span className="flex items-center gap-2 text-gray-500">
-                              <TrendingUp className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              Experience
-                            </span>
-                            <span className="font-medium text-gray-800">{job.experience}</span>
-                          </div>
-                        )}
-                        {job.postedDate && (
-                          <div className="flex items-center justify-between gap-2 text-sm">
-                            <span className="flex items-center gap-2 text-gray-500">
-                              <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              Posted Date
-                            </span>
-                            <span className="font-medium text-gray-800">{formatISTDate(job.postedDate)}</span>
-                          </div>
-                        )}
-                        {job.postedBy && (
-                          <div className="flex items-center justify-between gap-2 text-sm">
-                            <span className="flex items-center gap-2 text-gray-500">
-                              <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              Created By
-                            </span>
-                            <span className="font-medium text-gray-800 truncate">{job.postedBy}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Salary & Skills Info */}
-                      <div className="space-y-2 mb-4">
-                        {(job as any).salary && (
-                          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg">
-                            <DollarSign className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm text-gray-700">{(job as any).salary}</span>
-                          </div>
-                        )}
-                        {((job as any).mustHaveSkills?.length > 0 || (job as any).niceToHaveSkills?.length > 0) && (
-                          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg">
-                            <Target className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm text-gray-700">
-                              {(job as any).mustHaveSkills?.length || 0} required + {(job as any).niceToHaveSkills?.length || 0} preferred skills
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Updated + Applicants footer line */}
-                      <div className="flex items-center justify-between gap-2 text-xs text-gray-500 mb-4">
-                        <span className="truncate">
-                          {job.updated_at ? `Updated ${formatLastUpdated(job.updated_at)}` : ''}
-                        </span>
-                        <span className="font-medium text-gray-600 flex-shrink-0">
-                          {job.applicants} {job.applicants === 1 ? 'applicant' : 'applicants'}
-                        </span>
-                      </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        {/* Edit Button - icon only (hidden for Disabled JDs) */}
-                        {onEditJob && !['disabled', 'archived'].includes(job.status.toLowerCase()) && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
-                            className="flex-shrink-0 p-2.5 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
-                            aria-label="Edit" title="Edit"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                        )}
-
-                        {/* Three-dot Menu - Grid View */}
-                        <div className="relative flex-shrink-0">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveDropdown(activeDropdown === job.id ? null : job.id);
-                            }}
-                            className="p-2.5 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
-                          >
-                            <MoreVertical className="w-4 h-4 text-gray-600" />
-                          </button>
-                          {activeDropdown === job.id && (
-                            <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-40">
-                              {/* View Applicants - Hide for Draft */}
-                              {job.status.toLowerCase() !== 'draft' && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    (onViewApplicants || onViewJob)(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                                >
-                                  <Users className="w-4 h-4 text-menu-icon-secondary" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>View Applicants</span>
-                                </button>
-                              )}
-                              {/* Quick Actions — mirror the Job Details "Quick Actions" panel */}
-                              {onAIMatch && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    requestAIMatch(job);
-                                  }}
-                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                                >
-                                  <Brain className="w-4 h-4 text-menu-icon-ai" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>AI Talent Match</span>
-                                </button>
-                              )}
-                              {onScoreResumes && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onScoreResumes(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                                >
-                                  <ClipboardList className="w-4 h-4 text-menu-icon-score" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
-                                </button>
-                              )}
-                              {/* Disable Job for Published */}
-                              {job.status === 'Published' && onDisableJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    requestDisableJob(job);
-                                  }}
-                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-orange-700 hover:bg-orange-50"
-                                >
-                                  <Ban className="w-4 h-4" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Disable Job</span>
-                                </button>
-                              )}
-                              {/* Re-enable JD for Disabled */}
-                              {job.status === 'Disabled' && onRepublishJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onRepublishJob(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-green-700 hover:bg-green-50"
-                                >
-                                  <CheckCircle2 className="w-4 h-4" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
-                                </button>
-                              )}
-                              {/* Archive Job */}
-                              {job.status !== 'Archived' && onArchiveJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onArchiveJob(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                                >
-                                  <Archive className="w-4 h-4 text-menu-icon-archive" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Archive Job</span>
-                                </button>
-                              )}
-                              {/* Unarchive Job */}
-                              {job.status === 'Archived' && onUnarchiveJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onUnarchiveJob(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-green-700 hover:bg-green-50"
-                                >
-                                  <RefreshCw className="w-4 h-4" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Unarchive Job</span>
-                                </button>
-                              )}
-                              {/* Delete Job */}
-                              {onDeleteJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onDeleteJob(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Delete Job</span>
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                        {/* View JD - primary action, always available (including Draft) */}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onViewJob(job); }}
-                          className="flex-shrink-0 flex items-center justify-center gap-1.5 px-4 py-2.5 bg-brand-blue text-white text-sm font-medium rounded-lg hover:bg-brand-blue/90 transition-all"
-                        >
-                          View JD
-                          <span aria-hidden="true">&rarr;</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
             // List View
             <div className="space-y-3">
               {currentJobs.map(job => {
@@ -1601,7 +1230,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
-                                    requestAIMatch(job);
+                                    setActiveDropdown(null);
+                                    onAIMatch(job);
                                   }}
                                   className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
                                 >
@@ -1780,7 +1410,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                 )}
                                 {/* Quick Actions — same gates as the latest-version menu */}
                                 {onAIMatch && !['draft', 'disabled', 'archived'].includes(versionJob.status.toLowerCase()) && (
-                                  <DropdownMenuItem onSelect={() => requestAIMatch(versionJob)} className={viewVersionsMenuItemClass}>
+                                  <DropdownMenuItem onSelect={() => onAIMatch(versionJob)} className={viewVersionsMenuItemClass}>
                                     <Brain className="w-4 h-4 text-menu-icon-ai" />
                                     <span className={MENU_ITEM_SCALE_CLASS}>AI Talent Match</span>
                                   </DropdownMenuItem>
@@ -1836,7 +1466,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 );
               })}
             </div>
-          )
         ) : (
           // Empty State
           <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-8 sm:p-10 text-center">
@@ -1908,53 +1537,51 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
               </div>
 
               {/* Right: Page navigation */}
-              <div className="flex items-center justify-center sm:justify-end gap-1.5">
+              <div className="flex items-center justify-center sm:justify-end gap-2 sm:gap-3">
+                {/* Go to page */}
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
+                  <input
+                    type="number"
+                    min={1}
+                    max={totalPages}
+                    value={goToPage}
+                    onChange={(e) => setGoToPage(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.currentTarget.blur();
+                        commitGoToPage();
+                      }
+                    }}
+                    onBlur={commitGoToPage}
+                    aria-label="Go to page"
+                    className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
+                  />
+                </div>
+
                 {/* Previous Button */}
                 <button
                   onClick={() => handlePageChange(currentPage - 1)}
                   disabled={currentPage === 1}
-                  className={`p-2.5 rounded-lg border transition-all ${
-                    currentPage === 1
-                      ? 'border-gray-300 text-gray-400 cursor-not-allowed'
-                      : 'border-gray-300 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-                  }`}
+                  className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
                   aria-label="Previous page" title="Previous page"
                 >
-                  <ChevronLeft className="w-4 h-4" />
+                  <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
 
-                {/* Page Numbers */}
-                <div className="flex items-center gap-1">
-                  {getPageNumbers().map((page, index) => (
-                    <button
-                      key={index}
-                      onClick={() => typeof page === 'number' && handlePageChange(page)}
-                      disabled={page === '...'}
-                      className={`min-w-[40px] h-10 px-2 rounded-lg text-sm transition-all ${
-                        page === currentPage
-                          ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                          : page === '...'
-                          ? 'text-gray-400 cursor-default'
-                          : 'border border-gray-300 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-                      }`}
-                    >
-                      {page}
-                    </button>
-                  ))}
-                </div>
+                {/* Current / total */}
+                <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
+                  <span className="text-brand-blue font-semibold">{currentPage}</span> / {totalPages}
+                </span>
 
                 {/* Next Button */}
                 <button
                   onClick={() => handlePageChange(currentPage + 1)}
                   disabled={currentPage === totalPages}
-                  className={`p-2.5 rounded-lg border transition-all ${
-                    currentPage === totalPages
-                      ? 'border-gray-300 text-gray-400 cursor-not-allowed'
-                      : 'border-gray-300 text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
-                  }`}
+                  className="inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors"
                   aria-label="Next page" title="Next page"
                 >
-                  <ChevronRight className="w-4 h-4" />
+                  <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
               </div>
             </div>
@@ -1965,22 +1592,12 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       </div>
       </div>
 
-      {/* Confirm before running AI Talent Match — same copy, layout and
-          Yes/No behavior as the Job Details page's AI Talent Match confirm.
-          No is the do-nothing path: closing this never calls onAIMatch. */}
       <ArchiveJobModal
         isOpen={bulkArchiveOpen}
         count={selectedJobs.size}
         jobLabel={`${selectedJobs.size} job description${selectedJobs.size === 1 ? '' : 's'} selected`}
         onConfirm={confirmBulkArchive}
         onCancel={() => setBulkArchiveOpen(false)}
-      />
-
-      <AITalentMatchConfirmModal
-        isOpen={!!aiMatchConfirmJob}
-        jobTitle={aiMatchConfirmJob ? formatJobVersionLabel(aiMatchConfirmJob) : ''}
-        onConfirm={confirmAIMatch}
-        onCancel={() => setAiMatchConfirmJob(null)}
       />
 
       {/* AI Match Modal */}

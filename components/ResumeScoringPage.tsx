@@ -2,7 +2,7 @@
 
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { WorkInProgressIcon } from '@/components/icons/nav-icons';
-import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Award, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronRight, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList } from 'lucide-react';
+import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronRight, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, useId } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useRouter } from 'next/navigation';
@@ -34,7 +34,6 @@ import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
-import JobVersionHistoryCards from '@/components/jobs/JobVersionHistoryCards';
 import { lineageKey, resolveVersionHistoryRows } from '@/lib/utils/jobOpeningDisplay';
 import type { Job as LineageJob } from '@/lib/types/types';
 import {
@@ -787,8 +786,7 @@ export default function ResumeScoringPage({
   void historySourceFilter; void historyDateFrom; void historyDateTo;
   void historyMinCandidates; void historyAvgScoreMin;
 
-  // History view mode and selection
-  const [historyViewMode, setHistoryViewMode] = useState<'grid' | 'list'>('list');
+  // History selection
   const [historyCurrentPage, setHistoryCurrentPage] = useState(1);
   const [historyItemsPerPage, setHistoryItemsPerPage] = useState(10);
 
@@ -829,12 +827,12 @@ export default function ResumeScoringPage({
   // they left off. The scrollable content is the history-list view (the ref
   // walks up to the route's overflow container). Re-detect the scroller when a
   // toggle that drastically changes page height flips (cards<->list drill-in,
-  // grid<->list, global view).
-  const rootRef = useScrollRestoration<HTMLElement>('resume-scoring', !historyLoading, [pageView, isGlobalView, historyViewMode]);
+  // global view).
+  const rootRef = useScrollRestoration<HTMLElement>('resume-scoring', !historyLoading, [pageView, isGlobalView]);
   useListStatePersistence(
     'resume-scoring',
     {
-      isGlobalView, globalListMode, globalSearchQuery, historyViewMode,
+      isGlobalView, globalListMode, globalSearchQuery,
       historySearchQuery, historyCreatedBy, historyScoredFrom, historyScoredTo,
       historyLocation, historyWorkMode, historyJobType, historyIndustry,
       historyCurrentPage, historyItemsPerPage,
@@ -852,7 +850,6 @@ export default function ResumeScoringPage({
       if (typeof s.isGlobalView === 'boolean') setIsGlobalView(s.isGlobalView);
       if (s.globalListMode === 'candidates' || s.globalListMode === 'events') setGlobalListMode(s.globalListMode);
       if (typeof s.globalSearchQuery === 'string') setGlobalSearchQuery(s.globalSearchQuery);
-      if (s.historyViewMode === 'grid' || s.historyViewMode === 'list') setHistoryViewMode(s.historyViewMode);
       if (typeof s.historySearchQuery === 'string') historySearch.setQuery(s.historySearchQuery);
       historySearch.setFilters({
         createdBy: typeof s.historyCreatedBy === 'string' ? s.historyCreatedBy : '',
@@ -1687,12 +1684,6 @@ export default function ResumeScoringPage({
     if (score >= 70) return 'Excellent match with strong alignment on key skills and experience requirements. Highly recommended candidate.';
     if (score >= 50) return 'Good match with relevant skills and experience. Solid candidate for consideration.';
     return 'Moderate match with some relevant skills. May require additional evaluation.';
-  };
-
-  const getScoreColor = (score: number) => {
-    if (score >= 70) return 'text-green-600';
-    if (score >= 50) return 'text-gray-800';
-    return 'text-yellow-600';
   };
 
   const getScoreBgColor = (score: number) => {
@@ -2873,8 +2864,6 @@ export default function ResumeScoringPage({
               // The hook debounces into `appliedQuery`, so keystrokes pass through.
               searchDebounceMs={0}
               searchPlaceholder="Search by job title..."
-              viewMode={historyViewMode}
-              onViewModeChange={setHistoryViewMode}
               onToggleFilters={() => setShowHistoryFilters(!showHistoryFilters)}
               filtersOpen={showHistoryFilters}
               activeFilterCount={historySearch.activeFilterCount}
@@ -2978,15 +2967,8 @@ export default function ResumeScoringPage({
         {/* History List or Empty State */}
         {displayHistory.length > 0 ? (
           <>
-          <div className={historyViewMode === 'grid' ? 'flex flex-col gap-4' : 'space-y-3'}>
+          <div className="space-y-3">
             {displayHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage).map((item) => {
-              const avgScore = item.scoredResumes.length > 0
-                ? Math.round(item.scoredResumes.reduce((sum, r) => sum + (r.overall_score || r.scorePercentage || 0), 0) / item.scoredResumes.length)
-                : 0;
-
-              const exactMatchCount = item.scoredResumes.filter(r => r.matchStatus === 'Exact Match' || r.matchStatus === 'exact_match').length;
-              const partialMatchCount = item.scoredResumes.filter(r => r.matchStatus === 'Partial Match' || r.matchStatus === 'partial_match').length;
-              const noMatchCount = item.scoredResumes.filter(r => r.matchStatus === 'No Match' || r.matchStatus === 'no_match' || (!r.matchStatus)).length;
               const isSelected = selectedHistoryItems.has(item.id);
 
               const jobDetails = jobs.find(j => j.id === item.jobId);
@@ -3194,42 +3176,23 @@ export default function ResumeScoringPage({
                   </DropdownMenuContent>
                 </DropdownMenu>
               );
-              // Grid view gets compact version cards — a dense table read as out
-              // of place dropped into a visual, badge-heavy grid card. List view
-              // keeps the table: a full-width row has room for it, and it's the
-              // look this feature was modelled on (the Job Description page).
               const versionHistoryPanel = versionsExpanded ? (
                 <div onClick={(e) => e.stopPropagation()} className="mt-3">
-                  {historyViewMode === 'grid' ? (
-                    <JobVersionHistoryCards
-                      job={versionStubJob}
-                      versions={versionLineage.lineages[versionKey]}
-                      loading={versionLineage.isLoading(versionKey)}
-                      versionDetails={versionLineage.versionDetails}
-                      versionApplicants={versionLineage.versionApplicants}
-                      versionScoredBy={versionLineage.versionScoredBy}
-                      onCardClick={openVersionDetails}
-                      renderAction={renderVersionAction}
-                      publishedOnly
-                    />
-                  ) : (
-                    <JobVersionHistoryPanel
-                      job={versionStubJob}
-                      versions={versionLineage.lineages[versionKey]}
-                      loading={versionLineage.isLoading(versionKey)}
-                      versionDetails={versionLineage.versionDetails}
-                      versionApplicants={versionLineage.versionApplicants}
-                      versionScoredBy={versionLineage.versionScoredBy}
-                      onRowClick={openVersionDetails}
-                      renderAction={renderVersionAction}
-                      publishedOnly
-                      stickyVersionColumn
-                    />
-                  )}
+                  <JobVersionHistoryPanel
+                    job={versionStubJob}
+                    versions={versionLineage.lineages[versionKey]}
+                    loading={versionLineage.isLoading(versionKey)}
+                    versionDetails={versionLineage.versionDetails}
+                    versionApplicants={versionLineage.versionApplicants}
+                    versionScoredBy={versionLineage.versionScoredBy}
+                    onRowClick={openVersionDetails}
+                    renderAction={renderVersionAction}
+                    publishedOnly
+                    stickyVersionColumn
+                  />
                 </div>
               ) : null;
 
-              if (historyViewMode === 'list') {
                 return (
                   <div
                     key={item.id}
@@ -3416,248 +3379,6 @@ export default function ResumeScoringPage({
                     {versionHistoryPanel}
                   </div>
                 );
-              }
-
-              // Grid View
-              return (
-                <div
-                  key={item.id}
-                  // min-w-0: without it this grid item's default min-width:auto
-                  // lets the version-history table's min-w-[960px] (see below)
-                  // force the whole card wider than its grid track, bleeding
-                  // past the rounded border instead of scrolling internally.
-                  className="min-w-0 bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden transition-all group hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5"
-                >
-                  <div className="p-4 sm:p-6 lg:p-8">
-                    <div className="flex flex-col sm:flex-row items-start justify-between gap-3 mb-3">
-                      {/* Icon + job id + title + badges */}
-                      <div
-                        className="flex items-start gap-3 min-w-0 cursor-pointer"
-                        onClick={() => {
-                          setSelectedHistoryItem(item);
-                          setViewMode('details');
-                          onLoadJdScores?.(item.jobId, item.jobTitle);
-                          router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
-                        }}
-                      >
-                        <div className="h-10 w-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0">
-                          <Briefcase className="h-5 w-5 text-brand-blue" />
-                        </div>
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap mb-1.5">
-                            {item.jdJobId && (
-                              <JobIdBadge className="inline-flex h-6 items-center">{item.jdJobId}</JobIdBadge>
-                            )}
-                            <h3
-                              className="text-base font-semibold text-gray-900 dark:text-slate-50 line-clamp-2 min-w-0"
-                              title={item.jobTitle}
-                            >
-                              {item.jobTitle}
-                            </h3>
-                          </div>
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            {(() => {
-                              const s = (item.jdStatus || 'published').toLowerCase();
-                              const cfg: Record<string, { label: string; bg: string; text: string; border: string; dot: string }> = {
-                                published: { label: 'Published', bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-200',  dot: 'bg-green-500' },
-                                active:    { label: 'Published', bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-200',  dot: 'bg-green-500' },
-                                closed:    { label: 'Closed',    bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-red-200',    dot: 'bg-red-500' },
-                                archived:  { label: 'Archived',  bg: 'bg-gray-50',   text: 'text-gray-500',   border: 'border-gray-200',   dot: 'bg-gray-400' },
-                                disabled:  { label: 'Disabled',  bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
-                                draft:     { label: 'Draft',     bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', border: 'border-brand-orange/20', dot: 'bg-brand-orange' },
-                              };
-                              const c = cfg[s] || cfg.published;
-                              return (
-                                <span className={`inline-flex h-6 items-center px-2 py-0.5 rounded-full text-xs ${c.bg} ${c.text} border ${c.border} gap-1.5`}>
-                                  <div className={`w-1.5 h-1.5 rounded-full ${c.dot}`}></div>
-                                  {c.label}
-                                </span>
-                              );
-                            })()}
-                            {displayVersionNumber && displayVersionNumber >= 1 && (
-                              <span className="inline-flex h-6 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 gap-1.5">
-                                <div className="w-1.5 h-1.5 rounded-full bg-gray-500 dark:bg-slate-500"></div>
-                                v{displayVersionNumber}
-                              </span>
-                            )}
-                            {/* History icon button */}
-                            <button
-                              onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
-                              className="inline-flex h-6 w-6 items-center justify-center rounded-lg border border-brand-cyan/20 bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan/15 transition-colors flex-shrink-0"
-                              aria-label="Scoring History" title="Scoring History"
-                            >
-                              <History className="w-3.5 h-3.5" />
-                            </button>
-                            {item.jdEmploymentType && (
-                              <span className="inline-flex h-6 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700">
-                                {formatEmploymentType(item.jdEmploymentType)}
-                              </span>
-                            )}
-                            {item.jdRemoteType && (
-                              <span className="inline-flex h-6 items-center px-2 py-0.5 rounded-full text-xs bg-gray-50 dark:bg-slate-800/50 text-gray-600 dark:text-slate-300 border border-gray-200 dark:border-slate-700 capitalize">
-                                {item.jdRemoteType}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Avg score + actions */}
-                      <div className="flex-shrink-0 flex items-start gap-3 self-start">
-                        <div className="text-right">
-                          <div className="text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium">Avg Score</div>
-                          <div className={`text-2xl sm:text-3xl font-bold tracking-tight ${getScoreColor(avgScore)}`}>{avgScore}%</div>
-                          <div className="text-xs text-gray-500 dark:text-slate-400">{item.totalScored} {item.totalScored === 1 ? 'candidate' : 'candidates'} scored</div>
-                        </div>
-                        <div className="flex items-center gap-1.5 pt-0.5">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedHistoryItem(item);
-                              setViewMode('details');
-                              onLoadJdScores?.(item.jobId, item.jobTitle);
-                              /* Arriving from the job row opens the job as a
-                                 whole: "Show All Versions" starts on, so the
-                                 table lists every version's candidates (and
-                                 the sibling versions' scores are pulled in).
-                                 The per-version rows below still open their
-                                 own single version. */
-                              showAllVersionsFor(item);
-                              try {
-                                localStorage.setItem('lastViewedScoringJdId', item.jobId);
-                              } catch (e) {
-                                console.error('Failed to save last viewed JD:', e);
-                              }
-                              router.push(`/recruitment/resume-scoring?jd_id=${item.jobId}`);
-                            }}
-                            aria-label="View Details"
-                            title="View Details"
-                            className="h-9 w-9 flex items-center justify-center border border-brand-cyan/30 bg-white dark:bg-slate-900 text-brand-cyan hover:bg-brand-cyan/5 hover:border-brand-cyan/50 rounded-lg transition-colors cursor-pointer"
-                          >
-                            <FileText className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); openWholeJobProgress(); }}
-                            disabled={loadingProgressJobId === item.jobId}
-                            aria-label="View Progress"
-                            title="View Progress (every version of this job)"
-                            className="h-9 w-9 flex items-center justify-center border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/50 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-                          >
-                            {loadingProgressJobId === item.jobId
-                              ? <Loader2 className="w-4 h-4 animate-spin" />
-                              : <WorkInProgressIcon className="w-4 h-4" />}
-                          </button>
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Info strip */}
-                    <div className="flex flex-wrap items-start gap-x-5 gap-y-2 py-2.5 border-t border-b border-gray-100 dark:border-slate-800 mb-3">
-                      {item.jdIndustryType && (
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium mb-1">
-                            <Building2 className="w-3.5 h-3.5 flex-shrink-0" /> Specialty
-                          </div>
-                          <div className="text-sm font-semibold text-gray-800 dark:text-slate-200 truncate">{formatIndustryType(item.jdIndustryType)}</div>
-                        </div>
-                      )}
-                      {item.jdLocation && (
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium mb-1">
-                            <MapPin className="w-3.5 h-3.5 flex-shrink-0" /> Location
-                          </div>
-                          <div className="text-sm font-semibold text-gray-800 dark:text-slate-200 truncate">{item.jdLocation}</div>
-                        </div>
-                      )}
-                      {(item.jdEmploymentType || item.jdRemoteType) && (
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium mb-1">
-                            <Clock className="w-3.5 h-3.5 flex-shrink-0" /> Employment
-                          </div>
-                          <div className="text-sm font-semibold text-gray-800 dark:text-slate-200 capitalize truncate">
-                            {[item.jdEmploymentType && formatEmploymentType(item.jdEmploymentType), item.jdRemoteType].filter(Boolean).join(' · ')}
-                          </div>
-                        </div>
-                      )}
-                      {item.jdPublishedAt && (
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium mb-1">
-                            <Calendar className="w-3.5 h-3.5 flex-shrink-0" /> Posted
-                          </div>
-                          <div className="text-sm font-semibold text-gray-800 dark:text-slate-200 truncate">{formatISTDate(item.jdPublishedAt)}</div>
-                        </div>
-                      )}
-                      {item.jdCreatedByName && (
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium mb-1">
-                            <User className="w-3.5 h-3.5 flex-shrink-0" /> Recruiter
-                          </div>
-                          <div className="text-sm font-semibold text-gray-800 dark:text-slate-200 truncate">{item.jdCreatedByName}</div>
-                        </div>
-                      )}
-                      <div className="min-w-0 sm:ml-auto">
-                        <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-wide text-gray-400 dark:text-slate-500 font-medium mb-1">
-                          <FileText className="w-3.5 h-3.5 flex-shrink-0" /> Evaluation
-                        </div>
-                        <div className="text-sm font-semibold text-brand-blue truncate">{item.totalScored} Scored</div>
-                      </div>
-                    </div>
-
-                    {/* Match tiles */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                      <div className="bg-green-50/60 dark:bg-green-950/20 border border-green-200/70 dark:border-green-900/40 rounded-lg p-2.5">
-                        <div className="flex items-start justify-between gap-2 mb-1.5">
-                          <div>
-                            <div className="text-xs font-semibold text-gray-800 dark:text-slate-200">Exact Match</div>
-                            <div className="text-[11px] text-gray-500 dark:text-slate-400">Fit score &ge; 90%</div>
-                          </div>
-                          <Award className="w-4 h-4 text-green-600 flex-shrink-0" />
-                        </div>
-                        <div className="text-xl text-green-700 dark:text-green-400 font-bold tracking-tight">{exactMatchCount}</div>
-                      </div>
-                      <div className="bg-brand-cyan/5 border border-brand-cyan/20 rounded-lg p-2.5">
-                        <div className="flex items-start justify-between gap-2 mb-1.5">
-                          <div>
-                            <div className="text-xs font-semibold text-gray-800 dark:text-slate-200">Partial Match</div>
-                            <div className="text-[11px] text-gray-500 dark:text-slate-400">Fit score 60% – 89%</div>
-                          </div>
-                          <CheckCircle className="w-4 h-4 text-brand-cyan flex-shrink-0" />
-                        </div>
-                        <div className="text-xl text-brand-cyan font-bold tracking-tight">{partialMatchCount}</div>
-                      </div>
-                      <div className="bg-brand-orange/5 border border-brand-orange/20 rounded-lg p-2.5">
-                        <div className="flex items-start justify-between gap-2 mb-1.5">
-                          <div>
-                            <div className="text-xs font-semibold text-gray-800 dark:text-slate-200">No Match</div>
-                            <div className="text-[11px] text-gray-500 dark:text-slate-400">Fit score &lt; 60%</div>
-                          </div>
-                          <XCircle className="w-4 h-4 text-brand-orange-deep flex-shrink-0" />
-                        </div>
-                        <div className="text-xl text-brand-orange-deep font-bold tracking-tight">{noMatchCount}</div>
-                      </div>
-                    </div>
-
-                    {hasVersionHistory && (
-                      <div className="flex justify-end">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); versionLineage.toggle(versionKey, item.jobId); }}
-                          aria-expanded={versionsExpanded}
-                          title={versionsExpanded ? 'Hide version history' : 'View version history'}
-                          className={`mt-3 px-3.5 py-1.5 rounded-lg transition-all text-xs font-medium flex items-center gap-1.5 justify-center cursor-pointer text-white ring-1 ring-white/10 ${
-                            versionsExpanded
-                              ? 'bg-brand-blue-2 shadow-md shadow-brand-blue/30'
-                              : 'bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 hover:shadow-md hover:shadow-brand-blue/30'
-                          }`}
-                        >
-                          {versionsExpanded ? 'Hide Versions' : 'View Versions'}
-                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
-                        </button>
-                      </div>
-                    )}
-                    {versionHistoryPanel}
-                  </div>
-                </div>
-              );
             })}
           </div>
           <ListPagination

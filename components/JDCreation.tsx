@@ -1,12 +1,18 @@
 'use client';
 
-import { Wand2, FileText, Copy, Download, Save, ChevronRight, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2 } from 'lucide-react';
+import { Wand2, FileText, Copy, Download, Save, ChevronRight, ChevronDown, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2 } from 'lucide-react';
 import UnsavedChangesModal from '@/components/UnsavedChangesModal';
 import SuccessAnimation from '@/components/ui/success-animation';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { Fragment, useState, useEffect, useRef, useMemo } from 'react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { useRouter } from 'next/navigation';
 import { useDrag, useDrop } from 'react-dnd';
 import { Job } from '@/lib/types/types';
@@ -857,6 +863,25 @@ const step2Fingerprint = (data: unknown, jobTitle: string): string =>
 
 // How many skills a category shows before the rest collapse behind "+N more".
 const SKILL_PREVIEW_LIMIT = 10;
+
+/**
+ * Where a phrase from the "possibly missed" panel can go.
+ *
+ * All FOUR lists, not just the two skills ones. The panel used to offer Must-Have and
+ * Nice-to-Have Skills only, and the phrases it reports are frequently not skills at all -
+ * "Team Player: Ability to work collaboratively within a team environment" is a
+ * requirement sentence, and a recruiter who wanted it in Additional Requirements had to
+ * retype it into the column's own Add box and dismiss the chip, which is the retyping the
+ * panel exists to save.
+ */
+const MISSED_TARGETS = [
+  { category: 'mustHaveSkills', listKey: 'must_have_skills', label: 'Must-Have Skills' },
+  { category: 'niceToHaveSkills', listKey: 'nice_to_have_skills', label: 'Nice-to-Have Skills' },
+  { category: 'mustHaveComments', listKey: 'must_have_comments', label: 'Must-Have Additional Requirements' },
+  { category: 'niceToHaveComments', listKey: 'nice_to_have_comments', label: 'Nice-to-Have Additional Requirements' },
+] as const;
+
+type MissedTarget = (typeof MISSED_TARGETS)[number]['category'];
 
 // How many JD lines the "possibly missed" panel shows before folding the rest away. The
 // panel is a warning, not a worklist: past a handful of lines it stops being read at all.
@@ -2392,10 +2417,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
    */
   const handleResolvePossiblyMissed = (
     phrase: string,
-    target: 'mustHaveSkills' | 'niceToHaveSkills' | null,
+    target: MissedTarget | null,
   ) => {
+    const destination = MISSED_TARGETS.find(t => t.category === target);
     setExtractedData(prev => {
-      if (!target) {
+      if (!target || !destination) {
         return {
           ...prev,
           mergeTrail: prev.mergeTrail.filter(
@@ -2408,19 +2434,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       );
       // The phrase is a fragment of the JD's sentence, so it starts lower-case; it is
       // becoming a list item now, and those read as lines.
-      const added = sentenceCaseForList(
-        phrase, target === 'mustHaveSkills' ? 'must_have_skills' : 'nice_to_have_skills',
-      );
+      const added = sentenceCaseForList(phrase, destination.listKey);
       return {
         ...prev,
         [target]: already ? prev[target] : [...(prev[target] || []), added],
       };
     });
     markExtractedDataModified();
-    if (target) {
+    if (destination) {
       toast.success({
-        title: 'Requirement added',
-        description: `"${phrase}" is now in ${target === 'mustHaveSkills' ? 'Must-Have' : 'Nice-to-Have'} Skills.`,
+        title: 'Added to the JD',
+        description: `"${phrase}" is now in ${destination.label}.`,
       });
     }
   };
@@ -7581,8 +7605,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                             {items.map((e) => {
                               const phrase = e.removed[0];
                               const suggestNice = e.list === 'nice_to_have_skills';
-                              const primary = suggestNice ? 'niceToHaveSkills' : 'mustHaveSkills';
-                              const secondary = suggestNice ? 'mustHaveSkills' : 'niceToHaveSkills';
+                              const primary: MissedTarget = suggestNice ? 'niceToHaveSkills' : 'mustHaveSkills';
                               return (
                                 <span
                                   key={phrase}
@@ -7593,28 +7616,45 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                                   </span>
                                   {!isRegenerating && (
                                     <>
-                                      {/* Short labels, full names for screen readers and
-                                          tooltips - the action must stay obvious without
-                                          spending a line of the panel on it. */}
-                                      <button
-                                        type="button"
-                                        onClick={() => handleResolvePossiblyMissed(phrase, primary)}
-                                        aria-label={`Add to ${suggestNice ? 'Nice-to-Have' : 'Must-Have'}`}
-                                        title={`Add to ${suggestNice ? 'Nice-to-Have' : 'Must-Have'} Skills`}
-                                        className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium text-brand-blue hover:bg-brand-blue/10"
-                                      >
-                                        <Plus className="w-3 h-3" />
-                                        {suggestNice ? 'Nice' : 'Must'}
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => handleResolvePossiblyMissed(phrase, secondary)}
-                                        aria-label={`Add to ${suggestNice ? 'Must-Have' : 'Nice-to-Have'}`}
-                                        title={`Add to ${suggestNice ? 'Must-Have' : 'Nice-to-Have'} Skills`}
-                                        className="rounded-full px-1.5 py-0.5 text-[11px] text-gray-500 hover:bg-gray-100 dark:hover:bg-slate-800 hover:text-gray-800"
-                                      >
-                                        {suggestNice ? 'Must' : 'Nice'}
-                                      </button>
+                                      {/* ONE menu, all four lists. Two buttons could only
+                                          reach the two skills lists, and these phrases are
+                                          as often requirement sentences as skill names -
+                                          "Team Player: Ability to work collaboratively
+                                          within a team environment" belongs in Additional
+                                          Requirements, and there was no way to put it
+                                          there without retyping it. */}
+                                      <DropdownMenu>
+                                        <DropdownMenuTrigger asChild>
+                                          <button
+                                            type="button"
+                                            aria-label={`Add "${phrase}" to a list`}
+                                            title="Choose where this belongs"
+                                            className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-medium text-brand-blue hover:bg-brand-blue/10"
+                                          >
+                                            <Plus className="w-3 h-3" />
+                                            Add
+                                            <ChevronDown className="w-3 h-3" />
+                                          </button>
+                                        </DropdownMenuTrigger>
+                                        <DropdownMenuContent align="start" className="w-64">
+                                          {MISSED_TARGETS.map(t => (
+                                            <DropdownMenuItem
+                                              key={t.category}
+                                              onClick={() => handleResolvePossiblyMissed(phrase, t.category)}
+                                              className="text-xs"
+                                            >
+                                              {t.label}
+                                              {/* The JD said where it read this - under a
+                                                  "preferred" heading or not - so the
+                                                  likely list is marked rather than
+                                                  chosen for the recruiter. */}
+                                              {t.category === primary && (
+                                                <span className="ml-auto pl-2 text-[10px] text-gray-400">suggested</span>
+                                              )}
+                                            </DropdownMenuItem>
+                                          ))}
+                                        </DropdownMenuContent>
+                                      </DropdownMenu>
                                       <button
                                         type="button"
                                         onClick={() => handleResolvePossiblyMissed(phrase, null)}
