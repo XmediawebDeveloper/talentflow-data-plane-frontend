@@ -1646,31 +1646,6 @@ export default function AIInterview() {
           </div>
         </div>
 
-        {/* AI-Powered Interviews Banner */}
-        {/* `dark:bg-none` drops the gradient outright in dark mode — its
-            `via-white` stop painted a near-white band across the banner. A flat
-            slate surface with a slightly stronger accent border reads the same
-            way against the dark page. */}
-        <div className="relative overflow-hidden rounded-xl sm:rounded-2xl border border-brand-blue/15 dark:border-brand-blue/25 ring-1 ring-brand-blue/10 dark:ring-brand-blue/15 bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 dark:bg-none dark:bg-slate-900 p-3 sm:p-5 mb-5 sm:mb-8 shadow-sm shadow-brand-blue/10">
-          <div className="absolute -right-12 -top-12 w-40 h-40 rounded-full bg-brand-blue/5 blur-2xl" aria-hidden />
-          <div className="relative flex items-start gap-3 sm:gap-4">
-            <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-lg sm:rounded-xl bg-brand-blue flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-              <Brain className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2 mb-1 flex-wrap">
-                <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">AI-Powered Interviews</h3>
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300 text-[10px] font-semibold ring-1 ring-green-200 dark:ring-green-500/25">
-                  LIVE
-                </span>
-              </div>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 leading-relaxed">
-                Create multi-round AI interview configurations linked to job descriptions. AI conducts HR, Technical, and Behavioral rounds with auto-suggested topics. Track candidate performance, round-wise scores, and weighted evaluations.
-              </p>
-            </div>
-          </div>
-        </div>
-
         {/* Stats Cards — clicking a card drills into the list with the matching tab applied */}
         <StatsCardGrid className="mb-5 sm:mb-8">
           {[

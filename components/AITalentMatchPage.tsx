@@ -43,6 +43,7 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
+import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import JDVersionHistory from '@/components/JDVersionHistory';
 
@@ -675,6 +676,10 @@ export default function AITalentMatchPage({
   } = candidateSearch.filters;
   const [candidateSortBy, setCandidateSortBy] = useState<'score' | 'name' | 'jobs' | 'date'>('jobs');
   const [candidateSortOrder, setCandidateSortOrder] = useState<'asc' | 'desc'>('desc');
+  // Shared between "View by Candidates" and "All Resumes" (incl. its rating-band
+  // filters) — only one of those views is ever on screen at a time, so one flag
+  // is enough and a toggle made in either view carries over to the other.
+  const [matchDisplayMode, setMatchDisplayMode] = useState<ListDisplayMode>('list');
 
   useEffect(() => {
     setCandidateCurrentPage(1);
@@ -2445,6 +2450,8 @@ export default function AITalentMatchPage({
                     {band.label}
                   </button>
                 ))}
+
+                <ListViewToggle value={matchDisplayMode} onChange={setMatchDisplayMode} className="ml-auto" />
               </div>
 
               {showCandidateFilters && (
@@ -2611,6 +2618,58 @@ export default function AITalentMatchPage({
                     Clear filters
                   </button>
                 )}
+              </div>
+            ) : matchDisplayMode === 'grid' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {paginatedCandidateRows.map((row) => {
+                  const avatar = avatarColorFor(row.key);
+                  const sortedJobs = [...row.jobs].sort((a, b) => new Date(b.matchedAt).getTime() - new Date(a.matchedAt).getTime());
+                  const latestJob = sortedJobs[0];
+                  return (
+                    <button
+                      key={row.key}
+                      onClick={() => openCandidateResume(row, sortedCandidateRows)}
+                      className="text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${avatar.bg} ${avatar.text}`}>
+                          {initialsFor(row.name || 'Candidate')}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{row.name || 'Candidate'}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{row.email || row.phone || '—'}</p>
+                        </div>
+                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(latestJob.score)}`}>
+                          {toMatchRating(latestJob.score)}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-gray-600 dark:text-slate-400 truncate" title={latestJob.jobTitle}>
+                        {latestJob.jobTitle}
+                      </p>
+
+                      <span className="inline-flex items-center self-start px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30 whitespace-nowrap">
+                        {row.jobs.length} Job {row.jobs.length === 1 ? 'Version' : 'Versions'}
+                      </span>
+
+                      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-500 pt-2 border-t border-gray-100 dark:border-slate-800">
+                        <span>{formatISTDate(latestJob.matchedAt.toISOString())}</span>
+                        <div
+                          onClick={(e) => { e.stopPropagation(); handleAttachmentsClick(row.best); }}
+                          className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
+                        >
+                          <Paperclip className="w-3.5 h-3.5" />
+                          Attachments
+                        </div>
+                      </div>
+
+                      <div className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors">
+                        <Eye className="w-3.5 h-3.5" />
+                        View Resume
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             ) : (
               /* Grouped table, matching Resume Scoring's grouped "View by
@@ -3055,6 +3114,8 @@ export default function AITalentMatchPage({
                   </button>
                 ))}
 
+                <ListViewToggle value={matchDisplayMode} onChange={setMatchDisplayMode} className={selectedAllResumeEntries.length > 0 ? '' : 'ml-auto'} />
+
                 {selectedAllResumeEntries.length > 0 && (
                   <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
                     {canRunScoring && (
@@ -3257,6 +3318,81 @@ export default function AITalentMatchPage({
                     Clear filters
                   </button>
                 )}
+              </div>
+            ) : matchDisplayMode === 'grid' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {paginatedAllResumeRows.map(({ key, row, job }) => {
+                  const scored = row.resumeId ? allScoredResumeIds.has(row.resumeId) : false;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => openCandidateResume(row, sortedAllResumeRows.map(entry => entry.row))}
+                      className="text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-xs text-gray-700 dark:text-slate-300 font-medium flex-shrink-0">
+                          {(row.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{row.name || 'Unknown'}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{row.email || '—'}</p>
+                        </div>
+                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(job.score)}`}>
+                          {toMatchRating(job.score)}
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={(e) => { e.stopPropagation(); openCandidateMatch(job.historyId); }}
+                        className="text-xs text-gray-600 dark:text-slate-400 hover:text-brand-blue hover:underline truncate text-left"
+                        title={`Open ${job.jobTitle} match`}
+                      >
+                        {job.jobTitle}
+                      </button>
+
+                      <div className="flex flex-wrap gap-1">
+                        <SkillsList
+                          skills={row.best.skills}
+                          chipClassName="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] bg-brand-blue/10 text-brand-blue border border-brand-blue/20 whitespace-nowrap"
+                          moreClassName="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] text-brand-blue font-medium whitespace-nowrap hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {scored ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-medium">
+                            <CheckCircle className="w-3 h-3" />
+                            Scored
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded-full text-[10px] font-medium">
+                            <XCircle className="w-3 h-3" />
+                            Not Scored
+                          </span>
+                        )}
+                        {row.location && (
+                          <span className="text-[10px] text-gray-500 dark:text-slate-500 truncate">{row.location}</span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-500 pt-2 border-t border-gray-100 dark:border-slate-800">
+                        <span>{row.experience || '—'}</span>
+                        <div
+                          onClick={(e) => { e.stopPropagation(); handleAttachmentsClick(row.best); }}
+                          className="inline-flex items-center gap-1 hover:text-brand-blue transition-colors"
+                        >
+                          <Paperclip className="w-3.5 h-3.5" />
+                          {row.best.attachmentCount || 1}
+                        </div>
+                      </div>
+
+                      <div className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors">
+                        <Eye className="w-3.5 h-3.5" />
+                        View Details
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             ) : (
               <>
@@ -4120,56 +4256,33 @@ export default function AITalentMatchPage({
           { label: 'Below 7', value: noMatchCount, barClass: 'bg-red-500', textClass: 'text-red-600' },
         ];
 
+        // Single action: jump straight to this version's match results — no
+        // dropdown, so the Action column reads the same one-click way as the
+        // rest of the app's history tables.
         const renderVersionActions = (session: AIMatchSessionVersion['session']) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label="Actions"
-                title="Actions"
-                className="p-1.5 bg-white dark:bg-slate-900 rounded-md border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-              >
-                <MoreVertical className="w-3.5 h-3.5 text-gray-600 dark:text-slate-300" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-              <DropdownMenuItem
-                className={actionsMenuItemClass}
-                onSelect={() => {
-                  userChangedView.current = true; // Prevent useEffect from resetting view
-                  const targetJobId = session.jd_id || modalItem.jobId;
-                  const targetJob = jobs.find(j => j.id === targetJobId);
-                  openMatchResults({
-                    id: session.id,
-                    jobId: targetJobId,
-                    jobTitle: targetJob?.title || modalItem.jobTitle,
-                    matchedAt: new Date(session.created_at),
-                    totalMatches: session.total_matches,
-                    matchedCandidates: [],
-                  }, targetJobId);
-                  updateUrlParams({ jdId: targetJobId, view: 'results' });
-                  setMatchHistoryModal(null);
-                }}
-              >
-                <Eye className="w-4 h-4 text-menu-icon-view" />
-                <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className={actionsMenuItemClass}
-                onSelect={() => {
-                  if (!canRunAiMatch) {
-                    toast.error('You do not have permission to run AI matching operations');
-                    return;
-                  }
-                  handleRunAIMatch(session.jd_id || modalItem.jobId);
-                  setMatchHistoryModal(null);
-                }}
-              >
-                <Sparkles className="w-4 h-4 text-menu-icon-ai" />
-                <span className={MENU_ITEM_SCALE_CLASS}>Run AI Match</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <button
+            type="button"
+            onClick={() => {
+              userChangedView.current = true; // Prevent useEffect from resetting view
+              const targetJobId = session.jd_id || modalItem.jobId;
+              const targetJob = jobs.find(j => j.id === targetJobId);
+              openMatchResults({
+                id: session.id,
+                jobId: targetJobId,
+                jobTitle: targetJob?.title || modalItem.jobTitle,
+                matchedAt: new Date(session.created_at),
+                totalMatches: session.total_matches,
+                matchedCandidates: [],
+              }, targetJobId);
+              updateUrlParams({ jdId: targetJobId, view: 'results' });
+              setMatchHistoryModal(null);
+            }}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
+            aria-label="View match results"
+            title="View match results"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
         );
 
         return (
