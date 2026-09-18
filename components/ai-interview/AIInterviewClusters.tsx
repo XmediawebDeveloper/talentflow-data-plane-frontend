@@ -2666,7 +2666,7 @@ export default function AIInterviewClusters() {
 
   return (
     <DndProvider backend={HTML5Backend}>
-      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+      <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 pb-24 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
