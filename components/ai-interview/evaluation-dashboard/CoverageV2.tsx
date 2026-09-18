@@ -9,15 +9,15 @@ interface Props {
 }
 
 function priorityTagColor(priority: 'High' | 'Medium' | 'Low') {
-  if (priority === 'High')   return { tag: 'P1', bg: '#4F46E5' };
-  if (priority === 'Medium') return { tag: 'P2', bg: '#6366F1' };
-  return                          { tag: 'P3', bg: '#A78BFA' };
+  if (priority === 'High')   return { tag: 'P1', bg: 'var(--raw-4f46e5)' };
+  if (priority === 'Medium') return { tag: 'P2', bg: 'var(--raw-6366f1)' };
+  return                          { tag: 'P3', bg: 'var(--raw-a78bfa)' };
 }
 
 function niceToHaveTagColor(priority: 'High' | 'Medium' | 'Low') {
-  if (priority === 'High')   return { tag: 'P1', bg: '#F59E0B' };
-  if (priority === 'Medium') return { tag: 'P2', bg: '#FBBF24' };
-  return                          { tag: 'P3', bg: '#FCD34D' };
+  if (priority === 'High')   return { tag: 'P1', bg: 'var(--raw-f59e0b)' };
+  if (priority === 'Medium') return { tag: 'P2', bg: 'var(--raw-fbbf24)' };
+  return                          { tag: 'P3', bg: 'var(--raw-fcd34d)' };
 }
 
 /** "Covered" = the question probed the skill. This is the Assessment Coverage

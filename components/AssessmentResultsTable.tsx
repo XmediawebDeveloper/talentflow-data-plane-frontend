@@ -6,6 +6,7 @@ import { assessmentService } from '@/lib/services/assessmentService';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import TabEmptyState from '@/components/ui/tab-empty-state';
+import Pagination from '@/components/Pagination';
 import { formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 
@@ -97,6 +98,9 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
     technical?: 'all' | '50-70' | '70-90' | '90+';
     coding?: 'all' | '50-70' | '70-90' | '90+';
   }>({});
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   // Detect if any results have technical/coding rounds
   const hasTechnicalRound = results.some(r => r.roundScores.some(rs => rs.roundName === 'Technical'));
@@ -273,6 +277,19 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
     return matchesSearch && matchesPassFail && matchesStatus && matchesTech && matchesCoding;
   });
+
+  // Reset to page 1 whenever the filtered set changes shape, so a filter
+  // narrowing the list never leaves the view stranded on a now-empty page.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, filterPassFail, statusFilter, roundFilters]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredResults.length / itemsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedResults = filteredResults.slice(
+    (safeCurrentPage - 1) * itemsPerPage,
+    safeCurrentPage * itemsPerPage
+  );
 
   const handleSelectAll = () => {
     if (selectedResults.length === filteredResults.length) {
@@ -788,7 +805,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   </td>
                 </tr>
               ) : (
-                filteredResults.map((result, index) => (
+                paginatedResults.map((result, index) => (
                   <React.Fragment key={result.id}>
                     <tr
                       data-row-selected={selectedResults.includes(result.id)}
@@ -1143,7 +1160,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             </div>
           </div>
         ) : (
-          filteredResults.map((result) => (
+          paginatedResults.map((result) => (
             <div key={result.id} className="p-4">
               <div className="flex items-start gap-3">
                 <button
@@ -1319,6 +1336,17 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             </button>
           </div>
         </div>
+      )}
+
+      {filteredResults.length > 0 && (
+        <Pagination
+          currentPage={safeCurrentPage}
+          totalPages={totalPages}
+          totalItems={filteredResults.length}
+          itemsPerPage={itemsPerPage}
+          onPageChange={setCurrentPage}
+          onItemsPerPageChange={(size) => { setItemsPerPage(size); setCurrentPage(1); }}
+        />
       )}
 
       {/* Export Format & Scope Selection Modal */}

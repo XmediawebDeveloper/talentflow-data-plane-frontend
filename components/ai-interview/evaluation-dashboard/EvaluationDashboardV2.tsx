@@ -71,9 +71,9 @@ function trendIcon(score: number) {
 }
 
 function scoreColor(score: number) {
-  if (score >= 8.0) return '#10B981';
-  if (score >= MHS_THRESHOLD) return '#F59E0B';
-  return '#EF4444';
+  if (score >= 8.0) return 'var(--raw-10b981)';
+  if (score >= MHS_THRESHOLD) return 'var(--raw-f59e0b)';
+  return 'var(--raw-ef4444)';
 }
 
 export function EvaluationDashboardV2({ data }: Props) {
@@ -1414,9 +1414,9 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
  * candidate data. */
 export function FormulaView() {
   const priorityWeights = [
-    { priority: 'Priority 1 (P1)', weight: 10, color: '#4F46E5', description: 'Must-Have / Highest Priority' },
-    { priority: 'Priority 2 (P2)', weight: 7,  color: '#6366F1', description: 'Important'                  },
-    { priority: 'Priority 3 (P3)', weight: 4,  color: '#A78BFA', description: 'Nice-to-Have'               },
+    { priority: 'Priority 1 (P1)', weight: 10, color: 'var(--raw-4f46e5)', description: 'Must-Have / Highest Priority' },
+    { priority: 'Priority 2 (P2)', weight: 7,  color: 'var(--raw-6366f1)', description: 'Important'                  },
+    { priority: 'Priority 3 (P3)', weight: 4,  color: 'var(--raw-a78bfa)', description: 'Nice-to-Have'               },
   ];
 
   // Doc §5 worked scenarios — verbatim from the spec
@@ -1443,7 +1443,7 @@ export function FormulaView() {
       totalWeight: 27,
       questionScore: 10.0,
       result: 'PASS',
-      color: '#10B981',
+      color: 'var(--raw-10b981)',
       insight:
         'Perfect score demonstrates exceptional mastery across all priority levels. ' +
         'If repeated across all 10 Must-Have questions, the Must-Have Section Score becomes 10.0 — Clear Pass.',
@@ -1459,7 +1459,7 @@ export function FormulaView() {
       totalWeight: 14,
       questionScore: 5.0,
       result: 'FAIL',
-      color: '#EF4444',
+      color: 'var(--raw-ef4444)',
       insight:
         'Even a perfect P3 cannot overcome a weak P1 — Priority 1 skills carry the most weight in the formula.',
     },
@@ -1474,7 +1474,7 @@ export function FormulaView() {
       totalWeight: 17,
       questionScore: 6.76,
       result: 'BORDERLINE',
-      color: '#F59E0B',
+      color: 'var(--raw-f59e0b)',
       insight:
         'Sits just below the 6.0 threshold. A single question like this can swing Section Score below Pass.',
     },

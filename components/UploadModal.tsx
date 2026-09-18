@@ -124,7 +124,7 @@ function FileFormatIcon({ color, accent, label }: { color: string; accent: strin
         fontSize="6.5"
         fontWeight="700"
         fontFamily="Arial, sans-serif"
-        fill="#ffffff"
+        fill="var(--raw-ffffff)"
       >
         {label}
       </text>
@@ -1028,9 +1028,9 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                   className="inline-flex items-center gap-1.5 rounded-full border border-brand-cyan/20 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                 >
                   {format === 'PDF' ? (
-                    <FileFormatIcon color="#dc2626" accent="#f87171" label="PDF" />
+                    <FileFormatIcon color="var(--raw-dc2626)" accent="var(--raw-f87171)" label="PDF" />
                   ) : (
-                    <FileFormatIcon color="#2563eb" accent="#93c5fd" label="W" />
+                    <FileFormatIcon color="var(--raw-2563eb)" accent="var(--raw-93c5fd)" label="W" />
                   )}
                   {format}
                 </span>

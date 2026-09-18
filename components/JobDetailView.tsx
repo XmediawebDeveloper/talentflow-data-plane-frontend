@@ -25,6 +25,7 @@ import InviteToAssessmentModal from './InviteToAssessmentModal';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import SelectSourceModal from './SelectSourceModal';
 import AssessmentResultsTable from './AssessmentResultsTable';
+import Pagination from './Pagination';
 import JDVersionHistoryModal from './JDVersionHistoryModal';
 import ResumeDetailView from './ResumeDetailView';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
@@ -4625,6 +4626,8 @@ function AIMatchTabContent({
   const [filterExperienceMin, setFilterExperienceMin] = useState<number | ''>('');
   const [filterExperienceMax, setFilterExperienceMax] = useState<number | ''>('');
   const [sortBy, setSortBy] = useState<'rank' | 'name' | 'score' | 'experience'>('rank');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
 
   // Attachments column → Version History popup. Same fetch-and-fallback
   // pattern as the standalone AI Talent Match page's handleAttachmentsClick:
@@ -4712,6 +4715,19 @@ function AIMatchTabContent({
     }
     return sorted;
   }, [candidates, searchQuery, filterThreshold, filterPhone, filterLocation, filterExperienceMin, filterExperienceMax, sortBy]);
+
+  // Reset to page 1 whenever the filtered/sorted set changes shape, so a
+  // narrowing filter never leaves the view stranded on a now-empty page.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterThreshold, filterPhone, filterLocation, filterExperienceMin, filterExperienceMax, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredCandidates.length / itemsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedCandidates = filteredCandidates.slice(
+    (safeCurrentPage - 1) * itemsPerPage,
+    safeCurrentPage * itemsPerPage
+  );
 
   const toggleSelect = (resumeId: string) => {
     setSelectedIds((prev) => {
@@ -4895,7 +4911,7 @@ function AIMatchTabContent({
                   </td>
                 </tr>
               ) : (
-                filteredCandidates.map((candidate, idx) => {
+                paginatedCandidates.map((candidate, idx) => {
                   const isScored = scoredResumeIds.has(candidate.resumeId);
                   const score = candidate.matchScore;
                   const scoreColor = score >= 70 ? 'bg-green-500' : score >= 45 ? 'bg-yellow-500' : 'bg-red-400';
@@ -4999,6 +5015,16 @@ function AIMatchTabContent({
             </tbody>
           </table>
         </div>
+        {filteredCandidates.length > 0 && (
+          <Pagination
+            currentPage={safeCurrentPage}
+            totalPages={totalPages}
+            totalItems={filteredCandidates.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={(size) => { setItemsPerPage(size); setCurrentPage(1); }}
+          />
+        )}
       </div>
 
       {/* Version History popup — same component and behavior as the

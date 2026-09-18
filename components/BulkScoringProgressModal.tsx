@@ -1176,9 +1176,9 @@ export default function BulkScoringProgressModal({
                 <path fill="currentColor" className="opacity-70" d="M74 62h34l9 11h49a5 5 0 0 1 5 5v10H69V67a5 5 0 0 1 5-5Z" />
                 <rect x="78" y="78" width="90" height="54" rx="8" fill="currentColor" />
                 {/* document badge on the folder */}
-                <circle cx="123" cy="105" r="15" fill="#fff" className="opacity-30" />
+                <circle cx="123" cy="105" r="15" fill="var(--raw-ffffff)" className="opacity-30" />
                 <path
-                  fill="#fff"
+                  fill="var(--raw-ffffff)"
                   d="M117 97h8l5 5v11a2 2 0 0 1-2 2h-11a2 2 0 0 1-2-2V99a2 2 0 0 1 2-2Zm3 8h8v2h-8zm0 5h8v2h-8z"
                 />
                 {/* ground shadow */}
@@ -1203,7 +1203,7 @@ export default function BulkScoringProgressModal({
               {anyFiltersApplied && (
                 <button
                   onClick={clearAllFilters}
-                  className="mt-5 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-[#2563eb] hover:bg-[#1d4ed8] text-white font-medium text-sm shadow-sm shadow-[#2563eb]/25 ring-1 ring-white/10 hover:shadow-md transition-all"
+                  className="mt-5 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-[var(--raw-2563eb)] hover:bg-[var(--raw-1d4ed8)] text-white font-medium text-sm shadow-sm shadow-[var(--raw-2563eb)]/25 ring-1 ring-white/10 hover:shadow-md transition-all"
                 >
                   <RefreshCw className="w-4 h-4" />
                   Clear Filters

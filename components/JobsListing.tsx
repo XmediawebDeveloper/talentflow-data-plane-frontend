@@ -1,7 +1,6 @@
 'use client'
 
-import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { Plus, Search, MapPin, Calendar, Target, Eye, MoreVertical, Briefcase, Users, User, TrendingUp, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, Building2, DollarSign, AlertCircle, ArrowUpRight, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList, Layers } from 'lucide-react';
+import { Plus, Search, MapPin, Eye, MoreVertical, Briefcase, Users, Clock, CheckCircle2, FileText, Sparkles, ChevronDown, Settings, Archive, XCircle, AlertCircle, ArrowUpRight, Edit, Send, Ban, RefreshCw, ArrowUpDown, CheckSquare, Square, Trash2, Download, ChevronLeft, ChevronRight, X, Brain, ClipboardList } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
@@ -11,16 +10,11 @@ import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
-import { formatISTDate } from '@/lib/utils/dateUtils';
 import {
   formatEmploymentType,
   formatIndustryType,
-  formatLastUpdated,
-  getCreationMethodConfig,
-  getDisplayStatus,
   matchesStatusFilter,
   getPublishedJobs,
-  getStatusConfig,
   collapseToLatestVersions,
   groupByLineage,
   sortJobs,
@@ -183,7 +177,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialStatusFilter]);
 
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   /* Version history — expand state, lineage, per-version JD records and
      applicant counts, all from the shared hook so the Apply to Job dialog opens
@@ -270,7 +263,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   useListStatePersistence(
     'job-openings-list',
     {
-      searchQuery, statusFilter, creationMethodFilter, locationFilter, viewMode,
+      searchQuery, statusFilter, creationMethodFilter, locationFilter,
       departmentFilter, industryFilter, experienceFilter, employmentTypeFilter,
       applicantsFilter, salaryRangeFilter, datePostedFromFilter, datePostedToFilter,
       sortBy, sortOrder, currentPage, itemsPerPage, pageView,
@@ -280,7 +273,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
       // status or page here is what hid a just-published JD behind the previous
       // narrowed view. Everything else (sort, density, column prefs) still restores.
       if (typeof s.searchQuery === 'string') search.setQuery(forceListView ? '' : s.searchQuery);
-      if (s.viewMode === 'grid' || s.viewMode === 'list') setViewMode(s.viewMode);
       // Restore the two-step view too. Without this, coming back from a
       // job-details page always remounted on 'cards' — the filters and page
       // were restored but the whole list stayed hidden behind the stat tiles,
@@ -707,15 +699,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
     setCurrentPage(1);
   }, [searchQuery, statusFilter, creationMethodFilter, locationFilter, departmentFilter, industryFilter, experienceFilter, employmentTypeFilter, applicantsFilter, datePostedFromFilter, datePostedToFilter, sortBy, sortOrder]);
 
-  // Update items per page based on view mode. Also skipped on mount, so it
-  // can't overwrite a restored page size / page number either.
-  const skipViewModeResetRef = useRef(true);
-  useEffect(() => {
-    if (skipViewModeResetRef.current) { skipViewModeResetRef.current = false; return; }
-    setItemsPerPage(10);
-    setCurrentPage(1); // Reset to first page when view mode changes
-  }, [viewMode]);
-
   const handlePageChange = (page: number) => {
     setCurrentPage(page);
     window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -817,16 +800,14 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
         {/* Consolidated toolbar: Search + Filters + Tabs + Select all + Sort */}
         <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
-          {/* Row 1: Search + View toggle + More Filters — the canonical toolbar,
-              now shared via <ListToolbar> so other list pages match this one. */}
+          {/* Row 1: Search + More Filters — the canonical toolbar, now shared
+              via <ListToolbar> so other list pages match this one. */}
           <ListToolbar
             searchValue={search.query}
             onSearchChange={search.setQuery}
             // The hook debounces into `appliedQuery`, so keystrokes pass through.
             searchDebounceMs={0}
             searchPlaceholder="Search jobs..."
-            viewMode={viewMode}
-            onViewModeChange={setViewMode}
             onToggleFilters={() => setShowAdvancedFilters(!showAdvancedFilters)}
             filtersOpen={showAdvancedFilters}
             activeFilterCount={activeFiltersCount}
@@ -1135,316 +1116,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
         {/* Jobs Grid/List */}
         {currentJobs.length > 0 ? (
-          viewMode === 'grid' ? (
-            // Grid View
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {currentJobs.map(job => {
-                const displayStatus = getDisplayStatus(job.status, job.currentVersion);
-                const statusConfig = getStatusConfig(displayStatus);
-                const creationMethodConfig = getCreationMethodConfig(job.creation_method);
-
-                return (
-                  <div
-                    key={job.id}
-                    className={`relative bg-white rounded-xl border transition-[transform,box-shadow,border-color] duration-150 cursor-pointer h-full flex flex-col ${activeDropdown === job.id ? 'z-30' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
-                    onClick={() => job.status.toLowerCase() === 'draft' && onEditJob ? onEditJob(job) : onViewJob(job)}
-                  >
-                    {/* Card Header */}
-                    <div className="p-4 border-b border-gray-100">
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-2">
-                          {/* Individual Select */}
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleSelectJob(job.id); }}
-                            className="flex-shrink-0"
-                            title={selectedJobs.has(job.id) ? 'Deselect' : 'Select'}
-                          >
-                            {selectedJobs.has(job.id)
-                              ? <CheckSquare className="w-4 h-4 text-brand-blue" />
-                              : <Square className="w-4 h-4 text-gray-400 hover:text-brand-blue" />
-                            }
-                          </button>
-                          <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-                            <Briefcase className="h-4 w-4 text-brand-blue" />
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                          <span className={`px-2 py-0.5 rounded-full text-xs ${statusConfig.bg} ${statusConfig.text} border ${statusConfig.border} flex items-center gap-1.5`}>
-                            <div className={`w-1.5 h-1.5 rounded-full ${statusConfig.dot}`}></div>
-                            {displayStatus}
-                          </span>
-                          <span className={`px-2 py-0.5 rounded-full text-xs ${creationMethodConfig.bg} ${creationMethodConfig.text} border ${creationMethodConfig.border} flex items-center gap-1.5`}>
-                            <div className={`w-1.5 h-1.5 rounded-full ${creationMethodConfig.dot}`}></div>
-                            {creationMethodConfig.label}
-                          </span>
-                          {job.versionNumber && job.versionNumber >= 1 && (
-                            <span className="px-2 py-0.5 rounded-full text-xs bg-gray-50 text-gray-700 border border-gray-200 flex items-center gap-1.5">
-                              <div className="w-1.5 h-1.5 rounded-full bg-gray-500"></div>
-                              v{job.versionNumber}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2 mb-2">
-                        {job.job_id && (
-                          <JobIdBadge>{job.job_id}</JobIdBadge>
-                        )}
-                        {/* Two lines on a card, one line in a row - a card
-                            gives the name its own width, a row shares it. Full
-                            name on hover either way. */}
-                        <h3
-                          className="text-sm sm:text-base font-medium text-gray-900 line-clamp-2 min-w-0"
-                          title={job.title}
-                        >
-                          {job.title}
-                        </h3>
-                      </div>
-                    </div>
-
-                    {/* Card Body */}
-                    <div className="p-4 flex-1 flex flex-col">
-                      <div className="flex-1">
-                      <div className="space-y-2 mb-4">
-                        {job.department && (
-                          <div className="flex items-center justify-between gap-2 text-sm">
-                            <span className="flex items-center gap-2 text-gray-500">
-                              <Layers className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              Department
-                            </span>
-                            <span className="font-medium text-gray-800 truncate">{job.department}</span>
-                          </div>
-                        )}
-                        <div className="flex items-center justify-between gap-2 text-sm">
-                          <span className="flex items-center gap-2 text-gray-500">
-                            <Briefcase className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                            Employment Type
-                          </span>
-                          <span className="font-medium text-gray-800 truncate">{formatEmploymentType(job.employmentType)}</span>
-                        </div>
-                        {(job as any).workMode && (
-                          <div className="flex items-center justify-between gap-2 text-sm">
-                            <span className="flex items-center gap-2 text-gray-500">
-                              <Building2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              Workplace
-                            </span>
-                            <span className="font-medium text-gray-800 capitalize truncate">{(job as any).workMode}</span>
-                          </div>
-                        )}
-                        {job.experience && (
-                          <div className="flex items-center justify-between gap-2 text-sm">
-                            <span className="flex items-center gap-2 text-gray-500">
-                              <TrendingUp className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              Experience
-                            </span>
-                            <span className="font-medium text-gray-800">{job.experience}</span>
-                          </div>
-                        )}
-                        {job.postedDate && (
-                          <div className="flex items-center justify-between gap-2 text-sm">
-                            <span className="flex items-center gap-2 text-gray-500">
-                              <Calendar className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              Posted Date
-                            </span>
-                            <span className="font-medium text-gray-800">{formatISTDate(job.postedDate)}</span>
-                          </div>
-                        )}
-                        {job.postedBy && (
-                          <div className="flex items-center justify-between gap-2 text-sm">
-                            <span className="flex items-center gap-2 text-gray-500">
-                              <User className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                              Created By
-                            </span>
-                            <span className="font-medium text-gray-800 truncate">{job.postedBy}</span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Salary & Skills Info */}
-                      <div className="space-y-2 mb-4">
-                        {(job as any).salary && (
-                          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg">
-                            <DollarSign className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm text-gray-700">{(job as any).salary}</span>
-                          </div>
-                        )}
-                        {((job as any).mustHaveSkills?.length > 0 || (job as any).niceToHaveSkills?.length > 0) && (
-                          <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg">
-                            <Target className="w-4 h-4 text-gray-500" />
-                            <span className="text-sm text-gray-700">
-                              {(job as any).mustHaveSkills?.length || 0} required + {(job as any).niceToHaveSkills?.length || 0} preferred skills
-                            </span>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Updated + Applicants footer line */}
-                      <div className="flex items-center justify-between gap-2 text-xs text-gray-500 mb-4">
-                        <span className="truncate">
-                          {job.updated_at ? `Updated ${formatLastUpdated(job.updated_at)}` : ''}
-                        </span>
-                        <span className="font-medium text-gray-600 flex-shrink-0">
-                          {job.applicants} {job.applicants === 1 ? 'applicant' : 'applicants'}
-                        </span>
-                      </div>
-                      </div>
-
-                      {/* Actions */}
-                      <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-2">
-                        {/* Edit Button - icon only (hidden for Disabled JDs) */}
-                        {onEditJob && !['disabled', 'archived'].includes(job.status.toLowerCase()) && (
-                          <button
-                            onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
-                            className="flex-shrink-0 p-2.5 bg-white text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
-                            aria-label="Edit" title="Edit"
-                          >
-                            <Edit className="w-4 h-4" />
-                          </button>
-                        )}
-
-                        {/* Three-dot Menu - Grid View */}
-                        <div className="relative flex-shrink-0">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveDropdown(activeDropdown === job.id ? null : job.id);
-                            }}
-                            className="p-2.5 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-all"
-                          >
-                            <MoreVertical className="w-4 h-4 text-gray-600" />
-                          </button>
-                          {activeDropdown === job.id && (
-                            <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-40">
-                              {/* View Applicants - Hide for Draft */}
-                              {job.status.toLowerCase() !== 'draft' && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    (onViewApplicants || onViewJob)(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                                >
-                                  <Users className="w-4 h-4 text-menu-icon-secondary" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>View Applicants</span>
-                                </button>
-                              )}
-                              {/* Quick Actions — mirror the Job Details "Quick Actions" panel */}
-                              {onAIMatch && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setActiveDropdown(null);
-                                    onAIMatch(job);
-                                  }}
-                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                                >
-                                  <Brain className="w-4 h-4 text-menu-icon-ai" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>AI Talent Match</span>
-                                </button>
-                              )}
-                              {onScoreResumes && !['draft', 'disabled', 'archived'].includes(job.status.toLowerCase()) && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onScoreResumes(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                                >
-                                  <ClipboardList className="w-4 h-4 text-menu-icon-score" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
-                                </button>
-                              )}
-                              {/* Disable Job for Published */}
-                              {job.status === 'Published' && onDisableJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    requestDisableJob(job);
-                                  }}
-                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-orange-700 hover:bg-orange-50"
-                                >
-                                  <Ban className="w-4 h-4" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Disable Job</span>
-                                </button>
-                              )}
-                              {/* Re-enable JD for Disabled */}
-                              {job.status === 'Disabled' && onRepublishJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onRepublishJob(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-green-700 hover:bg-green-50"
-                                >
-                                  <CheckCircle2 className="w-4 h-4" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
-                                </button>
-                              )}
-                              {/* Archive Job */}
-                              {job.status !== 'Archived' && onArchiveJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onArchiveJob(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50"
-                                >
-                                  <Archive className="w-4 h-4 text-menu-icon-archive" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Archive Job</span>
-                                </button>
-                              )}
-                              {/* Unarchive Job */}
-                              {job.status === 'Archived' && onUnarchiveJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onUnarchiveJob(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-green-700 hover:bg-green-50"
-                                >
-                                  <RefreshCw className="w-4 h-4" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Unarchive Job</span>
-                                </button>
-                              )}
-                              {/* Delete Job */}
-                              {onDeleteJob && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    onDeleteJob(job);
-                                    setActiveDropdown(null);
-                                  }}
-                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>Delete Job</span>
-                                </button>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                        {/* View JD - primary action, always available (including Draft) */}
-                        <button
-                          onClick={(e) => { e.stopPropagation(); onViewJob(job); }}
-                          className="flex-shrink-0 flex items-center justify-center gap-1.5 px-4 py-2.5 bg-brand-blue text-white text-sm font-medium rounded-lg hover:bg-brand-blue/90 transition-all"
-                        >
-                          View JD
-                          <span aria-hidden="true">&rarr;</span>
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          ) : (
             // List View
             <div className="space-y-3">
               {currentJobs.map(job => {
@@ -1795,7 +1466,6 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 );
               })}
             </div>
-          )
         ) : (
           // Empty State
           <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-8 sm:p-10 text-center">

@@ -312,8 +312,8 @@ function CompletePaymentContent() {
   const containerStyle: React.CSSProperties = {
     minHeight: '100vh',
     background: isDark
-      ? 'linear-gradient(135deg, #111827 0%, #1F2937 50%, #1E1B4B 100%)'
-      : 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 50%, #E0E7FF 100%)',
+      ? 'linear-gradient(135deg, var(--raw-111827) 0%, var(--raw-1f2937) 50%, var(--raw-1e1b4b) 100%)'
+      : 'linear-gradient(135deg, var(--raw-f8fafc) 0%, var(--raw-eef2ff) 50%, var(--raw-e0e7ff) 100%)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -323,18 +323,18 @@ function CompletePaymentContent() {
   };
 
   const formCardStyle: React.CSSProperties = {
-    backgroundColor: isDark ? '#1F2937' : '#ffffff',
+    backgroundColor: isDark ? 'var(--raw-1f2937)' : 'var(--raw-ffffff)',
     borderRadius: '24px',
     boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
     padding: '40px',
-    border: `1px solid ${isDark ? '#374151' : '#F3F4F6'}`,
+    border: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-f3f4f6)'}`,
   };
 
   const submitButtonStyle: React.CSSProperties = {
     width: '100%',
     padding: '14px 24px',
-    background: 'linear-gradient(to right, #2563EB, #4338CA)',
-    color: '#ffffff',
+    background: 'linear-gradient(to right, var(--raw-2563eb), var(--raw-4338ca))',
+    color: 'var(--raw-ffffff)',
     fontSize: '16px',
     fontWeight: 500,
     borderRadius: '12px',
@@ -353,7 +353,7 @@ function CompletePaymentContent() {
     return (
       <div style={containerStyle}>
         <div style={formCardStyle}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, color: isDark ? '#9CA3AF' : '#6B7280' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)' }}>
             <Loader2 style={{ width: 24, height: 24, animation: 'spin 1s linear infinite' }} />
             <span>Loading plan details...</span>
           </div>
@@ -369,18 +369,18 @@ function CompletePaymentContent() {
       <div style={containerStyle}>
         <div style={formCardStyle}>
           <div style={{ textAlign: 'center' }}>
-            <AlertCircle style={{ width: 48, height: 48, color: '#DC2626', margin: '0 auto 16px' }} />
-            <h2 style={{ fontSize: 24, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827', marginBottom: 8 }}>
+            <AlertCircle style={{ width: 48, height: 48, color: 'var(--raw-dc2626)', margin: '0 auto 16px' }} />
+            <h2 style={{ fontSize: 24, fontWeight: 700, color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)', marginBottom: 8 }}>
               {error || 'Invalid Payment Link'}
             </h2>
-            <p style={{ color: isDark ? '#9CA3AF' : '#6B7280', marginBottom: 24 }}>
+            <p style={{ color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)', marginBottom: 24 }}>
               This payment link is invalid or has expired. Please try signing up again.
             </p>
             <button
               onClick={() => router.push('/signup')}
               style={{
                 ...submitButtonStyle,
-                background: '#6B7280',
+                background: 'var(--raw-6b7280)',
               }}
             >
               <ArrowLeft style={{ width: 20, height: 20 }} />
@@ -395,39 +395,39 @@ function CompletePaymentContent() {
   return (
     <div style={containerStyle}>
       {/* Background Blobs */}
-      <div style={{ position: 'absolute', top: 80, left: 40, width: 288, height: 288, backgroundColor: '#93C5FD', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
-      <div style={{ position: 'absolute', top: 160, right: 40, width: 288, height: 288, backgroundColor: '#C4B5FD', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
+      <div style={{ position: 'absolute', top: 80, left: 40, width: 288, height: 288, backgroundColor: 'var(--raw-93c5fd)', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
+      <div style={{ position: 'absolute', top: 160, right: 40, width: 288, height: 288, backgroundColor: 'var(--raw-c4b5fd)', borderRadius: '50%', filter: 'blur(60px)', opacity: 0.3 }}></div>
 
       <div style={{ ...formCardStyle, maxWidth: 600, margin: '0 auto', position: 'relative', maxHeight: '90vh', overflowY: 'auto' }}>
         {/* Header */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
-          <div style={{ width: 48, height: 48, background: 'linear-gradient(135deg, #2563EB, #4338CA)', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <CreditCard style={{ width: 24, height: 24, color: '#ffffff' }} />
+          <div style={{ width: 48, height: 48, background: 'linear-gradient(135deg, var(--raw-2563eb), var(--raw-4338ca))', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <CreditCard style={{ width: 24, height: 24, color: 'var(--raw-ffffff)' }} />
           </div>
           <div>
-            <h2 style={{ fontSize: 24, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827', marginBottom: 4 }}>Complete Your Purchase</h2>
-            <p style={{ color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 14 }}>Your account is ready. Complete payment to activate your plan.</p>
+            <h2 style={{ fontSize: 24, fontWeight: 700, color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)', marginBottom: 4 }}>Complete Your Purchase</h2>
+            <p style={{ color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)', fontSize: 14 }}>Your account is ready. Complete payment to activate your plan.</p>
           </div>
         </div>
 
         {error && (
-          <div style={{ marginBottom: 24, padding: 16, backgroundColor: isDark ? 'rgba(239,68,68,0.15)' : '#FEF2F2', border: `1px solid ${isDark ? 'rgba(239,68,68,0.3)' : '#FECACA'}`, borderRadius: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
-            <AlertCircle style={{ width: 20, height: 20, color: '#DC2626', flexShrink: 0 }} />
-            <span style={{ fontSize: 14, color: isDark ? '#FCA5A5' : '#991B1B' }}>{error}</span>
+          <div style={{ marginBottom: 24, padding: 16, backgroundColor: isDark ? 'rgba(239,68,68,0.15)' : 'var(--raw-fef2f2)', border: `1px solid ${isDark ? 'rgba(239,68,68,0.3)' : 'var(--raw-fecaca)'}`, borderRadius: 12, display: 'flex', alignItems: 'flex-start', gap: 12 }}>
+            <AlertCircle style={{ width: 20, height: 20, color: 'var(--raw-dc2626)', flexShrink: 0 }} />
+            <span style={{ fontSize: 14, color: isDark ? 'var(--raw-fca5a5)' : 'var(--raw-991b1b)' }}>{error}</span>
           </div>
         )}
 
         {/* Plan Summary Card */}
-        <div style={{ backgroundColor: isDark ? '#374151' : '#F9FAFB', borderRadius: 16, padding: 24, marginBottom: 24, border: `1px solid ${isDark ? '#374151' : '#E5E7EB'}` }}>
+        <div style={{ backgroundColor: isDark ? 'var(--raw-374151)' : 'var(--raw-f9fafb)', borderRadius: 16, padding: 24, marginBottom: 24, border: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-e5e7eb)'}` }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
             <div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-                <span style={{ fontSize: 20, fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{planDetails.plan_name}</span>
-                <span style={{ backgroundColor: isDark ? 'rgba(37,99,235,0.15)' : '#DBEAFE', color: isDark ? '#93C5FD' : '#1D4ED8', fontSize: 12, fontWeight: 500, padding: '2px 8px', borderRadius: 12 }}>
+                <span style={{ fontSize: 20, fontWeight: 600, color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)' }}>{planDetails.plan_name}</span>
+                <span style={{ backgroundColor: isDark ? 'rgba(37,99,235,0.15)' : 'var(--raw-dbeafe)', color: isDark ? 'var(--raw-93c5fd)' : 'var(--raw-1d4ed8)', fontSize: 12, fontWeight: 500, padding: '2px 8px', borderRadius: 12 }}>
                   {planDetails.plan_tier}
                 </span>
               </div>
-              <p style={{ color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 14 }}>{planDetails.description}</p>
+              <p style={{ color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)', fontSize: 14 }}>{planDetails.description}</p>
             </div>
           </div>
 
@@ -437,24 +437,24 @@ function CompletePaymentContent() {
             const totalAmount = Math.round((planDetails.base_price + gstAmount) * 100) / 100;
             return (
               <>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0', borderTop: `1px solid ${isDark ? '#374151' : '#E5E7EB'}` }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '16px 0', borderTop: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-e5e7eb)'}` }}>
                   <div>
-                    <span style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280' }}>Billing:</span>
-                    <span style={{ fontSize: 14, fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827', marginLeft: 8 }}>
+                    <span style={{ fontSize: 14, color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)' }}>Billing:</span>
+                    <span style={{ fontSize: 14, fontWeight: 600, color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)', marginLeft: 8 }}>
                       {billingInterval === 'ANNUAL' ? 'Annual' : 'Monthly'}
                     </span>
                   </div>
                   <div style={{ textAlign: 'right' }}>
-                    <span style={{ fontSize: 32, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827' }}>
+                    <span style={{ fontSize: 32, fontWeight: 700, color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)' }}>
                       {formatCurrency(planDetails.base_price, planDetails.currency)}
                     </span>
-                    <span style={{ fontSize: 14, color: isDark ? '#9CA3AF' : '#6B7280', marginLeft: 4 }}>
+                    <span style={{ fontSize: 14, color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)', marginLeft: 4 }}>
                       /{billingInterval === 'ANNUAL' ? 'year' : 'month'}
                     </span>
                     {/* Strikethrough price and Save badge for annual plans */}
                     {billingInterval === 'ANNUAL' && planDetails.monthly_price && (planDetails.monthly_price * 12) > planDetails.base_price && (
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 8, marginTop: 6 }}>
-                        <span style={{ fontSize: 14, color: '#9CA3AF', textDecoration: 'line-through' }}>
+                        <span style={{ fontSize: 14, color: 'var(--raw-9ca3af)', textDecoration: 'line-through' }}>
                           {formatCurrency(planDetails.monthly_price * 12, planDetails.currency)}
                         </span>
                         {planDetails.discount_percentage && planDetails.discount_percentage > 0 && (
@@ -463,8 +463,8 @@ function CompletePaymentContent() {
                             padding: '2px 8px',
                             fontSize: 12,
                             fontWeight: 600,
-                            backgroundColor: isDark ? 'rgba(16,185,129,0.15)' : '#DCFCE7',
-                            color: '#15803D',
+                            backgroundColor: isDark ? 'rgba(16,185,129,0.15)' : 'var(--raw-dcfce7)',
+                            color: 'var(--raw-15803d)',
                             borderRadius: 12
                           }}>
                             Save {Math.round(planDetails.discount_percentage)}%
@@ -476,18 +476,18 @@ function CompletePaymentContent() {
                 </div>
 
                 {/* GST & Total Breakdown */}
-                <div style={{ padding: '12px 0', borderTop: `1px solid ${isDark ? '#374151' : '#E5E7EB'}`, borderBottom: `1px solid ${isDark ? '#374151' : '#E5E7EB'}` }}>
+                <div style={{ padding: '12px 0', borderTop: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-e5e7eb)'}`, borderBottom: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-e5e7eb)'}` }}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <span style={{ fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280' }}>Subtotal</span>
-                    <span style={{ fontSize: 13, color: isDark ? '#D1D5DB' : '#374151' }}>{formatCurrency(planDetails.base_price, planDetails.currency)}</span>
+                    <span style={{ fontSize: 13, color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)' }}>Subtotal</span>
+                    <span style={{ fontSize: 13, color: isDark ? 'var(--raw-d1d5db)' : 'var(--raw-374151)' }}>{formatCurrency(planDetails.base_price, planDetails.currency)}</span>
                   </div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                    <span style={{ fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280' }}>GST (18%)</span>
-                    <span style={{ fontSize: 13, color: isDark ? '#D1D5DB' : '#374151' }}>{formatCurrency(gstAmount, planDetails.currency)}</span>
+                    <span style={{ fontSize: 13, color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)' }}>GST (18%)</span>
+                    <span style={{ fontSize: 13, color: isDark ? 'var(--raw-d1d5db)' : 'var(--raw-374151)' }}>{formatCurrency(gstAmount, planDetails.currency)}</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px dashed ${isDark ? '#374151' : '#E5E7EB'}` }}>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827' }}>Total</span>
-                    <span style={{ fontSize: 15, fontWeight: 700, color: isDark ? '#F9FAFB' : '#111827' }}>{formatCurrency(totalAmount, planDetails.currency)}</span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTop: `1px dashed ${isDark ? 'var(--raw-374151)' : 'var(--raw-e5e7eb)'}` }}>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)' }}>Total</span>
+                    <span style={{ fontSize: 15, fontWeight: 700, color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)' }}>{formatCurrency(totalAmount, planDetails.currency)}</span>
                   </div>
                 </div>
               </>
@@ -496,9 +496,9 @@ function CompletePaymentContent() {
 
           {/* Included Seats */}
           {planDetails.included_seats && (
-            <div style={{ marginTop: 12, padding: 12, backgroundColor: isDark ? 'rgba(67,56,202,0.2)' : '#EEF2FF', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 14, color: '#4338CA', fontWeight: 500 }}>Included Team Seats</span>
-              <span style={{ fontSize: 16, fontWeight: 700, color: '#4338CA' }}>{planDetails.included_seats}</span>
+            <div style={{ marginTop: 12, padding: 12, backgroundColor: isDark ? 'rgba(67,56,202,0.2)' : 'var(--raw-eef2ff)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 14, color: 'var(--raw-4338ca)', fontWeight: 500 }}>Included Team Seats</span>
+              <span style={{ fontSize: 16, fontWeight: 700, color: 'var(--raw-4338ca)' }}>{planDetails.included_seats}</span>
             </div>
           )}
         </div>
@@ -506,15 +506,15 @@ function CompletePaymentContent() {
         {/* Plan Quotas */}
         {planDetails.quotas && Object.keys(planDetails.quotas).length > 0 && (
           <div style={{ marginBottom: 24 }}>
-            <h4 style={{ fontSize: 14, fontWeight: 600, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 12 }}>Plan Quotas:</h4>
-            <div style={{ backgroundColor: isDark ? '#374151' : '#F9FAFB', borderRadius: 12, padding: 16, border: `1px solid ${isDark ? '#374151' : '#E5E7EB'}` }}>
+            <h4 style={{ fontSize: 14, fontWeight: 600, color: isDark ? 'var(--raw-d1d5db)' : 'var(--raw-374151)', marginBottom: 12 }}>Plan Quotas:</h4>
+            <div style={{ backgroundColor: isDark ? 'var(--raw-374151)' : 'var(--raw-f9fafb)', borderRadius: 12, padding: 16, border: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-e5e7eb)'}` }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                 {Object.entries(planDetails.quotas)
                   .filter(([key, value]) => !['storage_gb', 'support_level', 'api_rate_limit'].includes(key) && value !== 0 && value !== null && value !== undefined)
                   .map(([key, value]) => (
-                  <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: isDark ? '#1F2937' : '#ffffff', borderRadius: 8, border: `1px solid ${isDark ? '#374151' : '#E5E7EB'}` }}>
-                    <span style={{ fontSize: 13, color: isDark ? '#9CA3AF' : '#6B7280' }}>{getQuotaLabel(key)}</span>
-                    <span style={{ fontSize: 13, fontWeight: 600, color: isDark ? '#F9FAFB' : '#111827' }}>{formatQuotaValue(key, value)}</span>
+                  <div key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', backgroundColor: isDark ? 'var(--raw-1f2937)' : 'var(--raw-ffffff)', borderRadius: 8, border: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-e5e7eb)'}` }}>
+                    <span style={{ fontSize: 13, color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)' }}>{getQuotaLabel(key)}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, color: isDark ? 'var(--raw-f9fafb)' : 'var(--raw-111827)' }}>{formatQuotaValue(key, value)}</span>
                   </div>
                 ))}
               </div>
@@ -525,15 +525,15 @@ function CompletePaymentContent() {
         {/* Features List */}
         {planDetails.features && planDetails.features.length > 0 && (
           <div style={{ marginBottom: 24 }}>
-            <h4 style={{ fontSize: 14, fontWeight: 600, color: isDark ? '#D1D5DB' : '#374151', marginBottom: 12 }}>Included Features:</h4>
-            <div style={{ backgroundColor: isDark ? '#374151' : '#F9FAFB', borderRadius: 12, padding: 16, border: `1px solid ${isDark ? '#374151' : '#E5E7EB'}` }}>
+            <h4 style={{ fontSize: 14, fontWeight: 600, color: isDark ? 'var(--raw-d1d5db)' : 'var(--raw-374151)', marginBottom: 12 }}>Included Features:</h4>
+            <div style={{ backgroundColor: isDark ? 'var(--raw-374151)' : 'var(--raw-f9fafb)', borderRadius: 12, padding: 16, border: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-e5e7eb)'}` }}>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
                 {planDetails.features
                   .filter(f => f.is_enabled)
                   .map((feature, index) => (
                     <div key={index} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0' }}>
-                      <Check style={{ width: 16, height: 16, color: '#10B981', flexShrink: 0 }} />
-                      <span style={{ fontSize: 13, color: isDark ? '#9CA3AF' : '#4B5563' }}>{feature.feature_name}</span>
+                      <Check style={{ width: 16, height: 16, color: 'var(--raw-10b981)', flexShrink: 0 }} />
+                      <span style={{ fontSize: 13, color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-4b5563)' }}>{feature.feature_name}</span>
                     </div>
                   ))}
               </div>
@@ -542,12 +542,12 @@ function CompletePaymentContent() {
         )}
 
         {/* Account Status */}
-        <div style={{ backgroundColor: isDark ? 'rgba(16,185,129,0.15)' : '#F0FDF4', borderRadius: 12, padding: 16, marginBottom: 24, border: `1px solid ${isDark ? 'rgba(16,185,129,0.3)' : '#BBF7D0'}` }}>
+        <div style={{ backgroundColor: isDark ? 'rgba(16,185,129,0.15)' : 'var(--raw-f0fdf4)', borderRadius: 12, padding: 16, marginBottom: 24, border: `1px solid ${isDark ? 'rgba(16,185,129,0.3)' : 'var(--raw-bbf7d0)'}` }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <CheckCircle style={{ width: 18, height: 18, color: '#16A34A' }} />
-            <span style={{ fontSize: 14, fontWeight: 600, color: '#166534' }}>Account Created — Payment Pending</span>
+            <CheckCircle style={{ width: 18, height: 18, color: 'var(--raw-16a34a)' }} />
+            <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--raw-166534)' }}>Account Created — Payment Pending</span>
           </div>
-          <p style={{ fontSize: 13, color: '#166534', marginTop: 8 }}>
+          <p style={{ fontSize: 13, color: 'var(--raw-166534)', marginTop: 8 }}>
             Your account has been set up. Complete payment below to activate your plan and start using TalentFlow.
           </p>
         </div>
@@ -576,24 +576,24 @@ function CompletePaymentContent() {
         </button>
 
         {/* Payment Methods Indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 12, fontSize: 12, color: '#9CA3AF' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 12, fontSize: 12, color: 'var(--raw-9ca3af)' }}>
           <span>Card</span>
-          <span style={{ color: isDark ? '#374151' : '#D1D5DB' }}>|</span>
+          <span style={{ color: isDark ? 'var(--raw-374151)' : 'var(--raw-d1d5db)' }}>|</span>
           <span>UPI</span>
-          <span style={{ color: isDark ? '#374151' : '#D1D5DB' }}>|</span>
+          <span style={{ color: isDark ? 'var(--raw-374151)' : 'var(--raw-d1d5db)' }}>|</span>
           <span>Netbanking</span>
-          <span style={{ color: isDark ? '#374151' : '#D1D5DB' }}>|</span>
+          <span style={{ color: isDark ? 'var(--raw-374151)' : 'var(--raw-d1d5db)' }}>|</span>
           <span>Wallets</span>
         </div>
 
         {/* Security Notice */}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, color: isDark ? '#9CA3AF' : '#6B7280', fontSize: 13 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 12, color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)', fontSize: 13 }}>
           <Shield style={{ width: 16, height: 16 }} />
           <span>Secure payment via Razorpay</span>
         </div>
 
         {/* Logout and Back to Login */}
-        <div style={{ marginTop: 24, paddingTop: 16, borderTop: `1px solid ${isDark ? '#374151' : '#E5E7EB'}`, textAlign: 'center' }}>
+        <div style={{ marginTop: 24, paddingTop: 16, borderTop: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-e5e7eb)'}`, textAlign: 'center' }}>
           <a
             href="/login"
             onClick={() => {
@@ -607,7 +607,7 @@ function CompletePaymentContent() {
               Cookies.remove('token');
               sessionStorage.clear();
             }}
-            style={{ color: '#2563EB', fontSize: 14, textDecoration: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
+            style={{ color: 'var(--raw-2563eb)', fontSize: 14, textDecoration: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4 }}
           >
             <ArrowLeft style={{ width: 16, height: 16 }} />
             Logout & Back to Login
@@ -628,20 +628,20 @@ function LoadingFallback() {
     <div style={{
       minHeight: '100vh',
       background: isDark
-        ? 'linear-gradient(135deg, #111827 0%, #1F2937 50%, #1E1B4B 100%)'
-        : 'linear-gradient(135deg, #F8FAFC 0%, #EEF2FF 50%, #E0E7FF 100%)',
+        ? 'linear-gradient(135deg, var(--raw-111827) 0%, var(--raw-1f2937) 50%, var(--raw-1e1b4b) 100%)'
+        : 'linear-gradient(135deg, var(--raw-f8fafc) 0%, var(--raw-eef2ff) 50%, var(--raw-e0e7ff) 100%)',
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
     }}>
       <div style={{
-        backgroundColor: isDark ? '#1F2937' : '#ffffff',
+        backgroundColor: isDark ? 'var(--raw-1f2937)' : 'var(--raw-ffffff)',
         borderRadius: '24px',
         boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.15)',
         padding: '40px',
-        border: `1px solid ${isDark ? '#374151' : '#F3F4F6'}`,
+        border: `1px solid ${isDark ? 'var(--raw-374151)' : 'var(--raw-f3f4f6)'}`,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, color: isDark ? '#9CA3AF' : '#6B7280' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, color: isDark ? 'var(--raw-9ca3af)' : 'var(--raw-6b7280)' }}>
           <Loader2 style={{ width: 24, height: 24, animation: 'spin 1s linear infinite' }} />
           <span>Loading...</span>
         </div>

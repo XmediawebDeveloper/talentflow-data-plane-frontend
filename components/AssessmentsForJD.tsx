@@ -18,12 +18,8 @@ import {
   Archive,
   Download,
   Share2,
-  LayoutGrid,
-  List,
   Loader2,
   ClipboardList,
-  Target,
-  TrendingUp,
   Activity,
   RefreshCw,
   AlertCircle,
@@ -51,7 +47,6 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
   const { available: assessmentAvailable } = usePlanFeature('assessment');
   const [isLoading, setIsLoading] = useState(true);
   const [assessments, setAssessments] = useState<any[]>([]);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('list');
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'active' | 'draft' | 'archived'>('all');
 
@@ -217,28 +212,6 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
           </div>
         </div>
         <div className="flex items-center gap-3">
-          {/* View Mode Toggle */}
-          <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1">
-            <button
-              onClick={() => setViewMode('list')}
-              className={`p-2 rounded transition-colors ${
-                viewMode === 'list' ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/15' : 'hover:text-brand-blue'
-              }`}
-              aria-label="List View" title="List View"
-            >
-              <List className="w-4 h-4" />
-            </button>
-            <button
-              onClick={() => setViewMode('grid')}
-              className={`p-2 rounded transition-colors ${
-                viewMode === 'grid' ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/15' : 'hover:text-brand-blue'
-              }`}
-              aria-label="Grid View" title="Grid View"
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-          </div>
-
           {/* Create Assessment Button */}
           {canCreateAssessments && assessmentAvailable && (
             <button
@@ -310,7 +283,6 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
       {/* Assessments List */}
       {filteredAssessments.length > 0 && (
         <>
-          {viewMode === 'list' ? (
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden tf-table-shell">
               <table className="w-full">
                 <thead className="bg-slate-50 border-b border-gray-100">
@@ -499,146 +471,6 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                 </tbody>
               </table>
             </div>
-          ) : (
-            /* Grid View */
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredAssessments.map((assessment) => (
-                <div
-                  key={assessment.id}
-                  className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-6 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all shadow-sm shadow-brand-blue/5"
-                >
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-lg font-semibold text-gray-900 truncate">
-                          {stripVersionFromTitle(assessment.title)}
-                        </h3>
-                        {assessment.version > 1 && <VersionBadge version={assessment.version} />}
-                      </div>
-                      <p className="text-xs text-gray-500">{assessment.short_id}</p>
-                    </div>
-                    {getStatusBadge(assessment.status)}
-                  </div>
-
-                  {/* Stats */}
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <div className="flex items-center gap-2">
-                      <Users className="w-4 h-4 text-brand-blue" />
-                      <div>
-                        <p className="text-xs text-gray-500">Candidates</p>
-                        <p className="text-sm font-semibold text-gray-900">{assessment.candidates}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                      <div>
-                        <p className="text-xs text-gray-500">Completed</p>
-                        <p className="text-sm font-semibold text-gray-900">{assessment.completed}</p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <Target className="w-4 h-4 text-brand-cyan" />
-                      <div>
-                        <p className="text-xs text-gray-500">Pass Rate</p>
-                        <p className="text-sm font-semibold text-gray-900">
-                          {assessment.completed > 0
-                            ? `${((assessment.passed / assessment.completed) * 100).toFixed(0)}%`
-                            : '-'}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-brand-orange" />
-                      <div>
-                        <p className="text-xs text-gray-500">Avg Score</p>
-                        <p className="text-sm font-semibold text-gray-900">
-                          {assessment.average_score != null
-                            ? `${Math.round(assessment.average_score)}%`
-                            : '-'}
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Actions */}
-                  <div className="flex items-center gap-2 pt-4 border-t border-gray-100">
-                    <button
-                      onClick={() => handleViewResults(assessment)}
-                      className="flex-1 flex items-center justify-center gap-2 px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-                    >
-                      <Eye className="w-4 h-4" />
-                      View Results
-                    </button>
-                    <div className="relative">
-                      <button
-                        onClick={() => setOpenMenuId(openMenuId === assessment.id ? null : assessment.id)}
-                        className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-                      {openMenuId === assessment.id && (
-                        <>
-                          <div
-                            className="fixed inset-0 z-10"
-                            onClick={() => setOpenMenuId(null)}
-                          />
-                          <div className="absolute right-0 bottom-full mb-2 w-48 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 z-20">
-                            <button
-                              onClick={() => {
-                                handleEdit(assessment);
-                                setOpenMenuId(null);
-                              }}
-                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
-                            >
-                              <Edit2 className="w-4 h-4" />
-                              Edit
-                            </button>
-                            {assessment.status !== 'archived' && (
-                              <button
-                                onClick={() => {
-                                  handleArchive(assessment);
-                                  setOpenMenuId(null);
-                                }}
-                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
-                              >
-                                <Archive className="w-4 h-4" />
-                                Archive
-                              </button>
-                            )}
-                            {(() => {
-                              const hasCandidates = assessment.invitations_count > 0;
-                              return (
-                                <button
-                                  onClick={() => {
-                                    if (hasCandidates) {
-                                      toast.error('Cannot delete — candidates have already been invited to this assessment');
-                                      return;
-                                    }
-                                    handleDelete(assessment);
-                                    setOpenMenuId(null);
-                                  }}
-                                  disabled={hasCandidates}
-                                  title={hasCandidates ? 'Cannot delete — candidates have already been invited to this assessment' : ''}
-                                  className={`w-full flex items-center gap-2 px-4 py-2 text-sm ${
-                                    hasCandidates
-                                      ? 'text-gray-400 cursor-not-allowed opacity-60'
-                                      : 'text-red-600 hover:bg-red-50'
-                                  }`}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                  Delete
-                                </button>
-                              );
-                            })()}
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
         </>
       )}
     </div>

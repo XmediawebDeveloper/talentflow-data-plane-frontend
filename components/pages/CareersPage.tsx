@@ -39,8 +39,8 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
 
   const pageStyle: React.CSSProperties = {
     minHeight: '100vh',
-    backgroundColor: isDark ? '#0F172A' : '#ffffff',
-    color: isDark ? '#ffffff' : '#111827',
+    backgroundColor: isDark ? 'var(--raw-0f172a)' : 'var(--raw-ffffff)',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
   };
 
   const containerStyle: React.CSSProperties = {
@@ -60,8 +60,8 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
     gap: '8px',
     padding: '8px 16px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(236, 72, 153, 0.2)' : '#FCE7F3',
-    color: isDark ? '#F9A8D4' : '#DB2777',
+    backgroundColor: isDark ? 'rgba(236, 72, 153, 0.2)' : 'var(--raw-fce7f3)',
+    color: isDark ? 'var(--raw-f9a8d4)' : 'var(--raw-db2777)',
     fontSize: '14px',
     fontWeight: 600,
     marginBottom: '16px',
@@ -70,14 +70,14 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
   const titleStyle: React.CSSProperties = {
     fontSize: isMobile ? '28px' : isTablet ? '40px' : '56px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '16px',
     lineHeight: 1.1,
   };
 
   const subtitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     maxWidth: '672px',
     margin: '0 auto',
     lineHeight: 1.6,
@@ -93,8 +93,8 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
   const benefitCardStyle: React.CSSProperties = {
     padding: isMobile ? '16px' : '24px',
     borderRadius: '16px',
-    border: `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
-    backgroundColor: isDark ? '#1E293B' : '#ffffff',
+    border: `1px solid ${isDark ? 'var(--raw-1e293b)' : 'var(--raw-e5e7eb)'}`,
+    backgroundColor: isDark ? 'var(--raw-1e293b)' : 'var(--raw-ffffff)',
     textAlign: 'center',
   };
 
@@ -112,13 +112,13 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
   const benefitTitleStyle: React.CSSProperties = {
     fontSize: '16px',
     fontWeight: 600,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '4px',
   };
 
   const benefitDescStyle: React.CSSProperties = {
     fontSize: '14px',
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
   };
 
   const filterContainerStyle: React.CSSProperties = {
@@ -137,9 +137,9 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
     cursor: 'pointer',
     border: 'none',
     backgroundColor: isActive
-      ? (isDark ? '#8B5CF6' : '#7C3AED')
-      : (isDark ? '#374151' : '#F3F4F6'),
-    color: isActive ? '#ffffff' : (isDark ? '#D1D5DB' : '#374151'),
+      ? (isDark ? 'var(--raw-8b5cf6)' : 'var(--raw-7c3aed)')
+      : (isDark ? 'var(--raw-374151)' : 'var(--raw-f3f4f6)'),
+    color: isActive ? 'var(--raw-ffffff)' : (isDark ? 'var(--raw-d1d5db)' : 'var(--raw-374151)'),
     transition: 'all 0.2s',
   });
 
@@ -153,8 +153,8 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
   const jobCardStyle: React.CSSProperties = {
     padding: isMobile ? '16px' : '24px',
     borderRadius: '16px',
-    border: `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
-    backgroundColor: isDark ? '#1E293B' : '#ffffff',
+    border: `1px solid ${isDark ? 'var(--raw-1e293b)' : 'var(--raw-e5e7eb)'}`,
+    backgroundColor: isDark ? 'var(--raw-1e293b)' : 'var(--raw-ffffff)',
     display: 'flex',
     flexDirection: isMobile ? 'column' : 'row',
     justifyContent: 'space-between',
@@ -169,7 +169,7 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
   const jobTitleStyle: React.CSSProperties = {
     fontSize: '20px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '8px',
   };
 
@@ -177,7 +177,7 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
     display: 'flex',
     flexWrap: 'wrap',
     gap: '16px',
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     fontSize: '14px',
   };
 
@@ -195,8 +195,8 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
     fontSize: isMobile ? '13px' : '14px',
     fontWeight: 500,
     borderRadius: '10px',
-    background: 'linear-gradient(135deg, #667EEA, #764BA2)',
-    color: '#ffffff',
+    background: 'linear-gradient(135deg, var(--raw-667eea), var(--raw-764ba2))',
+    color: 'var(--raw-ffffff)',
     border: 'none',
     cursor: 'pointer',
     width: isMobile ? '100%' : 'auto',
@@ -207,13 +207,13 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
     textAlign: 'center',
     padding: isMobile ? '40px 20px' : isTablet ? '60px 32px' : '80px 40px',
     borderRadius: isMobile ? '16px' : '24px',
-    background: 'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+    background: 'linear-gradient(135deg, var(--raw-667eea) 0%, var(--raw-764ba2) 100%)',
   };
 
   const ctaTitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '24px' : isTablet ? '36px' : '48px',
     fontWeight: 700,
-    color: '#ffffff',
+    color: 'var(--raw-ffffff)',
     marginBottom: '16px',
   };
 
@@ -233,21 +233,21 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
     fontSize: isMobile ? '16px' : '18px',
     fontWeight: 500,
     borderRadius: '12px',
-    backgroundColor: '#ffffff',
-    color: '#7C3AED',
+    backgroundColor: 'var(--raw-ffffff)',
+    color: 'var(--raw-7c3aed)',
     border: 'none',
     cursor: 'pointer',
   };
 
   const benefits = [
-    { icon: Heart, title: "Health & Wellness", description: "Full medical, dental, vision", gradient: "linear-gradient(135deg, #EC4899, #F43F5E)" },
-    { icon: Plane, title: "Unlimited PTO", description: "Take time when you need it", gradient: "linear-gradient(135deg, #3B82F6, #8B5CF6)" },
-    { icon: DollarSign, title: "Competitive Pay", description: "Top-of-market compensation", gradient: "linear-gradient(135deg, #22C55E, #14B8A6)" },
-    { icon: BookOpen, title: "Learning Budget", description: "$2,000/year for growth", gradient: "linear-gradient(135deg, #F59E0B, #F97316)" },
-    { icon: Coffee, title: "Remote First", description: "Work from anywhere", gradient: "linear-gradient(135deg, #8B5CF6, #EC4899)" },
-    { icon: Users, title: "Team Retreats", description: "Annual company gatherings", gradient: "linear-gradient(135deg, #06B6D4, #3B82F6)" },
-    { icon: Zap, title: "Equity", description: "Stock options for all", gradient: "linear-gradient(135deg, #667EEA, #764BA2)" },
-    { icon: Building, title: "401(k) Match", description: "4% company match", gradient: "linear-gradient(135deg, #14B8A6, #22C55E)" },
+    { icon: Heart, title: "Health & Wellness", description: "Full medical, dental, vision", gradient: "linear-gradient(135deg, var(--raw-ec4899), var(--raw-f43f5e))" },
+    { icon: Plane, title: "Unlimited PTO", description: "Take time when you need it", gradient: "linear-gradient(135deg, var(--raw-3b82f6), var(--raw-8b5cf6))" },
+    { icon: DollarSign, title: "Competitive Pay", description: "Top-of-market compensation", gradient: "linear-gradient(135deg, var(--raw-22c55e), var(--raw-14b8a6))" },
+    { icon: BookOpen, title: "Learning Budget", description: "$2,000/year for growth", gradient: "linear-gradient(135deg, var(--raw-f59e0b), var(--raw-f97316))" },
+    { icon: Coffee, title: "Remote First", description: "Work from anywhere", gradient: "linear-gradient(135deg, var(--raw-8b5cf6), var(--raw-ec4899))" },
+    { icon: Users, title: "Team Retreats", description: "Annual company gatherings", gradient: "linear-gradient(135deg, var(--raw-06b6d4), var(--raw-3b82f6))" },
+    { icon: Zap, title: "Equity", description: "Stock options for all", gradient: "linear-gradient(135deg, var(--raw-667eea), var(--raw-764ba2))" },
+    { icon: Building, title: "401(k) Match", description: "4% company match", gradient: "linear-gradient(135deg, var(--raw-14b8a6), var(--raw-22c55e))" },
   ];
 
   const departments = ["All", "Engineering", "Product", "Design", "Sales", "Marketing", "Operations"];
@@ -289,7 +289,7 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
             return (
               <div key={index} style={benefitCardStyle}>
                 <div style={benefitIconStyle(benefit.gradient)}>
-                  <Icon style={{ width: 24, height: 24, color: '#ffffff' }} />
+                  <Icon style={{ width: 24, height: 24, color: 'var(--raw-ffffff)' }} />
                 </div>
                 <h3 style={benefitTitleStyle}>{benefit.title}</h3>
                 <p style={benefitDescStyle}>{benefit.description}</p>
@@ -299,7 +299,7 @@ export default function CareersPage({ onNavigate }: CareersPageProps) {
         </div>
 
         {/* Open Positions */}
-        <h2 style={{ fontSize: '32px', fontWeight: 700, color: isDark ? '#ffffff' : '#111827', textAlign: 'center', marginBottom: '32px' }}>
+        <h2 style={{ fontSize: '32px', fontWeight: 700, color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)', textAlign: 'center', marginBottom: '32px' }}>
           Open Positions
         </h2>
 

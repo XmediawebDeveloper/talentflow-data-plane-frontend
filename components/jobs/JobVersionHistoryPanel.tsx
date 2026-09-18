@@ -329,10 +329,10 @@ export default function JobVersionHistoryPanel({
                        sideways. */
                     className={`sticky top-0 py-2.5 px-3 text-xs font-bold text-gray-900 whitespace-nowrap bg-brand-sky dark:bg-slate-800 dark:text-slate-100 ${minW} ${
                       label === 'Action'
-                        ? 'right-0 z-[8] shadow-[inset_0_-1px_0_#e5e7eb,-1px_0_0_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#334155,-1px_0_0_0_#334155]'
+                        ? 'right-0 z-[8] shadow-[inset_0_-1px_0_var(--raw-e5e7eb),-1px_0_0_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155),-1px_0_0_0_var(--raw-334155)]'
                         : label === 'Select' || (label === 'Version' && stickyVersionColumn)
-                          ? 'left-0 z-[8] shadow-[inset_0_-1px_0_#e5e7eb,1px_0_0_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#334155,1px_0_0_0_#334155]'
-                          : 'z-[7] shadow-[inset_0_-1px_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#334155]'
+                          ? 'left-0 z-[8] shadow-[inset_0_-1px_0_var(--raw-e5e7eb),1px_0_0_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155),1px_0_0_0_var(--raw-334155)]'
+                          : 'z-[7] shadow-[inset_0_-1px_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155)]'
                     }`}
                   >
                     {label}
@@ -430,10 +430,10 @@ export default function JobVersionHistoryPanel({
                            spec, static — not just on hover — so the cell
                            reads the same whether the row is being hovered
                            or not. */
-                        className={`py-2.5 px-3 whitespace-nowrap align-middle sticky left-0 z-[5] shadow-[1px_0_0_0_#e5e7eb] transition-colors duration-200 dark:shadow-[1px_0_0_0_#334155] ${
+                        className={`py-2.5 px-3 whitespace-nowrap align-middle sticky left-0 z-[5] shadow-[1px_0_0_0_var(--raw-e5e7eb)] transition-colors duration-200 dark:shadow-[1px_0_0_0_var(--raw-334155)] ${
                           isSelected
-                            ? 'bg-[#eef2fb] dark:bg-slate-800'
-                            : 'bg-[#eff3f9] dark:bg-slate-900'
+                            ? 'bg-[var(--raw-eef2fb)] dark:bg-slate-800'
+                            : 'bg-[var(--raw-eff3f9)] dark:bg-slate-900'
                         }`}
                         onClick={(e) => e.stopPropagation()}
                       >
@@ -474,7 +474,7 @@ export default function JobVersionHistoryPanel({
                            white/slate, NOT the #eff3f9 tint, which is
                            reserved for the Select column so the two sticky
                            columns don't read as one merged block. */
-                        ? 'sticky left-0 z-[5] bg-white shadow-[1px_0_0_0_#e5e7eb] transition-colors duration-200 dark:bg-slate-900 dark:shadow-[1px_0_0_0_#334155]'
+                        ? 'sticky left-0 z-[5] bg-white shadow-[1px_0_0_0_var(--raw-e5e7eb)] transition-colors duration-200 dark:bg-slate-900 dark:shadow-[1px_0_0_0_var(--raw-334155)]'
                         : ''
                     }`}>
                       <span className="inline-flex items-center gap-1.5">
@@ -642,7 +642,7 @@ export default function JobVersionHistoryPanel({
                          content sliding underneath never shows through; the
                          left hairline makes it read as floating over the
                          scrolling cells. */
-                      <td className="py-2.5 px-3 whitespace-nowrap align-middle sticky right-0 z-[5] bg-[#eff3f9] shadow-[-1px_0_0_0_#e5e7eb] transition-colors duration-200 dark:bg-slate-900 dark:shadow-[-1px_0_0_0_#334155]">
+                      <td className="py-2.5 px-3 whitespace-nowrap align-middle sticky right-0 z-[5] bg-[var(--raw-eff3f9)] shadow-[-1px_0_0_0_var(--raw-e5e7eb)] transition-colors duration-200 dark:bg-slate-900 dark:shadow-[-1px_0_0_0_var(--raw-334155)]">
                         <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
                           {renderAction(versionJob)}
                         </div>

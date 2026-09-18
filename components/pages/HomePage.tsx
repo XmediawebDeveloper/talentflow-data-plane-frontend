@@ -74,8 +74,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const pageStyle: React.CSSProperties = {
     minHeight: '100vh',
     overflow: 'hidden',
-    backgroundColor: isDark ? '#0F172A' : '#ffffff',
-    color: isDark ? '#ffffff' : '#111827',
+    backgroundColor: isDark ? 'var(--raw-0f172a)' : 'var(--raw-ffffff)',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
   };
 
   const heroSectionStyle: React.CSSProperties = {
@@ -90,7 +90,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const gradientBgStyle: React.CSSProperties = {
     position: 'absolute',
     inset: 0,
-    background: 'linear-gradient(135deg, #667EEA 0%, #764BA2 50%, #F093FB 100%)',
+    background: 'linear-gradient(135deg, var(--raw-667eea) 0%, var(--raw-764ba2) 50%, var(--raw-f093fb) 100%)',
     opacity: isDark ? 0.2 : 0.1,
   };
 
@@ -121,7 +121,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const badgeTextStyle: React.CSSProperties = {
     fontSize: '14px',
     fontWeight: 500,
-    color: isDark ? '#F1F5F9' : '#374151',
+    color: isDark ? 'var(--raw-f1f5f9)' : 'var(--raw-374151)',
   };
 
   const h1Style: React.CSSProperties = {
@@ -133,7 +133,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   };
 
   const gradientTextStyle: React.CSSProperties = {
-    background: 'linear-gradient(to right, #667EEA, #764BA2)',
+    background: 'linear-gradient(to right, var(--raw-667eea), var(--raw-764ba2))',
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent',
     backgroundClip: 'text',
@@ -141,7 +141,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
 
   const subHeadlineStyle: React.CSSProperties = {
     fontSize: isMobile ? '15px' : isTablet ? '18px' : '24px',
-    color: isDark ? '#CBD5E1' : '#4B5563',
+    color: isDark ? 'var(--raw-cbd5e1)' : 'var(--raw-4b5563)',
     maxWidth: '768px',
     margin: isMobile ? '0 auto 32px' : '0 auto 48px',
     lineHeight: 1.6,
@@ -168,8 +168,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     borderRadius: isMobile ? '12px' : '16px',
     cursor: 'pointer',
     border: 'none',
-    background: 'linear-gradient(to right, #667EEA, #764BA2)',
-    color: '#ffffff',
+    background: 'linear-gradient(to right, var(--raw-667eea), var(--raw-764ba2))',
+    color: 'var(--raw-ffffff)',
     boxShadow: '0 10px 40px rgba(102, 126, 234, 0.3)',
     transition: 'all 0.2s',
     width: isMobile ? '100%' : 'auto',
@@ -187,8 +187,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     borderRadius: isMobile ? '12px' : '16px',
     cursor: 'pointer',
     backgroundColor: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.8)',
-    color: isDark ? '#ffffff' : '#374151',
-    border: `2px solid ${isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB'}`,
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-374151)',
+    border: `2px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'var(--raw-e5e7eb)'}`,
     transition: 'all 0.2s',
     width: isMobile ? '100%' : 'auto',
   };
@@ -199,7 +199,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '32px',
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     fontSize: '14px',
   };
 
@@ -212,7 +212,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   // Stats section styles
   const statsSectionStyle: React.CSSProperties = {
     padding: isMobile ? '40px 0' : isTablet ? '60px 0' : '80px 0',
-    backgroundColor: isDark ? '#0F172A' : '#ffffff',
+    backgroundColor: isDark ? 'var(--raw-0f172a)' : 'var(--raw-ffffff)',
   };
 
   const statsGridStyle: React.CSSProperties = {
@@ -225,8 +225,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     padding: isSmallMobile ? '16px 12px' : isMobile ? '20px' : '32px',
     textAlign: 'center',
     borderRadius: isSmallMobile ? '10px' : '12px',
-    border: `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
-    backgroundColor: isDark ? '#1E293B' : '#ffffff',
+    border: `1px solid ${isDark ? 'var(--raw-1e293b)' : 'var(--raw-e5e7eb)'}`,
+    backgroundColor: isDark ? 'var(--raw-1e293b)' : 'var(--raw-ffffff)',
     display: isSmallMobile ? 'flex' : 'block',
     flexDirection: isSmallMobile ? 'row' : undefined,
     alignItems: isSmallMobile ? 'center' : undefined,
@@ -248,19 +248,19 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const statNumberStyle: React.CSSProperties = {
     fontSize: isSmallMobile ? '20px' : isMobile ? '24px' : isTablet ? '30px' : '36px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: isSmallMobile ? '2px' : '8px',
   };
 
   const statLabelStyle: React.CSSProperties = {
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     fontSize: isSmallMobile ? '12px' : '14px',
   };
 
   // Features section styles
   const featuresSectionStyle: React.CSSProperties = {
     padding: isMobile ? '48px 0' : isTablet ? '72px 0' : '96px 0',
-    backgroundColor: isDark ? 'rgba(30, 41, 59, 0.5)' : '#F9FAFB',
+    backgroundColor: isDark ? 'rgba(30, 41, 59, 0.5)' : 'var(--raw-f9fafb)',
   };
 
   const sectionHeadingStyle: React.CSSProperties = {
@@ -274,8 +274,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     gap: '8px',
     padding: '8px 16px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : '#EDE9FE',
-    color: isDark ? '#C4B5FD' : '#7C3AED',
+    backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'var(--raw-ede9fe)',
+    color: isDark ? 'var(--raw-c4b5fd)' : 'var(--raw-7c3aed)',
     fontSize: '14px',
     fontWeight: 600,
     marginBottom: '16px',
@@ -284,13 +284,13 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const sectionTitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '24px' : isTablet ? '36px' : '48px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '16px',
   };
 
   const sectionSubtitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     maxWidth: '672px',
     margin: '0 auto',
   };
@@ -304,8 +304,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const featureCardStyle: React.CSSProperties = {
     padding: isMobile ? '20px' : '32px',
     borderRadius: '12px',
-    border: `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
-    backgroundColor: isDark ? '#1E293B' : '#ffffff',
+    border: `1px solid ${isDark ? 'var(--raw-1e293b)' : 'var(--raw-e5e7eb)'}`,
+    backgroundColor: isDark ? 'var(--raw-1e293b)' : 'var(--raw-ffffff)',
   };
 
   const featureIconBoxStyle = (gradient: string): React.CSSProperties => ({
@@ -323,19 +323,19 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const featureTitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '20px' : '24px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '12px',
   };
 
   const featureDescStyle: React.CSSProperties = {
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     lineHeight: 1.6,
   };
 
   // How it works section
   const howItWorksSectionStyle: React.CSSProperties = {
     padding: isMobile ? '48px 0' : isTablet ? '72px 0' : '96px 0',
-    backgroundColor: isDark ? '#0F172A' : '#ffffff',
+    backgroundColor: isDark ? 'var(--raw-0f172a)' : 'var(--raw-ffffff)',
   };
 
   const howItWorksBadgeStyle: React.CSSProperties = {
@@ -344,8 +344,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     gap: '8px',
     padding: '8px 16px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(34, 197, 94, 0.2)' : '#DCFCE7',
-    color: isDark ? '#86EFAC' : '#16A34A',
+    backgroundColor: isDark ? 'rgba(34, 197, 94, 0.2)' : 'var(--raw-dcfce7)',
+    color: isDark ? 'var(--raw-86efac)' : 'var(--raw-16a34a)',
     fontSize: '14px',
     fontWeight: 600,
     marginBottom: '16px',
@@ -376,12 +376,12 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const stepTitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '20px' : '24px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '16px',
   };
 
   const stepDescStyle: React.CSSProperties = {
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     lineHeight: 1.6,
   };
 
@@ -395,7 +395,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const ctaGradientBgStyle: React.CSSProperties = {
     position: 'absolute',
     inset: 0,
-    background: 'linear-gradient(to right, #667EEA, #764BA2)',
+    background: 'linear-gradient(to right, var(--raw-667eea), var(--raw-764ba2))',
     opacity: 0.9,
   };
 
@@ -410,7 +410,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
   const ctaHeadingStyle: React.CSSProperties = {
     fontSize: isMobile ? '26px' : isTablet ? '40px' : '60px',
     fontWeight: 700,
-    color: '#ffffff',
+    color: 'var(--raw-ffffff)',
     lineHeight: 1.2,
     marginBottom: '24px',
   };
@@ -435,8 +435,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     borderRadius: isMobile ? '12px' : '16px',
     cursor: 'pointer',
     border: 'none',
-    backgroundColor: '#ffffff',
-    color: '#7C3AED',
+    backgroundColor: 'var(--raw-ffffff)',
+    color: 'var(--raw-7c3aed)',
     boxShadow: '0 20px 60px rgba(0,0,0,0.2)',
     transition: 'all 0.2s',
     width: isMobile ? '100%' : 'auto',
@@ -453,8 +453,8 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     borderRadius: isMobile ? '12px' : '16px',
     cursor: 'pointer',
     backgroundColor: 'transparent',
-    color: '#ffffff',
-    border: '2px solid #ffffff',
+    color: 'var(--raw-ffffff)',
+    border: '2px solid var(--raw-ffffff)',
     transition: 'all 0.2s',
     width: isMobile ? '100%' : 'auto',
   };
@@ -489,29 +489,29 @@ export default function HomePage({ onNavigate }: HomePageProps) {
     height: isFullscreen ? '100%' : 'auto',
     borderRadius: isFullscreen ? 0 : '12px',
     overflow: 'hidden',
-    backgroundColor: isDark ? '#1E293B' : '#ffffff',
+    backgroundColor: isDark ? 'var(--raw-1e293b)' : 'var(--raw-ffffff)',
   };
 
   const stats = [
-    { number: "2,500+", label: "Active Customers", icon: Users, gradient: "linear-gradient(135deg, #3B82F6, #8B5CF6)" },
-    { number: "5M+", label: "Resumes Processed", icon: FileText, gradient: "linear-gradient(135deg, #8B5CF6, #EC4899)" },
-    { number: "40%", label: "Faster Hiring", icon: TrendingUp, gradient: "linear-gradient(135deg, #22C55E, #14B8A6)" },
-    { number: "98%", label: "Satisfaction", icon: Star, gradient: "linear-gradient(135deg, #F97316, #EF4444)" },
+    { number: "2,500+", label: "Active Customers", icon: Users, gradient: "linear-gradient(135deg, var(--raw-3b82f6), var(--raw-8b5cf6))" },
+    { number: "5M+", label: "Resumes Processed", icon: FileText, gradient: "linear-gradient(135deg, var(--raw-8b5cf6), var(--raw-ec4899))" },
+    { number: "40%", label: "Faster Hiring", icon: TrendingUp, gradient: "linear-gradient(135deg, var(--raw-22c55e), var(--raw-14b8a6))" },
+    { number: "98%", label: "Satisfaction", icon: Star, gradient: "linear-gradient(135deg, var(--raw-f97316), var(--raw-ef4444))" },
   ];
 
   const features = [
-    { icon: Sparkles, title: "AI Resume Scoring", description: "Automatically rank candidates based on job requirements with 95% accuracy", gradient: "linear-gradient(135deg, #3B82F6, #8B5CF6)" },
-    { icon: Video, title: "Video Interviews", description: "Conduct and record video interviews with AI-powered sentiment analysis", gradient: "linear-gradient(135deg, #8B5CF6, #EC4899)" },
-    { icon: BarChart3, title: "Advanced Analytics", description: "Get insights into your hiring pipeline with real-time dashboards", gradient: "linear-gradient(135deg, #22C55E, #14B8A6)" },
-    { icon: FileText, title: "Smart Assessments", description: "Create custom tests and quizzes with automatic grading", gradient: "linear-gradient(135deg, #F97316, #EF4444)" },
-    { icon: Users, title: "Team Collaboration", description: "Work together with hiring managers and interviewers in real-time", gradient: "linear-gradient(135deg, #EC4899, #8B5CF6)" },
-    { icon: Shield, title: "Enterprise Security", description: "SOC 2 Type II certified with bank-level encryption", gradient: "linear-gradient(135deg, #14B8A6, #3B82F6)" },
+    { icon: Sparkles, title: "AI Resume Scoring", description: "Automatically rank candidates based on job requirements with 95% accuracy", gradient: "linear-gradient(135deg, var(--raw-3b82f6), var(--raw-8b5cf6))" },
+    { icon: Video, title: "Video Interviews", description: "Conduct and record video interviews with AI-powered sentiment analysis", gradient: "linear-gradient(135deg, var(--raw-8b5cf6), var(--raw-ec4899))" },
+    { icon: BarChart3, title: "Advanced Analytics", description: "Get insights into your hiring pipeline with real-time dashboards", gradient: "linear-gradient(135deg, var(--raw-22c55e), var(--raw-14b8a6))" },
+    { icon: FileText, title: "Smart Assessments", description: "Create custom tests and quizzes with automatic grading", gradient: "linear-gradient(135deg, var(--raw-f97316), var(--raw-ef4444))" },
+    { icon: Users, title: "Team Collaboration", description: "Work together with hiring managers and interviewers in real-time", gradient: "linear-gradient(135deg, var(--raw-ec4899), var(--raw-8b5cf6))" },
+    { icon: Shield, title: "Enterprise Security", description: "SOC 2 Type II certified with bank-level encryption", gradient: "linear-gradient(135deg, var(--raw-14b8a6), var(--raw-3b82f6))" },
   ];
 
   const steps = [
-    { step: "01", title: "Create Your Account", description: "Sign up in under 2 minutes with no credit card required", gradient: "linear-gradient(135deg, #3B82F6, #8B5CF6)" },
-    { step: "02", title: "Post Your Jobs", description: "Add job descriptions and let our AI automatically parse requirements", gradient: "linear-gradient(135deg, #8B5CF6, #EC4899)" },
-    { step: "03", title: "Start Hiring", description: "Receive ranked candidates and schedule interviews instantly", gradient: "linear-gradient(135deg, #EC4899, #F97316)" },
+    { step: "01", title: "Create Your Account", description: "Sign up in under 2 minutes with no credit card required", gradient: "linear-gradient(135deg, var(--raw-3b82f6), var(--raw-8b5cf6))" },
+    { step: "02", title: "Post Your Jobs", description: "Add job descriptions and let our AI automatically parse requirements", gradient: "linear-gradient(135deg, var(--raw-8b5cf6), var(--raw-ec4899))" },
+    { step: "03", title: "Start Hiring", description: "Receive ranked candidates and schedule interviews instantly", gradient: "linear-gradient(135deg, var(--raw-ec4899), var(--raw-f97316))" },
   ];
 
   return (
@@ -524,18 +524,18 @@ export default function HomePage({ onNavigate }: HomePageProps) {
           <div style={textCenterStyle}>
             {/* Badge */}
             <div style={badgeStyle}>
-              <Sparkles style={{ width: 16, height: 16, color: isDark ? '#A78BFA' : '#667EEA' }} />
+              <Sparkles style={{ width: 16, height: 16, color: isDark ? 'var(--raw-a78bfa)' : 'var(--raw-667eea)' }} />
               <span style={badgeTextStyle}>Rated 4.9/5 by 2,500+ recruitment teams</span>
               <div style={{ display: 'flex', gap: '2px' }}>
                 {[...Array(5)].map((_, i) => (
-                  <Star key={i} style={{ width: 12, height: 12, fill: '#667EEA', color: '#667EEA' }} />
+                  <Star key={i} style={{ width: 12, height: 12, fill: 'var(--raw-667eea)', color: 'var(--raw-667eea)' }} />
                 ))}
               </div>
             </div>
 
             {/* Main Headline */}
             <h1 style={h1Style}>
-              <span style={{ color: isDark ? '#ffffff' : '#111827' }}>Hire Smarter with</span>
+              <span style={{ color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)' }}>Hire Smarter with</span>
               <br />
               <span style={gradientTextStyle}>AI-Powered Recruiting</span>
             </h1>
@@ -543,7 +543,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             {/* Subheadline */}
             <p style={subHeadlineStyle}>
               Transform your hiring process with intelligent resume screening, automated assessments, and AI-powered interviews. Save{" "}
-              <span style={{ fontWeight: 600, color: '#667EEA' }}>15+ hours per week</span>.
+              <span style={{ fontWeight: 600, color: 'var(--raw-667eea)' }}>15+ hours per week</span>.
             </p>
 
             {/* CTA Buttons */}
@@ -561,15 +561,15 @@ export default function HomePage({ onNavigate }: HomePageProps) {
             {/* Trust Indicators */}
             <div style={trustIndicatorsStyle}>
               <div style={trustItemStyle}>
-                <CheckCircle2 style={{ width: 20, height: 20, color: '#22C55E' }} />
+                <CheckCircle2 style={{ width: 20, height: 20, color: 'var(--raw-22c55e)' }} />
                 <span>{trialDays}-{trialDays === 1 ? 'day' : 'days'} free trial</span>
               </div>
               <div style={trustItemStyle}>
-                <CheckCircle2 style={{ width: 20, height: 20, color: '#22C55E' }} />
+                <CheckCircle2 style={{ width: 20, height: 20, color: 'var(--raw-22c55e)' }} />
                 <span>No credit card required</span>
               </div>
               <div style={trustItemStyle}>
-                <CheckCircle2 style={{ width: 20, height: 20, color: '#22C55E' }} />
+                <CheckCircle2 style={{ width: 20, height: 20, color: 'var(--raw-22c55e)' }} />
                 <span>Setup in 5 minutes</span>
               </div>
             </div>
@@ -589,36 +589,36 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
                 <div style={{
                   width: 48, height: 48, borderRadius: 12,
-                  background: 'linear-gradient(135deg, #8B5CF6, #EC4899)',
+                  background: 'linear-gradient(135deg, var(--raw-8b5cf6), var(--raw-ec4899))',
                   display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}>
-                  <Play style={{ width: 24, height: 24, color: '#fff' }} />
+                  <Play style={{ width: 24, height: 24, color: 'var(--raw-ffffff)' }} />
                 </div>
                 <div>
-                  <h3 style={{ fontWeight: 700, color: '#fff', fontSize: 18 }}>TalentFlow Product Demo</h3>
+                  <h3 style={{ fontWeight: 700, color: 'var(--raw-ffffff)', fontSize: 18 }}>TalentFlow Product Demo</h3>
                   <p style={{ fontSize: 14, color: 'rgba(255,255,255,0.8)' }}>See how TalentFlow transforms recruiting</p>
                 </div>
               </div>
               <button onClick={() => setDemoModalOpen(false)} style={{ padding: 8, background: 'none', border: 'none', cursor: 'pointer' }} aria-label="Close">
-                <X style={{ width: 24, height: 24, color: '#fff' }} />
+                <X style={{ width: 24, height: 24, color: 'var(--raw-ffffff)' }} />
               </button>
             </div>
 
             <div style={{
               aspectRatio: isFullscreen ? 'auto' : '16/9',
               height: isFullscreen ? '100vh' : 'auto',
-              background: 'linear-gradient(135deg, #1E293B, #581C87, #9D174D)',
+              background: 'linear-gradient(135deg, var(--raw-1e293b), var(--raw-581c87), var(--raw-9d174d))',
               display: 'flex', alignItems: 'center', justifyContent: 'center'
             }}>
               <div style={{ textAlign: 'center', padding: 32 }}>
                 <div style={{
                   width: 128, height: 128, margin: '0 auto 24px',
-                  borderRadius: '50%', background: 'linear-gradient(135deg, #8B5CF6, #EC4899)',
+                  borderRadius: '50%', background: 'linear-gradient(135deg, var(--raw-8b5cf6), var(--raw-ec4899))',
                   display: 'flex', alignItems: 'center', justifyContent: 'center'
                 }}>
-                  <Video style={{ width: 64, height: 64, color: '#fff' }} />
+                  <Video style={{ width: 64, height: 64, color: 'var(--raw-ffffff)' }} />
                 </div>
-                <h4 style={{ fontSize: 30, fontWeight: 700, color: '#fff', marginBottom: 12 }}>Product Demo Video</h4>
+                <h4 style={{ fontSize: 30, fontWeight: 700, color: 'var(--raw-ffffff)', marginBottom: 12 }}>Product Demo Video</h4>
                 <p style={{ fontSize: 18, color: 'rgba(255,255,255,0.8)', maxWidth: 640, margin: '0 auto 32px' }}>
                   Watch how TalentFlow streamlines your entire recruiting process
                 </p>
@@ -627,7 +627,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
                     Start Free Trial <ArrowRight style={{ width: 20, height: 20 }} />
                   </button>
                   <button onClick={() => { setDemoModalOpen(false); onNavigate("contact"); }}
-                    style={{ ...outlineButtonStyle, borderColor: '#fff', color: '#fff', backgroundColor: 'transparent' }}>
+                    style={{ ...outlineButtonStyle, borderColor: 'var(--raw-ffffff)', color: 'var(--raw-ffffff)', backgroundColor: 'transparent' }}>
                     Schedule Live Demo
                   </button>
                 </div>
@@ -646,7 +646,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               return (
                 <div key={index} style={statCardStyle}>
                   <div style={statIconBoxStyle(stat.gradient)}>
-                    <Icon style={{ width: isSmallMobile ? 20 : 28, height: isSmallMobile ? 20 : 28, color: '#fff' }} />
+                    <Icon style={{ width: isSmallMobile ? 20 : 28, height: isSmallMobile ? 20 : 28, color: 'var(--raw-ffffff)' }} />
                   </div>
                   {isSmallMobile ? (
                     <div style={{ textAlign: 'left' }}>
@@ -686,7 +686,7 @@ export default function HomePage({ onNavigate }: HomePageProps) {
               return (
                 <div key={index} style={featureCardStyle}>
                   <div style={featureIconBoxStyle(feature.gradient)}>
-                    <Icon style={{ width: 32, height: 32, color: '#fff' }} />
+                    <Icon style={{ width: 32, height: 32, color: 'var(--raw-ffffff)' }} />
                   </div>
                   <h3 style={featureTitleStyle}>{feature.title}</h3>
                   <p style={featureDescStyle}>{feature.description}</p>

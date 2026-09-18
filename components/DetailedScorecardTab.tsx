@@ -828,7 +828,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
           onMouseEnter={cancelHideReasoningTooltip}
           onMouseLeave={hideReasoningTooltip}
         >
-          <div className="whitespace-normal bg-[#e1ebed] text-gray-800 text-xs rounded-xl py-2.5 px-3.5 shadow-xl border border-gray-200 leading-relaxed select-text">
+          <div className="whitespace-normal bg-[var(--raw-e1ebed)] text-gray-800 text-xs rounded-xl py-2.5 px-3.5 shadow-xl border border-gray-200 leading-relaxed select-text">
             {reasoningTooltip.text}
           </div>
         </div>,

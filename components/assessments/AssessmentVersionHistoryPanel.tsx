@@ -893,8 +893,8 @@ export default function AssessmentVersionHistoryPanel({
                          Action td (5) < sticky header (7) < pinned corner (8). */
                       className={`sticky top-0 py-2 px-3 text-xs font-semibold text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 ${minW} ${
                         label === 'Actions'
-                          ? 'z-[7] lg:right-0 lg:z-[8] shadow-[inset_0_-1px_0_#e5e7eb] lg:shadow-[inset_0_-1px_0_#e5e7eb,-1px_0_0_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#334155] dark:lg:shadow-[inset_0_-1px_0_#334155,-1px_0_0_0_#334155]'
-                          : 'z-[7] shadow-[inset_0_-1px_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#334155]'
+                          ? 'z-[7] lg:right-0 lg:z-[8] shadow-[inset_0_-1px_0_var(--raw-e5e7eb)] lg:shadow-[inset_0_-1px_0_var(--raw-e5e7eb),-1px_0_0_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155)] dark:lg:shadow-[inset_0_-1px_0_var(--raw-334155),-1px_0_0_0_var(--raw-334155)]'
+                          : 'z-[7] shadow-[inset_0_-1px_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155)]'
                       }`}
                     >
                       {label}
@@ -927,7 +927,7 @@ export default function AssessmentVersionHistoryPanel({
                   const newestAssessmentVersion = group.assessments[0]?.version ?? 1;
                   /* Opaque only while pinned — an unpinned cell should take
                      the row's own hover tint like every other cell. */
-                  const stickyTint = 'lg:bg-white lg:group-hover:bg-[#f8f9fc] dark:lg:bg-slate-900 dark:lg:group-hover:bg-slate-800';
+                  const stickyTint = 'lg:bg-white lg:group-hover:bg-[var(--raw-f8f9fc)] dark:lg:bg-slate-900 dark:lg:group-hover:bg-slate-800';
 
                   return (
                     /* One <tr> per job version, then one more carrying its
@@ -993,7 +993,7 @@ export default function AssessmentVersionHistoryPanel({
                             324px viewport, leaving the reader scrolling the
                             middle columns under it — so below `lg` it is an
                             ordinary last column reached by scrolling. */}
-                        <td className={`py-3 px-3 whitespace-nowrap align-middle lg:sticky lg:right-0 lg:z-[5] lg:shadow-[-1px_0_0_0_#e5e7eb] transition-colors duration-200 dark:lg:shadow-[-1px_0_0_0_#334155] ${stickyTint}`}>
+                        <td className={`py-3 px-3 whitespace-nowrap align-middle lg:sticky lg:right-0 lg:z-[5] lg:shadow-[-1px_0_0_0_var(--raw-e5e7eb)] transition-colors duration-200 dark:lg:shadow-[-1px_0_0_0_var(--raw-334155)] ${stickyTint}`}>
                           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                             {/* Read THIS version. Never disabled and never
                                 conditional on the assessment state beside it:
