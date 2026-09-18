@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import AITalentMatchPage from '@/components/AITalentMatchPage';
 import { jdService, JDResponse } from '@/lib/services/jdService';
-import { aiMatchService, AIMatchSessionResponse } from '@/lib/services/aiMatchService';
+import { aiMatchService, AIMatchSessionResponse, AIMatchSessionListResponse } from '@/lib/services/aiMatchService';
 import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
 import { Loader2 } from 'lucide-react';
 import FeatureGate from '@/components/shared/FeatureGate';
@@ -85,6 +85,11 @@ export default function AITalentMatchRoute() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [matchHistory, setMatchHistory] = useState<MatchHistory[]>([]);
   const [matchSessionCounts, setMatchSessionCounts] = useState<Record<string, number>>({});
+  // "Top Match Rating (10)" / "Top Match Rating (9-7)": tenant-wide counts
+  // precomputed server-side in the same /ai-match/sessions call, so these
+  // stat cards render immediately instead of waiting on every session's
+  // full candidate detail to be fetched and bucket-counted client-side.
+  const [ratingBandCounts, setRatingBandCounts] = useState<{ exact: number; partial: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,7 +108,9 @@ export default function AITalentMatchRoute() {
         // and match history in parallel
         const [jobsResponse, historyResponse] = await Promise.all([
           jdService.list({ page_size: 100, source: 'my-jds' }), // Fetch user's jobs to show disabled jobs in history
-          aiMatchService.listSessions({ page_size: 100 }).catch(() => ({ items: [], total: 0 })),
+          aiMatchService.listSessions({ page_size: 100 }).catch(
+            (): AIMatchSessionListResponse => ({ items: [], total: 0, page: 1, page_size: 100 })
+          ),
         ]);
 
         const transformedJobs = jobsResponse.items.map(transformJDToJob);
@@ -131,6 +138,10 @@ export default function AITalentMatchRoute() {
           }
         }
         setMatchSessionCounts(sessionCounts);
+        setRatingBandCounts({
+          exact: historyResponse.top_rating_exact_count ?? 0,
+          partial: historyResponse.top_rating_partial_count ?? 0,
+        });
 
         // Keep route load summary-only.
         // Candidate details are fetched lazily when the user opens a specific session.
@@ -162,6 +173,7 @@ export default function AITalentMatchRoute() {
           setJobs([]);
           setMatchHistory([]);
           setMatchSessionCounts({});
+          setRatingBandCounts(null);
         }
       } finally {
         setIsLoading(false);
@@ -234,6 +246,7 @@ export default function AITalentMatchRoute() {
           jobs={jobs}
           matchHistory={matchHistory}
           matchSessionCounts={matchSessionCounts}
+          ratingBandCounts={ratingBandCounts}
           onSaveMatch={handleSaveMatch}
           onMatchComplete={() => fetchData({ silent: true })}
         />
