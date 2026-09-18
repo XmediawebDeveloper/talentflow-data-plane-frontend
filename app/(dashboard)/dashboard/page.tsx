@@ -250,7 +250,7 @@ function AreaChart({ buckets, stroke, fillFrom, fillTo }: AreaChartProps) {
             y1={y}
             x2={padding.left + innerW}
             y2={y}
-            stroke="#e2e8f0"
+            stroke="var(--raw-e2e8f0)"
             strokeWidth="1"
             strokeDasharray={g === 1 ? '0' : '3,3'}
           />
@@ -269,7 +269,7 @@ function AreaChart({ buckets, stroke, fillFrom, fillTo }: AreaChartProps) {
             y={height - 6}
             textAnchor="middle"
             fontSize="9"
-            fill="#94a3b8"
+            fill="var(--raw-94a3b8)"
             fontFamily="ui-sans-serif, system-ui"
           >
             {p.label}
@@ -297,7 +297,7 @@ function FunnelDonut({ segments, centerLabel, centerValue }: FunnelDonutProps) {
   return (
     <div className="relative flex flex-col items-center">
       <svg viewBox={`0 0 ${size} ${size}`} width={size} height={size} aria-hidden>
-        <circle cx={center} cy={center} r={radius} fill="none" stroke="#f1f5f9" strokeWidth={stroke} />
+        <circle cx={center} cy={center} r={radius} fill="none" stroke="var(--raw-f1f5f9)" strokeWidth={stroke} />
         {segments.map((seg) => {
           const length = (seg.value / total) * circumference;
           const dashArray = `${length} ${circumference - length}`;
@@ -604,10 +604,10 @@ export default function DashboardPage() {
 
   // ───── Pipeline (real values only) ─────
   const pipelineSteps = [
-    { key: 'resumes', label: 'Resumes', value: stats?.total_resumes ?? 0, color: '#0f3c99' },
-    { key: 'scoring', label: 'Scoring runs', value: stats?.total_scorings ?? 0, color: '#079cc4' },
-    { key: 'assessments', label: 'Assessments', value: stats?.total_assessments ?? 0, color: '#ed881c' },
-    { key: 'interviews', label: 'AI interviews', value: interviewTotal ?? 0, color: '#334155' },
+    { key: 'resumes', label: 'Resumes', value: stats?.total_resumes ?? 0, color: 'var(--raw-0f3c99)' },
+    { key: 'scoring', label: 'Scoring runs', value: stats?.total_scorings ?? 0, color: 'var(--raw-079cc4)' },
+    { key: 'assessments', label: 'Assessments', value: stats?.total_assessments ?? 0, color: 'var(--raw-ed881c)' },
+    { key: 'interviews', label: 'AI interviews', value: interviewTotal ?? 0, color: 'var(--raw-334155)' },
   ];
   const pipelineMax = Math.max(...pipelineSteps.map((s) => s.value), 1);
   const pipelineTotal = pipelineSteps.reduce((a, b) => a + b.value, 0);

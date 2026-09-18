@@ -10,9 +10,6 @@ import {
   CheckCircle,
   FileText,
   Users,
-  MapPin,
-  Calendar,
-  Clock,
   Eye,
   Edit2,
   RefreshCw,
@@ -21,10 +18,7 @@ import {
   Filter,
   ChevronDown,
   Loader2,
-  Building2,
   TrendingUp,
-  LayoutGrid,
-  List,
   Archive,
   Power,
   AlertCircle,
@@ -39,7 +33,6 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 
 type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
-type ViewMode = 'grid' | 'list';
 
 export default function JobOpeningsPage() {
   const router = useRouter();
@@ -73,7 +66,6 @@ export default function JobOpeningsPage() {
     }
   };
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [refetchKey, setRefetchKey] = useState(0);
 
   // Quota info for job publishing limit
@@ -377,32 +369,6 @@ export default function JobOpeningsPage() {
                 </button>
               ))}
             </div>
-
-            {/* View Toggle */}
-            <div className="flex items-center gap-1 bg-gray-100 p-1 rounded-lg">
-              <button
-                onClick={() => setViewMode('list')}
-                className={`p-2 rounded-md transition-colors ${
-                  viewMode === 'list'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-900'
-                }`}
-                aria-label="List View" title="List View"
-              >
-                <List className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setViewMode('grid')}
-                className={`p-2 rounded-md transition-colors ${
-                  viewMode === 'grid'
-                    ? 'bg-white text-gray-900 shadow-sm'
-                    : 'text-gray-500 hover:text-gray-900'
-                }`}
-                aria-label="Grid View" title="Grid View"
-              >
-                <LayoutGrid className="w-4 h-4" />
-              </button>
-            </div>
           </div>
         </div>
 
@@ -458,170 +424,6 @@ export default function JobOpeningsPage() {
                 )}
               </div>
             )}
-          </div>
-        ) : viewMode === 'grid' ? (
-          /* Grid View */
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {jobs.map((job) => (
-              <div
-                key={job.id}
-                className="bg-white rounded-xl border border-gray-200 p-4 sm:p-5 hover:shadow-md hover:border-[var(--border-dark)] hover:-translate-y-0.5 transition-all duration-200 group cursor-pointer"
-              >
-                {/* Header */}
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
-                    <h3 className="font-semibold text-gray-900 text-base mb-1 line-clamp-1 group-hover:text-gray-800 transition-colors">
-                      {job.title}
-                    </h3>
-                    {getStatusBadge(job.status, job.republished_at)}
-                  </div>
-                  <div className="relative">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActiveDropdown(activeDropdown === job.id ? null : job.id);
-                      }}
-                      className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                      <MoreVertical className="w-4 h-4 text-gray-400" />
-                    </button>
-                    {activeDropdown === job.id && (
-                      <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
-                        {/* View Applicants */}
-                        <button
-                          onClick={() => { router.push(`/recruitment/job-details?id=${job.id}&tab=applicants`); setActiveDropdown(null); }}
-                          className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                        >
-                          <Users className="w-4 h-4" />
-                          View Applicants
-                        </button>
-                        {/* Publish for drafts */}
-                        {job.status === 'draft' && (
-                          <button
-                            onClick={() => handleStatusChange(job.id, 'published')}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
-                          >
-                            <CheckCircle className="w-4 h-4" />
-                            Publish
-                          </button>
-                        )}
-                        {/* Disable Job for published */}
-                        {job.status === 'published' && canUpdateJd && (
-                          <button
-                            onClick={() => {
-                              if (!canUpdateJd) {
-                                toast.error('You do not have permission to update job descriptions');
-                                return;
-                              }
-                              handleStatusChange(job.id, 'disabled');
-                            }}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50"
-                          >
-                            <Power className="w-4 h-4" />
-                            Disable Job
-                          </button>
-                        )}
-                        {/* Re-enable JD for disabled */}
-                        {job.status === 'disabled' && canUpdateJd && (
-                          <button
-                            onClick={() => {
-                              if (!canUpdateJd) {
-                                toast.error('You do not have permission to update job descriptions');
-                                return;
-                              }
-                              handleStatusChange(job.id, 'published');
-                            }}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
-                          >
-                            <Power className="w-4 h-4" />
-                            Re-enable JD
-                          </button>
-                        )}
-                        {/* Archive Job */}
-                        {job.status !== 'archived' && canDeleteJd && (
-                          <button
-                            onClick={() => {
-                              if (!canDeleteJd) {
-                                toast.error('You do not have permission to archive job descriptions');
-                                return;
-                              }
-                              handleStatusChange(job.id, 'archived');
-                            }}
-                            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                          >
-                            <Archive className="w-4 h-4" />
-                            Archive Job
-                          </button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Info */}
-                <div className="space-y-2 mb-4">
-                  {job.department && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <Building2 className="w-4 h-4 text-gray-400" />
-                      <span>{job.department}</span>
-                    </div>
-                  )}
-                  {/* Location hidden for now */}
-                  {false && job.location && (
-                    <div className="flex items-center gap-2 text-sm text-gray-600">
-                      <MapPin className="w-4 h-4 text-gray-400" />
-                      <span>{job.location}</span>
-                    </div>
-                  )}
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Clock className="w-4 h-4 text-gray-400" />
-                    <span>{getExperienceText(job.experience_min, job.experience_max)}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Calendar className="w-4 h-4 text-gray-400" />
-                    <span>{formatISTDate(job.created_at)}</span>
-                  </div>
-                </div>
-
-                {/* Footer */}
-                <div className="pt-3 border-t border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
-                  <div className="flex items-center gap-1.5 text-xs sm:text-sm">
-                    <Users className="w-3 h-3 sm:w-4 sm:h-4 text-gray-400" />
-                    <span className="text-gray-600">{job.applicants_count || 0} applicants</span>
-                  </div>
-                  <div className="flex items-center gap-1.5 sm:gap-2 w-full sm:w-auto">
-                    {/* Edit Button */}
-                    <button
-                      onClick={() => {
-                        if (!canUpdateJd) {
-                          toast.error('You do not have permission to edit job descriptions');
-                          return;
-                        }
-                        router.push(`/recruitment/jd-creation?id=${job.id}`);
-                      }}
-                      disabled={!canUpdateJd}
-                      className={`flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium rounded-lg transition-colors border flex-1 sm:flex-initial justify-center ${
-                        canUpdateJd
-                          ? 'text-gray-600 hover:bg-gray-100 border-gray-200 cursor-pointer'
-                          : 'text-gray-400 bg-gray-50 border-gray-200 cursor-not-allowed opacity-60'
-                      }`}
-                      title={!canUpdateJd ? 'You do not have permission to edit job descriptions' : ''}
-                    >
-                      <Edit2 className="w-3 h-3 sm:w-4 sm:h-4" />
-                      Edit
-                    </button>
-                    {/* View Button */}
-                    <button
-                      onClick={() => router.push(`/recruitment/job-details?id=${job.id}`)}
-                      className="flex items-center gap-1 px-2 sm:px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 flex-1 sm:flex-initial justify-center"
-                    >
-                      <Eye className="w-3 h-3 sm:w-4 sm:h-4" />
-                      View
-                    </button>
-                  </div>
-                </div>
-              </div>
-            ))}
           </div>
         ) : (
           /* List View */

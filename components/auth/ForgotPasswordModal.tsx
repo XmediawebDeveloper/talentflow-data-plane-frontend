@@ -359,7 +359,7 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                   <path
                     d="M8.6 11.9l2.4 2.4 4.4-4.4"
                     fill="none"
-                    stroke="#fff"
+                    stroke="var(--raw-ffffff)"
                     strokeWidth="2.2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -379,11 +379,11 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                     fill="currentColor"
                     d="M20 5l10 3.6v8.1c0 6.6-4.3 11.2-10 12.8-5.7-1.6-10-6.2-10-12.8V8.6z"
                   />
-                  <rect x="16.2" y="17.4" width="7.6" height="7" rx="1.6" fill="#fff" />
+                  <rect x="16.2" y="17.4" width="7.6" height="7" rx="1.6" fill="var(--raw-ffffff)" />
                   <path
                     d="M17.8 17.4v-2.3a2.2 2.2 0 0 1 4.4 0v2.3"
                     fill="none"
-                    stroke="#fff"
+                    stroke="var(--raw-ffffff)"
                     strokeWidth="1.6"
                     strokeLinecap="round"
                   />
@@ -627,7 +627,7 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                       <path
                         d="M8.6 11.9l2.4 2.4 4.4-4.4"
                         fill="none"
-                        stroke="#fff"
+                        stroke="var(--raw-ffffff)"
                         strokeWidth="2.2"
                         strokeLinecap="round"
                         strokeLinejoin="round"
@@ -685,7 +685,7 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                     <path
                       d="M8.6 11.9l2.4 2.4 4.4-4.4"
                       fill="none"
-                      stroke="#fff"
+                      stroke="var(--raw-ffffff)"
                       strokeWidth="2.4"
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -858,11 +858,11 @@ export default function ForgotPasswordModal({ isOpen, onClose }: ForgotPasswordM
                 <span className="tf-ok-panel-icon" aria-hidden="true">
                   <svg viewBox="0 0 24 24" width="24" height="24">
                     <path fill="currentColor" d="M12 2l7.5 2.7v6.1c0 4.9-3.2 8.4-7.5 9.6-4.3-1.2-7.5-4.7-7.5-9.6V4.7z" />
-                    <rect x="9.6" y="11.4" width="4.8" height="4.4" rx="1" fill="#fff" />
+                    <rect x="9.6" y="11.4" width="4.8" height="4.4" rx="1" fill="var(--raw-ffffff)" />
                     <path
                       d="M10.6 11.4v-1.5a1.4 1.4 0 0 1 2.8 0v1.5"
                       fill="none"
-                      stroke="#fff"
+                      stroke="var(--raw-ffffff)"
                       strokeWidth="1.1"
                       strokeLinecap="round"
                     />

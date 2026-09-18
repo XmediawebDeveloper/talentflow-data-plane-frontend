@@ -621,6 +621,11 @@ export default function AITalentMatchPage({
   // grouped "View by Candidates" uses.
   const [candidateCurrentPage, setCandidateCurrentPage] = useState(1);
   const [candidateItemsPerPage, setCandidateItemsPerPage] = useState(20);
+  // Separate page/size for the "View by Resumes" flat table — same filter
+  // and sort state as "View by Candidates" above, but its own row grouping,
+  // so the two views paginate independently.
+  const [resumeCurrentPage, setResumeCurrentPage] = useState(1);
+  const [resumeItemsPerPage, setResumeItemsPerPage] = useState(20);
   const [expandedCandidateGroups, setExpandedCandidateGroups] = useState<Set<string>>(new Set());
   const toggleCandidateGroupExpanded = (key: string) => {
     setExpandedCandidateGroups(prev => {
@@ -642,7 +647,7 @@ export default function AITalentMatchPage({
       dateFrom: '',
       dateTo: '',
     },
-    onChange: () => setCandidateCurrentPage(1),
+    onChange: () => { setCandidateCurrentPage(1); setResumeCurrentPage(1); },
   });
   const candidateSearchQuery = candidateSearch.appliedQuery;
   const {
@@ -661,6 +666,7 @@ export default function AITalentMatchPage({
 
   useEffect(() => {
     setCandidateCurrentPage(1);
+    setResumeCurrentPage(1);
   }, [candidateSortBy, candidateSortOrder]);
 
   const openCandidateMatch = (historyId: string) => {
@@ -2019,6 +2025,11 @@ export default function AITalentMatchPage({
       return (a.job.score - b.job.score) * direction;
     });
 
+    const paginatedAllResumeRows = sortedAllResumeRows.slice(
+      (resumeCurrentPage - 1) * resumeItemsPerPage,
+      resumeCurrentPage * resumeItemsPerPage,
+    );
+
     // Options come from the loaded rows, so only real values are offered.
     const candidateLocations = Array.from(
       new Set(candidateRows.map(row => row.location).filter(Boolean) as string[])
@@ -3246,7 +3257,7 @@ export default function AITalentMatchPage({
                       </tr>
                     </thead>
                     <tbody>
-                      {sortedAllResumeRows.map(({ key, row, job }, index) => (
+                      {paginatedAllResumeRows.map(({ key, row, job }, index) => (
                         <tr
                           key={key}
                           onClick={() => openCandidateResume(row, sortedAllResumeRows.map(entry => entry.row))}
@@ -3396,7 +3407,7 @@ export default function AITalentMatchPage({
 
                 {/* Mobile cards — the table is too wide below md */}
                 <div className="md:hidden space-y-3">
-                  {sortedAllResumeRows.map(({ key, row, job }) => (
+                  {paginatedAllResumeRows.map(({ key, row, job }) => (
                     <div
                       key={key}
                       onClick={() => openCandidateResume(row, sortedAllResumeRows.map(entry => entry.row))}
@@ -3419,6 +3430,15 @@ export default function AITalentMatchPage({
                     </div>
                   ))}
                 </div>
+
+                <ListPagination
+                  currentPage={resumeCurrentPage}
+                  itemsPerPage={resumeItemsPerPage}
+                  totalItems={sortedAllResumeRows.length}
+                  onPageChange={setResumeCurrentPage}
+                  onItemsPerPageChange={setResumeItemsPerPage}
+                  itemLabel="resumes"
+                />
               </>
             )}
           </>

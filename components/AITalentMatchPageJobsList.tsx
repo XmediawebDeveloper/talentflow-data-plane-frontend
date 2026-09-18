@@ -1,4 +1,3 @@
-import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Sparkles, MapPin, Briefcase, Building2, Calendar, FileText, User, Users, Clock, ArrowRight, History, DollarSign, Award, TrendingUp, Search, Filter, ChevronDown, X, LayoutGrid, List as ListIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { formatISTDate } from '@/lib/utils/dateUtils';
@@ -105,7 +104,6 @@ export default function AITalentMatchPageJobsList({
   onBack
 }: AITalentMatchPageJobsListProps) {
   const [showFilters, setShowFilters] = useState(false);
-  const [jobsView, setJobsView] = useState<'grid' | 'list'>('list');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
 
@@ -257,8 +255,6 @@ export default function AITalentMatchPageJobsList({
           // The hook debounces into `appliedQuery`, so keystrokes pass through.
           searchDebounceMs={0}
           searchPlaceholder="Search by job title, department, or location..."
-          viewMode={jobsView}
-          onViewModeChange={setJobsView}
           onToggleFilters={() => setShowFilters(!showFilters)}
           filtersOpen={showFilters}
           activeFilterCount={search.activeFilterCount}
@@ -367,223 +363,6 @@ export default function AITalentMatchPageJobsList({
             )}
           </div>
 
-          {jobsView === 'grid' ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {paginatedJobs.map((job) => {
-              const jobHistory = getJobMatchHistory(job.id);
-              const hasHistory = jobHistory.length > 0;
-              const latestMatch = hasHistory ? jobHistory[jobHistory.length - 1] : null;
-
-              // "View Versions" — see the setup above this list for what each
-              // of these reads.
-              const sharedJob = toSharedJob(job);
-              const versionKey = lineageKey(sharedJob);
-              const versionsExpanded = versionLineage.isExpanded(versionKey);
-              const lineageSiblings = versionGroups.get(versionKey) ?? [sharedJob];
-              const visibleVersionCount = new Set(
-                lineageSiblings
-                  .filter(sibling => isVersionVisibleForScoring(sibling.status, sibling.id, versionLineage.versionApplicants))
-                  .map(sibling => sibling.versionNumber ?? 1),
-              ).size;
-              const hasVersionHistory = visibleVersionCount > 1;
-
-              // A version's own radio (inside "View Versions") can check this
-              // job in place of the card's own radio — both write the same
-              // `selectedJobId`, so the card reads as checked and Run AI
-              // Match targets the right id whichever radio was clicked.
-              const lineageIds = new Set(lineageSiblings.map(sibling => sibling.id));
-              lineageIds.add(job.id);
-              const isSelected = effectiveSelectedJobId !== null && lineageIds.has(effectiveSelectedJobId);
-              const isDisabled = effectiveSelectedJobId !== null && !isSelected;
-              const selectedTargetId = isSelected ? (effectiveSelectedJobId as string) : job.id;
-
-              return (
-                <div
-                  key={job.id}
-                  className={`rounded-xl border transition-all duration-150 flex flex-col ${
-                    isDisabled
-                      ? 'bg-gray-50 dark:bg-slate-900/60 border-gray-100 dark:border-slate-800 opacity-50 cursor-not-allowed'
-                      : `bg-white dark:bg-slate-900 cursor-pointer ${
-                          isSelected
-                            ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30'
-                            : 'border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'
-                        }`
-                  }`}
-                  onClick={() => { if (!isDisabled) handleToggleJob(job.id); }}
-                >
-                  {/* Card Header */}
-                  <div className="p-4 border-b border-gray-100">
-                    <div className="flex items-start justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); if (!isDisabled) handleToggleJob(job.id); }}
-                          disabled={isDisabled}
-                          className="flex h-9 w-9 flex-shrink-0 items-center justify-center"
-                          title={isSelected ? 'Deselect' : 'Select'}
-                          aria-label={isSelected ? 'Deselect job' : 'Select job'}
-                        >
-                          <input
-                            type="radio"
-                            checked={isSelected}
-                            disabled={isDisabled}
-                            readOnly
-                            className="w-4 h-4 text-brand-blue border-gray-300 focus:ring-brand-blue/40 cursor-pointer pointer-events-none disabled:cursor-not-allowed"
-                          />
-                        </button>
-                        <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-                          <Briefcase className="h-4 w-4 text-brand-blue" />
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
-                        {job.currentVersion && (
-                          <span className="px-2 py-0.5 rounded-full text-xs bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20 flex items-center gap-1.5">
-                            <div className="w-1.5 h-1.5 rounded-full bg-brand-cyan"></div>
-                            v{job.currentVersion}
-                          </span>
-                        )}
-                        {job.currentVersion && (
-                          <span className={`px-2 py-0.5 rounded-full text-xs flex items-center gap-1.5 border ${
-                            job.currentVersion > 1
-                              ? 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20'
-                              : 'bg-green-50 text-green-700 border-green-200'
-                          }`}>
-                            <div className={`w-1.5 h-1.5 rounded-full ${job.currentVersion > 1 ? 'bg-brand-orange' : 'bg-green-500'}`}></div>
-                            {job.currentVersion > 1 ? 'Republished' : 'Published'}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 mb-2 flex-wrap">
-                      {job.jobId && (
-                        <JobIdBadge>{job.jobId}</JobIdBadge>
-                      )}
-                      <h3
-                        className="text-sm sm:text-base font-medium text-gray-900 line-clamp-2 flex-1 min-w-0"
-                        title={job.title}
-                      >
-                        {job.title}
-                      </h3>
-                    </div>
-                  </div>
-
-                  {/* Card Body */}
-                  <div className="p-4 flex-1 flex flex-col">
-                    <div className="space-y-2 mb-4">
-                      {job.department && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Briefcase className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                          <span className="truncate">{job.department}</span>
-                        </div>
-                      )}
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <MapPin className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                        <span className="truncate">{job.location && job.location.trim() ? job.location : '-'}</span>
-                      </div>
-                      {job.employmentType && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <Briefcase className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                          <span className="truncate">{job.employmentType}</span>
-                        </div>
-                      )}
-                      {job.experience && (
-                        <div className="flex items-center gap-2 text-sm text-gray-600">
-                          <TrendingUp className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                          <span>{job.experience}</span>
-                        </div>
-                      )}
-                    </div>
-
-                    {/* Applicants */}
-                    <div className="flex items-center gap-2 px-3 py-1.5 bg-brand-blue/5 ring-1 ring-brand-blue/15 rounded-lg mb-3">
-                      <User className="w-4 h-4 text-brand-blue" />
-                      <span className="text-sm text-brand-blue font-medium">
-                        {job.applicants} {job.applicants === 1 ? 'applicant' : 'applicants'}
-                      </span>
-                    </div>
-
-                    {/* Match History */}
-                    {hasHistory && latestMatch && (
-                      <div className="bg-green-50 ring-1 ring-green-200 rounded-lg p-2.5 mb-3">
-                        <div className="flex items-center justify-between">
-                          <div className="min-w-0">
-                            <div className="text-[10px] text-gray-600 mb-0.5">Last Matched</div>
-                            <div className="flex items-center gap-1.5">
-                              <Clock className="w-3 h-3 text-gray-500 flex-shrink-0" />
-                              <span className="text-xs text-gray-700 font-medium truncate">
-                                {formatISTDate(latestMatch.matchedAt.toISOString())}
-                              </span>
-                            </div>
-                          </div>
-                          <div className="text-center flex-shrink-0 ml-2">
-                            <div className="text-[10px] text-gray-600 mb-0.5">Candidates</div>
-                            <div className="text-base font-bold text-green-700">{latestMatch.totalMatches}</div>
-                          </div>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* View Versions — same button/panel Resume Scoring's job
-                        picker uses, only offered when this job actually has
-                        more than one version worth showing. */}
-                    {hasVersionHistory && (
-                      <div className="mb-3 flex items-center justify-end">
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); versionLineage.toggle(versionKey, job.id); }}
-                          aria-expanded={versionsExpanded}
-                          className={`h-7 px-2 inline-flex items-center gap-1 whitespace-nowrap border rounded-md text-xs transition-colors duration-200 ${
-                            versionsExpanded
-                              ? 'bg-brand-sky text-brand-blue border-brand-blue/30 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10 dark:bg-slate-800 dark:text-slate-100 dark:border-brand-blue/50'
-                              : 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/30 hover:bg-brand-blue-2'
-                          }`}
-                          title={versionsExpanded ? 'Hide version history' : 'View version history'}
-                        >
-                          {versionsExpanded ? 'Hide Versions' : 'View Versions'}
-                          <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${versionsExpanded ? 'rotate-180' : ''}`} />
-                        </button>
-                      </div>
-                    )}
-                    {versionsExpanded && (
-                      <div onClick={(e) => e.stopPropagation()}>
-                        <JobVersionHistoryPanel
-                          job={sharedJob}
-                          versions={versionLineage.lineages[versionKey]}
-                          loading={versionLineage.isLoading(versionKey)}
-                          versionDetails={versionLineage.versionDetails}
-                          versionApplicants={versionLineage.versionApplicants}
-                          openInNewTab
-                          staticRows
-                          publishedOnly
-                          onSelectVersion={(versionJob) => { if (!isDisabled) handleToggleJob(versionJob.id); }}
-                          selectedVersionId={effectiveSelectedJobId}
-                          selectionDisabled={isDisabled}
-                          selectionDisabledReason="Deselect the currently checked job first"
-                          selectHint={(versionJob) => `Run AI Match against v${versionJob.versionNumber ?? 1}`}
-                        />
-                      </div>
-                    )}
-
-                    {/* Action Button - pinned to bottom, only once this job
-                        (or one of its versions) is checked. Every other job
-                        is disabled until it's unchecked again, so there is
-                        never more than one to show a button for. */}
-                    {isSelected && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); onSelectJob(selectedTargetId); }}
-                        className="mt-auto w-full px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-lg hover:shadow-brand-blue/30 flex items-center justify-center gap-2 whitespace-nowrap text-sm"
-                      >
-                        <Sparkles className="w-4 h-4" />
-                        Run AI Match
-                        <ArrowRight className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-          ) : (
             <div className="space-y-3">
               {paginatedJobs.map((job) => {
                 const jobHistory = getJobMatchHistory(job.id);
@@ -811,7 +590,6 @@ export default function AITalentMatchPageJobsList({
                 );
               })}
             </div>
-          )}
 
           <ListPagination
             currentPage={currentPage}

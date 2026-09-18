@@ -504,7 +504,7 @@ function escapeHtml(s: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#039;');
+    .replace(/'/g, '&var(--raw-003399);');
 }
 
 // ── Transcript diff helpers ────────────────────────────────────────
@@ -2008,9 +2008,9 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                               <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} />
                               <Tooltip />
                               <Legend />
-                              <Line type="monotone" dataKey="confidence" stroke="#16a34a" strokeWidth={2} name="Confidence" dot={{ r: 3 }} />
-                              <Line type="monotone" dataKey="nervousness" stroke="#ef4444" strokeWidth={2} name="Nervousness" dot={{ r: 3 }} />
-                              <Line type="monotone" dataKey="engagement" stroke="#0f3c99" strokeWidth={2} name="Engagement" dot={{ r: 3 }} />
+                              <Line type="monotone" dataKey="confidence" stroke="var(--raw-16a34a)" strokeWidth={2} name="Confidence" dot={{ r: 3 }} />
+                              <Line type="monotone" dataKey="nervousness" stroke="var(--raw-ef4444)" strokeWidth={2} name="Nervousness" dot={{ r: 3 }} />
+                              <Line type="monotone" dataKey="engagement" stroke="var(--raw-0f3c99)" strokeWidth={2} name="Engagement" dot={{ r: 3 }} />
                             </LineChart>
                           </ResponsiveContainer>
                         </div>
@@ -2248,31 +2248,31 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 const exportQaPDF = async () => {
                   const html2pdf = (await import('html2pdf.js')).default;
                   const root = document.createElement('div');
-                  root.style.cssText = 'padding:24px;font-family:Arial,sans-serif;color:#111;max-width:720px;';
+                  root.style.cssText = 'padding:24px;font-family:Arial,sans-serif;color:var(--raw-111111);max-width:720px;';
                   let inner = `<h1 style="font-size:20px;margin:0 0 4px 0">Q&amp;A Transcript</h1>
-                    <div style="font-size:12px;color:#666;margin-bottom:16px">${candidateNameLabel} · ${groups.length} questions</div>`;
+                    <div style="font-size:12px;color:var(--raw-666666);margin-bottom:16px">${candidateNameLabel} · ${groups.length} questions</div>`;
                   groups.forEach((g: any, i: number) => {
                     const it = g.main;
                     const rl = roundLabelFor(it.round_type);
                     const topic = it.topic && it.topic !== 'general' ? it.topic : '';
-                    inner += `<div style="margin-bottom:14px;padding:10px 12px;border:1px solid #e5e7eb;border-radius:6px;page-break-inside:avoid">
-                      <div style="font-size:11px;color:#6b7280;margin-bottom:4px">
+                    inner += `<div style="margin-bottom:14px;padding:10px 12px;border:1px solid var(--raw-e5e7eb);border-radius:6px;page-break-inside:avoid">
+                      <div style="font-size:11px;color:var(--raw-6b7280);margin-bottom:4px">
                         <b>Q${it.question_number ?? i + 1}</b>${rl ? ` · ${rl}` : ''}${topic ? ` · ${topic}` : ''}
                       </div>
-                      <div style="font-size:13px;font-weight:600;color:#111;margin-bottom:6px">${escapeHtml(it.question || '')}</div>
-                      <div style="font-size:12px;color:#374151"><b>Candidate Answer:</b> ${escapeHtml(it.answer || '—')}</div>`;
+                      <div style="font-size:13px;font-weight:600;color:var(--raw-111111);margin-bottom:6px">${escapeHtml(it.question || '')}</div>
+                      <div style="font-size:12px;color:var(--raw-374151)"><b>Candidate Answer:</b> ${escapeHtml(it.answer || '—')}</div>`;
                     (it.clarifications || []).forEach((cl: any, ci: number) => {
-                      inner += `<div style="margin-top:8px;padding-left:10px;border-left:2px solid #fcd34d">
-                        <div style="font-size:10px;color:#b45309;margin-bottom:2px"><b>CL${cl.clarification_number ?? ci + 1}</b></div>
-                        <div style="font-size:12px;font-weight:600;color:#111;margin-bottom:4px">${escapeHtml(cl.question || '')}</div>
-                        <div style="font-size:12px;color:#374151"><b>Candidate Answer:</b> ${escapeHtml(cl.answer || '—')}</div>
+                      inner += `<div style="margin-top:8px;padding-left:10px;border-left:2px solid var(--raw-fcd34d)">
+                        <div style="font-size:10px;color:var(--raw-b45309);margin-bottom:2px"><b>CL${cl.clarification_number ?? ci + 1}</b></div>
+                        <div style="font-size:12px;font-weight:600;color:var(--raw-111111);margin-bottom:4px">${escapeHtml(cl.question || '')}</div>
+                        <div style="font-size:12px;color:var(--raw-374151)"><b>Candidate Answer:</b> ${escapeHtml(cl.answer || '—')}</div>
                       </div>`;
                     });
                     g.followUps.forEach((fu: any, fi: number) => {
-                      inner += `<div style="margin-top:8px;padding-left:10px;border-left:2px solid #c4b5fd">
-                        <div style="font-size:10px;color:#7c3aed;margin-bottom:2px"><b>F${fi + 1}</b></div>
-                        <div style="font-size:12px;font-weight:600;color:#111;margin-bottom:4px">${escapeHtml(fu.question || '')}</div>
-                        <div style="font-size:12px;color:#374151"><b>Candidate Answer:</b> ${escapeHtml(fu.answer || '—')}</div>
+                      inner += `<div style="margin-top:8px;padding-left:10px;border-left:2px solid var(--raw-c4b5fd)">
+                        <div style="font-size:10px;color:var(--raw-7c3aed);margin-bottom:2px"><b>F${fi + 1}</b></div>
+                        <div style="font-size:12px;font-weight:600;color:var(--raw-111111);margin-bottom:4px">${escapeHtml(fu.question || '')}</div>
+                        <div style="font-size:12px;color:var(--raw-374151)"><b>Candidate Answer:</b> ${escapeHtml(fu.answer || '—')}</div>
                       </div>`;
                     });
                     inner += `</div>`;

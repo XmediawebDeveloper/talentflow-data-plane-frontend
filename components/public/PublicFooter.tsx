@@ -6,7 +6,7 @@ interface PublicFooterProps {
 
 export function PublicFooter({ onNavigate }: PublicFooterProps) {
   return (
-    <footer className="bg-[#111827] dark:bg-[#020617] text-white py-12 transition-colors duration-300 border-t border-[#1F2937] dark:border-[#0F172A]">
+    <footer className="bg-[var(--raw-111827)] dark:bg-[var(--raw-020617)] text-white py-12 transition-colors duration-300 border-t border-[var(--raw-1f2937)] dark:border-[var(--raw-0f172a)]">
       <div className="container mx-auto max-w-[1440px] px-6">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8 mb-8">
           <div>
@@ -20,7 +20,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
               className="h-10 w-auto"
             />
             </button>
-            <p className="text-[#9CA3AF] text-[14px] leading-relaxed">
+            <p className="text-[var(--raw-9ca3af)] text-[14px] leading-relaxed">
               AI-powered recruitment solutions for agencies, companies, and
               freelance recruiters.
             </p>
@@ -32,7 +32,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
               <li>
                 <button
                   onClick={() => onNavigate("features")}
-                  className="text-[#9CA3AF] hover:text-white transition-colors"
+                  className="text-[var(--raw-9ca3af)] hover:text-white transition-colors"
                 >
                   Features
                 </button>
@@ -40,7 +40,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
               <li>
                 <button
                   onClick={() => onNavigate("pricing")}
-                  className="text-[#9CA3AF] hover:text-white transition-colors"
+                  className="text-[var(--raw-9ca3af)] hover:text-white transition-colors"
                 >
                   Pricing
                 </button>
@@ -48,7 +48,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
               <li>
                 <button
                   onClick={() => onNavigate("how-it-works")}
-                  className="text-[#9CA3AF] hover:text-white transition-colors"
+                  className="text-[var(--raw-9ca3af)] hover:text-white transition-colors"
                 >
                   How It Works
                 </button>
@@ -56,7 +56,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
               <li>
                 <button
                   onClick={() => onNavigate("demo")}
-                  className="text-[#9CA3AF] hover:text-white transition-colors"
+                  className="text-[var(--raw-9ca3af)] hover:text-white transition-colors"
                 >
                   Request Demo
                 </button>
@@ -70,7 +70,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
               <li>
                 <button
                   onClick={() => onNavigate("about")}
-                  className="text-[#9CA3AF] hover:text-white transition-colors"
+                  className="text-[var(--raw-9ca3af)] hover:text-white transition-colors"
                 >
                   About Us
                 </button>
@@ -78,7 +78,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
               <li>
                 <button
                   onClick={() => onNavigate("contact")}
-                  className="text-[#9CA3AF] hover:text-white transition-colors"
+                  className="text-[var(--raw-9ca3af)] hover:text-white transition-colors"
                 >
                   Contact
                 </button>
@@ -86,7 +86,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
               <li>
                 <button
                   onClick={() => onNavigate("faq")}
-                  className="text-[#9CA3AF] hover:text-white transition-colors"
+                  className="text-[var(--raw-9ca3af)] hover:text-white transition-colors"
                 >
                   FAQ
                 </button>
@@ -94,7 +94,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
               <li>
                 <button
                   onClick={() => onNavigate("careers")}
-                  className="text-[#9CA3AF] hover:text-white transition-colors"
+                  className="text-[var(--raw-9ca3af)] hover:text-white transition-colors"
                 >
                   Careers
                 </button>
@@ -108,7 +108,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
               <li>
                 <button
                   onClick={() => onNavigate("privacy")}
-                  className="text-[#9CA3AF] hover:text-white transition-colors"
+                  className="text-[var(--raw-9ca3af)] hover:text-white transition-colors"
                 >
                   Privacy Policy
                 </button>
@@ -116,7 +116,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
               <li>
                 <button
                   onClick={() => onNavigate("terms")}
-                  className="text-[#9CA3AF] hover:text-white transition-colors"
+                  className="text-[var(--raw-9ca3af)] hover:text-white transition-colors"
                 >
                   Terms of Service
                 </button>
@@ -124,7 +124,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
               <li>
                 <button
                   onClick={() => onNavigate("cookies")}
-                  className="text-[#9CA3AF] hover:text-white transition-colors"
+                  className="text-[var(--raw-9ca3af)] hover:text-white transition-colors"
                 >
                   Cookie Policy
                 </button>
@@ -132,7 +132,7 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
               <li>
                 <button
                   onClick={() => onNavigate("gdpr")}
-                  className="text-[#9CA3AF] hover:text-white transition-colors"
+                  className="text-[var(--raw-9ca3af)] hover:text-white transition-colors"
                 >
                   GDPR Compliance
                 </button>
@@ -141,26 +141,26 @@ export function PublicFooter({ onNavigate }: PublicFooterProps) {
           </div>
         </div>
 
-        <div className="border-t border-[#374151] pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
-          <p className="text-[#9CA3AF] text-[14px]">
+        <div className="border-t border-[var(--raw-374151)] pt-8 flex flex-col md:flex-row items-center justify-between gap-4">
+          <p className="text-[var(--raw-9ca3af)] text-[14px]">
             &copy; 2026 BusinessIntegra. All rights reserved.
           </p>
           <div className="flex items-center gap-6">
             <a
               href="#"
-              className="text-[#9CA3AF] hover:text-white transition-colors text-[14px]"
+              className="text-[var(--raw-9ca3af)] hover:text-white transition-colors text-[14px]"
             >
               LinkedIn
             </a>
             <a
               href="#"
-              className="text-[#9CA3AF] hover:text-white transition-colors text-[14px]"
+              className="text-[var(--raw-9ca3af)] hover:text-white transition-colors text-[14px]"
             >
               Twitter
             </a>
             <a
               href="#"
-              className="text-[#9CA3AF] hover:text-white transition-colors text-[14px]"
+              className="text-[var(--raw-9ca3af)] hover:text-white transition-colors text-[14px]"
             >
               Facebook
             </a>

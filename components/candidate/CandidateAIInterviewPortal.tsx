@@ -1807,7 +1807,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       };
 
       // Page background WHITE for the capture.
-      if (pageEl) pageEl.style.background = '#ffffff';
+      if (pageEl) pageEl.style.background = 'var(--raw-ffffff)';
       if (hideEls.length || pageEl) {
         // Wait for ACTUAL new decoded frames, not a fixed wall-clock delay —
         // that's what silently failed before (see root-cause comment above).

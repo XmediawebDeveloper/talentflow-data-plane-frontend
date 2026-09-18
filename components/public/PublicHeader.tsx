@@ -44,8 +44,8 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
 
   // Inline styles
   const headerStyle: React.CSSProperties = {
-    backgroundColor: isDark ? '#0F172A' : '#ffffff',
-    borderBottom: `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
+    backgroundColor: isDark ? 'var(--raw-0f172a)' : 'var(--raw-ffffff)',
+    borderBottom: `1px solid ${isDark ? 'var(--raw-1e293b)' : 'var(--raw-e5e7eb)'}`,
     position: 'sticky',
     top: 0,
     zIndex: 50,
@@ -78,7 +78,7 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
   const logoBoxStyle: React.CSSProperties = {
     width: '32px',
     height: '32px',
-    background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
+    background: 'linear-gradient(135deg, var(--raw-2563eb), var(--raw-1d4ed8))',
     borderRadius: '8px',
     display: 'flex',
     alignItems: 'center',
@@ -86,7 +86,7 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
   };
 
   const logoTextStyle: React.CSSProperties = {
-    color: '#ffffff',
+    color: 'var(--raw-ffffff)',
     fontSize: '14px',
     fontWeight: 600,
   };
@@ -97,14 +97,14 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
   };
 
   const brandSubtextStyle: React.CSSProperties = {
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     fontSize: '10px',
     textTransform: 'uppercase',
     letterSpacing: '0.05em',
   };
 
   const brandNameStyle: React.CSSProperties = {
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     fontSize: '16px',
     fontWeight: 600,
     lineHeight: 1,
@@ -125,8 +125,8 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
     fontSize: '14px',
     fontWeight: 500,
     color: isActive
-      ? (isDark ? '#60A5FA' : '#2563EB')
-      : (isDark ? '#CBD5E1' : '#374151'),
+      ? (isDark ? 'var(--raw-60a5fa)' : 'var(--raw-2563eb)')
+      : (isDark ? 'var(--raw-cbd5e1)' : 'var(--raw-374151)'),
     transition: 'color 0.2s',
   });
 
@@ -161,9 +161,9 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
     borderRadius: '8px',
     cursor: 'pointer',
     transition: 'all 0.2s',
-    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : '#ffffff',
-    color: isDark ? '#E2E8F0' : '#374151',
-    border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : '#E5E7EB'}`,
+    backgroundColor: isDark ? 'rgba(255, 255, 255, 0.08)' : 'var(--raw-ffffff)',
+    color: isDark ? 'var(--raw-e2e8f0)' : 'var(--raw-374151)',
+    border: `1px solid ${isDark ? 'rgba(255,255,255,0.2)' : 'var(--raw-e5e7eb)'}`,
   };
 
   const startTrialButtonStyle: React.CSSProperties = {
@@ -177,9 +177,9 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
     cursor: 'pointer',
     transition: 'all 0.2s',
     background: isDark
-      ? 'linear-gradient(to right, #2563EB, #4338CA)'
-      : 'linear-gradient(to right, #3B82F6, #6366F1)',
-    color: '#ffffff',
+      ? 'linear-gradient(to right, var(--raw-2563eb), var(--raw-4338ca))'
+      : 'linear-gradient(to right, var(--raw-3b82f6), var(--raw-6366f1))',
+    color: 'var(--raw-ffffff)',
     border: isDark ? '1px solid rgba(99, 130, 246, 0.5)' : 'none',
     boxShadow: isDark ? '0 0 12px rgba(59, 130, 246, 0.4)' : '0 4px 14px rgba(59, 130, 246, 0.4)',
   };
@@ -194,7 +194,7 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
   const mobileMenuStyle: React.CSSProperties = {
     display: mobileMenuOpen && isMobile ? 'block' : 'none',
     padding: '16px 0',
-    borderTop: `1px solid ${isDark ? '#334155' : '#E5E7EB'}`,
+    borderTop: `1px solid ${isDark ? 'var(--raw-334155)' : 'var(--raw-e5e7eb)'}`,
   };
 
   const mobileNavStyle: React.CSSProperties = {
@@ -212,8 +212,8 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
     fontSize: '14px',
     fontWeight: 500,
     color: isActive
-      ? (isDark ? '#60A5FA' : '#2563EB')
-      : (isDark ? '#CBD5E1' : '#374151'),
+      ? (isDark ? 'var(--raw-60a5fa)' : 'var(--raw-2563eb)')
+      : (isDark ? 'var(--raw-cbd5e1)' : 'var(--raw-374151)'),
   });
 
   const mobileButtonContainerStyle: React.CSSProperties = {
@@ -221,7 +221,7 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
     flexDirection: 'column',
     gap: '8px',
     paddingTop: '16px',
-    borderTop: `1px solid ${isDark ? '#334155' : '#E5E7EB'}`,
+    borderTop: `1px solid ${isDark ? 'var(--raw-334155)' : 'var(--raw-e5e7eb)'}`,
   };
 
   return (
@@ -261,9 +261,9 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
               aria-label="Toggle dark mode"
             >
               {isDark ? (
-                <Sun style={{ width: 20, height: 20, color: '#F59E0B' }} />
+                <Sun style={{ width: 20, height: 20, color: 'var(--raw-f59e0b)' }} />
               ) : (
-                <Moon style={{ width: 20, height: 20, color: '#6B7280' }} />
+                <Moon style={{ width: 20, height: 20, color: 'var(--raw-6b7280)' }} />
               )}
             </button>
 
@@ -283,9 +283,9 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
               aria-label="Toggle dark mode"
             >
               {isDark ? (
-                <Sun style={{ width: 20, height: 20, color: '#F59E0B' }} />
+                <Sun style={{ width: 20, height: 20, color: 'var(--raw-f59e0b)' }} />
               ) : (
-                <Moon style={{ width: 20, height: 20, color: '#6B7280' }} />
+                <Moon style={{ width: 20, height: 20, color: 'var(--raw-6b7280)' }} />
               )}
             </button>
 
@@ -294,9 +294,9 @@ export function PublicHeader({ activePage, onNavigate, onLogin, onSignup }: Publ
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
             >
               {mobileMenuOpen ? (
-                <X style={{ width: 24, height: 24, color: isDark ? '#CBD5E1' : '#374151' }} />
+                <X style={{ width: 24, height: 24, color: isDark ? 'var(--raw-cbd5e1)' : 'var(--raw-374151)' }} />
               ) : (
-                <Menu style={{ width: 24, height: 24, color: isDark ? '#CBD5E1' : '#374151' }} />
+                <Menu style={{ width: 24, height: 24, color: isDark ? 'var(--raw-cbd5e1)' : 'var(--raw-374151)' }} />
               )}
             </button>
           </div>

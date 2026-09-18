@@ -29,7 +29,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
       case 'Hire':        return { bg: 'var(--score-medium)', text: 'white', border: 'var(--score-medium)' };
       case 'Consider':    return { bg: 'var(--score-medium-bg)', text: 'var(--score-medium)', border: 'var(--score-medium)' };
       case 'No Hire':     return { bg: 'var(--score-low)', text: 'white', border: 'var(--score-low)' };
-      default:            return { bg: '#e5e7eb', text: '#374151', border: '#e5e7eb' };
+      default:            return { bg: 'var(--raw-e5e7eb)', text: 'var(--raw-374151)', border: 'var(--raw-e5e7eb)' };
     }
   }
   const recStyle = getRecStyle(recommendation);
@@ -206,7 +206,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
               </div>
             </div>
             <div className="text-right">
-              <div className="text-6xl mb-1 font-bold" style={{ fontFamily: 'var(--font-mono)', background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
+              <div className="text-6xl mb-1 font-bold" style={{ fontFamily: 'var(--font-mono)', background: 'linear-gradient(135deg, var(--raw-10b981) 0%, var(--raw-059669) 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
                 {scores.final.toFixed(1)}
               </div>
               <div className="text-sm text-gray-500">out of 100</div>
@@ -216,7 +216,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
             <div className="absolute inset-0 flex items-center justify-between px-4 text-xs font-medium text-gray-700">
               <span>0</span><span>50</span><span>100</span>
             </div>
-            <div className="absolute top-0 w-3 h-full border-2 border-white shadow-lg transition-all duration-1000 ease-out" style={{ left: `calc(${Math.min(scores.final, 100)}% - 6px)`, background: 'linear-gradient(135deg, var(--score-high) 0%, #059669 100%)' }} />
+            <div className="absolute top-0 w-3 h-full border-2 border-white shadow-lg transition-all duration-1000 ease-out" style={{ left: `calc(${Math.min(scores.final, 100)}% - 6px)`, background: 'linear-gradient(135deg, var(--score-high) 0%, var(--raw-059669) 100%)' }} />
           </div>
         </div>
 
@@ -389,7 +389,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
               {allSkills.sort((a, b) => b.score - a.score).slice(0, 5).map((skill, idx) => (
                 <div key={idx} className="flex items-center justify-between p-3 bg-white rounded-lg border border-emerald-200">
                   <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold" style={{ background: 'linear-gradient(135deg, var(--score-high) 0%, #059669 100%)', fontFamily: 'var(--font-mono)' }}>
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-sm font-semibold" style={{ background: 'linear-gradient(135deg, var(--score-high) 0%, var(--raw-059669) 100%)', fontFamily: 'var(--font-mono)' }}>
                       {idx + 1}
                     </div>
                     <span className="text-sm font-medium">{skill.name}</span>
@@ -418,10 +418,10 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
               const coveredCount = cluster.skills.filter(s => s.level === 'High' || s.level === 'Medium').length;
               const coveragePct = totalSkills > 0 ? Math.round((coveredCount / totalSkills) * 100) : 0;
               const colors = coveragePct >= 70
-                ? { bg: 'bg-gradient-to-br from-emerald-50 to-emerald-100', text: 'text-emerald-900', border: 'border-emerald-300', fill: 'linear-gradient(90deg, var(--score-high) 0%, #059669 100%)' }
+                ? { bg: 'bg-gradient-to-br from-emerald-50 to-emerald-100', text: 'text-emerald-900', border: 'border-emerald-300', fill: 'linear-gradient(90deg, var(--score-high) 0%, var(--raw-059669) 100%)' }
                 : coveragePct >= 40
-                  ? { bg: 'bg-gradient-to-br from-amber-50 to-amber-100', text: 'text-amber-900', border: 'border-amber-300', fill: 'linear-gradient(90deg, var(--score-medium) 0%, #d97706 100%)' }
-                  : { bg: 'bg-gradient-to-br from-red-50 to-red-100', text: 'text-red-900', border: 'border-red-300', fill: 'linear-gradient(90deg, var(--score-low) 0%, #dc2626 100%)' };
+                  ? { bg: 'bg-gradient-to-br from-amber-50 to-amber-100', text: 'text-amber-900', border: 'border-amber-300', fill: 'linear-gradient(90deg, var(--score-medium) 0%, var(--raw-d97706) 100%)' }
+                  : { bg: 'bg-gradient-to-br from-red-50 to-red-100', text: 'text-red-900', border: 'border-red-300', fill: 'linear-gradient(90deg, var(--score-low) 0%, var(--raw-dc2626) 100%)' };
               return (
                 <div key={idx} className={`p-6 rounded-xl border-2 ${colors.bg} ${colors.border} hover:shadow-lg transition-all duration-300`}>
                   <div className="flex items-center justify-between mb-4">

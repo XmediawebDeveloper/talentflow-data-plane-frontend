@@ -93,7 +93,7 @@ export default function HowItWorksPage() {
         </div>
 
         {/* CTA */}
-        <div className="text-center bg-gradient-to-r from-[#667EEA] to-[#764BA2] rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-12">
+        <div className="text-center bg-gradient-to-r from-[var(--raw-667eea)] to-[var(--raw-764ba2)] rounded-2xl sm:rounded-3xl p-6 sm:p-8 md:p-12">
           <h2 className="text-2xl sm:text-3xl font-bold text-white mb-3 sm:mb-4">
             Ready to streamline your hiring?
           </h2>

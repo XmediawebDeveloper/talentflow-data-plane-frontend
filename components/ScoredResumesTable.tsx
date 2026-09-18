@@ -994,8 +994,8 @@ Best regards`);
         <![endif]-->
         <style>
           table { border-collapse: collapse; }
-          th, td { border: 1px solid #000; padding: 8px; text-align: left; }
-          th { background-color: #f0f0f0; font-weight: bold; }
+          th, td { border: 1px solid var(--raw-000000); padding: 8px; text-align: left; }
+          th { background-color: var(--raw-f0f0f0); font-weight: bold; }
         </style>
       </head>
       <body>
@@ -1949,7 +1949,7 @@ Best regards`);
                   const groupSelected = rows.every((r) => selectedResumes.includes(r.id));
                   return (
                     <Fragment key={key}>
-                      <tr className="hover:bg-[#fafbfc] transition-colors">
+                      <tr className="hover:bg-[var(--raw-fafbfc)] transition-colors">
                         <td className="py-4 px-4 align-top tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
                           <button
                             onClick={() => handleSelectGroup(rows)}
@@ -2295,7 +2295,7 @@ Best regards`);
               <tr
                 key={resume.id}
                 onClick={(e) => handleRowClick(resume.id, e)}
-                className={`border-b border-gray-100 hover:bg-[#fafbfc] transition-colors cursor-pointer ${
+                className={`border-b border-gray-100 hover:bg-[var(--raw-fafbfc)] transition-colors cursor-pointer ${
                   index % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'
                 }`}
               >

@@ -276,16 +276,16 @@ export default function StepConsent({
                 prose-code:px-1.5 prose-code:py-0.5 prose-code:rounded prose-code:text-xs prose-code:font-normal prose-code:before:content-none prose-code:after:content-none
                 prose-pre:rounded-lg prose-pre:text-sm prose-pre:font-normal"
               style={{
-                color: '#374151',
+                color: 'var(--raw-374151)',
                 colorScheme: 'light',
               }}
             >
               <style>{`
-                .jd-prose * { color: #374151 !important; background-color: transparent !important; }
-                .jd-prose h1, .jd-prose h2, .jd-prose h3, .jd-prose h4 { color: #111827 !important; }
-                .jd-prose strong { color: #111827 !important; }
-                .jd-prose code { background-color: #f3f4f6 !important; color: #1f2937 !important; }
-                .jd-prose pre { background-color: #f9fafb !important; color: #374151 !important; border: 1px solid #e5e7eb !important; }
+                .jd-prose * { color: var(--raw-374151) !important; background-color: transparent !important; }
+                .jd-prose h1, .jd-prose h2, .jd-prose h3, .jd-prose h4 { color: var(--raw-111827) !important; }
+                .jd-prose strong { color: var(--raw-111827) !important; }
+                .jd-prose code { background-color: var(--raw-f3f4f6) !important; color: var(--raw-1f2937) !important; }
+                .jd-prose pre { background-color: var(--raw-f9fafb) !important; color: var(--raw-374151) !important; border: 1px solid var(--raw-e5e7eb) !important; }
               `}</style>
               <div className="jd-prose">
                 <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{descToShow || ''}</ReactMarkdown>
@@ -317,7 +317,7 @@ export default function StepConsent({
             <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Additional Details</h2>
           </div>
           <div className="p-5">
-            <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: '#374151' }}>
+            <p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--raw-374151)' }}>
               {jdAdditionalDetails}
             </p>
           </div>

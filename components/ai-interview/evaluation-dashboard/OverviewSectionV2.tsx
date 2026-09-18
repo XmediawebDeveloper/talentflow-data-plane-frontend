@@ -99,7 +99,7 @@ export function OverviewSectionV2({
       questions: mhQCount,
       threshold: MHS_THRESHOLD,
       status: isPartialEvaluation ? 'PARTIAL' : (scores.mustHave >= MHS_THRESHOLD ? 'PASS' : 'FAIL'),
-      color: '#4F46E5',
+      color: 'var(--raw-4f46e5)',
       description: isPartialEvaluation
         ? 'Average of attended Must-Have question scores — reference only for partial interviews'
         : 'Average of Must-Have question scores — determines Pass/Fail',
@@ -112,7 +112,7 @@ export function OverviewSectionV2({
       questions: nhQCount,
       threshold: null,
       status: 'INFO',
-      color: '#F59E0B',
+      color: 'var(--raw-f59e0b)',
       description: 'Average of Nice-to-Have question scores — informational only',
       present: sectionsPresent.niceToHave,
     },
@@ -404,10 +404,10 @@ export function OverviewSectionV2({
           {radarData.length > 0 ? (
             <ResponsiveContainer width="100%" height={380}>
               <RadarChart data={radarData}>
-                <PolarGrid stroke="#E5E7EB" />
-                <PolarAngleAxis dataKey="skill" tick={{ fill: '#6B7280', fontSize: 12, fontWeight: 500 }} />
-                <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fill: '#6B7280', fontSize: 10 }} />
-                <Radar name="Score" dataKey="score" stroke="#4F46E5" fill="#4F46E5" fillOpacity={0.6} strokeWidth={2} />
+                <PolarGrid stroke="var(--raw-e5e7eb)" />
+                <PolarAngleAxis dataKey="skill" tick={{ fill: 'var(--raw-6b7280)', fontSize: 12, fontWeight: 500 }} />
+                <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fill: 'var(--raw-6b7280)', fontSize: 10 }} />
+                <Radar name="Score" dataKey="score" stroke="var(--raw-4f46e5)" fill="var(--raw-4f46e5)" fillOpacity={0.6} strokeWidth={2} />
               </RadarChart>
             </ResponsiveContainer>
           ) : (
