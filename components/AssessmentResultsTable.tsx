@@ -1150,8 +1150,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
         </div>
       </div>
 
-      {/* Desktop Grid View — a simpler, read-only card view: no row selection
-          and no per-row PDF download, both of which stay list-only actions. */}
+      {/* Desktop Grid View */}
       {displayMode === 'grid' && (
         <div className="hidden md:grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
           {paginatedResults.length === 0 ? (
@@ -1172,12 +1171,25 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                 }
               };
               return (
-                <button
+                <div
                   key={result.id}
+                  role="button"
+                  tabIndex={0}
                   onClick={openDetail}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(); } }}
                   className={`text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 ${status === 'Pending' ? 'cursor-default' : 'cursor-pointer'}`}
                 >
                   <div className="flex items-start gap-2.5">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleSelectResult(result.id); }}
+                      className="p-1 -m-1 hover:bg-brand-blue/10 rounded flex-shrink-0"
+                    >
+                      {selectedResults.includes(result.id) ? (
+                        <CheckSquare className="w-4 h-4 text-brand-blue" />
+                      ) : (
+                        <Square className="w-4 h-4 text-gray-400" />
+                      )}
+                    </button>
                     <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-sm flex-shrink-0">
                       {(result.candidateName || 'U')[0].toUpperCase()}
                     </div>
@@ -1237,7 +1249,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       View Details
                     </div>
                   )}
-                </button>
+                </div>
               );
             })
           )}

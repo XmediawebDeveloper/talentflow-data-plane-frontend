@@ -480,6 +480,10 @@ function DroppableFolderCard({
       setDropUp(roomBelow < needed && roomAbove > roomBelow);
     }
 
+    // Mirrors toggleActions closing this panel: the two floating panels
+    // (actions menu, subfolder peek) share the same card footprint, so only
+    // one can be open at a time.
+    setShowActions(false);
     setShowSubfolders(true);
   };
 
