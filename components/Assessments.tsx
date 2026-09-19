@@ -468,6 +468,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // invites V2 candidates manually via the normal invite flow.
   const [cloneTargetAssessment, setCloneTargetAssessment] = useState<any | null>(null);
   const [isCloning, setIsCloning] = useState(false);
+  // Draft-conflict modal — shown instead of the clone confirmation when the
+  // lineage already has an unfinished draft; offers to open it directly.
+  const [pendingDraftConflict, setPendingDraftConflict] = useState<{
+    target: any;
+    draft: AssessmentVersionRow;
+  } | null>(null);
   // Revoke confirmation state
   const [revokeTargetAssessment, setRevokeTargetAssessment] = useState<any | null>(null);
   const [revokeCount, setRevokeCount] = useState<number | null>(null);
@@ -2928,20 +2934,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     // a direct way into the draft they should be using).
     const pendingDraft = findPendingDraftVersion(assessment, lineage);
     if (pendingDraft) {
-      const openIt = await dialog.confirm({
-        title: 'Draft already exists',
-        message: `Already one assessment version is in draft ("${pendingDraft.title || 'Untitled'}"). Use this draft instead of creating a new one.`,
-        variant: 'warning',
-        confirmText: 'Open Draft',
-      });
-      if (openIt) {
-        handleEditAssessment({
-          id: pendingDraft.id,
-          jd_id: assessment.jd_id,
-          status: 'Draft',
-          invitations_count: 0,
-        });
-      }
+      setPendingDraftConflict({ target: assessment, draft: pendingDraft });
       return;
     }
     setCloneTargetAssessment(assessment);
@@ -8282,6 +8275,118 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             </div>
           </div>
         </div>
+        );
+      })()}
+
+      {/* Draft-conflict modal — shown by handleOpenCloneModal instead of the
+          clone confirmation when the lineage already has an unfinished
+          draft. Points the recruiter at that draft rather than letting them
+          create a second one (the backend blocks the second one too, but
+          this avoids the round trip). */}
+      {pendingDraftConflict && (() => {
+        const { target, draft } = pendingDraftConflict;
+        const closeConflict = () => setPendingDraftConflict(null);
+        const lastEdited = draft.updated_at || draft.created_at;
+        // Same fields/fallbacks the clone-confirmation modal uses for its
+        // "Current Job" card, so the JD name/version shown here always
+        // agrees with what that modal (and the list row) would show.
+        const jdShortId = target?.jd_short_id;
+        const jobTitle = target?.jd_title
+          || target?.job?.title
+          || stripVersionFromTitle(target?.title || draft.title || '')
+          || 'This job';
+        const jobVersion = target?.jd_version ?? draft.jd_version ?? 1;
+        const draftVersion = draft.version ?? 1;
+        return (
+          <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-lg overflow-hidden">
+              <div className="px-5 sm:px-7 pt-5 sm:pt-7 pb-5 sm:pb-6">
+                <div className="flex justify-end">
+                  <button
+                    onClick={closeConflict}
+                    className="p-1.5 -mr-1.5 -mt-1 text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+                    aria-label="Close"
+                  >
+                    <X className="w-5 h-5 sm:w-6 sm:h-6" />
+                  </button>
+                </div>
+
+                <div className="flex flex-col items-center text-center -mt-4">
+                  <div className="w-14 h-14 rounded-full bg-amber-50 dark:bg-amber-500/15 flex items-center justify-center">
+                    <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <h3 className="mt-4 text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">
+                    Draft already exists
+                  </h3>
+                  <p className="mt-2 text-sm sm:text-base text-gray-500 dark:text-slate-400 leading-snug">
+                    A draft version already exists for this assessment.
+                    Open the existing draft to continue editing, or cancel to stay here.
+                  </p>
+                </div>
+
+                <div className="mt-5 sm:mt-6 rounded-xl border border-gray-200/80 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3 sm:p-4">
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-500/15 flex items-center justify-center flex-shrink-0">
+                      <FileText className="w-5 h-5 text-brand-blue dark:text-blue-300" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400">Existing Draft</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                        <span className="text-sm sm:text-base font-bold text-gray-900 dark:text-slate-50 break-words">
+                          {jdShortId ? `${jdShortId.replace(/-/g, ' ')}  ` : ''}
+                          {jobTitle} v{jobVersion} - Assessment V {draftVersion}
+                        </span>
+                        <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 text-xs font-semibold flex-shrink-0">
+                          Draft
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm text-gray-500 dark:text-slate-400">
+                        {lastEdited && (
+                          <span className="inline-flex items-center gap-1.5">
+                            <Calendar className="w-3.5 h-3.5" />
+                            Last edited on {formatIST(lastEdited)}
+                          </span>
+                        )}
+                        {draft.created_by_name && (
+                          <>
+                            <span aria-hidden="true" className="text-gray-300 dark:text-slate-600">|</span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <Users className="w-3.5 h-3.5" />
+                              Edited by {draft.created_by_name}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-200 dark:border-slate-700 px-5 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
+                <button
+                  onClick={closeConflict}
+                  className="px-5 sm:px-8 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    handleEditAssessment({
+                      id: draft.id,
+                      jd_id: target?.jd_id,
+                      status: 'Draft',
+                      invitations_count: 0,
+                    });
+                    closeConflict();
+                  }}
+                  className="px-5 sm:px-8 py-2.5 text-sm font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow-md shadow-amber-600/25 transition-colors flex items-center justify-center gap-2"
+                >
+                  Open Draft
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
         );
       })()}
 
