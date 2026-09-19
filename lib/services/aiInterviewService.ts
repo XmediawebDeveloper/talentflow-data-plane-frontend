@@ -873,6 +873,27 @@ export const aiInterviewService = {
   },
 
   /**
+   * Full action history for one invitation — every send, resend, revoke,
+   * edit and candidate-lifecycle milestone as its own row, oldest first.
+   * Reads the same audit trail the Activity Log is built from, scoped to
+   * this session, rather than the invitation row's single latest-value
+   * columns (which get overwritten, e.g. a resend clears revoked_at).
+   */
+  async getSessionTimeline(sessionId: string): Promise<Array<{
+    action: string;
+    action_label: string;
+    details: Record<string, any>;
+    created_at: string | null;
+  }>> {
+    try {
+      const response = await api.get(`/ai-interview/session/${sessionId}/timeline`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Archive a config
    */
   async archive(id: string): Promise<AIInterviewResponse> {
