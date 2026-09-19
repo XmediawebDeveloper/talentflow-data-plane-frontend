@@ -10,6 +10,7 @@ import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
+import { DashboardSkeleton } from '@/components/ui/skeleton-loader';
 
 interface AdminDashboardProps {
   user?: User;
@@ -131,14 +132,7 @@ export default function AdminDashboard({
   };
 
   if (loading) {
-    return (
-      <main className="flex-1 bg-slate-50 flex items-center justify-center">
-        <div className="flex items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-          <span className="text-gray-700 font-medium">Loading dashboard...</span>
-        </div>
-      </main>
-    );
+    return <DashboardSkeleton />;
   }
 
   return (

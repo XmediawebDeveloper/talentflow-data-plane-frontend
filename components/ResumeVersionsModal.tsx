@@ -5,6 +5,7 @@ import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import VersionCompareModal, { type CompareVersion } from './VersionCompareModal';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
+import { ListSkeleton } from '@/components/ui/skeleton-loader';
 
 interface ResumeVersion {
   id: string;
@@ -215,10 +216,7 @@ export default function ResumeVersionsModal({
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
-              <Loader2 className="w-8 h-8 text-gray-400 dark:text-slate-500 animate-spin mb-3" />
-              <p className="text-gray-600 dark:text-slate-400">Loading versions...</p>
-            </div>
+            <ListSkeleton rows={5} />
           ) : versions.length > 0 ? (
             /* Version List View */
             <div className="space-y-3">

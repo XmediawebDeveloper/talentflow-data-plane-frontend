@@ -125,12 +125,6 @@ export function buildMenuSections(isTenantAdmin: boolean): NavSection[] {
       label: 'SETTINGS',
       items: [
         { id: 'general-settings', label: 'Profile Settings', icon: Settings, href: '/settings/general-settings' },
-        // ── TEST TOOL: DeepFilterNet denoise A/B — REMOVE AFTER TESTING ──
-        // Delete this line + the page app/(dashboard)/settings/stt-denoise-test/
-        // + backend app/routers/stt_denoise_test.py + its main.py include block.
-        { id: 'stt-denoise-test', label: 'STT Denoise Test', icon: Headphones, href: '/settings/stt-denoise-test' },
-        { id: 'stt-compare-test', label: 'STT Compare Test', icon: Headphones, href: '/settings/stt-compare-test' },
-        // ── end TEST TOOL ──
         // Permissions & Roles, API Management, Branding & White Label, Security Settings and Legal & Compliance
         // are reached from the "Workspace & Admin" links inside the Profile Settings (/settings/general-settings) page.
       ],

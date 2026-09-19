@@ -30,6 +30,7 @@ import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import QuotaBadge from '@/components/ui/quota-badge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
+import { PageSkeleton, TableSkeleton } from '@/components/ui/skeleton';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
@@ -1846,14 +1847,7 @@ export default function ResumeScoringPage({
 
   // Show loading when waiting for initial JD's history to load
   if (isWaitingForInitialJd) {
-    return (
-      <main className="flex-1 flex items-center justify-center bg-white dark:bg-slate-950">
-        <div className="text-center">
-          <Loader2 className="w-6 h-6 animate-spin text-brand-blue mx-auto mb-3" />
-          <p className="text-sm text-gray-600 dark:text-slate-400">Loading scored candidates...</p>
-        </div>
-      </main>
-    );
+    return <PageSkeleton variant="table" showStats={false} />;
   }
 
   // View Candidate Scoring Detail Page
@@ -2775,15 +2769,7 @@ export default function ResumeScoringPage({
           <div className="space-y-4">
             <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
             {isLoadingGlobal ? (
-              /* No card while loading — a bordered box around a spinner reads as
-                 an empty table that has finished. `tf-loader-center` gives the
-                 spinner the table's own height to sit in the middle of, so it
-                 lands where the rows will be rather than at the top of a
-                 short padded box. */
-              <div className="tf-loader-center">
-                <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-                <span className="ml-3 text-sm text-gray-600 dark:text-slate-400">Loading all scored candidates...</span>
-              </div>
+              <TableSkeleton />
             ) : globalScoredResumes.length === 0 ? (
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-10 text-center">
                 <div className="w-12 h-12 mx-auto mb-3 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
@@ -3397,12 +3383,7 @@ export default function ResumeScoringPage({
           />
           </>
         ) : historyLoading && scoredHistory.length === 0 ? (
-          /* Same treatment as View by Candidates above — no card, centred in
-             the space the list will occupy. */
-          <div className="tf-loader-center">
-            <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-            <span className="ml-3 text-gray-600 dark:text-slate-400 text-sm">Loading scoring history...</span>
-          </div>
+          <TableSkeleton />
         ) : scoredHistory.length === 0 ? (
           <div className="bg-white dark:bg-slate-900 rounded-xl border-2 border-dashed border-brand-blue/20 p-8 sm:p-10 text-center">
             <div className="max-w-md mx-auto">

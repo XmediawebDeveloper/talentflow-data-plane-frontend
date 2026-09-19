@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
+import { ListSkeleton } from '@/components/ui/skeleton-loader';
 
 type CategoryFilter = 'all' | 'assessment_lifecycle' | 'candidate_activity';
 
@@ -405,10 +406,7 @@ export default function AssessmentAuditTrail() {
         {/* Timeline View */}
         <div className="p-3 sm:p-6">
           {isLoading ? (
-            <div className="text-center py-8 sm:py-12">
-              <Loader2 className="w-8 h-8 text-brand-blue animate-spin mx-auto mb-4" />
-              <p className="text-sm text-gray-500">Loading activity log...</p>
-            </div>
+            <ListSkeleton rows={5} />
           ) : activities.length === 0 ? (
             <ListEmptyState
               icon={Activity}

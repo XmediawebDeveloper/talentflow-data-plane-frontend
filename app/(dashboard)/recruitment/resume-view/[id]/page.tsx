@@ -12,6 +12,7 @@ import {
   User, File, HardDrive, Loader2, Share2, Copy, Check, ChevronDown, ChevronUp,
   AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Search, Database, Paperclip
 } from 'lucide-react';
+import { DetailPageSkeleton } from '@/components/ui/skeleton-loader';
 
 // Full Resume Content Component with better UI
 function FullResumeContent({ text }: { text: string }) {
@@ -975,12 +976,7 @@ Best regards`);
   };
 
   if (loading) {
-    return (
-      <div className="tf-loader-page bg-slate-50">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-        <span className="ml-3 text-gray-600">Loading resume...</span>
-      </div>
-    );
+    return <DetailPageSkeleton />;
   }
 
   if (error || !resume) {

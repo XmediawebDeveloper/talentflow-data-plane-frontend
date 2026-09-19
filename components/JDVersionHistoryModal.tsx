@@ -11,6 +11,7 @@ import remarkBreaks from 'remark-breaks';
 import VersionCompareModal, { type CompareVersion } from './VersionCompareModal';
 import { formatEmploymentType, formatIndustryType } from '@/lib/utils/jobOpeningDisplay';
 import { formatSalaryRange } from '@/lib/utils/salary';
+import { ListSkeleton } from '@/components/ui/skeleton-loader';
 
 interface JDVersionHistoryModalProps {
   isOpen: boolean;
@@ -544,10 +545,7 @@ export default function JDVersionHistoryModal({
 
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {loading ? (
-            <div className="flex flex-col items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
-              <Loader2 className="w-8 h-8 text-gray-400 dark:text-slate-500 animate-spin mb-3" />
-              <p className="text-gray-600 dark:text-slate-400">Loading versions...</p>
-            </div>
+            <ListSkeleton rows={5} />
           ) : selectedVersion ? (
             <div className="space-y-4">
               {/* The version being viewed, described by the shared card. */}

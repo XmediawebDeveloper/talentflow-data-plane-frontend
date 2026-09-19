@@ -7,10 +7,10 @@ import { jdService, JDResponse } from '@/lib/services/jdService';
 import { resumeService, folderService } from '@/lib/services/resumeService';
 import { scoringService, normalizeScoringStatus } from '@/lib/services/scoringService';
 import { Resume, Folder } from '@/lib/types/types';
-import { Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { parseIST } from '@/lib/utils/dateUtils';
 import FeatureGate from '@/components/shared/FeatureGate';
+import { PageSkeleton } from '@/components/ui/skeleton';
 
 interface ScoredResumeData {
   id: string;
@@ -826,12 +826,7 @@ export default function ResumeScoringRoute() {
   };
 
   if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-        <span className="ml-3 text-sm text-gray-600 dark:text-slate-400">Loading job descriptions...</span>
-      </div>
-    );
+    return <PageSkeleton variant="table" showStats={false} />;
   }
 
   return (

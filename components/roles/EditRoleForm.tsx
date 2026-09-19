@@ -91,6 +91,12 @@ const hasAnyActionSelected = (selectedCodes: Set<string>, category: CustomPermis
 const fieldClassName =
   'w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500';
 
+// Same field, in its invalid state — a full replacement rather than extra classes
+// appended to `fieldClassName`, so the red border/ring can't lose a Tailwind
+// specificity tie against the gray/blue ones it replaces.
+const fieldErrorClassName =
+  'w-full rounded-xl border border-red-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-red-400 focus:ring-4 focus:ring-red-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500';
+
 const getErrorStatus = (error: unknown): number | undefined => {
   if (typeof error !== 'object' || error === null || !('response' in error)) {
     return undefined;
@@ -111,21 +117,37 @@ const getErrorDetail = (error: unknown): string | undefined => {
 
 interface EditRoleFormProps {
   roleId: number;
+  /** When rendered inside a side panel/modal instead of as a full page. */
+  embedded?: boolean;
+  /** Called after a successful update (panel host closes + refreshes). */
+  onSuccess?: () => void;
+  /** Called on cancel/back or unrecoverable load error (panel host closes). */
+  onCancel?: () => void;
 }
 
-export default function EditRoleForm({ roleId }: EditRoleFormProps) {
+export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCancel }: EditRoleFormProps) {
   const router = useRouter();
+  const handleClose = onCancel ?? (() => router.push('/organization/role-management'));
   const [role, setRole] = useState<Role | null>(null);
   const [roles, setRoles] = useState<RoleListItem[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [selectedPermissionCodes, setSelectedPermissionCodes] = useState<Set<string>>(new Set());
+  // Set once the editable Role Name field is left, so its error shows the
+  // moment it's touched (and updates live as they type) rather than only after
+  // Save. Role Code is immutable here, so only the name needs validating.
+  const [nameTouched, setNameTouched] = useState(false);
+
+  // Derived required-name error — only for editable roles (a system role's name
+  // is locked). Recomputed each render so a touched field tracks its value live.
+  const nameError = role && !role.is_system && !role.name.trim() ? 'Role name is required' : '';
+  const showNameError = nameTouched ? nameError : '';
 
   useEffect(() => {
     if (!roleId || isNaN(roleId) || roleId <= 0) {
       toast.error('Invalid role ID');
-      router.push('/organization/role-management');
+      handleClose();
       return;
     }
     const run = async () => {
@@ -154,13 +176,16 @@ export default function EditRoleForm({ roleId }: EditRoleFormProps) {
         } else {
           toast.error('Failed to load role data');
         }
-        router.push('/organization/role-management');
+        handleClose();
       } finally {
         setIsLoading(false);
       }
     };
 
     void run();
+    // handleClose is intentionally omitted: it closes over the stable setEditingRole
+    // (via onCancel) and re-adding the inline onCancel would re-run this loader every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [roleId, router]);
 
   const getPermissionIdByCode = (code: string): number | null => {
@@ -255,6 +280,11 @@ export default function EditRoleForm({ roleId }: EditRoleFormProps) {
 
   const handleSubmit = async () => {
     if (!role) return;
+    if (nameError) {
+      // Reveal the inline message and stop instead of letting the backend reject it.
+      setNameTouched(true);
+      return;
+    }
 
     const payload = {
       name: role.name,
@@ -269,7 +299,7 @@ export default function EditRoleForm({ roleId }: EditRoleFormProps) {
     try {
       await rbacService.updateRole(role.id, payload);
       toast.success('Role updated successfully');
-      router.push('/organization/role-management');
+      if (onSuccess) { onSuccess(); } else { router.push('/organization/role-management'); }
     } catch (error: unknown) {
       console.error('Failed to update role:', error);
       toast.error(getErrorDetail(error) || 'Failed to update role');
@@ -443,7 +473,7 @@ export default function EditRoleForm({ roleId }: EditRoleFormProps) {
 
   if (isLoading || !role) {
     return (
-      <main className="flex-1 bg-slate-50">
+      <main className={embedded ? '' : 'flex-1 bg-slate-50'}>
         <div className="flex h-full min-h-[60dvh] items-center justify-center p-8">
           <div className="flex items-center gap-3 text-gray-600">
             <Loader2 className="h-8 w-8 animate-spin text-brand-blue" />
@@ -455,17 +485,21 @@ export default function EditRoleForm({ roleId }: EditRoleFormProps) {
   }
 
   return (
-    <main className="flex-1 overflow-x-clip bg-slate-50">
-      <div className="mx-auto w-full max-w-[1400px]">
-      <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-        <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Role Management', href: '/organization/role-management' }, { label: 'Edit Role' }]} />
-        <button
-          onClick={() => router.push('/organization/role-management')}
-          className="mb-4 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-white hover:text-brand-blue"
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Role Management
-        </button>
+    <main className={embedded ? '' : 'flex-1 overflow-x-clip bg-slate-50'}>
+      <div className={embedded ? 'w-full' : 'mx-auto w-full max-w-[1400px]'}>
+      <div className={embedded ? 'w-full' : 'p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl'}>
+        {!embedded && (
+          <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Role Management', href: '/organization/role-management' }, { label: 'Edit Role' }]} />
+        )}
+        {!embedded && (
+          <button
+            onClick={handleClose}
+            className="mb-4 inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium text-gray-600 transition-colors hover:bg-white hover:text-brand-blue"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to Role Management
+          </button>
+        )}
 
         <section className="relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
           <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-brand-cyan/25 blur-3xl" />
@@ -527,9 +561,14 @@ export default function EditRoleForm({ roleId }: EditRoleFormProps) {
                     type="text"
                     value={role.name}
                     onChange={(e) => setRole({ ...role, name: e.target.value })}
-                    className={fieldClassName}
+                    onBlur={() => setNameTouched(true)}
+                    aria-invalid={!!showNameError}
+                    className={showNameError ? fieldErrorClassName : fieldClassName}
                     disabled={role.is_system}
                   />
+                  {showNameError && (
+                    <span className="mt-1.5 block text-xs font-medium text-red-600">{nameError}</span>
+                  )}
                 </label>
 
                 <label className="block">
@@ -594,7 +633,7 @@ export default function EditRoleForm({ roleId }: EditRoleFormProps) {
 
             <div className="flex flex-col gap-3 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end sm:px-6">
               <button
-                onClick={() => router.push('/organization/role-management')}
+                onClick={handleClose}
                 className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50"
                 disabled={isSaving}
               >
