@@ -17,7 +17,7 @@ import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import ListPagination from '@/components/ListPagination';
-import { ListSkeleton } from '@/components/ui/skeleton-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 /** Same page size the Job Openings page reads the JD list in. */
 const JD_BATCH_SIZE = 100;
@@ -649,7 +649,33 @@ export default function JobOpeningPickerList({
             })}
           </div>
         ) : loadingJobs ? (
-          <ListSkeleton />
+          /* Skeleton mirrors the job picker rows: the same
+             `space-y-2 sm:space-y-3` stack of `rounded-lg border-2 p-3 sm:p-4`
+             cards, each with the leading radio, the job summary (title + meta
+             line) and the trailing eye/version-history button column. */
+          <div className="space-y-2 sm:space-y-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="rounded-lg border-2 border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3 sm:p-4"
+              >
+                <div className="flex flex-col sm:flex-row items-start gap-3 sm:gap-4">
+                  <Skeleton className="mt-1 h-4 w-4 rounded-full flex-shrink-0" />
+                  <div className="flex-1 min-w-0 space-y-2">
+                    <Skeleton className="h-5 w-2/3" />
+                    <div className="flex flex-wrap items-center gap-3">
+                      <Skeleton className="h-3.5 w-24" />
+                      <Skeleton className="h-3.5 w-20" />
+                      <Skeleton className="h-3.5 w-28" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Skeleton className="h-9 w-9 rounded-md" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : (
           <div className="text-center py-8 sm:py-12 text-gray-500 dark:text-slate-500">
             <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" />

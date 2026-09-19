@@ -12,7 +12,7 @@ import {
   User, File, HardDrive, Loader2, Share2, Copy, Check, ChevronDown, ChevronUp,
   AlignLeft, Hash, X, Eye, UserPlus, Sparkles, Search, Database, Paperclip
 } from 'lucide-react';
-import { DetailPageSkeleton } from '@/components/ui/skeleton-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Full Resume Content Component with better UI
 function FullResumeContent({ text }: { text: string }) {
@@ -976,7 +976,87 @@ Best regards`);
   };
 
   if (loading) {
-    return <DetailPageSkeleton />;
+    // Structure-matched skeleton — mirrors this page's real layout: the card
+    // wrapper + breadcrumb, the "Resume Details" header, the action bar, the
+    // candidate hero card (avatar + name/meta chips + contact tiles), and the
+    // stacked section cards (Summary, Work Experience, Education, Skills…),
+    // each a titled card with an icon tile, heading and a few skeleton lines.
+    return (
+      <main className="flex-1 overflow-x-clip bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            {/* Breadcrumb */}
+            <div className="mb-4 md:mb-6 flex items-center gap-2">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-3" />
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-3 w-3" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+
+            {/* Header */}
+            <div className="border-b border-gray-100 py-3 sm:py-4 mb-4">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <Skeleton className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl" />
+                <div className="space-y-1.5">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+              </div>
+            </div>
+
+            {/* Action bar */}
+            <div className="border-b border-gray-100 py-2.5 sm:py-3 mb-4">
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-9 w-20 rounded-lg" />
+                <Skeleton className="h-9 w-20 rounded-lg" />
+                <Skeleton className="h-9 w-24 rounded-lg" />
+              </div>
+            </div>
+
+            {/* Body — candidate hero card + section cards */}
+            <div className="space-y-6">
+              {/* Candidate hero card */}
+              <div className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm rounded-xl p-6">
+                <div className="flex items-start gap-4">
+                  <Skeleton className="w-16 h-16 rounded-full flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-6 w-56" />
+                    <Skeleton className="h-4 w-40" />
+                    <div className="flex flex-wrap gap-2 pt-1">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <Skeleton key={i} className="h-6 w-24 rounded-full" />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-5 pt-5 border-t border-gray-100 flex flex-wrap gap-3">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <Skeleton key={i} className="h-11 w-48 rounded-lg" />
+                  ))}
+                </div>
+              </div>
+
+              {/* Section cards */}
+              {Array.from({ length: 3 }).map((_, card) => (
+                <div key={card} className="bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm rounded-xl p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Skeleton className="w-9 h-9 rounded-lg" />
+                    <Skeleton className="h-6 w-48" />
+                  </div>
+                  <div className="space-y-2.5">
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-11/12" />
+                    <Skeleton className="h-4 w-5/6" />
+                    <Skeleton className="h-4 w-2/3" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   if (error || !resume) {
@@ -2014,12 +2094,41 @@ Best regards`);
       })()}
 
       {/* Version Preview Modal - shows extracted text content */}
-      {/* Loading overlay for preview fetch */}
+      {/* Loading state for preview fetch — skeleton mirroring the preview modal
+          that replaces it: same modal shell + header, and a document card of
+          skeleton lines (section headings + tapering paragraph lines) in the
+          gray content area. */}
       {previewLoading && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-          <div className="bg-white rounded-xl p-8 flex items-center gap-3 shadow-2xl shadow-brand-blue/20 ring-1 ring-brand-blue/10">
-            <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-            <span className="text-gray-700">Loading preview...</span>
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-2xl h-[90dvh] flex flex-col overflow-hidden">
+            {/* Header */}
+            <div className="flex items-center justify-between gap-3 px-6 py-4 border-b border-gray-100 bg-gray-50 flex-shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <Skeleton className="w-10 h-10 rounded-xl" />
+                <div className="min-w-0 space-y-1.5">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Skeleton className="h-9 w-24 rounded-lg" />
+                <Skeleton className="h-9 w-9 rounded-lg" />
+              </div>
+            </div>
+            {/* Document content */}
+            <div className="flex-1 overflow-y-auto bg-gray-100 p-6">
+              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-2xl mx-auto min-h-full space-y-3">
+                <Skeleton className="h-6 w-48 mb-4" />
+                {Array.from({ length: 3 }).map((_, s) => (
+                  <div key={s} className="space-y-2 pt-3">
+                    <Skeleton className="h-4 w-32 mb-2" />
+                    <Skeleton className="h-3 w-full" />
+                    <Skeleton className="h-3 w-11/12" />
+                    <Skeleton className="h-3 w-4/5" />
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       )}

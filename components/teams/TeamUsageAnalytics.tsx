@@ -18,6 +18,7 @@ import { toast } from '@/components/ui/enhanced-toast';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -274,13 +275,27 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
         </td>
       </tr>
 
-      {/* Loading */}
+      {/* Loading — mirrors MemberLogEntries: label + entry rows */}
       {expanded && loading && (
         <tr>
-          <td colSpan={8} className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50">
-            <div className="flex items-center gap-2 text-gray-400 dark:text-slate-500 text-sm">
-              <Loader2 className="w-4 h-4 animate-spin" />
-              Loading consumption history…
+          <td colSpan={8} className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 py-4">
+            <Skeleton className="h-3 w-56 mb-3" />
+            <div className="space-y-2">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg px-4 py-3 flex items-start gap-3">
+                  <Skeleton className="shrink-0 h-6 w-10 rounded-md" />
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <Skeleton className="h-4 w-40" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                  <div className="shrink-0 space-y-1.5 flex flex-col items-end">
+                    <Skeleton className="h-4 w-16" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                  <Skeleton className="shrink-0 h-6 w-16 rounded-full" />
+                  <Skeleton className="shrink-0 h-3 w-20" />
+                </div>
+              ))}
             </div>
           </td>
         </tr>
@@ -406,9 +421,24 @@ function TeamRow({
           <td colSpan={7} className="p-0 border-t border-gray-100 dark:border-slate-700/60">
             <div className="bg-gray-50 dark:bg-slate-800/50">
               {loadingMembers ? (
-                <div className="flex items-center justify-center gap-2 text-gray-400 dark:text-slate-500 text-sm px-6 py-4">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Loading members…
+                <div className="px-4 py-3 space-y-3">
+                  {/* Mirrors member rows: avatar + name/email, then unit stat columns */}
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-4">
+                      <div className="flex items-center gap-2 w-56 shrink-0">
+                        <Skeleton className="w-7 h-7 rounded-full" />
+                        <div className="space-y-1.5">
+                          <Skeleton className="h-4 w-28" />
+                          <Skeleton className="h-3 w-36" />
+                        </div>
+                      </div>
+                      <div className="flex-1 grid grid-cols-7 gap-3">
+                        {Array.from({ length: 7 }).map((_, j) => (
+                          <Skeleton key={j} className="h-6 w-full max-w-[3rem] mx-auto rounded-md" />
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : members && members.length > 0 ? (
                 <div className="tf-table-shell">
@@ -743,17 +773,29 @@ export default function TeamUsageAnalytics() {
           </thead>
           <tbody>
             {loading ? (
-              <tr>
-                <td colSpan={7}>
-                  {/* This row is the only content of a shell that reserves 400px, so the
-                      loader box carries that height too — otherwise it sits at the top
-                      of the box with the rest of it left empty. */}
-                  <div className="flex items-center justify-center gap-3 text-gray-500 dark:text-slate-500 tf-loader-center">
-                    <Loader2 className="w-5 h-5 animate-spin" />
-                    <span className="text-sm">Loading team usage…</span>
-                  </div>
-                </td>
-              </tr>
+              /* Skeleton rows mirror the 7-col team row: Team, RS, AS, AIU, RU, Total, expand */
+              Array.from({ length: 6 }).map((_, i) => (
+                <tr key={i} className="border-t border-gray-200 dark:border-slate-700">
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="w-4 h-4 rounded" />
+                      <Skeleton className="w-9 h-9 rounded-lg" />
+                      <Skeleton className="h-4 w-32" />
+                    </div>
+                  </td>
+                  {Array.from({ length: 4 }).map((_, j) => (
+                    <td key={j} className="px-4 py-4 whitespace-nowrap">
+                      <Skeleton className="h-6 w-10 rounded-md" />
+                    </td>
+                  ))}
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <Skeleton className="h-5 w-8" />
+                  </td>
+                  <td className="px-4 py-4 whitespace-nowrap">
+                    <Skeleton className="h-6 w-24 rounded-full" />
+                  </td>
+                </tr>
+              ))
             ) : teams.length === 0 ? (
               <tr>
                 <td colSpan={7} className="py-16 text-center">

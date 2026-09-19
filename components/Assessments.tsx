@@ -29,8 +29,15 @@ import {
 } from '@/components/ui/dropdown-menu';
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, ASSESSMENT_INVITE_STATUS_OPTIONS, type InviteFilterState } from './InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from './InviteStatCards';
+import AssessmentInviteTable, {
+  InviteStatusBadge,
+  isBulkResendable,
+  isTrackedInviteCompleted,
+  isValidInviteEmail,
+  inviteStatusBucket,
+} from '@/components/assessments/AssessmentInviteTable';
 import ListToolbar from '@/components/ui/list-toolbar';
-import { ListSkeleton } from '@/components/ui/skeleton-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 import ListCountBadge from '@/components/ui/list-count-badge';
 /* The two shared empty states. ListEmptyState covers a LIST in its two
    flavours — narrowed to nothing by a search/filter (keep the controls, offer
@@ -48,6 +55,16 @@ import type { AssessmentAttemptResponse } from '@/lib/services/assessmentService
 
 import { Job } from '@/lib/types/types';
 import { assessmentService } from '@/lib/services';
+import {
+  buildInvitationRowActions,
+  InvitationActionsMenu,
+  InvitationActionButtons,
+  ViewFullHistoryLink,
+  EditInvitationModal,
+  RevokeInvitationDialog,
+  InvitationHistoryDialog,
+  timelineEvents,
+} from '@/components/AssessmentInviteActions';
 /* The job's own version list, for asking about each version by its own id —
    see `loadAssessmentLineage`. Same endpoint the version panel's job half
    already reads through `useJobVersionLineage`. */
@@ -68,7 +85,7 @@ import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import QuotaBadge from '@/components/ui/quota-badge';
 import AllAssessmentsTable from '@/components/assessments/AllAssessmentsTable';
-import AssessmentVersionHistoryPanel, { VersionChip, type AssessmentVersionRow } from '@/components/assessments/AssessmentVersionHistoryPanel';
+import AssessmentVersionHistoryPanel, { type AssessmentVersionRow, VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { latestVersionNumber } from '@/lib/utils/jobOpeningDisplay';
 
@@ -465,6 +482,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Resend confirmation dialog state
   const [resendTargetInvitation, setResendTargetInvitation] = useState<any | null>(null);
   const [isResending, setIsResending] = useState(false);
+  // Single-invitation Revoke / Edit ("Save & Send") / full-history state —
+  // shared by the Track Invites popup and the Invitation Status tab, since
+  // both surfaces get the full action set and only one is ever visible.
+  const [revokeInviteTarget, setRevokeInviteTarget] = useState<any | null>(null);
+  const [editInviteTarget, setEditInviteTarget] = useState<any | null>(null);
+  const [historyInviteTarget, setHistoryInviteTarget] = useState<any | null>(null);
   // Clone confirmation state — simple confirm-only modal. The recruiter
   // invites V2 candidates manually via the normal invite flow.
   const [cloneTargetAssessment, setCloneTargetAssessment] = useState<any | null>(null);
@@ -1366,8 +1389,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      completed_at/attempt_id check covers both. Every other status — In
      Progress, System Check, Expired, Invited, Terminated, ... — stays on the
      tracking popup: there is no result to show, so the row doesn't navigate. */
-  const isTrackedInviteCompleted = (invitation: any): boolean =>
-    (invitation.status === 'completed' || !!invitation.completed_at) && !!invitation.attempt_id;
 
   const opensTrackedDetails = (invitation: any): boolean =>
     isTrackedInviteCompleted(invitation);
@@ -1391,7 +1412,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      applies. */
   const isInviteExpired = (inv: any): boolean => {
     const s = inv.status;
-    if (['completed', 'failed', 'bounced', 'abandoned', 'expired'].includes(s) || inv.completed_at || inv.bounced_at) return false;
+    if (['completed', 'failed', 'bounced', 'abandoned', 'expired', 'revoked'].includes(s) || inv.completed_at || inv.bounced_at) return false;
     if (inv.unit_consumed) return false;
     return !!(inv.expires_at && new Date(inv.expires_at) < new Date());
   };
@@ -1439,6 +1460,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
     if (s === 'bounced' || inv.bounced_at) {
       return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`}><RefreshCw className="w-3 h-3" /> Bounced</span>;
+    }
+    if (s === 'revoked') {
+      return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`}><Ban className="w-3 h-3" /> Revoked</span>;
     }
     if (s === 'expired') {
       return <span className={`${base} bg-status-expired/10 text-status-expired ring-status-expired/20`}><Clock className="w-3 h-3" /> Expired</span>;
@@ -1516,18 +1540,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      status dropdown and its badges all read this one function, so a card's
      number always matches the rows selecting it produces — including for
      clock-expired invites, which `status` still calls 'sent'. */
-  const inviteStatusBucket = (inv: any): string => {
-    if (isInviteExpired(inv)) return 'expired';
-    if (inv.status === 'completed' || inv.completed_at) return 'completed';
-    if (inv.status === 'failed') return 'failed';
-    if (inv.status === 'bounced' || inv.bounced_at) return 'bounced';
-    if (inv.status === 'expired') return 'expired';
-    if (inv.status === 'abandoned') return 'abandoned';
-    if (inv.status === 'started' || inv.started_at) return 'started';
-    if (inv.status === 'opened' || inv.opened_at) return 'opened';
-    if (inv.status === 'sent' || inv.sent_at) return 'sent';
-    return 'pending';
-  };
 
   /* Bulk Resend on the Invitation Status tab — the popup's control, for the
      rows ticked there. Its own confirm state because the dialog names its own
@@ -1755,10 +1767,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      ('started'), System Check ('opened'), Completed, failed and bounced rows
      get no checkbox — their per-row actions (or lack of one) already say what
      can be done with them. */
-  const isBulkResendable = (inv: any): boolean =>
-    ['sent', 'expired'].includes(inv.status)
-    && !inv.started_at
-    && !inv.completed_at;
   const [trackingSelectedIds, setTrackingSelectedIds] = useState<Set<string>>(new Set());
   const trackingSelectableIds = trackingInvitations.filter(isBulkResendable).map((inv: any) => inv.id);
   const allTrackingSelected =
@@ -3131,8 +3139,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     setShowTrackInvitesModal(true);
   };
 
-  const isValidInviteEmail = (email: string) =>
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   // Preview the new expiry the backend will produce. Mirrors backend logic:
   // reuses the original invitation's configured duration, measured from the LAST
@@ -3303,6 +3309,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       toast.error(msg);
     } finally {
       setIsSendingChangeEmail(false);
+    }
+  };
+
+  /** Which invitation an invite-management action targets, and which list to
+   *  refetch afterwards — same rule handleResendInvitation and
+   *  handleUpdateEmail already follow, shared here for Revoke and Edit. */
+  const getInviteAssessmentId = (invitation: any): string | undefined =>
+    invitation?._assessment_id || invitation?.assessment_id || selectedAssessmentForTracking?.id;
+
+  const refreshInviteLists = async (invitation: any) => {
+    if (invitation?._assessment_id) {
+      await loadAllInviteStatuses();
+    } else if (selectedAssessmentForTracking) {
+      await Promise.all([
+        loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters),
+        loadTrackingInvitationSummary(selectedAssessmentForTracking),
+      ]);
     }
   };
 
@@ -5356,10 +5379,53 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               return (
                 <div>
                   {isLoadingCompletedCandidates ? (
-                    <div className="flex items-center justify-center py-16 tf-loader-center">
-                      <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-                      <span className="ml-2 text-sm text-gray-600 dark:text-slate-400">Loading candidate results…</span>
-                    </div>
+                    <>
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                        <Skeleton className="h-4 w-64" />
+                      </div>
+                      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm overflow-hidden">
+                        <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60">
+                          <Skeleton className="h-5 w-40" />
+                        </div>
+                        <div className="min-h-[400px] overflow-auto tf-table-shell">
+                          <table className="w-full min-w-[1720px] table-auto">
+                            <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                              <tr>
+                                {['CID', 'Candidate', 'Email', 'JD Title', 'Job Version', 'Resume Version', 'Phone', 'Invite Source', 'Tech Score', 'Coding Score', 'Result Status', 'Timeline', 'Completed', 'Duration', 'Actions'].map((c) => (
+                                  <th key={c} className="px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                              {Array.from({ length: 8 }).map((_, r) => (
+                                <tr key={r}>
+                                  <td className="px-4 py-4"><Skeleton className="h-5 w-16 rounded" /></td>
+                                  <td className="px-4 py-4">
+                                    <div className="flex items-center gap-2.5">
+                                      <Skeleton className="h-8 w-8 rounded-full flex-shrink-0" />
+                                      <Skeleton className="h-4 w-28" />
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-40" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-36" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-10" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-5 w-10 rounded-full" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-28" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-5 w-20 rounded" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-6 w-12 mx-auto" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-6 w-12 mx-auto" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-6 w-20 rounded-full mx-auto" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-40" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-16 mx-auto" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-9 w-9 rounded-md mx-auto" /></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
                   ) : completedCandidatesError ? (
                     <div className="p-6 text-center">
                       <p className="text-sm text-red-600 mb-3">{completedCandidatesError}</p>
@@ -5667,10 +5733,76 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               return (
                 <div>
                   {isLoadingInviteStatus ? (
-                    <div className="flex items-center justify-center py-16 tf-loader-center">
-                      <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-                      <span className="ml-2 text-sm text-gray-600 dark:text-slate-400">Loading invitation statuses…</span>
-                    </div>
+                    <>
+                      {/* Summary + status filter row */}
+                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4 sm:mb-5">
+                        <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] self-start">
+                          {Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[36px]">
+                              <Skeleton className="h-3.5 w-3.5 rounded" />
+                              <Skeleton className="h-3.5 w-16" />
+                              <Skeleton className="h-[18px] w-6 rounded-full" />
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-2.5 sm:gap-3 lg:justify-end flex-shrink-0">
+                          <Skeleton className="h-3.5 w-24" />
+                          <Skeleton className="h-1.5 w-20 sm:w-28 rounded-full" />
+                          <Skeleton className="h-4 w-8" />
+                        </div>
+                      </div>
+                      {/* Invitations card */}
+                      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm overflow-hidden">
+                        <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <Skeleton className="h-5 w-24" />
+                            <Skeleton className="h-6 w-16 rounded-full" />
+                          </div>
+                          <Skeleton className="h-8 w-24 rounded-lg" />
+                        </div>
+                        <div className="min-h-[320px] overflow-auto tf-table-shell">
+                          <table className="w-full min-w-[1550px] table-auto">
+                            <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                              <tr>
+                                <th className="px-4 py-3 w-12"><Skeleton className="h-4 w-4 rounded" /></th>
+                                {['CID', 'Candidate', 'Job & Assessment', 'Status', 'Invited On', 'Timeline', 'Tech Score', 'Coding Score', 'Action'].map((c) => (
+                                  <th key={c} className="px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                              {Array.from({ length: 8 }).map((_, r) => (
+                                <tr key={r}>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-4 rounded" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-5 w-16 rounded" /></td>
+                                  <td className="px-4 py-4">
+                                    <div className="flex items-center gap-3">
+                                      <Skeleton className="h-9 w-9 rounded-full flex-shrink-0" />
+                                      <div className="space-y-1.5">
+                                        <Skeleton className="h-4 w-32" />
+                                        <Skeleton className="h-3 w-40" />
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4">
+                                    <div className="space-y-1.5">
+                                      <Skeleton className="h-4 w-48" />
+                                      <Skeleton className="h-3 w-32" />
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-40" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-6 w-12 mx-auto" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-6 w-12 mx-auto" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-8 w-8 rounded-md mx-auto" /></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
                   ) : inviteStatusError ? (
                     <div className="p-6 text-center">
                       <p className="text-sm text-red-600 mb-3">{inviteStatusError}</p>
@@ -6067,53 +6199,28 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         {inv.sent_at || inv.created_at ? formatISTDate(inv.sent_at || inv.created_at) : '-'}
                                       </div>
                                     </td>
-                                    {/* Same lifecycle stamps the popup's Timeline
-                                        column shows, in the same order. */}
+                                    {/* Every audit-logged event on its own line, oldest
+                                        first (timelineEvents/buildFullTimeline in
+                                        AssessmentInviteActions) — not just the latest
+                                        per milestone type, so a revoke followed by an
+                                        edited resend shows both, not just the resend. */}
                                     <td className="px-4 py-4 align-middle text-xs text-gray-500 dark:text-slate-500">
                                       <div className="space-y-1">
-                                        {inv.sent_at && (
-                                          <div className="flex items-center gap-2 whitespace-nowrap">
-                                            <Mail className="w-3 h-3 text-status-invited flex-shrink-0" />
-                                            <span className="text-status-invited">Invited: {formatIST(inv.sent_at)}</span>
-                                          </div>
-                                        )}
-                                        {inv.opened_at && (
-                                          <div className="flex items-center gap-2 whitespace-nowrap">
-                                            <Monitor className="w-3 h-3 text-status-progress flex-shrink-0" />
-                                            <span className="text-status-progress">System Check: {formatIST(inv.opened_at)}</span>
-                                          </div>
-                                        )}
-                                        {inv.started_at && (
-                                          <div className="flex items-center gap-2 whitespace-nowrap">
-                                            <Play className="w-3 h-3 text-status-progress flex-shrink-0" />
-                                            <span className="text-status-progress">Started: {formatIST(inv.started_at)}</span>
-                                          </div>
-                                        )}
-                                        {inv.completed_at && (
-                                          <div className="flex items-center gap-2 whitespace-nowrap">
-                                            <CheckCircle className="w-3 h-3 text-status-completed flex-shrink-0" />
-                                            <span className="text-status-completed">Completed: {formatIST(inv.completed_at)}</span>
-                                          </div>
-                                        )}
-                                        {inv.terminated_at && !inv.completed_at && (
-                                          <div className="flex items-center gap-2 whitespace-nowrap">
-                                            <Ban className="w-3 h-3 text-red-600 flex-shrink-0" />
-                                            <span className="text-red-600">Terminated: {formatIST(inv.terminated_at)}</span>
-                                          </div>
-                                        )}
-                                        {inviteStatusBucket(inv) === 'expired' && inv.expires_at && (
-                                          <div className="flex items-center gap-2 whitespace-nowrap">
-                                            <Clock className="w-3 h-3 text-status-expired flex-shrink-0" />
-                                            <span className="text-status-expired">Expired at: {formatIST(inv.expires_at)}</span>
-                                          </div>
-                                        )}
-                                        {!inv.sent_at && !inv.started_at && (
+                                        {timelineEvents(inv).length === 0 ? (
                                           <div className="flex items-center gap-2 whitespace-nowrap">
                                             <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
                                             <span>Created: {formatIST(inv.created_at)}</span>
                                           </div>
+                                        ) : (
+                                          timelineEvents(inv).map(({ label, at, Icon, tone }, i) => (
+                                            <div key={`${label}-${i}`} className="flex items-center gap-2 whitespace-nowrap">
+                                              <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
+                                              <span className={tone}>{label}: {formatIST(at)}</span>
+                                            </div>
+                                          ))
                                         )}
                                       </div>
+                                      <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(inv)} />
                                     </td>
                                     {renderInviteScoreCell(inv, 'technical')}
                                     {renderInviteScoreCell(inv, 'coding')}
@@ -6134,75 +6241,52 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         const hasResult = inviteHasResult(inv);
                                         const scored = inv.scoring_status !== 'pending' && inv.scoring_status !== 'processing';
                                         const canDownload = hasResult && scored && canDownloadInviteReport;
-                                        /* Resend is offered on Expired rows and
-                                           only those. `isInviteResendable` is
-                                           the one definition of that — the bulk
-                                           Resend button and its confirmation
-                                           read the same helper, so a row cannot
-                                           offer an action the bulk path would
-                                           skip, or the reverse. */
-                                        const canResend = isInviteResendable(inv);
-                                        // No trigger at all rather than a menu that
-                                        // opens onto nothing — the popup's rule.
-                                        if (!hasResult && !canResend) return null;
-                                        return (
-                                          <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                              <button
-                                                aria-label="Actions"
-                                                title="Actions"
-                                                className="p-1.5 text-gray-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 rounded transition-colors"
+                                        // Edit Email/Change Email (the pre-existing
+                                        // failed/bounced "fix the address" flow)
+                                        // isn't wired on this tab — it never had
+                                        // that inline editor UI, only Resend. The
+                                        // new Edit (revoked)/Revoke/Copy Link are
+                                        // added here alongside it.
+                                        const actions = buildInvitationRowActions(inv, {
+                                          onResend: (target) => setResendTargetInvitation(target),
+                                          resendingId: isResending ? resendTargetInvitation?.id : null,
+                                          onEdit: (target) => setEditInviteTarget(target),
+                                          onRevoke: (target) => setRevokeInviteTarget(target),
+                                          revokingId: revokeInviteTarget?.id,
+                                        });
+                                        const extraItems = (
+                                          <>
+                                            {hasResult && (
+                                              <DropdownMenuItem
+                                                className={assessmentDropdownMenuItemClass}
+                                                onSelect={() => openInviteResult(inv)}
                                               >
-                                                <MoreVertical className="w-4 h-4" />
-                                              </button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-48">
-                                              {hasResult && (
-                                                <DropdownMenuItem
-                                                  className={assessmentDropdownMenuItemClass}
-                                                  onSelect={() => openInviteResult(inv)}
-                                                >
-                                                  <Eye className="w-3.5 h-3.5 text-menu-icon-view" />
-                                                  <span className={MENU_ITEM_SCALE_CLASS}>View Result</span>
-                                                </DropdownMenuItem>
-                                              )}
-                                              {/* Resend — the popup's item, opening
-                                                  the same page-level confirmation
-                                                  (new-link expiry preview and all)
-                                                  through the same state. The work is
-                                                  handleResendInvitation's; nothing
-                                                  about it is reimplemented here. */}
-                                              {canResend && (
-                                                <DropdownMenuItem
-                                                  className={assessmentDropdownMenuItemClass}
-                                                  onSelect={() => setResendTargetInvitation(inv)}
-                                                >
-                                                  <Mail className="w-3.5 h-3.5 text-menu-icon-share" />
-                                                  <span className={MENU_ITEM_SCALE_CLASS}>Resend</span>
-                                                </DropdownMenuItem>
-                                              )}
-                                              {/* Disabled rather than hidden while
-                                                  scoring runs: the action exists for
-                                                  this row, it is just not ready yet,
-                                                  and hiding it would read as "this
-                                                  row has no report". */}
-                                              {hasResult && canDownloadInviteReport && (
-                                                <DropdownMenuItem
-                                                  className={assessmentDropdownMenuItemClass}
-                                                  disabled={!canDownload || downloadingInviteReportId === inv.id}
-                                                  onSelect={() => downloadInviteReport(inv)}
-                                                >
-                                                  {downloadingInviteReportId === inv.id
-                                                    ? <Loader2 className="w-3.5 h-3.5 text-menu-icon-download animate-spin" />
-                                                    : <Download className="w-3.5 h-3.5 text-menu-icon-download" />}
-                                                  <span className={MENU_ITEM_SCALE_CLASS}>
-                                                    {downloadingInviteReportId === inv.id ? 'Preparing…' : 'Download Report'}
-                                                  </span>
-                                                </DropdownMenuItem>
-                                              )}
-                                            </DropdownMenuContent>
-                                          </DropdownMenu>
+                                                <Eye className="w-3.5 h-3.5 text-menu-icon-view" />
+                                                <span className={MENU_ITEM_SCALE_CLASS}>View Result</span>
+                                              </DropdownMenuItem>
+                                            )}
+                                            {/* Disabled rather than hidden while
+                                                scoring runs: the action exists for
+                                                this row, it is just not ready yet,
+                                                and hiding it would read as "this
+                                                row has no report". */}
+                                            {hasResult && canDownloadInviteReport && (
+                                              <DropdownMenuItem
+                                                className={assessmentDropdownMenuItemClass}
+                                                disabled={!canDownload || downloadingInviteReportId === inv.id}
+                                                onSelect={() => downloadInviteReport(inv)}
+                                              >
+                                                {downloadingInviteReportId === inv.id
+                                                  ? <Loader2 className="w-3.5 h-3.5 text-menu-icon-download animate-spin" />
+                                                  : <Download className="w-3.5 h-3.5 text-menu-icon-download" />}
+                                                <span className={MENU_ITEM_SCALE_CLASS}>
+                                                  {downloadingInviteReportId === inv.id ? 'Preparing…' : 'Download Report'}
+                                                </span>
+                                              </DropdownMenuItem>
+                                            )}
+                                          </>
                                         );
+                                        return <InvitationActionsMenu actions={actions} extraItems={extraItems} className="w-48" />;
                                       })()}
                                     </td>
                                   </tr>
@@ -6401,12 +6485,37 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
                     {/* Loading State */}
                     {isLoadingTopics ? (
-                      <div className="flex items-center justify-center py-12 tf-loader-center">
-                        <div className="text-center">
-                          <Loader2 className="w-10 h-10 text-brand-blue animate-spin mx-auto mb-3" />
-                          <p className="text-gray-600 dark:text-slate-400">Loading topic settings...</p>
+                      <>
+                        {/* Topic Availability banner */}
+                        <div className="bg-white border border-gray-100 rounded-xl p-3 sm:p-4">
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <Skeleton className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg" />
+                            <div className="space-y-2">
+                              <Skeleton className="h-4 w-32" />
+                              <Skeleton className="h-3 w-40" />
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                        {/* Section cards: HR, Technical, Coding */}
+                        {Array.from({ length: 3 }).map((_, i) => (
+                          <div key={i} className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm rounded-xl p-3 sm:p-5">
+                            <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
+                              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                                <Skeleton className="w-7 h-7 sm:w-10 sm:h-10 rounded-xl flex-shrink-0" />
+                                <div className="flex items-center gap-2">
+                                  <Skeleton className="h-4 w-20" />
+                                  <Skeleton className="h-5 w-10 rounded" />
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <Skeleton className="h-3.5 w-8" />
+                                <Skeleton className="w-9 sm:w-14 h-5 sm:h-7 rounded-full" />
+                              </div>
+                            </div>
+                            <Skeleton className="h-4 w-2/3 ml-9 sm:ml-[52px]" />
+                          </div>
+                        ))}
+                      </>
                     ) : (
                       <>
                         {/* Error Message */}
@@ -6615,12 +6724,55 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <div className="space-y-4 sm:space-y-6">
                 {/* Loading State */}
                 {isLoadingProctoring ? (
-                  <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center">
-                    <div className="text-center">
-                      <Loader2 className="w-10 h-10 text-brand-blue animate-spin mx-auto mb-3" />
-                      <p className="text-sm text-gray-600 dark:text-slate-400">Loading proctoring settings...</p>
+                  <>
+                    {/* Settings header banner */}
+                    <div className="bg-white border border-gray-100 rounded-xl p-3 sm:p-4">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <Skeleton className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg" />
+                        <div className="space-y-2">
+                          <Skeleton className="h-4 w-36" />
+                          <Skeleton className="h-3 w-40" />
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                    {/* Main proctoring toggle card */}
+                    <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm rounded-xl p-3 sm:p-5">
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                            <Skeleton className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex-shrink-0" />
+                            <div className="flex items-center gap-2">
+                              <Skeleton className="h-4 w-32" />
+                              <Skeleton className="h-5 w-16 rounded" />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <Skeleton className="h-3.5 w-8" />
+                            <Skeleton className="w-10 sm:w-14 h-5 sm:h-7 rounded-full" />
+                          </div>
+                        </div>
+                        <Skeleton className="h-4 w-3/4" />
+                      </div>
+                    </div>
+                    {/* Security Features grid */}
+                    <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm rounded-xl p-3 sm:p-6">
+                      <Skeleton className="h-4 w-32 mb-3 sm:mb-4" />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+                        {Array.from({ length: 6 }).map((_, i) => (
+                          <div key={i} className="flex items-center justify-between gap-2 p-3 rounded-lg border border-gray-100 dark:border-slate-700/60">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
+                              <div className="space-y-1.5 min-w-0">
+                                <Skeleton className="h-3.5 w-28" />
+                                <Skeleton className="h-3 w-40" />
+                              </div>
+                            </div>
+                            <Skeleton className="w-10 h-5 rounded-full flex-shrink-0" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
                 ) : proctoringError && !proctoringSettings ? (
                   <div className="flex flex-col items-center justify-center py-8 sm:py-12">
                     <AlertTriangle className="w-10 h-10 sm:w-12 sm:h-12 text-red-400 mb-3 sm:mb-4" />
@@ -6863,9 +7015,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <span className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500">{proctoringEventsTotal} total</span>
                       </div>
                       {isLoadingProctoringEvents ? (
-                        <div className="flex items-center justify-center py-8 tf-loader-center">
-                          <Loader2 className="w-6 h-6 text-brand-blue animate-spin mr-2" />
-                          <span className="text-sm text-gray-500 dark:text-slate-500">Loading events...</span>
+                        <div className="space-y-2 sm:space-y-3">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <div key={i} className="flex items-center justify-between gap-2 p-2.5 sm:p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
+                              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                                <Skeleton className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex-shrink-0" />
+                                <div className="space-y-1.5 min-w-0">
+                                  <Skeleton className="h-3.5 w-32" />
+                                  <Skeleton className="h-3 w-40" />
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                                <Skeleton className="h-5 w-14 rounded" />
+                                <Skeleton className="w-4 h-4 rounded-full" />
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       ) : proctoringEvents.length === 0 ? (
                         <div className="text-center py-8">
@@ -6920,8 +7085,40 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 )}
               </div>
             ) : isLoading ? (
-              /* Loading State */
-              <ListSkeleton />
+              /* Loading State — mirrors the job-list rows (renderJobListRow) */
+              <div className="space-y-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="relative p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] shadow-sm">
+                    <div className="flex flex-col gap-3 @4xl/job-row:flex-row @4xl/job-row:items-center @4xl/job-row:gap-4 lg:flex-row lg:items-center lg:gap-4">
+                      {/* Identity */}
+                      <div className="flex items-center gap-2.5 min-w-0 lg:w-[360px] lg:flex-shrink-0">
+                        <Skeleton className="h-9 w-9 rounded-lg flex-shrink-0" />
+                        <Skeleton className="h-6 w-16 rounded-md flex-shrink-0" />
+                        <Skeleton className="h-4 w-40" />
+                      </div>
+                      {/* Status pill */}
+                      <Skeleton className="h-6 w-20 rounded-full flex-shrink-0" />
+                      {/* Metrics grid */}
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 lg:flex-1">
+                        {Array.from({ length: 4 }).map((_, m) => (
+                          <div key={m} className="min-w-0 space-y-1.5 sm:px-3">
+                            <div className="flex items-center gap-1.5">
+                              <Skeleton className="w-4 h-4 rounded flex-shrink-0" />
+                              <Skeleton className="h-4 w-8" />
+                            </div>
+                            <Skeleton className="h-3 w-16" />
+                          </div>
+                        ))}
+                      </div>
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 flex-shrink-0 self-start lg:self-auto lg:ml-auto">
+                        <Skeleton className="h-8 w-28 rounded-lg" />
+                        <Skeleton className="h-8 w-20 rounded-lg" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : filteredAssessments.length === 0 ? (() => {
               /* One shared ListEmptyState for both zeros this list can reach.
                  It picks the flavour itself from `isNarrowed`: a search or
@@ -7584,12 +7781,41 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 height, which is the whole point of it. */}
             <div className="relative px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
               {showTrackingInitialLoader ? (
-                /* Nothing to show yet, so the spinner IS the body - and it
-                   FILLS it, rather than collapsing the dialog to a 200px box
-                   that then jumps to table height when the rows land. The
-                   dialog's min-height reserves the space; this occupies it. */
-                <div className={TRACKER_DIALOG_PLACEHOLDER_CLASS}>
-                  <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue animate-spin" />
+                /* Nothing to show yet, so a skeleton of the invitations table
+                   FILLS the body — it mirrors the table's shell and columns
+                   rather than collapsing the dialog to a spinner box that then
+                   jumps to table height when the rows land. */
+                <div className="tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0 border border-gray-200 dark:border-slate-700 rounded-lg">
+                  <table className="w-max min-w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200 dark:border-slate-700">
+                        <th className="w-8 py-3 pl-4 pr-0"><Skeleton className="h-4 w-4 rounded-full" /></th>
+                        {['CID', 'Candidate', 'Status', 'Timeline', 'Actions'].map((c) => (
+                          <th key={c} className="py-3 px-4 text-left"><Skeleton className="h-3 w-16" /></th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                      {Array.from({ length: 7 }).map((_, r) => (
+                        <tr key={r}>
+                          <td className="py-3 pl-4 pr-0"><Skeleton className="h-4 w-4 rounded-full" /></td>
+                          <td className="py-3 px-4"><Skeleton className="h-5 w-16 rounded" /></td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-3">
+                              <Skeleton className="h-9 w-9 rounded-full flex-shrink-0" />
+                              <div className="space-y-1.5">
+                                <Skeleton className="h-4 w-28" />
+                                <Skeleton className="h-3 w-36" />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                          <td className="py-3 px-4"><Skeleton className="h-4 w-40" /></td>
+                          <td className="py-3 px-4"><Skeleton className="h-8 w-8 rounded-md" /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               ) : trackingInvitations.length === 0 ? (
                 <div className={`${TRACKER_DIALOG_PLACEHOLDER_CLASS} text-gray-500 dark:text-slate-500`}>
@@ -7768,71 +7994,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             </td>
                                 <td className="py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 hidden md:table-cell">
                                   <div className="space-y-1">
-                                    {invitation.sent_at && (
+                                    {/* Every audit-logged event on its own line, oldest
+                                        first (timelineEvents/buildFullTimeline in
+                                        AssessmentInviteActions) — not just the latest
+                                        per milestone type, so a revoke followed by an
+                                        edited resend shows both, not just the resend. */}
+                                    {timelineEvents(invitation).length === 0 ? (
                                       <div className="flex items-center gap-2">
-                                        <Mail className="w-3 h-3 text-status-invited flex-shrink-0" />
-                                        <span className="text-status-invited">Invited: {formatIST(invitation.sent_at)}</span>
+                                        <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                        <span>Created: {formatIST(invitation.created_at)}</span>
+                                      </div>
+                                    ) : (
+                                      timelineEvents(invitation).map(({ label, at, Icon, tone }, i) => (
+                                        <div key={`${label}-${i}`} className="flex items-center gap-2">
+                                          <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
+                                          <span className={tone}>{label}: {formatIST(at)}</span>
+                                        </div>
+                                      ))
+                                    )}
                                   </div>
-                                )}
-                                {invitation.bounced_at && (
-                                  <div className="flex items-center gap-2">
-                                    <RefreshCw className="w-3 h-3 text-red-600 flex-shrink-0" />
-                                    <span className="text-red-600">Bounced: {formatIST(invitation.bounced_at)}</span>
-                                  </div>
-                                )}
-                                {invitation.opened_at && (
-                                  <div className="flex items-center gap-2">
-                                    <Monitor className="w-3 h-3 text-status-progress flex-shrink-0" />
-                                    <span className="text-status-progress">System Check: {formatIST(invitation.opened_at)}</span>
-                                  </div>
-                                )}
-                                {invitation.started_at && (
-                                  <div className="flex items-center gap-2">
-                                    <Play className="w-3 h-3 text-status-progress flex-shrink-0" />
-                                    <span className="text-status-progress">Started: {formatIST(invitation.started_at)}</span>
-                                  </div>
-                                )}
-                                {invitation.completed_at && (
-                                  <div className="flex items-center gap-2">
-                                    <CheckCircle className="w-3 h-3 text-status-completed flex-shrink-0" />
-                                    <span className="text-status-completed">Completed: {formatIST(invitation.completed_at)}</span>
-                                  </div>
-                                )}
-                                {invitation.terminated_at && !invitation.completed_at && (
-                                  <div className="flex items-center gap-2">
-                                    <Ban className="w-3 h-3 text-red-600 flex-shrink-0" />
-                                    <span className="text-red-600">Terminated: {formatIST(invitation.terminated_at)}</span>
-                                  </div>
-                                )}
-                                {/* Expired-at timestamp — shown when the link
-                                    has expired (status='expired' or clock-based
-                                    expiry on a never-started invite). The
-                                    expires_at column holds the deadline; we
-                                    surface it as the moment of expiry. */}
-                                {(() => {
-                                  const s = (invitation.status || '').toLowerCase();
-                                  const clockExpired = !invitation.started_at
-                                    && !invitation.unit_consumed
-                                    && invitation.expires_at
-                                    && new Date(invitation.expires_at) < new Date();
-                                  const isExpired = !invitation.completed_at
-                                    && (s === 'expired' || clockExpired);
-                                  if (!isExpired || !invitation.expires_at) return null;
-                                  return (
-                                    <div className="flex items-center gap-2">
-                                      <Clock className="w-3 h-3 text-status-expired flex-shrink-0" />
-                                      <span className="text-status-expired">Expired at: {formatIST(invitation.expires_at)}</span>
-                                    </div>
-                                  );
-                                })()}
-                                {!invitation.sent_at && !invitation.started_at && (
-                                  <div className="flex items-center gap-2">
-                                    <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                                    <span>Created: {formatIST(invitation.created_at)}</span>
-                                  </div>
-                                )}
-                              </div>
-                            </td>
+                                  <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(invitation)} />
+                                </td>
                             {/* Tech Score / Coding Score columns. Same pattern
                                 as the Results page: percent number on top, small
                                 Pass/Fail tag below, both colored against the 70%
@@ -7937,72 +8119,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     </button>
                                   </div>
                                 </div>
-                              ) : (() => {
-                                const isCompleted = invitation.status === 'completed' || !!invitation.completed_at;
-                                const isBounced = invitation.status === 'bounced';
-                                // Action rules by status: Invited/Expired → Resend only;
-                                // System Check ('opened') and In Progress → no menu at all;
-                                // Completed → View Results only. Edit Email survives only
-                                // where fixing the address is the point — a failed invite
-                                // (mistyped address) or a bounce.
-                                const canResend = ['sent', 'failed', 'expired'].includes(invitation.status)
-                                  && !invitation.started_at
-                                  && !invitation.completed_at;
-                                const canEditEmail = invitation.status === 'failed'
-                                  && !invitation.started_at
-                                  && !invitation.completed_at;
-
-                                // Nothing actionable — render no trigger rather than an
-                                // empty menu the user can open onto nothing.
-                                if (!isCompleted && !isBounced && !canResend) return null;
-
-                                return (
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <button
-                                        aria-label="Actions"
-                                        title="Actions"
-                                        className="p-1.5 text-gray-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 rounded transition-colors"
-                                      >
-                                        <MoreVertical className="w-4 h-4" />
-                                      </button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-44">
-                                      {isCompleted && (
-                                        // Completed-but-no-attempt is a rare orphaned
-                                        // invitation: disabled, so we never silently drop
-                                        // the user on the aggregate results page.
-                                        <DropdownMenuItem
-                                          className={assessmentDropdownMenuItemClass}
-                                          disabled={!invitation.attempt_id}
-                                          onSelect={() => openTrackedInviteResult(invitation)}
-                                        >
-                                          <Eye className="w-3.5 h-3.5 text-menu-icon-view" />
-                                          <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
-                                        </DropdownMenuItem>
-                                      )}
-                                      {canResend && (
-                                        <DropdownMenuItem className={assessmentDropdownMenuItemClass} onSelect={() => setResendTargetInvitation(invitation)}>
-                                          <Mail className="w-3.5 h-3.5 text-menu-icon-share" />
-                                          <span className={MENU_ITEM_SCALE_CLASS}>Resend</span>
-                                        </DropdownMenuItem>
-                                      )}
-                                      {(isBounced || canEditEmail) && (
-                                        <DropdownMenuItem
-                                          className={assessmentDropdownMenuItemClass}
-                                          onSelect={() => {
-                                            setEditingEmailId(invitation.id);
-                                            setNewEmailValue(invitation.candidate_email);
-                                          }}
-                                        >
-                                          <Pencil className="w-3.5 h-3.5 text-menu-icon-edit" />
-                                          <span className={MENU_ITEM_SCALE_CLASS}>{isBounced ? 'Change Email' : 'Edit Email'}</span>
-                                        </DropdownMenuItem>
-                                      )}
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                );
-                              })()}
+                              ) : (
+                                <InvitationActionsMenu
+                                  actions={buildInvitationRowActions(invitation, {
+                                    onResend: (target) => setResendTargetInvitation(target),
+                                    resendingId: isResending ? resendTargetInvitation?.id : null,
+                                    onEditEmail: (target) => { setEditingEmailId(target.id); setNewEmailValue(target.candidate_email); },
+                                    onEdit: (target) => setEditInviteTarget(target),
+                                    onRevoke: (target) => setRevokeInviteTarget(target),
+                                    revokingId: revokeInviteTarget?.id,
+                                    onViewResult: openTrackedInviteResult,
+                                  })}
+                                />
+                              )}
                             </td>
                           </tr>
                         );
@@ -8092,6 +8221,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           );
         })()}
       </ConfirmationDialog>
+
+      {/* Revoke / Edit ("Save & Send") / full-history — shared by the Track
+          Invites popup and the Invitation Status tab (see
+          getInviteAssessmentId / refreshInviteLists above). */}
+      <RevokeInvitationDialog
+        target={revokeInviteTarget}
+        onClose={() => setRevokeInviteTarget(null)}
+        getAssessmentId={getInviteAssessmentId}
+        onRevoked={() => refreshInviteLists(revokeInviteTarget)}
+      />
+      <EditInvitationModal
+        target={editInviteTarget}
+        onClose={() => setEditInviteTarget(null)}
+        getAssessmentId={getInviteAssessmentId}
+        onSaved={() => refreshInviteLists(editInviteTarget)}
+      />
+      <InvitationHistoryDialog
+        target={historyInviteTarget}
+        onClose={() => setHistoryInviteTarget(null)}
+        getAssessmentId={getInviteAssessmentId}
+      />
 
       {/* Bulk resend confirmation for the Invitation Status tab — the same
           ConfirmationDialog, wording and warning tone as the popup's below,

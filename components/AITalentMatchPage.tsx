@@ -43,7 +43,7 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
-import { TableSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import JDVersionHistory from '@/components/JDVersionHistory';
@@ -51,6 +51,37 @@ import JDVersionHistory from '@/components/JDVersionHistory';
 /* Shared row for both candidate tables' ⋮ Actions menu (Preview Resume /
    Score Resume / Invite Assessment / Invite AI Interview). */
 const actionsMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700 hover:!bg-gray-50 focus:!bg-gray-50 focus:!text-gray-700 focus-visible:!outline-none data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700';
+
+/* Neutral-gray table skeleton whose columns mirror a specific matched-candidate
+   table. `cols` is one width class (e.g. 'w-24') per column, in table order. */
+function MatchTableSkeleton({ cols, rows = 6 }: { cols: string[]; rows?: number }) {
+  const gridStyle = { gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` };
+  return (
+    <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 overflow-hidden">
+      <div className="overflow-x-auto">
+        {/* Header */}
+        <div
+          className="grid gap-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/60 px-4 py-3"
+          style={gridStyle}
+        >
+          {cols.map((w, i) => (
+            <Skeleton key={i} className={`h-3 ${w}`} />
+          ))}
+        </div>
+        {/* Rows */}
+        <div className="divide-y divide-gray-100 dark:divide-slate-800">
+          {Array.from({ length: rows }).map((_, r) => (
+            <div key={r} className="grid items-center gap-4 px-4 py-4" style={gridStyle}>
+              {cols.map((_w, c) => (
+                <Skeleton key={c} className="h-4" style={{ width: `${55 + ((r + c) * 7) % 40}%` }} />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 interface Job {
   id: string;
@@ -2615,7 +2646,9 @@ export default function AITalentMatchPage({
             </div>
 
             {loadingCandidateRows ? (
-              <TableSkeleton />
+              /* View by Candidates: expand, Candidate, Job Versions, Job Titles,
+                 Latest Matched, Actions. */
+              <MatchTableSkeleton cols={['w-6', 'w-32', 'w-24', 'w-28', 'w-24', 'w-16']} />
             ) : filteredCandidateRows.length === 0 ? (
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-8 sm:p-10 text-center">
                 <div className="w-12 h-12 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center mx-auto mb-3">
@@ -3260,7 +3293,13 @@ export default function AITalentMatchPage({
             </div>
 
             {loadingCandidateRows ? (
-              <TableSkeleton />
+              /* All Resumes table: select, Match Rating, Candidate Name, Job
+                 Title, Email, Phone, Location, Skills, Experience, Uploaded By,
+                 Uploaded Date, Resume Version, Attachments, Scored Status,
+                 Actions. */
+              <MatchTableSkeleton
+                cols={['w-6', 'w-20', 'w-28', 'w-24', 'w-28', 'w-20', 'w-20', 'w-24', 'w-16', 'w-24', 'w-20', 'w-20', 'w-16', 'w-20', 'w-16']}
+              />
             ) : filteredAllResumeRows.length === 0 ? (
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-8 sm:p-10 text-center">
                 <div className="w-12 h-12 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center mx-auto mb-3">
@@ -4323,10 +4362,35 @@ export default function AITalentMatchPage({
 
               <div className="overflow-y-auto px-6 py-4 flex-1">
                 {isLoadingModal ? (
-                  <div className="flex items-center justify-center gap-2 py-8 text-sm text-gray-500 dark:text-slate-500">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Loading match history...
-                  </div>
+                  <>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
+                      {Array.from({ length: 4 }).map((_, i) => (
+                        <div key={i} className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <Skeleton className="h-7 w-7 rounded-lg" />
+                            <Skeleton className="h-3 w-16" />
+                          </div>
+                          <Skeleton className="h-6 w-12" />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3 mb-3">
+                      <div className="flex items-end gap-2 overflow-x-auto py-1 -my-1">
+                        {Array.from({ length: 5 }).map((_, i) => (
+                          <div key={i} className="flex-1 min-w-[8rem] space-y-1.5">
+                            <Skeleton className="h-3 w-16" />
+                            <Skeleton className="h-9 w-full rounded-lg" />
+                          </div>
+                        ))}
+                        <Skeleton className="h-9 w-9 rounded-lg" />
+                      </div>
+                    </div>
+                    {/* Version history: Version, Matched By, Date, Candidates,
+                        Rating (10 / 9-7 / Below 7), Status, Action. */}
+                    <MatchTableSkeleton
+                      cols={['w-16', 'w-24', 'w-20', 'w-16', 'w-10', 'w-10', 'w-10', 'w-16', 'w-16']}
+                    />
+                  </>
                 ) : (
                   <>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
@@ -4852,7 +4916,13 @@ export default function AITalentMatchPage({
           {/* Candidates List */}
           <div>
           {isLoadingResultsFromHistory ? (
-            <TableSkeleton />
+            /* Selected-job candidates: select, Matched Rating, Candidate Name,
+               Job Title, Job Version, Email, Phone, Location, Skills,
+               Experience, Uploaded By, Uploaded Date, Resume Version,
+               Attachments, Scored Status, Actions. */
+            <MatchTableSkeleton
+              cols={['w-6', 'w-20', 'w-28', 'w-24', 'w-16', 'w-28', 'w-20', 'w-20', 'w-24', 'w-16', 'w-24', 'w-20', 'w-20', 'w-16', 'w-20', 'w-16']}
+            />
           ) : matchedCandidates.length === 0 ? (
             <div className="border-2 border-dashed border-brand-blue/20 rounded-xl p-8 sm:p-10 text-center bg-white dark:bg-slate-900">
               <Image

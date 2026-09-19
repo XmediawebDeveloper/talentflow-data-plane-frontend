@@ -7,7 +7,7 @@ import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { ArrowLeft,
   Eye, Download, X, BarChart3,
-  CheckCircle2, XCircle, AlertCircle, Loader2, Clock,
+  CheckCircle2, XCircle, AlertCircle, Clock,
   ClipboardList, Video, ClipboardCheck, FileText, TrendingUp, TrendingDown,
   Layers, Minus, RefreshCw, ChevronLeft, ChevronRight
 } from 'lucide-react';
@@ -25,7 +25,7 @@ import {
   UNIT_TYPE_NAMES,
 } from '@/lib/services/unitPoolService';
 import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
-import { PageSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface UsageTransparencyDashboardProps {
   onBack?: () => void;
@@ -201,7 +201,107 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
   };
 
   if (loading && !data) {
-    return <PageSkeleton variant="table" showStats={false} />;
+    return (
+      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-50 to-gray-100/30">
+        {/* Header */}
+        <div className="bg-white border-b border-gray-200 shadow-sm">
+          <div className="max-w-7xl mx-auto px-6 py-6">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <Skeleton className="w-12 h-12 rounded-xl" />
+                <div className="space-y-2">
+                  <Skeleton className="h-6 w-72" />
+                  <Skeleton className="h-3.5 w-96 max-w-full" />
+                </div>
+              </div>
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-10 w-28 rounded-lg" />
+                <Skeleton className="h-10 w-32 rounded-lg" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto px-6 py-8">
+          {/* Summary */}
+          <div className="mb-8">
+            <Skeleton className="h-6 w-64 mb-4" />
+            {/* Category Summary Cards */}
+            <div className="grid grid-cols-3 gap-4 mb-6">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="bg-white border-2 border-gray-200 rounded-xl p-5">
+                  <div className="flex items-center justify-between mb-3">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="w-8 h-8 rounded-lg" />
+                  </div>
+                  <Skeleton className="h-8 w-16 mb-1" />
+                  <Skeleton className="h-3 w-32" />
+                </div>
+              ))}
+            </div>
+            {/* Unit Type Breakdown */}
+            <div className="grid grid-cols-3 gap-4">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="bg-white border border-gray-200 rounded-xl p-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Skeleton className="w-8 h-8 rounded-lg" />
+                    <Skeleton className="h-4 w-24" />
+                  </div>
+                  <div className="space-y-2">
+                    {Array.from({ length: 5 }).map((_, j) => (
+                      <div key={j} className="flex justify-between">
+                        <Skeleton className="h-3.5 w-24" />
+                        <Skeleton className="h-3.5 w-10" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Filters Section */}
+          <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6 mb-6">
+            <div className="flex items-center justify-between gap-4">
+              <Skeleton className="h-10 w-64 rounded-lg" />
+              <Skeleton className="h-10 w-28 rounded-lg" />
+            </div>
+          </div>
+
+          {/* Data Table */}
+          <div className="bg-white rounded-xl shadow-md border border-gray-200 p-6">
+            <div className="flex items-center gap-3 mb-6">
+              <Skeleton className="w-5 h-5 rounded" />
+              <Skeleton className="h-5 w-48" />
+            </div>
+            <div className="overflow-x-auto tf-table-shell">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b-2 border-gray-200">
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <th key={i} className="text-left py-3 px-4">
+                        <Skeleton className="h-3 w-20" />
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {Array.from({ length: 7 }).map((_, r) => (
+                    <tr key={r} className="border-b border-gray-100">
+                      {Array.from({ length: 8 }).map((_, c) => (
+                        <td key={c} className="py-4 px-4">
+                          <Skeleton className="h-4 w-16" />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

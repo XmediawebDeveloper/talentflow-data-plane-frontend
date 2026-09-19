@@ -5,11 +5,51 @@ import { useState } from 'react';
 import dynamic from 'next/dynamic';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from '@/components/ui/enhanced-toast';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Dynamic import to avoid SSR issues with docx-preview dependency
 const DuplicateResolutionModal = dynamic(() => import('./DuplicateResolutionModal'), {
   ssr: false,
-  loading: () => <div>Loading...</div>
+  // Skeleton mirrors the modal shell: overlay → dialog → header (icon + title)
+  // → body (candidate card + two-column existing/new comparison).
+  loading: () => (
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-100 dark:border-slate-700/60 w-full max-w-[95vw] sm:max-w-4xl max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+        {/* Header */}
+        <div className="bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 px-6 py-5 flex-shrink-0">
+          <div className="flex items-start gap-4">
+            <Skeleton className="h-9 w-9 sm:h-10 sm:w-10 rounded-lg flex-shrink-0" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-5 w-56" />
+              <Skeleton className="h-4 w-72 max-w-full" />
+            </div>
+          </div>
+        </div>
+        {/* Body */}
+        <div className="flex-1 overflow-y-auto p-6 bg-gray-50 dark:bg-slate-950">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 shadow-sm p-5 mb-6">
+            <div className="flex items-center gap-3 mb-4">
+              <Skeleton className="w-10 h-10 rounded-full" />
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-4 w-52" />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="bg-slate-50 dark:bg-slate-800/50 border border-gray-100 dark:border-slate-700/60 rounded-lg p-4 space-y-3">
+                  <Skeleton className="h-4 w-32" />
+                  <Skeleton className="h-3.5 w-full" />
+                  <Skeleton className="h-3.5 w-5/6" />
+                  <Skeleton className="h-3.5 w-2/3" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 });
 
 interface UploadStatus {

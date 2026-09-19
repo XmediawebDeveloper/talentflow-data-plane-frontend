@@ -15,6 +15,7 @@ import {
 import { toast } from 'sonner';
 import rbacService from '@/lib/services/rbacService';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   Permission,
   Role,
@@ -472,12 +473,51 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
   };
 
   if (isLoading || !role) {
+    // Skeleton mirroring the role editor: gradient hero, the Role Details form
+    // card (Name/Code, Description, Priority/Inherits, Permissions) and the
+    // right-hand summary sidebar.
     return (
-      <main className={embedded ? '' : 'flex-1 bg-slate-50'}>
-        <div className="flex h-full min-h-[60dvh] items-center justify-center p-8">
-          <div className="flex items-center gap-3 text-gray-600">
-            <Loader2 className="h-8 w-8 animate-spin text-brand-blue" />
-            <span className="font-medium">Loading role editor...</span>
+      <main className={embedded ? '' : 'flex-1 overflow-x-clip bg-slate-50'}>
+        <div className={embedded ? 'w-full' : 'mx-auto w-full max-w-[1400px]'}>
+          <div className={embedded ? 'w-full' : 'p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl'}>
+            <div className="mb-6 rounded-2xl border border-gray-100 bg-white p-5 sm:p-6 lg:p-7">
+              <div className="flex items-start gap-3">
+                <Skeleton className="h-12 w-12 rounded-xl" />
+                <div className="space-y-2">
+                  <Skeleton className="h-7 w-56" />
+                  <Skeleton className="h-4 w-80 max-w-full" />
+                </div>
+              </div>
+            </div>
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+              <div className="rounded-2xl border border-gray-100 bg-white">
+                <div className="border-b border-gray-100 bg-gray-50 px-5 py-4 space-y-2">
+                  <Skeleton className="h-5 w-32" />
+                  <Skeleton className="h-3.5 w-72 max-w-full" />
+                </div>
+                <div className="space-y-6 p-5 sm:p-6">
+                  <div className="grid gap-5 md:grid-cols-2">
+                    {Array.from({ length: 2 }).map((_, i) => (
+                      <div key={i} className="space-y-2"><Skeleton className="h-3.5 w-24" /><Skeleton className="h-11 w-full rounded-xl" /></div>
+                    ))}
+                  </div>
+                  <div className="space-y-2"><Skeleton className="h-3.5 w-24" /><Skeleton className="h-24 w-full rounded-xl" /></div>
+                  <div className="grid gap-5 md:grid-cols-2">
+                    {Array.from({ length: 2 }).map((_, i) => (
+                      <div key={i} className="space-y-2"><Skeleton className="h-3.5 w-24" /><Skeleton className="h-11 w-full rounded-xl" /></div>
+                    ))}
+                  </div>
+                  <div className="space-y-3">
+                    <Skeleton className="h-5 w-32" />
+                    {Array.from({ length: 3 }).map((_, i) => (<Skeleton key={i} className="h-16 w-full rounded-2xl" />))}
+                  </div>
+                </div>
+              </div>
+              <div className="rounded-2xl border border-gray-100 bg-white p-5 space-y-4 xl:sticky xl:top-6 xl:self-start">
+                <Skeleton className="h-5 w-32" />
+                {Array.from({ length: 4 }).map((_, i) => (<Skeleton key={i} className="h-14 w-full rounded-xl" />))}
+              </div>
+            </div>
           </div>
         </div>
       </main>

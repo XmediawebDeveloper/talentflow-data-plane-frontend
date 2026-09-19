@@ -31,6 +31,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import BulkScoringProgressModal, { ScoringProgressItem } from './BulkScoringProgressModal';
 import UploadModal from './UploadModal';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Folder-tree pane sizing. Kept in step with FolderTree's own clamp
 // (200–400px) so a width restored from storage is one the tree will honour.
@@ -588,7 +589,17 @@ export default function SelectSourceModal({
             const batchItem = (batchStatus.items || []).find((b: any) => b.resume_id === item.resumeId);
             if (!batchItem) return item;
             const status = normalizeScoringStatus(batchItem.status) as ProgressItem['status'];
-            return { ...item, status, score: batchItem.overall_score, overallRating10: batchItem.overall_rating_10, matchStatus: batchItem.match_status };
+            return {
+              ...item,
+              status,
+              score: batchItem.overall_score,
+              overallRating10: batchItem.overall_rating_10,
+              matchStatus: batchItem.match_status,
+              // Never copied here before — only the context-sync loop below set
+              // it (for GlobalScoringProgressIndicator), so the modal rendered
+              // from THIS state always showed a bare "Failed" badge with no reason.
+              errorMessage: batchItem.error_message || item.errorMessage,
+            };
           }));
           setScoringStats({
             queued: batchStatus.queued,
@@ -623,15 +634,24 @@ export default function SelectSourceModal({
             // this component down would destroy the popup's owner (and its restore
             // callback), so "expand" would have nothing to reopen. Stay mounted and
             // let them come back to the finished result.
-            setTimeout(() => {
-              if (isBulkProgressMinimizedRef.current) return;
-              setShowProgressModal(false);
-              if (onScoringComplete) {
-                onScoringComplete();
-              } else {
-                onClose();
-              }
-            }, 1500);
+            //
+            // This used to fire on ANY completion, failed or not. A permanent
+            // config failure (e.g. missing scoring API key) resolves in ~1s
+            // instead of retrying for ~90s, so the 1.5s auto-close routinely
+            // fired before anyone could read the failed row's error message.
+            // Only auto-advance on a clean run; leave the popup up on any
+            // failure so the reason stays visible and Retry is reachable.
+            if ((batchStatus.failed || 0) === 0) {
+              setTimeout(() => {
+                if (isBulkProgressMinimizedRef.current) return;
+                setShowProgressModal(false);
+                if (onScoringComplete) {
+                  onScoringComplete();
+                } else {
+                  onClose();
+                }
+              }, 1500);
+            }
           } else {
             setTimeout(poll, 3000);
           }
@@ -1133,9 +1153,31 @@ export default function SelectSourceModal({
                 hand-rolled implementation of it. */}
             <div className="flex-1 min-h-0 flex flex-col">
               {loading ? (
-                <div className="flex items-center justify-center py-10 sm:py-16 tf-loader-center tf-loader-center--compact">
-                  <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 animate-spin text-brand-blue" />
-                  <span className="ml-2 sm:ml-3 text-xs sm:text-base text-gray-600 dark:text-slate-400">Loading resumes...</span>
+                <div className="flex-1 min-h-0 overflow-hidden px-3 sm:px-6 py-3 sm:py-4">
+                  {/* Mirrors the ResumeTable: a header row of column labels
+                      followed by resume rows (checkbox + avatar + name/meta). */}
+                  <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+                    <div className="hidden md:flex items-center gap-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50/60 dark:bg-slate-800/50 px-4 py-3">
+                      <Skeleton className="h-4 w-4 rounded" />
+                      <Skeleton className="h-3.5 flex-[2]" />
+                      <Skeleton className="h-3.5 flex-1" />
+                      <Skeleton className="h-3.5 flex-1" />
+                      <Skeleton className="h-3.5 w-16" />
+                    </div>
+                    {Array.from({ length: 8 }).map((_, i) => (
+                      <div key={i} className="flex items-center gap-3 sm:gap-4 border-b border-gray-100 dark:border-slate-700/60 px-4 py-3.5 last:border-b-0">
+                        <Skeleton className="h-4 w-4 shrink-0 rounded" />
+                        <Skeleton className="h-9 w-9 shrink-0 rounded-full" />
+                        <div className="flex-[2] min-w-0 space-y-2">
+                          <Skeleton className="h-4 w-2/5" />
+                          <Skeleton className="h-3 w-3/5" />
+                        </div>
+                        <Skeleton className="hidden md:block h-4 flex-1" />
+                        <Skeleton className="hidden md:block h-4 flex-1" />
+                        <Skeleton className="h-8 w-8 shrink-0 rounded-lg" />
+                      </div>
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <ResumeTable

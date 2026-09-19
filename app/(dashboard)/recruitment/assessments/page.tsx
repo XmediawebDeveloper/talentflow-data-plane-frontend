@@ -8,6 +8,7 @@ import { jdService } from '@/lib/services/jdService';
 import { mapJDStatus } from '@/lib/utils/jobOpeningDisplay';
 import { Job } from '@/lib/types/types';
 import FeatureGate from '@/components/shared/FeatureGate';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function AssessmentsRoute() {
   const searchParams = useSearchParams();
@@ -122,9 +123,42 @@ export default function AssessmentsRoute() {
   }, []);
 
   if (isLoading) {
+    // Neutral skeleton mirroring the assessments list (header + job rows)
+    // instead of a bare spinner.
     return (
-      <div className="tf-loader-page bg-slate-50">
-        <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
+      <div className="flex-1 overflow-x-clip bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px] p-4 md:p-8">
+          <div className="mb-6 flex items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <Skeleton className="hidden sm:block h-10 w-10 rounded-lg shrink-0" />
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-56" />
+                <Skeleton className="h-4 w-80 max-w-full" />
+              </div>
+            </div>
+            <Skeleton className="h-10 w-40 rounded-lg" />
+          </div>
+          <div className="space-y-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-gray-100 bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-48" />
+                      <Skeleton className="h-3 w-32" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-6 w-20 rounded-full" />
+                    <Skeleton className="hidden sm:block h-8 w-24 rounded-lg" />
+                    <Skeleton className="h-8 w-8 rounded-lg" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

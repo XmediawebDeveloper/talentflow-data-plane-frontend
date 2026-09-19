@@ -8,7 +8,7 @@ import { generateBillingInvoicePDF } from '@/lib/utils/pdfInvoice';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ListPagination from '@/components/ListPagination';
-import { TableSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 interface LineItem {
@@ -409,8 +409,52 @@ export default function BillingHistoryPage() {
           </div>
         )}
 
-        {/* Loading State */}
-        {loading && <TableSkeleton rows={6} columns={6} />}
+        {/* Loading State — mirrors the invoices table columns (Invoice, Timestamp, Description, Payment, Amount, Status, Actions) */}
+        {loading && (
+          <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
+            <div className="border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6">
+              <Skeleton className="h-4 w-20" />
+              <Skeleton className="mt-1.5 h-3 w-32" />
+            </div>
+            <div className="overflow-x-auto">
+              <div className="min-w-[800px]">
+                {/* Header */}
+                <div className="grid grid-cols-[200px_160px_minmax(0,1fr)_160px_130px_100px_100px] gap-4 border-b border-gray-100 px-4 py-4">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-3 w-24" />
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="ml-auto h-3 w-16" />
+                  <Skeleton className="mx-auto h-3 w-14" />
+                  <Skeleton className="ml-auto h-3 w-14" />
+                </div>
+                {/* Rows */}
+                <div className="divide-y divide-gray-100">
+                  {Array.from({ length: 6 }).map((_, r) => (
+                    <div key={r} className="grid grid-cols-[200px_160px_minmax(0,1fr)_160px_130px_100px_100px] items-center gap-4 px-4 py-4">
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
+                        <Skeleton className="h-4 w-28" />
+                      </div>
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-4 w-40" />
+                      <div className="flex items-center gap-1.5">
+                        <Skeleton className="h-3.5 w-3.5 rounded-sm" />
+                        <Skeleton className="h-4 w-24" />
+                      </div>
+                      <Skeleton className="ml-auto h-4 w-16" />
+                      <Skeleton className="mx-auto h-6 w-16 rounded-full" />
+                      <div className="ml-auto flex items-center gap-1.5">
+                        <Skeleton className="h-7 w-14 rounded-md" />
+                        <Skeleton className="h-7 w-7 rounded-md" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Empty State */}
         {!loading && !error && filteredInvoices.length === 0 && (

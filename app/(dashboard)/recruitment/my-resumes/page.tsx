@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { DndProvider, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import dynamic from 'next/dynamic';
-import ResumeTable from '@/components/ResumeTable';
+import ResumeTable, { ResumeTableSkeleton } from '@/components/ResumeTable';
 import NoResumesEmptyState from '@/components/resumes/NoResumesEmptyState';
 import UploadHistoryEmptyState from '@/components/resumes/UploadHistoryEmptyState';
 import SkillsList from '@/components/ui/SkillsList';
@@ -15,7 +15,7 @@ import { getDisplaySkills } from '@/lib/utils/resumeSkills';
 import Pagination from '@/components/Pagination';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
-import { PageSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import FolderTree, { FOLDER_NAME_MAX_LENGTH, MAX_FOLDER_DEPTH } from '@/components/FolderTree';
 import BulkActionsBar from '@/components/BulkActionsBar';
 import UploadModal from '@/components/UploadModal';
@@ -3832,9 +3832,47 @@ export default function MyResumesPage() {
   };
 
   if (loading) {
-    // Skeleton instead of a spinner during the initial fetch, matching the
-    // route-level loading.tsx so the load reads as one continuous skeleton.
-    return <PageSkeleton variant="table" showStats={false} />;
+    // Structure-matched skeleton mirroring the real My Resumes page: same
+    // outer wrapper / white card, the same header block (icon box, title +
+    // count chip, subtitle, the two action buttons), the search toolbar row,
+    // then the shared ResumeTableSkeleton in place of the ResumeTable.
+    return (
+      <main className="flex-1 overflow-x-clip bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            {/* Breadcrumb */}
+            <Skeleton className="h-4 w-48 mb-4 md:mb-6" />
+            {/* Header row */}
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 mb-5">
+              <div className="w-full sm:w-auto flex items-start gap-3">
+                <Skeleton className="hidden sm:block h-9 w-9 rounded-lg flex-shrink-0" />
+                <div>
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
+                    <Skeleton className="h-6 w-48" />
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                  </div>
+                  <Skeleton className="h-4 w-40" />
+                </div>
+              </div>
+              <div className="flex gap-2 w-full sm:w-auto">
+                <Skeleton className="h-9 w-32 rounded-md flex-1 sm:flex-initial" />
+                <Skeleton className="h-9 w-32 rounded-md flex-1 sm:flex-initial" />
+              </div>
+            </div>
+            {/* Search / toolbar card */}
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
+              <div className="flex items-center gap-3">
+                <Skeleton className="h-10 flex-1 rounded-lg" />
+                <Skeleton className="h-10 w-28 rounded-lg" />
+                <Skeleton className="hidden sm:block h-10 w-20 rounded-lg" />
+              </div>
+            </div>
+            {/* The resume table, as its own matching skeleton */}
+            <ResumeTableSkeleton rows={8} />
+          </div>
+        </div>
+      </main>
+    );
   }
 
   /* Upload History is only actionable once THIS user has uploaded something.
@@ -4585,11 +4623,27 @@ export default function MyResumesPage() {
                     </div>
                   )}
 
-                  {/* Loading state at root level (folders/resumes not yet fetched) */}
+                  {/* Loading state at root level (folders/resumes not yet fetched).
+                      Skeleton mirrors the folder-card grid below: same grid
+                      classes, six cards each shaped like DroppableFolderCard
+                      (icon box + name line + count line + action dot). */}
                   {loading && cardViewFolder === null && foldersToDisplay.length === 0 && (
-                    <div className="text-center py-12">
-                      <Loader2 className="w-8 h-8 text-blue-500 mx-auto mb-3 animate-spin" />
-                      <p className="text-sm text-gray-500">Loading folders…</p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-4 items-start">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div
+                          key={i}
+                          className="bg-white border border-gray-100 rounded-xl shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]"
+                        >
+                          <div className="flex items-center gap-3 p-3">
+                            <Skeleton className="w-9 h-9 rounded-lg flex-shrink-0" />
+                            <div className="flex-1 min-w-0 space-y-2">
+                              <Skeleton className="h-4 w-2/3" />
+                              <Skeleton className="h-3 w-1/3" />
+                            </div>
+                            <Skeleton className="h-7 w-7 rounded-md flex-shrink-0" />
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   )}
 
@@ -4669,11 +4723,12 @@ export default function MyResumesPage() {
                         </div>
                       )}
 
-                      {/* Loading state while the folder's resumes are being fetched */}
+                      {/* Loading state while the folder's resumes are being
+                          fetched. Skeleton mirrors the ResumeTable that renders
+                          here once loaded, framed by the same white card. */}
                       {loading && visibleFolderResumes.length === 0 && visibleFoldersToDisplay.length === 0 && (
-                        <div className="text-center py-12 bg-white border border-gray-200 rounded-xl">
-                          <Loader2 className="w-8 h-8 text-blue-500 mx-auto mb-3 animate-spin" />
-                          <p className="text-sm text-gray-500">Loading resumes…</p>
+                        <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                          <ResumeTableSkeleton rows={8} />
                         </div>
                       )}
 
@@ -6691,9 +6746,10 @@ export default function MyResumesPage() {
             <AlertDialogDescription asChild>
               <div className="mt-2 space-y-4 text-left">
                 {deleteFolderConfirm.loading ? (
-                  <div className="flex items-center justify-center py-6 tf-loader-center tf-loader-center--compact">
-                    <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                    <span className="ml-2 text-sm text-gray-500">Loading folder info...</span>
+                  <div className="space-y-3 py-2">
+                    <Skeleton className="h-4 w-3/4" />
+                    <Skeleton className="h-16 w-full rounded-lg" />
+                    <Skeleton className="h-4 w-1/2" />
                   </div>
                 ) : (
                   <>
