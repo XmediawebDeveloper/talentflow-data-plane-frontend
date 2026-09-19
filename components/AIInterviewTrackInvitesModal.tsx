@@ -14,16 +14,16 @@ import InviteFilterBar, {
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
 import { TRACKER_DIALOG_PANEL_CLASS } from '@/lib/constants/trackerDialog';
 import AIInterviewInviteTable, {
-  resolveInviteStatus,
   isExpiredForActions,
 } from '@/components/AIInterviewInviteTable';
 
-/* Bulk resend eligibility — Invited and Expired rows only, and never once the
-   candidate has started or completed. Matches the per-row Resend rule (minus
-   revoked, which stays a deliberate one-at-a-time action) and the assessment
-   tracker's bulk-select gating, so the two popups behave the same. */
+/* Bulk resend eligibility — Expired rows only, and never once the candidate
+   has started or completed. A freshly-sent "invited" row has no manual resend
+   (Revoke, then Edit's Save and Send on the AI Interviews page, is the only
+   way to reissue a link) — matches the per-row Resend rule so the two popups
+   behave the same. */
 const isBulkResendable = (inv: any): boolean =>
-  (resolveInviteStatus(inv) === 'invited' || isExpiredForActions(inv)) &&
+  isExpiredForActions(inv) &&
   !inv.started_at &&
   !inv.completed_at;
 
@@ -45,11 +45,12 @@ const PAGE_SIZE = 10;
  * Invite tracking for a job's AI interview, opened from the Job Details page.
  *
  * Follows the same per-status action rules as the assessment Track Invite
- * popup: Invited/Expired → Resend only, System Check / In Progress → no
- * action, Completed → View Result only. Edit and Revoke stay on the AI
- * Interviews page — those callbacks are deliberately not passed to
- * <AIInterviewInviteTable> (the same list the AI Interviews page renders),
- * so omitting them simply drops those menu items here.
+ * popup: Invited → Copy Link only (no manual resend once sent), Expired →
+ * Resend, System Check / In Progress → no action, Completed → View Result
+ * only. Edit and Revoke stay on the AI Interviews page — those callbacks are
+ * deliberately not passed to <AIInterviewInviteTable> (the same list the AI
+ * Interviews page renders), so omitting them simply drops those menu items
+ * here.
  */
 export default function AIInterviewTrackInvitesModal({
   isOpen,
@@ -98,8 +99,8 @@ export default function AIInterviewTrackInvitesModal({
   const [resendingId, setResendingId] = useState<string | null>(null);
 
   /* Bulk selection — same control and semantics as the assessment tracker's
-     Select All bar: only bulk-resendable rows (Invited/Expired) are
-     selectable, scoped to the rows on the CURRENT page. */
+     Select All bar: only bulk-resendable rows (Expired) are selectable,
+     scoped to the rows on the CURRENT page. */
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkResendConfirm, setShowBulkResendConfirm] = useState(false);
   const [isBulkResending, setIsBulkResending] = useState(false);
@@ -301,7 +302,7 @@ export default function AIInterviewTrackInvitesModal({
         />
 
         {/* Select All — same control, wording and placement as the assessment
-            tracker's bulk-select bar. Only Invited/Expired rows count. */}
+            tracker's bulk-select bar. Only Expired rows count. */}
         {!isLoading && selectableIds.length > 0 && (
           <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
             <button
@@ -343,10 +344,10 @@ export default function AIInterviewTrackInvitesModal({
             the mobile card stack) inside is the single vertical scroller. */}
         <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
           {/* Same action rules as the assessment tracker: the table offers
-              Resend on Invited/Expired (and Send Again on revoked), View
-              Details on Completed, and nothing once the candidate is in the
-              interview flow (System Check / In Progress). Edit and Revoke are
-              not passed, so they never appear here. */}
+              Resend on Expired only, View Details on Completed, and nothing
+              once the candidate is in the interview flow (System Check / In
+              Progress) or once sent (Invited gets Copy Link only). Edit and
+              Revoke are not passed, so they never appear here. */}
           <AIInterviewInviteTable
             invitations={invitations}
             isLoading={isLoading}
@@ -357,7 +358,7 @@ export default function AIInterviewTrackInvitesModal({
             onViewDetails={onViewResult}
             selectedIds={selectedIds}
             onToggleSelect={toggleSelectOne}
-            // Bulk-resend gating (Invited/Expired), not the AI Interviews
+            // Bulk-resend gating (Expired only), not the AI Interviews
             // page's revocable-only default.
             isSelectable={isBulkResendable}
           />
@@ -401,7 +402,7 @@ export default function AIInterviewTrackInvitesModal({
           variant="warning"
         />
 
-        {/* Bulk resend confirmation — selected Invited/Expired candidates only. */}
+        {/* Bulk resend confirmation — selected Expired candidates only. */}
         <ConfirmationDialog
           isOpen={showBulkResendConfirm}
           onClose={() => { if (!isBulkResending) setShowBulkResendConfirm(false); }}

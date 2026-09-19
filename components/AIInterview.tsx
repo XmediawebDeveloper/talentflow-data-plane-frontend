@@ -3188,7 +3188,7 @@ export default function AIInterview() {
             </div>
             <div className="px-5 sm:px-6 py-4 space-y-4">
               <p className="text-sm text-gray-500 dark:text-slate-500">
-                This invitation is revoked, so its status stays <strong>Revoked</strong> after saving. Use Send Again afterwards to reactivate it with a fresh link.
+                Update the candidate's details below. Saving will send them a fresh invitation link automatically.
               </p>
               <div>
                 <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate name</label>
@@ -3230,7 +3230,21 @@ export default function AIInterview() {
                   setSavingEditInvite(true);
                   try {
                     await aiInterviewService.updateInvitation(inv.id, { candidate_name: name, candidate_email: email });
-                    toast.success('Invitation updated');
+                    // Saving is the only path to reactivating a revoked invite now —
+                    // there's no separate Send Again button once it's revoked — so
+                    // the resend happens right here, automatically.
+                    try {
+                      await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
+                      toast.success(`Invitation updated and sent to ${email}`);
+                    } catch (sendErr: any) {
+                      const detail = sendErr?.response?.data?.detail;
+                      const msg =
+                        (typeof detail === 'object' && detail?.message) ||
+                        (typeof detail === 'string' && detail) ||
+                        sendErr?.message ||
+                        'Details saved, but the invitation could not be sent — try Edit again.';
+                      toast.error(msg);
+                    }
                     if (viewInvitationsConfig) {
                       await refreshInvitationsView(viewInvitationsConfig.id);
                     }
@@ -3245,7 +3259,7 @@ export default function AIInterview() {
                 className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50"
               >
                 {savingEditInvite && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                Save Changes
+                Save & Send
               </button>
             </div>
           </div>
