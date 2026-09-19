@@ -713,12 +713,19 @@ export default function SelectSourceModal({
           files.map(file => resumeService.upload(file, folderId))
         );
         await fetchData();
-        const firstSuccess = results.find(r => r.status === 'fulfilled') as PromiseFulfilledResult<any> | undefined;
-        if (firstSuccess) {
+        const uploadedResumes = results
+          .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled' && !!r.value?.id)
+          .map(r => ({ id: r.value.id as string, candidateName: (r.value.candidate_name as string) || 'Resume' }));
+        if (uploadedResumes.length > 0) {
+          const failedCount = files.length - uploadedResumes.length;
+          if (failedCount > 0) {
+            toast.error(`${failedCount} of ${files.length} resumes could not be uploaded (invalid, non-English or duplicate).`);
+          }
           return {
             success: true,
-            resumeId: firstSuccess.value?.id,
-            candidateName: firstSuccess.value?.candidate_name,
+            resumeId: uploadedResumes[0].id,
+            candidateName: uploadedResumes[0].candidateName,
+            uploadedResumes,
           };
         }
         // All files rejected — re-throw the first rejection so the catch
@@ -735,7 +742,8 @@ export default function SelectSourceModal({
       return {
         success: true,
         resumeId: response.id,
-        candidateName: response.candidate_name
+        candidateName: response.candidate_name,
+        uploadedResumes: [{ id: response.id, candidateName: response.candidate_name || 'Resume' }],
       };
     } catch (error: any) {
       console.error('Upload error:', error);
@@ -857,12 +865,6 @@ export default function SelectSourceModal({
     }
   };
 
-  // Handle upload complete - auto-select the uploaded resume
-  const handleUploadComplete = () => {
-    setShowUploadModal(false);
-    fetchData(); // Refresh the list
-  };
-
   const handleCreateFolder = async (name: string, parentId?: string) => {
     try {
       if (/<[^>]+>/.test(name) || /javascript:|data:|vbscript:/i.test(name)) {
@@ -914,6 +916,26 @@ export default function SelectSourceModal({
 
     // Show success message
     toast.success(`Resume uploaded! "${candidateName}" is now selected. Add more or click "Score Resumes" to continue.`);
+  };
+
+  // Bulk counterpart: tick every resume the bulk upload stored
+  const handleAutoSelectManyAfterUpload = async (uploaded: { id: string; candidateName: string }[]) => {
+    setShowUploadModal(false);
+
+    await fetchData();
+    refreshTabCounts();
+
+    setSelectedResumes(prev => {
+      const next = [...prev];
+      uploaded.forEach(u => { if (!next.includes(u.id)) next.push(u.id); });
+      return next;
+    });
+
+    toast.success(
+      uploaded.length === 1
+        ? `Resume uploaded! "${uploaded[0].candidateName}" is now selected. Add more or click "Score Resumes" to continue.`
+        : `${uploaded.length} resumes uploaded and selected. Add more or click "Score Resumes" to continue.`
+    );
   };
 
   return (
@@ -1327,9 +1349,9 @@ export default function SelectSourceModal({
           targetFolder={selectedFolder !== 'all' ? selectedFolder : undefined}
           onClose={() => setShowUploadModal(false)}
           onUpload={handleUpload}
-          onUploadComplete={handleUploadComplete}
           onCreateFolder={handleCreateFolder}
           onScoreResume={handleAutoSelectAfterUpload}
+          onScoreResumes={handleAutoSelectManyAfterUpload}
         />
       )}
 

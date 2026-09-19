@@ -487,6 +487,11 @@ function RecordingTabContent({
               // local-fs blob fallback.
               target="_blank"
               rel="noopener noreferrer"
+              // Native link click - the download itself never hits our backend
+              // for a presigned S3 URL, so log it here rather than after a
+              // fetch resolves. Doesn't call preventDefault, so the download
+              // still proceeds even if this fails.
+              onClick={() => aiInterviewService.logRecordingDownload(interview.id, isCandidate ? 'candidate' : 'screen')}
               className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-brand-blue text-white hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30 transition-colors"
             >
               <Download className="w-4 h-4" /> Download Recording

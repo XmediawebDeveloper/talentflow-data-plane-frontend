@@ -73,34 +73,41 @@ export const isExpiredForActions = (inv: any): boolean =>
   resolveInviteStatus(inv) === 'expired' || isInviteExpired(inv);
 
 /**
- * Revocable — and therefore bulk-selectable. Hidden once the candidate accepted
- * Consent & Terms and entered the interview process (system_check/in_progress),
- * engaged with the interview (completed/terminated), the invite was abandoned
- * pre-send (cancelled), it is already revoked, or the link expired (only Resend
- * is offered at that point).
+ * Revocable — and therefore both bulk-selectable and eligible for the row's
+ * own Revoke action. Hidden once the candidate accepted Consent & Terms and
+ * entered the interview process (system_check/in_progress), engaged with the
+ * interview (completed/terminated), the invite was abandoned pre-send
+ * (cancelled), it is already revoked (Edit + Copy Link only from here on), or
+ * the link expired (only Resend is offered at that point).
  */
 export const isRevocableInvite = (inv: any): boolean =>
   !['system_check', 'in_progress', 'completed', 'terminated', 'cancelled', 'revoked'].includes(inv.status) &&
   !isExpiredForActions(inv);
 
-/** Edit and Revoke appear together; Edit only ever enables once revoked. */
-const canEditOrRevoke = (inv: any): boolean =>
-  !['system_check', 'in_progress', 'completed', 'terminated', 'cancelled'].includes(inv.status) &&
-  !isExpiredForActions(inv);
+/**
+ * Edit only ever appears once an invitation is revoked — editing is how a
+ * revoked invite gets corrected and sent again (Save and Send), so there is
+ * nothing to edit before that.
+ */
+const canEdit = (inv: any): boolean => inv.status === 'revoked';
 
 /**
- * Resend covers an invited row (regenerates the token), a revoked one
- * (reactivates and issues a fresh token) and an expired one — however it expired
- * — as long as the candidate hasn't already started or completed.
+ * Resend only ever covers an expired row now — a live "invited" row has no
+ * manual resend (Revoke, then Edit's Save and Send, is the only path to a
+ * fresh link), and a revoked row's resend lives inside the Edit modal too.
+ * As long as the candidate hasn't already started or completed.
  */
 const canResendInvite = (inv: any): boolean =>
-  (resolveInviteStatus(inv) === 'invited' || inv.status === 'revoked' || isExpiredForActions(inv)) &&
+  isExpiredForActions(inv) &&
   !inv.started_at &&
   !inv.completed_at;
 
+/** Copy Link stays available once revoked (the token row is kept, not
+ *  deleted), so the recruiter can still hand it out while deciding whether
+ *  to edit and resend. */
 export const isInterviewLinkLive = (inv: any): boolean =>
   !!inv.interview_token &&
-  !['completed', 'cancelled', 'terminated', 'expired', 'revoked'].includes(resolveInviteStatus(inv)) &&
+  !['completed', 'cancelled', 'terminated', 'expired'].includes(resolveInviteStatus(inv)) &&
   !isInviteExpired(inv);
 
 /** Invite/list Score is ALWAYS the Must-Have Skills percentage (MHS section
@@ -312,7 +319,7 @@ export default function AIInterviewInviteTable({
     if (onResend && canResendInvite(inv)) {
       actions.push({
         key: 'resend',
-        label: inv.status === 'revoked' ? 'Send Again' : 'Resend Email',
+        label: 'Resend Email',
         Icon: Mail,
         run: () => onResend(inv),
         title: 'Revoke old link and send a new invitation',
@@ -321,27 +328,24 @@ export default function AIInterviewInviteTable({
         iconClassName: 'text-menu-icon-share',
       });
     }
-    if (onEdit && canEditOrRevoke(inv)) {
+    if (onEdit && canEdit(inv)) {
       actions.push({
         key: 'edit',
         label: 'Edit',
         Icon: Pencil,
         run: () => onEdit(inv),
-        // Editing a live invitation would change who the outstanding link belongs
-        // to, so it stays disabled until the invitation is revoked.
-        disabled: inv.status !== 'revoked',
-        title: inv.status === 'revoked' ? 'Edit candidate details' : 'Revoke this invitation first to edit it',
+        title: 'Edit candidate details and send',
         iconClassName: 'text-menu-icon-edit',
       });
     }
-    if (onRevoke && canEditOrRevoke(inv)) {
+    if (onRevoke && isRevocableInvite(inv)) {
       actions.push({
         key: 'revoke',
         label: 'Revoke',
         Icon: Ban,
         run: () => onRevoke(inv),
-        disabled: inv.status === 'revoked' || revokingId === inv.id,
-        title: inv.status === 'revoked' ? 'Already revoked' : "Revoke this invitation — the candidate's link will stop working",
+        disabled: revokingId === inv.id,
+        title: "Revoke this invitation — the candidate's link will stop working",
         destructive: true,
         busy: revokingId === inv.id,
       });
