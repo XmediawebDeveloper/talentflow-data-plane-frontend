@@ -1,6 +1,6 @@
 'use client';
 
-import { Briefcase, Plus, Search, Sparkles, Eye, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { Briefcase, Plus, Search, Sparkles, Eye, ChevronDown, CheckCircle2, Loader2 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
