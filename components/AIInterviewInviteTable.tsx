@@ -163,13 +163,20 @@ type TimelineEntry = { label: string; at: string; Icon: LucideIcon; tone: string
  *  silently collapsed a row's history down to just its latest state. The
  *  fallback inside buildFullTimeline still covers rows from before this
  *  field existed. */
-const timelineEvents = (inv: any): TimelineEntry[] => buildFullTimeline(inv, inv.timeline || []);
+/** Compact view caps at the 4 most recent events (still oldest-first among
+ *  themselves) — older ones drop off the table cell but stay reachable via
+ *  "View full history", which reads the uncapped trail separately. */
+const COMPACT_TIMELINE_LIMIT = 4;
+const timelineEvents = (inv: any): TimelineEntry[] =>
+  buildFullTimeline(inv, inv.timeline || []).slice(-COMPACT_TIMELINE_LIMIT);
 
 /** Every occurrence of an invitation-management action (not just the latest)
  *  reads the same audit trail the Activity Log is built from — see
  *  aiInterviewService.getSessionTimeline. Multiple sends, edits or revokes
- *  each show up as their own row here, in real chronological order, unlike
- *  timelineEvents() above which only ever shows one row per milestone type. */
+ *  each show up as their own row here, in real chronological order, and
+ *  unlike timelineEvents() above (capped to the 4 most recent for the
+ *  compact cell), this — the "View full history" modal's source — is never
+ *  truncated. */
 const describeTimelineAction = (action: string): { label: string; Icon: LucideIcon; tone: string } => {
   switch (action) {
     case 'ai_interview_invite':
@@ -548,8 +555,8 @@ export default function AIInterviewInviteTable({
               {/* Two-column grid rather than a free wrap, so entries line up
                   instead of staggering by label width. */}
               <div className="text-[10px] text-gray-500 dark:text-slate-500 grid grid-cols-2 gap-x-3 gap-y-0.5 mb-1">
-                {timelineEvents(inv).map(({ label, at, Icon, tone }) => (
-                  <div key={label} className="flex items-center gap-1 min-w-0">
+                {timelineEvents(inv).map(({ label, at, Icon, tone }, i) => (
+                  <div key={`${label}-${i}`} className="flex items-center gap-1 min-w-0">
                     <Icon className={`w-2.5 h-2.5 flex-shrink-0 ${tone}`} />
                     <span className="truncate">{label}: {formatIST(at)}</span>
                   </div>
@@ -706,8 +713,8 @@ export default function AIInterviewInviteTable({
                   <td className="py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden md:table-cell">
                     {events.length > 0 ? (
                       <div className="space-y-1">
-                        {events.map(({ label, at, Icon, tone }) => (
-                          <div key={label} className="flex items-center gap-2 whitespace-nowrap">
+                        {events.map(({ label, at, Icon, tone }, i) => (
+                          <div key={`${label}-${i}`} className="flex items-center gap-2 whitespace-nowrap">
                             <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
                             <span className={tone}>{label}: {formatIST(at)}</span>
                           </div>
