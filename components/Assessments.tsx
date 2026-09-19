@@ -755,6 +755,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   ) => countAssessmentVersions(assessment, lineage) >= MAX_ASSESSMENT_VERSIONS;
 
   /**
+   * A lineage may only hold one unpublished version at a time — creating a
+   * second draft while one is already sitting unfinished just buries the
+   * first. Finds that sibling draft (if any) so Duplicate can point the
+   * recruiter at it instead of minting another one. Excludes `assessment`
+   * itself so duplicating a row that IS the draft isn't mistaken for a
+   * conflicting sibling (that case is already blocked separately, since the
+   * Duplicate button is disabled on a draft row).
+   */
+  const findPendingDraftVersion = (
+    assessment: { id?: string; jd_id?: string },
+    lineage?: AssessmentVersionRow[],
+  ): AssessmentVersionRow | undefined => {
+    if (!assessment.jd_id) return undefined;
+    const fetched = lineage ?? assessmentLineages[assessment.jd_id];
+    const rows: AssessmentVersionRow[] = fetched?.length
+      ? fetched
+      : (apiAssessments.filter((x: any) => x.jd_id === assessment.jd_id) as AssessmentVersionRow[]);
+    return rows.find(
+      v => String(v.status || '').toLowerCase() === 'draft' && v.id !== assessment.id,
+    );
+  };
+
+  /**
    * Create an assessment for ONE job version, from the Job Version History.
    *
    * The same navigation Job Details uses (`AssessmentsForJD.handleCreateAssessment`
@@ -2899,6 +2922,28 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       });
       return;
     }
+    // Only one draft may exist per lineage at a time — offer to open the
+    // existing one instead of minting a second (the backend blocks this
+    // too, but checking here avoids the round trip and gives the recruiter
+    // a direct way into the draft they should be using).
+    const pendingDraft = findPendingDraftVersion(assessment, lineage);
+    if (pendingDraft) {
+      const openIt = await dialog.confirm({
+        title: 'Draft already exists',
+        message: `Already one assessment version is in draft ("${pendingDraft.title || 'Untitled'}"). Use this draft instead of creating a new one.`,
+        variant: 'warning',
+        confirmText: 'Open Draft',
+      });
+      if (openIt) {
+        handleEditAssessment({
+          id: pendingDraft.id,
+          jd_id: assessment.jd_id,
+          status: 'Draft',
+          invitations_count: 0,
+        });
+      }
+      return;
+    }
     setCloneTargetAssessment(assessment);
   };
 
@@ -2931,9 +2976,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       ]);
       toast.success(`Assessment duplicated: "${response.cloned_title}"`);
       setCloneTargetAssessment(null);
-    } catch (error) {
+      // Take the recruiter straight into the new draft's edit form instead
+      // of leaving them to find it themselves in the JD's version panel.
+      handleEditAssessment({
+        id: response.cloned_id,
+        jd_id: clonedFromJdId,
+        status: 'Draft',
+        invitations_count: 0,
+      });
+    } catch (error: any) {
       console.error('Failed to duplicate assessment:', error);
-      toast.error('Failed to duplicate assessment. Please try again.');
+      const msg =
+        error?.response?.data?.detail?.message ||
+        error?.response?.data?.message ||
+        (typeof error?.response?.data?.detail === 'string' ? error.response.data.detail : null) ||
+        'Failed to duplicate assessment. Please try again.';
+      toast.error(msg);
     } finally {
       setIsCloning(false);
     }
