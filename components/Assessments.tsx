@@ -69,7 +69,7 @@ import QuotaBadge from '@/components/ui/quota-badge';
 import AllAssessmentsTable from '@/components/assessments/AllAssessmentsTable';
 import AssessmentVersionHistoryPanel, { VersionChip, type AssessmentVersionRow } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
-import { groupByLineage, latestVersionNumber } from '@/lib/utils/jobOpeningDisplay';
+import { latestVersionNumber } from '@/lib/utils/jobOpeningDisplay';
 
 
 /** What the version-history helpers below read off an assessment row — the
@@ -1083,6 +1083,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Stats from API
   const [stats, setStats] = useState({
     total_assessments: 0,
+    total_jobs_with_assessments: 0,
     total_ever_created: 0,
     total_deleted: 0,
     active_assessments: 0,
@@ -2291,6 +2292,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         const response = statsResult.value;
         setStats({
           total_assessments: response.total_assessments,
+          total_jobs_with_assessments: response.total_jobs_with_assessments || 0,
           total_ever_created: response.total_ever_created || response.total_assessments,
           total_deleted: response.total_deleted || 0,
           active_assessments: response.active_assessments,
@@ -2639,6 +2641,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       const statsResponse = await assessmentService.getStats();
       setStats({
         total_assessments: statsResponse.total_assessments,
+        total_jobs_with_assessments: statsResponse.total_jobs_with_assessments || 0,
         total_ever_created: statsResponse.total_ever_created || statsResponse.total_assessments,
         total_deleted: statsResponse.total_deleted || 0,
         active_assessments: statsResponse.active_assessments,
@@ -4155,22 +4158,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     </div>
   );
 
-  /* How many JOBS the tenant has, for the Total Jobs summary card.
+  /* How many JOBS have at least one assessment, for the Total Jobs card.
 
-     `jobs` is the route's fetch of JD rows and holds one row per VERSION — a
-     job republished twice is three rows in it — so `jobs.length` here would
-     report versions while reading as a job count. `groupByLineage` is the
-     shared helper the Job Openings list counts its own "Total Jobs" tile with
-     (keyed on `job_id`, falling back to the row id), so the two pages cannot
-     report different numbers of jobs for the same tenant.
+     The card opens the Total Jobs tab, whose Job List heading counts jobs that
+     HAVE assessments — so the card must count the same population. It used to
+     count every job the tenant has (`groupByLineage(jobs)`, the JD list), which
+     reported e.g. 193 above a Job List of 59.
 
-     No new request: this is the list the page is already handed as a prop and
-     already reads for the LATEST badge and the Position filter.
-
-     Deliberately NOT the Job List heading's `assessmentResultCount` below,
-     which counts the jobs that HAVE assessments and moves with the filters —
-     a header tile answers "how many jobs are there", which is this. */
-  const totalJobs = groupByLineage(jobs).size;
+     Read from /assessments/stats rather than derived from the page's own
+     assessment list: that list follows the active tab and the search box, and
+     a summary card must not move with them. The backend counts distinct job
+     lineages with the same key the Job List collapses by (`jobLineageKey`):
+     the JD's job_id, then jd_id, then the assessment's own id. */
+  const totalJobs = stats.total_jobs_with_assessments;
 
   /* Candidates who have actually SAT an assessment, from the same
      /assessments/stats response the Total and Active figures come from — one
@@ -4852,8 +4852,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
               Total Jobs          -> the Total Jobs tab, which is the
                                      job-grouped list. `totalJobs`, the
-                                     distinct job lineages in the `jobs` prop
-                                     — see its derivation above. It leads the
+                                     distinct jobs that HAVE assessments
+                                     (stats.total_jobs_with_assessments). It leads the
                                      row for the same reason its tab leads the
                                      tab strip: the job is what an assessment
                                      hangs off, so it is the widest of these

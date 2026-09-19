@@ -822,13 +822,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
      Results" for one frame before flipping to the real count — exactly the
      flash the count is supposed to never show. */
   const [loadingAiMatch, setLoadingAiMatch] = useState(true);
-  /* True as soon as `listSessions` — ONE call — comes back, well before
-     `loadingAiMatch` goes false (which waits on a `getSession` per session,
-     fetched to dedupe candidates across every run). The tab badge uses this
-     to show a real number as fast as the Scored Resumes badge does, instead
-     of sitting on a skeleton for the whole dedup fetch — see
-     `aiMatchBadgeCount` below for how the two numbers hand off. */
-  const [aiMatchSessionsLoaded, setAiMatchSessionsLoaded] = useState(false);
+  /* DISTINCT candidates matched to this JD, counted server-side. Held apart from
+     `aiMatchCandidates.length` because the list is fetched with a limit: if a JD ever
+     exceeds it, the badge must still say how many there are. Null until the fetch
+     answers — see `aiMatchBadgeCount` below. */
+  const [aiMatchTotal, setAiMatchTotal] = useState<number | null>(null);
 
   // ✅ PERMISSIONS: Permission checking function
   const hasPermission = (permission: string): boolean => {
@@ -1684,38 +1682,40 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const fetchAiMatchData = async () => {
     setLoadingAiMatch(true);
     try {
-      const response = await aiMatchService.listSessions({ jd_id: job.id, page_size: 100 });
-      const sessions = response.items || [];
-      setAiMatchSessions(sessions);
-      setAiMatchSessionsLoaded(true);
+      /* Two requests, in parallel, and that is the whole tab.
 
-      // listSessions returns sessions with results: [] — fetch each session individually for enriched candidates
-      const allCandidatesMap = new Map<string, MatchedCandidate>();
-      await Promise.all(
-        sessions.map(async (session) => {
-          try {
-            const { candidates } = await aiMatchService.getSession(session.id);
-            candidates.forEach((c) => {
-              const existing = allCandidatesMap.get(c.resumeId);
-              // Keep the one with the higher match score (from the most recent/best session)
-              if (!existing || c.matchScore > existing.matchScore) {
-                allCandidatesMap.set(c.resumeId, c);
-              }
-            });
-          } catch (err) {
-            console.warn(`Failed to fetch session ${session.id}:`, err);
-          }
-        })
-      );
+         It used to be one per session plus one per candidate: `listSessions`, then a
+         `getSession` for each (their `results` come back empty from the list), then -
+         inside `getSession` - a `GET /resumes/{id}` per candidate for email, phone and
+         notice period, with the de-duplication done here in JavaScript afterwards. A JD
+         with 6 runs and 732 match rows spent ~739 requests to show 122 people, which is
+         why the tab sat loading for the better part of a minute.
 
-      // Sort by matchScore descending
-      const sorted = Array.from(allCandidatesMap.values()).sort((a, b) => b.matchScore - a.matchScore);
-      setAiMatchCandidates(sorted);
-    } catch (error) {
-      console.error('Failed to fetch AI match data:', error);
-      setAiMatchSessions([]);
-      setAiMatchCandidates([]);
-      setAiMatchSessionsLoaded(true);
+         `listJdCandidates` does the de-duplication and the resume join in one query, and
+         reports the distinct total. The sessions are still fetched - the activity
+         timeline and the tab's own run history read them - but that is one call that no
+         longer blocks the list. */
+      const [sessionsResult, candidatesResult] = await Promise.allSettled([
+        aiMatchService.listSessions({ jd_id: job.id, page_size: 100 }),
+        aiMatchService.listJdCandidates(job.id),
+      ]);
+
+      if (sessionsResult.status === 'fulfilled') {
+        setAiMatchSessions(sessionsResult.value.items || []);
+      } else {
+        console.error('Failed to fetch AI match sessions:', sessionsResult.reason);
+        setAiMatchSessions([]);
+      }
+
+      if (candidatesResult.status === 'fulfilled') {
+        const { candidates, total } = candidatesResult.value;
+        setAiMatchCandidates(candidates);
+        setAiMatchTotal(total);
+      } else {
+        console.error('Failed to fetch AI match candidates:', candidatesResult.reason);
+        setAiMatchCandidates([]);
+        setAiMatchTotal(0);
+      }
     } finally {
       setLoadingAiMatch(false);
     }
@@ -2443,21 +2443,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     ? aiInterviewInviteAction
     : aiInterviewCreateAction;
 
-  /* AI Talent Match Results tab badge — shows a real number as soon as
-     `listSessions` (one call) resolves, the same speed the Scored Resumes
-     badge already has, rather than waiting out the slower per-session dedup
-     fetch that only the tab's own candidate list actually needs.
-     `total_matches` is precomputed server-side per session (the same field
-     "Top Match Rating" already reads for an instant number elsewhere), so
-     summing it is free once sessions are in. It's an upper bound — a
-     candidate matched in two sessions of this job is counted twice — so once
-     the exact deduplicated list finishes loading, the badge switches to
-     `aiMatchCandidates.length`, which can only ever be equal or lower. */
-  const aiMatchBadgeCount = !aiMatchSessionsLoaded
-    ? null
-    : loadingAiMatch
-      ? aiMatchSessions.reduce((sum, s) => sum + (s.total_matches ?? 0), 0)
-      : aiMatchCandidates.length;
+  /* AI Talent Match Results tab badge — the distinct candidate count, straight from
+     the server, shown as soon as that one call resolves.
+
+     It used to show the sum of each session's `total_matches` while the real list
+     loaded, because the real list took ~739 requests to assemble and the badge could
+     not wait. That sum counts a candidate once per session it appears in, so a JD read
+     732 and then dropped to 122 a minute later, in front of the recruiter. Now the
+     count arrives with the list, so there is no provisional number to correct. */
+  const aiMatchBadgeCount = aiMatchTotal;
 
   return (
     <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
@@ -2907,10 +2901,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
               }`}>
-                {/* aiMatchBadgeCount is null only for the instant before
-                    listSessions itself (one call) has come back — same tiny
-                    window every other tab's badge has, which is why this is
-                    the only case that still needs a placeholder. */}
+                {/* Null only until the one candidates call answers — the same small
+                    window every other tab's badge has. Whatever shows next is final:
+                    this badge no longer corrects itself downward. */}
                 {aiMatchBadgeCount === null ? (
                   <span className="inline-block h-3 w-4 rounded bg-current opacity-30 animate-pulse align-middle" aria-label="Loading count" />
                 ) : (

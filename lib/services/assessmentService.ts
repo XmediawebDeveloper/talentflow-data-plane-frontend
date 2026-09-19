@@ -356,6 +356,8 @@ export interface DetailedResultResponse {
 // 1. Stats Summary
 export interface AssessmentStatsResponse {
   total_assessments: number;
+  /** Distinct jobs (JD lineages) with at least one assessment. */
+  total_jobs_with_assessments?: number;
   active_assessments: number;
   draft_assessments: number;
   closed_assessments: number;
