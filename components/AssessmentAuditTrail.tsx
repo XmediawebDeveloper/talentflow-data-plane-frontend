@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import { ListSkeleton } from '@/components/ui/skeleton-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type CategoryFilter = 'all' | 'assessment_lifecycle' | 'candidate_activity';
 
@@ -406,7 +406,37 @@ export default function AssessmentAuditTrail() {
         {/* Timeline View */}
         <div className="p-3 sm:p-6">
           {isLoading ? (
-            <ListSkeleton rows={5} />
+            <div className="space-y-3 sm:space-y-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="relative flex items-start gap-2.5 sm:gap-4 p-3 sm:p-4 rounded-lg border border-gray-100 bg-white"
+                >
+                  {/* Icon */}
+                  <Skeleton className="flex-shrink-0 w-8 h-8 sm:w-10 sm:h-10 rounded-full" />
+                  {/* Content */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-1 sm:gap-4">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
+                          <Skeleton className="h-4 sm:h-5 w-48" />
+                          <Skeleton className="h-4 w-16 rounded-full" />
+                        </div>
+                        <Skeleton className="h-3.5 w-full max-w-lg mb-1.5" />
+                        <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1.5 sm:mt-2">
+                          <Skeleton className="h-3 w-24" />
+                          <Skeleton className="h-3 w-28" />
+                        </div>
+                      </div>
+                      <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:gap-1 flex-shrink-0 mt-1 sm:mt-0">
+                        <Skeleton className="h-3.5 w-20" />
+                        <Skeleton className="h-3 w-12" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : activities.length === 0 ? (
             <ListEmptyState
               icon={Activity}

@@ -30,7 +30,7 @@ import {
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, ASSESSMENT_INVITE_STATUS_OPTIONS, type InviteFilterState } from './InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from './InviteStatCards';
 import ListToolbar from '@/components/ui/list-toolbar';
-import { ListSkeleton } from '@/components/ui/skeleton-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 import ListCountBadge from '@/components/ui/list-count-badge';
 /* The two shared empty states. ListEmptyState covers a LIST in its two
    flavours — narrowed to nothing by a search/filter (keep the controls, offer
@@ -5356,10 +5356,53 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               return (
                 <div>
                   {isLoadingCompletedCandidates ? (
-                    <div className="flex items-center justify-center py-16 tf-loader-center">
-                      <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-                      <span className="ml-2 text-sm text-gray-600 dark:text-slate-400">Loading candidate results…</span>
-                    </div>
+                    <>
+                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+                        <Skeleton className="h-4 w-64" />
+                      </div>
+                      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm overflow-hidden">
+                        <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60">
+                          <Skeleton className="h-5 w-40" />
+                        </div>
+                        <div className="min-h-[400px] overflow-auto tf-table-shell">
+                          <table className="w-full min-w-[1720px] table-auto">
+                            <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                              <tr>
+                                {['CID', 'Candidate', 'Email', 'JD Title', 'Job Version', 'Resume Version', 'Phone', 'Invite Source', 'Tech Score', 'Coding Score', 'Result Status', 'Timeline', 'Completed', 'Duration', 'Actions'].map((c) => (
+                                  <th key={c} className="px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                              {Array.from({ length: 8 }).map((_, r) => (
+                                <tr key={r}>
+                                  <td className="px-4 py-4"><Skeleton className="h-5 w-16 rounded" /></td>
+                                  <td className="px-4 py-4">
+                                    <div className="flex items-center gap-2.5">
+                                      <Skeleton className="h-8 w-8 rounded-full flex-shrink-0" />
+                                      <Skeleton className="h-4 w-28" />
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-40" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-36" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-10" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-5 w-10 rounded-full" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-28" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-5 w-20 rounded" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-6 w-12 mx-auto" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-6 w-12 mx-auto" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-6 w-20 rounded-full mx-auto" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-40" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-16 mx-auto" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-9 w-9 rounded-md mx-auto" /></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
                   ) : completedCandidatesError ? (
                     <div className="p-6 text-center">
                       <p className="text-sm text-red-600 mb-3">{completedCandidatesError}</p>
@@ -5667,10 +5710,76 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               return (
                 <div>
                   {isLoadingInviteStatus ? (
-                    <div className="flex items-center justify-center py-16 tf-loader-center">
-                      <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-                      <span className="ml-2 text-sm text-gray-600 dark:text-slate-400">Loading invitation statuses…</span>
-                    </div>
+                    <>
+                      {/* Summary + status filter row */}
+                      <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4 sm:mb-5">
+                        <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] self-start">
+                          {Array.from({ length: 4 }).map((_, i) => (
+                            <div key={i} className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[36px]">
+                              <Skeleton className="h-3.5 w-3.5 rounded" />
+                              <Skeleton className="h-3.5 w-16" />
+                              <Skeleton className="h-[18px] w-6 rounded-full" />
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex items-center gap-2.5 sm:gap-3 lg:justify-end flex-shrink-0">
+                          <Skeleton className="h-3.5 w-24" />
+                          <Skeleton className="h-1.5 w-20 sm:w-28 rounded-full" />
+                          <Skeleton className="h-4 w-8" />
+                        </div>
+                      </div>
+                      {/* Invitations card */}
+                      <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm overflow-hidden">
+                        <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <Skeleton className="h-5 w-24" />
+                            <Skeleton className="h-6 w-16 rounded-full" />
+                          </div>
+                          <Skeleton className="h-8 w-24 rounded-lg" />
+                        </div>
+                        <div className="min-h-[320px] overflow-auto tf-table-shell">
+                          <table className="w-full min-w-[1550px] table-auto">
+                            <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                              <tr>
+                                <th className="px-4 py-3 w-12"><Skeleton className="h-4 w-4 rounded" /></th>
+                                {['CID', 'Candidate', 'Job & Assessment', 'Status', 'Invited On', 'Timeline', 'Tech Score', 'Coding Score', 'Action'].map((c) => (
+                                  <th key={c} className="px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                                ))}
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                              {Array.from({ length: 8 }).map((_, r) => (
+                                <tr key={r}>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-4 rounded" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-5 w-16 rounded" /></td>
+                                  <td className="px-4 py-4">
+                                    <div className="flex items-center gap-3">
+                                      <Skeleton className="h-9 w-9 rounded-full flex-shrink-0" />
+                                      <div className="space-y-1.5">
+                                        <Skeleton className="h-4 w-32" />
+                                        <Skeleton className="h-3 w-40" />
+                                      </div>
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4">
+                                    <div className="space-y-1.5">
+                                      <Skeleton className="h-4 w-48" />
+                                      <Skeleton className="h-3 w-32" />
+                                    </div>
+                                  </td>
+                                  <td className="px-4 py-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-40" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-6 w-12 mx-auto" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-6 w-12 mx-auto" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-8 w-8 rounded-md mx-auto" /></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    </>
                   ) : inviteStatusError ? (
                     <div className="p-6 text-center">
                       <p className="text-sm text-red-600 mb-3">{inviteStatusError}</p>
@@ -6401,12 +6510,37 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
                     {/* Loading State */}
                     {isLoadingTopics ? (
-                      <div className="flex items-center justify-center py-12 tf-loader-center">
-                        <div className="text-center">
-                          <Loader2 className="w-10 h-10 text-brand-blue animate-spin mx-auto mb-3" />
-                          <p className="text-gray-600 dark:text-slate-400">Loading topic settings...</p>
+                      <>
+                        {/* Topic Availability banner */}
+                        <div className="bg-white border border-gray-100 rounded-xl p-3 sm:p-4">
+                          <div className="flex items-center gap-2 sm:gap-3">
+                            <Skeleton className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg" />
+                            <div className="space-y-2">
+                              <Skeleton className="h-4 w-32" />
+                              <Skeleton className="h-3 w-40" />
+                            </div>
+                          </div>
                         </div>
-                      </div>
+                        {/* Section cards: HR, Technical, Coding */}
+                        {Array.from({ length: 3 }).map((_, i) => (
+                          <div key={i} className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm rounded-xl p-3 sm:p-5">
+                            <div className="flex items-center justify-between gap-2 mb-1.5 sm:mb-2">
+                              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                                <Skeleton className="w-7 h-7 sm:w-10 sm:h-10 rounded-xl flex-shrink-0" />
+                                <div className="flex items-center gap-2">
+                                  <Skeleton className="h-4 w-20" />
+                                  <Skeleton className="h-5 w-10 rounded" />
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 flex-shrink-0">
+                                <Skeleton className="h-3.5 w-8" />
+                                <Skeleton className="w-9 sm:w-14 h-5 sm:h-7 rounded-full" />
+                              </div>
+                            </div>
+                            <Skeleton className="h-4 w-2/3 ml-9 sm:ml-[52px]" />
+                          </div>
+                        ))}
+                      </>
                     ) : (
                       <>
                         {/* Error Message */}
@@ -6615,12 +6749,55 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <div className="space-y-4 sm:space-y-6">
                 {/* Loading State */}
                 {isLoadingProctoring ? (
-                  <div className="flex items-center justify-center py-8 sm:py-12 tf-loader-center">
-                    <div className="text-center">
-                      <Loader2 className="w-10 h-10 text-brand-blue animate-spin mx-auto mb-3" />
-                      <p className="text-sm text-gray-600 dark:text-slate-400">Loading proctoring settings...</p>
+                  <>
+                    {/* Settings header banner */}
+                    <div className="bg-white border border-gray-100 rounded-xl p-3 sm:p-4">
+                      <div className="flex items-center gap-2 sm:gap-3">
+                        <Skeleton className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg" />
+                        <div className="space-y-2">
+                          <Skeleton className="h-4 w-36" />
+                          <Skeleton className="h-3 w-40" />
+                        </div>
+                      </div>
                     </div>
-                  </div>
+                    {/* Main proctoring toggle card */}
+                    <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm rounded-xl p-3 sm:p-5">
+                      <div className="flex flex-col gap-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                            <Skeleton className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl flex-shrink-0" />
+                            <div className="flex items-center gap-2">
+                              <Skeleton className="h-4 w-32" />
+                              <Skeleton className="h-5 w-16 rounded" />
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            <Skeleton className="h-3.5 w-8" />
+                            <Skeleton className="w-10 sm:w-14 h-5 sm:h-7 rounded-full" />
+                          </div>
+                        </div>
+                        <Skeleton className="h-4 w-3/4" />
+                      </div>
+                    </div>
+                    {/* Security Features grid */}
+                    <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm rounded-xl p-3 sm:p-6">
+                      <Skeleton className="h-4 w-32 mb-3 sm:mb-4" />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
+                        {Array.from({ length: 6 }).map((_, i) => (
+                          <div key={i} className="flex items-center justify-between gap-2 p-3 rounded-lg border border-gray-100 dark:border-slate-700/60">
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
+                              <div className="space-y-1.5 min-w-0">
+                                <Skeleton className="h-3.5 w-28" />
+                                <Skeleton className="h-3 w-40" />
+                              </div>
+                            </div>
+                            <Skeleton className="w-10 h-5 rounded-full flex-shrink-0" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </>
                 ) : proctoringError && !proctoringSettings ? (
                   <div className="flex flex-col items-center justify-center py-8 sm:py-12">
                     <AlertTriangle className="w-10 h-10 sm:w-12 sm:h-12 text-red-400 mb-3 sm:mb-4" />
@@ -6863,9 +7040,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         <span className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500">{proctoringEventsTotal} total</span>
                       </div>
                       {isLoadingProctoringEvents ? (
-                        <div className="flex items-center justify-center py-8 tf-loader-center">
-                          <Loader2 className="w-6 h-6 text-brand-blue animate-spin mr-2" />
-                          <span className="text-sm text-gray-500 dark:text-slate-500">Loading events...</span>
+                        <div className="space-y-2 sm:space-y-3">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <div key={i} className="flex items-center justify-between gap-2 p-2.5 sm:p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
+                              <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+                                <Skeleton className="w-7 h-7 sm:w-8 sm:h-8 rounded-full flex-shrink-0" />
+                                <div className="space-y-1.5 min-w-0">
+                                  <Skeleton className="h-3.5 w-32" />
+                                  <Skeleton className="h-3 w-40" />
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+                                <Skeleton className="h-5 w-14 rounded" />
+                                <Skeleton className="w-4 h-4 rounded-full" />
+                              </div>
+                            </div>
+                          ))}
                         </div>
                       ) : proctoringEvents.length === 0 ? (
                         <div className="text-center py-8">
@@ -6920,8 +7110,40 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 )}
               </div>
             ) : isLoading ? (
-              /* Loading State */
-              <ListSkeleton />
+              /* Loading State — mirrors the job-list rows (renderJobListRow) */
+              <div className="space-y-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="relative p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] shadow-sm">
+                    <div className="flex flex-col gap-3 @4xl/job-row:flex-row @4xl/job-row:items-center @4xl/job-row:gap-4 lg:flex-row lg:items-center lg:gap-4">
+                      {/* Identity */}
+                      <div className="flex items-center gap-2.5 min-w-0 lg:w-[360px] lg:flex-shrink-0">
+                        <Skeleton className="h-9 w-9 rounded-lg flex-shrink-0" />
+                        <Skeleton className="h-6 w-16 rounded-md flex-shrink-0" />
+                        <Skeleton className="h-4 w-40" />
+                      </div>
+                      {/* Status pill */}
+                      <Skeleton className="h-6 w-20 rounded-full flex-shrink-0" />
+                      {/* Metrics grid */}
+                      <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 lg:flex-1">
+                        {Array.from({ length: 4 }).map((_, m) => (
+                          <div key={m} className="min-w-0 space-y-1.5 sm:px-3">
+                            <div className="flex items-center gap-1.5">
+                              <Skeleton className="w-4 h-4 rounded flex-shrink-0" />
+                              <Skeleton className="h-4 w-8" />
+                            </div>
+                            <Skeleton className="h-3 w-16" />
+                          </div>
+                        ))}
+                      </div>
+                      {/* Actions */}
+                      <div className="flex items-center gap-2 flex-shrink-0 self-start lg:self-auto lg:ml-auto">
+                        <Skeleton className="h-8 w-28 rounded-lg" />
+                        <Skeleton className="h-8 w-20 rounded-lg" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : filteredAssessments.length === 0 ? (() => {
               /* One shared ListEmptyState for both zeros this list can reach.
                  It picks the flavour itself from `isNarrowed`: a search or
@@ -7584,12 +7806,41 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 height, which is the whole point of it. */}
             <div className="relative px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
               {showTrackingInitialLoader ? (
-                /* Nothing to show yet, so the spinner IS the body - and it
-                   FILLS it, rather than collapsing the dialog to a 200px box
-                   that then jumps to table height when the rows land. The
-                   dialog's min-height reserves the space; this occupies it. */
-                <div className={TRACKER_DIALOG_PLACEHOLDER_CLASS}>
-                  <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue animate-spin" />
+                /* Nothing to show yet, so a skeleton of the invitations table
+                   FILLS the body — it mirrors the table's shell and columns
+                   rather than collapsing the dialog to a spinner box that then
+                   jumps to table height when the rows land. */
+                <div className="tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0 border border-gray-200 dark:border-slate-700 rounded-lg">
+                  <table className="w-max min-w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200 dark:border-slate-700">
+                        <th className="w-8 py-3 pl-4 pr-0"><Skeleton className="h-4 w-4 rounded-full" /></th>
+                        {['CID', 'Candidate', 'Status', 'Timeline', 'Actions'].map((c) => (
+                          <th key={c} className="py-3 px-4 text-left"><Skeleton className="h-3 w-16" /></th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                      {Array.from({ length: 7 }).map((_, r) => (
+                        <tr key={r}>
+                          <td className="py-3 pl-4 pr-0"><Skeleton className="h-4 w-4 rounded-full" /></td>
+                          <td className="py-3 px-4"><Skeleton className="h-5 w-16 rounded" /></td>
+                          <td className="py-3 px-4">
+                            <div className="flex items-center gap-3">
+                              <Skeleton className="h-9 w-9 rounded-full flex-shrink-0" />
+                              <div className="space-y-1.5">
+                                <Skeleton className="h-4 w-28" />
+                                <Skeleton className="h-3 w-36" />
+                              </div>
+                            </div>
+                          </td>
+                          <td className="py-3 px-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                          <td className="py-3 px-4"><Skeleton className="h-4 w-40" /></td>
+                          <td className="py-3 px-4"><Skeleton className="h-8 w-8 rounded-md" /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               ) : trackingInvitations.length === 0 ? (
                 <div className={`${TRACKER_DIALOG_PLACEHOLDER_CLASS} text-gray-500 dark:text-slate-500`}>

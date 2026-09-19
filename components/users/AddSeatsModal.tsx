@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -303,10 +304,62 @@ export default function AddSeatsModal({
           <div className="p-5 sm:p-7 space-y-5">
 
             {isLoading ? (
-              <div className="flex flex-col items-center justify-center py-16 gap-3 tf-loader-center tf-loader-center--compact">
-                <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-                <p className="text-sm text-gray-500 dark:text-slate-500">Loading pricing...</p>
-              </div>
+              <>
+                {/* Addon Details Card skeleton */}
+                <div className="relative bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-4 sm:p-5 overflow-hidden shadow-sm">
+                  <div className="relative flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                      <Skeleton className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl flex-shrink-0" />
+                      <div className="min-w-0 space-y-2">
+                        <Skeleton className="h-5 sm:h-6 w-40" />
+                        <Skeleton className="h-3 w-24" />
+                      </div>
+                    </div>
+                    <div className="text-right flex-shrink-0 space-y-2">
+                      <Skeleton className="h-3 w-14 ml-auto" />
+                      <Skeleton className="h-5 w-16 ml-auto" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Quantity Selector skeleton */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-12 sm:h-[52px] w-36 rounded-xl flex-shrink-0" />
+                    <Skeleton className="h-12 flex-1 rounded-xl" />
+                  </div>
+                </div>
+
+                {/* Order Summary skeleton */}
+                <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
+                  <div className="px-5 py-3 bg-gradient-to-r from-gray-50 to-white border-b border-gray-200 dark:border-slate-700 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <Skeleton className="w-8 h-8 rounded-lg" />
+                      <Skeleton className="h-4 w-28" />
+                    </div>
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                  <div className="p-4 sm:p-5 space-y-3">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="flex justify-between items-center">
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-4 w-16" />
+                      </div>
+                    ))}
+                    <div className="mt-1 pt-3 border-t border-gray-200 dark:border-slate-700 flex justify-between items-center">
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-3 w-20" />
+                      </div>
+                      <Skeleton className="h-8 w-24" />
+                    </div>
+                  </div>
+                </div>
+              </>
             ) : (
               <>
                 {/* Success */}

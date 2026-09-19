@@ -4,6 +4,7 @@ import { toast } from '@/components/ui/enhanced-toast';
 import { assessmentService } from '@/lib/services/assessmentService';
 import { useAuth } from '@/lib/hooks/useAuth';
 import api from '@/lib/services/api';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface InviteToAssessmentModalProps {
   onClose: () => void;
@@ -482,14 +483,51 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
     );
   }
 
-  // Loading Screen
+  // Loading Screen — mirrors the invite screen: header, then the
+  // "Select Assessment" field and the "Candidates" field the form shows.
   if (view === 'loading' || isLoadingAssessments) {
     return (
       <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-md w-full p-5 sm:p-8 text-center">
-          <Loader2 className="w-10 h-10 sm:w-12 sm:h-12 animate-spin text-gray-600 dark:text-slate-400 mx-auto mb-3 sm:mb-4" />
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2">Loading Assessments...</h3>
-          <p className="text-gray-500 dark:text-slate-500 text-xs sm:text-sm">Checking for existing assessments</p>
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col tf-round-edges">
+          {/* Header */}
+          <div className="bg-white border-b border-gray-100 px-4 sm:px-6 py-4 sm:py-5 flex items-center gap-2.5 sm:gap-3 shrink-0">
+            <Skeleton className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex-shrink-0" />
+            <div className="min-w-0 space-y-1.5">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+          </div>
+          {/* Body */}
+          <div className="flex-1 overflow-y-auto p-4 sm:p-6 space-y-4 sm:space-y-6">
+            {/* Select Assessment field */}
+            <div className="space-y-2">
+              <Skeleton className="h-3.5 w-32" />
+              <Skeleton className="h-11 w-full rounded-lg" />
+            </div>
+            {/* Candidates field */}
+            <div className="space-y-2">
+              <Skeleton className="h-3.5 w-24" />
+              <div className="space-y-2 sm:space-y-3">
+                {Array.from({ length: 2 }).map((_, i) => (
+                  <div key={i} className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3 p-2.5 sm:p-3 rounded-lg border border-gray-200 dark:border-slate-700">
+                    <div className="space-y-1.5">
+                      <Skeleton className="h-3 w-16" />
+                      <Skeleton className="h-9 w-full rounded-lg" />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Skeleton className="h-3 w-20" />
+                      <Skeleton className="h-9 w-full rounded-lg" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {/* Expiry field */}
+            <div className="space-y-2">
+              <Skeleton className="h-3.5 w-20" />
+              <Skeleton className="h-10 w-full rounded-lg" />
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -799,9 +837,24 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
 
                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
                       {isLoadingResumes ? (
-                        <div className="flex items-center justify-center py-10 tf-loader-center tf-loader-center--compact">
-                          <Loader2 className="w-5 h-5 animate-spin text-gray-400 dark:text-slate-500" />
-                        </div>
+                        <>
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <div
+                              key={i}
+                              className="flex items-center gap-2 p-2.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900"
+                            >
+                              <Skeleton className="w-4 h-4 shrink-0 rounded" />
+                              <div className="flex-1 min-w-0 space-y-1.5">
+                                <div className="flex items-center justify-between gap-2">
+                                  <Skeleton className="h-3.5 w-28" />
+                                  <Skeleton className="h-3 w-12" />
+                                </div>
+                                <Skeleton className="h-3 w-40" />
+                                <Skeleton className="h-3 w-24" />
+                              </div>
+                            </div>
+                          ))}
+                        </>
                       ) : filteredDbResumes.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-10 text-gray-400 dark:text-slate-500">
                           <Database className="w-7 h-7 mb-2" />

@@ -16,7 +16,6 @@ import {
   MapPin,
   Building2,
   Sparkles,
-  Loader2,
   Edit2,
   Trash2,
   LogIn,
@@ -43,7 +42,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { PLAN_FEATURE_METADATA, PlanFeatureKey } from '@/lib/types/planFeatures';
-import { ListSkeleton } from '@/components/ui/skeleton-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -616,7 +615,32 @@ export default function Dashboard({
           </div>
           <div className="p-6">
             {loadingJDs ? (
-              <ListSkeleton rows={3} />
+              <div className="space-y-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="border border-gray-200 rounded-xl p-5 bg-white">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <Skeleton className="h-6 w-48" />
+                          <Skeleton className="h-6 w-20 rounded-full" />
+                        </div>
+                        <div className="flex items-center gap-5 mb-3">
+                          <Skeleton className="h-4 w-24" />
+                          <Skeleton className="h-4 w-28" />
+                          <Skeleton className="h-4 w-32" />
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <Skeleton className="h-4 w-24" />
+                          <Skeleton className="h-4 w-20" />
+                        </div>
+                      </div>
+                      <div className="ml-4">
+                        <Skeleton className="h-9 w-24 rounded-lg" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : publishedJDs.length === 0 ? (
               <div className="text-center py-12">
                 <Briefcase className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -727,7 +751,29 @@ export default function Dashboard({
           </div>
           <div className="p-6">
             {loadingJDs ? (
-              <ListSkeleton rows={3} />
+              <div className="space-y-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="border border-gray-200 rounded-xl p-5 bg-white">
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <Skeleton className="h-6 w-48" />
+                          <Skeleton className="h-6 w-16 rounded-full" />
+                          <Skeleton className="h-4 w-24" />
+                        </div>
+                        <div className="flex items-center gap-5 mb-3">
+                          <Skeleton className="h-4 w-24" />
+                          <Skeleton className="h-4 w-28" />
+                          <Skeleton className="h-4 w-32" />
+                        </div>
+                      </div>
+                      <div className="ml-4">
+                        <Skeleton className="h-9 w-36 rounded-lg" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : draftJDs.length === 0 ? (
               <div className="text-center py-12">
                 <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -824,9 +870,32 @@ export default function Dashboard({
               </div>
             <div className="p-0">
               {loadingActivities ? (
-                <div className="flex items-center justify-center py-8 tf-loader-center">
-                  <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                  <span className="ml-2 text-gray-600 text-sm">Loading activities...</span>
+                <div className="tf-table-shell">
+                  <table className="w-full">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        <th className="px-6 py-3 text-left"><Skeleton className="h-3 w-20" /></th>
+                        <th className="px-6 py-3 text-left"><Skeleton className="h-3 w-20" /></th>
+                        <th className="px-6 py-3 text-left"><Skeleton className="h-3 w-20" /></th>
+                        <th className="px-6 py-3 text-left"><Skeleton className="h-3 w-20" /></th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <tr key={i}>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
+                              <Skeleton className="h-4 w-28" />
+                            </div>
+                          </td>
+                          <td className="px-6 py-4"><Skeleton className="h-4 w-40" /></td>
+                          <td className="px-6 py-4 whitespace-nowrap"><Skeleton className="h-4 w-24" /></td>
+                          <td className="px-6 py-4 whitespace-nowrap"><Skeleton className="h-4 w-16" /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               ) : recentActivities.length === 0 ? (
                 <div className="text-center py-8">

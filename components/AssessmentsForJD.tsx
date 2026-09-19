@@ -34,7 +34,7 @@ import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import VersionBadge from './VersionBadge';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
-import { TableSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface AssessmentsForJDProps {
   jdId: string;
@@ -188,7 +188,82 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
   };
 
   if (isLoading) {
-    return <TableSkeleton />;
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <Skeleton className="w-10 h-10 rounded-xl" />
+            <div className="space-y-2">
+              <Skeleton className="h-5 w-44" />
+              <Skeleton className="h-3.5 w-56" />
+            </div>
+          </div>
+          <Skeleton className="h-10 w-44 rounded-lg" />
+        </div>
+
+        {/* Tabs */}
+        <div className="flex items-center gap-1 border-b border-gray-100">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <div key={i} className="flex items-center gap-2 px-4 py-3">
+              <Skeleton className="h-4 w-16" />
+              <Skeleton className="h-5 w-6 rounded-full" />
+            </div>
+          ))}
+        </div>
+
+        {/* Assessments Table */}
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden tf-table-shell">
+          <table className="w-full">
+            <thead className="bg-slate-50 border-b border-gray-100">
+              <tr>
+                {['Assessment', 'Status', 'Candidates', 'Pass Rate', 'Avg Score', 'Created', 'Actions'].map((col, i) => (
+                  <th key={col} className={`px-6 py-3 ${i === 6 ? 'text-right' : 'text-left'}`}>
+                    <Skeleton className={`h-3 w-20 ${i === 6 ? 'ml-auto' : ''}`} />
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-100">
+              {Array.from({ length: 7 }).map((_, r) => (
+                <tr key={r}>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="flex-shrink-0 w-10 h-10 rounded-xl" />
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <Skeleton className="h-4 w-40" />
+                        <Skeleton className="h-3 w-16" />
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-6 py-4">
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </td>
+                  <td className="px-6 py-4">
+                    <Skeleton className="h-4 w-28" />
+                  </td>
+                  <td className="px-6 py-4">
+                    <Skeleton className="h-4 w-10" />
+                  </td>
+                  <td className="px-6 py-4">
+                    <Skeleton className="h-4 w-10" />
+                  </td>
+                  <td className="px-6 py-4">
+                    <Skeleton className="h-4 w-20" />
+                  </td>
+                  <td className="px-6 py-4">
+                    <div className="flex items-center justify-end gap-2">
+                      <Skeleton className="h-7 w-7 rounded-md" />
+                      <Skeleton className="h-7 w-7 rounded-md" />
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    );
   }
 
   return (

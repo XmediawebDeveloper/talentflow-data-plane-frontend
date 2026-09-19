@@ -39,6 +39,7 @@ import RecordPager from '@/components/RecordPager';
 import IntegrityCheckTab from './IntegrityCheckTab';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
 import { summarizeViolations } from './violationTaxonomy';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface CandidateResultsViewProps {
   interview: AIInterviewResponse;
@@ -2881,7 +2882,28 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 not from proctoring_violations. See the fetch effect above for why. */}
             {!evaluationPending && activeTab === 'verification' && (
               envVerificationsLoading && envVerifications === null ? (
-                renderPlaceholder('Loading QR verification…')
+                <div className="space-y-4">
+                  {Array.from({ length: 2 }).map((_, i) => (
+                    <div key={i} className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white overflow-hidden">
+                      <div className="px-4 sm:px-5 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="w-4 h-4 rounded" />
+                          <Skeleton className="h-4 w-44" />
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-3 w-24" />
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                          <Skeleton className="h-5 w-24 rounded-full" />
+                          <Skeleton className="h-5 w-24 rounded-full" />
+                        </div>
+                      </div>
+                      <div className="p-4 sm:p-5 space-y-4">
+                        <Skeleton className="h-3 w-48" />
+                        <Skeleton className="w-full max-w-lg h-48 rounded-lg" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               ) : !envVerifications || envVerifications.length === 0 ? (
                 renderPlaceholder(
                   envVerificationsError

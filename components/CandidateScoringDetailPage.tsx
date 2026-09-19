@@ -25,7 +25,7 @@ import { formatSalaryRange } from '@/lib/utils/salary';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
-import { DetailPageSkeleton } from '@/components/ui/skeleton-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface ScoredResume {
   id: string;  // This is the SCORE ID, not resume ID!
@@ -1096,9 +1096,81 @@ Best regards`);
     }
   };
 
-  // Show loading state while waiting for complete data
+  // Show loading state while waiting for complete data — mirrors the real
+  // detail layout: the identity/score header card, the tab strip, and the
+  // overview tab's stacked section cards, so the skeleton lines up with what
+  // replaces it rather than being a generic block.
   if (!isDataReady) {
-    return <DetailPageSkeleton />;
+    return (
+      <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+            {/* Breadcrumb */}
+            <div className="flex items-center gap-2 mb-4 md:mb-6">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-3" />
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-3 w-3" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+
+            {/* Header card — identity, contact badges, score display bar */}
+            <div className="bg-white rounded-xl shadow-lg border-2 border-gray-200 p-4 sm:p-6">
+              <div className="flex items-start justify-between gap-4 mb-3">
+                <div className="min-w-0 space-y-2">
+                  <Skeleton className="h-7 w-56" />
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-5 w-40" />
+                    <Skeleton className="h-5 w-20 rounded-md" />
+                  </div>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 mb-4 sm:mb-6">
+                <Skeleton className="h-8 w-48 rounded-lg" />
+                <Skeleton className="h-8 w-36 rounded-lg" />
+                <Skeleton className="h-8 w-32 rounded-lg" />
+                <div className="flex items-center gap-2 ml-auto">
+                  <Skeleton className="h-8 w-20 rounded-lg" />
+                  <Skeleton className="h-8 w-24 rounded-lg" />
+                </div>
+              </div>
+              {/* Score display bar */}
+              <div className="flex items-center justify-between gap-4 bg-gray-50 rounded-lg px-3 sm:px-4 py-2.5 sm:py-3 border border-gray-200">
+                <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+                  <Skeleton className="h-8 w-16" />
+                  <Skeleton className="h-6 w-28 rounded-md" />
+                  <Skeleton className="h-4 w-48" />
+                </div>
+                <Skeleton className="h-4 w-24" />
+              </div>
+            </div>
+
+            {/* Tab strip */}
+            <div className="pt-4 sm:pt-6">
+              <div className="bg-white rounded-t-xl border-x-2 border-t-2 border-gray-200 shadow-sm">
+                <div className="flex gap-2 px-3 sm:px-6 pt-2 pb-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-8 w-24 rounded-t-lg" />
+                  ))}
+                </div>
+              </div>
+
+              {/* Overview tab section cards */}
+              <div className="bg-white rounded-b-xl border-x-2 border-b-2 border-gray-200 p-4 sm:p-6 lg:p-8 space-y-6">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="bg-white border border-gray-200 rounded-xl p-6 space-y-3">
+                    <Skeleton className="h-5 w-40" />
+                    <Skeleton className="h-3.5 w-full" />
+                    <Skeleton className="h-3.5 w-5/6" />
+                    <Skeleton className="h-3.5 w-4/6" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   return (
@@ -2327,10 +2399,47 @@ Best regards`);
           {activeTab === 'viewjd' && (
             <div className="space-y-6">
               {!jdDetails ? (
-                <div className="flex items-center gap-2 text-gray-500 py-6">
-                  <Loader2 className="h-4 w-4 text-gray-400 animate-spin" />
-                  <span className="text-sm">Loading job details...</span>
-                </div>
+                /* Mirrors the loaded JD layout below: header card (id/title/
+                   status + meta chips), Job Description card, and the Skills &
+                   Requirements card. */
+                <>
+                  <div className="bg-gray-50 border border-gray-300 rounded-xl p-4 sm:p-5">
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <Skeleton className="h-5 w-16 rounded-md" />
+                      <Skeleton className="h-6 w-52" />
+                      <Skeleton className="h-5 w-20 rounded-full" />
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Skeleton className="h-5 w-24 rounded-md" />
+                      <Skeleton className="h-5 w-20 rounded-md" />
+                      <Skeleton className="h-5 w-28 rounded-md" />
+                      <Skeleton className="h-5 w-16 rounded-full" />
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 border border-gray-300 rounded-xl p-4 sm:p-6 space-y-3">
+                    <Skeleton className="h-5 w-40" />
+                    <div className="h-px bg-gray-200"></div>
+                    <Skeleton className="h-3.5 w-full" />
+                    <Skeleton className="h-3.5 w-11/12" />
+                    <Skeleton className="h-3.5 w-5/6" />
+                    <Skeleton className="h-3.5 w-3/4" />
+                  </div>
+
+                  <div className="bg-gray-50 border border-gray-300 rounded-xl p-4 sm:p-6">
+                    <Skeleton className="h-5 w-48 mb-4" />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                      {Array.from({ length: 2 }).map((_, col) => (
+                        <div key={col} className="space-y-3">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-3.5 w-40" />
+                          <Skeleton className="h-3.5 w-36" />
+                          <Skeleton className="h-3.5 w-44" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </>
               ) : (
                 <>
                   {/* JD header card — JD ID, title, status, and the meta row */}

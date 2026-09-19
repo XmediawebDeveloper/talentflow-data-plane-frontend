@@ -50,7 +50,7 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { User, Tenant } from '@/lib/types/tenant';
 import AssessmentsForJD from './AssessmentsForJD';
-import { DetailPageSkeleton } from '@/components/ui/skeleton-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type TabType = 'overview' | 'scored-resumes' | 'assessment-results';
 
@@ -277,7 +277,130 @@ ${job.certifications?.join(', ') || 'N/A'}
   ];
 
   if (loading) {
-    return <DetailPageSkeleton />;
+    // Structure-matched skeleton — mirrors this page's real layout: the header
+    // (back nav + pager, title/status/meta, action buttons), the tabs bar, and
+    // the 12-col grid (overview section cards + the sidebar's three cards).
+    return (
+      <div className="flex-1 bg-gray-50 overflow-y-auto">
+        {/* Header */}
+        <div className="bg-white border-b border-gray-200 px-8 py-4">
+          <div className="max-w-7xl mx-auto">
+            <div className="flex items-center justify-between mb-4">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-8 w-28 rounded-lg" />
+            </div>
+            <div className="flex items-start justify-between">
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-7 w-64" />
+                  <Skeleton className="h-6 w-20 rounded-full" />
+                </div>
+                <div className="flex items-center gap-4">
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-4 w-32" />
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Skeleton className="h-9 w-9 rounded-lg" />
+                <Skeleton className="h-9 w-9 rounded-lg" />
+                <Skeleton className="h-9 w-20 rounded-lg" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="bg-white border-b border-gray-200 px-8">
+          <div className="max-w-7xl mx-auto flex items-center gap-6 py-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Skeleton key={i} className="h-5 w-32" />
+            ))}
+          </div>
+        </div>
+
+        {/* Content grid */}
+        <div className="max-w-7xl mx-auto px-8 py-6">
+          <div className="grid grid-cols-12 gap-6">
+            {/* Main column — Job Description, Requirements, Job Details cards */}
+            <div className="col-span-9 space-y-6">
+              {/* Job Description */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+                <Skeleton className="h-6 w-40 mb-2" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-5/6" />
+                <Skeleton className="h-4 w-4/6" />
+              </div>
+              {/* Requirements */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+                <Skeleton className="h-6 w-36 mb-2" />
+                <Skeleton className="h-4 w-24" />
+                <div className="flex flex-wrap gap-2">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Skeleton key={i} className="h-6 w-20 rounded-full" />
+                  ))}
+                </div>
+                <Skeleton className="h-4 w-24" />
+                <div className="flex flex-wrap gap-2">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <Skeleton key={i} className="h-6 w-20 rounded-full" />
+                  ))}
+                </div>
+              </div>
+              {/* Job Details grid */}
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <Skeleton className="h-6 w-32 mb-4" />
+                <div className="grid grid-cols-2 gap-4">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
+                      <Skeleton className="h-5 w-5 rounded" />
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-3 w-24" />
+                        <Skeleton className="h-4 w-28" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Sidebar — Quick Actions, Applicant Statistics, Recent Activity */}
+            <div className="col-span-3 space-y-6">
+              <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+                <Skeleton className="h-4 w-28 mb-2" />
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Skeleton key={i} className="h-10 w-full rounded-lg" />
+                ))}
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-4">
+                <Skeleton className="h-4 w-36 mb-2" />
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-8 w-8 rounded-lg" />
+                      <Skeleton className="h-4 w-24" />
+                    </div>
+                    <Skeleton className="h-6 w-8" />
+                  </div>
+                ))}
+              </div>
+              <div className="bg-white rounded-xl border border-gray-200 p-5 space-y-3">
+                <Skeleton className="h-4 w-28 mb-2" />
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="flex items-start gap-3">
+                    <Skeleton className="h-8 w-8 rounded-lg flex-shrink-0" />
+                    <div className="flex-1 space-y-1.5">
+                      <Skeleton className="h-4 w-full" />
+                      <Skeleton className="h-3 w-2/3" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!job) {

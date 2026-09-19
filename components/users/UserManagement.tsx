@@ -54,7 +54,7 @@ import OrganizationTabs from '@/components/organization/OrganizationTabs';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
-import { TableSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Types
 interface UserPermissions {
@@ -2263,7 +2263,38 @@ export default function UserManagement() {
       {/* Users Table */}
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 tf-round-edges">
         {isLoading ? (
-          <TableSkeleton />
+          /* Neutral skeleton matching the users table columns: User ID, User,
+             Role, Permissions, Status, Created At, Last Login, Actions. */
+          <div className="tf-table-shell">
+            <div className="grid grid-cols-8 gap-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-6 py-4">
+              {['w-16', 'w-12', 'w-12', 'w-24', 'w-14', 'w-20', 'w-20', 'w-16'].map((w, i) => (
+                <Skeleton key={i} className={`h-3 ${w}`} />
+              ))}
+            </div>
+            <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
+              {Array.from({ length: 8 }).map((_, r) => (
+                <div key={r} className="grid grid-cols-8 items-center gap-4 px-6 py-4">
+                  <Skeleton className="h-5 w-16 rounded" />
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-8 w-8 rounded-full shrink-0" />
+                    <div className="space-y-1.5">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-3 w-28" />
+                    </div>
+                  </div>
+                  <Skeleton className="h-5 w-16 rounded-full" />
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-5 w-14 rounded-full" />
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-4 w-20" />
+                  <div className="flex items-center justify-center gap-1">
+                    <Skeleton className="h-8 w-8 rounded-lg" />
+                    <Skeleton className="h-8 w-8 rounded-lg" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         ) : (
           <div className="tf-table-shell">
             <table className="w-full">
@@ -2830,9 +2861,28 @@ export default function UserManagement() {
                   </div>
 
                   {isLoadingPermissions ? (
-                    <div className="flex items-center justify-center py-8 bg-slate-50 dark:bg-slate-800/50 rounded-lg tf-loader-center tf-loader-center--compact">
-                      <Loader2 className="w-5 h-5 animate-spin text-brand-blue" />
-                      <span className="ml-2 text-sm text-gray-500 dark:text-slate-500">Loading permissions...</span>
+                    <div className="space-y-4">
+                      {Array.from({ length: 3 }).map((_, ci) => (
+                        <div key={ci} className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
+                          {/* Module Header */}
+                          <div className="px-3 sm:px-4 py-2.5 border-b border-gray-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <Skeleton className="w-8 h-[18px] rounded-full flex-shrink-0" />
+                              <Skeleton className="h-4 w-32" />
+                            </div>
+                            <Skeleton className="h-3 w-16" />
+                          </div>
+                          {/* Permission Cards Grid */}
+                          <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+                            {Array.from({ length: 4 }).map((_, pi) => (
+                              <div key={pi} className="flex items-center gap-2.5 p-2.5 rounded-lg border border-gray-100 dark:border-slate-800">
+                                <Skeleton className="w-6 h-6 rounded flex-shrink-0" />
+                                <Skeleton className="h-4 flex-1" />
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   ) : (
                     <div className="space-y-4">
@@ -3427,8 +3477,22 @@ export default function UserManagement() {
               </h3>
 
               {isViewingRolePopupLoading ? (
-                <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
-                  <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
+                <div className="space-y-4 sm:space-y-6">
+                  {Array.from({ length: 2 }).map((_, mi) => (
+                    <div key={mi} className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden bg-white dark:bg-slate-900 shadow-sm">
+                      <div className="bg-slate-50 dark:bg-slate-800/50 px-3 sm:px-4 py-2.5 border-b border-gray-200 dark:border-slate-700">
+                        <Skeleton className="h-4 w-28" />
+                      </div>
+                      <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
+                        {Array.from({ length: 4 }).map((_, pi) => (
+                          <div key={pi} className="flex items-start gap-2 sm:gap-3 p-2 sm:p-3 bg-slate-50 dark:bg-slate-800/50 rounded-lg border border-gray-200 dark:border-slate-700">
+                            <Skeleton className="w-6 h-6 sm:w-8 sm:h-8 rounded flex-shrink-0" />
+                            <Skeleton className="h-4 flex-1 mt-1" />
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : viewingRolePopupPermissions.length === 0 ? (
                 <div className="text-center py-10 sm:py-12">

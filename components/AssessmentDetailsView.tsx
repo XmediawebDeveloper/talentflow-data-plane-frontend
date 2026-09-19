@@ -16,6 +16,7 @@ import { formatJobExperienceText } from '@/lib/utils/jobExperience';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface AssessmentDetailsViewProps {
   assessment: any;
@@ -2043,9 +2044,24 @@ export default function AssessmentDetailsView({
               <div>
                 <h4 className="text-xs sm:text-sm font-medium text-gray-700 mb-2 sm:mb-3">Recent Invitations</h4>
                 {activityLoading ? (
-                  <div className="py-8 sm:py-12 text-center">
-                    <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue animate-spin mx-auto mb-2 sm:mb-3" />
-                    <p className="text-gray-600 text-xs sm:text-sm">Loading invitations...</p>
+                  <div className="space-y-2 sm:space-y-3">
+                    {Array.from({ length: 5 }).map((_, i) => (
+                      <div key={i} className="bg-slate-50 rounded-xl border border-gray-200 ring-1 ring-black/[0.02] p-2.5 sm:p-3 lg:p-4">
+                        <div className="flex items-center gap-2 sm:gap-3 lg:gap-4">
+                          <Skeleton className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-1.5 sm:gap-2 mb-1">
+                              <Skeleton className="h-4 w-28 sm:w-36" />
+                              <Skeleton className="h-4 w-16 rounded-full" />
+                            </div>
+                            <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-3">
+                              <Skeleton className="h-3 w-40" />
+                              <Skeleton className="h-3 w-32" />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : recentActivity.length === 0 ? (
                   <div className="py-8 sm:py-12 text-center border-2 border-dashed border-brand-blue/20 rounded-xl">
@@ -2195,9 +2211,21 @@ export default function AssessmentDetailsView({
             </div>
 
             {activityLoading ? (
-              <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
-                <Loader2 className="w-8 h-8 text-brand-blue animate-spin mx-auto mb-3" />
-                <p className="text-gray-600">Loading activity...</p>
+              <div className="divide-y divide-gray-100">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
+                    <div className="flex items-start sm:items-center gap-2 sm:gap-3 lg:gap-4">
+                      <Skeleton className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-0">
+                          <Skeleton className="h-4 w-56" />
+                          <Skeleton className="h-3.5 w-24" />
+                        </div>
+                        <Skeleton className="h-3.5 w-48 mt-1" />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : recentActivity.length === 0 ? (
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
@@ -2349,9 +2377,31 @@ export default function AssessmentDetailsView({
             </div>
 
             {versionsLoading ? (
-              <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
-                <Loader2 className="w-8 h-8 text-brand-blue animate-spin mx-auto mb-3" />
-                <p className="text-gray-600">Loading version history...</p>
+              <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="flex items-start gap-2 sm:gap-3 lg:gap-4">
+                    <Skeleton className="w-9 h-9 sm:w-10 sm:h-10 lg:w-12 lg:h-12 rounded-full flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Skeleton className="h-5 w-44" />
+                        <Skeleton className="h-5 w-24 rounded" />
+                      </div>
+                      <Skeleton className="h-3.5 w-3/4 mb-3" />
+                      <Skeleton className="h-3.5 w-40 mb-1" />
+                      <Skeleton className="h-3.5 w-56 mb-3 sm:mb-4" />
+                      {/* Configuration box */}
+                      <div className="bg-slate-50 border border-gray-200 ring-1 ring-black/[0.02] rounded-xl p-2.5 sm:p-3 lg:p-4">
+                        <Skeleton className="h-4 w-32 mb-2 sm:mb-3" />
+                        <div className="space-y-1.5 sm:space-y-2">
+                          <Skeleton className="h-3.5 w-2/3" />
+                          <Skeleton className="h-3.5 w-1/2" />
+                          <Skeleton className="h-3.5 w-3/5" />
+                          <Skeleton className="h-3.5 w-1/2" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : versionHistory.length === 0 ? (
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
@@ -2456,9 +2506,25 @@ export default function AssessmentDetailsView({
             </div>
 
             {siblingsLoading ? (
-              <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
-                <Loader2 className="w-8 h-8 text-brand-blue animate-spin mx-auto mb-3" />
-                <p className="text-gray-600">Loading versions...</p>
+              <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div key={i} className="rounded-xl border border-gray-100 bg-white p-3 sm:p-4 ring-1 ring-black/[0.02]">
+                    <div className="flex items-start gap-3 sm:gap-4">
+                      <Skeleton className="w-10 h-10 sm:w-12 sm:h-12 rounded-full flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5 sm:gap-2 mb-1.5">
+                          <Skeleton className="h-5 w-48 sm:w-64" />
+                          <Skeleton className="h-5 w-16 rounded" />
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          <Skeleton className="h-3.5 w-24" />
+                          <Skeleton className="h-3.5 w-28" />
+                          <Skeleton className="h-3.5 w-20" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
             ) : siblingVersions.length === 0 ? (
               <div className="px-3 sm:px-4 lg:px-6 py-8 sm:py-12 text-center">
@@ -2703,8 +2769,49 @@ export default function AssessmentDetailsView({
           </div>
 
           {jdLoading ? (
-            <div className="px-3 sm:px-4 lg:px-6 py-12 flex items-center justify-center tf-loader-center">
-              <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
+            <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
+              {/* JD Title + chips */}
+              <div className="min-w-0">
+                <Skeleton className="h-6 w-64 sm:w-80" />
+                <div className="flex items-center gap-2 mt-2 flex-wrap">
+                  <Skeleton className="h-5 w-20 rounded" />
+                  <Skeleton className="h-5 w-16 rounded" />
+                  <Skeleton className="h-4 w-24" />
+                </div>
+              </div>
+
+              {/* Job Details grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-2 px-3 py-2 bg-slate-50 rounded-lg ring-1 ring-black/[0.02]">
+                    <Skeleton className="w-4 h-4 rounded flex-shrink-0" />
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <Skeleton className="h-3 w-16" />
+                      <Skeleton className="h-4 w-24" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Skills */}
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-40" />
+                <div className="flex flex-wrap gap-1.5">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Skeleton key={i} className="h-6 w-16 rounded" />
+                  ))}
+                </div>
+              </div>
+
+              {/* Description */}
+              <div>
+                <Skeleton className="h-4 w-28 mb-2" />
+                <div className="px-3 sm:px-4 py-3 sm:py-4 bg-slate-50 rounded-lg ring-1 ring-black/[0.02] space-y-2">
+                  <Skeleton className="h-3.5 w-full" />
+                  <Skeleton className="h-3.5 w-5/6" />
+                  <Skeleton className="h-3.5 w-4/6" />
+                </div>
+              </div>
             </div>
           ) : jdError ? (
             <div className="px-3 sm:px-4 lg:px-6 py-8 text-center">
