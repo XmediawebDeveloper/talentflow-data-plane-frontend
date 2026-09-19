@@ -1,6 +1,6 @@
 'use client';
 
-import { Briefcase, Plus, Loader2, Search, Sparkles, Eye, ChevronDown, CheckCircle2 } from 'lucide-react';
+import { Briefcase, Plus, Search, Sparkles, Eye, ChevronDown, CheckCircle2 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -16,6 +16,7 @@ import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { lineageKey, isSelectableVersion } from '@/lib/utils/jobOpeningDisplay';
 import type { Job } from '@/lib/types/types';
+import { ListSkeleton } from '@/components/ui/skeleton-loader';
 
 const normalizeSearchValue = (value?: string | null) => (value || '').toLowerCase().trim();
 const normalizeIdentifier = (value?: string | null) => normalizeSearchValue(value).replace(/[^a-z0-9]/g, '');

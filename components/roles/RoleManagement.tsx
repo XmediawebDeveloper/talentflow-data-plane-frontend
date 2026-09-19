@@ -2,6 +2,9 @@
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import OrganizationTabs from '@/components/organization/OrganizationTabs';
+import CreateRoleForm from './CreateRoleForm';
+import EditRoleForm from './EditRoleForm';
+import { Sheet, SheetContent } from '@/components/ui/sheet';
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
@@ -62,6 +65,9 @@ export default function RoleManagement() {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewingRole, setViewingRole] = useState<RoleListItem | null>(null);
   const [viewingRolePermissions, setViewingRolePermissions] = useState<Permission[]>([]);
+  // CRUD is inline (side panels), not full-page redirects — per UI/UX guidelines.
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editingRole, setEditingRole] = useState<RoleListItem | null>(null);
   // Two-step drill-in: 'cards' shows only the 4 stat tiles; clicking one expands
   // into a focused list view. Each card drives a different listView so the
   // expanded panel reflects what was clicked (mirrors /recruitment/job-openings).
@@ -231,7 +237,7 @@ export default function RoleManagement() {
       toast.error(`Invalid role ID: ${role.id}`);
       return;
     }
-    router.push(`/organization/role-management/edit/${role.id}`);
+    setEditingRole(role);
   };
 
   const getAuditActionLabel = (action: string) => {
@@ -393,7 +399,7 @@ export default function RoleManagement() {
                 </div>
               </div>
               <button
-                onClick={() => router.push('/organization/role-management/create')}
+                onClick={() => setCreateOpen(true)}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
               >
                 <Plus className="h-4 w-4" />
@@ -670,7 +676,7 @@ export default function RoleManagement() {
                                 {!role.is_system ? (
                                   <button
                                     onClick={() => handleDeleteRole(role.id)}
-                                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-brand-orange/15 bg-brand-orange/[0.05] text-brand-orange-deep transition-all hover:-translate-y-0.5 hover:bg-brand-orange/[0.1]"
+                                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-500/15 bg-red-500/[0.05] text-red-600 transition-all hover:-translate-y-0.5 hover:bg-red-500/[0.1]"
                                     title={`Delete ${role.name}`}
                                     aria-label={`Delete ${role.name}`}
                                   >
@@ -757,7 +763,7 @@ export default function RoleManagement() {
                           {!role.is_system && (
                             <button
                               onClick={() => handleDeleteRole(role.id)}
-                              className="inline-flex items-center gap-2 rounded-xl border border-brand-orange/15 bg-brand-orange/[0.05] px-3 py-2 text-sm font-medium text-brand-orange-deep transition-all hover:bg-brand-orange/[0.1]"
+                              className="inline-flex items-center gap-2 rounded-xl border border-red-500/15 bg-red-500/[0.05] px-3 py-2 text-sm font-medium text-red-600 transition-all hover:bg-red-500/[0.1]"
                             >
                               <Ban className="h-4 w-4" />
                               Delete
@@ -1108,6 +1114,31 @@ export default function RoleManagement() {
           </div>
         </div>
       )}
+
+      {/* Create Role — inline side panel (CRUD is not a full-page redirect) */}
+      <Sheet open={createOpen} onOpenChange={setCreateOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-4xl overflow-y-auto p-4 sm:p-6">
+          <CreateRoleForm
+            embedded
+            onCancel={() => setCreateOpen(false)}
+            onSuccess={() => { setCreateOpen(false); loadData(); }}
+          />
+        </SheetContent>
+      </Sheet>
+
+      {/* Edit Role — inline side panel */}
+      <Sheet open={!!editingRole} onOpenChange={(open) => { if (!open) setEditingRole(null); }}>
+        <SheetContent side="right" className="w-full sm:max-w-4xl overflow-y-auto p-4 sm:p-6">
+          {editingRole && (
+            <EditRoleForm
+              roleId={editingRole.id}
+              embedded
+              onCancel={() => setEditingRole(null)}
+              onSuccess={() => { setEditingRole(null); loadData(); }}
+            />
+          )}
+        </SheetContent>
+      </Sheet>
     </main>
   );
 }

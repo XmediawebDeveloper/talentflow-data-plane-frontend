@@ -588,7 +588,17 @@ export default function SelectSourceModal({
             const batchItem = (batchStatus.items || []).find((b: any) => b.resume_id === item.resumeId);
             if (!batchItem) return item;
             const status = normalizeScoringStatus(batchItem.status) as ProgressItem['status'];
-            return { ...item, status, score: batchItem.overall_score, overallRating10: batchItem.overall_rating_10, matchStatus: batchItem.match_status };
+            return {
+              ...item,
+              status,
+              score: batchItem.overall_score,
+              overallRating10: batchItem.overall_rating_10,
+              matchStatus: batchItem.match_status,
+              // Never copied here before — only the context-sync loop below set
+              // it (for GlobalScoringProgressIndicator), so the modal rendered
+              // from THIS state always showed a bare "Failed" badge with no reason.
+              errorMessage: batchItem.error_message || item.errorMessage,
+            };
           }));
           setScoringStats({
             queued: batchStatus.queued,
@@ -623,15 +633,24 @@ export default function SelectSourceModal({
             // this component down would destroy the popup's owner (and its restore
             // callback), so "expand" would have nothing to reopen. Stay mounted and
             // let them come back to the finished result.
-            setTimeout(() => {
-              if (isBulkProgressMinimizedRef.current) return;
-              setShowProgressModal(false);
-              if (onScoringComplete) {
-                onScoringComplete();
-              } else {
-                onClose();
-              }
-            }, 1500);
+            //
+            // This used to fire on ANY completion, failed or not. A permanent
+            // config failure (e.g. missing scoring API key) resolves in ~1s
+            // instead of retrying for ~90s, so the 1.5s auto-close routinely
+            // fired before anyone could read the failed row's error message.
+            // Only auto-advance on a clean run; leave the popup up on any
+            // failure so the reason stays visible and Retry is reachable.
+            if ((batchStatus.failed || 0) === 0) {
+              setTimeout(() => {
+                if (isBulkProgressMinimizedRef.current) return;
+                setShowProgressModal(false);
+                if (onScoringComplete) {
+                  onScoringComplete();
+                } else {
+                  onClose();
+                }
+              }, 1500);
+            }
           } else {
             setTimeout(poll, 3000);
           }

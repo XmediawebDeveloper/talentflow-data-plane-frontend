@@ -960,10 +960,10 @@ export default function BulkScoringProgressModal({
                               {getStatusIcon(item.status)}
                               {item.status}
                             </span>
-                            {item.status === 'Failed' && item.errorReason && (
+                            {item.status === 'Failed' && (
                               <div className="flex items-start gap-1 text-xs text-red-600 mt-1 max-w-[280px] whitespace-normal break-words">
                                 <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
-                                <span>{item.errorReason}</span>
+                                <span>{item.errorReason || 'Scoring failed. Please contact your administrator.'}</span>
                               </div>
                             )}
                           </div>
@@ -1073,10 +1073,10 @@ export default function BulkScoringProgressModal({
                         <span className="inline">{item.status}</span>
                       </span>
                     </div>
-                    {item.status === 'Failed' && item.errorReason && (
+                    {item.status === 'Failed' && (
                       <div className="flex items-start gap-1 text-xs text-red-600 mb-2">
                         <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
-                        <span>{item.errorReason}</span>
+                        <span>{item.errorReason || 'Scoring failed. Please contact your administrator.'}</span>
                       </div>
                     )}
                     {/* Footer: Source + Date + Match */}

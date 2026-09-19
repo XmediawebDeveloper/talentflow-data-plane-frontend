@@ -18,7 +18,6 @@ import {
   Archive,
   Download,
   Share2,
-  Loader2,
   ClipboardList,
   Activity,
   RefreshCw,
@@ -35,6 +34,7 @@ import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import VersionBadge from './VersionBadge';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
+import { TableSkeleton } from '@/components/ui/skeleton';
 
 interface AssessmentsForJDProps {
   jdId: string;
@@ -188,12 +188,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12 tf-loader-center">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-        <span className="ml-3 text-gray-600">Loading assessments...</span>
-      </div>
-    );
+    return <TableSkeleton />;
   }
 
   return (

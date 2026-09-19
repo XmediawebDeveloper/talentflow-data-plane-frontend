@@ -1,8 +1,9 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Eye, Download, FileText, Loader2 } from 'lucide-react';
+import { X, Eye, Download, FileText } from 'lucide-react';
 import { resumeService } from '@/lib/services/resumeService';
+import { Skeleton } from '@/components/ui/skeleton';
 import { extractLocalResumeText } from '@/lib/utils/localResumeText';
 import { toast } from 'sonner';
 
@@ -273,9 +274,15 @@ export default function ResumeTextPreviewModal({
               />
             )
           ) : loading ? (
-            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-8 max-w-2xl mx-auto min-h-full flex flex-col items-center justify-center gap-3">
-              <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
-              <p className="text-sm text-gray-500">Loading resume...</p>
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 max-w-2xl mx-auto min-h-full space-y-4">
+              <Skeleton className="h-6 w-1/2" />
+              <Skeleton className="h-4 w-1/3" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-5/6" />
+              <Skeleton className="h-4 w-2/3" />
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-4/5" />
             </div>
           ) : content ? (
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6 sm:p-8 max-w-2xl mx-auto min-h-full">

@@ -15,6 +15,7 @@ import {
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { PageSkeleton } from '@/components/ui/skeleton';
 
 interface AssessmentResultsProps {
   onBack: () => void;
@@ -892,14 +893,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   // Loading state
   if (isLoading) {
-    return (
-      <div className="flex-1 bg-slate-50 flex items-center justify-center px-4">
-        <div className="text-center">
-          <Loader2 className="w-10 h-10 sm:w-12 sm:h-12 text-brand-blue animate-spin mx-auto mb-3 sm:mb-4" />
-          <p className="text-sm sm:text-base text-gray-600">Loading assessment results...</p>
-        </div>
-      </div>
-    );
+    return <PageSkeleton variant="table" />;
   }
 
   // AS-23: Handle sort toggle

@@ -43,6 +43,7 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
+import { TableSkeleton } from '@/components/ui/skeleton';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import JDVersionHistory from '@/components/JDVersionHistory';
@@ -2603,10 +2604,7 @@ export default function AITalentMatchPage({
             </div>
 
             {loadingCandidateRows ? (
-              <div className="flex items-center justify-center gap-2 text-gray-500 py-16 tf-loader-center tf-loader-center--compact">
-                <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
-                <span className="text-sm">Loading matched candidates...</span>
-              </div>
+              <TableSkeleton />
             ) : filteredCandidateRows.length === 0 ? (
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-8 sm:p-10 text-center">
                 <div className="w-12 h-12 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center mx-auto mb-3">
@@ -3251,10 +3249,7 @@ export default function AITalentMatchPage({
             </div>
 
             {loadingCandidateRows ? (
-              <div className="flex items-center justify-center gap-2 text-gray-500 py-16 tf-loader-center tf-loader-center--compact">
-                <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
-                <span className="text-sm">Loading matched resumes...</span>
-              </div>
+              <TableSkeleton />
             ) : filteredAllResumeRows.length === 0 ? (
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-8 sm:p-10 text-center">
                 <div className="w-12 h-12 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center mx-auto mb-3">
@@ -4836,10 +4831,7 @@ export default function AITalentMatchPage({
           {/* Candidates List */}
           <div>
           {isLoadingResultsFromHistory ? (
-            <div className="flex flex-col items-center justify-center py-12 px-4 tf-loader-center tf-loader-center--compact">
-              <Loader2 className="w-6 h-6 text-brand-blue animate-spin mb-3" />
-              <p className="text-sm text-gray-600 dark:text-slate-400 text-center">Loading matched candidates...</p>
-            </div>
+            <TableSkeleton />
           ) : matchedCandidates.length === 0 ? (
             <div className="border-2 border-dashed border-brand-blue/20 rounded-xl p-8 sm:p-10 text-center bg-white dark:bg-slate-900">
               <Image

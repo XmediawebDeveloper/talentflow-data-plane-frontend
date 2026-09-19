@@ -15,6 +15,7 @@ import {
 import ListPagination from '@/components/ListPagination';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { TableSkeleton } from '@/components/ui/skeleton';
 
 type MasterDataType = 'experience' | 'education' | 'industry';
 
@@ -385,10 +386,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
       {/* Table */}
       <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
         {loading ? (
-          <div className="p-12 text-center">
-            <Loader2 className="mx-auto mb-3 h-8 w-8 animate-spin text-brand-blue" />
-            <p className="font-medium text-gray-600 dark:text-slate-400">Loading...</p>
-          </div>
+          <TableSkeleton />
         ) : items.length === 0 ? (
           <div className="p-12 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">

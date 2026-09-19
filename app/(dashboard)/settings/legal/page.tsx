@@ -2,7 +2,8 @@
 
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useState, useEffect } from 'react';
-import { ScrollText, CheckCircle, Loader2, AlertCircle, Eye, X, FileText, Shield, Cookie, Sparkles } from 'lucide-react';
+import { ScrollText, CheckCircle, AlertCircle, Eye, X, FileText, Shield, Cookie, Sparkles } from 'lucide-react';
+import { Skeleton, TableSkeleton } from '@/components/ui/skeleton';
 import type { IconComponent } from '@/lib/types/icon';
 import { termsService } from '@/lib/services/termsService';
 import type { DocumentType } from '@/lib/services/termsService';
@@ -136,9 +137,8 @@ export default function LegalCompliancePage() {
         </div>
 
         {loading ? (
-          <div className="flex items-center justify-center py-16 tf-loader-center">
-            <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
-            <span className="ml-2 font-medium text-gray-600 dark:text-slate-400">Loading history...</span>
+          <div className="p-4 sm:p-6">
+            <TableSkeleton columns={6} />
           </div>
         ) : error ? (
           <div className="flex items-center justify-center py-16 text-red-500">
@@ -248,9 +248,14 @@ export default function LegalCompliancePage() {
             {/* Body */}
             <div className="flex-1 overflow-y-auto px-6 py-5 prose prose-sm max-w-none">
               {docLoading ? (
-                <div className="flex items-center justify-center py-16 tf-loader-center">
-                  <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
-                  <span className="ml-2 font-medium text-gray-600 dark:text-slate-400">Loading document...</span>
+                <div className="space-y-4 py-2">
+                  <Skeleton className="h-6 w-1/2" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-5/6" />
+                  <Skeleton className="h-4 w-2/3" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-4/5" />
                 </div>
               ) : docError ? (
                 <div className="flex items-center justify-center py-16 text-red-500">
