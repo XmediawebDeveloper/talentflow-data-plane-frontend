@@ -81,6 +81,20 @@ function transformJDToJob(jd: JDResponse): Job {
   };
 }
 
+/** Every match session, not just the first 100 — the endpoint caps page_size
+ *  at 100, and history past that silently vanished. Page 1 carries the totals
+ *  (and the tenant-wide rating-band counts), the rest are fetched in parallel. */
+async function listAllSessions(): Promise<AIMatchSessionListResponse> {
+  const PAGE_SIZE = 100;
+  const first = await aiMatchService.listSessions({ page: 1, page_size: PAGE_SIZE });
+  const pages = Math.ceil((first.total || 0) / PAGE_SIZE);
+  if (pages <= 1) return first;
+  const rest = await Promise.all(
+    Array.from({ length: pages - 1 }, (_, i) => aiMatchService.listSessions({ page: i + 2, page_size: PAGE_SIZE }))
+  );
+  return { ...first, items: [...first.items, ...rest.flatMap(r => r.items || [])] };
+}
+
 export default function AITalentMatchRoute() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [matchHistory, setMatchHistory] = useState<MatchHistory[]>([]);
@@ -113,12 +127,35 @@ export default function AITalentMatchRoute() {
         // and match history in parallel
         const [jobsResponse, historyResponse] = await Promise.all([
           jdService.list({ page_size: 100, source: 'my-jds' }), // Fetch user's jobs to show disabled jobs in history
-          aiMatchService.listSessions({ page_size: 100 }).catch(
+          listAllSessions().catch(
             (): AIMatchSessionListResponse => ({ items: [], total: 0, page: 1, page_size: 100 })
           ),
         ]);
 
-        const transformedJobs = jobsResponse.items.map(transformJDToJob);
+        // The page of 100 above is the most recently updated JDs, and a tenant
+        // can have hundreds — a job matched weeks ago falls off it. Every lookup
+        // below (title, JD code, department, location, version) then missed, and
+        // the job's card read "Unknown Job" (8 of 11 on a 427-JD tenant). Pull
+        // exactly the JDs the sessions point at that the page didn't bring.
+        const listedIds = new Set(jobsResponse.items.map(jd => jd.id));
+        const missingIds = [...new Set(
+          historyResponse.items.map(s => s.jd_id).filter((id): id is string => !!id && !listedIds.has(id))
+        )];
+        let referencedJDs: JDResponse[] = [];
+        if (missingIds.length > 0) {
+          try {
+            // Chunked so a long id list can't outgrow the URL.
+            const chunks: string[][] = [];
+            for (let i = 0; i < missingIds.length; i += 100) chunks.push(missingIds.slice(i, i + 100));
+            const responses = await Promise.all(chunks.map(ids => jdService.list({ ids, page_size: ids.length })));
+            referencedJDs = responses.flatMap(r => r.items || []);
+          } catch (err) {
+            // Titles still come from the session's own jd_title below.
+            console.warn('[AITalentMatch] Failed to load JDs referenced by match sessions:', err);
+          }
+        }
+
+        const transformedJobs = [...jobsResponse.items, ...referencedJDs].map(transformJDToJob);
         setJobs(transformedJobs);
 
         // Group sessions by job - only keep the latest session per job
@@ -134,7 +171,7 @@ export default function AITalentMatchRoute() {
         for (const session of historyResponse.items) {
           const jobId = session.jd_id || session.search_query || 'unknown';
           const ownerJob = transformedJobs.find(j => j.id === session.jd_id);
-          const countKey = ownerJob?.jobId || jobId;
+          const countKey = ownerJob?.jobId || session.jd_job_id || jobId;
           sessionCounts[countKey] = (sessionCounts[countKey] || 0) + 1;
           const existing = sessionsByJob.get(jobId);
           // Keep the most recent session for each job
@@ -157,7 +194,7 @@ export default function AITalentMatchRoute() {
           return {
             id: session.id,
             jobId: session.jd_id || '',
-            jobTitle: job?.title || session.search_query || 'Unknown Job',
+            jobTitle: job?.title || session.jd_title || session.search_query || 'Unknown Job',
             matchedAt: new Date(session.created_at),
             totalMatches: session.total_matches,
             matchedCandidates: [],

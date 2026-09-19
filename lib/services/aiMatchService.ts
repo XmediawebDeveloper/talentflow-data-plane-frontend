@@ -38,12 +38,9 @@ export interface AIMatchResultItem {
   concerns: string[];
   rank: number;
   status: string;
-}
-
-/** A row of `GET /ai-match/jd/{id}/candidates`: the match, with the resume detail
- *  the client used to fetch one `GET /resumes/{id}` at a time to obtain. */
-export interface JDCandidateItem extends AIMatchResultItem {
-  session_id: string;
+  /* Resume details. `GET /sessions/{id}` and `POST /run` join them server-side;
+     absent (older backend, or the join failed) means the row still needs
+     `enrichCandidatesWithResumeDetails`. */
   email?: string;
   phone?: string;
   location?: string;
@@ -52,8 +49,14 @@ export interface JDCandidateItem extends AIMatchResultItem {
   uploaded_by?: string;
   uploaded_by_name?: string;
   resume_created_at?: string | null;
-  resume_version?: number;
-  version_count?: number;
+  resume_version?: number | null;
+  version_count?: number | null;
+}
+
+/** A row of `GET /ai-match/jd/{id}/candidates`: the match, with the resume detail
+ *  the client used to fetch one `GET /resumes/{id}` at a time to obtain. */
+export interface JDCandidateItem extends AIMatchResultItem {
+  session_id: string;
 }
 
 export interface JDCandidateListResponse {
@@ -188,7 +191,7 @@ function transformResultToCandidate(result: AIMatchResultItem): MatchedCandidate
 
 /** Same as `transformResultToCandidate`, but the resume detail comes from the row
  *  itself rather than from a follow-up request per candidate. */
-function transformJDCandidate(item: JDCandidateItem): MatchedCandidate {
+function transformJDCandidate(item: AIMatchResultItem): MatchedCandidate {
   return {
     ...transformResultToCandidate(item),
     email: item.email || '',
@@ -202,6 +205,23 @@ function transformJDCandidate(item: JDCandidateItem): MatchedCandidate {
     attachmentCount: item.version_count || 1,
     resumeVersion: item.resume_version || 1,
   };
+}
+
+/** A match row the backend already joined resume details onto. `resume_version`
+ *  is set on every attached row (defaults to 1), so its absence means not attached. */
+function hasResumeDetails(result: AIMatchResultItem): boolean {
+  return result.resume_version != null;
+}
+
+/** Session results as candidates. Rows carrying resume details are used as-is;
+ *  only the rest (older backend, or a failed join) fall back to one
+ *  `GET /resumes/{id}` each — which is what every row used to cost, 126 requests
+ *  for the AI Talent Match page's three sessions. */
+async function resultsToCandidates(results: AIMatchResultItem[]): Promise<MatchedCandidate[]> {
+  const missing = results.filter(r => !hasResumeDetails(r)).map(transformResultToCandidate);
+  const enriched = missing.length ? await enrichCandidatesWithResumeDetails(missing) : [];
+  const enrichedById = new Map(enriched.map(c => [c.id, c]));
+  return results.map(r => (hasResumeDetails(r) ? transformJDCandidate(r) : enrichedById.get(r.id)!));
 }
 
 // Enrich candidates with resume details (email, phone, location, uploaded by, uploaded date)
@@ -259,12 +279,9 @@ export const aiMatchService = {
       });
 
       const session = response.data;
-      const candidates = session.results.map(transformResultToCandidate);
+      const candidates = await resultsToCandidates(session.results);
 
-      // Enrich candidates with email, phone, location from resume details
-      const enrichedCandidates = await enrichCandidatesWithResumeDetails(candidates);
-
-      return { session, candidates: enrichedCandidates };
+      return { session, candidates };
     } catch (error) {
       throw new Error(handleApiError(error));
     }
@@ -285,12 +302,9 @@ export const aiMatchService = {
       });
 
       const session = response.data;
-      const candidates = session.results.map(transformResultToCandidate);
+      const candidates = await resultsToCandidates(session.results);
 
-      // Enrich candidates with email, phone, location from resume details
-      const enrichedCandidates = await enrichCandidatesWithResumeDetails(candidates);
-
-      return { session, candidates: enrichedCandidates };
+      return { session, candidates };
     } catch (error) {
       throw new Error(handleApiError(error));
     }
@@ -320,12 +334,9 @@ export const aiMatchService = {
     try {
       const response = await api.get<AIMatchSessionResponse>(`/ai-match/sessions/${sessionId}`);
       const session = response.data;
-      const candidates = session.results.map(transformResultToCandidate);
+      const candidates = await resultsToCandidates(session.results);
 
-      // Enrich candidates with email, phone, location from resume details
-      const enrichedCandidates = await enrichCandidatesWithResumeDetails(candidates);
-
-      return { session, candidates: enrichedCandidates };
+      return { session, candidates };
     } catch (error) {
       throw new Error(handleApiError(error));
     }

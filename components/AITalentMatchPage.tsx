@@ -428,6 +428,11 @@ export default function AITalentMatchPage({
     }
 
     setLoadingCandidateRows(true);
+    // Scored status spans every JD, so the per-JD `scoredResumeIds` set can't
+    // answer it — pull the tenant-wide scored list. Started alongside the
+    // session fetches (it used to run only after them, one page at a time),
+    // so the roll-up waits on the slower of the two rather than their sum.
+    const scoredIdsRequest = loadAllScoredResumeIds();
     try {
       const perJob = await Promise.all(
         matchHistory.map(async (item) => ({ item, candidates: await loadHistoryCandidates(item, { silent }) }))
@@ -492,28 +497,34 @@ export default function AITalentMatchPage({
         [...byKey.values()].sort((a, b) => b.jobs.length - a.jobs.length || b.bestScore - a.bestScore)
       );
 
-      // Scored status here spans every JD, so the per-JD `scoredResumeIds` set
-      // can't answer it — pull the tenant-wide scored list instead.
-      try {
-        const ids = new Set<string>();
-        let page = 1;
-        let fetched = 0;
-        while (true) {
-          const response = await scoringService.getAllScoredResumes({ page, page_size: 100 });
-          const items = response.items || [];
-          items.forEach(item => { if (item.resume_id) ids.add(item.resume_id); });
-          fetched += items.length;
-          if (items.length === 0 || fetched >= (response.total || 0)) break;
-          page++;
-        }
-        setAllScoredResumeIds(ids);
-      } catch (error) {
-        console.error('[AITalentMatch] Failed to load scored resumes for candidate roll-up:', error);
-        setAllScoredResumeIds(new Set());
-      }
+      setAllScoredResumeIds(await scoredIdsRequest);
     } finally {
       setLoadingCandidateRows(false);
     }
+  };
+
+  /** Every scored resume id in the tenant. Page 1 gives the total; the
+   *  remaining pages are fetched in parallel. Never rejects — an empty set just
+   *  shows every row as "Not Scored". */
+  const loadAllScoredResumeIds = async (): Promise<Set<string>> => {
+    const PAGE_SIZE = 100;
+    const ids = new Set<string>();
+    const collect = (items: Array<{ resume_id?: string }> = []) =>
+      items.forEach(item => { if (item.resume_id) ids.add(item.resume_id); });
+    try {
+      const first = await scoringService.getAllScoredResumes({ page: 1, page_size: PAGE_SIZE });
+      collect(first.items);
+      const pages = Math.ceil((first.total || 0) / PAGE_SIZE);
+      const rest = await Promise.all(
+        Array.from({ length: Math.max(0, pages - 1) }, (_, i) =>
+          scoringService.getAllScoredResumes({ page: i + 2, page_size: PAGE_SIZE }))
+      );
+      rest.forEach(response => collect(response.items));
+    } catch (error) {
+      console.error('[AITalentMatch] Failed to load scored resumes for candidate roll-up:', error);
+      return new Set();
+    }
+    return ids;
   };
 
   // Helper to update URL params - use shallow routing to prevent full page reload
@@ -3944,10 +3955,20 @@ export default function AITalentMatchPage({
                         </span>
                         {/* The result gets the tinted chip, exactly as the
                             "N candidates scored" chip does on the reference. */}
-                        <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
-                          <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-                          {item.totalMatches} {item.totalMatches === 1 ? 'candidate' : 'candidates'} matched
-                        </span>
+                        {/* A run that found nobody still counts as a matched job
+                            (it was matched — the result was empty), so it stays
+                            listed; it just says so instead of "0 candidates matched". */}
+                        {item.totalMatches > 0 ? (
+                          <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
+                            <FileText className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+                            {item.totalMatches} {item.totalMatches === 1 ? 'candidate' : 'candidates'} matched
+                          </span>
+                        ) : (
+                          <span className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 ring-1 ring-amber-200 dark:ring-amber-500/30 rounded-lg">
+                            <AlertCircle className="w-4 h-4" />
+                            No candidates matched
+                          </span>
+                        )}
                         </div>
                       </div>
                     </div>
