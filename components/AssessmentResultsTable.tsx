@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import Pagination from '@/components/Pagination';
+import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 
@@ -101,6 +102,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
 
   // Detect if any results have technical/coding rounds
   const hasTechnicalRound = results.some(r => r.roundScores.some(rs => rs.roundName === 'Technical'));
@@ -758,11 +760,12 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             </button>
           )}
 
+          <ListViewToggle value={displayMode} onChange={setDisplayMode} className="ml-auto" />
         </div>
       </div>
 
       {/* Desktop Table View */}
-      <div className="hidden md:block">
+      <div className={displayMode === 'grid' ? 'hidden' : 'hidden md:block'}>
         {/* Header + data cells stay on one line; the shell below is the single
             scroll container handling both axes. The expanded detail row and the
             empty state opt back out via whitespace-normal — they're prose/panel
@@ -1146,6 +1149,112 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
           </table>
         </div>
       </div>
+
+      {/* Desktop Grid View */}
+      {displayMode === 'grid' && (
+        <div className="hidden md:grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+          {paginatedResults.length === 0 ? (
+            <div className="col-span-full py-12 text-center text-gray-400">
+              <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p className="text-sm">No assessment results found</p>
+              {searchTerm && <p className="text-xs mt-1">Try adjusting your search or filters</p>}
+            </div>
+          ) : (
+            paginatedResults.map((result) => {
+              const status = getResultStatus(result);
+              const scoringDone = status === 'Completed' && result.scoring_status === 'completed';
+              const openDetail = () => {
+                if (status === 'Pending') return;
+                if (onViewResultDetail) { onViewResultDetail(result, jobTitle); return; }
+                if (result.assessmentId) {
+                  router.push(`/recruitment/assessments/${result.assessmentId}/results/details?candidate_id=${result.id}${result.candidateDisplayId ? `&cid=${encodeURIComponent(result.candidateDisplayId)}` : ''}`);
+                }
+              };
+              return (
+                <div
+                  key={result.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={openDetail}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDetail(); } }}
+                  className={`text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 ${status === 'Pending' ? 'cursor-default' : 'cursor-pointer'}`}
+                >
+                  <div className="flex items-start gap-2.5">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleSelectResult(result.id); }}
+                      className="p-1 -m-1 hover:bg-brand-blue/10 rounded flex-shrink-0"
+                    >
+                      {selectedResults.includes(result.id) ? (
+                        <CheckSquare className="w-4 h-4 text-brand-blue" />
+                      ) : (
+                        <Square className="w-4 h-4 text-gray-400" />
+                      )}
+                    </button>
+                    <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-sm flex-shrink-0">
+                      {(result.candidateName || 'U')[0].toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-gray-900 truncate">{result.candidateName}</p>
+                      <p className="text-xs text-gray-500 truncate">{result.email}</p>
+                    </div>
+                    {result.candidateDisplayId && (
+                      <span className="text-[10px] font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-1.5 py-0.5 rounded shrink-0">
+                        {result.candidateDisplayId}
+                      </span>
+                    )}
+                  </div>
+
+                  <p className="text-xs text-gray-600 truncate" title={result.assessmentName}>
+                    {result.assessmentName}
+                  </p>
+
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${getStatusBadgeColor(status)}`}>
+                      {status}
+                    </span>
+                    {scoringDone && (
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                        result.passFail === 'Pass' ? 'bg-green-50 text-green-700 ring-1 ring-green-200' : 'bg-red-50 text-red-700 ring-1 ring-red-200'
+                      }`}>
+                        {result.passFail}
+                      </span>
+                    )}
+                  </div>
+
+                  {scoringDone && (
+                    <div className="flex items-center gap-2">
+                      <div className="flex-1 bg-gray-200 rounded-full h-1.5">
+                        <div
+                          className={`h-1.5 rounded-full ${result.passFail === 'Pass' ? 'bg-green-500' : 'bg-red-500'}`}
+                          style={{ width: `${Math.min(100, result.scorePercentage)}%` }}
+                        />
+                      </div>
+                      <span className={`font-medium text-xs shrink-0 ${getScoreColor(result.scorePercentage)}`}>
+                        {Math.round(result.scorePercentage)}%
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
+                    <span>{result.duration || (result.completionTime ? `${result.completionTime} min` : '—')}</span>
+                    <span className="truncate">{result.completedDate || '—'}</span>
+                  </div>
+
+                  {status !== 'Pending' && (
+                    <div
+                      onClick={(e) => { e.stopPropagation(); openDetail(); }}
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      View Details
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      )}
 
       {/* Mobile Card View */}
       <div className="md:hidden divide-y divide-gray-200">

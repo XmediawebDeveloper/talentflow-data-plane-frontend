@@ -14,6 +14,7 @@ import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
 import { Tooltip } from '@/components/ui/tooltip';
 import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
+import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import AITalentMatchConfirmModal from './AITalentMatchConfirmModal';
 import ResumeUploadModal from './ResumeUploadModal';
 import ResumeVersionsModal from './ResumeVersionsModal';
@@ -823,13 +824,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
      Results" for one frame before flipping to the real count — exactly the
      flash the count is supposed to never show. */
   const [loadingAiMatch, setLoadingAiMatch] = useState(true);
-  /* True as soon as `listSessions` — ONE call — comes back, well before
-     `loadingAiMatch` goes false (which waits on a `getSession` per session,
-     fetched to dedupe candidates across every run). The tab badge uses this
-     to show a real number as fast as the Scored Resumes badge does, instead
-     of sitting on a skeleton for the whole dedup fetch — see
-     `aiMatchBadgeCount` below for how the two numbers hand off. */
-  const [aiMatchSessionsLoaded, setAiMatchSessionsLoaded] = useState(false);
+  /* DISTINCT candidates matched to this JD, counted server-side. Held apart from
+     `aiMatchCandidates.length` because the list is fetched with a limit: if a JD ever
+     exceeds it, the badge must still say how many there are. Null until the fetch
+     answers — see `aiMatchBadgeCount` below. */
+  const [aiMatchTotal, setAiMatchTotal] = useState<number | null>(null);
 
   // ✅ PERMISSIONS: Permission checking function
   const hasPermission = (permission: string): boolean => {
@@ -1518,8 +1517,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       // with the frontend's match_status bucketing. When a backend count was 0
       // (falsy) it fell through to the filter, letting one resume be counted in
       // two buckets at once — e.g. Total 1 but Partial Match 1 AND No Match 1.
+      // `total` also reads the converted list now, not `response.total` — the
+      // backend total counts every scored resume for this JD, while the tab
+      // itself (ScoredResumesTable) only ever renders this one `page_size:
+      // 100` page, via its own `resumes.length` count badge. For a JD with
+      // more than 100 scored resumes those two disagreed, so the tab-strip
+      // badge showed the true (higher) total and then visibly dropped to 100
+      // the moment the tab opened.
       const stats = {
-        total: response.total ?? convertedResumes.length,
+        total: convertedResumes.length,
         exactMatch: convertedResumes.filter((r: any) => r.matchStatus === 'Exact Match').length,
         partialMatch: convertedResumes.filter((r: any) => r.matchStatus === 'Partial Match').length,
         noMatch: convertedResumes.filter((r: any) => r.matchStatus === 'No Match').length,
@@ -1685,38 +1691,40 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const fetchAiMatchData = async () => {
     setLoadingAiMatch(true);
     try {
-      const response = await aiMatchService.listSessions({ jd_id: job.id, page_size: 100 });
-      const sessions = response.items || [];
-      setAiMatchSessions(sessions);
-      setAiMatchSessionsLoaded(true);
+      /* Two requests, in parallel, and that is the whole tab.
 
-      // listSessions returns sessions with results: [] — fetch each session individually for enriched candidates
-      const allCandidatesMap = new Map<string, MatchedCandidate>();
-      await Promise.all(
-        sessions.map(async (session) => {
-          try {
-            const { candidates } = await aiMatchService.getSession(session.id);
-            candidates.forEach((c) => {
-              const existing = allCandidatesMap.get(c.resumeId);
-              // Keep the one with the higher match score (from the most recent/best session)
-              if (!existing || c.matchScore > existing.matchScore) {
-                allCandidatesMap.set(c.resumeId, c);
-              }
-            });
-          } catch (err) {
-            console.warn(`Failed to fetch session ${session.id}:`, err);
-          }
-        })
-      );
+         It used to be one per session plus one per candidate: `listSessions`, then a
+         `getSession` for each (their `results` come back empty from the list), then -
+         inside `getSession` - a `GET /resumes/{id}` per candidate for email, phone and
+         notice period, with the de-duplication done here in JavaScript afterwards. A JD
+         with 6 runs and 732 match rows spent ~739 requests to show 122 people, which is
+         why the tab sat loading for the better part of a minute.
 
-      // Sort by matchScore descending
-      const sorted = Array.from(allCandidatesMap.values()).sort((a, b) => b.matchScore - a.matchScore);
-      setAiMatchCandidates(sorted);
-    } catch (error) {
-      console.error('Failed to fetch AI match data:', error);
-      setAiMatchSessions([]);
-      setAiMatchCandidates([]);
-      setAiMatchSessionsLoaded(true);
+         `listJdCandidates` does the de-duplication and the resume join in one query, and
+         reports the distinct total. The sessions are still fetched - the activity
+         timeline and the tab's own run history read them - but that is one call that no
+         longer blocks the list. */
+      const [sessionsResult, candidatesResult] = await Promise.allSettled([
+        aiMatchService.listSessions({ jd_id: job.id, page_size: 100 }),
+        aiMatchService.listJdCandidates(job.id),
+      ]);
+
+      if (sessionsResult.status === 'fulfilled') {
+        setAiMatchSessions(sessionsResult.value.items || []);
+      } else {
+        console.error('Failed to fetch AI match sessions:', sessionsResult.reason);
+        setAiMatchSessions([]);
+      }
+
+      if (candidatesResult.status === 'fulfilled') {
+        const { candidates, total } = candidatesResult.value;
+        setAiMatchCandidates(candidates);
+        setAiMatchTotal(total);
+      } else {
+        console.error('Failed to fetch AI match candidates:', candidatesResult.reason);
+        setAiMatchCandidates([]);
+        setAiMatchTotal(0);
+      }
     } finally {
       setLoadingAiMatch(false);
     }
@@ -2439,24 +2447,30 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     ? aiInterviewInviteAction
     : aiInterviewCreateAction;
 
-  /* AI Talent Match Results tab badge — shows a real number as soon as
-     `listSessions` (one call) resolves, the same speed the Scored Resumes
-     badge already has, rather than waiting out the slower per-session dedup
-     fetch that only the tab's own candidate list actually needs.
-     `total_matches` is precomputed server-side per session (the same field
-     "Top Match Rating" already reads for an instant number elsewhere), so
-     summing it is free once sessions are in. It's an upper bound — a
-     candidate matched in two sessions of this job is counted twice — so once
-     the exact deduplicated list finishes loading, the badge switches to
-     `aiMatchCandidates.length`, which can only ever be equal or lower. */
-  const aiMatchBadgeCount = !aiMatchSessionsLoaded
+  /* AI Talent Match Results tab badge — holds the loading placeholder until
+     the server's distinct-candidate total arrives, rather than showing an
+     interim `sum(session.total_matches)` first. That sum double-counts a
+     candidate matched across more than one session of this job, so it used
+     to flash a higher number before dropping to the real, lower count —
+     visibly "changing" right as the user opened the tab. Showing nothing
+     until the real count is ready means the badge never has to correct
+     itself. */
+  const aiMatchBadgeCount = (loadingAiMatch || aiMatchTotal === null)
     ? null
-    : loadingAiMatch
-      ? aiMatchSessions.reduce((sum, s) => sum + (s.total_matches ?? 0), 0)
-      : aiMatchCandidates.length;
+    : aiMatchTotal;
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+    // overflow-x-clip, not overflow-x-hidden/overflow-y-auto: the latter pair
+    // makes this <main> its own scroll container, but it never actually gets
+    // height-bound enough to be what scrolls — the dashboard layout's own
+    // overflow-y-auto div does. `position: sticky` resolves against the
+    // NEAREST scroll container regardless of whether that container is the
+    // one actually moving, so the breadcrumb was pinning to this <main> (which
+    // never scrolls) while the real scrolling happened one level up — visibly
+    // dragging the "stuck" breadcrumb away. `clip` doesn't establish a scroll
+    // container at all, so the app's single real scroller is what sticky
+    // resolves against, matching the working list pages (JobsListing, etc).
+    <main className="flex-1 overflow-x-clip bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
       {/* Breadcrumb — must be a DIRECT child of the card so `sticky` has the
@@ -2903,10 +2917,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
               }`}>
-                {/* aiMatchBadgeCount is null only for the instant before
-                    listSessions itself (one call) has come back — same tiny
-                    window every other tab's badge has, which is why this is
-                    the only case that still needs a placeholder. */}
+                {/* Null while sessions are listing or the per-session dedup
+                    fetch is still running — see aiMatchBadgeCount above. */}
                 {aiMatchBadgeCount === null ? (
                   <span className="inline-block h-3 w-4 rounded bg-current opacity-30 animate-pulse align-middle" aria-label="Loading count" />
                 ) : (
@@ -4618,6 +4630,7 @@ function AIMatchTabContent({
   const [sortBy, setSortBy] = useState<'rank' | 'name' | 'score' | 'experience'>('rank');
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
 
   // Attachments column → Version History popup. Same fetch-and-fallback
   // pattern as the standalone AI Talent Match page's handleAttachmentsClick:
@@ -4853,14 +4866,131 @@ function AIMatchTabContent({
             <option value="score">Sort by Score</option>
             <option value="experience">Sort by Experience</option>
           </select>
+          <ListViewToggle value={displayMode} onChange={setDisplayMode} className="ml-auto" />
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table / Grid */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-        {/* Bounded viewport: rows scroll vertically (and horizontally) while the
+        {displayMode === 'grid' ? (
+          <div className="min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto p-4">
+            {filteredCandidates.length === 0 ? (
+              <div className="px-4 py-12 text-center text-gray-500 dark:text-slate-500 text-sm">
+                No candidates match the current filters.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {paginatedCandidates.map((candidate) => {
+                  const isScored = scoredResumeIds.has(candidate.resumeId);
+                  return (
+                    <div
+                      key={candidate.resumeId}
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => {
+                        if (onViewCandidate) {
+                          try {
+                            sessionStorage.setItem('resumeNavList', JSON.stringify(filteredCandidates.map((c) => c.resumeId)));
+                            sessionStorage.setItem('resumeNavSource', 'job-details');
+                          } catch { /* ignore */ }
+                          onViewCandidate(candidate);
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if ((e.key === 'Enter' || e.key === ' ') && onViewCandidate) {
+                          e.preventDefault();
+                          try {
+                            sessionStorage.setItem('resumeNavList', JSON.stringify(filteredCandidates.map((c) => c.resumeId)));
+                            sessionStorage.setItem('resumeNavSource', 'job-details');
+                          } catch { /* ignore */ }
+                          onViewCandidate(candidate);
+                        }
+                      }}
+                      className="text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 cursor-pointer"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${candidate.name || 'candidate'}`}
+                          checked={selectedIds.has(candidate.resumeId)}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => toggleSelect(candidate.resumeId)}
+                          className="mt-1.5 flex-shrink-0 rounded border-gray-300"
+                        />
+                        <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-sm text-gray-700 dark:text-slate-300 font-medium flex-shrink-0">
+                          {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{candidate.name}</p>
+                          {candidate.title && (
+                            <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{candidate.title}</p>
+                          )}
+                        </div>
+                        <div className={`inline-flex items-center justify-center px-2 py-0.5 rounded-md font-bold text-xs shrink-0 ${
+                          (candidate.rank || 0) >= 7 ? 'bg-green-100 text-green-800 border border-green-300' :
+                          (candidate.rank || 0) >= 4 ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' :
+                          (candidate.rank || 0) >= 1 ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-300 dark:border-slate-700' :
+                          'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 border border-gray-200 dark:border-slate-700'
+                        }`}>
+                          {candidate.rank || '-'}
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-gray-600 dark:text-slate-400 truncate">
+                        {candidate.email || '—'}{candidate.location ? ` · ${candidate.location}` : ''}
+                      </p>
+
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {isScored ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                            <CheckCircle className="w-3 h-3" />
+                            Scored
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded-full text-xs font-medium">
+                            <XCircle className="w-3 h-3" />
+                            Not Scored
+                          </span>
+                        )}
+                        {candidate.experience && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15">
+                            {candidate.experience}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-gray-200 dark:bg-slate-700 rounded-full h-1.5">
+                          <div
+                            className={`h-1.5 rounded-full ${
+                              candidate.matchScore >= 70 ? 'bg-green-500' :
+                              candidate.matchScore >= 45 ? 'bg-yellow-500' : 'bg-red-400'
+                            }`}
+                            style={{ width: `${Math.min(100, candidate.matchScore)}%` }}
+                          />
+                        </div>
+                        <span className="font-medium text-xs shrink-0 text-gray-700 dark:text-slate-300">
+                          {Math.round(candidate.matchScore)}% match
+                        </span>
+                      </div>
+
+                      <div
+                        onClick={(e) => { e.stopPropagation(); handleAttachmentsClick(candidate); }}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
+                      >
+                        <Paperclip className="w-3.5 h-3.5" />
+                        Resume ({candidate.attachmentCount ?? 1})
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+        /* Bounded viewport: rows scroll vertically (and horizontally) while the
             header stays pinned. Header background/border live on the cells so the
-            pinned row paints solid over the rows sliding underneath. */}
+            pinned row paints solid over the rows sliding underneath. */
         <div className="min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell">
           <table className="w-full min-w-[1450px] table-auto">
             <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
@@ -4998,6 +5128,7 @@ function AIMatchTabContent({
             </tbody>
           </table>
         </div>
+        )}
         {filteredCandidates.length > 0 && (
           <Pagination
             currentPage={safeCurrentPage}

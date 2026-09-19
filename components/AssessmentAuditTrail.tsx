@@ -3,7 +3,7 @@ import {
   Download, CheckCircle, XCircle, Clock, AlertTriangle,
   FileText, RefreshCw, Eye, Calendar, Mail, User, Building2, Hash, Activity,
   Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff, Loader2,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, MailWarning, LogOut, Ban, Save
 } from 'lucide-react';
 import { assessmentService, CombinedAuditActivity, CombinedAuditTrailResponse } from '@/lib/services';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -22,11 +22,18 @@ const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   assessment_deleted: <Trash2 className="w-4 h-4" />,
   assessment_published: <Send className="w-4 h-4" />,
   assessment_archived: <FileText className="w-4 h-4" />,
+  assessment_saved_as_draft: <Save className="w-4 h-4" />,
+  assessment_draft_updated: <Save className="w-4 h-4" />,
+  invites_revoked: <Ban className="w-4 h-4" />,
   candidate_invited: <Mail className="w-4 h-4" />,
   candidate_started: <Play className="w-4 h-4" />,
   candidate_completed: <Award className="w-4 h-4" />,
   candidate_failed: <UserX className="w-4 h-4" />,
   candidate_expired: <TimerOff className="w-4 h-4" />,
+  invite_failed: <MailWarning className="w-4 h-4" />,
+  invite_email_changed: <Edit className="w-4 h-4" />,
+  candidate_exited: <LogOut className="w-4 h-4" />,
+  candidate_errored: <AlertTriangle className="w-4 h-4" />,
 };
 
 // Color mapping for each activity type
@@ -36,11 +43,18 @@ const ACTIVITY_COLORS: Record<string, { bg: string; text: string; icon: string; 
   assessment_deleted: { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500', border: 'border-red-200' },
   assessment_published: { bg: 'bg-green-50', text: 'text-green-700', icon: 'text-green-500', border: 'border-green-200' },
   assessment_archived: { bg: 'bg-slate-50', text: 'text-gray-700', icon: 'text-gray-500', border: 'border-gray-200' },
+  assessment_saved_as_draft: { bg: 'bg-brand-blue/5', text: 'text-brand-blue', icon: 'text-brand-blue', border: 'border-brand-blue/20' },
+  assessment_draft_updated: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
+  invites_revoked: { bg: 'bg-slate-50', text: 'text-gray-700', icon: 'text-gray-500', border: 'border-gray-200' },
   candidate_invited: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
   candidate_started: { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', icon: 'text-brand-orange', border: 'border-brand-orange/20' },
   candidate_completed: { bg: 'bg-green-50', text: 'text-green-700', icon: 'text-green-500', border: 'border-green-200' },
   candidate_failed: { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500', border: 'border-red-200' },
   candidate_expired: { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', icon: 'text-brand-orange', border: 'border-brand-orange/20' },
+  invite_failed: { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500', border: 'border-red-200' },
+  invite_email_changed: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
+  candidate_exited: { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', icon: 'text-brand-orange', border: 'border-brand-orange/20' },
+  candidate_errored: { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500', border: 'border-red-200' },
 };
 
 export default function AssessmentAuditTrail() {

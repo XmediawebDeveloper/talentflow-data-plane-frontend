@@ -499,7 +499,7 @@ export default function JDListPage() {
   const canCreateJD = accessCheck?.can_create_jd !== false;
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+    <main className="flex-1 overflow-x-clip bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="w-full p-4 md:p-8 bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb

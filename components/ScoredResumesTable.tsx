@@ -7,6 +7,7 @@ import ColumnCustomizationModal from './ColumnCustomizationModal';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
+import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import InviteShareModal from './InviteShareModal';
@@ -515,6 +516,7 @@ Best regards`);
       // No-op when using external control
     } : setInternalSelectedResumes;
   const [showFilters, setShowFilters] = useState(false);
+  const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
   const [showInviteModal, setShowInviteModal] = useState(false);
   const [inviteCandidate, setInviteCandidate] = useState<ScoredResume | null>(null);
 
@@ -806,6 +808,13 @@ Best regards`);
     (safeCurrentPage - 1) * itemsPerPage,
     safeCurrentPage * itemsPerPage,
   );
+
+  /* Grid view's row source — one card per candidate either way. Grouped mode
+     collapses each cluster to its primary (highest) version, same as the
+     grouped table's own row, plus how many versions it's standing in for. */
+  const gridRows: { resume: ScoredResume; versionCount?: number }[] = isGrouped
+    ? paginatedGroups.map(({ rows }) => ({ resume: rows[0], versionCount: rows.length }))
+    : paginatedResumes.map((resume) => ({ resume }));
 
   const uniqueRecruiters = Array.from(new Set(resumes.map(r => r.scoredBy)));
 
@@ -1386,7 +1395,10 @@ Best regards`);
   // candidate can be invited to; each entry is gated by its own permission and
   // by whether that section exists on this JD, rather than hiding the whole
   // control. Neither configured → the button is disabled.
-  const renderInviteCell = (resume: ScoredResume) => {
+  // Just the invite control itself, with no `<td>` wrapper, so the grid
+  // view's card can place it next to its own View/Actions buttons instead
+  // of inside a table row.
+  const renderInviteButton = (resume: ScoredResume) => {
     // Row-scoped: for the cross-job global list this reads THIS row's own
     // job from the bulk map: resolveAssessmentConfigured/
     // resolveAIInterviewConfigured (see above), not the table-wide flags,
@@ -1402,9 +1414,11 @@ Best regards`);
         ? 'No published assessment or AI interview for this job yet'
         : undefined;
 
+    if (!(canCreateAssessments || mayInviteAIInterview)) {
+      return <span className="text-xs text-gray-400">-</span>;
+    }
+
     return (
-  <td className="py-3 px-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-    {(canCreateAssessments || mayInviteAIInterview) ? (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -1477,12 +1491,14 @@ Best regards`);
           )}
         </DropdownMenuContent>
       </DropdownMenu>
-    ) : (
-      <span className="text-xs text-gray-400">-</span>
-    )}
-  </td>
     );
   };
+
+  const renderInviteCell = (resume: ScoredResume) => (
+    <td className="py-3 px-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+      {renderInviteButton(resume)}
+    </td>
+  );
 
   /**
    * The Actions dropdown's items for one resume — factored out so the
@@ -1627,6 +1643,7 @@ Best regards`);
               Export
             </button>
           )}
+          <ListViewToggle value={displayMode} onChange={setDisplayMode} />
         </ListToolbar>
 
         {/* Advanced Filters */}
@@ -1812,7 +1829,8 @@ Best regards`);
         {/* Selection row — its own strip under the search/filter row, divided by
             a rule, exactly like job-openings' "Select all + Bulk Actions" line.
             Bulk buttons only appear once something is picked, so the row stays
-            quiet until it has work to do. */}
+            quiet until it has work to do. Shown in both list and grid view,
+            since grid cards now carry their own per-item checkbox too. */}
         {filteredResumes.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-3 border-t border-gray-200">
             <button
@@ -1914,7 +1932,116 @@ Best regards`);
         </div>
       )}
 
-      {isGrouped ? (
+      {displayMode === 'grid' ? (
+        <div className="rounded-xl border border-gray-200 overflow-hidden">
+          {gridRows.length === 0 ? (
+            <ListEmptyState
+              icon={Search}
+              isNarrowed={search.isNarrowed}
+              query={search.appliedQuery}
+              entityLabel="scored resume"
+              emptyTitle="No Scored Resumes"
+              emptyDescription="Score resumes against this job description to see the candidates here."
+              onReset={search.reset}
+              imageSrc="/scored-resumes-empty-state.webp"
+              imageAlt="Scored resumes illustration"
+              action={onScoreResumesFromEmptyState ? (
+                <button onClick={onScoreResumesFromEmptyState} className={TAB_EMPTY_ACTION_CLASS}>
+                  <ClipboardList className="w-4 h-4" />
+                  Score Resumes
+                </button>
+              ) : undefined}
+            />
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+              {gridRows.map(({ resume, versionCount }) => (
+                <div
+                  key={resume.id}
+                  onClick={(e) => handleRowClick(resume.id, e)}
+                  className="text-left bg-white rounded-xl border border-gray-200 hover:shadow-md hover:border-[var(--border-dark)] hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 cursor-pointer"
+                >
+                  <div className="flex items-start gap-2.5">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleSelectResume(resume.id); }}
+                      className="p-1 -m-1 hover:bg-gray-100 rounded flex-shrink-0"
+                    >
+                      {selectedResumes.includes(resume.id) ? (
+                        <CheckSquare className="w-4 h-4 text-gray-800" />
+                      ) : (
+                        <Square className="w-4 h-4 text-gray-400" />
+                      )}
+                    </button>
+                    <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-sm flex-shrink-0">
+                      {(resume.candidateName || 'C')[0].toUpperCase()}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-gray-900 truncate">{resume.candidateName || 'Candidate'}</p>
+                      <p className="text-xs text-gray-500 truncate">{resume.email || '—'}</p>
+                    </div>
+                    {versionCount != null && versionCount > 1 && (
+                      <span className="text-[10px] font-medium text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full shrink-0 whitespace-nowrap">
+                        {versionCount} versions
+                      </span>
+                    )}
+                  </div>
+
+                  {isGlobalView && resume.jobTitle && (
+                    <p className="text-xs text-gray-500 truncate" title={resume.jobTitle}>
+                      Applied for: <span className="font-medium text-gray-700">
+                        {[resume.jobCode, truncateJobTitle(resume.jobTitle), resume.jobVersion != null ? `v${resume.jobVersion}` : null]
+                          .filter(Boolean)
+                          .join('-')}
+                      </span>
+                    </p>
+                  )}
+
+                  <div className="flex items-center justify-between gap-2">
+                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs border ${matchBadgeClass(resume.matchStatus)}`}>
+                      {resume.matchStatus}
+                    </span>
+                    <span className={`text-sm font-semibold ${
+                      MATCH_SCORE_TEXT_CLASS[normalizeMatchResult(resume.matchStatus) ?? 'No Match']
+                    }`}>
+                      {formatOverallScore(resume.overallRating10, resume.scorePercentage)}
+                    </span>
+                  </div>
+
+                  <div
+                    className="flex items-center gap-1.5 mt-1"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <button
+                      onClick={() => onViewCandidate && onViewCandidate(resume)}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      View
+                    </button>
+                    {renderInviteButton(resume)}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          aria-label="Actions"
+                          title="Actions"
+                          className="p-2.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all"
+                        >
+                          <MoreVertical className="w-4 h-4 text-gray-600" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl"
+                      >
+                        {renderActionsMenuItems(resume)}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : isGrouped ? (
         <div className="rounded-xl border border-gray-200 overflow-hidden">
           {/* Desktop Table View — grouped */}
           <div className="hidden md:block overflow-x-auto tf-table-shell">

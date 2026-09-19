@@ -426,6 +426,10 @@ export function JobStatusChip({ status, currentVersion }: { status?: string; cur
  * a caller that says nothing gets exactly what this panel has always rendered.
  */
 export interface VersionHistoryVocabulary {
+  /** The child noun, singular — used in the "View"/"Create" Actions-cell
+   *  button text and its aria-label/title (e.g. "View Assessment" vs
+   *  "View Interview"). */
+  childSingular: string;
   /** Outer table's count column — how many children hang off a job version. */
   childPlural: string;
   /** Heading over the nested table, with its count appended. */
@@ -443,6 +447,7 @@ export interface VersionHistoryVocabulary {
 }
 
 export const ASSESSMENT_VOCABULARY: VersionHistoryVocabulary = {
+  childSingular: 'Assessment',
   childPlural: 'Assessments',
   childVersionsHeading: 'Assessment Versions',
   childNone: 'No assessment',
@@ -1082,13 +1087,13 @@ export default function AssessmentVersionHistoryPanel({
                                 aria-expanded={isOpen}
                                 aria-label={
                                   isOpen
-                                    ? `Hide the assessment for job V${group.jobVersion}`
-                                    : `View the assessment for job V${group.jobVersion}`
+                                    ? `Hide the ${vocabulary.childSingular.toLowerCase()} for job V${group.jobVersion}`
+                                    : `View the ${vocabulary.childSingular.toLowerCase()} for job V${group.jobVersion}`
                                 }
-                                title={`View the assessment created for job V${group.jobVersion}`}
+                                title={`View the ${vocabulary.childSingular.toLowerCase()} created for job V${group.jobVersion}`}
                                 className="h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue text-xs font-medium hover:bg-brand-blue/5 transition-colors"
                               >
-                                View Assessment
+                                View {vocabulary.childSingular}
                                 <ChevronDown
                                   className={`w-3.5 h-3.5 transition-transform duration-300 ease-out ${isOpen ? 'rotate-180' : ''}`}
                                 />
@@ -1125,7 +1130,7 @@ export default function AssessmentVersionHistoryPanel({
                                   group.jobCurrentVersion,
                                 );
                                 const reason = canCreate
-                                  ? `Create an assessment for job V${group.jobVersion}`
+                                  ? `Create ${vocabulary.childSingular === 'Assessment' ? 'an' : 'a'} ${vocabulary.childSingular.toLowerCase()} for job V${group.jobVersion}`
                                   : createAssessmentBlockedReason(group.jobStatus, group.jobCurrentVersion);
                                 return (
                                   <button
@@ -1144,7 +1149,7 @@ export default function AssessmentVersionHistoryPanel({
                                     }`}
                                   >
                                     <Plus className="w-3.5 h-3.5" />
-                                    Create Assessment
+                                    Create {vocabulary.childSingular}
                                   </button>
                                 );
                               })()

@@ -740,12 +740,13 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   const internalTotalTickets = internalStats?.total_tickets ?? 0;
 
   return (
-    <div ref={rootRef} className="flex-1 bg-slate-50 overflow-x-hidden overflow-y-auto">
+    <div ref={rootRef} className="flex-1 bg-slate-50 overflow-x-clip">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-      <div className="px-4 md:px-8 pt-4 md:pt-6">
-        <PageBreadcrumb className="mb-0" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Support Tickets' }]} />
-      </div>
+      {/* Direct child of the card (not wrapped in its own div) so `sticky` has
+          the card's full height to travel within — a wrapper boxed to just
+          this row's height let it unstick after a moment of scrolling. */}
+      <PageBreadcrumb className="mx-4 md:mx-8 mt-4 md:mt-6 mb-0" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Support Tickets' }]} />
       {/* SaaS Hero Header */}
       <div className="px-4 md:px-8 pt-4 md:pt-6">
         <section className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal p-5 text-white shadow-xl shadow-brand-blue/20 ring-1 ring-white/10 sm:p-6 lg:p-7">
