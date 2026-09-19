@@ -459,8 +459,8 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                           so the entries line up instead of staggering by the
                           width of whichever label came before them. */}
                       <div className="text-[10px] text-gray-500 dark:text-slate-500 grid grid-cols-2 gap-x-3 gap-y-0.5 mb-1">
-                        {timelineEvents(invitation).map(({ label, at, Icon, tone }) => (
-                          <div key={label} className="flex items-center gap-1 min-w-0">
+                        {timelineEvents(invitation).map(({ label, at, Icon, tone }, i) => (
+                          <div key={`${label}-${i}`} className="flex items-center gap-1 min-w-0">
                             <Icon className={`w-2.5 h-2.5 flex-shrink-0 ${tone}`} />
                             <span className="truncate">{label}: {formatIST(at)}</span>
                           </div>
@@ -609,8 +609,8 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                                     <span className="text-gray-400 dark:text-slate-500">—</span>
                                   ) : (
                                     <div className="space-y-1">
-                                      {events.map(({ label, at, Icon, tone }) => (
-                                        <div key={label} className="flex items-center gap-2 whitespace-nowrap">
+                                      {events.map(({ label, at, Icon, tone }, i) => (
+                                        <div key={`${label}-${i}`} className="flex items-center gap-2 whitespace-nowrap">
                                           <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
                                           <span className={tone}>
                                             {label}: {formatIST(at)}

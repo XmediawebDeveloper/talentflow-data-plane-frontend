@@ -56,6 +56,7 @@ import {
   EditInvitationModal,
   RevokeInvitationDialog,
   InvitationHistoryDialog,
+  timelineEvents,
 } from '@/components/AssessmentInviteActions';
 /* The job's own version list, for asking about each version by its own id —
    see `loadAssessmentLineage`. Same endpoint the version panel's job half
@@ -6102,51 +6103,25 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         {inv.sent_at || inv.created_at ? formatISTDate(inv.sent_at || inv.created_at) : '-'}
                                       </div>
                                     </td>
-                                    {/* Same lifecycle stamps the popup's Timeline
-                                        column shows, in the same order. */}
+                                    {/* Every audit-logged event on its own line, oldest
+                                        first (timelineEvents/buildFullTimeline in
+                                        AssessmentInviteActions) — not just the latest
+                                        per milestone type, so a revoke followed by an
+                                        edited resend shows both, not just the resend. */}
                                     <td className="px-4 py-4 align-middle text-xs text-gray-500 dark:text-slate-500">
                                       <div className="space-y-1">
-                                        {inv.sent_at && (
-                                          <div className="flex items-center gap-2 whitespace-nowrap">
-                                            <Mail className="w-3 h-3 text-status-invited flex-shrink-0" />
-                                            <span className="text-status-invited">Invited: {formatIST(inv.sent_at)}</span>
-                                          </div>
-                                        )}
-                                        {inv.opened_at && (
-                                          <div className="flex items-center gap-2 whitespace-nowrap">
-                                            <Monitor className="w-3 h-3 text-status-progress flex-shrink-0" />
-                                            <span className="text-status-progress">System Check: {formatIST(inv.opened_at)}</span>
-                                          </div>
-                                        )}
-                                        {inv.started_at && (
-                                          <div className="flex items-center gap-2 whitespace-nowrap">
-                                            <Play className="w-3 h-3 text-status-progress flex-shrink-0" />
-                                            <span className="text-status-progress">Started: {formatIST(inv.started_at)}</span>
-                                          </div>
-                                        )}
-                                        {inv.completed_at && (
-                                          <div className="flex items-center gap-2 whitespace-nowrap">
-                                            <CheckCircle className="w-3 h-3 text-status-completed flex-shrink-0" />
-                                            <span className="text-status-completed">Completed: {formatIST(inv.completed_at)}</span>
-                                          </div>
-                                        )}
-                                        {inv.terminated_at && !inv.completed_at && (
-                                          <div className="flex items-center gap-2 whitespace-nowrap">
-                                            <Ban className="w-3 h-3 text-red-600 flex-shrink-0" />
-                                            <span className="text-red-600">Terminated: {formatIST(inv.terminated_at)}</span>
-                                          </div>
-                                        )}
-                                        {inviteStatusBucket(inv) === 'expired' && inv.expires_at && (
-                                          <div className="flex items-center gap-2 whitespace-nowrap">
-                                            <Clock className="w-3 h-3 text-status-expired flex-shrink-0" />
-                                            <span className="text-status-expired">Expired at: {formatIST(inv.expires_at)}</span>
-                                          </div>
-                                        )}
-                                        {!inv.sent_at && !inv.started_at && (
+                                        {timelineEvents(inv).length === 0 ? (
                                           <div className="flex items-center gap-2 whitespace-nowrap">
                                             <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
                                             <span>Created: {formatIST(inv.created_at)}</span>
                                           </div>
+                                        ) : (
+                                          timelineEvents(inv).map(({ label, at, Icon, tone }, i) => (
+                                            <div key={`${label}-${i}`} className="flex items-center gap-2 whitespace-nowrap">
+                                              <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
+                                              <span className={tone}>{label}: {formatIST(at)}</span>
+                                            </div>
+                                          ))
                                         )}
                                       </div>
                                       <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(inv)} />
@@ -7781,72 +7756,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             </td>
                                 <td className="py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 hidden md:table-cell">
                                   <div className="space-y-1">
-                                    {invitation.sent_at && (
+                                    {/* Every audit-logged event on its own line, oldest
+                                        first (timelineEvents/buildFullTimeline in
+                                        AssessmentInviteActions) — not just the latest
+                                        per milestone type, so a revoke followed by an
+                                        edited resend shows both, not just the resend. */}
+                                    {timelineEvents(invitation).length === 0 ? (
                                       <div className="flex items-center gap-2">
-                                        <Mail className="w-3 h-3 text-status-invited flex-shrink-0" />
-                                        <span className="text-status-invited">Invited: {formatIST(invitation.sent_at)}</span>
+                                        <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                        <span>Created: {formatIST(invitation.created_at)}</span>
+                                      </div>
+                                    ) : (
+                                      timelineEvents(invitation).map(({ label, at, Icon, tone }, i) => (
+                                        <div key={`${label}-${i}`} className="flex items-center gap-2">
+                                          <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
+                                          <span className={tone}>{label}: {formatIST(at)}</span>
+                                        </div>
+                                      ))
+                                    )}
                                   </div>
-                                )}
-                                {invitation.bounced_at && (
-                                  <div className="flex items-center gap-2">
-                                    <RefreshCw className="w-3 h-3 text-red-600 flex-shrink-0" />
-                                    <span className="text-red-600">Bounced: {formatIST(invitation.bounced_at)}</span>
-                                  </div>
-                                )}
-                                {invitation.opened_at && (
-                                  <div className="flex items-center gap-2">
-                                    <Monitor className="w-3 h-3 text-status-progress flex-shrink-0" />
-                                    <span className="text-status-progress">System Check: {formatIST(invitation.opened_at)}</span>
-                                  </div>
-                                )}
-                                {invitation.started_at && (
-                                  <div className="flex items-center gap-2">
-                                    <Play className="w-3 h-3 text-status-progress flex-shrink-0" />
-                                    <span className="text-status-progress">Started: {formatIST(invitation.started_at)}</span>
-                                  </div>
-                                )}
-                                {invitation.completed_at && (
-                                  <div className="flex items-center gap-2">
-                                    <CheckCircle className="w-3 h-3 text-status-completed flex-shrink-0" />
-                                    <span className="text-status-completed">Completed: {formatIST(invitation.completed_at)}</span>
-                                  </div>
-                                )}
-                                {invitation.terminated_at && !invitation.completed_at && (
-                                  <div className="flex items-center gap-2">
-                                    <Ban className="w-3 h-3 text-red-600 flex-shrink-0" />
-                                    <span className="text-red-600">Terminated: {formatIST(invitation.terminated_at)}</span>
-                                  </div>
-                                )}
-                                {/* Expired-at timestamp — shown when the link
-                                    has expired (status='expired' or clock-based
-                                    expiry on a never-started invite). The
-                                    expires_at column holds the deadline; we
-                                    surface it as the moment of expiry. */}
-                                {(() => {
-                                  const s = (invitation.status || '').toLowerCase();
-                                  const clockExpired = !invitation.started_at
-                                    && !invitation.unit_consumed
-                                    && invitation.expires_at
-                                    && new Date(invitation.expires_at) < new Date();
-                                  const isExpired = !invitation.completed_at
-                                    && (s === 'expired' || clockExpired);
-                                  if (!isExpired || !invitation.expires_at) return null;
-                                  return (
-                                    <div className="flex items-center gap-2">
-                                      <Clock className="w-3 h-3 text-status-expired flex-shrink-0" />
-                                      <span className="text-status-expired">Expired at: {formatIST(invitation.expires_at)}</span>
-                                    </div>
-                                  );
-                                })()}
-                                {!invitation.sent_at && !invitation.started_at && (
-                                  <div className="flex items-center gap-2">
-                                    <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
-                                    <span>Created: {formatIST(invitation.created_at)}</span>
-                                  </div>
-                                )}
-                              </div>
-                              <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(invitation)} />
-                            </td>
+                                  <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(invitation)} />
+                                </td>
                             {/* Tech Score / Coding Score columns. Same pattern
                                 as the Results page: percent number on top, small
                                 Pass/Fail tag below, both colored against the 70%
