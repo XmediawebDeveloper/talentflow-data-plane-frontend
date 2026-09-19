@@ -1,9 +1,10 @@
 import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, Search, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye } from 'lucide-react';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { assessmentService } from '@/lib/services';
+import { assessmentService, jdService } from '@/lib/services';
 import { formatISTDate, formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import VersionBadge from './VersionBadge';
+import JobIdBadge, { JOB_ID_BADGE_CLASS } from './jobs/JobIdBadge';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import {
@@ -22,6 +23,14 @@ interface AssessmentResultsProps {
   assessmentTitle: string;
   assessmentVersion?: number | null;
   jdTitle?: string;
+  /** The JD row this assessment was authored against — the entry point to the
+   *  job's version lineage, which is what the Job Version selector lists. */
+  jdId?: string;
+  /** Human-readable Job ID (JD-001), shown at the head of the page. */
+  jdShortId?: string;
+  /** The job version this assessment was authored against. Only a fallback:
+   *  the scope is normally read from the lineage. */
+  jdVersion?: number | null;
   canDownloadPDF?: boolean;
   canBatchDownload?: boolean;
   prevId?: string | null;
@@ -125,7 +134,28 @@ interface CandidateResult {
   sections: SectionResult[];
   round: number; // Added round tracking
   roundName?: string; // Optional round name
+  /** The assessment this attempt belongs to. Rows can span several assessments
+   *  now that the page reports a whole JD, so every per-row call (details,
+   *  PDF, delete) is addressed with this rather than with the page's own id. */
+  assessmentId: string;
+  /** The job version that assessment was authored against. */
+  jobVersion?: number;
 }
+
+/** One entry in the Job Version selector: a version of the JD and the
+ *  assessments authored against it. A version with no assessments still
+ *  appears — the JD has that version whether or not anyone was assessed on
+ *  it — and simply selects an empty result set. */
+interface JobVersionScope {
+  versionNumber: number;
+  assessmentIds: string[];
+}
+
+/** All of a scoped assessment's results are fetched in one request and paged
+ *  client-side, because a page of a merged set cannot be asked for per
+ *  assessment. Matches the fan-out page size the Assessments page uses for its
+ *  own cross-assessment result tabs. */
+const RESULTS_FETCH_PAGE_SIZE = 1000;
 
 interface AssessmentDetails {
   hr_enabled: boolean;
@@ -155,7 +185,7 @@ interface QuestionResult {
   type: 'multiple-choice' | 'text' | 'coding';
 }
 
-export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount }: AssessmentResultsProps) {
+export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount }: AssessmentResultsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
@@ -232,7 +262,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       { id: 'cid', label: 'CID', enabled: true },
       { id: 'candidate', label: 'Candidate', enabled: true },
       { id: 'email', label: 'Email', enabled: true },
+      { id: 'jdId', label: 'JD ID', enabled: true },
       { id: 'jdTitle', label: 'JD Title', enabled: true },
+      { id: 'jobVersion', label: 'Job Version', enabled: true },
       { id: 'phone', label: 'Phone', enabled: true },
       { id: 'inviteSource', label: 'Invite Source', enabled: true },
     ];
@@ -331,8 +363,166 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     fetchAssessmentDetails();
   }, [assessmentId]);
 
-  // Track total items from server (for pagination)
-  const [totalItems, setTotalItems] = useState(0);
+  /* ── Job Version scope ────────────────────────────────────────────────────
+     Results belong to an assessment, and an assessment is authored against one
+     version of a JD — so "the results for this job" is the union of the
+     results of every assessment in the JD's lineage, and a single job version
+     is the subset authored against that version. The selector defaults to All
+     Versions: the page reports the job, not whichever version the recruiter
+     happened to arrive through.
+
+     Nothing here is hardcoded. The versions come from the JD's own lineage
+     endpoint (`/jd/{id}/lineage` — every republish is its own JD row with its
+     own version number), and each version is asked for its assessments, which
+     is the same per-version fan-out the Assessments page's version panel runs.
+     Asking per version rather than once for the page's own `jd_id` is what
+     finds the assessments authored against the OTHER versions: the list
+     endpoint matches `jd_id` exactly, so one request only ever answers for one
+     version of the job. */
+  const [jobVersionScopes, setJobVersionScopes] = useState<JobVersionScope[]>([]);
+  const [selectedJobVersion, setSelectedJobVersion] = useState<'all' | number>('all');
+  /* Results wait for the scope, so the first fetch is already the full set —
+     otherwise the page would render this assessment's rows and then replace
+     them, which is the flicker the version selector must not introduce. */
+  const [jobVersionsLoaded, setJobVersionsLoaded] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    /* The page's own assessment, on the version it was authored against.
+       Whatever fails below, the page still shows the results it showed
+       before — degraded to one version, never empty. */
+    const ownScope: JobVersionScope[] = [{
+      versionNumber: jdVersion ?? 1,
+      assessmentIds: [assessmentId],
+    }];
+
+    const loadJobVersions = async () => {
+      if (!jdId) {
+        if (!cancelled) {
+          setJobVersionScopes(ownScope);
+          setJobVersionsLoaded(true);
+        }
+        return;
+      }
+      try {
+        let lineage: { id: string; version_number: number }[] = [];
+        try {
+          lineage = await jdService.getLineageVersions(jdId);
+        } catch (error) {
+          console.warn('[TalentFlow] Failed to load JD lineage for the Job Version selector:', error);
+        }
+
+        const versionIds = lineage.length
+          ? [...new Set([jdId, ...lineage.map(v => v.id).filter(Boolean)])]
+          : [jdId];
+        const versionNumberByJdId = new Map(lineage.map(v => [v.id, v.version_number]));
+
+        const responses = await Promise.all(
+          versionIds.map(versionId =>
+            assessmentService
+              .list({ jd_id: versionId, page_size: 50 })
+              /* One version failing must not lose the others — it contributes
+                 nothing and the rest of the merge stands. */
+              .catch(() => ({ items: [] })),
+          ),
+        );
+        if (cancelled) return;
+
+        /* Deduped by assessment id: if the endpoint ever widens a `jd_id`
+           filter to the lineage, the extra copies arrive as duplicates.
+
+           Which version an assessment belongs to is resolved from the JD ROW
+           it points at — that row's lineage `version_number` — and only then
+           from the assessment's `jd_version`. That field is a snapshot the
+           backend stamps at creation, and it comes back as 1 for assessments
+           authored against a later version, so reading it first labelled every
+           row V1. Same precedence as `AssessmentVersionHistoryPanel.jobVersionOf`
+           and `AssessmentDetailsView` — id first, number second. */
+        const versionByAssessmentId = new Map<string, number>();
+        responses.forEach((response, index) => {
+          for (const row of (response.items || [])) {
+            if (!row?.id) continue;
+            versionByAssessmentId.set(
+              row.id,
+              versionNumberByJdId.get(row.jd_id ?? versionIds[index])
+                ?? versionNumberByJdId.get(versionIds[index])
+                ?? row.jd_version
+                ?? 1,
+            );
+          }
+        });
+        // The assessment the page was opened on is always in scope.
+        if (!versionByAssessmentId.has(assessmentId)) {
+          versionByAssessmentId.set(assessmentId, versionNumberByJdId.get(jdId) ?? jdVersion ?? 1);
+        }
+
+        /* Every version the JD actually has, plus any version an assessment
+           names that the lineage did not return. A version with no assessments
+           is still a version of this job and belongs in the dropdown. */
+        const versionNumbers = [...new Set([
+          ...lineage.map(v => v.version_number),
+          ...versionByAssessmentId.values(),
+        ])].sort((a, b) => a - b);
+
+        setJobVersionScopes(versionNumbers.map(versionNumber => ({
+          versionNumber,
+          assessmentIds: [...versionByAssessmentId.entries()]
+            .filter(([, version]) => version === versionNumber)
+            .map(([id]) => id),
+        })));
+      } catch (error) {
+        console.warn('[TalentFlow] Failed to resolve the job versions for these results:', error);
+        if (!cancelled) setJobVersionScopes(ownScope);
+      } finally {
+        if (!cancelled) setJobVersionsLoaded(true);
+      }
+    };
+
+    loadJobVersions();
+    return () => { cancelled = true; };
+  }, [assessmentId, jdId, jdVersion]);
+
+  /** Which job version each scoped assessment was authored against — what
+   *  stamps a merged row with the version it belongs to. */
+  const jobVersionByAssessmentId = useMemo(() => {
+    const byId = new Map<string, number>();
+    for (const scope of jobVersionScopes) {
+      for (const id of scope.assessmentIds) byId.set(id, scope.versionNumber);
+    }
+    return byId;
+  }, [jobVersionScopes]);
+
+  /* The selection the page can actually honour. A restored selection — or one
+     left over from before a version went away — that the JD no longer has
+     reads as All Versions rather than as an empty table for a version that
+     isn't there. Derived rather than corrected in state, so the selector and
+     the rows can never disagree for a render. */
+  const effectiveJobVersion: 'all' | number =
+    selectedJobVersion !== 'all'
+    && jobVersionsLoaded
+    && !jobVersionScopes.some(scope => scope.versionNumber === selectedJobVersion)
+      ? 'all'
+      : selectedJobVersion;
+
+  /** The assessments whose results the current selection covers. */
+  const scopedAssessmentIds = useMemo(() => {
+    if (effectiveJobVersion === 'all') {
+      return [...new Set(jobVersionScopes.flatMap(scope => scope.assessmentIds))];
+    }
+    return jobVersionScopes.find(scope => scope.versionNumber === effectiveJobVersion)?.assessmentIds ?? [];
+  }, [jobVersionScopes, effectiveJobVersion]);
+
+  /* A stable dependency for the results fetch: the effect must re-run when the
+     scope's CONTENTS change, not every time the memo mints a new array. */
+  const scopeKey = scopedAssessmentIds.join(',');
+
+
+  /* Out-of-order replies are the other way a version switch shows stale rows:
+     All Versions fans out over more assessments than one version does, so a
+     slow "all" can land after the fast "V2" that replaced it. Only the newest
+     request is allowed to write. */
+  const resultsRequestRef = useRef(0);
 
   // Persist the list's view state + scroll so returning from a candidate's
   // details lands the recruiter exactly where they left off. Keyed per
@@ -341,9 +531,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const rootRef = useScrollRestoration<HTMLDivElement>(persistKey, !isLoading, [pageView]);
   useListStatePersistence(
     persistKey,
-    { pageView, statusFilter, searchQuery, sortField, sortDirection, currentPage, passFailFilter, dateFrom, dateTo, roundFilters },
+    { pageView, statusFilter, searchQuery, sortField, sortDirection, currentPage, passFailFilter, dateFrom, dateTo, roundFilters, selectedJobVersion },
     (s) => {
       if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      if (s.selectedJobVersion === 'all' || typeof s.selectedJobVersion === 'number') setSelectedJobVersion(s.selectedJobVersion);
       if (typeof s.statusFilter === 'string') setStatusFilter(s.statusFilter as typeof statusFilter);
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
       if (typeof s.sortField === 'string') setSortField(s.sortField as typeof sortField);
@@ -356,8 +547,18 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     },
   );
 
-  // Fetch results from API with server-side pagination and filters
+  /* Fetch the results of every assessment in scope and merge them.
+     The server-side filters still go out with each request — one per scoped
+     assessment, in parallel — so search, status, pass/fail and the date range
+     are answered by the backend exactly as before. What moved to the client is
+     PAGING: a page of a merged set cannot be asked for per assessment, so each
+     request asks for the whole (filtered) set and the table pages over it. */
   useEffect(() => {
+    /* Wait for the scope. Fetching this assessment first and the job's other
+       versions a moment later is precisely the flicker the selector must not
+       have. */
+    if (!jobVersionsLoaded) return;
+    const requestId = ++resultsRequestRef.current;
     const fetchResults = async () => {
       if (!initialLoadDone.current) {
         setIsLoading(true);
@@ -367,8 +568,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       try {
         // Build server-side filter parameters
         const params: any = {
-          page: currentPage,
-          page_size: pageSize,
+          page: 1,
+          page_size: RESULTS_FETCH_PAGE_SIZE,
         };
 
         // Add server-supported filters
@@ -391,10 +592,30 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         if (dateFrom) params.date_from = `${dateFrom}T00:00:00`;
         if (dateTo) params.date_to = `${dateTo}T23:59:59`;
 
-        const response = await assessmentService.listResults(assessmentId, params);
-        if (response?.items) {
+        const responses = await Promise.all(
+          scopedAssessmentIds.map(id =>
+            assessmentService
+              .listResults(id, params)
+              .then(response => ({ id, response }))
+              /* One assessment being unavailable must not empty the page —
+                 the rest of the job's versions still list. */
+              .catch(error => {
+                console.warn('[TalentFlow] Failed to load results for an assessment in scope:', error);
+                return { id, response: null };
+              }),
+          ),
+        );
+        // A reply from a selection the user has already moved off must not land.
+        if (requestId !== resultsRequestRef.current) return;
+
+        // A job version with no assessments has no results — an empty table,
+        // not the previous selection's rows left standing.
+        if (responses.length === 0) {
+          setCandidateResults([]);
+          setApiStats({ completed_count: 0, in_progress_count: 0, pending_count: 0, average_score: null });
+        } else {
           // Map API response to component format
-          const mapped: CandidateResult[] = response.items.map((item: any, index: number) => {
+          const mapped: CandidateResult[] = responses.flatMap(({ id: sourceAssessmentId, response }) => (response?.items ?? []).map((item: any) => {
             // Determine status: attempt status + scoring status
             const scoringStatus: string = item.scoring_status || 'pending';
             let status: 'Completed' | 'In Progress' | 'Pending' = 'Completed';
@@ -477,36 +698,55 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 }
               ].filter(Boolean) as SectionResult[],
               round: 1,
-              roundName: 'Round 1'
+              roundName: 'Round 1',
+              /* Which assessment this attempt came from. Rows can span the
+                 job's versions, so every per-row call is addressed with this. */
+              assessmentId: sourceAssessmentId,
+              jobVersion: jobVersionByAssessmentId.get(sourceAssessmentId),
             };
+          }));
+
+          /* Newest first, across the merged set. Attempts arrive grouped by
+             assessment, and the column sort below is stable, so without a base
+             order the rows of one version would sit in a block above another's
+             whenever the sort key ties. */
+          mapped.sort((a, b) => {
+            const at = new Date(a.completed_at || a.started_at || a.created_at || 0).getTime();
+            const bt = new Date(b.completed_at || b.started_at || b.created_at || 0).getTime();
+            return bt - at;
           });
           setCandidateResults(mapped);
 
-          // Set total from server for pagination
-          setTotalItems(response.total || mapped.length);
-
-          // Set stats from mapped data so "processing" attempts show as In Progress
+          /* Stats over the whole scoped set, from the mapped rows so
+             "processing" attempts show as In Progress. The rows are the full
+             filtered set now (paging is client-side), so these count every
+             candidate in scope rather than the page's worth. */
+          const completed = mapped.filter((c: CandidateResult) => c.status === 'Completed');
           setApiStats({
-            completed_count: mapped.filter((c: CandidateResult) => c.status === 'Completed').length,
+            completed_count: completed.length,
             in_progress_count: mapped.filter((c: CandidateResult) => c.status === 'In Progress').length,
             pending_count: mapped.filter((c: CandidateResult) => c.status === 'Pending').length,
-            average_score: response.average_score ? Math.round(Number(response.average_score)) : null
+            average_score: completed.length
+              ? Math.round(completed.reduce((sum, c) => sum + c.percentage, 0) / completed.length)
+              : null,
           });
         }
       } catch (error) {
         console.error('Failed to fetch assessment results:', error);
+        if (requestId !== resultsRequestRef.current) return;
         // Keep empty results on error
         setCandidateResults([]);
-        setTotalItems(0);
       } finally {
-        setIsLoading(false);
-        setIsFetching(false);
-        initialLoadDone.current = true;
+        if (requestId === resultsRequestRef.current) {
+          setIsLoading(false);
+          setIsFetching(false);
+          initialLoadDone.current = true;
+        }
       }
     };
 
     fetchResults();
-  }, [assessmentId, currentPage, pageSize, searchQuery, statusFilter, passFailFilter, dateFrom, dateTo]);
+  }, [jobVersionsLoaded, scopeKey, jobVersionByAssessmentId, searchQuery, statusFilter, passFailFilter, dateFrom, dateTo]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -577,7 +817,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     setIsDeleting(resultId);
     try {
       const deletedCandidate = candidateResults.find(c => c.id === resultId);
-      await assessmentService.deleteResult(assessmentId, resultId);
+      // The row's own assessment — rows can span the job's versions.
+      await assessmentService.deleteResult(deletedCandidate?.assessmentId ?? assessmentId, resultId);
       // Remove from local state
       setCandidateResults(prev => prev.filter(c => c.id !== resultId));
       // Update stats
@@ -602,7 +843,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // Handle row selection
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
-      setSelectedRows(candidateResults.map(c => c.id));
+      // The rows on screen — the header checkbox is checked against this page.
+      setSelectedRows(paginatedCandidates.map(c => c.id));
     } else {
       setSelectedRows([]);
     }
@@ -628,7 +870,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
     setDownloadingPDF(candidateId);
     try {
-      const blob = await assessmentService.exportPDF(assessmentId, candidateId);
+      // The row's own assessment — rows can span the job's versions.
+      const blob = await assessmentService.exportPDF(candidate.assessmentId, candidateId);
 
       // Create download link
       const url = window.URL.createObjectURL(blob);
@@ -666,19 +909,37 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
     setDownloadingBulkPDF(true);
     try {
-      const blob = await assessmentService.exportResultsBulkPDFs(assessmentId, eligibleCandidates.map(c => c.id));
+      /* The endpoint takes result ids belonging to ONE assessment, and a
+         selection can span the job's versions — so the rows are grouped by the
+         assessment they came from and each group asked for its own archive.
+         A selection within one version is a single request, exactly as before. */
+      const byAssessment = new Map<string, string[]>();
+      for (const candidate of eligibleCandidates) {
+        const ids = byAssessment.get(candidate.assessmentId) ?? [];
+        ids.push(candidate.id);
+        byAssessment.set(candidate.assessmentId, ids);
+      }
 
-      // Create download link
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
       const safeJd = jdTitle?.replace(/[^a-zA-Z0-9]/g, '_') || assessmentTitle.replace(/\s+/g, '_');
-      link.download = `${safeJd}_Reports_${timestamp}.zip`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
+
+      for (const [sourceAssessmentId, resultIds] of byAssessment) {
+        const blob = await assessmentService.exportResultsBulkPDFs(sourceAssessmentId, resultIds);
+
+        // Create download link
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        /* One archive per job version when the selection spans several, named
+           for it so the recruiter can tell them apart. */
+        const version = jobVersionByAssessmentId.get(sourceAssessmentId);
+        const versionSuffix = byAssessment.size > 1 && version != null ? `_v${version}` : '';
+        link.download = `${safeJd}${versionSuffix}_Reports_${timestamp}.zip`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }
     } catch (error) {
       console.error('Failed to download bulk PDFs:', error);
       toast.error('Failed to download PDF reports. Please try again.');
@@ -693,36 +954,54 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     setExportStep('scope');
   };
 
-  // Export current page only
-  const handleExportCurrentPage = async () => {
-    if (isExporting) return;
-    setIsExporting(true);
-    const _toastId = toast.loading('Preparing export… this may take a moment for large datasets.');
-    try {
-      const enabledColumnIds = columns
-        .filter(col => col.enabled)
-        .map(col => col.id);
+  /** The server-side filters an export carries, as the endpoint takes them. */
+  type ExportFilters = {
+    search?: string;
+    status_filter?: string;
+    passed?: boolean;
+    result_ids?: string[];
+  };
 
-      console.log('[EXPORT] Exporting current page with columns:', enabledColumnIds);
+  /** The rows of an export, grouped by the assessment each came from. */
+  const groupRowsByAssessment = (rows: CandidateResult[]) => {
+    const groups = new Map<string, string[]>();
+    for (const row of rows) {
+      const ids = groups.get(row.assessmentId) ?? [];
+      ids.push(row.id);
+      groups.set(row.assessmentId, ids);
+    }
+    return groups;
+  };
 
-      // Get current page candidates
-      const currentPageCandidates = paginatedCandidates;
+  /**
+   * Download an export of the current scope.
+   *
+   * The endpoint exports ONE assessment, and under All Versions the table's
+   * rows come from several — so the export is asked per assessment and the
+   * files named for their job version. A scope of one assessment is a single
+   * file with the name it has always had, which is every scope that existed
+   * before the Job Version selector.
+   *
+   * `null` for a group's ids means "everything this assessment has that the
+   * filters match"; a list of ids pins the export to exactly those rows.
+   */
+  const downloadScopedExport = async (
+    groups: Map<string, string[] | null>,
+    baseFilters: ExportFilters,
+    fileLabel: string,
+  ) => {
+    const enabledColumnIds = columns.filter(col => col.enabled).map(col => col.id);
+    const sorting = { sort_by: sortField, sort_order: sortDirection };
+    console.log('[EXPORT] Exporting columns:', enabledColumnIds, 'from assessments:', [...groups.keys()]);
+    const extension = selectedFormat === 'csv' ? 'csv' : 'xlsx';
+    const stamp = new Date().toISOString().slice(0, 10);
 
-      // Build filters object (same as all filtered)
-      const filters: any = {};
-      if (searchQuery.trim()) filters.search = searchQuery.trim();
-      if (statusFilter !== 'all') filters.status_filter = statusFilter.toLowerCase().replace(' ', '_');
-      if (passFailFilter === 'pass') filters.passed = true;
-      else if (passFailFilter === 'fail') filters.passed = false;
-
-      // Build sorting object
-      const sorting = {
-        sort_by: sortField,
-        sort_order: sortDirection,
-      };
+    for (const [sourceAssessmentId, resultIds] of groups) {
+      const filters: ExportFilters = { ...baseFilters };
+      if (resultIds) filters.result_ids = resultIds;
 
       const blob = await assessmentService.exportResults(
-        assessmentId,
+        sourceAssessmentId,
         selectedFormat,
         false,
         enabledColumnIds,
@@ -733,12 +1012,39 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      const extension = selectedFormat === 'csv' ? 'csv' : 'xlsx';
-      link.download = `${assessmentTitle.replace(/\s+/g, '_')}_CurrentPage_${new Date().toISOString().slice(0, 10)}.${extension}`;
+      const version = jobVersionByAssessmentId.get(sourceAssessmentId);
+      const versionSuffix = groups.size > 1 && version != null ? `_v${version}` : '';
+      link.download = `${assessmentTitle.replace(/\s+/g, '_')}${versionSuffix}_${fileLabel}_${stamp}.${extension}`;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       window.URL.revokeObjectURL(url);
+    }
+  };
+
+  // Export current page only
+  const handleExportCurrentPage = async () => {
+    if (isExporting) return;
+    setIsExporting(true);
+    const _toastId = toast.loading('Preparing export… this may take a moment for large datasets.');
+    try {
+      // Get current page candidates
+      const currentPageCandidates = paginatedCandidates;
+
+      // Build filters object (same as all filtered)
+      const filters: ExportFilters = {};
+      if (searchQuery.trim()) filters.search = searchQuery.trim();
+      if (statusFilter !== 'all') filters.status_filter = statusFilter.toLowerCase().replace(' ', '_');
+      if (passFailFilter === 'pass') filters.passed = true;
+      else if (passFailFilter === 'fail') filters.passed = false;
+
+      /* Pinned to the rows on screen: paging is client-side now, so the page
+         the recruiter is looking at is something only the client can name. */
+      await downloadScopedExport(
+        groupRowsByAssessment(currentPageCandidates),
+        filters,
+        'CurrentPage'
+      );
 
       const formatName = selectedFormat === 'csv' ? 'CSV' : 'Excel';
       toast.success(`Current page exported to ${formatName} successfully! (${currentPageCandidates.length} results)`, { id: _toastId });
@@ -758,46 +1064,23 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     setIsExporting(true);
     const _toastId = toast.loading('Preparing export of all filtered results…');
     try {
-      const enabledColumnIds = columns
-        .filter(col => col.enabled)
-        .map(col => col.id);
-
-      console.log('[EXPORT] Exporting all filtered results with columns:', enabledColumnIds);
-
       // Build filters object
-      const filters: any = {};
+      const filters: ExportFilters = {};
       if (searchQuery.trim()) filters.search = searchQuery.trim();
       if (statusFilter !== 'all') filters.status_filter = statusFilter.toLowerCase().replace(' ', '_');
       if (passFailFilter === 'pass') filters.passed = true;
       else if (passFailFilter === 'fail') filters.passed = false;
 
-      // Build sorting object
-      const sorting = {
-        sort_by: sortField,
-        sort_order: sortDirection,
-      };
-
       console.log('[EXPORT] Filters:', filters);
-      console.log('[EXPORT] Sorting:', sorting);
 
-      const blob = await assessmentService.exportResults(
-        assessmentId,
-        selectedFormat,
-        false,
-        enabledColumnIds,
+      /* Every assessment in scope, each exporting everything the filters
+         match — which under All Versions is the whole job, not just the
+         version the page was opened on. */
+      await downloadScopedExport(
+        new Map(scopedAssessmentIds.map(id => [id, null])),
         filters,
-        sorting
+        'AllResults'
       );
-
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      const extension = selectedFormat === 'csv' ? 'csv' : 'xlsx';
-      link.download = `${assessmentTitle.replace(/\s+/g, '_')}_AllResults_${new Date().toISOString().slice(0, 10)}.${extension}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
 
       const formatName = selectedFormat === 'csv' ? 'CSV' : 'Excel';
       toast.success(`All filtered results exported to ${formatName} successfully! (${filteredCandidates.length} results including in-progress)`, { id: _toastId });
@@ -817,37 +1100,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     setIsExporting(true);
     const _toastId = toast.loading('Preparing export of selected results…');
     try {
-      const enabledColumnIds = columns
-        .filter(col => col.enabled)
-        .map(col => col.id);
-
-      const filters: any = {
-        result_ids: selectedRows,
-      };
-
-      const sorting = {
-        sort_by: sortField,
-        sort_order: sortDirection,
-      };
-
-      const blob = await assessmentService.exportResults(
-        assessmentId,
-        selectedFormat,
-        false,
-        enabledColumnIds,
-        filters,
-        sorting
+      /* The selected rows, asked of the assessments they actually belong to —
+         a selection can span the job's versions. */
+      await downloadScopedExport(
+        groupRowsByAssessment(candidateResults.filter(c => selectedRows.includes(c.id))),
+        {},
+        'Selected'
       );
-
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      const extension = selectedFormat === 'csv' ? 'csv' : 'xlsx';
-      link.download = `${assessmentTitle.replace(/\s+/g, '_')}_Selected_${new Date().toISOString().slice(0, 10)}.${extension}`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      window.URL.revokeObjectURL(url);
 
       const formatName = selectedFormat === 'csv' ? 'CSV' : 'Excel';
       toast.success(`${selectedRows.length} selected candidate${selectedRows.length > 1 ? 's' : ''} exported to ${formatName} successfully!`, { id: _toastId });
@@ -885,7 +1144,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // Reset to page 1 when filters change (MUST be before any early returns)
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, passFailFilter, roundFilters, dateFrom, dateTo]);
+  }, [searchQuery, statusFilter, passFailFilter, roundFilters, dateFrom, dateTo, selectedJobVersion]);
 
   // Use API results only (no mock data)
   const displayResults = candidateResults;
@@ -961,7 +1220,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     });
   }
 
-  // Client-side sort (applied to current page only)
+  // Client-side sort (applied to the whole scoped set, which is then paged)
   filteredCandidates = [...filteredCandidates].sort((a, b) => {
     let comparison = 0;
     switch (sortField) {
@@ -981,8 +1240,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     return sortDirection === 'asc' ? comparison : -comparison;
   });
 
-  // Use server-paginated results directly (no client-side slice needed)
-  const paginatedCandidates = filteredCandidates;
+  /* Paged on the client: the rows are the merged, filtered results of every
+     assessment in scope, which no single server page can express. */
+  const totalItems = filteredCandidates.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / pageSize));
+  /* A page number the current set can honour. A restored page, or one the user
+     was on when a narrower Job Version was picked, can sit past the end — the
+     table shows the last page rather than an empty one. */
+  const safePage = Math.min(currentPage, totalPages);
+  const pageStartIndex = (safePage - 1) * pageSize;
+  const paginatedCandidates = filteredCandidates.slice(pageStartIndex, pageStartIndex + pageSize);
 
   // Open a candidate's result details. Stores the visible (non-Pending) order
   // first so the details view can offer Prev/Next between candidates. Used by
@@ -997,18 +1264,20 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       return;
     }
     try {
+      /* Scoped to the candidate's own assessment: the details route pages
+         Prev/Next within one assessment id, so a list spanning the job's
+         versions would ask that assessment for attempts it does not have.
+         Same rule the Assessments page's cross-assessment results tab uses. */
       sessionStorage.setItem('assessmentResultNavList', JSON.stringify(
         paginatedCandidates
-          .filter(c => c.status !== 'Pending')
+          .filter(c => c.status !== 'Pending' && c.assessmentId === candidate.assessmentId)
           .map(c => ({ id: c.id, cid: c.candidateDisplayId || '' }))
       ));
     } catch { /* ignore quota errors */ }
-    router.push(`/recruitment/assessments/${assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`);
+    router.push(`/recruitment/assessments/${candidate.assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`);
   };
 
-  // Calculate pagination from server total
-  const totalPages = Math.ceil(totalItems / pageSize);
-  const startIndex = (currentPage - 1) * pageSize;
+  const startIndex = pageStartIndex;
   const endIndex = Math.min(startIndex + pageSize, totalItems);
 
   // Use API stats if available, otherwise calculate from data
@@ -1047,16 +1316,66 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         <div>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
             <div className="min-w-0">
+              {/* The job these results belong to, and the job version they are
+                  scoped to: [JD-001] Backend Developer [All Versions ▾]. The page
+                  reports the JD across every version of it by default, so the
+                  job — not the assessment the recruiter arrived through — is
+                  what names it. The assessment itself stays on the breadcrumb. */}
               <div className="flex items-center gap-2 mb-1 sm:mb-2 flex-wrap">
-                <h1 className="text-base sm:text-lg md:text-xl font-semibold text-gray-900 truncate tracking-tight">{assessmentTitle}</h1>
-                {assessmentVersion != null && (
-                  <VersionBadge version={assessmentVersion} size="sm" variant="primary" />
+                {jdShortId && (
+                  /* The app's one Job ID badge — see JobIdBadge. */
+                  <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>
                 )}
+                <h1 className="min-w-0 text-base sm:text-lg md:text-xl font-semibold text-gray-900 truncate tracking-tight">
+                  {jdTitle || assessmentTitle}
+                </h1>
+                <label htmlFor="assessment-results-job-version" className="sr-only">Job Version</label>
+                {/* The version selector wears the Job ID badge's own skin so the
+                    two read as one "JD-001 · All Versions" pair. A native select
+                    underneath keeps keyboard and screen-reader behaviour; only
+                    the arrow is redrawn, since appearance-none drops it. */}
+                <span className="relative inline-flex flex-shrink-0 items-center">
+                  <select
+                    id="assessment-results-job-version"
+                    value={effectiveJobVersion === 'all' ? 'all' : String(effectiveJobVersion)}
+                    onChange={(e) => {
+                      setSelectedJobVersion(e.target.value === 'all' ? 'all' : Number(e.target.value));
+                      setCurrentPage(1);
+                      /* A selection made under the old scope would go on driving
+                         the bulk actions for rows that are no longer listed. */
+                      setSelectedRows([]);
+                    }}
+                    disabled={!jobVersionsLoaded}
+                    className={`${JOB_ID_BADGE_CLASS} appearance-none cursor-pointer pr-6 hover:bg-brand-blue-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 disabled:opacity-60 disabled:cursor-not-allowed transition-colors`}
+                  >
+                    {/* Options drop the badge's blue ground — some browsers
+                        paint the open list with the select's own colours. */}
+                    <option value="all" className="bg-white text-gray-900">All Versions</option>
+                    {jobVersionScopes.map(scope => (
+                      <option key={scope.versionNumber} value={scope.versionNumber} className="bg-white text-gray-900">
+                        Job Version V{scope.versionNumber}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown className="pointer-events-none absolute right-1.5 h-3 w-3 text-white" aria-hidden="true" />
+                </span>
               </div>
-              <p className="text-xs sm:text-sm text-gray-600">
-                Assessment Results - {totalItems} total candidates
+              <p className="text-xs sm:text-sm text-gray-600 flex items-center gap-1.5 flex-wrap">
+                {/* The assessment the page was opened on, with its own version
+                    — named only while the selection is that one assessment,
+                    since a wider scope's rows span several of them. */}
+                {scopedAssessmentIds.length === 1 && scopedAssessmentIds[0] === assessmentId && assessmentTitle && (
+                  <span className="inline-flex items-center gap-1.5">
+                    {assessmentTitle}
+                    {assessmentVersion != null && (
+                      <VersionBadge version={assessmentVersion} size="sm" variant="primary" />
+                    )}
+                    <span className="text-gray-300" aria-hidden="true">•</span>
+                  </span>
+                )}
+                <span>Assessment Results - {totalItems} total candidates</span>
                 {selectedRows.length > 0 && (
-                  <span className="ml-2 text-brand-blue font-medium">
+                  <span className="text-brand-blue font-medium">
                     • {selectedRows.length} selected
                   </span>
                 )}
@@ -1542,7 +1861,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           </div>
 
           <div className="hidden xl:block tf-table-shell">
-            <table className="w-full min-w-[2040px] table-fixed [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_td]:align-middle">
+            <table className="w-full min-w-[2264px] table-fixed [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_td]:align-middle">
               <thead className="bg-slate-50 border-b border-gray-100">
                 <tr>
                   <th className={`px-4 py-3 w-10 tf-sticky-col-left ${stickyHeaderClass}`}>
@@ -1575,6 +1894,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       </div>
                     </th>
                   )}
+                  {isColumnEnabled('jdId') && (
+                    <th className={`w-28 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>JD ID</th>
+                  )}
                   {isColumnEnabled('jdTitle') && (
                     <th className={`w-56 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
                       <div className="flex items-center gap-1">
@@ -1582,6 +1904,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         JD Title
                       </div>
                     </th>
+                  )}
+                  {isColumnEnabled('jobVersion') && (
+                    <th className={`w-28 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Job Version</th>
                   )}
                   {isColumnEnabled('phone') && (
                     <th className={`w-36 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
@@ -1710,11 +2035,35 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           <div className="truncate text-sm text-gray-600" title={candidate.email || '-'}>{candidate.email || '-'}</div>
                         </td>
                       )}
+                      {isColumnEnabled('jdId') && (
+                        /* Every version of a job shares one Job ID, so the
+                           page's own is every row's — under All Versions too. */
+                        <td className="px-4 py-4">
+                          {jdShortId ? (
+                            <JobIdBadge className="inline-flex items-center">{jdShortId}</JobIdBadge>
+                          ) : (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
+                        </td>
+                      )}
                       {isColumnEnabled('jdTitle') && (
                         <td className="px-4 py-4">
                           <div className="truncate text-sm text-gray-600" title={jdTitle || 'N/A'}>
                             {jdTitle || 'N/A'}
                           </div>
+                        </td>
+                      )}
+                      {isColumnEnabled('jobVersion') && (
+                        /* The version of the assessment this attempt came from —
+                           stamped per row, so All Versions shows a mix. */
+                        <td className="px-4 py-4">
+                          {candidate.jobVersion != null ? (
+                            <span className="inline-flex items-center whitespace-nowrap text-xs font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-2 py-1 rounded">
+                              v{candidate.jobVersion}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">-</span>
+                          )}
                         </td>
                       )}
                       {isColumnEnabled('phone') && (
@@ -1859,7 +2208,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} results
               </div>
               <InlinePageNav
-                page={currentPage}
+                page={safePage}
                 totalPages={totalPages}
                 onPageChange={setCurrentPage}
               />

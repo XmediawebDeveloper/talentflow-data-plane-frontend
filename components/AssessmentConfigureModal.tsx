@@ -1,6 +1,6 @@
 'use client';
 
-import { Sliders, X } from 'lucide-react';
+import { Eye, Sliders, X } from 'lucide-react';
 import AssessmentCreation from './AssessmentCreation';
 
 interface AssessmentConfigureModalProps {
@@ -13,6 +13,16 @@ interface AssessmentConfigureModalProps {
    * popup; the popup closes itself either way.
    */
   onSaved?: () => void;
+  /**
+   * VIEW-ONLY. The same dialog and the same Configure step, with every control
+   * non-operable and the Save as Draft / Publish card gone — what the New
+   * Versions tab's preview opens, so a recruiter reads a version's
+   * configuration in the form that configures it rather than in a second
+   * layout written to describe it.
+   *
+   * Off by default: the Edit action opens this dialog unchanged.
+   */
+  readOnly?: boolean;
 }
 
 /**
@@ -46,6 +56,7 @@ export default function AssessmentConfigureModal({
   onClose,
   assessment,
   onSaved,
+  readOnly = false,
 }: AssessmentConfigureModalProps) {
   /* `jd_id` is not optional here: the Configure step is scoped to a job — it
      reads the JD's skills, experience and coding requirements to lay itself
@@ -70,11 +81,25 @@ export default function AssessmentConfigureModal({
               <Sliders className="w-5 h-5 text-brand-blue" />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
-                Configure Assessment
-              </h2>
+              {/* Same heading either way — this IS the Configure step, and a
+                  preview that renamed it would stop matching the form it is
+                  showing. The chip beside it is the one difference: the same
+                  mode pill the assessment preview dialog carries, so "you
+                  cannot change anything here" is stated rather than left to be
+                  discovered by pressing a control that does not respond. */}
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+                  Configure Assessment
+                </h2>
+                {readOnly && (
+                  <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-[10px] sm:text-xs flex items-center gap-1 flex-shrink-0">
+                    <Eye className="w-3 h-3" />
+                    View only
+                  </span>
+                )}
+              </div>
               <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 truncate">
-                Set duration, section distribution, and topics for{' '}
+                {readOnly ? 'Duration, section distribution, and topics for ' : 'Set duration, section distribution, and topics for '}
                 <span className="text-brand-blue font-medium">
                   {assessment.jd_title || assessment.job?.title || 'this job'}
                 </span>
@@ -84,7 +109,7 @@ export default function AssessmentConfigureModal({
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close assessment configuration"
+            aria-label={readOnly ? 'Close assessment preview' : 'Close assessment configuration'}
             title="Close"
             className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
           >
@@ -98,6 +123,7 @@ export default function AssessmentConfigureModal({
         <div className="flex-1 min-h-0 overflow-y-auto">
           <AssessmentCreation
             embedded
+            readOnly={readOnly}
             editAssessmentId={assessment.id}
             preSelectedJobId={assessment.jd_id}
             /* The flow fetches every JD version itself on mount (and resolves

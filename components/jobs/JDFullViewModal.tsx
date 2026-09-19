@@ -1,23 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import remarkBreaks from 'remark-breaks';
-import remarkGfm from 'remark-gfm';
 import {
   AlertCircle,
   Briefcase,
-  CheckCircle,
-  ChevronRight,
   ExternalLink,
-  Eye,
   FileText,
   Loader2,
   X,
 } from 'lucide-react';
 import { jdService, type JDResponse } from '@/lib/services/jdService';
-import { formatJobExperienceText } from '@/lib/utils/jobExperience';
-import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import JDOverviewSections from '@/components/jobs/JDOverviewSections';
 
 /**
  * ONE JD, in full, in a dialog.
@@ -57,13 +50,9 @@ export default function JDFullViewModal({
   /** Optional route to the JD's own page, offered in the footer when given. */
   onOpenFullPage?: () => void;
 }) {
-  const { hasPlanFeature } = usePlanFeatures();
   const [jd, setJd] = useState<JDResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  /* Collapsed on open, as it is on the Job Details page — the summary is the
-     structured cross-check, read after the description rather than with it. */
-  const [showExtractedSummary, setShowExtractedSummary] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -111,58 +100,6 @@ export default function JDFullViewModal({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [onClose]);
-
-  /* ---- Read-only label helpers for the Extracted Data Summary dropdown ----
-     JobDetailView's own, verbatim, so a code the Job Details page prints as
-     "Field-based / Travel" does not read as "Field Based" here. */
-  const prettifyCode = (value?: string): string =>
-    (value || '')
-      .replace(/[_-]+/g, ' ')
-      .trim()
-      .replace(/\b\w/g, c => c.toUpperCase());
-
-  const employmentTypeLabel = (value?: string): string => {
-    switch (value) {
-      case 'full_time': return 'Full Time';
-      case 'part_time': return 'Part Time';
-      case 'contract': return 'Contract';
-      case 'internship': return 'Internship';
-      case 'temporary': return 'Temporary / Seasonal';
-      default: return value ? prettifyCode(value) : 'Not specified';
-    }
-  };
-  const workModeLabel = (value?: string): string => {
-    switch (value) {
-      case 'onsite': return 'Onsite';
-      case 'remote': return 'Remote';
-      case 'hybrid': return 'Hybrid';
-      case 'field_based': return 'Field-based / Travel';
-      default: return value ? prettifyCode(value) : 'Not specified';
-    }
-  };
-
-  /* The Job Details page's own JDResponse → view mapping for the fields this
-     column reads: the two skill lists, their per-skill notes, the single
-     internal comment as the one-item list the notes card renders, and the
-     experience line built by the shared formatter. */
-  const mustHaveSkills = jd?.must_have_skills || [];
-  const niceToHaveSkills = jd?.nice_to_have_skills || [];
-  const mustHaveComments = jd?.must_have_comments || [];
-  const niceToHaveComments = jd?.nice_to_have_comments || [];
-  const internalRecruiterComments = jd?.internal_comments ? [jd.internal_comments] : [];
-  const experienceText = jd
-    ? formatJobExperienceText({
-        jobLevel: jd.job_level || jd.experience_level,
-        experienceMin: jd.experience_min,
-        experienceMax: jd.experience_max,
-      })
-    : undefined;
-
-  const hasAnyExtractedData =
-    mustHaveSkills.length > 0 || niceToHaveSkills.length > 0 ||
-    mustHaveComments.length > 0 || niceToHaveComments.length > 0 ||
-    !!experienceText || !!jd?.industry_type ||
-    !!jd?.employment_type || !!jd?.remote_type;
 
   return (
     <div
@@ -222,220 +159,16 @@ export default function JDFullViewModal({
               </p>
             </div>
           ) : (
-            <div className="space-y-5">
-              {/* Complete Job Description */}
-              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-                <div className="p-4 sm:p-5">
-                  <div className="space-y-4 sm:space-y-5">
-                    {jd.description ? (
-                      <div>
-                        <h2 className="text-sm font-semibold text-gray-900 dark:text-slate-50 mb-3">
-                          Job Description
-                        </h2>
-                        <div className="h-px bg-gray-200 dark:bg-slate-700 mb-3"></div>
-                        {/* The same three passes the Job Details page makes
-                            over the stored text: an extractor that found no
-                            certifications still writes the heading, and an
-                            empty "Certifications: None" section is noise in a
-                            JD being read rather than edited. */}
-                        <div className="markdown-content prose prose-sm max-w-none text-gray-700 dark:text-slate-300">
-                          <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>{jd.description
-                            .replace(/#+\s*Certifications[\s\S]*?(?=\n#|\n\n#|$)/gi, (match) =>
-                              match.toLowerCase().includes('none') || match.toLowerCase().includes('not required') || match.toLowerCase().includes('n/a') || match.trim().match(/^#+\s*Certifications\s*$/im) ? '' : match
-                            )
-                            .replace(/\*\*Certifications\*\*[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
-                            .replace(/Certifications[:\s]*(?:None|None required|N\/A|Not required)\.?\s*/gi, '')
-                          }</ReactMarkdown>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="text-gray-500 dark:text-slate-500 italic text-center py-8">
-                        No job description provided
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
+            /* The Job Details page's Overview column, shared with the View
+               JD tab on an assessment — see `JDOverviewSections`. This
+               dialog's own copy of it is what moved there.
 
-              {/* JD22 - Additional Details. Shown only where the recruiter
-                  filled it in, as on the Job Details page. */}
-              {jd.additional_details && (
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-                  <div className="flex items-center gap-2 mb-3">
-                    <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50">Additional Details</h3>
-                    <span className="text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded">
-                      Visible to candidates
-                    </span>
-                  </div>
-                  <p className="text-sm text-gray-600 dark:text-slate-400 whitespace-pre-wrap">{jd.additional_details}</p>
-                </div>
-              )}
-
-              {/* Internal Recruiter Notes & Assessment Guidance - Side by Side.
-                  One column below `sm`, where the dialog is too narrow for two;
-                  the pair is otherwise the page's. */}
-              <div className={`grid grid-cols-1 ${hasPlanFeature('assessment') ? 'sm:grid-cols-2' : ''} gap-4`}>
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-                  <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Internal Recruiter Notes</h3>
-                  <div className="text-sm text-gray-600 dark:text-slate-400 space-y-2">
-                    {internalRecruiterComments.length > 0 ? (
-                      <ul className="list-disc list-inside space-y-1">
-                        {internalRecruiterComments.map((note, index) => (
-                          <li key={index}>{note}</li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="text-gray-500 dark:text-slate-500 italic">No internal notes added</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Assessment Guidance - only if plan includes assessment */}
-                {hasPlanFeature('assessment') && (
-                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-                    <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-3">Assessment Guidance</h3>
-                    <div className="text-sm text-gray-600 dark:text-slate-400">
-                      {jd.assessment_guidance ? (
-                        <p className="whitespace-pre-wrap">{jd.assessment_guidance}</p>
-                      ) : (
-                        <p className="text-gray-500 dark:text-slate-500 italic">No assessment guidance provided</p>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              {/* Extracted Data Summary - Collapsible */}
-              {hasAnyExtractedData && (
-                <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
-                  {/* Header toggle */}
-                  <button
-                    type="button"
-                    onClick={() => setShowExtractedSummary(!showExtractedSummary)}
-                    className="w-full bg-brand-blue/[0.04] px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between hover:bg-brand-blue/[0.07] transition-colors rounded-t-xl"
-                  >
-                    <div className="text-left">
-                      <h3 className="text-sm sm:text-lg text-gray-900 dark:text-slate-50 flex items-center gap-2 flex-wrap">
-                        📊 Extracted Data Summary
-                        <Eye className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-                      </h3>
-                      <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">Click to {showExtractedSummary ? 'hide' : 'view'} structured requirements</p>
-                    </div>
-                    <div className={`transform transition-transform ${showExtractedSummary ? 'rotate-180' : ''}`}>
-                      <ChevronRight className="w-5 h-5 text-gray-500 dark:text-slate-500 rotate-90" />
-                    </div>
-                  </button>
-
-                  {showExtractedSummary && (
-                    <>
-                      {/* Skills & Comments */}
-                      <div className="p-4 sm:p-6 border-b border-gray-200 dark:border-slate-700">
-                        <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Skills &amp; Requirements</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
-                          {/* Left: Skills */}
-                          <div className="space-y-4 sm:space-y-6">
-                            <div>
-                              <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Must-Have Skills ({mustHaveSkills.length})</h4>
-                              {mustHaveSkills.length > 0 ? (
-                                <div className="space-y-2">
-                                  {mustHaveSkills.map((skill, index) => (
-                                    <div key={index} className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
-                                      <CheckCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
-                                      {skill}
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-gray-500 dark:text-slate-500 italic text-sm">None</p>
-                              )}
-                            </div>
-                            <div>
-                              <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Nice-to-Have Skills ({niceToHaveSkills.length})</h4>
-                              {niceToHaveSkills.length > 0 ? (
-                                <div className="space-y-2">
-                                  {niceToHaveSkills.map((skill, index) => (
-                                    <div key={index} className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
-                                      <CheckCircle className="w-4 h-4 text-gray-800 dark:text-slate-100 flex-shrink-0" />
-                                      {skill}
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-gray-500 dark:text-slate-500 italic text-sm">None</p>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Right: Comments */}
-                          <div className="space-y-4 sm:space-y-6">
-                            <div>
-                              <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Must-Have Additional Requirements ({mustHaveComments.length})</h4>
-                              {mustHaveComments.length > 0 ? (
-                                <div className="space-y-2">
-                                  {mustHaveComments.map((comment, index) => (
-                                    <div key={index} className="flex items-start gap-2 text-sm text-gray-700 dark:text-slate-300">
-                                      <CheckCircle className="w-4 h-4 text-orange-500 flex-shrink-0 mt-0.5" />
-                                      <span>{comment}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-gray-500 dark:text-slate-500 italic text-sm">None</p>
-                              )}
-                            </div>
-                            <div>
-                              <h4 className="text-sm text-gray-700 dark:text-slate-300 mb-3">Nice-to-Have Additional Requirements ({niceToHaveComments.length})</h4>
-                              {niceToHaveComments.length > 0 ? (
-                                <div className="space-y-2">
-                                  {niceToHaveComments.map((comment, index) => (
-                                    <div key={index} className="flex items-start gap-2 text-sm text-gray-600 dark:text-slate-400">
-                                      <CheckCircle className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
-                                      <span>{comment}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <p className="text-gray-500 dark:text-slate-500 italic text-sm">None</p>
-                              )}
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Requirements Grid */}
-                      <div className="p-4 sm:p-6">
-                        <h3 className="text-sm sm:text-base text-gray-900 dark:text-slate-50 mb-3 sm:mb-4">Requirements</h3>
-                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
-                          <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
-                            <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Experience</h4>
-                            <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{experienceText || 'Not specified'}</p>
-                          </div>
-                          {/* No Education tile, as on the Job Details page: the
-                              requirement is stated in the Additional
-                              Requirements above, in the recruiter's own words
-                              and with the field of study a bare level throws
-                              away. */}
-                          {jd.industry_type && (
-                            <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
-                              <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Industry Type</h4>
-                              <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{prettifyCode(jd.industry_type)}</p>
-                            </div>
-                          )}
-                          <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
-                            <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Employment Type</h4>
-                            <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{employmentTypeLabel(jd.employment_type)}</p>
-                          </div>
-                          <div className="bg-gray-50 dark:bg-slate-800/50 p-3 sm:p-4 rounded-lg">
-                            <h4 className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-1 sm:mb-2">Work Mode</h4>
-                            <p className="text-sm sm:text-base text-gray-900 dark:text-slate-50">{workModeLabel(jd.remote_type)}</p>
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-            </div>
+               `showScoringDetail={false}` keeps what this dialog has always
+               shown: it is a quick read of the description, not a review of
+               how a resume will be graded, so the Essential / Preferred
+               badges, the Location tile and the Scoring Preferences block
+               stay off here, as they always were. */
+            <JDOverviewSections jd={jd} showScoringDetail={false} />
           )}
         </div>
 
