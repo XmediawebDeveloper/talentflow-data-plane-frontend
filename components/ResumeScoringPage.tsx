@@ -1436,7 +1436,16 @@ export default function ResumeScoringPage({
               // Refresh header quota dropdown — Celery just finished deducting RS units on CP
               dispatchUnitsConsumed();
 
-              if (onRefreshHistory) {
+              // Auto-closing/navigating away here used to always fire on
+              // completion, success or not. A permanent-config failure (e.g.
+              // missing scoring API key) now fails fast — a couple of seconds,
+              // not the old ~90s retry loop — so the redirect below fired
+              // before anyone could read the failed row's error message. Only
+              // auto-advance on a clean run; on any failure, leave the modal
+              // open so the user can read it and use Retry/Retry All.
+              if ((status.failed || 0) > 0) {
+                console.log(`[ResumeScoringPage] ${status.failed} item(s) failed — keeping progress modal open`);
+              } else if (onRefreshHistory) {
                 console.log('[ResumeScoringPage] Refreshing scored history...');
                 invalidateGlobalScoredResumes();
                 await onRefreshHistory();
