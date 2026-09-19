@@ -1395,7 +1395,10 @@ Best regards`);
   // candidate can be invited to; each entry is gated by its own permission and
   // by whether that section exists on this JD, rather than hiding the whole
   // control. Neither configured → the button is disabled.
-  const renderInviteCell = (resume: ScoredResume) => {
+  // Just the invite control itself, with no `<td>` wrapper, so the grid
+  // view's card can place it next to its own View/Actions buttons instead
+  // of inside a table row.
+  const renderInviteButton = (resume: ScoredResume) => {
     // Row-scoped: for the cross-job global list this reads THIS row's own
     // job from the bulk map: resolveAssessmentConfigured/
     // resolveAIInterviewConfigured (see above), not the table-wide flags,
@@ -1411,9 +1414,11 @@ Best regards`);
         ? 'No published assessment or AI interview for this job yet'
         : undefined;
 
+    if (!(canCreateAssessments || mayInviteAIInterview)) {
+      return <span className="text-xs text-gray-400">-</span>;
+    }
+
     return (
-  <td className="py-3 px-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-    {(canCreateAssessments || mayInviteAIInterview) ? (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <button
@@ -1486,12 +1491,14 @@ Best regards`);
           )}
         </DropdownMenuContent>
       </DropdownMenu>
-    ) : (
-      <span className="text-xs text-gray-400">-</span>
-    )}
-  </td>
     );
   };
+
+  const renderInviteCell = (resume: ScoredResume) => (
+    <td className="py-3 px-4 align-middle whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+      {renderInviteButton(resume)}
+    </td>
+  );
 
   /**
    * The Actions dropdown's items for one resume — factored out so the
@@ -1822,10 +1829,9 @@ Best regards`);
         {/* Selection row — its own strip under the search/filter row, divided by
             a rule, exactly like job-openings' "Select all + Bulk Actions" line.
             Bulk buttons only appear once something is picked, so the row stays
-            quiet until it has work to do. Hidden in grid view: the cards carry
-            no per-item checkbox, so a "Select all" strip with nothing under it
-            to select would just be a dead control. */}
-        {filteredResumes.length > 0 && displayMode !== 'grid' && (
+            quiet until it has work to do. Shown in both list and grid view,
+            since grid cards now carry their own per-item checkbox too. */}
+        {filteredResumes.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 sm:gap-3 pt-3 border-t border-gray-200">
             <button
               onClick={handleSelectAll}
@@ -1955,6 +1961,16 @@ Best regards`);
                   className="text-left bg-white rounded-xl border border-gray-200 hover:shadow-md hover:border-[var(--border-dark)] hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 cursor-pointer"
                 >
                   <div className="flex items-start gap-2.5">
+                    <button
+                      onClick={(e) => { e.stopPropagation(); handleSelectResume(resume.id); }}
+                      className="p-1 -m-1 hover:bg-gray-100 rounded flex-shrink-0"
+                    >
+                      {selectedResumes.includes(resume.id) ? (
+                        <CheckSquare className="w-4 h-4 text-gray-800" />
+                      ) : (
+                        <Square className="w-4 h-4 text-gray-400" />
+                      )}
+                    </button>
                     <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-sm flex-shrink-0">
                       {(resume.candidateName || 'C')[0].toUpperCase()}
                     </div>
@@ -1971,7 +1987,11 @@ Best regards`);
 
                   {isGlobalView && resume.jobTitle && (
                     <p className="text-xs text-gray-500 truncate" title={resume.jobTitle}>
-                      Applied for: <span className="font-medium text-gray-700">{truncateJobTitle(resume.jobTitle)}</span>
+                      Applied for: <span className="font-medium text-gray-700">
+                        {[resume.jobCode, truncateJobTitle(resume.jobTitle), resume.jobVersion != null ? `v${resume.jobVersion}` : null]
+                          .filter(Boolean)
+                          .join('-')}
+                      </span>
                     </p>
                   )}
 
@@ -1987,11 +2007,34 @@ Best regards`);
                   </div>
 
                   <div
-                    onClick={(e) => { e.stopPropagation(); if (onViewCandidate) onViewCandidate(resume); }}
-                    className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors mt-1"
+                    className="flex items-center gap-1.5 mt-1"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <Eye className="w-3.5 h-3.5" />
-                    View Details
+                    <button
+                      onClick={() => onViewCandidate && onViewCandidate(resume)}
+                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      View
+                    </button>
+                    {renderInviteButton(resume)}
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <button
+                          aria-label="Actions"
+                          title="Actions"
+                          className="p-2.5 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-all"
+                        >
+                          <MoreVertical className="w-4 h-4 text-gray-600" />
+                        </button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent
+                        align="end"
+                        className="w-52 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl"
+                      >
+                        {renderActionsMenuItems(resume)}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               ))}

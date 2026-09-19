@@ -2298,7 +2298,7 @@ export default function AITalentMatchPage({
             active={historyPageView === 'resumes' && candidateRatingBand === 'exact'}
             showClickArrow
             icon={CheckCircle2}
-            label="Top Match Rating (10)"
+            label="Match Rating (10)"
             // Renders straight from the server-computed `ratingBandCounts` prop
             // (available from the same fast session-list call as the other two
             // cards); only falls back to the slower per-session tally + its
@@ -2321,7 +2321,7 @@ export default function AITalentMatchPage({
             active={historyPageView === 'resumes' && candidateRatingBand === 'partial'}
             showClickArrow
             icon={PieChart}
-            label="Top Match Rating (9-7)"
+            label="Match Rating (9-7)"
             // Same server-computed-prop-first rule as the 10-band card above.
             value={statsReady ? displayedPartialCount : (
               <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
@@ -2462,8 +2462,6 @@ export default function AITalentMatchPage({
                     {band.label}
                   </button>
                 ))}
-
-                <ListViewToggle value={matchDisplayMode} onChange={setMatchDisplayMode} className="ml-auto" />
               </div>
 
               {showCandidateFilters && (
@@ -2630,58 +2628,6 @@ export default function AITalentMatchPage({
                     Clear filters
                   </button>
                 )}
-              </div>
-            ) : matchDisplayMode === 'grid' ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                {paginatedCandidateRows.map((row) => {
-                  const avatar = avatarColorFor(row.key);
-                  const sortedJobs = [...row.jobs].sort((a, b) => new Date(b.matchedAt).getTime() - new Date(a.matchedAt).getTime());
-                  const latestJob = sortedJobs[0];
-                  return (
-                    <button
-                      key={row.key}
-                      onClick={() => openCandidateResume(row, sortedCandidateRows)}
-                      className="text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3"
-                    >
-                      <div className="flex items-start gap-2.5">
-                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${avatar.bg} ${avatar.text}`}>
-                          {initialsFor(row.name || 'Candidate')}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{row.name || 'Candidate'}</p>
-                          <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{row.email || row.phone || '—'}</p>
-                        </div>
-                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(latestJob.score)}`}>
-                          {toMatchRating(latestJob.score)}
-                        </span>
-                      </div>
-
-                      <p className="text-xs text-gray-600 dark:text-slate-400 truncate" title={latestJob.jobTitle}>
-                        {latestJob.jobTitle}
-                      </p>
-
-                      <span className="inline-flex items-center self-start px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30 whitespace-nowrap">
-                        {row.jobs.length} Job {row.jobs.length === 1 ? 'Version' : 'Versions'}
-                      </span>
-
-                      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-500 pt-2 border-t border-gray-100 dark:border-slate-800">
-                        <span>{formatISTDate(latestJob.matchedAt.toISOString())}</span>
-                        <div
-                          onClick={(e) => { e.stopPropagation(); handleAttachmentsClick(row.best); }}
-                          className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
-                        >
-                          <Paperclip className="w-3.5 h-3.5" />
-                          Attachments
-                        </div>
-                      </div>
-
-                      <div className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors">
-                        <Eye className="w-3.5 h-3.5" />
-                        View Resume
-                      </div>
-                    </button>
-                  );
-                })}
               </div>
             ) : (
               /* Grouped table, matching Resume Scoring's grouped "View by
@@ -3126,14 +3072,12 @@ export default function AITalentMatchPage({
                   </button>
                 ))}
 
-                <ListViewToggle value={matchDisplayMode} onChange={setMatchDisplayMode} className={selectedAllResumeEntries.length > 0 ? '' : 'ml-auto'} />
-
                 {selectedAllResumeEntries.length > 0 && (
-                  <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+                  <div className="flex flex-wrap items-center gap-2">
                     {canRunScoring && (
                       <button
                         onClick={() => { void handleScoreSelectedAllResumes(); }}
-                        className="px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                        className="px-3 py-1.5 bg-brand-orange hover:bg-brand-orange-deep text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm shadow-brand-orange/25 ring-1 ring-white/10"
                       >
                         <ClipboardList className="w-3.5 h-3.5" />
                         Score ({selectedAllResumeEntries.length})
@@ -3165,6 +3109,8 @@ export default function AITalentMatchPage({
                     )}
                   </div>
                 )}
+
+                <ListViewToggle value={matchDisplayMode} onChange={setMatchDisplayMode} className="ml-auto" />
               </div>
 
               {/* Same filter panel as "View by Candidates" — one filter set
@@ -3332,16 +3278,33 @@ export default function AITalentMatchPage({
                 )}
               </div>
             ) : matchDisplayMode === 'grid' ? (
+              <>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
                 {paginatedAllResumeRows.map(({ key, row, job }) => {
                   const scored = row.resumeId ? allScoredResumeIds.has(row.resumeId) : false;
                   return (
-                    <button
+                    <div
                       key={key}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => openCandidateResume(row, sortedAllResumeRows.map(entry => entry.row))}
-                      className="text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3"
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          openCandidateResume(row, sortedAllResumeRows.map(entry => entry.row));
+                        }
+                      }}
+                      className="text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 cursor-pointer"
                     >
                       <div className="flex items-start gap-2.5">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${row.name || 'candidate'}`}
+                          checked={selectedAllResumeKeys.has(key)}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => toggleAllResumeSelected(key)}
+                          className="mt-1.5 flex-shrink-0"
+                        />
                         <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-xs text-gray-700 dark:text-slate-300 font-medium flex-shrink-0">
                           {(row.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
                         </div>
@@ -3402,10 +3365,20 @@ export default function AITalentMatchPage({
                         <Eye className="w-3.5 h-3.5" />
                         View Details
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
+
+              <ListPagination
+                currentPage={resumeCurrentPage}
+                itemsPerPage={resumeItemsPerPage}
+                totalItems={sortedAllResumeRows.length}
+                onPageChange={setResumeCurrentPage}
+                onItemsPerPageChange={setResumeItemsPerPage}
+                itemLabel="resumes"
+              />
+              </>
             ) : (
               <>
                 <div className="hidden md:block min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto rounded-xl border border-gray-100 dark:border-slate-700/60 tf-table-shell">
@@ -4769,7 +4742,7 @@ export default function AITalentMatchPage({
                     className={`px-3 py-2 text-white rounded-lg transition-all font-medium text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial ${
                       availableUnits !== null && selectedCandidates.length > availableUnits
                         ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                        : 'bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
+                        : 'bg-brand-orange hover:bg-brand-orange-deep shadow-sm shadow-brand-orange/25 ring-1 ring-white/10'
                     }`}
                     >
                       <ClipboardList className="w-3.5 h-3.5" />

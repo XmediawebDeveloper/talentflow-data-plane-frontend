@@ -1270,6 +1270,7 @@ export default function AIInterview() {
      not restated here. */
   const INTERVIEW_VOCABULARY: VersionHistoryVocabulary = {
     ...ASSESSMENT_VOCABULARY,
+    childSingular: 'Interview',
     childPlural: 'Interviews',
     childVersionsHeading: 'Interview Versions',
     childNone: 'No interview',

@@ -4900,8 +4900,10 @@ function AIMatchTabContent({
                 {paginatedCandidates.map((candidate) => {
                   const isScored = scoredResumeIds.has(candidate.resumeId);
                   return (
-                    <button
+                    <div
                       key={candidate.resumeId}
+                      role="button"
+                      tabIndex={0}
                       onClick={() => {
                         if (onViewCandidate) {
                           try {
@@ -4911,9 +4913,27 @@ function AIMatchTabContent({
                           onViewCandidate(candidate);
                         }
                       }}
-                      className="text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3"
+                      onKeyDown={(e) => {
+                        if ((e.key === 'Enter' || e.key === ' ') && onViewCandidate) {
+                          e.preventDefault();
+                          try {
+                            sessionStorage.setItem('resumeNavList', JSON.stringify(filteredCandidates.map((c) => c.resumeId)));
+                            sessionStorage.setItem('resumeNavSource', 'job-details');
+                          } catch { /* ignore */ }
+                          onViewCandidate(candidate);
+                        }
+                      }}
+                      className="text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3 cursor-pointer"
                     >
                       <div className="flex items-start gap-2.5">
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${candidate.name || 'candidate'}`}
+                          checked={selectedIds.has(candidate.resumeId)}
+                          onClick={(e) => e.stopPropagation()}
+                          onChange={() => toggleSelect(candidate.resumeId)}
+                          className="mt-1.5 flex-shrink-0 rounded border-gray-300"
+                        />
                         <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-sm text-gray-700 dark:text-slate-300 font-medium flex-shrink-0">
                           {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                         </div>
@@ -4978,7 +4998,7 @@ function AIMatchTabContent({
                         <Paperclip className="w-3.5 h-3.5" />
                         Resume ({candidate.attachmentCount ?? 1})
                       </div>
-                    </button>
+                    </div>
                   );
                 })}
               </div>
