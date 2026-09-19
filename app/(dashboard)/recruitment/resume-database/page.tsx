@@ -40,6 +40,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import FeatureGate from '@/components/shared/FeatureGate';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { PageSkeleton } from '@/components/ui/skeleton';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
@@ -957,12 +958,9 @@ export default function ResumeDatabasePage() {
   };
 
   if (loading && resumes.length === 0) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-        <span className="ml-3 text-sm text-gray-600 dark:text-slate-400">Loading resume database...</span>
-      </div>
-    );
+    // Skeleton instead of a spinner during the initial fetch — matches the
+    // route-level loading.tsx so refresh → mount → fetch reads as one skeleton.
+    return <PageSkeleton variant="table" showStats={false} />;
   }
 
   return (
@@ -1016,14 +1014,23 @@ export default function ResumeDatabasePage() {
           clipping the card would cut them off. Without it the bar's white and
           the pager's slate square off the corners they sit in. */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
-        <SearchFilterBarCompact
-          searchQuery={searchQuery}
-          onSearchChange={handleSearchChange}
-          filters={filters}
-          onFiltersChange={(next: SearchFilters) => search.setFilters(next as Record<string, unknown>)}
-          sortBy={sortBy}
-          onSortChange={setSortBy}
-        />
+        {/* Search pinned to the top of the scroll viewport so it stays reachable
+            while the list scrolls. Opaque background so rows can't show through,
+            and z above the rows below it. The filter panel/sort menu open as
+            children, so they ride along with the sticky bar. `[&>div]:rounded-t-xl`
+            rounds the inner bar so it doesn't square off the card's rounded top
+            corners (this wrapper is now the tf-round-edges first child) — no
+            overflow-hidden, which would clip the open filter panel. */}
+        <div className="sticky top-0 z-20 bg-white dark:bg-slate-900 [&>div]:rounded-t-xl">
+          <SearchFilterBarCompact
+            searchQuery={searchQuery}
+            onSearchChange={handleSearchChange}
+            filters={filters}
+            onFiltersChange={(next: SearchFilters) => search.setFilters(next as Record<string, unknown>)}
+            sortBy={sortBy}
+            onSortChange={setSortBy}
+          />
+        </div>
 
         {/* Loading indicator for filter changes */}
         {loading && (

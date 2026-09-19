@@ -3,7 +3,7 @@
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { WorkInProgressIcon } from '@/components/icons/nav-icons';
 import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList } from 'lucide-react';
-import { useState, useEffect, useRef, useMemo, useId } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
@@ -30,6 +30,7 @@ import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import QuotaBadge from '@/components/ui/quota-badge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
+import { PageSkeleton, TableSkeleton } from '@/components/ui/skeleton';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
@@ -1198,8 +1199,12 @@ export default function ResumeScoringPage({
     }
   }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd, pendingScoringData, initialNewScoring, jobs]);
 
-  // After scoring completes: auto-navigate to details view once scoredHistory is refreshed
-  useEffect(() => {
+  // After scoring completes: auto-navigate to details view once scoredHistory is refreshed.
+  // A layout effect, not useEffect: the popup that hid the "Choose JD" view has
+  // already been closed in the same batch that set pendingAutoSelectJdId, and a
+  // plain effect runs after paint - so that view showed for a frame before the
+  // details view replaced it.
+  useLayoutEffect(() => {
     if (!pendingAutoSelectJdId) return;
     const historyItem = scoredHistory.find(h => h.jobId === pendingAutoSelectJdId);
     if (historyItem) {
@@ -1855,14 +1860,7 @@ export default function ResumeScoringPage({
 
   // Show loading when waiting for initial JD's history to load
   if (isWaitingForInitialJd) {
-    return (
-      <main className="flex-1 flex items-center justify-center bg-white dark:bg-slate-950">
-        <div className="text-center">
-          <Loader2 className="w-6 h-6 animate-spin text-brand-blue mx-auto mb-3" />
-          <p className="text-sm text-gray-600 dark:text-slate-400">Loading scored candidates...</p>
-        </div>
-      </main>
-    );
+    return <PageSkeleton variant="table" showStats={false} />;
   }
 
   // View Candidate Scoring Detail Page
@@ -2784,15 +2782,7 @@ export default function ResumeScoringPage({
           <div className="space-y-4">
             <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
             {isLoadingGlobal ? (
-              /* No card while loading — a bordered box around a spinner reads as
-                 an empty table that has finished. `tf-loader-center` gives the
-                 spinner the table's own height to sit in the middle of, so it
-                 lands where the rows will be rather than at the top of a
-                 short padded box. */
-              <div className="tf-loader-center">
-                <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-                <span className="ml-3 text-sm text-gray-600 dark:text-slate-400">Loading all scored candidates...</span>
-              </div>
+              <TableSkeleton />
             ) : globalScoredResumes.length === 0 ? (
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-10 text-center">
                 <div className="w-12 h-12 mx-auto mb-3 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-full flex items-center justify-center">
@@ -3406,12 +3396,7 @@ export default function ResumeScoringPage({
           />
           </>
         ) : historyLoading && scoredHistory.length === 0 ? (
-          /* Same treatment as View by Candidates above — no card, centred in
-             the space the list will occupy. */
-          <div className="tf-loader-center">
-            <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-            <span className="ml-3 text-gray-600 dark:text-slate-400 text-sm">Loading scoring history...</span>
-          </div>
+          <TableSkeleton />
         ) : scoredHistory.length === 0 ? (
           <div className="bg-white dark:bg-slate-900 rounded-xl border-2 border-dashed border-brand-blue/20 p-8 sm:p-10 text-center">
             <div className="max-w-md mx-auto">
@@ -4196,13 +4181,16 @@ export default function ResumeScoringPage({
           jobTitle={selectedJobData.title}
           onClose={() => setShowResumeSelectionModal(false)}
           onScoringComplete={async () => {
-            setShowResumeSelectionModal(false);
             invalidateGlobalScoredResumes();
+            // The popup stays up while the history refreshes. Closing it first
+            // exposed the "Choose JD" view underneath for the whole fetch.
             await onRefreshHistory?.();
             // Same hand-off the async Celery flow above uses: once
             // scoredHistory carries this job's fresh scores, the sync effect
-            // opens its details view automatically.
+            // opens its details view automatically. Closing the popup in the
+            // same batch means the next paint is already the details view.
             setPendingAutoSelectJdId(selectedJob);
+            setShowResumeSelectionModal(false);
             router.push(`/recruitment/resume-scoring?jd_id=${selectedJob}`, { scroll: false });
           }}
         />

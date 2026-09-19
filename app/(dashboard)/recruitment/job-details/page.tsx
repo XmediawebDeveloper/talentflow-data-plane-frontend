@@ -3,8 +3,8 @@
 import { useState, useEffect } from 'react';
 import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
 import JobDetailView from '@/components/JobDetailView';
+import { DetailPageSkeleton } from '@/components/ui/skeleton-loader';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
 import DisableJobModal from '@/components/DisableJobModal';
@@ -497,12 +497,7 @@ function JobDetailsContent() {
   };
 
   if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-800 dark:text-slate-200" />
-        <span className="ml-3 text-gray-600 dark:text-slate-400">Loading job details...</span>
-      </div>
-    );
+    return <DetailPageSkeleton />;
   }
 
   if (!job) {
@@ -635,12 +630,7 @@ function JobDetailsContent() {
 
 export default function JobDetailsRoute() {
   return (
-    <Suspense fallback={
-      <div className="flex-1 flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-800 dark:text-slate-200" />
-        <span className="ml-3 text-gray-600 dark:text-slate-400">Loading...</span>
-      </div>
-    }>
+    <Suspense fallback={<DetailPageSkeleton />}>
       <JobDetailsContent />
     </Suspense>
   );

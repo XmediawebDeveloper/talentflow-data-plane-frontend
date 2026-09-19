@@ -35,6 +35,8 @@ import {
   mapJDToJob,
   sortJobs,
 } from '@/lib/utils/jobOpeningDisplay';
+import { FormSkeleton } from '@/components/ui/skeleton';
+import { ListSkeleton } from '@/components/ui/skeleton-loader';
 
 // Languages that have an executable runtime in the candidate's coding round.
 // Mirrors LANGUAGE_VERSIONS in backend app/routers/candidate.py — anything not
@@ -3226,10 +3228,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 items={buildBreadcrumbItems()}
               />
             )}
-            <div className="flex items-center justify-center h-64">
-              <Loader2 className="h-8 w-8 text-brand-blue animate-spin" />
-              <span className="ml-3 text-sm text-gray-600">Loading assessment configuration...</span>
-            </div>
+            <FormSkeleton />
           </div>
         </div>
       </div>
@@ -3290,10 +3289,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
 
             <div className="p-4 sm:p-6">
               {isLoadingJobs ? (
-                <div className="text-center py-8 sm:py-12">
-                  <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 text-brand-blue animate-spin mx-auto mb-3" />
-                  <p className="text-sm sm:text-base text-gray-500">Loading job descriptions...</p>
-                </div>
+                <ListSkeleton rows={5} />
               ) : (
               <div className="space-y-3" ref={jdListRef}>
                 {/* Search Jobs — the Apply to Job dialog's own field, down to

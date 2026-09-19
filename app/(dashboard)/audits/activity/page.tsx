@@ -37,6 +37,7 @@ import {
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import AuditTrailPage from '@/app/(dashboard)/audits/trail/page';
+import { ListSkeleton } from '@/components/ui/skeleton-loader';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -321,10 +322,7 @@ export default function ActivityLogsPage() {
 
         <div className="rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02] overflow-hidden">
           {loading ? (
-            <div className="p-12 text-center">
-              <RefreshCw className="w-8 h-8 text-brand-blue animate-spin mx-auto mb-4" />
-              <p className="font-medium text-gray-600 dark:text-slate-400">Loading activity...</p>
-            </div>
+            <ListSkeleton />
           ) : error ? (
             <div className="p-12 text-center">
               <p className="text-red-500">{error}</p>

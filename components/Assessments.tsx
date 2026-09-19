@@ -30,6 +30,7 @@ import {
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, ASSESSMENT_INVITE_STATUS_OPTIONS, type InviteFilterState } from './InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from './InviteStatCards';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { ListSkeleton } from '@/components/ui/skeleton-loader';
 import ListCountBadge from '@/components/ui/list-count-badge';
 /* The two shared empty states. ListEmptyState covers a LIST in its two
    flavours — narrowed to nothing by a search/filter (keep the controls, offer
@@ -6920,12 +6921,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </div>
             ) : isLoading ? (
               /* Loading State */
-              <div className="flex items-center justify-center py-12 tf-loader-center">
-                <div className="text-center">
-                  <Loader2 className="w-10 h-10 text-brand-blue animate-spin mx-auto mb-3" />
-                  <p className="text-gray-600 dark:text-slate-400">Loading assessments...</p>
-                </div>
-              </div>
+              <ListSkeleton />
             ) : filteredAssessments.length === 0 ? (() => {
               /* One shared ListEmptyState for both zeros this list can reach.
                  It picks the flavour itself from `isNarrowed`: a search or

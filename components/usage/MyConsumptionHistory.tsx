@@ -31,6 +31,7 @@ import {
   getUnitTypeName,
 } from '@/lib/services/unitPoolService';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { TableSkeleton } from '@/components/ui/skeleton';
 
 const UNIT_TYPE_ICONS: Record<UnitType, IconComponent> = {
   RS: ClipboardList,
@@ -156,14 +157,7 @@ export default function MyConsumptionHistory() {
   };
 
   if (isLoading) {
-    return (
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-        <div className="flex items-center justify-center py-8 tf-loader-center">
-          <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-          <span className="ml-2 text-gray-500">Loading your consumption history...</span>
-        </div>
-      </div>
-    );
+    return <TableSkeleton />;
   }
 
   return (

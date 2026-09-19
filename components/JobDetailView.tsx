@@ -53,6 +53,7 @@ import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
+import { DetailPageSkeleton, TableSkeleton } from '@/components/ui/skeleton-loader';
 
 // Legacy aliases — both now use the centralized IST formatter
 const formatToIST = formatIST;
@@ -2198,12 +2199,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
      This cannot hang: the restore above clears `pendingResumeId` as soon as the
      rows land, whether or not one of them matched. */
   if (pendingResumeId && !viewingScoredResume) {
-    return (
-      <main className="flex-1 flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-800 dark:text-slate-200" />
-        <span className="ml-3 text-gray-600 dark:text-slate-400">Loading...</span>
-      </main>
-    );
+    return <DetailPageSkeleton />;
   }
 
   // Candidate detail from the AI Interview Result tab — rendered inline so the
@@ -3882,10 +3878,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       {activeTab === 'scored-resumes' && (
         <div ref={scoredResumesSectionRef} className="mt-0 scroll-mt-5">
           {loadingScoredResumes ? (
-            <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-8 sm:p-10 flex items-center justify-center">
-              <Loader2 className="h-6 w-6 text-blue-600 animate-spin" />
-              <span className="ml-3 text-gray-600 dark:text-slate-400 text-sm">Loading scored resumes...</span>
-            </div>
+            <TableSkeleton />
           ) : scoredResumes.length === 0 ? (
             <TabEmptyState
               icon={Users}
@@ -3974,10 +3967,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       {activeTab === 'ai-interview-results' && (
         <div className="mt-0" ref={aiInterviewResultsSectionRef}>
           {loadingAIInterviewConfig ? (
-            <div className="flex items-center justify-center py-16 tf-loader-center">
-              <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-              <span className="ml-3 text-sm text-gray-500 dark:text-slate-400">Loading AI interview results...</span>
-            </div>
+            <TableSkeleton />
           ) : aiInterviewConfigError ? (
             <div className="text-center py-16">
               <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">{aiInterviewConfigError}</p>
@@ -4763,14 +4753,7 @@ function AIMatchTabContent({
   const selectedCandidates = candidates.filter((c) => selectedIds.has(c.resumeId));
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12 tf-loader-center">
-        <div className="flex flex-col items-center gap-3">
-          <Loader2 className="h-8 w-8 text-gray-600 dark:text-slate-400 animate-spin" />
-          <p className="text-gray-500 dark:text-slate-500 text-sm">Loading AI match results...</p>
-        </div>
-      </div>
-    );
+    return <TableSkeleton />;
   }
 
   if (candidates.length === 0) {

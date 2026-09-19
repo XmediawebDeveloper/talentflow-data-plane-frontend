@@ -1,10 +1,11 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, BarChart3, Loader2 } from 'lucide-react';
+import { X, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { jdService } from '@/lib/services/jdService';
+import { TableSkeleton } from '@/components/ui/skeleton';
 import type { ScoredResume } from './ScoredResumesTable';
 
 interface ScoreTableModalProps {
@@ -146,10 +147,7 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobTitle, onCl
             as the hook the globals.css note refers to. */}
         <div className="score-table-modal-body flex-1 overflow-y-auto p-4 sm:p-6">
           {loading ? (
-            <div className="flex items-center justify-center py-16">
-              <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-              <span className="ml-3 text-sm text-gray-600">Loading score table...</span>
-            </div>
+            <TableSkeleton />
           ) : (
             <DetailedScorecardTab
               resume={{

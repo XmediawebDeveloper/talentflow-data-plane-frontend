@@ -14,6 +14,7 @@ import { PlanFeatureKey } from '@/lib/types/planFeatures';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import api from '@/lib/services/api';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
+import { DashboardSkeleton } from '@/components/ui/skeleton-loader';
 
 // Addon interface
 interface Addon {
@@ -585,20 +586,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   }
 
   if (loading) {
-    return (
-      <div className="min-h-[100dvh] bg-slate-50 dark:bg-slate-950 flex items-center justify-center">
-        <div className="text-center">
-          <div className="mx-auto mb-6 flex h-20 w-20 animate-pulse items-center justify-center rounded-2xl bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal shadow-lg shadow-brand-blue/25 ring-4 ring-brand-blue/10">
-            <BarChart3 className="h-10 w-10 text-white" />
-          </div>
-          <div className="mb-2 flex items-center justify-center gap-3">
-            <Loader2 className="h-5 w-5 animate-spin text-brand-blue" />
-            <span className="text-lg font-semibold text-gray-900 dark:text-slate-50">Loading Usage Data</span>
-          </div>
-          <p className="text-sm text-gray-500 dark:text-slate-500">Fetching your quota information...</p>
-        </div>
-      </div>
-    );
+    return <DashboardSkeleton />;
   }
 
   const handleUpgradeClick = () => {

@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
 import AssessmentCreation from '@/components/AssessmentCreation';
+import { PageSkeleton } from '@/components/ui/skeleton';
 import { jdService } from '@/lib/services/jdService';
 import api from '@/lib/services/api';
 import { Job } from '@/lib/types/types';
@@ -133,12 +133,7 @@ export default function CreateAssessmentPage() {
   };
 
   if (isLoading) {
-    return (
-      <main className="tf-loader-page bg-slate-50">
-        <Loader2 className="h-8 w-8 text-brand-blue animate-spin" />
-        <span className="ml-3 text-sm text-gray-600 dark:text-slate-400">Loading...</span>
-      </main>
-    );
+    return <PageSkeleton variant="form" showStats={false} />;
   }
 
   return (
