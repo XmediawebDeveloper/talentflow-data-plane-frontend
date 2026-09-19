@@ -1937,7 +1937,17 @@ export default function AITalentMatchPage({
 
   // View: History List
   if (viewMode === 'history') {
-    const totalMatchedCandidates = matchHistory.reduce((sum, item) => sum + (item.totalMatches || 0), 0);
+    // "Match by Candidate" must count unique people, not resume matches — a
+    // candidate re-scored across jobs (or re-uploaded under a new resumeId)
+    // is one person, not several. `candidateRows` is already deduped by
+    // email/name/resumeId (see buildCandidateRows), so read its length
+    // instead of summing each session's `totalMatches` (which counts every
+    // matched resume/version, the same inflated total "All Resumes" lists).
+    // It's ready once the roll-up has finished building, or immediately if
+    // every session has zero matches (nothing to build).
+    const totalMatchedCandidatesReady = !loadingCandidateRows &&
+      (candidateRows.length > 0 || matchHistory.every(item => (item.totalMatches || 0) === 0));
+    const totalMatchedCandidates = candidateRows.length;
 
     // Every session's candidates load in individually (in the background — see
     // the prefetch effect above), so the rating-band counts below fill in one
@@ -2277,7 +2287,9 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={User}
             label="Match by Candidate"
-            value={totalMatchedCandidates}
+            value={totalMatchedCandidatesReady ? totalMatchedCandidates : (
+              <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
+            )}
             sparkline={false}
             onClick={() => { setCandidateRatingBand(null); void openCandidatesView(); }}
           />

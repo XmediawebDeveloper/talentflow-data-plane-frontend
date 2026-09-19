@@ -1518,8 +1518,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       // with the frontend's match_status bucketing. When a backend count was 0
       // (falsy) it fell through to the filter, letting one resume be counted in
       // two buckets at once — e.g. Total 1 but Partial Match 1 AND No Match 1.
+      // `total` also reads the converted list now, not `response.total` — the
+      // backend total counts every scored resume for this JD, while the tab
+      // itself (ScoredResumesTable) only ever renders this one `page_size:
+      // 100` page, via its own `resumes.length` count badge. For a JD with
+      // more than 100 scored resumes those two disagreed, so the tab-strip
+      // badge showed the true (higher) total and then visibly dropped to 100
+      // the moment the tab opened.
       const stats = {
-        total: response.total ?? convertedResumes.length,
+        total: convertedResumes.length,
         exactMatch: convertedResumes.filter((r: any) => r.matchStatus === 'Exact Match').length,
         partialMatch: convertedResumes.filter((r: any) => r.matchStatus === 'Partial Match').length,
         noMatch: convertedResumes.filter((r: any) => r.matchStatus === 'No Match').length,
@@ -2444,21 +2451,17 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     ? aiInterviewInviteAction
     : aiInterviewCreateAction;
 
-  /* AI Talent Match Results tab badge — shows a real number as soon as
-     `listSessions` (one call) resolves, the same speed the Scored Resumes
-     badge already has, rather than waiting out the slower per-session dedup
-     fetch that only the tab's own candidate list actually needs.
-     `total_matches` is precomputed server-side per session (the same field
-     "Top Match Rating" already reads for an instant number elsewhere), so
-     summing it is free once sessions are in. It's an upper bound — a
-     candidate matched in two sessions of this job is counted twice — so once
-     the exact deduplicated list finishes loading, the badge switches to
-     `aiMatchCandidates.length`, which can only ever be equal or lower. */
-  const aiMatchBadgeCount = !aiMatchSessionsLoaded
+  /* AI Talent Match Results tab badge — holds the loading placeholder until
+     the deduplicated candidate list finishes building, rather than showing
+     an interim `sum(session.total_matches)` first. That sum double-counts a
+     candidate matched across more than one session of this job, so it used
+     to flash a higher number before dropping to the real, lower
+     `aiMatchCandidates.length` — visibly "changing" right as the user opened
+     the tab. Showing nothing until the real count is ready means the badge
+     never has to correct itself. */
+  const aiMatchBadgeCount = (!aiMatchSessionsLoaded || loadingAiMatch)
     ? null
-    : loadingAiMatch
-      ? aiMatchSessions.reduce((sum, s) => sum + (s.total_matches ?? 0), 0)
-      : aiMatchCandidates.length;
+    : aiMatchCandidates.length;
 
   return (
     // overflow-x-clip, not overflow-x-hidden/overflow-y-auto: the latter pair
@@ -2918,10 +2921,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
               }`}>
-                {/* aiMatchBadgeCount is null only for the instant before
-                    listSessions itself (one call) has come back — same tiny
-                    window every other tab's badge has, which is why this is
-                    the only case that still needs a placeholder. */}
+                {/* Null while sessions are listing or the per-session dedup
+                    fetch is still running — see aiMatchBadgeCount above. */}
                 {aiMatchBadgeCount === null ? (
                   <span className="inline-block h-3 w-4 rounded bg-current opacity-30 animate-pulse align-middle" aria-label="Loading count" />
                 ) : (
