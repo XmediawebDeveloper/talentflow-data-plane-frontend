@@ -1546,12 +1546,14 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const placeholderMsg = getPlaceholderMessage();
 
   return (
-    // overflow-y-auto makes this <main> the element that actually scrolls, which
-    // is what the sticky breadcrumb below pins against. Without it, overflow-x
-    // alone still makes <main> a scrollport, but the real scrolling happens on
-    // the layout container above it — so the breadcrumb pinned to a scrollport
-    // that never moved and scrolled away with the page.
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+    // overflow-x-clip, not overflow-x-hidden/overflow-y-auto: that pair made
+    // this <main> its own scroll container without ever being height-bound
+    // enough to actually overflow, so `position: sticky` resolved against a
+    // box that never moved while the dashboard layout's own overflow-y-auto
+    // div did the real scrolling — the breadcrumb visibly scrolled away.
+    // `clip` doesn't establish a scroll container at all, so sticky resolves
+    // against the app's one real scroller, same as the working list pages.
+    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           {/* Breadcrumb — a DIRECT child of the card, not wrapped in a row with

@@ -755,6 +755,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   ) => countAssessmentVersions(assessment, lineage) >= MAX_ASSESSMENT_VERSIONS;
 
   /**
+   * A lineage may only hold one unpublished version at a time — creating a
+   * second draft while one is already sitting unfinished just buries the
+   * first. Finds that sibling draft (if any) so Duplicate can point the
+   * recruiter at it instead of minting another one. Excludes `assessment`
+   * itself so duplicating a row that IS the draft isn't mistaken for a
+   * conflicting sibling (that case is already blocked separately, since the
+   * Duplicate button is disabled on a draft row).
+   */
+  const findPendingDraftVersion = (
+    assessment: { id?: string; jd_id?: string },
+    lineage?: AssessmentVersionRow[],
+  ): AssessmentVersionRow | undefined => {
+    if (!assessment.jd_id) return undefined;
+    const fetched = lineage ?? assessmentLineages[assessment.jd_id];
+    const rows: AssessmentVersionRow[] = fetched?.length
+      ? fetched
+      : (apiAssessments.filter((x: any) => x.jd_id === assessment.jd_id) as AssessmentVersionRow[]);
+    return rows.find(
+      v => String(v.status || '').toLowerCase() === 'draft' && v.id !== assessment.id,
+    );
+  };
+
+  /**
    * Create an assessment for ONE job version, from the Job Version History.
    *
    * The same navigation Job Details uses (`AssessmentsForJD.handleCreateAssessment`
@@ -796,6 +819,37 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       + `&jd_id=${encodeURIComponent(jobVersionId)}`
       + `&returnUrl=${encodeURIComponent('/recruitment/assessments')}`
     );
+  };
+
+  /* mapAssessmentFromApi (below) turns the backend's raw status into a
+     display word for the rest of the page. AssessmentVersionRow.status is
+     documented as "straight off assessmentService.list" — i.e. the RAW word —
+     so reusing apiAssessments for the optimistic paint below has to translate
+     back, or `assessmentStatusLabel` (which expects 'published'/'draft'/...)
+     would read "Active" as an unrecognised status and render it as Draft. */
+  const DISPLAY_TO_RAW_ASSESSMENT_STATUS: Record<string, string> = {
+    Active: 'published', Completed: 'closed', Archived: 'archived', Draft: 'draft',
+  };
+
+  /**
+   * Best-effort assessment rows for the version panel's FIRST paint, read
+   * from the full assessment list (`apiAssessments`) this page already has in
+   * memory — filtered to this job's known version ids, straight off
+   * `jdLineage.lineages` if that lineage happens to already be cached (e.g.
+   * from the "LATEST badge" prefetch), else just this row's own JD id.
+   *
+   * Complete and correct whenever the page has no status/search filter active
+   * (the default "Total Jobs" view — see `getAssessmentStatusFilter`), and
+   * merely a head start otherwise: `loadAssessmentLineage`'s own per-version
+   * fetch still runs regardless and overwrites `assessmentLineages[jdId]` the
+   * moment it resolves, so a filtered tab or an unknown lineage self-corrects
+   * rather than getting stuck on a guess.
+   */
+  const getOptimisticAssessmentRows = (jdId: string): AssessmentVersionRow[] => {
+    const knownVersionIds = new Set<string>([jdId, ...(jdLineage.lineages[jdId] || []).map(v => v.id)]);
+    return apiAssessments
+      .filter(a => a.jd_id && knownVersionIds.has(a.jd_id))
+      .map(a => ({ ...a, status: DISPLAY_TO_RAW_ASSESSMENT_STATUS[a.status] || a.status })) as AssessmentVersionRow[];
   };
 
   const toggleAssessmentVersions = (assessment: AssessmentLineageRef) => {
@@ -2868,6 +2922,28 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       });
       return;
     }
+    // Only one draft may exist per lineage at a time — offer to open the
+    // existing one instead of minting a second (the backend blocks this
+    // too, but checking here avoids the round trip and gives the recruiter
+    // a direct way into the draft they should be using).
+    const pendingDraft = findPendingDraftVersion(assessment, lineage);
+    if (pendingDraft) {
+      const openIt = await dialog.confirm({
+        title: 'Draft already exists',
+        message: `Already one assessment version is in draft ("${pendingDraft.title || 'Untitled'}"). Use this draft instead of creating a new one.`,
+        variant: 'warning',
+        confirmText: 'Open Draft',
+      });
+      if (openIt) {
+        handleEditAssessment({
+          id: pendingDraft.id,
+          jd_id: assessment.jd_id,
+          status: 'Draft',
+          invitations_count: 0,
+        });
+      }
+      return;
+    }
     setCloneTargetAssessment(assessment);
   };
 
@@ -2900,9 +2976,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       ]);
       toast.success(`Assessment duplicated: "${response.cloned_title}"`);
       setCloneTargetAssessment(null);
-    } catch (error) {
+      // Take the recruiter straight into the new draft's edit form instead
+      // of leaving them to find it themselves in the JD's version panel.
+      handleEditAssessment({
+        id: response.cloned_id,
+        jd_id: clonedFromJdId,
+        status: 'Draft',
+        invitations_count: 0,
+      });
+    } catch (error: any) {
       console.error('Failed to duplicate assessment:', error);
-      toast.error('Failed to duplicate assessment. Please try again.');
+      const msg =
+        error?.response?.data?.detail?.message ||
+        error?.response?.data?.message ||
+        (typeof error?.response?.data?.detail === 'string' ? error.response.data.detail : null) ||
+        'Failed to duplicate assessment. Please try again.';
+      toast.error(msg);
     } finally {
       setIsCloning(false);
     }
@@ -4006,16 +4095,26 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           here: a click on a version row must not bubble to the
           row behind it, which would collapse the panel it was
           aimed at. */}
-      {openVersionsFor === assessment.id && assessment.jd_id && (
+      {openVersionsFor === assessment.id && assessment.jd_id && (() => {
+        const jdId = assessment.jd_id!;
+        /* The real, authoritative rows once loadAssessmentLineage's own fetch
+           lands; the best-effort optimistic guess (see its own doc comment)
+           until then, so the panel has something to show on first paint
+           instead of a spinner. Every lookup below reads this one value, so
+           the panel and its row actions never disagree about what's on
+           screen. */
+        const displayedRows = assessmentLineages[jdId] ?? getOptimisticAssessmentRows(jdId);
+        const hasRowsToShow = !!assessmentLineages[jdId] || displayedRows.length > 0;
+        return (
         <div onClick={(e) => e.stopPropagation()}>
           <AssessmentVersionHistoryPanel
             jobVersions={jdLineage.lineages[assessment.jd_id]}
             jobVersionDetails={jdLineage.versionDetails}
-            assessments={assessmentLineages[assessment.jd_id]}
+            assessments={displayedRows}
             /* The backend's per-version "has an assessment" index,
                read beside the rows - see the prop for why both. */
             jdsWithAssessments={jdsWithAssessments}
-            loading={!!loadingLineages[assessment.jd_id] || jdLineage.isLoading(assessment.jd_id)}
+            loading={!hasRowsToShow && (!!loadingLineages[assessment.jd_id] || jdLineage.isLoading(assessment.jd_id))}
             currentAssessmentId={assessment.id}
             latestJobVersion={getLatestJobVersion(assessment)}
             /* Opened on the page the ROW's own status calls for -
@@ -4033,8 +4132,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                panel still LISTS the versions, which is what
                View Versions is reached for. */
             onRowClick={selectMode ? undefined : (versionId) => {
-              const raw = (assessmentLineages[assessment.jd_id!] || [])
-                .find((v) => v.id === versionId);
+              const raw = displayedRows.find((v) => v.id === versionId);
               openAssessment(raw ? mapAssessmentFromApi(raw, 0) : { id: versionId });
             }}
             /* Every version gets the card's own menu, keyed
@@ -4064,8 +4162,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                Preview action opens, so there is one assessment-details view
                in the app and this is it. */
             onViewAssessment={(version) => {
-              const raw = (assessmentLineages[assessment.jd_id!] || [])
-                .find((v) => v.id === version.id);
+              const raw = displayedRows.find((v) => v.id === version.id);
               if (!raw) return;
               setSelectedAssessmentForPreview(mapAssessmentFromApi(raw, 0));
               setShowPreviewModal(true);
@@ -4138,8 +4235,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                one control that answers "which of these am I picking?", so in
                the dialog the column holds that alone. */
             renderAction={selectMode ? undefined : (version) => {
-              const raw = (assessmentLineages[assessment.jd_id!] || [])
-                .find((v) => v.id === version.id);
+              const raw = displayedRows.find((v) => v.id === version.id);
               if (!raw) return null;
               const mapped = mapAssessmentFromApi(raw, 0);
               return (
@@ -4151,7 +4247,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             }}
           />
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 
@@ -6955,7 +7052,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             onClick={closeInvitePicker}
           />
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl xl:max-w-6xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-6xl xl:max-w-7xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
               {/* Header */}
               <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
                 <div className="flex items-center gap-3 min-w-0 flex-1">

@@ -250,7 +250,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         <div key={folder.id}>
           <button
             onClick={() => setSelectedFolder(folder.id)}
-            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${isSelected ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 font-medium' : 'text-gray-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+            className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-all ${isSelected ? 'bg-gray-100 dark:bg-slate-800 text-gray-900 dark:text-slate-50 font-medium' : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'}`}
             style={{ paddingLeft: `${level * 16 + 12}px` }}
           >
             {hasChildren ? (
@@ -258,13 +258,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                 {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
               </button>
             ) : <div className="w-5" />}
-            {isExpanded ? (
-              <FolderOpen className={`w-4 h-4 ${isSelected ? '' : 'text-brand-orange'}`} />
-            ) : (
-              <Folder className={`w-4 h-4 ${isSelected ? '' : 'text-brand-orange'}`} />
-            )}
+            {isExpanded ? <FolderOpen className="w-4 h-4 text-brand-orange" /> : <Folder className="w-4 h-4 text-brand-orange" />}
             <span className="flex-1 text-left truncate">{folder.name}</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{count}</span>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400">{count}</span>
           </button>
           {isExpanded && hasChildren && <div>{renderFolderTree(folder.id, level + 1)}</div>}
         </div>
@@ -820,7 +816,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
   if (showSuccess) {
     return (
       <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6" role="dialog" aria-modal="true">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full p-6 sm:p-8 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto">
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-md w-full p-6 sm:p-8 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto tf-round-edges">
           <div className="w-14 h-14 sm:w-16 sm:h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10 text-green-600" />
           </div>
@@ -851,7 +847,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         role="dialog"
         aria-modal="true"
       >
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full p-6 sm:p-8 max-h-[90dvh] flex flex-col overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-md w-full p-6 sm:p-8 max-h-[90dvh] flex flex-col overflow-hidden tf-round-edges">
           <div className="flex-shrink-0 text-center mb-6">
             <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-10 h-10 text-amber-600" />
@@ -925,7 +921,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     <div
       className={embedded
         ? ''
-        : 'fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-6 overflow-y-auto'}
+        : 'fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6'}
       onClick={embedded ? undefined : (e) => {
         if (e.target === e.currentTarget) onClose();
       }}
@@ -934,26 +930,26 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
       aria-label="Send AI Interview via Email"
     >
       <div className={embedded
-        ? 'bg-white dark:bg-slate-900 rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 w-full flex flex-col'
-        : 'bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-brand-blue/10 sm:border sm:border-gray-100 dark:sm:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-4xl w-full max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col'}>
+        ? 'bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 w-full flex flex-col overflow-hidden tf-round-edges'
+        : 'bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col tf-round-edges'}>
         {/* Header */}
-        <div className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-3 shrink-0">
+        <div className="bg-gradient-to-r from-green-600 to-teal-600 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
+            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
               <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-gray-900 dark:text-slate-50 text-sm sm:text-base font-semibold tracking-tight truncate">Send AI Interview via Email</h2>
-              <p className="text-gray-600 dark:text-slate-400 text-xs sm:text-sm truncate">{config.jd_title || config.position} — AI Interview</p>
+              <h2 className="text-base sm:text-lg font-semibold text-white truncate">Send AI Interview via Email</h2>
+              <p className="text-green-100 text-xs sm:text-sm truncate">{config.jd_title || config.position} — AI Interview</p>
             </div>
           </div>
           {!embedded && (
             <button
               onClick={onClose}
               aria-label="Close dialog"
-              className="text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center rounded-lg transition-colors flex-shrink-0"
+              className="text-white hover:bg-white hover:bg-opacity-20 p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0"
             >
-              <X className="w-5 h-5" />
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
           )}
         </div>
@@ -961,9 +957,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4 sm:p-6">
           {/* Config Info Banner */}
-          <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 mb-6">
+          <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg p-4 mb-6">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-lg bg-gradient-to-r from-green-600 to-teal-600 flex items-center justify-center">
                 <FileText className="w-6 h-6 text-white" />
               </div>
               <div className="flex-1">
@@ -998,8 +994,8 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
             if (quotaStatsLoading) {
               return (
-                <div className="mb-4 px-4 py-3 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
-                  <Loader2 className="w-4 h-4 text-brand-blue animate-spin" />
+                <div className="mb-4 px-4 py-3 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg flex items-center gap-2 text-sm text-gray-500 dark:text-slate-500">
+                  <Loader2 className="w-4 h-4 text-gray-500 dark:text-slate-500 animate-spin" />
                   Checking AI interview quota...
                 </div>
               );
@@ -1013,9 +1009,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
               if (isUnlimited) {
                 return (
-                  <div className="mb-4 px-4 py-3 rounded-xl border text-sm bg-brand-blue/5 border-brand-blue/20 text-brand-blue">
+                  <div className="mb-4 px-4 py-3 rounded-lg border text-sm bg-blue-50 border-blue-200 text-blue-800">
                     <div className="flex items-center gap-2">
-                      <Info className="w-4 h-4 flex-shrink-0" />
+                      <Info className="w-4 h-4 text-blue-500 flex-shrink-0" />
                       <span className="font-medium">Unlimited AI interview units</span>
                     </div>
                   </div>
@@ -1023,17 +1019,17 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
               }
 
               return (
-                <div className={`mb-4 px-4 py-3 rounded-xl border text-sm ${
+                <div className={`mb-4 px-4 py-3 rounded-lg border text-sm ${
                   isInsufficient
                     ? 'bg-red-50 border-red-200 text-red-800'
                     : isLow
-                    ? 'bg-brand-orange-deep/5 border-brand-orange-deep/30 text-brand-orange-deep'
-                    : 'bg-brand-blue/5 border-brand-blue/20 text-brand-blue'
+                    ? 'bg-amber-50 border-amber-200 text-amber-800'
+                    : 'bg-blue-50 border-blue-200 text-blue-800'
                 }`}>
                   <div className="flex items-start gap-2">
                     {isInsufficient
-                      ? <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                      : <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                      ? <ShieldAlert className="w-4 h-4 mt-0.5 text-red-500 flex-shrink-0" />
+                      : <Info className="w-4 h-4 mt-0.5 text-blue-500 flex-shrink-0" />
                     }
                     <div className="flex-1">
                       <div className="font-medium mb-1">
@@ -1068,17 +1064,17 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
               const isInsufficient = remaining <= 0;
               const isLow = !isInsufficient && remaining <= 3;
               return (
-                <div className={`mb-4 px-4 py-3 rounded-xl border text-sm ${
+                <div className={`mb-4 px-4 py-3 rounded-lg border text-sm ${
                   isInsufficient
                     ? 'bg-red-50 border-red-200 text-red-800'
                     : isLow
-                    ? 'bg-brand-orange-deep/5 border-brand-orange-deep/30 text-brand-orange-deep'
-                    : 'bg-brand-blue/5 border-brand-blue/20 text-brand-blue'
+                    ? 'bg-amber-50 border-amber-200 text-amber-800'
+                    : 'bg-blue-50 border-blue-200 text-blue-800'
                 }`}>
                   <div className="flex items-center gap-2">
                     {isInsufficient
-                      ? <ShieldAlert className="w-4 h-4 flex-shrink-0" />
-                      : <Info className="w-4 h-4 flex-shrink-0" />
+                      ? <ShieldAlert className="w-4 h-4 text-red-500 flex-shrink-0" />
+                      : <Info className="w-4 h-4 text-blue-500 flex-shrink-0" />
                     }
                     <span>
                       <span className="font-medium">{Math.max(0, remaining)} AI interview unit{remaining !== 1 ? 's' : ''} remaining</span>
@@ -1101,7 +1097,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                 <button
                   onClick={() => setInputMode('manual')}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-                    inputMode === 'manual' ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20' : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700'
+                    inputMode === 'manual' ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                   }`}
                 >
                   <Upload className="w-4 h-4" />
@@ -1110,7 +1106,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                 <button
                   onClick={() => excelInputRef.current?.click()}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-                    inputMode === 'excel' ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20' : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700'
+                    inputMode === 'excel' ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                   }`}
                 >
                   <FileSpreadsheet className="w-4 h-4" />
@@ -1126,7 +1122,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                 <button
                   onClick={() => setInputMode('database')}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
-                    inputMode === 'database' ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20' : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 hover:bg-gray-200 dark:hover:bg-slate-700'
+                    inputMode === 'database' ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' : 'bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                   }`}
                 >
                   <Database className="w-4 h-4" />
@@ -1142,7 +1138,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                   <p className="text-sm text-gray-600 dark:text-slate-400">Enter candidate details manually</p>
                   <button
                     onClick={addCandidate}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors"
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-green-600 hover:text-green-700 rounded-lg transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                     Add Candidate
@@ -1153,14 +1149,14 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                   {candidates.map((candidate) => (
                     <div
                       key={candidate.id}
-                      className={`p-4 border rounded-xl ring-1 ring-black/[0.02] dark:ring-white/[0.02] ${
-                        candidate.source === 'database' ? 'bg-brand-blue/5 border-brand-blue/20' : 'bg-white dark:bg-slate-900 border-gray-100 dark:border-slate-700/60'
+                      className={`p-4 border rounded-lg ${
+                        candidate.source === 'database' ? 'bg-gray-50 dark:bg-slate-800/50 border-gray-300 dark:border-slate-700' : 'bg-gray-50 dark:bg-slate-800/50 border-gray-200 dark:border-slate-700'
                       }`}
                     >
                       <div className="flex items-center gap-3">
                         {candidate.source === 'database' && (
                           <div className="flex-shrink-0">
-                            <div className="w-8 h-8 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-green-600 to-teal-600 flex items-center justify-center">
                               <Database className="w-4 h-4 text-white" />
                             </div>
                           </div>
@@ -1174,7 +1170,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                               onChange={(e) => updateCandidate(candidate.id, 'name', e.target.value)}
                               placeholder="e.g., John Doe"
                               readOnly={candidate.source === 'database'}
-                              className={`w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue ${
+                              className={`w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent ${
                                 candidate.source === 'database' ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed' : ''
                               }`}
                             />
@@ -1193,7 +1189,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                                     ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed border-gray-200 dark:border-slate-700'
                                     : candidate.email.trim() && (!isValidEmail(candidate.email) || isDuplicateEmail(candidate.id, candidate.email))
                                       ? 'border-red-500 focus:ring-red-500'
-                                      : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-brand-blue'
+                                      : 'border-gray-200 dark:border-slate-700 focus:ring-green-500 focus:border-transparent'
                                 }`}
                               />
                               {/* Per-candidate Copy Link button */}
@@ -1328,21 +1324,21 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
             {/* Database Selection Mode */}
             {inputMode === 'database' && (
-              <div className="border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-xl overflow-hidden">
+              <div className="border-2 border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
                 {/* Tabs */}
-                <div className="flex border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950">
+                <div className="flex border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50">
                   {hasMyResumesAccess && (
                     <button
                       onClick={() => setDbTab('my-resumes')}
                       className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
                         dbTab === 'my-resumes'
-                          ? 'border-brand-blue text-brand-blue bg-white dark:bg-slate-900'
+                          ? 'border-gray-800 text-gray-900 dark:text-slate-50 bg-white dark:bg-slate-900'
                           : 'border-transparent text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
                       }`}
                     >
                       <FolderOpen className="w-4 h-4" />
                       My Resumes
-                      <span className="px-1.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{myResumesData.length}</span>
+                      <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300">{myResumesData.length}</span>
                     </button>
                   )}
                   {(hasInternalDBAccess || (!hasMyResumesAccess && !hasInternalDBAccess)) && (
@@ -1350,13 +1346,13 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                       onClick={() => setDbTab('internal-db')}
                       className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
                         dbTab === 'internal-db'
-                          ? 'border-brand-blue text-brand-blue bg-white dark:bg-slate-900'
+                          ? 'border-gray-800 text-gray-900 dark:text-slate-50 bg-white dark:bg-slate-900'
                           : 'border-transparent text-gray-500 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-300'
                       }`}
                     >
                       <Database className="w-4 h-4" />
                       Internal Database
-                      <span className="px-1.5 py-0.5 rounded-full text-xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{internalDbData.length}</span>
+                      <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300">{internalDbData.length}</span>
                     </button>
                   )}
                 </div>
@@ -1365,15 +1361,15 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                 <div className="flex" style={{ minHeight: '300px', maxHeight: '380px' }}>
                   {/* Folder Sidebar (My Resumes only) */}
                   {dbTab === 'my-resumes' && myFolders.length > 0 && (
-                    <div className="w-48 border-r border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 overflow-y-auto flex-shrink-0 p-3">
+                    <div className="w-48 border-r border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 overflow-y-auto flex-shrink-0 p-3">
                       <p className="text-xs font-medium text-gray-500 dark:text-slate-500 uppercase mb-2 px-1">Folders</p>
                       <button
                         onClick={() => setSelectedFolder('all')}
-                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm mb-1 ${selectedFolder === 'all' ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 font-medium' : 'text-gray-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800'}`}
+                        className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm mb-1 ${selectedFolder === 'all' ? 'bg-gray-100 dark:bg-slate-800 text-gray-900 dark:text-slate-50 font-medium' : 'text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700'}`}
                       >
-                        <FolderOpen className="w-4 h-4" />
+                        <FolderOpen className="w-4 h-4 text-brand-orange" />
                         <span className="flex-1 text-left">All Resumes</span>
-                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{myResumesData.length}</span>
+                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400">{myResumesData.length}</span>
                       </button>
                       <div className="space-y-0.5">{renderFolderTree(undefined, 0)}</div>
                     </div>
@@ -1388,7 +1384,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                         placeholder="Search by name, email, or position..."
-                        className="flex-1 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
                       />
                       <button
                         onClick={() => {
@@ -1408,7 +1404,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
                       {isLoadingResumes ? (
                         <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
-                          <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
+                          <Loader2 className="w-6 h-6 animate-spin text-gray-400 dark:text-slate-500" />
                         </div>
                       ) : filteredResumes.length === 0 ? (
                         <div className="flex flex-col items-center justify-center py-12 text-gray-400 dark:text-slate-500">
@@ -1420,7 +1416,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                           key={resume.id}
                           onClick={() => toggleResumeSelection(resume.id)}
                           className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-all ${
-                            selectedResumes.includes(resume.id) ? 'bg-brand-blue/5 border-brand-blue ring-1 ring-brand-blue/20' : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:border-gray-300 dark:hover:border-slate-700'
+                            selectedResumes.includes(resume.id) ? 'bg-brand-blue/5 border-brand-blue/40' : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                           }`}
                         >
                           <div className={`w-4 h-4 rounded border-2 flex-shrink-0 flex items-center justify-center ${
@@ -1441,13 +1437,13 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                     </div>
 
                     {/* Action footer */}
-                    <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex-wrap gap-2">
+                    <div className="flex items-center justify-between px-3 py-2 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 flex-wrap gap-2">
                       <span className="text-xs text-gray-500 dark:text-slate-500">{selectedResumes.length} candidate{selectedResumes.length !== 1 ? 's' : ''} selected</span>
                       <div className="flex items-center gap-2">
                         <button
                           onClick={handleAddFromDatabase}
                           disabled={selectedResumes.length === 0}
-                          className="flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                          className="flex items-center gap-2 px-3 py-1.5 text-sm border border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                           <Users className="w-4 h-4" />
                           Add to List
@@ -1455,7 +1451,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                         <button
                           onClick={handleSendFromDatabase}
                           disabled={selectedResumes.length === 0 || isSubmitting}
-                          className="flex items-center gap-2 px-3 py-1.5 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed disabled:shadow-none"
+                          className="flex items-center gap-2 px-3 py-1.5 text-sm bg-gradient-to-r from-green-600 to-teal-600 hover:from-green-700 hover:to-teal-700 text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {isSubmitting ? (
                             <><Loader2 className="w-4 h-4 animate-spin" />Sending...</>
@@ -1478,7 +1474,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             <select
               value={expiryDays}
               onChange={(e) => setExpiryDays(Number(e.target.value))}
-              className="text-xs border border-gray-200 dark:border-slate-700 rounded-lg px-2 py-1 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+              className="text-xs border border-gray-200 dark:border-slate-700 rounded-lg px-2 py-1 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
             >
               <option value={1}>1 day</option>
               <option value={3}>3 days</option>
@@ -1499,7 +1495,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
               value={customMessage}
               onChange={(e) => setCustomMessage(e.target.value)}
               rows={10}
-              className="w-full px-4 py-3 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue resize-none font-mono"
+              className="w-full px-4 py-3 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none font-mono"
               placeholder="Edit the message content here..."
             />
             <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
@@ -1515,7 +1511,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                 type="checkbox"
                 checked={sendCopy}
                 onChange={(e) => setSendCopy(e.target.checked)}
-                className="w-4 h-4 text-brand-blue border-gray-300 dark:border-slate-700 rounded focus:ring-brand-blue/40"
+                className="w-4 h-4 text-green-600 border-gray-300 dark:border-slate-700 rounded focus:ring-green-500"
               />
               <span className="text-sm text-gray-700 dark:text-slate-300">Send me a copy</span>
             </label>
@@ -1599,7 +1595,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-950 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
+        <div className="px-6 py-4 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 flex items-center justify-between shrink-0">
           <div className="text-sm text-gray-600 dark:text-slate-400">
             {(() => {
               const validCount = candidates.filter((c) => c.name.trim() && c.email.trim()).length;
@@ -1619,14 +1615,14 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           <div className="flex items-center gap-3">
             <button
               onClick={onClose}
-              className="px-5 py-2 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="px-5 py-2 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSend}
               disabled={!isValid || isSubmitting || (quotaStats !== null && quotaStats.available === 0 && quotaStats.total_quota < 999999)}
-              className="px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed disabled:shadow-none flex items-center gap-2"
+              className="px-6 py-2 bg-gradient-to-r from-green-600 to-teal-600 text-white rounded-lg hover:from-green-700 hover:to-teal-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
             >
               {isSubmitting ? (
                 <>

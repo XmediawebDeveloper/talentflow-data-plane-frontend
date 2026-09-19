@@ -71,6 +71,11 @@ export interface AIMatchSessionListResponse {
   total: number;
   page: number;
   page_size: number;
+  // Tenant-wide counts of individual match results by rating band (a perfect
+  // 10 vs 9-7), precomputed server-side so the "Top Match Rating" stat cards
+  // can render immediately from this same list call.
+  top_rating_exact_count?: number;
+  top_rating_partial_count?: number;
 }
 
 // Frontend-friendly candidate format (for UI components)

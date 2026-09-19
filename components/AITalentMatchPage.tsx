@@ -19,7 +19,7 @@ import ResumeVersionsModal from './ResumeVersionsModal';
 import Pagination from './Pagination';
 import ListPagination from './ListPagination';
 import { recordUsage } from '@/lib/services/usageTrackingService';
-import { aiMatchService, MatchedCandidate } from '@/lib/services/aiMatchService';
+import { aiMatchService, MatchedCandidate, AIMatchSessionResponse } from '@/lib/services/aiMatchService';
 import AIMatchVersionHistoryTable, { AIMatchSessionVersion, buildAIMatchVersions } from './AIMatchVersionHistoryTable';
 import { scoringService } from '@/lib/services/scoringService';
 import { resumeService } from '@/lib/services/resumeService';
@@ -43,6 +43,7 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
+import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import JDVersionHistory from '@/components/JDVersionHistory';
 
@@ -182,6 +183,16 @@ interface AITalentMatchPageProps {
    *  share a JD code but not an id). Drives whether "View Version History"
    *  shows at all. */
   matchSessionCounts?: Record<string, number>;
+  /** Tenant-wide "Top Match Rating" band counts, precomputed server-side in
+   *  the same session-list call so these two stat cards render immediately
+   *  instead of waiting on every session's full candidate detail. `null`
+   *  while that initial call is still in flight. */
+  ratingBandCounts?: { exact: number; partial: number } | null;
+  /** Every session from the same initial /ai-match/sessions call `matchHistory`
+   *  is already built from — kept raw (not collapsed to one-per-job) so "View
+   *  Versions" can paint instantly from data already in memory instead of
+   *  re-fetching per version. See `getOptimisticAIMatchVersions`. */
+  allMatchSessions?: AIMatchSessionResponse[];
   onSaveMatch?: (data: MatchHistory) => void;
   /** Background reconciliation after a match completes — see the route's own
    *  fetchData({ silent: true }) for why this exists alongside onSaveMatch. */
@@ -194,6 +205,8 @@ export default function AITalentMatchPage({
   jobs,
   matchHistory = [],
   matchSessionCounts = {},
+  ratingBandCounts = null,
+  allMatchSessions = [],
   onSaveMatch,
   onMatchComplete,
   onSubmitToScoring,
@@ -663,6 +676,10 @@ export default function AITalentMatchPage({
   } = candidateSearch.filters;
   const [candidateSortBy, setCandidateSortBy] = useState<'score' | 'name' | 'jobs' | 'date'>('jobs');
   const [candidateSortOrder, setCandidateSortOrder] = useState<'asc' | 'desc'>('desc');
+  // Shared between "View by Candidates" and "All Resumes" (incl. its rating-band
+  // filters) — only one of those views is ever on screen at a time, so one flag
+  // is enough and a toggle made in either view carries over to the other.
+  const [matchDisplayMode, setMatchDisplayMode] = useState<ListDisplayMode>('list');
 
   useEffect(() => {
     setCandidateCurrentPage(1);
@@ -853,6 +870,28 @@ export default function AITalentMatchPage({
     } finally {
       setLoadingHistoryJobId(current => current === historyKey ? null : current);
     }
+  };
+
+  /**
+   * Best-effort version rows for "View Versions"' FIRST paint, built entirely
+   * from data already in memory — no request. `allMatchSessions` is the raw,
+   * un-collapsed reply from the same /ai-match/sessions call `matchHistory`
+   * itself comes from, and every field `AIMatchVersionHistoryTable` reads off
+   * `session` (`total_matches`, `created_at`, `jd_id`) is already present on
+   * those summary records — unlike the full hydration `loadAIMatchVersionHistory`
+   * does, nothing here needs `session.results`.
+   *
+   * `loadAIMatchVersionHistory` still runs every time regardless (see
+   * `toggleAIMatchVersionHistory`) and overwrites `historyVersionsByJob` the
+   * moment it resolves — this is only ever a head start, corrected the moment
+   * the authoritative, fully-hydrated fetch lands (that fetch is also what the
+   * "Match History" modal's Exact/Partial/No-Match roll-up depends on, so it
+   * can't be skipped, only no longer blocking this table's first paint).
+   */
+  const getOptimisticAIMatchVersions = (historyKey: string): AIMatchSessionVersion[] => {
+    const lineageIds = new Set(jobs.filter(j => j.jobId === historyKey).map(j => j.id));
+    const knownSessions = allMatchSessions.filter(s => s.jd_id && lineageIds.has(s.jd_id));
+    return buildAIMatchVersions(knownSessions);
   };
 
   const toggleAIMatchVersionHistory = (historyKey: string, anyRowId: string) => {
@@ -1898,7 +1937,17 @@ export default function AITalentMatchPage({
 
   // View: History List
   if (viewMode === 'history') {
-    const totalMatchedCandidates = matchHistory.reduce((sum, item) => sum + (item.totalMatches || 0), 0);
+    // "Match by Candidate" must count unique people, not resume matches — a
+    // candidate re-scored across jobs (or re-uploaded under a new resumeId)
+    // is one person, not several. `candidateRows` is already deduped by
+    // email/name/resumeId (see buildCandidateRows), so read its length
+    // instead of summing each session's `totalMatches` (which counts every
+    // matched resume/version, the same inflated total "All Resumes" lists).
+    // It's ready once the roll-up has finished building, or immediately if
+    // every session has zero matches (nothing to build).
+    const totalMatchedCandidatesReady = !loadingCandidateRows &&
+      (candidateRows.length > 0 || matchHistory.every(item => (item.totalMatches || 0) === 0));
+    const totalMatchedCandidates = candidateRows.length;
 
     // Every session's candidates load in individually (in the background — see
     // the prefetch effect above), so the rating-band counts below fill in one
@@ -1978,12 +2027,18 @@ export default function AITalentMatchPage({
     // "Top Match Rating (10)"/"Top Match Rating (9-7)" cards: how many scored
     // resumes land in each band, out of the same un-deduped rows "All Resumes"
     // itself lists — so a card's count and its drill-down list never disagree.
+    // This client-side tally is only a fallback for when the server-computed
+    // `ratingBandCounts` prop isn't available yet (or at all) — normally the
+    // cards render straight from that prop below, without waiting on it.
     const topRatingExactCount = allResumeRows.filter(
       ({ job }) => matchBandForRating(toMatchRating(job.score)) === 'exact'
     ).length;
     const topRatingPartialCount = allResumeRows.filter(
       ({ job }) => matchBandForRating(toMatchRating(job.score)) === 'partial'
     ).length;
+    const statsReady = ratingBandCounts !== null || topStatsReady;
+    const displayedExactCount = ratingBandCounts?.exact ?? topRatingExactCount;
+    const displayedPartialCount = ratingBandCounts?.partial ?? topRatingPartialCount;
 
     const filteredAllResumeRows = allResumeRows.filter(({ row, job }) => {
       const matchesSearch = !candidateQuery ||
@@ -2232,7 +2287,9 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={User}
             label="Match by Candidate"
-            value={totalMatchedCandidates}
+            value={totalMatchedCandidatesReady ? totalMatchedCandidates : (
+              <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
+            )}
             sparkline={false}
             onClick={() => { setCandidateRatingBand(null); void openCandidatesView(); }}
           />
@@ -2242,10 +2299,12 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={CheckCircle2}
             label="Top Match Rating (10)"
-            // Shown only once every session has resolved — see `topStatsReady`
-            // — so this renders the final count directly instead of visibly
-            // counting up as sessions load in one by one.
-            value={topStatsReady ? topRatingExactCount : (
+            // Renders straight from the server-computed `ratingBandCounts` prop
+            // (available from the same fast session-list call as the other two
+            // cards); only falls back to the slower per-session tally + its
+            // "wait for every session" gate (`statsReady`) if that prop is
+            // unavailable, so the skeleton is no longer the common case.
+            value={statsReady ? displayedExactCount : (
               <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
             )}
             sparkline={false}
@@ -2263,10 +2322,8 @@ export default function AITalentMatchPage({
             showClickArrow
             icon={PieChart}
             label="Top Match Rating (9-7)"
-            // Same "hold until every session has resolved" rule as the 10-band
-            // card above, so this shows the final count directly rather than
-            // counting up (1, 2, 3, ...) as sessions load in.
-            value={topStatsReady ? topRatingPartialCount : (
+            // Same server-computed-prop-first rule as the 10-band card above.
+            value={statsReady ? displayedPartialCount : (
               <span className="inline-block h-6 w-8 bg-gray-100 dark:bg-slate-800 rounded animate-pulse align-middle" aria-label="Loading" />
             )}
             sparkline={false}
@@ -2405,6 +2462,8 @@ export default function AITalentMatchPage({
                     {band.label}
                   </button>
                 ))}
+
+                <ListViewToggle value={matchDisplayMode} onChange={setMatchDisplayMode} className="ml-auto" />
               </div>
 
               {showCandidateFilters && (
@@ -2571,6 +2630,58 @@ export default function AITalentMatchPage({
                     Clear filters
                   </button>
                 )}
+              </div>
+            ) : matchDisplayMode === 'grid' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {paginatedCandidateRows.map((row) => {
+                  const avatar = avatarColorFor(row.key);
+                  const sortedJobs = [...row.jobs].sort((a, b) => new Date(b.matchedAt).getTime() - new Date(a.matchedAt).getTime());
+                  const latestJob = sortedJobs[0];
+                  return (
+                    <button
+                      key={row.key}
+                      onClick={() => openCandidateResume(row, sortedCandidateRows)}
+                      className="text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center text-sm font-semibold flex-shrink-0 ${avatar.bg} ${avatar.text}`}>
+                          {initialsFor(row.name || 'Candidate')}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{row.name || 'Candidate'}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{row.email || row.phone || '—'}</p>
+                        </div>
+                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(latestJob.score)}`}>
+                          {toMatchRating(latestJob.score)}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-gray-600 dark:text-slate-400 truncate" title={latestJob.jobTitle}>
+                        {latestJob.jobTitle}
+                      </p>
+
+                      <span className="inline-flex items-center self-start px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-500/10 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-500/30 whitespace-nowrap">
+                        {row.jobs.length} Job {row.jobs.length === 1 ? 'Version' : 'Versions'}
+                      </span>
+
+                      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-500 pt-2 border-t border-gray-100 dark:border-slate-800">
+                        <span>{formatISTDate(latestJob.matchedAt.toISOString())}</span>
+                        <div
+                          onClick={(e) => { e.stopPropagation(); handleAttachmentsClick(row.best); }}
+                          className="inline-flex items-center gap-1 text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
+                        >
+                          <Paperclip className="w-3.5 h-3.5" />
+                          Attachments
+                        </div>
+                      </div>
+
+                      <div className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors">
+                        <Eye className="w-3.5 h-3.5" />
+                        View Resume
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             ) : (
               /* Grouped table, matching Resume Scoring's grouped "View by
@@ -3015,6 +3126,8 @@ export default function AITalentMatchPage({
                   </button>
                 ))}
 
+                <ListViewToggle value={matchDisplayMode} onChange={setMatchDisplayMode} className={selectedAllResumeEntries.length > 0 ? '' : 'ml-auto'} />
+
                 {selectedAllResumeEntries.length > 0 && (
                   <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
                     {canRunScoring && (
@@ -3217,6 +3330,81 @@ export default function AITalentMatchPage({
                     Clear filters
                   </button>
                 )}
+              </div>
+            ) : matchDisplayMode === 'grid' ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {paginatedAllResumeRows.map(({ key, row, job }) => {
+                  const scored = row.resumeId ? allScoredResumeIds.has(row.resumeId) : false;
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => openCandidateResume(row, sortedAllResumeRows.map(entry => entry.row))}
+                      className="text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-xs text-gray-700 dark:text-slate-300 font-medium flex-shrink-0">
+                          {(row.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase()}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{row.name || 'Unknown'}</p>
+                          <p className="text-xs text-gray-500 dark:text-slate-400 truncate">{row.email || '—'}</p>
+                        </div>
+                        <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(job.score)}`}>
+                          {toMatchRating(job.score)}
+                        </span>
+                      </div>
+
+                      <button
+                        onClick={(e) => { e.stopPropagation(); openCandidateMatch(job.historyId); }}
+                        className="text-xs text-gray-600 dark:text-slate-400 hover:text-brand-blue hover:underline truncate text-left"
+                        title={`Open ${job.jobTitle} match`}
+                      >
+                        {job.jobTitle}
+                      </button>
+
+                      <div className="flex flex-wrap gap-1">
+                        <SkillsList
+                          skills={row.best.skills}
+                          chipClassName="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] bg-brand-blue/10 text-brand-blue border border-brand-blue/20 whitespace-nowrap"
+                          moreClassName="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] text-brand-blue font-medium whitespace-nowrap hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {scored ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-medium">
+                            <CheckCircle className="w-3 h-3" />
+                            Scored
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded-full text-[10px] font-medium">
+                            <XCircle className="w-3 h-3" />
+                            Not Scored
+                          </span>
+                        )}
+                        {row.location && (
+                          <span className="text-[10px] text-gray-500 dark:text-slate-500 truncate">{row.location}</span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-500 pt-2 border-t border-gray-100 dark:border-slate-800">
+                        <span>{row.experience || '—'}</span>
+                        <div
+                          onClick={(e) => { e.stopPropagation(); handleAttachmentsClick(row.best); }}
+                          className="inline-flex items-center gap-1 hover:text-brand-blue transition-colors"
+                        >
+                          <Paperclip className="w-3.5 h-3.5" />
+                          {row.best.attachmentCount || 1}
+                        </div>
+                      </div>
+
+                      <div className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors">
+                        <Eye className="w-3.5 h-3.5" />
+                        View Details
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             ) : (
               <>
@@ -3682,6 +3870,11 @@ export default function AITalentMatchPage({
               // this row's id — every republished version of the same job
               // shares one history key so their runs aren't split across cards.
               const historyKey = jobData?.jobId || item.jobId;
+              // The real, fully-hydrated versions once loadAIMatchVersionHistory
+              // lands; an instant, data-already-in-memory guess until then — see
+              // getOptimisticAIMatchVersions's own doc comment.
+              const displayedHistoryVersions = historyVersionsByJob[historyKey] ?? getOptimisticAIMatchVersions(historyKey);
+              const hasHistoryVersionsToShow = !!historyVersionsByJob[historyKey] || displayedHistoryVersions.length > 0;
 
               return (
                 <div
@@ -3856,9 +4049,13 @@ export default function AITalentMatchPage({
                         <p className="text-sm font-semibold text-gray-900 dark:text-slate-100">Version History</p>
                       </div>
                       <AIMatchVersionHistoryTable
-                        loading={loadingHistoryJobId === historyKey}
-                        failed={failedHistoryJobId === historyKey}
-                        versions={historyVersionsByJob[historyKey] ?? null}
+                        loading={!hasHistoryVersionsToShow && loadingHistoryJobId === historyKey}
+                        /* A background hydration failure (fetching the fully
+                           accurate version) must not blank out a perfectly good
+                           optimistic table already on screen — only shown when
+                           there is nothing else to fall back on. */
+                        failed={failedHistoryJobId === historyKey && !hasHistoryVersionsToShow}
+                        versions={hasHistoryVersionsToShow ? displayedHistoryVersions : null}
                         /* Resolved per session, not per card: the rows span the
                            job's whole lineage, so each one may be a different
                            JD record with its own status. Falls back to this
@@ -4071,56 +4268,33 @@ export default function AITalentMatchPage({
           { label: 'Below 7', value: noMatchCount, barClass: 'bg-red-500', textClass: 'text-red-600' },
         ];
 
+        // Single action: jump straight to this version's match results — no
+        // dropdown, so the Action column reads the same one-click way as the
+        // rest of the app's history tables.
         const renderVersionActions = (session: AIMatchSessionVersion['session']) => (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label="Actions"
-                title="Actions"
-                className="p-1.5 bg-white dark:bg-slate-900 rounded-md border border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-              >
-                <MoreVertical className="w-3.5 h-3.5 text-gray-600 dark:text-slate-300" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-              <DropdownMenuItem
-                className={actionsMenuItemClass}
-                onSelect={() => {
-                  userChangedView.current = true; // Prevent useEffect from resetting view
-                  const targetJobId = session.jd_id || modalItem.jobId;
-                  const targetJob = jobs.find(j => j.id === targetJobId);
-                  openMatchResults({
-                    id: session.id,
-                    jobId: targetJobId,
-                    jobTitle: targetJob?.title || modalItem.jobTitle,
-                    matchedAt: new Date(session.created_at),
-                    totalMatches: session.total_matches,
-                    matchedCandidates: [],
-                  }, targetJobId);
-                  updateUrlParams({ jdId: targetJobId, view: 'results' });
-                  setMatchHistoryModal(null);
-                }}
-              >
-                <Eye className="w-4 h-4 text-menu-icon-view" />
-                <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                className={actionsMenuItemClass}
-                onSelect={() => {
-                  if (!canRunAiMatch) {
-                    toast.error('You do not have permission to run AI matching operations');
-                    return;
-                  }
-                  handleRunAIMatch(session.jd_id || modalItem.jobId);
-                  setMatchHistoryModal(null);
-                }}
-              >
-                <Sparkles className="w-4 h-4 text-menu-icon-ai" />
-                <span className={MENU_ITEM_SCALE_CLASS}>Run AI Match</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <button
+            type="button"
+            onClick={() => {
+              userChangedView.current = true; // Prevent useEffect from resetting view
+              const targetJobId = session.jd_id || modalItem.jobId;
+              const targetJob = jobs.find(j => j.id === targetJobId);
+              openMatchResults({
+                id: session.id,
+                jobId: targetJobId,
+                jobTitle: targetJob?.title || modalItem.jobTitle,
+                matchedAt: new Date(session.created_at),
+                totalMatches: session.total_matches,
+                matchedCandidates: [],
+              }, targetJobId);
+              updateUrlParams({ jdId: targetJobId, view: 'results' });
+              setMatchHistoryModal(null);
+            }}
+            className="p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
+            aria-label="View match results"
+            title="View match results"
+          >
+            <Eye className="w-4 h-4" />
+          </button>
         );
 
         return (

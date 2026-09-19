@@ -2,7 +2,7 @@
 
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { WorkInProgressIcon } from '@/components/icons/nav-icons';
-import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronRight, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList } from 'lucide-react';
+import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, useId } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useRouter } from 'next/navigation';
@@ -42,6 +42,23 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+
+/** Search/Scored By/Version/Status for the Scoring History modal's filter
+ *  row — same shape as AITalentMatchPage's MatchHistoryModalFilters, so the
+ *  two popups' filter sections behave identically (one object, live
+ *  filtering, a single Reset back to this). */
+interface ScoringHistoryModalFilters {
+  search: string;
+  scoredBy: string;
+  version: string;
+  status: 'all' | 'exact' | 'partial' | 'nomatch';
+}
+const EMPTY_SCORING_HISTORY_FILTERS: ScoringHistoryModalFilters = {
+  search: '',
+  scoredBy: 'all',
+  version: 'all',
+  status: 'all',
+};
 
 const formatEmploymentType = (type: string | undefined): string => {
   if (!type) return '-';
@@ -553,23 +570,12 @@ export default function ResumeScoringPage({
     }
   };
 
-  // Pending filter inputs (Search/Scored By/Version/Status) for the modal's
-  // toolbar — committed into `appliedHistoryFilters` only on Apply, per the
-  // mockup's Reset/Apply pair, rather than filtering live on every keystroke.
-  const [historyFilterSearch, setHistoryFilterSearch] = useState('');
-  const [historyFilterScoredBy, setHistoryFilterScoredBy] = useState('all');
-  const [historyFilterVersion, setHistoryFilterVersion] = useState('all');
-  const [historyFilterStatus, setHistoryFilterStatus] = useState<'all' | 'exact' | 'partial' | 'nomatch'>('all');
-  const [appliedHistoryFilters, setAppliedHistoryFilters] = useState({
-    search: '', scoredBy: 'all', version: 'all', status: 'all' as 'all' | 'exact' | 'partial' | 'nomatch',
-  });
-  const resetHistoryModalFilters = () => {
-    setHistoryFilterSearch('');
-    setHistoryFilterScoredBy('all');
-    setHistoryFilterVersion('all');
-    setHistoryFilterStatus('all');
-    setAppliedHistoryFilters({ search: '', scoredBy: 'all', version: 'all', status: 'all' });
-  };
+  // Search/Scored By/Version/Status for the modal's toolbar — same shape and
+  // live-filtering behavior as the AI Talent Match History popup's own
+  // `historyModalFilter`: one object, updated directly on every change, no
+  // separate Apply step.
+  const [historyModalFilter, setHistoryModalFilter] = useState<ScoringHistoryModalFilters>(EMPTY_SCORING_HISTORY_FILTERS);
+  const resetHistoryModalFilters = () => setHistoryModalFilter(EMPTY_SCORING_HISTORY_FILTERS);
 
   // Every time the modal opens for a job, pull its latest scores — the same
   // "always fresh on open" behaviour Track Invites follows — rather than
@@ -3609,24 +3615,31 @@ export default function ResumeScoringPage({
         const distinctHistoryScorers = Array.from(new Set(allResumes.map((r: any) => r.scoredBy || 'System'))).sort();
         const distinctHistoryVersions = Array.from(new Set(allResumes.map((r: any) => r.__versionNumber as number))).sort((a, b) => b - a);
 
-        // The APPLIED filters narrow which resumes feed the table's rows —
-        // Match Summary and the Job Version Average panel stay on the full,
+        // Filters narrow the table below live, as each one changes — no
+        // Apply step, same as the AI Talent Match History popup. Match
+        // Summary and the Job Version Average panel stay on the full,
         // unfiltered set below, so they always read as "this job's whole
         // history" regardless of what the table itself is currently showing.
         const filteredHistoryResumes = allResumes.filter((r: any) => {
-          if (appliedHistoryFilters.version !== 'all' && String(r.__versionNumber) !== appliedHistoryFilters.version) return false;
-          if (appliedHistoryFilters.scoredBy !== 'all' && (r.scoredBy || 'System') !== appliedHistoryFilters.scoredBy) return false;
-          if (appliedHistoryFilters.status === 'exact' && !isExactMatch(r)) return false;
-          if (appliedHistoryFilters.status === 'partial' && !isPartialMatch(r)) return false;
-          if (appliedHistoryFilters.status === 'nomatch' && !isNoMatch(r)) return false;
-          if (appliedHistoryFilters.search.trim()) {
-            const q = appliedHistoryFilters.search.trim().toLowerCase();
+          if (historyModalFilter.version !== 'all' && String(r.__versionNumber) !== historyModalFilter.version) return false;
+          if (historyModalFilter.scoredBy !== 'all' && (r.scoredBy || 'System') !== historyModalFilter.scoredBy) return false;
+          if (historyModalFilter.status === 'exact' && !isExactMatch(r)) return false;
+          if (historyModalFilter.status === 'partial' && !isPartialMatch(r)) return false;
+          if (historyModalFilter.status === 'nomatch' && !isNoMatch(r)) return false;
+          if (historyModalFilter.search.trim()) {
+            const q = historyModalFilter.search.trim().toLowerCase();
             const scorer = (r.scoredBy || 'System').toLowerCase();
             const email = (r.scoredByEmail || '').toLowerCase();
             if (!scorer.includes(q) && !email.includes(q)) return false;
           }
           return true;
         });
+
+        const isHistoryModalFilterActive =
+          historyModalFilter.search.trim() !== '' ||
+          historyModalFilter.scoredBy !== 'all' ||
+          historyModalFilter.version !== 'all' ||
+          historyModalFilter.status !== 'all';
 
         const groups: {
           version: number;
@@ -3708,11 +3721,8 @@ export default function ResumeScoringPage({
         ];
 
         const sortHeaderIcon = <ChevronsUpDown className="w-3 h-3 text-gray-400 dark:text-slate-500" />;
-        // Shared between the header row and every body row so columns can
-        // never drift out of alignment with each other.
-        const historyGridCols = 'grid-cols-[60px_1.5fr_1.0fr_0.8fr_1.5fr_0.8fr_56px]';
-        const historySelectClass = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue';
-        const historyLabelClass = 'block text-xs font-semibold text-gray-700 dark:text-slate-300 mb-1.5';
+        const historySelectClass = 'w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black dark:text-slate-100 bg-white dark:bg-slate-900';
+        const historyLabelClass = 'block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1';
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
@@ -3813,73 +3823,83 @@ export default function ResumeScoringPage({
                 </div>
               </div>
 
-              {/* Filter toolbar — Reset/Apply rather than live filtering, so
-                  picking several filters in a row doesn't reshuffle the table
-                  after every click. */}
+              {/* Filter row — same live-filtering shape as the AI Talent
+                  Match History popup's own filter row: Search/Scored By/
+                  Version/Status narrow the table below as each one changes,
+                  no Apply step. Always one line, scrolling horizontally on
+                  its own rather than breaking if it's ever narrower than the
+                  fields' combined min-width. Reset only appears once some
+                  field is actually narrowing the table. */}
               <div className="px-6 pt-4">
-                <div className="p-4 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.6fr)_repeat(3,minmax(0,1fr))_auto] gap-3 items-end">
-                    <div>
+                <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3">
+                  {/* py-1 -my-1: see the Match History popup's own filter row
+                      for why — without it a horizontally-scrolling flex row
+                      clips every field's focus ring at its own edge. */}
+                  <div className="flex items-end gap-2 overflow-x-auto py-1 -my-1">
+                    <div className="flex-1 min-w-[11rem]">
                       <label className={historyLabelClass}>Search</label>
                       <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500 pointer-events-none" />
                         <input
                           type="text"
-                          value={historyFilterSearch}
-                          onChange={(e) => setHistoryFilterSearch(e.target.value)}
+                          value={historyModalFilter.search}
+                          onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, search: e.target.value }))}
                           placeholder="Search by scorer, email, etc..."
-                          className={`${historySelectClass} pl-9`}
+                          className={`${historySelectClass} pl-9 w-full`}
                         />
                       </div>
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-[10rem]">
                       <label className={historyLabelClass}>Scored By</label>
-                      <select value={historyFilterScoredBy} onChange={(e) => setHistoryFilterScoredBy(e.target.value)} className={historySelectClass}>
+                      <select
+                        value={historyModalFilter.scoredBy}
+                        onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, scoredBy: e.target.value }))}
+                        className={`${historySelectClass} w-full`}
+                      >
                         <option value="all">All Scorers</option>
                         {distinctHistoryScorers.map((s) => (
                           <option key={s} value={s}>{s}</option>
                         ))}
                       </select>
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-[7rem]">
                       <label className={historyLabelClass}>Version</label>
-                      <select value={historyFilterVersion} onChange={(e) => setHistoryFilterVersion(e.target.value)} className={historySelectClass}>
+                      <select
+                        value={historyModalFilter.version}
+                        onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, version: e.target.value }))}
+                        className={`${historySelectClass} w-full`}
+                      >
                         <option value="all">All Versions</option>
                         {distinctHistoryVersions.map((v) => (
                           <option key={v} value={String(v)}>v{v}</option>
                         ))}
                       </select>
                     </div>
-                    <div>
+                    <div className="flex-1 min-w-[9rem]">
                       <label className={historyLabelClass}>Status</label>
-                      <select value={historyFilterStatus} onChange={(e) => setHistoryFilterStatus(e.target.value as typeof historyFilterStatus)} className={historySelectClass}>
+                      <select
+                        value={historyModalFilter.status}
+                        onChange={(e) => setHistoryModalFilter(prev => ({ ...prev, status: e.target.value as ScoringHistoryModalFilters['status'] }))}
+                        className={`${historySelectClass} w-full`}
+                      >
                         <option value="all">All Status</option>
                         <option value="exact">Exact Match</option>
                         <option value="partial">Partial Match</option>
                         <option value="nomatch">No Match</option>
                       </select>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={resetHistoryModalFilters}
-                        className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors whitespace-nowrap"
-                      >
-                        Reset
-                      </button>
-                      <button
-                        onClick={() => {
-                          setAppliedHistoryFilters({
-                            search: historyFilterSearch,
-                            scoredBy: historyFilterScoredBy,
-                            version: historyFilterVersion,
-                            status: historyFilterStatus,
-                          });
-                        }}
-                        className="px-4 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-nowrap"
-                      >
-                        Apply
-                      </button>
-                    </div>
+                    {isHistoryModalFilterActive && (
+                      <div className="flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={resetHistoryModalFilters}
+                          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium border border-red-200 dark:border-red-900/50 rounded-full text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors whitespace-nowrap"
+                        >
+                          <XCircle className="w-4 h-4" />
+                          Reset
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -3895,93 +3915,69 @@ export default function ResumeScoringPage({
                       {allResumes.length === 0 ? 'No scoring history available.' : 'No scoring history matches these filters.'}
                     </div>
                   ) : (
-                    /* overflow-x-auto + min-w below: the grid's fixed/fr column
-                       tracks need ~760px to fit the Status column's three
-                       badges without crushing them, wider than a phone
-                       viewport — scroll it sideways instead of clipping it
-                       (overflow-hidden on the outer card used to do exactly
-                       that, silently cutting columns off on mobile). */
-                    <div className="overflow-x-auto">
-                    <div className="min-w-[760px]">
-                      {/* A CSS grid rather than a <table>: header and body rows
-                          share the exact same `historyGridCols` track list, so
-                          every column lines up pixel-for-pixel regardless of
-                          how much a cell's own content wants. */}
-                      <div className={`grid ${historyGridCols} shrink-0 bg-brand-sky dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700/60`}>
-                        <div className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100 text-center">Version</div>
-                        <div className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100 text-center">Scored By</div>
-                        <div className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100 text-center">
-                          <span className="inline-flex items-center justify-center gap-1">Date {sortHeaderIcon}</span>
-                        </div>
-                        <div className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100 text-center">
-                          <span className="inline-flex items-center justify-center gap-1">Resumes {sortHeaderIcon}</span>
-                        </div>
-                        <div className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100 text-center">
-                          <span className="inline-flex items-center justify-center gap-1">Status {sortHeaderIcon}</span>
-                        </div>
-                        <div className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100 text-center">
-                          <span className="inline-flex items-center justify-center gap-1">Average Score {sortHeaderIcon}</span>
-                        </div>
-                        <div className="px-4 py-3 text-xs font-bold text-gray-900 dark:text-slate-100 text-center">Action</div>
-                      </div>
-                      {/* ~4 rows at their normal ~76-84px height; scrolls its
-                          own overflow for the rest. Self-contained (not a
-                          flex-1 child fighting siblings for space) now that
-                          the dialog's outer body is the one that scrolls if
-                          the window is too short for everything else. */}
-                      <div className="max-h-[340px] overflow-y-auto divide-y divide-gray-100 dark:divide-slate-700">
+                    /* Same shape as the AI Talent Match History popup's own
+                       table: one bordered box, sticky header living in the
+                       SAME scroll container as the rows (so a scrollbar can
+                       never make the body narrower than the header — the
+                       cause of the earlier bleeding), light row dividers
+                       only (no vertical grid lines), a subtle blue-tinted
+                       hover, and the Exact/Partial/No Match counts broken out
+                       as their own light-tinted columns under a "Status"
+                       group header instead of three badges crammed into one
+                       cell. Fixed height ≈ the 2-row sticky header (~64px)
+                       plus 3 data rows (~50px each). */
+                    <div className="overflow-auto rounded-lg border border-gray-200 dark:border-slate-700" style={{ height: 200 }}>
+                      <table className="w-full text-xs">
+                        <thead className="sticky top-0 z-10">
+                          <tr className="text-left bg-brand-sky dark:bg-slate-800">
+                            <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">Version</th>
+                            <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">Scored By</th>
+                            <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">
+                              <span className="inline-flex items-center gap-1">Date {sortHeaderIcon}</span>
+                            </th>
+                            <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">
+                              <span className="inline-flex items-center gap-1">Resumes Scored {sortHeaderIcon}</span>
+                            </th>
+                            <th colSpan={3} className="py-1.5 px-3 font-bold text-gray-900 dark:text-slate-100 text-center border-b border-gray-200 dark:border-slate-700">Status</th>
+                            <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom">
+                              <span className="inline-flex items-center gap-1">Average Score {sortHeaderIcon}</span>
+                            </th>
+                            <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom text-right">Action</th>
+                          </tr>
+                          <tr className="text-left bg-brand-sky dark:bg-slate-800">
+                            <th className="py-1.5 px-3 font-semibold text-green-700 dark:text-green-400">Exact</th>
+                            <th className="py-1.5 px-3 font-semibold text-brand-orange-deep dark:text-orange-400">Partial</th>
+                            <th className="py-1.5 px-3 font-semibold text-red-600 dark:text-red-400">No Match</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
                         {groups.map((g) => {
                           const groupKey = `${g.version}||${g.scoredBy}||${g.date}`;
                           return (
-                            <div key={groupKey}>
-                              <div className={`grid ${historyGridCols} hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors`}>
-                                <div className="px-4 py-3.5 flex items-center justify-center">
-                                  <span className="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
+                            <tr key={groupKey} className="hover:bg-brand-blue/[0.03] dark:hover:bg-brand-blue/[0.06]">
+                                <td className="py-2.5 px-3 whitespace-nowrap">
+                                  <span className="px-2 py-0.5 rounded-md font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
                                     v{g.version}
                                   </span>
-                                </div>
-                                <div className="px-4 py-3.5 flex items-center justify-center min-w-0 text-center">
-                                  <div className="min-w-0">
-                                    <div className="text-gray-900 dark:text-slate-100 font-semibold truncate">{g.scoredBy}</div>
-                                    {g.scoredByEmail && (
-                                      <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{g.scoredByEmail}</div>
-                                    )}
-                                  </div>
-                                </div>
-                                <div className="px-4 py-3.5 flex items-center justify-center whitespace-nowrap">
-                                  <div className="flex items-center gap-1.5 text-gray-700 dark:text-slate-300">
+                                </td>
+                                <td className="py-2.5 px-3 whitespace-nowrap">
+                                  <div className="font-semibold text-gray-900 dark:text-slate-100 truncate max-w-[160px]">{g.scoredBy}</div>
+                                  {g.scoredByEmail && (
+                                    <div className="text-gray-400 dark:text-slate-600 truncate max-w-[160px]">{g.scoredByEmail}</div>
+                                  )}
+                                </td>
+                                <td className="py-2.5 px-3 whitespace-nowrap text-gray-600 dark:text-slate-400">
+                                  <span className="inline-flex items-center gap-1.5">
                                     <Calendar className="w-3.5 h-3.5 text-brand-blue flex-shrink-0" />
                                     {g.date}
-                                  </div>
-                                </div>
-                                <div className="px-4 py-3.5 flex flex-col items-center justify-center text-center">
-                                  <span className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-brand-blue/10 text-brand-blue font-bold text-sm">{g.count}</span>
-                                  <div className="text-[11px] text-gray-500 dark:text-slate-500 mt-0.5">Resume{g.count === 1 ? '' : 's'} Scored</div>
-                                </div>
-                                <div className="px-4 py-3.5 flex items-center justify-center">
-                                  <div className="flex items-center gap-1.5">
-                                    {/* h-10 + whitespace-nowrap on every badge — "No Match"
-                                        wrapping to two lines inside a 52px-wide badge while
-                                        "Exact"/"Partial" stayed on one is what made these
-                                        three look like different-height cards. */}
-                                    <span className="inline-flex flex-col items-center justify-center h-10 px-2 py-1 rounded-lg bg-green-50 dark:bg-green-900/20 min-w-[56px]">
-                                      <span className="text-[10px] font-medium text-green-700 dark:text-green-400 whitespace-nowrap">Exact</span>
-                                      <span className="text-sm font-bold text-green-700 dark:text-green-400">{g.exactCount}</span>
-                                    </span>
-                                    <span className="inline-flex flex-col items-center justify-center h-10 px-2 py-1 rounded-lg bg-orange-50 dark:bg-orange-900/20 min-w-[56px]">
-                                      <span className="text-[10px] font-medium text-orange-600 dark:text-orange-400 whitespace-nowrap">Partial</span>
-                                      <span className="text-sm font-bold text-orange-600 dark:text-orange-400">{g.partialCount}</span>
-                                    </span>
-                                    <span className="inline-flex flex-col items-center justify-center h-10 px-2 py-1 rounded-lg bg-red-50 dark:bg-red-900/20 min-w-[56px]">
-                                      <span className="text-[10px] font-medium text-red-600 dark:text-red-400 whitespace-nowrap">No Match</span>
-                                      <span className="text-sm font-bold text-red-600 dark:text-red-400">{g.noMatchCount}</span>
-                                    </span>
-                                  </div>
-                                </div>
-                                <div className="px-4 py-3.5 flex items-center justify-center text-center">
-                                  <span className="text-lg font-bold text-brand-blue">{Math.round(g.totalScore / g.count)}</span>
-                                </div>
-                                <div className="px-4 py-3.5 flex items-center justify-center">
+                                  </span>
+                                </td>
+                                <td className="py-2.5 px-3 font-semibold text-gray-900 dark:text-slate-100">{g.count}</td>
+                                <td className="py-2.5 px-3 text-center font-semibold text-green-700 bg-green-50/60 dark:bg-green-500/10 dark:text-green-400">{g.exactCount}</td>
+                                <td className="py-2.5 px-3 text-center font-semibold text-brand-orange-deep bg-orange-50/60 dark:bg-orange-500/10 dark:text-orange-400">{g.partialCount}</td>
+                                <td className="py-2.5 px-3 text-center font-semibold text-red-600 bg-red-50/60 dark:bg-red-500/10 dark:text-red-400">{g.noMatchCount}</td>
+                                <td className="py-2.5 px-3 font-bold text-brand-blue">{Math.round(g.totalScore / g.count)}</td>
+                                <td className="py-2.5 px-3 text-right">
                                   {/* Always a direct link to this session's JD scoring page
                                       (filtered to this day) — never an inline expand/collapse,
                                       regardless of how many resumes the session scored. */}
@@ -3991,15 +3987,14 @@ export default function ResumeScoringPage({
                                     aria-label="View job scores"
                                     title="View job scores"
                                   >
-                                    <ChevronRight className="w-4 h-4" />
+                                    <Eye className="w-4 h-4" />
                                   </button>
-                                </div>
-                              </div>
-                            </div>
+                                </td>
+                            </tr>
                           );
                         })}
-                      </div>
-                    </div>
+                        </tbody>
+                      </table>
                     </div>
                   )}
                 </div>
@@ -4050,10 +4045,6 @@ export default function ResumeScoringPage({
                   </p>
                 </div>
               </div>
-              </div>
-
-              <div className="flex justify-end px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 shrink-0">
-                <button onClick={() => setHistoryModalItem(null)} className="px-6 py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-all">Close</button>
               </div>
             </div>
           </div>

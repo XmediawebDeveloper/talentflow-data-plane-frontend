@@ -927,7 +927,7 @@ export default function AssessmentDetailsView({
   // max-w-[1400px] column, then one padded white card that owns ALL horizontal
   // padding. Sections below therefore carry no px-* of their own.
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
       {/* Breadcrumb — must be a DIRECT child of the card so `sticky` has the
