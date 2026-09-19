@@ -165,6 +165,8 @@ interface AssessmentVersionHistoryPanelProps {
    * the only part a different kind of child cannot share.
    */
   renderChildDetail?: (child: AssessmentVersionRow) => ReactNode;
+  /** The cell under `vocabulary.extraDetailColumn`, when the vocabulary has one. */
+  renderChildExtraDetail?: (child: AssessmentVersionRow) => ReactNode;
   /**
    * The trailing controls for one assessment — the host's own three-dot menu
    * and quick actions. Given that assessment's record so the host's existing
@@ -438,6 +440,9 @@ export interface VersionHistoryVocabulary {
   childNone: string;
   /** The child table's one descriptive column — see `renderChildDetail`. */
   detailColumn: { label: string; minW: string };
+  /** An optional second descriptive column, right after `detailColumn`,
+   *  filled by `renderChildExtraDetail`. */
+  extraDetailColumn?: { label: string; minW: string };
   /**
    * One child's status, in the words its own list uses. Keyed straight into
    * `STATUS_STYLES` by the chip, so a word outside Active / Draft / Completed /
@@ -480,6 +485,7 @@ const childColumnsFor = (vocabulary: VersionHistoryVocabulary): { label: string;
   { label: 'Created On', minW: 'min-w-[130px]' },
   { label: 'Created By', minW: 'min-w-[120px]' },
   vocabulary.detailColumn,
+  ...(vocabulary.extraDetailColumn ? [vocabulary.extraDetailColumn] : []),
   { label: 'Invitations Sent', minW: 'min-w-[120px]' },
 ];
 
@@ -708,6 +714,7 @@ export default function AssessmentVersionHistoryPanel({
   selectionGroupName = 'assessment-version-selection',
   vocabulary = ASSESSMENT_VOCABULARY,
   renderChildDetail,
+  renderChildExtraDetail,
 }: AssessmentVersionHistoryPanelProps) {
   const childColumns = childColumnsFor(vocabulary);
   /* Which job versions have their assessment table open. Local to the panel:
@@ -761,6 +768,7 @@ export default function AssessmentVersionHistoryPanel({
      Tailwind never emits. */
   const assessmentTableMinWidth =
     800 +
+    (vocabulary.extraDetailColumn ? 170 : 0) +
     (showsAssessmentSelect ? 70 : 0) +
     (showsAssessmentActions ? (renderAction ? (onViewAssessment ? 215 : 180) : 90) : 0);
 
@@ -1036,7 +1044,7 @@ export default function AssessmentVersionHistoryPanel({
                           <CreatedCell createdOn={group.createdOn} createdBy={group.createdBy} />
                         </td>
                         <td className="py-3 px-3 whitespace-nowrap align-middle">
-                          <MetricCell value={count} label={count === 1 ? 'Assessment' : 'Assessments'} />
+                          <MetricCell value={count} label={count === 1 ? vocabulary.childSingular : vocabulary.childPlural} />
                         </td>
                         <td className="py-3 px-3 whitespace-nowrap align-middle">
                           <MetricCell value={group.totalInvitations} label={group.totalInvitations === 1 ? 'Invitation' : 'Invitations'} />
@@ -1339,6 +1347,11 @@ export default function AssessmentVersionHistoryPanel({
                                                 <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                                                   {renderChildDetail ? renderChildDetail(assessment) : <RoundWeightageCell assessment={assessment} />}
                                                 </td>
+                                                {vocabulary.extraDetailColumn && (
+                                                  <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                                    {renderChildExtraDetail ? renderChildExtraDetail(assessment) : '—'}
+                                                  </td>
+                                                )}
                                                 <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                                                   <MetricCell value={invitations} label={invitations === 1 ? 'Invitation' : 'Invitations'} />
                                                 </td>

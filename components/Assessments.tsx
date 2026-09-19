@@ -6,7 +6,7 @@ import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
-import { TRACKER_DIALOG_PANEL_CLASS, TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
+import { TRACKER_DIALOG_PANEL_CLASS } from '@/lib/constants/trackerDialog';
 import { createPortal } from 'react-dom';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -29,6 +29,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, ASSESSMENT_INVITE_STATUS_OPTIONS, type InviteFilterState } from './InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from './InviteStatCards';
+import AssessmentInviteTable, {
+  InviteStatusBadge,
+  isBulkResendable,
+  isTrackedInviteCompleted,
+  isValidInviteEmail,
+  inviteStatusBucket,
+} from '@/components/assessments/AssessmentInviteTable';
 import ListToolbar from '@/components/ui/list-toolbar';
 import { ListSkeleton } from '@/components/ui/skeleton-loader';
 import ListCountBadge from '@/components/ui/list-count-badge';
@@ -78,7 +85,7 @@ import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import QuotaBadge from '@/components/ui/quota-badge';
 import AllAssessmentsTable from '@/components/assessments/AllAssessmentsTable';
-import AssessmentVersionHistoryPanel, { VersionChip, type AssessmentVersionRow } from '@/components/assessments/AssessmentVersionHistoryPanel';
+import AssessmentVersionHistoryPanel, { type AssessmentVersionRow } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { latestVersionNumber } from '@/lib/utils/jobOpeningDisplay';
 
@@ -1382,8 +1389,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      completed_at/attempt_id check covers both. Every other status — In
      Progress, System Check, Expired, Invited, Terminated, ... — stays on the
      tracking popup: there is no result to show, so the row doesn't navigate. */
-  const isTrackedInviteCompleted = (invitation: any): boolean =>
-    (invitation.status === 'completed' || !!invitation.completed_at) && !!invitation.attempt_id;
 
   const opensTrackedDetails = (invitation: any): boolean =>
     isTrackedInviteCompleted(invitation);
@@ -1535,18 +1540,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      status dropdown and its badges all read this one function, so a card's
      number always matches the rows selecting it produces — including for
      clock-expired invites, which `status` still calls 'sent'. */
-  const inviteStatusBucket = (inv: any): string => {
-    if (isInviteExpired(inv)) return 'expired';
-    if (inv.status === 'completed' || inv.completed_at) return 'completed';
-    if (inv.status === 'failed') return 'failed';
-    if (inv.status === 'bounced' || inv.bounced_at) return 'bounced';
-    if (inv.status === 'expired') return 'expired';
-    if (inv.status === 'abandoned') return 'abandoned';
-    if (inv.status === 'started' || inv.started_at) return 'started';
-    if (inv.status === 'opened' || inv.opened_at) return 'opened';
-    if (inv.status === 'sent' || inv.sent_at) return 'sent';
-    return 'pending';
-  };
 
   /* Bulk Resend on the Invitation Status tab — the popup's control, for the
      rows ticked there. Its own confirm state because the dialog names its own
@@ -1774,10 +1767,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      ('started'), System Check ('opened'), Completed, failed and bounced rows
      get no checkbox — their per-row actions (or lack of one) already say what
      can be done with them. */
-  const isBulkResendable = (inv: any): boolean =>
-    ['sent', 'expired'].includes(inv.status)
-    && !inv.started_at
-    && !inv.completed_at;
   const [trackingSelectedIds, setTrackingSelectedIds] = useState<Set<string>>(new Set());
   const trackingSelectableIds = trackingInvitations.filter(isBulkResendable).map((inv: any) => inv.id);
   const allTrackingSelected =
@@ -3150,8 +3139,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     setShowTrackInvitesModal(true);
   };
 
-  const isValidInviteEmail = (email: string) =>
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   // Preview the new expiry the backend will produce. Mirrors backend logic:
   // reuses the original invitation's configured duration, measured from the LAST
