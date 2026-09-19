@@ -17,6 +17,7 @@ import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import ListPagination from '@/components/ListPagination';
+import { ListSkeleton } from '@/components/ui/skeleton-loader';
 
 /** Same page size the Job Openings page reads the JD list in. */
 const JD_BATCH_SIZE = 100;
@@ -647,23 +648,16 @@ export default function JobOpeningPickerList({
               );
             })}
           </div>
+        ) : loadingJobs ? (
+          <ListSkeleton />
         ) : (
           <div className="text-center py-8 sm:py-12 text-gray-500 dark:text-slate-500">
-            {loadingJobs ? (
-              <>
-                <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin text-brand-blue" />
-                <p className="text-xs sm:text-sm">Loading job openings...</p>
-              </>
-            ) : (
-              <>
-                <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" />
-                <p className="text-xs sm:text-sm">
-                  {showAllStatuses
-                    ? (searchQuery ? 'No jobs found matching your search' : 'No jobs available')
-                    : (searchQuery ? 'No published jobs found matching your search' : 'No published jobs available')}
-                </p>
-              </>
-            )}
+            <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-gray-400 dark:text-slate-500" />
+            <p className="text-xs sm:text-sm">
+              {showAllStatuses
+                ? (searchQuery ? 'No jobs found matching your search' : 'No jobs available')
+                : (searchQuery ? 'No published jobs found matching your search' : 'No published jobs available')}
+            </p>
           </div>
         )}
       </div>

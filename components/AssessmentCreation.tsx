@@ -2,7 +2,7 @@
 
 import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown } from 'lucide-react';
 import type { AssessmentResponse, HRTopic } from '@/lib/services/assessmentService';
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
@@ -35,6 +35,8 @@ import {
   mapJDToJob,
   sortJobs,
 } from '@/lib/utils/jobOpeningDisplay';
+import { FormSkeleton } from '@/components/ui/skeleton';
+import { ListSkeleton } from '@/components/ui/skeleton-loader';
 
 // Languages that have an executable runtime in the candidate's coding round.
 // Mirrors LANGUAGE_VERSIONS in backend app/routers/candidate.py — anything not
@@ -523,6 +525,15 @@ interface AssessmentCreationProps {
   editAssessmentId?: string;
 }
 
+/**
+ * Imperative handle for `embedded` mode: lets `AssessmentConfigureModal`'s own
+ * header close button run the same unsaved-changes check as the in-flow
+ * breadcrumb, instead of closing the popup out from under an active edit.
+ */
+export interface AssessmentCreationHandle {
+  requestClose: () => void;
+}
+
 /** The three assessment rounds, by name — each round owns the section of the
  *  same name, which is what the Configure step nests under it. */
 type RoundName = 'HR' | 'Technical' | 'Coding';
@@ -594,7 +605,7 @@ function getExperienceRange(job: Pick<Job, 'experience' | 'experience_min' | 'ex
   return { min: 0, max: 0 };
 }
 
-export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings, preSelectedJobId, proctoringSettings: initialProctoringSettings, embedded = false, editAssessmentId: embeddedEditAssessmentId }: AssessmentCreationProps) {
+const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreationProps>(function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings, preSelectedJobId, proctoringSettings: initialProctoringSettings, embedded = false, editAssessmentId: embeddedEditAssessmentId }, ref) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isTenantAdmin, user } = useAuth();
@@ -668,11 +679,16 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
    */
   const [editLoadSettled, setEditLoadSettled] = useState(false);
   const [editingAssessment, setEditingAssessment] = useState<any>(null);
-  // "Leave without saving?" prompt for the Configure step's own exit link,
-  // shown only while editing an already-saved draft AND that draft has
-  // actually been changed (see `isDirty`) — a click that leaves an unchanged
-  // draft needs no confirmation at all.
+  // "Leave without saving?" prompt for the Configure step's exit links,
+  // shown only while the form actually has unsaved changes (see `isDirty`) —
+  // a click that leaves an unchanged form needs no confirmation at all.
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
+  // What "leave" means for the click that opened the dialog — `onBack` (the
+  // root "Assessments" crumb, the popup's own close button) by default, or a
+  // different destination (e.g. the "Select Job Description" crumb going
+  // back a step instead of exiting the flow). Read once by the dialog's
+  // Discard button, then cleared.
+  const pendingLeaveActionRef = useRef<(() => void) | null>(null);
   const [jdSearch, setJdSearch] = useState('');
   /* JD picker paging. The page is stored WITH the search it belongs to — the
      same trick the Apply to Job dialog uses — so a new query starts back at
@@ -883,7 +899,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
        committed yet and changing the JD is a thing recruiters do.
          … › Select Job Description › Configure Assessment */
     return [
-      { label: STEP_CRUMB_LABEL['select-jd'], onClick: () => setStep('select-jd') },
+      { label: STEP_CRUMB_LABEL['select-jd'], onClick: () => attemptStepChange(() => setStep('select-jd')) },
       { label: STEP_CRUMB_LABEL[step] },
     ];
   };
@@ -1149,6 +1165,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   // on at JD-select time); "manual" = recruiter flipped the toggle. Stays
   // null when Coding is disabled.
   const [codingEnabledSource, setCodingEnabledSource] = useState<'auto' | 'manual' | null>(null);
+  // CREATE mode's `isDirty` signal: there is no saved baseline for a brand
+  // new assessment to diff against (unlike edit mode's comparison against
+  // `editingAssessment`), so this tracks whether the recruiter has actually
+  // touched the Configure step — set from the handlers those controls call
+  // (topic add/remove, percentage change, HR question pick, coding language
+  // pick, coding enable/disable), never from the JD-driven auto-detection
+  // effects that populate the same state before the recruiter gets there.
+  const [hasConfigureEdits, setHasConfigureEdits] = useState(false);
 
   // HR Question Bank - loaded from the live question bank API for this tenant
   const [hrQuestionBank, setHrQuestionBank] = useState<HRBankQuestion[]>([]);
@@ -1213,6 +1237,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
     const hrSection = sections.find(s => s.name === 'HR');
     if (!hrSection?.enabled) return;
 
+    setHasConfigureEdits(true);
     setSelectedHRQuestions(prev => {
       if (prev.includes(id)) {
         return prev.filter(q => q !== id);
@@ -2297,6 +2322,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   const updatePercentage = (sectionName: string, value: number) => {
     const clamped = Math.max(0, Math.min(100, value));
+    setHasConfigureEdits(true);
     setSections(prev => {
       // Technical + Coding must always sum to 100%. HR is excluded — it uses
       // fixed duration from the Question Bank, not a percentage. When the
@@ -2352,6 +2378,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   const addTopic = (sectionName: 'HR' | 'Technical' | 'Coding') => {
     if (!newTopic.value.trim()) return;
 
+    setHasConfigureEdits(true);
     setSections(sections.map(s =>
       s.name === sectionName
         ? { ...s, topics: [...s.topics, newTopic.value.trim()] }
@@ -2361,6 +2388,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   };
 
   const removeTopic = (sectionName: string, topicIndex: number) => {
+    setHasConfigureEdits(true);
     setSections(sections.map(s =>
       s.name === sectionName
         ? { ...s, topics: s.topics.filter((_, i) => i !== topicIndex) }
@@ -2406,6 +2434,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   // Confirm button handler - works for both enable and disable modes
   const handleConfirmCodingAction = () => {
+    setHasConfigureEdits(true);
     /* Editing an already-enabled round: the languages are already in state,
        so there is nothing to apply beyond the same non-empty rule. Returning
        here is what keeps the percentage restore below off this path. */
@@ -2526,6 +2555,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   // Handle HR round toggle with validation
   const handleHRToggle = () => {
+    setHasConfigureEdits(true);
     const hrSection = sections.find(s => s.name === 'HR');
     const isCurrentlyEnabled = hrSection?.enabled || false;
 
@@ -2552,6 +2582,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
   // Handle Technical round toggle with validation
   const handleTechnicalToggle = () => {
+    setHasConfigureEdits(true);
     const techSection = sections.find(s => s.name === 'Technical');
     const isCurrentlyEnabled = techSection?.enabled || false;
 
@@ -2594,6 +2625,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
    * this is the single path every add goes through.
    */
   const toggleLanguageSelection = (lang: string) => {
+    setHasConfigureEdits(true);
     setSelectedCodingLanguages(prev => {
       if (prev.includes(lang)) return prev.filter(l => l !== lang);
       if (prev.length >= MAX_CODING_LANGUAGES) {
@@ -2605,16 +2637,21 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   };
 
   /**
-   * True only while editing an already-saved draft AND the current form
-   * state actually disagrees with what was loaded from it — re-derives the
-   * same shape `handleGenerateAssessment` sends the API, compared against
-   * the raw saved fields, rather than a snapshot ref: the HR/coding/section
-   * state populates across a couple of async effects (HR bank load,
-   * assessment load) that don't resolve in a fixed order, so there is no
-   * single instant to safely snapshot "the loaded baseline" from.
+   * Edit mode: true only while the current form state actually disagrees
+   * with what was loaded from the saved draft — re-derives the same shape
+   * `handleGenerateAssessment` sends the API, compared against the raw saved
+   * fields, rather than a snapshot ref: the HR/coding/section state populates
+   * across a couple of async effects (HR bank load, assessment load) that
+   * don't resolve in a fixed order, so there is no single instant to safely
+   * snapshot "the loaded baseline" from.
+   *
+   * Create mode: there is no saved draft to diff against, so this falls back
+   * to `hasConfigureEdits`/`userToggledProctoring` — whether the recruiter
+   * has actually touched a Configure control (see where those are set).
    */
   const isDirty = useMemo(() => {
-    if (!isEditMode || !editingAssessment || !editLoadSettled) return false;
+    if (!isEditMode) return hasConfigureEdits || userToggledProctoring;
+    if (!editingAssessment || !editLoadSettled) return false;
 
     const sameSet = (a: string[], b: string[]): boolean => {
       const as = [...a].map(v => v.trim().toLowerCase()).sort();
@@ -2648,19 +2685,44 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
     return false;
   }, [
-    isEditMode, editingAssessment, editLoadSettled,
+    isEditMode, editingAssessment, editLoadSettled, hasConfigureEdits, userToggledProctoring,
     sections, selectedHRQuestions, hrQuestionBank, selectedCodingLanguages, proctoringEnabled,
   ]);
 
-  // The Configure step's only exit link while editing (`buildStepCrumbs`
-  // gives edit mode a single non-clickable "Edit Assessment" crumb — see the
-  // comment on that function) is the root "Assessments" breadcrumb. Route it
-  // through here instead of calling `onBack` directly so an actual edit
-  // prompts Save/Discard, and a click with nothing changed just leaves.
+  // The root "Assessments" breadcrumb (and the popup chrome's own close
+  // button, via the imperative handle below). Route it through here instead
+  // of calling `onBack` directly so an actual edit prompts Save/Discard, and
+  // a click with nothing changed just leaves. Takes no arguments — it is
+  // passed straight to a few `onClick` props, and a bound param there would
+  // silently receive the click event instead of a real destination.
   const handleLeaveAttempt = () => {
-    if (isDirty) setShowUnsavedDialog(true);
-    else onBack();
+    if (isDirty) {
+      pendingLeaveActionRef.current = null; // null = the Discard button falls back to onBack
+      setShowUnsavedDialog(true);
+    } else {
+      onBack();
+    }
   };
+
+  // The same dirty-check for exits that DON'T leave the flow — e.g. the
+  // "Select Job Description" crumb, which steps back to job selection
+  // rather than closing the create/edit view. `target` is called directly
+  // (build the closure at the call site, e.g. `() => setStep('select-jd')`)
+  // once there is nothing unsaved, or stashed for the dialog's Discard
+  // button to run if there is.
+  const attemptStepChange = (target: () => void) => {
+    if (isDirty) {
+      pendingLeaveActionRef.current = target;
+      setShowUnsavedDialog(true);
+    } else {
+      target();
+    }
+  };
+
+  // Exposes the same dirty-check to the popup chrome's own close button
+  // (`AssessmentConfigureModal`'s header X), which lives outside this
+  // component and would otherwise call `onClose`/`onBack` directly.
+  useImperativeHandle(ref, () => ({ requestClose: handleLeaveAttempt }), [handleLeaveAttempt]);
 
   /**
    * Leave the flow for the assessments list, handing the published record to
@@ -2753,8 +2815,11 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
           );
         }
       } else {
-        // Create new assessment
-        resultAssessment = await assessmentService.create(assessmentData);
+        // Create new assessment. `save_and_exit` tells the backend this
+        // create call is ALSO the recruiter's exit (Save as Draft rather
+        // than Publish), so it can log the "Saved as Draft" checkpoint
+        // immediately instead of only on whatever edit comes next.
+        resultAssessment = await assessmentService.create({ ...assessmentData, save_and_exit: saveAsDraft });
 
         // If not saving as draft, publish immediately
         if (!saveAsDraft) {
@@ -3163,10 +3228,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
                 items={buildBreadcrumbItems()}
               />
             )}
-            <div className="flex items-center justify-center h-64">
-              <Loader2 className="h-8 w-8 text-brand-blue animate-spin" />
-              <span className="ml-3 text-sm text-gray-600">Loading assessment configuration...</span>
-            </div>
+            <FormSkeleton />
           </div>
         </div>
       </div>
@@ -3227,10 +3289,7 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
             <div className="p-4 sm:p-6">
               {isLoadingJobs ? (
-                <div className="text-center py-8 sm:py-12">
-                  <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 text-brand-blue animate-spin mx-auto mb-3" />
-                  <p className="text-sm sm:text-base text-gray-500">Loading job descriptions...</p>
-                </div>
+                <ListSkeleton rows={5} />
               ) : (
               <div className="space-y-3" ref={jdListRef}>
                 {/* Search Jobs — the Apply to Job dialog's own field, down to
@@ -5103,11 +5162,14 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
 
         <UnsavedChangesModal
           isOpen={showUnsavedDialog}
-          description="You have unsaved changes to this draft. Would you like to save them before leaving?"
+          description="Save your configuration as a draft before leaving?"
+          discardLabel="Discard"
           onClose={() => setShowUnsavedDialog(false)}
           onDiscard={() => {
             setShowUnsavedDialog(false);
-            onBack();
+            const leave = pendingLeaveActionRef.current;
+            pendingLeaveActionRef.current = null;
+            (leave || onBack)();
           }}
           onSave={() => handleGenerateAssessment(true)}
           isSaving={isGenerating}
@@ -5511,4 +5573,6 @@ export default function AssessmentCreation({ onBack, jobs, onCreateAssessment, o
   }
 
   return null;
-}
+});
+
+export default AssessmentCreation;

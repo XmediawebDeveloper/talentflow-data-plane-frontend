@@ -494,15 +494,21 @@ export default function TableScrollbars() {
            The 6px offset from the thumb is kept even though seeing through the
            overlay makes it unnecessary, since probing a column's padding rather
            than the middle of its content is the cheaper hit test anyway. */
-        const probeX = Math.round(left + viewW - BAR_SIZE - BAR_INSET - 6);
-        const isShell = (probeY: number) => {
-          const stack = document.elementsFromPoint(probeX, Math.round(probeY));
+        /* Topmost REAL (non-overlay) element at a point is this shell — i.e. the
+           shell is what's painted there, nothing is covering it. Skipping our
+           own overlay is load-bearing: its live horizontal track/trough sit
+           exactly where these probes look, so a naive hit test would find them
+           and mistake the shell for occluded. */
+        const isShellAt = (x: number, y: number) => {
+          const stack = document.elementsFromPoint(Math.round(x), Math.round(y));
           for (const el of stack) {
             if (root.contains(el)) continue;
             return shell.contains(el);
           }
           return false;
         };
+        const probeX = Math.round(left + viewW - BAR_SIZE - BAR_INSET - 6);
+        const isShell = (probeY: number) => isShellAt(probeX, probeY);
 
         const clip = clipRect(shell, rect);
 
@@ -573,7 +579,28 @@ export default function TableScrollbars() {
           const gutterLeft = Math.max(left, clip.left);
           const gutterWidth = Math.min(left + viewW, clip.right) - gutterLeft;
 
-          if (trackWidth < MIN_THUMB || stripTop < bandTop) {
+          /* The vertical band was trimmed off a single probe column at the
+             table's far-right edge (probeX). That answers a full-width occluder
+             — a dialog, the sticky breadcrumb — but not a popover that covers
+             the MIDDLE of the strip while leaving that right-edge column clear:
+             the filter dropdown is anchored to its trigger button, inset from
+             the table's right edge, so it never reaches probeX and the band
+             stays untrimmed — leaving the horizontal bar to paint straight
+             across the open panel. Sample along the strip's own width and drop
+             the bar if anything real is painted over it; it comes back the
+             frame after the popover closes. */
+          const stripMidY = stripTop + X_GUTTER / 2;
+          const X_OCCLUSION_SAMPLES = 8;
+          let xOccluded = false;
+          for (let i = 0; i <= X_OCCLUSION_SAMPLES; i++) {
+            const sampleX = trackLeft + (trackWidth * i) / X_OCCLUSION_SAMPLES;
+            if (!isShellAt(sampleX, stripMidY)) {
+              xOccluded = true;
+              break;
+            }
+          }
+
+          if (trackWidth < MIN_THUMB || stripTop < bandTop || xOccluded) {
             x.track.style.display = 'none';
             if (x.gutter) x.gutter.style.display = 'none';
           } else {

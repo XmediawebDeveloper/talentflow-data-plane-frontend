@@ -13,6 +13,7 @@ import { useState, useEffect } from 'react';
 import { Users, BarChart3, FileText, ClipboardCheck, Upload, Briefcase, Loader2, AlertCircle, Calendar, ChevronDown, ChevronUp } from 'lucide-react';
 import teamService, { TeamUsageSummary, AllTeamsUsageSummary, MyTeamsUsageSummary } from '@/lib/services/teamService';
 import TeamMemberUsage from '@/components/teams/TeamMemberUsage';
+import { ListSkeleton } from '@/components/ui/skeleton-loader';
 
 // Unit type labels for display
 const UNIT_TYPE_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
@@ -116,12 +117,7 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
   }
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-12 tf-loader-center">
-        <Loader2 className="w-8 h-8 text-gray-400 animate-spin" />
-        <span className="ml-3 text-gray-600">Loading team usage data...</span>
-      </div>
-    );
+    return <ListSkeleton />;
   }
 
   if (error) {

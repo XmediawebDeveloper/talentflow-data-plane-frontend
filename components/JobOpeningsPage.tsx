@@ -17,7 +17,6 @@ import {
   MoreVertical,
   Filter,
   ChevronDown,
-  Loader2,
   TrendingUp,
   Archive,
   Power,
@@ -31,6 +30,7 @@ import { toast } from 'sonner';
 import api from '@/lib/services/api';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
+import { TableSkeleton } from '@/components/ui/skeleton';
 
 type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
 
@@ -374,10 +374,7 @@ export default function JobOpeningsPage() {
 
         {/* Jobs Display */}
         {loading ? (
-          <div className="flex items-center justify-center py-20 tf-loader-center">
-            <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
-            <span className="ml-3 text-gray-600">Loading job openings...</span>
-          </div>
+          <TableSkeleton />
         ) : jobs.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
             <Briefcase className="w-12 h-12 text-gray-300 mx-auto mb-4" />

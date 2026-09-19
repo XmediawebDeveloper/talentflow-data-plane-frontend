@@ -6,7 +6,7 @@ import ViewResumeButton from '@/components/ui/view-resume-button';
 import { useState, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { Folder } from '@/lib/types/types';
 import { Tenant } from '@/lib/types/tenant';
-import { recordResumeUpload, hasAvailableQuota, checkQuotaStatus, QuotaInfo } from '@/lib/services/usageTrackingService';
+import { hasAvailableQuota, checkQuotaStatus, QuotaInfo } from '@/lib/services/usageTrackingService';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
@@ -69,6 +69,8 @@ interface UploadModalProps {
     error?: string;
     resumeId?: string; // Added to support post-upload scoring
     candidateName?: string;
+    // Every resume a bulk upload stored (resumeId above is only the first one)
+    uploadedResumes?: { id: string; candidateName: string }[];
     existingResume?: {
       id: string;
       candidateName: string;
@@ -98,10 +100,10 @@ interface UploadModalProps {
       targetFolderId?: string;
     };
   }>;
-  onUploadComplete?: (statuses: any[]) => void;
   onCreateFolder?: (name: string, parentId?: string) => void;
   onViewResume?: (resumeId: string) => void;
   onScoreResume?: (resumeId: string, candidateName: string) => void; // New callback for scoring
+  onScoreResumes?: (resumes: { id: string; candidateName: string }[]) => void; // Bulk counterpart of onScoreResume
   onDuplicateDetected?: (duplicateData: any) => void; // Callback for duplicate resolution
   targetFolder?: string;
 }
@@ -132,7 +134,7 @@ function FileFormatIcon({ color, accent, label }: { color: string; accent: strin
   );
 }
 
-export default function UploadModal({ folders, tenant, uploadSection, onClose, onUpload, onUploadComplete, onCreateFolder, onViewResume, onScoreResume, onDuplicateDetected, targetFolder }: UploadModalProps) {
+export default function UploadModal({ folders, tenant, uploadSection, onClose, onUpload, onCreateFolder, onViewResume, onScoreResume, onScoreResumes, onDuplicateDetected, targetFolder }: UploadModalProps) {
   const { available: resumeUploadAvailable } = usePlanFeature('resume_upload');
 
   if (!resumeUploadAvailable) {
@@ -499,64 +501,6 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
     });
   };
 
-  const handleUpload = () => {
-    if (selectedFiles.length > 0) {
-      // Use root folder as fallback when no folder is selected
-      onUpload(selectedFiles, selectedFolder || rootFolder?.id || undefined);
-
-      // Track usage - POST /api/v1/external/usage/record (RU for each resume uploaded)
-      selectedFiles.forEach((file, index) => {
-        recordResumeUpload(`upload-${Date.now()}-${index}`, {
-          file_name: file.name,
-          file_size_kb: Math.round(file.size / 1024),
-          folder_id: selectedFolder || undefined,
-          section: uploadSection
-        });
-      });
-
-      // Generate upload status for bulk uploads
-      if (activeTab === 'bulk' && selectedFiles.length > 1 && onUploadComplete) {
-        // Simulate upload process with status tracking
-        const statuses = selectedFiles.map((file, index) => {
-          const random = Math.random();
-          let status: 'completed' | 'updated' | 'duplicated' | 'version' | 'error' | 'pending';
-          let errorMessage = undefined;
-          let existingLocation = undefined;
-          let versionInfo = undefined;
-          
-          if (random < 0.4) {
-            status = 'completed';
-          } else if (random < 0.5) {
-            status = 'updated';
-          } else if (random < 0.65) {
-            status = 'duplicated';
-            existingLocation = 'Frontend Developers / Senior Level';
-          } else if (random < 0.75) {
-            status = 'version';
-            existingLocation = 'Backend Developers / Mid Level';
-            versionInfo = 'Updated version detected - Resume last modified 2 weeks ago';
-          } else if (random < 0.85) {
-            status = 'pending';
-          } else {
-            status = 'error';
-            errorMessage = 'File format not recognized or corrupted';
-          }
-          
-          return {
-            fileName: file.name,
-            status,
-            candidateName: `Candidate ${index + 1}`,
-            errorMessage,
-            existingLocation,
-            versionInfo,
-          };
-        });
-        
-        onUploadComplete(statuses);
-      }
-    }
-  };
-
   const formatFileSize = (bytes: number) => {
     if (bytes < 1024) return bytes + ' B';
     if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
@@ -787,6 +731,8 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
       // that's already doing exactly that was redundant, not a real choice.
       if (activeTab === 'single' && result.resumeId && onScoreResume) {
         onScoreResume(result.resumeId, result.candidateName || selectedFiles[0]?.name || 'Resume');
+      } else if (activeTab === 'bulk' && result.uploadedResumes?.length && onScoreResumes) {
+        onScoreResumes(result.uploadedResumes);
       }
       onClose();
     } catch (error: any) {

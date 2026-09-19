@@ -9,6 +9,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { userSettingsApi, UserSettings, UserProfile, UserSettingsUpdate, UserProfileUpdate } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
+import { PageSkeleton } from '@/components/ui/skeleton';
 
 export default function Settings() {
   const { user, logout, hasPermission, isTenantAdmin } = useAuth();
@@ -249,14 +250,7 @@ export default function Settings() {
   );
 
   if (isLoading) {
-    return (
-      <main className="flex-1 overflow-x-clip bg-slate-50 flex items-center justify-center">
-        <div className="w-full max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-8 flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-          <p className="font-semibold text-gray-600 dark:text-slate-400">Loading settings...</p>
-        </div>
-      </main>
-    );
+    return <PageSkeleton variant="form" showStats={false} />;
   }
 
   return (
