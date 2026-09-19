@@ -1,7 +1,8 @@
 'use client';
 
 import { Eye, Sliders, X } from 'lucide-react';
-import AssessmentCreation from './AssessmentCreation';
+import { useRef } from 'react';
+import AssessmentCreation, { type AssessmentCreationHandle } from './AssessmentCreation';
 
 interface AssessmentConfigureModalProps {
   isOpen: boolean;
@@ -63,6 +64,8 @@ export default function AssessmentConfigureModal({
      out — so an assessment with no job behind it has nothing to configure.
      Callers fall back to the plain edit dialog in that case, the same way the
      route's draft redirect is gated on `jd_id`. */
+  const assessmentCreationRef = useRef<AssessmentCreationHandle>(null);
+
   if (!isOpen || !assessment?.id || !assessment?.jd_id) return null;
 
   return (
@@ -108,7 +111,7 @@ export default function AssessmentConfigureModal({
           </div>
           <button
             type="button"
-            onClick={onClose}
+            onClick={() => assessmentCreationRef.current?.requestClose()}
             aria-label={readOnly ? 'Close assessment preview' : 'Close assessment configuration'}
             title="Close"
             className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
@@ -122,6 +125,7 @@ export default function AssessmentConfigureModal({
             which is why the step renders neither inside a popup. */}
         <div className="flex-1 min-h-0 overflow-y-auto">
           <AssessmentCreation
+            ref={assessmentCreationRef}
             embedded
             readOnly={readOnly}
             editAssessmentId={assessment.id}

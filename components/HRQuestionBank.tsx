@@ -1,13 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Plus, Search, Edit2, Trash2, ChevronDown, ChevronUp, Tag, Clock, Filter, X, Save, AlertCircle, MessageSquare, FileText, CheckCircle2, Loader2 } from 'lucide-react';
+import { Plus, Search, Edit2, Trash2, ChevronDown, ChevronUp, Tag, Clock, Filter, X, Save, AlertCircle, MessageSquare, FileText, CheckCircle2 } from 'lucide-react';
 import api from '@/lib/services/api';
 import { toast } from '@/components/ui/enhanced-toast';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ListPagination from '@/components/ListPagination';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { ListSkeleton } from '@/components/ui/skeleton-loader';
 
 // Question categories for HR round
 const HR_CATEGORIES = [
@@ -643,10 +644,7 @@ export default function HRQuestionBank() {
 
       {/* Question List */}
       {loading ? (
-        <div className="flex flex-col items-center justify-center py-16 gap-3 tf-loader-center">
-          <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
-          <p className="text-gray-500 text-sm">Loading questions...</p>
-        </div>
+        <ListSkeleton />
       ) : filteredQuestions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 px-4 bg-white border border-gray-200 rounded-xl shadow-sm">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/20 mb-4">

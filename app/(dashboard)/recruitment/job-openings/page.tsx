@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Loader2, AlertTriangle, X, Clock, GraduationCap, Factory, FolderOpen, FileSearch, ClipboardCheck, Users, Video, Info, ShieldCheck } from 'lucide-react';
 import JobsListing from '@/components/JobsListing';
+import { PageSkeleton } from '@/components/ui/skeleton';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
 import DisableJobModal from '@/components/DisableJobModal';
@@ -544,12 +545,9 @@ export default function JobOpeningsPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
-        <span className="ml-3 text-gray-600">Loading job openings...</span>
-      </div>
-    );
+    // Skeleton instead of a spinner during the initial fetch, matching the
+    // route-level loading.tsx so the load reads as one continuous skeleton.
+    return <PageSkeleton variant="cards" showStats={false} />;
   }
 
   return (

@@ -58,6 +58,7 @@ import teamService, { AllTeamsUsageSummary, TeamMembersUsageSummary } from '@/li
 import dashboardService, { SubscriptionUnits } from '@/lib/services/dashboardService';
 import { featurePermissionService, UserLimitsResponse } from '@/lib/services/featurePermissionService';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { TableSkeleton } from '@/components/ui/skeleton';
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -510,11 +511,7 @@ function FeatureWiseTab({
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16 tf-loader-center">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-      </div>
-    );
+    return <TableSkeleton />;
   }
 
   if (!items.length) {
@@ -683,11 +680,7 @@ function UserWiseTab({
   const paginatedUsers = users.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16 tf-loader-center">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-      </div>
-    );
+    return <TableSkeleton />;
   }
 
   if (!users.length) {
@@ -791,11 +784,7 @@ function TeamWiseTab({
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16 tf-loader-center">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-      </div>
-    );
+    return <TableSkeleton />;
   }
 
   if (!teamsData?.teams?.length) {
@@ -1087,11 +1076,7 @@ function RefundsTab({
   };
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center py-16 tf-loader-center">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-      </div>
-    );
+    return <TableSkeleton />;
   }
 
   if (unavailable) {

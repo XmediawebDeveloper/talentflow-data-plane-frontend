@@ -1,20 +1,29 @@
 'use client';
 
+import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   X, Mail, Play, CheckCircle, Clock, Ban, Copy, Loader2, Users, Eye, Pencil,
-  MoreVertical, Check, Monitor,
+  MoreVertical, Check, Monitor, History,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
+import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 
 /**
  * The candidate list for an AI interview's invite tracker.
@@ -73,31 +82,38 @@ export const isExpiredForActions = (inv: any): boolean =>
   resolveInviteStatus(inv) === 'expired' || isInviteExpired(inv);
 
 /**
- * Revocable — and therefore bulk-selectable. Hidden once the candidate accepted
- * Consent & Terms and entered the interview process (system_check/in_progress),
- * engaged with the interview (completed/terminated), the invite was abandoned
- * pre-send (cancelled), it is already revoked, or the link expired (only Resend
- * is offered at that point).
+ * Revocable — and therefore both bulk-selectable and eligible for the row's
+ * own Revoke action. Hidden once the candidate accepted Consent & Terms and
+ * entered the interview process (system_check/in_progress), engaged with the
+ * interview (completed/terminated), the invite was abandoned pre-send
+ * (cancelled), it is already revoked (Edit + Copy Link only from here on), or
+ * the link expired (only Resend is offered at that point).
  */
 export const isRevocableInvite = (inv: any): boolean =>
   !['system_check', 'in_progress', 'completed', 'terminated', 'cancelled', 'revoked'].includes(inv.status) &&
   !isExpiredForActions(inv);
 
-/** Edit and Revoke appear together; Edit only ever enables once revoked. */
-const canEditOrRevoke = (inv: any): boolean =>
-  !['system_check', 'in_progress', 'completed', 'terminated', 'cancelled'].includes(inv.status) &&
-  !isExpiredForActions(inv);
+/**
+ * Edit only ever appears once an invitation is revoked — editing is how a
+ * revoked invite gets corrected and sent again (Save and Send), so there is
+ * nothing to edit before that.
+ */
+const canEdit = (inv: any): boolean => inv.status === 'revoked';
 
 /**
- * Resend covers an invited row (regenerates the token), a revoked one
- * (reactivates and issues a fresh token) and an expired one — however it expired
- * — as long as the candidate hasn't already started or completed.
+ * Resend only ever covers an expired row now — a live "invited" row has no
+ * manual resend (Revoke, then Edit's Save and Send, is the only path to a
+ * fresh link), and a revoked row's resend lives inside the Edit modal too.
+ * As long as the candidate hasn't already started or completed.
  */
 const canResendInvite = (inv: any): boolean =>
-  (resolveInviteStatus(inv) === 'invited' || inv.status === 'revoked' || isExpiredForActions(inv)) &&
+  isExpiredForActions(inv) &&
   !inv.started_at &&
   !inv.completed_at;
 
+/** Copy Link disappears once revoked — only Edit remains from there.
+ *  Revoked is listed explicitly (rather than relying on it not being
+ *  'invited') so the intent reads at the call site. */
 export const isInterviewLinkLive = (inv: any): boolean =>
   !!inv.interview_token &&
   !['completed', 'cancelled', 'terminated', 'expired', 'revoked'].includes(resolveInviteStatus(inv)) &&
@@ -136,26 +152,73 @@ const copyInterviewLink = async (inv: any) => {
   toast.success('Interview link copied!');
 };
 
-/** Milestones oldest-first, every one on its own line — the same treatment the
- *  assessment tracker gives its timeline. */
-const timelineEvents = (inv: any) => {
-  const out: { label: string; at: string; Icon: LucideIcon; tone: string }[] = [];
-  /* Last send, not the first: a resend regenerates the link and pushes the
-     expiry, so showing the original invite time next to a fresh deadline read
-     as stale. invitation_sent_at is null on invites that predate the column —
-     those fall back to created_at, which is when they were sent. */
-  const invitedAt = inv.invitation_sent_at || inv.created_at;
-  if (invitedAt) out.push({ label: 'Invited', at: invitedAt, Icon: Mail, tone: 'text-brand-blue' });
-  /* Consent accepted -> the candidate reached the system check step. Same
-     milestone (and wording) the assessment tracker prints from opened_at. */
-  if (inv.consent_accepted_at) out.push({ label: 'System Check', at: inv.consent_accepted_at, Icon: Monitor, tone: 'text-brand-cyan' });
-  if (inv.started_at) out.push({ label: 'Started', at: inv.started_at, Icon: Play, tone: 'text-brand-orange-deep' });
-  if (inv.completed_at) out.push({ label: 'Completed', at: inv.completed_at, Icon: CheckCircle, tone: 'text-green-600' });
-  if (inv.revoked_at) out.push({ label: 'Revoked', at: inv.revoked_at, Icon: Ban, tone: 'text-red-600' });
+type TimelineEntry = { label: string; at: string; Icon: LucideIcon; tone: string };
 
-  /* expires_at holds the deadline; it is surfaced as the moment of expiry once
-     that deadline passed on an interview that never completed. Without it a
-     lapsed invite shows only "Invited". */
+/** Milestones oldest-first, every one on its own line. Delegates to
+ *  buildFullTimeline (below) over the invitation's own embedded `timeline`
+ *  (every audit-logged send/resend/revoke/edit for this row, attached by the
+ *  list endpoint) rather than reading the single mutable columns directly —
+ *  those get overwritten or cleared on reactivation (a resend clears
+ *  revoked_at, a second send overwrites invitation_sent_at), which is what
+ *  silently collapsed a row's history down to just its latest state. The
+ *  fallback inside buildFullTimeline still covers rows from before this
+ *  field existed. */
+const timelineEvents = (inv: any): TimelineEntry[] => buildFullTimeline(inv, inv.timeline || []);
+
+/** Every occurrence of an invitation-management action (not just the latest)
+ *  reads the same audit trail the Activity Log is built from — see
+ *  aiInterviewService.getSessionTimeline. Multiple sends, edits or revokes
+ *  each show up as their own row here, in real chronological order, unlike
+ *  timelineEvents() above which only ever shows one row per milestone type. */
+const describeTimelineAction = (action: string): { label: string; Icon: LucideIcon; tone: string } => {
+  switch (action) {
+    case 'ai_interview_invite':
+      return { label: 'Invited', Icon: Mail, tone: 'text-brand-blue' };
+    case 'ai_interview_invite_revoke':
+      return { label: 'Revoked', Icon: Ban, tone: 'text-red-600' };
+    case 'ai_interview_invite_edit':
+      return { label: 'Edited', Icon: Pencil, tone: 'text-brand-orange-deep' };
+    case 'ai_interview_consent':
+      return { label: 'System Check', Icon: Monitor, tone: 'text-brand-cyan' };
+    case 'ai_interview_start':
+      return { label: 'Started', Icon: Play, tone: 'text-brand-orange-deep' };
+    case 'ai_interview_complete':
+      return { label: 'Completed', Icon: CheckCircle, tone: 'text-green-600' };
+    case 'ai_interview_terminated':
+      return { label: 'Terminated', Icon: Ban, tone: 'text-red-600' };
+    default:
+      return { label: action, Icon: Clock, tone: 'text-gray-500' };
+  }
+};
+
+/** Merges the fetched audit trail with a same-shaped fallback synthesized from
+ *  the invitation row's own single-value columns, for milestone types the
+ *  audit trail has no row for at all — sessions from before this trail
+ *  existed, and Expired, which is a deadline lapsing rather than a discrete
+ *  logged action. Real audit rows always win: the fallback for a given type
+ *  only fires when zero audit rows of that type are present. */
+const buildFullTimeline = (
+  inv: any,
+  auditLogs: Array<{ action: string; created_at: string | null }>
+): TimelineEntry[] => {
+  const out: TimelineEntry[] = auditLogs
+    .filter((log) => !!log.created_at)
+    .map((log) => ({ ...describeTimelineAction(log.action), at: log.created_at as string }));
+
+  const loggedActions = new Set(auditLogs.map((log) => log.action));
+  const fallback: [string, string | null | undefined, string][] = [
+    ['ai_interview_invite', inv.invitation_sent_at || inv.created_at, 'Invited'],
+    ['ai_interview_consent', inv.consent_accepted_at, 'System Check'],
+    ['ai_interview_start', inv.started_at, 'Started'],
+    ['ai_interview_complete', inv.completed_at, 'Completed'],
+    ['ai_interview_invite_revoke', inv.revoked_at, 'Revoked'],
+  ];
+  for (const [action, at] of fallback) {
+    if (at && !loggedActions.has(action)) {
+      out.push({ ...describeTimelineAction(action), at });
+    }
+  }
+
   const status = (inv.status || '').toLowerCase();
   const clockExpired =
     !inv.started_at && !inv.unit_consumed && inv.expires_at && new Date(inv.expires_at) < new Date();
@@ -295,6 +358,29 @@ export default function AIInterviewInviteTable({
 }: AIInterviewInviteTableProps) {
   const selectable = !!onToggleSelect;
 
+  /* Full action-log modal — fetched on demand per row, never eagerly for the
+     whole page, so opening the tracker doesn't fire one audit-trail request
+     per visible invitation. */
+  const [timelineTarget, setTimelineTarget] = useState<any | null>(null);
+  const [timelineEntries, setTimelineEntries] = useState<TimelineEntry[] | null>(null);
+  const [timelineLoading, setTimelineLoading] = useState(false);
+  const [timelineError, setTimelineError] = useState<string | null>(null);
+
+  const openTimeline = async (inv: any) => {
+    setTimelineTarget(inv);
+    setTimelineEntries(null);
+    setTimelineError(null);
+    setTimelineLoading(true);
+    try {
+      const logs = await aiInterviewService.getSessionTimeline(inv.id);
+      setTimelineEntries(buildFullTimeline(inv, logs));
+    } catch (err: any) {
+      setTimelineError(err?.message || 'Failed to load history');
+    } finally {
+      setTimelineLoading(false);
+    }
+  };
+
   /* Built once per row and rendered twice — as menu items on desktop, as compact
      buttons on the mobile card — so the two can't drift apart. */
   const rowActions = (inv: any): RowAction[] => {
@@ -312,7 +398,7 @@ export default function AIInterviewInviteTable({
     if (onResend && canResendInvite(inv)) {
       actions.push({
         key: 'resend',
-        label: inv.status === 'revoked' ? 'Send Again' : 'Resend Email',
+        label: 'Resend Email',
         Icon: Mail,
         run: () => onResend(inv),
         title: 'Revoke old link and send a new invitation',
@@ -321,27 +407,24 @@ export default function AIInterviewInviteTable({
         iconClassName: 'text-menu-icon-share',
       });
     }
-    if (onEdit && canEditOrRevoke(inv)) {
+    if (onEdit && canEdit(inv)) {
       actions.push({
         key: 'edit',
         label: 'Edit',
         Icon: Pencil,
         run: () => onEdit(inv),
-        // Editing a live invitation would change who the outstanding link belongs
-        // to, so it stays disabled until the invitation is revoked.
-        disabled: inv.status !== 'revoked',
-        title: inv.status === 'revoked' ? 'Edit candidate details' : 'Revoke this invitation first to edit it',
+        title: 'Edit candidate details and send',
         iconClassName: 'text-menu-icon-edit',
       });
     }
-    if (onRevoke && canEditOrRevoke(inv)) {
+    if (onRevoke && isRevocableInvite(inv)) {
       actions.push({
         key: 'revoke',
         label: 'Revoke',
         Icon: Ban,
         run: () => onRevoke(inv),
-        disabled: inv.status === 'revoked' || revokingId === inv.id,
-        title: inv.status === 'revoked' ? 'Already revoked' : "Revoke this invitation — the candidate's link will stop working",
+        disabled: revokingId === inv.id,
+        title: "Revoke this invitation — the candidate's link will stop working",
         destructive: true,
         busy: revokingId === inv.id,
       });
@@ -464,7 +547,7 @@ export default function AIInterviewInviteTable({
 
               {/* Two-column grid rather than a free wrap, so entries line up
                   instead of staggering by label width. */}
-              <div className="text-[10px] text-gray-500 dark:text-slate-500 grid grid-cols-2 gap-x-3 gap-y-0.5 mb-1.5">
+              <div className="text-[10px] text-gray-500 dark:text-slate-500 grid grid-cols-2 gap-x-3 gap-y-0.5 mb-1">
                 {timelineEvents(inv).map(({ label, at, Icon, tone }) => (
                   <div key={label} className="flex items-center gap-1 min-w-0">
                     <Icon className={`w-2.5 h-2.5 flex-shrink-0 ${tone}`} />
@@ -472,6 +555,13 @@ export default function AIInterviewInviteTable({
                   </div>
                 ))}
               </div>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); openTimeline(inv); }}
+                className="flex items-center gap-1 text-[10px] font-medium text-brand-blue hover:underline mb-1.5"
+              >
+                <History className="w-2.5 h-2.5" /> View full history
+              </button>
 
               <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-gray-100 dark:border-slate-700/60">
                 <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap min-w-0">
@@ -626,6 +716,13 @@ export default function AIInterviewInviteTable({
                     ) : (
                       <span className="text-gray-400 dark:text-slate-500">—</span>
                     )}
+                    <button
+                      type="button"
+                      onClick={(e) => { e.stopPropagation(); openTimeline(inv); }}
+                      className="flex items-center gap-1 text-[11px] font-medium text-brand-blue hover:underline mt-1"
+                    >
+                      <History className="w-3 h-3" /> View full history
+                    </button>
                   </td>
 
                   <td className="py-3 px-4 align-middle tf-sticky-col" onClick={(e) => e.stopPropagation()}>
@@ -672,6 +769,44 @@ export default function AIInterviewInviteTable({
           </tbody>
         </table>
       </div>
+
+      {/* Full action-log modal — every send, resend, revoke, edit and
+          candidate-lifecycle milestone as its own row, oldest first. */}
+      <Dialog open={!!timelineTarget} onOpenChange={(open) => { if (!open) setTimelineTarget(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Invitation History</DialogTitle>
+            <DialogDescription>
+              {timelineTarget?.candidate_name || timelineTarget?.candidate_email || 'Candidate'}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="overflow-y-auto max-h-[60vh] -mx-1 px-1">
+            {timelineLoading ? (
+              <div className="flex items-center justify-center py-10">
+                <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
+              </div>
+            ) : timelineError ? (
+              <p className="text-sm text-red-600 dark:text-red-400 py-6 text-center">{timelineError}</p>
+            ) : timelineEntries && timelineEntries.length > 0 ? (
+              <ol className="space-y-3">
+                {timelineEntries.map((entry, i) => (
+                  <li key={i} className="flex items-start gap-3">
+                    <span className={`mt-0.5 flex-shrink-0 rounded-full p-1.5 bg-gray-100 dark:bg-slate-800 ${entry.tone}`}>
+                      <entry.Icon className="w-3.5 h-3.5" />
+                    </span>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{entry.label}</p>
+                      <p className="text-xs text-gray-500 dark:text-slate-500">{formatIST(entry.at)}</p>
+                    </div>
+                  </li>
+                ))}
+              </ol>
+            ) : (
+              <p className="text-sm text-gray-500 dark:text-slate-500 py-6 text-center">No history recorded yet.</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

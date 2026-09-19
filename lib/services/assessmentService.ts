@@ -31,6 +31,11 @@ export interface AssessmentCreate {
   coding_percentage?: number;
   coding_topics?: string[];
   coding_languages?: string[];
+  /** True when this create call is also the recruiter's exit — "Save as
+   *  Draft" on the Configure step rather than "Publish" — so the backend can
+   *  log the "Saved as Draft" checkpoint immediately instead of only on
+   *  whatever edit happens to come next. */
+  save_and_exit?: boolean;
 }
 
 export interface AssessmentUpdate {
@@ -356,6 +361,8 @@ export interface DetailedResultResponse {
 // 1. Stats Summary
 export interface AssessmentStatsResponse {
   total_assessments: number;
+  /** Distinct jobs (JD lineages) with at least one assessment. */
+  total_jobs_with_assessments?: number;
   active_assessments: number;
   draft_assessments: number;
   closed_assessments: number;
@@ -453,11 +460,18 @@ export type AuditActivityType =
   | 'assessment_deleted'
   | 'assessment_published'
   | 'assessment_archived'
+  | 'assessment_saved_as_draft'
+  | 'assessment_draft_updated'
+  | 'invites_revoked'
   | 'candidate_invited'
   | 'candidate_started'
   | 'candidate_completed'
   | 'candidate_failed'
-  | 'candidate_expired';
+  | 'candidate_expired'
+  | 'invite_failed'
+  | 'invite_email_changed'
+  | 'candidate_exited'
+  | 'candidate_errored';
 
 export interface CombinedAuditActivity {
   id: string;
@@ -872,6 +886,87 @@ export const assessmentService = {
       const response = await api.post<{ revoked_count: number; revoked_ids: string[] }>(
         `/assessments/${assessmentId}/invitations/revoke-pending`
       );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Revoke the current link and send a fresh invitation — same endpoint
+   * whether the invitation is plain SENT or reactivating a REVOKED one.
+   */
+  async resendInvitation(assessmentId: string, invitationId: string): Promise<any> {
+    try {
+      const response = await api.post(`/assessments/${assessmentId}/invitations/${invitationId}/resend`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Revoke a single sent invitation — distinct from revokePendingInvitations,
+   * which revokes every pending/sent invitation on the assessment at once.
+   */
+  async revokeInvitation(assessmentId: string, invitationId: string): Promise<any> {
+    try {
+      const response = await api.post(`/assessments/${assessmentId}/invitations/${invitationId}/revoke`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Change the candidate email on a failed/bounced invitation and resend —
+   * the pre-existing "fix a bad address" flow, unrelated to Edit below.
+   */
+  async updateInvitationEmail(assessmentId: string, invitationId: string, newEmail: string): Promise<any> {
+    try {
+      const response = await api.patch(
+        `/assessments/${assessmentId}/invitations/${invitationId}/update-email`,
+        { new_email: newEmail }
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Edit a REVOKED invitation's candidate name/email. Only allowed while the
+   * invitation is revoked — does not change status or resend by itself; the
+   * caller follows this with resendInvitation() for "Save & Send".
+   */
+  async updateInvitationDetails(
+    assessmentId: string,
+    invitationId: string,
+    data: { candidate_name?: string; candidate_email?: string }
+  ): Promise<any> {
+    try {
+      const response = await api.patch(
+        `/assessments/${assessmentId}/invitations/${invitationId}/update-details`,
+        data
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Full action history for one invitation — every send, resend, revoke,
+   * edit and candidate-lifecycle milestone as its own row, oldest first.
+   */
+  async getInvitationTimeline(assessmentId: string, invitationId: string): Promise<Array<{
+    action: string;
+    action_label: string;
+    details: Record<string, any>;
+    created_at: string | null;
+  }>> {
+    try {
+      const response = await api.get(`/assessments/${assessmentId}/invitations/${invitationId}/timeline`);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

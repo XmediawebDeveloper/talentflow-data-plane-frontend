@@ -426,6 +426,10 @@ export function JobStatusChip({ status, currentVersion }: { status?: string; cur
  * a caller that says nothing gets exactly what this panel has always rendered.
  */
 export interface VersionHistoryVocabulary {
+  /** The child noun, singular — used in the "View"/"Create" Actions-cell
+   *  button text and its aria-label/title (e.g. "View Assessment" vs
+   *  "View Interview"). */
+  childSingular: string;
   /** Outer table's count column — how many children hang off a job version. */
   childPlural: string;
   /** Heading over the nested table, with its count appended. */
@@ -443,6 +447,7 @@ export interface VersionHistoryVocabulary {
 }
 
 export const ASSESSMENT_VOCABULARY: VersionHistoryVocabulary = {
+  childSingular: 'Assessment',
   childPlural: 'Assessments',
   childVersionsHeading: 'Assessment Versions',
   childNone: 'No assessment',
@@ -560,11 +565,14 @@ export function LatestBadge() {
 
 /** A number over the noun it counts — the reference's metric cell. */
 function MetricCell({ value, label }: { value: number; label: string }) {
+  // Number and label on one line, never wrapped — the Assessments / Invitations
+  // Sent / Completed columns read as a single "1 Assessment" phrase rather than
+  // a value stacked above a word.
   return (
-    <>
-      <div className="text-sm font-semibold text-gray-900 dark:text-slate-100">{value}</div>
-      <div className="text-xs text-gray-500 dark:text-slate-400">{label}</div>
-    </>
+    <div className="flex items-baseline gap-1 whitespace-nowrap">
+      <span className="text-sm font-semibold text-gray-900 dark:text-slate-100">{value}</span>
+      <span className="text-xs text-gray-500 dark:text-slate-400">{label}</span>
+    </div>
   );
 }
 
@@ -941,13 +949,16 @@ export default function AssessmentVersionHistoryPanel({
                   {jobColumns.map(({ label, minW }) => (
                     <th
                       key={label}
-                      /* z order, back to front: body cells (auto) < sticky
-                         Action td (5) < sticky header (7) < pinned corner (8). */
-                      className={`sticky top-0 py-2 px-3 text-xs font-semibold text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 ${minW} ${
-                        label === 'Actions'
-                          ? 'z-[7] lg:right-0 lg:z-[8] shadow-[inset_0_-1px_0_var(--raw-e5e7eb)] lg:shadow-[inset_0_-1px_0_var(--raw-e5e7eb),-1px_0_0_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155)] dark:lg:shadow-[inset_0_-1px_0_var(--raw-334155),-1px_0_0_0_var(--raw-334155)]'
-                          : 'z-[7] shadow-[inset_0_-1px_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155)]'
-                      }`}
+                      /* The header sticks to the top of the scroll box (z-[7]);
+                         no column is pinned sideways. Actions used to pin right,
+                         but an opaque pinned column overlaps the last data
+                         column (Completed) whenever the table is wider than its
+                         host panel — which it is in the narrower contexts this
+                         panel renders in — hiding Completed behind it. A plain
+                         sideways-scrolling table keeps every column, Actions and
+                         Completed alike, fully readable at some scroll position
+                         on every screen. */
+                      className={`sticky top-0 py-2 px-3 text-xs font-semibold text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800 ${minW} z-[7] shadow-[inset_0_-1px_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155)]`}
                     >
                       {label}
                     </th>
@@ -977,9 +988,6 @@ export default function AssessmentVersionHistoryPanel({
                      inner table badges Latest. Read off the sorted list rather
                      than recomputed, so the badge and the ordering agree. */
                   const newestAssessmentVersion = group.assessments[0]?.version ?? 1;
-                  /* Opaque only while pinned — an unpinned cell should take
-                     the row's own hover tint like every other cell. */
-                  const stickyTint = 'lg:bg-white lg:group-hover:bg-[var(--raw-f8f9fc)] dark:lg:bg-slate-900 dark:lg:group-hover:bg-slate-800';
 
                   return (
                     /* One <tr> per job version, then one more carrying its
@@ -1036,16 +1044,12 @@ export default function AssessmentVersionHistoryPanel({
                         <td className="py-3 px-3 whitespace-nowrap align-middle">
                           <MetricCell value={group.totalCompleted} label={group.totalCompleted === 1 ? 'Candidate' : 'Candidates'} />
                         </td>
-                        {/* Actions — pinned right so it stays reachable while
-                            the table scrolls sideways. Opaque background (plus
-                            a hover tint matching the row's translucent one) so
-                            content sliding underneath never shows through. */}
-                        {/* Pinned right only where the table has room for it.
-                            On a phone the pinned column would cover most of a
-                            324px viewport, leaving the reader scrolling the
-                            middle columns under it — so below `lg` it is an
-                            ordinary last column reached by scrolling. */}
-                        <td className={`py-3 px-3 whitespace-nowrap align-middle lg:sticky lg:right-0 lg:z-[5] lg:shadow-[-1px_0_0_0_var(--raw-e5e7eb)] transition-colors duration-200 dark:lg:shadow-[-1px_0_0_0_var(--raw-334155)] ${stickyTint}`}>
+                        {/* Actions — an ordinary last column, reached by
+                            scrolling sideways like any other. It is deliberately
+                            NOT pinned right: an opaque pinned column overlaps the
+                            Completed column beside it whenever the table is wider
+                            than its host panel, clipping Completed from view. */}
+                        <td className="py-3 px-3 whitespace-nowrap align-middle">
                           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                             {/* Read THIS version. Never disabled and never
                                 conditional on the assessment state beside it:
@@ -1083,13 +1087,13 @@ export default function AssessmentVersionHistoryPanel({
                                 aria-expanded={isOpen}
                                 aria-label={
                                   isOpen
-                                    ? `Hide the assessment for job V${group.jobVersion}`
-                                    : `View the assessment for job V${group.jobVersion}`
+                                    ? `Hide the ${vocabulary.childSingular.toLowerCase()} for job V${group.jobVersion}`
+                                    : `View the ${vocabulary.childSingular.toLowerCase()} for job V${group.jobVersion}`
                                 }
-                                title={`View the assessment created for job V${group.jobVersion}`}
+                                title={`View the ${vocabulary.childSingular.toLowerCase()} created for job V${group.jobVersion}`}
                                 className="h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue text-xs font-medium hover:bg-brand-blue/5 transition-colors"
                               >
-                                View Assessment
+                                View {vocabulary.childSingular}
                                 <ChevronDown
                                   className={`w-3.5 h-3.5 transition-transform duration-300 ease-out ${isOpen ? 'rotate-180' : ''}`}
                                 />
@@ -1126,7 +1130,7 @@ export default function AssessmentVersionHistoryPanel({
                                   group.jobCurrentVersion,
                                 );
                                 const reason = canCreate
-                                  ? `Create an assessment for job V${group.jobVersion}`
+                                  ? `Create ${vocabulary.childSingular === 'Assessment' ? 'an' : 'a'} ${vocabulary.childSingular.toLowerCase()} for job V${group.jobVersion}`
                                   : createAssessmentBlockedReason(group.jobStatus, group.jobCurrentVersion);
                                 return (
                                   <button
@@ -1145,7 +1149,7 @@ export default function AssessmentVersionHistoryPanel({
                                     }`}
                                   >
                                     <Plus className="w-3.5 h-3.5" />
-                                    Create Assessment
+                                    Create {vocabulary.childSingular}
                                   </button>
                                 );
                               })()

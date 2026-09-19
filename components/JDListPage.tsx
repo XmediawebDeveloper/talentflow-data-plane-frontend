@@ -1,6 +1,6 @@
 'use client';
 
-import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, CheckCircle2, FileText, Archive, Edit2, Trash2, Loader2, X, User, Briefcase, Monitor, AlertTriangle, AlertCircle, Clock, ArrowUpDown, Power, ClipboardList, Download, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Search, MapPin, Calendar, Eye, MoreVertical, Users, Filter, CheckCircle2, FileText, Archive, Edit2, Trash2, X, User, Briefcase, Monitor, AlertTriangle, AlertCircle, Clock, ArrowUpDown, Power, ClipboardList, Download, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { formatISTDate } from '@/lib/utils/dateUtils';
@@ -19,6 +19,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 // ✅ PERMISSION FIX: Import permission hook for CRUD checks
 import { useModulePermissions } from '@/lib/hooks/usePermissions';
 import { useAuth } from '@/components/providers/AuthProvider';
+import { ListSkeleton } from '@/components/ui/skeleton-loader';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -710,10 +711,7 @@ export default function JDListPage() {
 
         {/* JD List */}
         {loading ? (
-          <div className="flex items-center justify-center py-20 tf-loader-center">
-            <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
-            <span className="ml-3 text-gray-600">Loading job descriptions...</span>
-          </div>
+          <ListSkeleton />
         ) : jds.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
             <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />

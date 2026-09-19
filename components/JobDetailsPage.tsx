@@ -34,7 +34,6 @@ import {
   Activity,
   UserCheck,
   UserX,
-  Loader2,
   ExternalLink,
   MoreHorizontal,
   Brain,
@@ -51,6 +50,7 @@ import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { User, Tenant } from '@/lib/types/tenant';
 import AssessmentsForJD from './AssessmentsForJD';
+import { DetailPageSkeleton } from '@/components/ui/skeleton-loader';
 
 type TabType = 'overview' | 'scored-resumes' | 'assessment-results';
 
@@ -277,12 +277,7 @@ ${job.certifications?.join(', ') || 'N/A'}
   ];
 
   if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
-        <span className="ml-3 text-gray-600">Loading job details...</span>
-      </div>
-    );
+    return <DetailPageSkeleton />;
   }
 
   if (!job) {

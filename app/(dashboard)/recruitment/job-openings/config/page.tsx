@@ -2,9 +2,10 @@
 
 import { Suspense, useState, useEffect } from 'react';
 import { useRouter, usePathname, useSearchParams } from 'next/navigation';
-import { Clock, GraduationCap, Factory, Settings, Sparkles, Loader2 } from 'lucide-react';
+import { Clock, GraduationCap, Factory, Settings, Sparkles } from 'lucide-react';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import MasterDataManagement from '@/components/masters/MasterDataManagement';
+import { PageSkeleton } from '@/components/ui/skeleton';
 
 /**
  * The three master-data lists a job description is built from, behind one tab
@@ -159,12 +160,7 @@ export default function JobOpeningsConfigPage() {
   // `useSearchParams` needs a Suspense boundary above it, same as job-details.
   return (
     <Suspense
-      fallback={
-        <div className="flex-1 flex items-center justify-center bg-slate-50">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-800 dark:text-slate-200" />
-          <span className="ml-3 text-gray-600 dark:text-slate-400">Loading...</span>
-        </div>
-      }
+      fallback={<PageSkeleton variant="table" showStats={false} />}
     >
       <JobOpeningsConfigContent />
     </Suspense>

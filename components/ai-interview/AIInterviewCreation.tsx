@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { PublishedJD, AIInterviewRoundConfig } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
+import { TableSkeleton } from '@/components/ui/skeleton';
 import { findInvalidSkillPunctuation } from '@/lib/skillDuplicates';
 
 interface RoundConfig {
@@ -392,10 +393,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
             </div>
 
             {loadingJds ? (
-              <div className="flex items-center justify-center py-16 tf-loader-center">
-                <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-                <span className="ml-2 text-sm text-gray-500">Loading job descriptions...</span>
-              </div>
+              <TableSkeleton />
             ) : filteredJds.length === 0 ? (
               <div className="text-center py-16 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
                 <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300" />

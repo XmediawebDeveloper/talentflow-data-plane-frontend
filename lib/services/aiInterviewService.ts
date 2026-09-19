@@ -814,6 +814,22 @@ export const aiInterviewService = {
   },
 
   /**
+   * The "Download Recording" link on the results page (CandidateResultsView.tsx)
+   * is a plain <a href> to a presigned URL for S3-backed recordings - the
+   * browser follows it directly and the download itself never touches our
+   * backend, so this is fired from the link's onClick instead of after a
+   * fetch resolves. Best-effort: a logging failure should never block or
+   * surface as a download error.
+   */
+  async logRecordingDownload(interviewId: string, recordingType: 'candidate' | 'screen'): Promise<void> {
+    try {
+      await api.post(`/ai-interview/${interviewId}/recording/log-download?recording_type=${recordingType}`);
+    } catch (error) {
+      console.error('Failed to log AI interview recording download activity:', error);
+    }
+  },
+
+  /**
    * Trigger a browser download from a Blob.
    */
   triggerBlobDownload(blob: Blob, filename: string): void {
@@ -850,6 +866,27 @@ export const aiInterviewService = {
         `/ai-interview/${configId}/invitations`,
         { params }
       );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Full action history for one invitation — every send, resend, revoke,
+   * edit and candidate-lifecycle milestone as its own row, oldest first.
+   * Reads the same audit trail the Activity Log is built from, scoped to
+   * this session, rather than the invitation row's single latest-value
+   * columns (which get overwritten, e.g. a resend clears revoked_at).
+   */
+  async getSessionTimeline(sessionId: string): Promise<Array<{
+    action: string;
+    action_label: string;
+    details: Record<string, any>;
+    created_at: string | null;
+  }>> {
+    try {
+      const response = await api.get(`/ai-interview/session/${sessionId}/timeline`);
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

@@ -46,6 +46,7 @@ import { formatIST } from '@/lib/utils/dateUtils';
 import { useQuota } from '@/contexts/QuotaContext';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { TableSkeleton } from '@/components/ui/skeleton';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -1183,13 +1184,7 @@ export default function AuditTrailPage() {
 
           {/* Table Content */}
           {loading ? (
-            <div className="p-8 sm:p-12 md:p-16 text-center">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 bg-brand-blue rounded-xl flex items-center justify-center mx-auto mb-3 sm:mb-4 shadow-lg shadow-brand-blue/20 ring-1 ring-white/10">
-                <RefreshCw className="w-5 h-5 sm:w-6 sm:h-6 text-white animate-spin" />
-              </div>
-              <p className="text-gray-600 dark:text-slate-400 font-medium text-sm sm:text-base">Loading audit logs...</p>
-              <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mt-1">Please wait</p>
-            </div>
+            <TableSkeleton />
           ) : error ? (
             <div className="p-8 sm:p-12 md:p-16 text-center">
               <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gray-200 dark:bg-slate-800 rounded-xl flex items-center justify-center mx-auto mb-3 sm:mb-4">

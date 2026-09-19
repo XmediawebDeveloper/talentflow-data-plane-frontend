@@ -37,6 +37,7 @@ import AssessmentInviteTable, {
   inviteStatusBucket,
 } from '@/components/assessments/AssessmentInviteTable';
 import ListToolbar from '@/components/ui/list-toolbar';
+import { ListSkeleton } from '@/components/ui/skeleton-loader';
 import ListCountBadge from '@/components/ui/list-count-badge';
 /* The two shared empty states. ListEmptyState covers a LIST in its two
    flavours — narrowed to nothing by a search/filter (keep the controls, offer
@@ -54,6 +55,15 @@ import type { AssessmentAttemptResponse } from '@/lib/services/assessmentService
 
 import { Job } from '@/lib/types/types';
 import { assessmentService } from '@/lib/services';
+import {
+  buildInvitationRowActions,
+  InvitationActionsMenu,
+  InvitationActionButtons,
+  ViewFullHistoryLink,
+  EditInvitationModal,
+  RevokeInvitationDialog,
+  InvitationHistoryDialog,
+} from '@/components/AssessmentInviteActions';
 /* The job's own version list, for asking about each version by its own id —
    see `loadAssessmentLineage`. Same endpoint the version panel's job half
    already reads through `useJobVersionLineage`. */
@@ -76,7 +86,7 @@ import QuotaBadge from '@/components/ui/quota-badge';
 import AllAssessmentsTable from '@/components/assessments/AllAssessmentsTable';
 import AssessmentVersionHistoryPanel, { type AssessmentVersionRow } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
-import { groupByLineage, latestVersionNumber } from '@/lib/utils/jobOpeningDisplay';
+import { latestVersionNumber } from '@/lib/utils/jobOpeningDisplay';
 
 
 /** What the version-history helpers below read off an assessment row — the
@@ -471,10 +481,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Resend confirmation dialog state
   const [resendTargetInvitation, setResendTargetInvitation] = useState<any | null>(null);
   const [isResending, setIsResending] = useState(false);
+  // Single-invitation Revoke / Edit ("Save & Send") / full-history state —
+  // shared by the Track Invites popup and the Invitation Status tab, since
+  // both surfaces get the full action set and only one is ever visible.
+  const [revokeInviteTarget, setRevokeInviteTarget] = useState<any | null>(null);
+  const [editInviteTarget, setEditInviteTarget] = useState<any | null>(null);
+  const [historyInviteTarget, setHistoryInviteTarget] = useState<any | null>(null);
   // Clone confirmation state — simple confirm-only modal. The recruiter
   // invites V2 candidates manually via the normal invite flow.
   const [cloneTargetAssessment, setCloneTargetAssessment] = useState<any | null>(null);
   const [isCloning, setIsCloning] = useState(false);
+  // Draft-conflict modal — shown instead of the clone confirmation when the
+  // lineage already has an unfinished draft; offers to open it directly.
+  const [pendingDraftConflict, setPendingDraftConflict] = useState<{
+    target: any;
+    draft: AssessmentVersionRow;
+  } | null>(null);
   // Revoke confirmation state
   const [revokeTargetAssessment, setRevokeTargetAssessment] = useState<any | null>(null);
   const [revokeCount, setRevokeCount] = useState<number | null>(null);
@@ -760,6 +782,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     assessment: { jd_id?: string },
     lineage?: AssessmentVersionRow[],
   ) => countAssessmentVersions(assessment, lineage) >= MAX_ASSESSMENT_VERSIONS;
+
+  /**
+   * A lineage may only hold one unpublished version at a time — creating a
+   * second draft while one is already sitting unfinished just buries the
+   * first. Finds that sibling draft (if any) so Duplicate can point the
+   * recruiter at it instead of minting another one. Excludes `assessment`
+   * itself so duplicating a row that IS the draft isn't mistaken for a
+   * conflicting sibling (that case is already blocked separately, since the
+   * Duplicate button is disabled on a draft row).
+   */
+  const findPendingDraftVersion = (
+    assessment: { id?: string; jd_id?: string },
+    lineage?: AssessmentVersionRow[],
+  ): AssessmentVersionRow | undefined => {
+    if (!assessment.jd_id) return undefined;
+    const fetched = lineage ?? assessmentLineages[assessment.jd_id];
+    const rows: AssessmentVersionRow[] = fetched?.length
+      ? fetched
+      : (apiAssessments.filter((x: any) => x.jd_id === assessment.jd_id) as AssessmentVersionRow[]);
+    return rows.find(
+      v => String(v.status || '').toLowerCase() === 'draft' && v.id !== assessment.id,
+    );
+  };
 
   /**
    * Create an assessment for ONE job version, from the Job Version History.
@@ -1121,6 +1166,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Stats from API
   const [stats, setStats] = useState({
     total_assessments: 0,
+    total_jobs_with_assessments: 0,
     total_ever_created: 0,
     total_deleted: 0,
     active_assessments: 0,
@@ -1359,6 +1405,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     router.push(`${base}?candidate_id=${invitation.attempt_id}${cid}${name}`);
   };
 
+  /* Past its configured expiry with no terminal state and no unit consumed: the
+     invite IS expired now, whatever the backend last wrote to `status`. Once a
+     unit has been consumed the candidate actually started, so expiry no longer
+     applies. */
+  const isInviteExpired = (inv: any): boolean => {
+    const s = inv.status;
+    if (['completed', 'failed', 'bounced', 'abandoned', 'expired', 'revoked'].includes(s) || inv.completed_at || inv.bounced_at) return false;
+    if (inv.unit_consumed) return false;
+    return !!(inv.expires_at && new Date(inv.expires_at) < new Date());
+  };
 
   /* The invite status badge, one copy for both readers of it — the Track
      Invites popup and the page-level Invitation Status tab. It used to be
@@ -1377,10 +1433,53 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      The terminal failure states (Invite Failed / Bounced / Terminated) and
      Pending keep their per-component red and slate — nothing else draws them
      yet, so there is nothing for them to stay in step with. */
-  /* One wrapper over the shared badge, so the four call sites in this file
-     keep their call shape while the markup lives with the table that is the
-     reason it has to be identical everywhere. */
-  const renderInviteStatusBadge = (inv: any) => <InviteStatusBadge inv={inv} />;
+  const renderInviteStatusBadge = (inv: any) => {
+    const s = inv.status;
+    const base = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1";
+    /* Resolved first so a lapsed invite shows only the Expired badge — never
+       the stale pre-expiry status. */
+    if (isInviteExpired(inv)) {
+      return <span className={`${base} bg-status-expired/10 text-status-expired ring-status-expired/20`}><Clock className="w-3 h-3" /> Expired</span>;
+    }
+    if (s === 'completed' || inv.completed_at) {
+      const autoCompleted = inv.termination_code === 'TENANT_SESSION_TIMEOUT';
+      return (
+        <span
+          className={`${base} bg-status-completed/10 dark:bg-status-completed/15 text-status-completed ring-status-completed/20 dark:ring-status-completed/25`}
+          title={autoCompleted ? 'Auto-submitted when the assessment duration elapsed' : undefined}
+        >
+          <CheckCircle className="w-3 h-3" />
+          Completed
+          {autoCompleted && <span className="text-status-completed/80">(Auto)</span>}
+        </span>
+      );
+    }
+    if (s === 'failed') {
+      return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`}><X className="w-3 h-3" /> Invite Failed</span>;
+    }
+    if (s === 'bounced' || inv.bounced_at) {
+      return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`}><RefreshCw className="w-3 h-3" /> Bounced</span>;
+    }
+    if (s === 'revoked') {
+      return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`}><Ban className="w-3 h-3" /> Revoked</span>;
+    }
+    if (s === 'expired') {
+      return <span className={`${base} bg-status-expired/10 text-status-expired ring-status-expired/20`}><Clock className="w-3 h-3" /> Expired</span>;
+    }
+    if (s === 'abandoned') {
+      return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`} title="Ended before completion — the candidate left the assessment"><Ban className="w-3 h-3" /> Terminated</span>;
+    }
+    if (s === 'started' || inv.started_at) {
+      return <span className={`${base} bg-status-progress/10 text-status-progress ring-status-progress/20`}><Play className="w-3 h-3" /> In Progress</span>;
+    }
+    if (s === 'opened' || inv.opened_at) {
+      return <span className={`${base} bg-status-progress/10 text-status-progress ring-status-progress/20`} title="Consent accepted — the candidate is on the system check step"><Monitor className="w-3 h-3" /> System Check</span>;
+    }
+    if (s === 'sent' || inv.sent_at) {
+      return <span className={`${base} bg-status-invited/10 text-status-invited ring-status-invited/20`}><Mail className="w-3 h-3" /> Invited</span>;
+    }
+    return <span className={`${base} bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-gray-200 dark:ring-slate-700`}><Clock className="w-3 h-3" /> Pending</span>;
+  };
 
   /* The mark a round is passed at. Shared by the Candidate Results table and
      the two score cells below — the popup spelled 70 into each of its own. */
@@ -2261,6 +2360,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         const response = statsResult.value;
         setStats({
           total_assessments: response.total_assessments,
+          total_jobs_with_assessments: response.total_jobs_with_assessments || 0,
           total_ever_created: response.total_ever_created || response.total_assessments,
           total_deleted: response.total_deleted || 0,
           active_assessments: response.active_assessments,
@@ -2609,6 +2709,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       const statsResponse = await assessmentService.getStats();
       setStats({
         total_assessments: statsResponse.total_assessments,
+        total_jobs_with_assessments: statsResponse.total_jobs_with_assessments || 0,
         total_ever_created: statsResponse.total_ever_created || statsResponse.total_assessments,
         total_deleted: statsResponse.total_deleted || 0,
         active_assessments: statsResponse.active_assessments,
@@ -2838,6 +2939,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       });
       return;
     }
+    // Only one draft may exist per lineage at a time — offer to open the
+    // existing one instead of minting a second (the backend blocks this
+    // too, but checking here avoids the round trip and gives the recruiter
+    // a direct way into the draft they should be using).
+    const pendingDraft = findPendingDraftVersion(assessment, lineage);
+    if (pendingDraft) {
+      setPendingDraftConflict({ target: assessment, draft: pendingDraft });
+      return;
+    }
     setCloneTargetAssessment(assessment);
   };
 
@@ -2870,9 +2980,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       ]);
       toast.success(`Assessment duplicated: "${response.cloned_title}"`);
       setCloneTargetAssessment(null);
-    } catch (error) {
+      // Take the recruiter straight into the new draft's edit form instead
+      // of leaving them to find it themselves in the JD's version panel.
+      handleEditAssessment({
+        id: response.cloned_id,
+        jd_id: clonedFromJdId,
+        status: 'Draft',
+        invitations_count: 0,
+      });
+    } catch (error: any) {
       console.error('Failed to duplicate assessment:', error);
-      toast.error('Failed to duplicate assessment. Please try again.');
+      const msg =
+        error?.response?.data?.detail?.message ||
+        error?.response?.data?.message ||
+        (typeof error?.response?.data?.detail === 'string' ? error.response.data.detail : null) ||
+        'Failed to duplicate assessment. Please try again.';
+      toast.error(msg);
     } finally {
       setIsCloning(false);
     }
@@ -3185,6 +3308,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       toast.error(msg);
     } finally {
       setIsSendingChangeEmail(false);
+    }
+  };
+
+  /** Which invitation an invite-management action targets, and which list to
+   *  refetch afterwards — same rule handleResendInvitation and
+   *  handleUpdateEmail already follow, shared here for Revoke and Edit. */
+  const getInviteAssessmentId = (invitation: any): string | undefined =>
+    invitation?._assessment_id || invitation?.assessment_id || selectedAssessmentForTracking?.id;
+
+  const refreshInviteLists = async (invitation: any) => {
+    if (invitation?._assessment_id) {
+      await loadAllInviteStatuses();
+    } else if (selectedAssessmentForTracking) {
+      await Promise.all([
+        loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters),
+        loadTrackingInvitationSummary(selectedAssessmentForTracking),
+      ]);
     }
   };
 
@@ -4131,22 +4271,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     </div>
   );
 
-  /* How many JOBS the tenant has, for the Total Jobs summary card.
+  /* How many JOBS have at least one assessment, for the Total Jobs card.
 
-     `jobs` is the route's fetch of JD rows and holds one row per VERSION — a
-     job republished twice is three rows in it — so `jobs.length` here would
-     report versions while reading as a job count. `groupByLineage` is the
-     shared helper the Job Openings list counts its own "Total Jobs" tile with
-     (keyed on `job_id`, falling back to the row id), so the two pages cannot
-     report different numbers of jobs for the same tenant.
+     The card opens the Total Jobs tab, whose Job List heading counts jobs that
+     HAVE assessments — so the card must count the same population. It used to
+     count every job the tenant has (`groupByLineage(jobs)`, the JD list), which
+     reported e.g. 193 above a Job List of 59.
 
-     No new request: this is the list the page is already handed as a prop and
-     already reads for the LATEST badge and the Position filter.
-
-     Deliberately NOT the Job List heading's `assessmentResultCount` below,
-     which counts the jobs that HAVE assessments and moves with the filters —
-     a header tile answers "how many jobs are there", which is this. */
-  const totalJobs = groupByLineage(jobs).size;
+     Read from /assessments/stats rather than derived from the page's own
+     assessment list: that list follows the active tab and the search box, and
+     a summary card must not move with them. The backend counts distinct job
+     lineages with the same key the Job List collapses by (`jobLineageKey`):
+     the JD's job_id, then jd_id, then the assessment's own id. */
+  const totalJobs = stats.total_jobs_with_assessments;
 
   /* Candidates who have actually SAT an assessment, from the same
      /assessments/stats response the Total and Active figures come from — one
@@ -4828,8 +4965,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
               Total Jobs          -> the Total Jobs tab, which is the
                                      job-grouped list. `totalJobs`, the
-                                     distinct job lineages in the `jobs` prop
-                                     — see its derivation above. It leads the
+                                     distinct jobs that HAVE assessments
+                                     (stats.total_jobs_with_assessments). It leads the
                                      row for the same reason its tab leads the
                                      tab strip: the job is what an assessment
                                      hangs off, so it is the widest of these
@@ -5999,6 +6136,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                           </div>
                                         )}
                                       </div>
+                                      <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(inv)} />
                                     </td>
                                     {renderInviteScoreCell(inv, 'technical')}
                                     {renderInviteScoreCell(inv, 'coding')}
@@ -6019,75 +6157,52 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         const hasResult = inviteHasResult(inv);
                                         const scored = inv.scoring_status !== 'pending' && inv.scoring_status !== 'processing';
                                         const canDownload = hasResult && scored && canDownloadInviteReport;
-                                        /* Resend is offered on Expired rows and
-                                           only those. `isInviteResendable` is
-                                           the one definition of that — the bulk
-                                           Resend button and its confirmation
-                                           read the same helper, so a row cannot
-                                           offer an action the bulk path would
-                                           skip, or the reverse. */
-                                        const canResend = isInviteResendable(inv);
-                                        // No trigger at all rather than a menu that
-                                        // opens onto nothing — the popup's rule.
-                                        if (!hasResult && !canResend) return null;
-                                        return (
-                                          <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                              <button
-                                                aria-label="Actions"
-                                                title="Actions"
-                                                className="p-1.5 text-gray-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 rounded transition-colors"
+                                        // Edit Email/Change Email (the pre-existing
+                                        // failed/bounced "fix the address" flow)
+                                        // isn't wired on this tab — it never had
+                                        // that inline editor UI, only Resend. The
+                                        // new Edit (revoked)/Revoke/Copy Link are
+                                        // added here alongside it.
+                                        const actions = buildInvitationRowActions(inv, {
+                                          onResend: (target) => setResendTargetInvitation(target),
+                                          resendingId: isResending ? resendTargetInvitation?.id : null,
+                                          onEdit: (target) => setEditInviteTarget(target),
+                                          onRevoke: (target) => setRevokeInviteTarget(target),
+                                          revokingId: revokeInviteTarget?.id,
+                                        });
+                                        const extraItems = (
+                                          <>
+                                            {hasResult && (
+                                              <DropdownMenuItem
+                                                className={assessmentDropdownMenuItemClass}
+                                                onSelect={() => openInviteResult(inv)}
                                               >
-                                                <MoreVertical className="w-4 h-4" />
-                                              </button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-48">
-                                              {hasResult && (
-                                                <DropdownMenuItem
-                                                  className={assessmentDropdownMenuItemClass}
-                                                  onSelect={() => openInviteResult(inv)}
-                                                >
-                                                  <Eye className="w-3.5 h-3.5 text-menu-icon-view" />
-                                                  <span className={MENU_ITEM_SCALE_CLASS}>View Result</span>
-                                                </DropdownMenuItem>
-                                              )}
-                                              {/* Resend — the popup's item, opening
-                                                  the same page-level confirmation
-                                                  (new-link expiry preview and all)
-                                                  through the same state. The work is
-                                                  handleResendInvitation's; nothing
-                                                  about it is reimplemented here. */}
-                                              {canResend && (
-                                                <DropdownMenuItem
-                                                  className={assessmentDropdownMenuItemClass}
-                                                  onSelect={() => setResendTargetInvitation(inv)}
-                                                >
-                                                  <Mail className="w-3.5 h-3.5 text-menu-icon-share" />
-                                                  <span className={MENU_ITEM_SCALE_CLASS}>Resend</span>
-                                                </DropdownMenuItem>
-                                              )}
-                                              {/* Disabled rather than hidden while
-                                                  scoring runs: the action exists for
-                                                  this row, it is just not ready yet,
-                                                  and hiding it would read as "this
-                                                  row has no report". */}
-                                              {hasResult && canDownloadInviteReport && (
-                                                <DropdownMenuItem
-                                                  className={assessmentDropdownMenuItemClass}
-                                                  disabled={!canDownload || downloadingInviteReportId === inv.id}
-                                                  onSelect={() => downloadInviteReport(inv)}
-                                                >
-                                                  {downloadingInviteReportId === inv.id
-                                                    ? <Loader2 className="w-3.5 h-3.5 text-menu-icon-download animate-spin" />
-                                                    : <Download className="w-3.5 h-3.5 text-menu-icon-download" />}
-                                                  <span className={MENU_ITEM_SCALE_CLASS}>
-                                                    {downloadingInviteReportId === inv.id ? 'Preparing…' : 'Download Report'}
-                                                  </span>
-                                                </DropdownMenuItem>
-                                              )}
-                                            </DropdownMenuContent>
-                                          </DropdownMenu>
+                                                <Eye className="w-3.5 h-3.5 text-menu-icon-view" />
+                                                <span className={MENU_ITEM_SCALE_CLASS}>View Result</span>
+                                              </DropdownMenuItem>
+                                            )}
+                                            {/* Disabled rather than hidden while
+                                                scoring runs: the action exists for
+                                                this row, it is just not ready yet,
+                                                and hiding it would read as "this
+                                                row has no report". */}
+                                            {hasResult && canDownloadInviteReport && (
+                                              <DropdownMenuItem
+                                                className={assessmentDropdownMenuItemClass}
+                                                disabled={!canDownload || downloadingInviteReportId === inv.id}
+                                                onSelect={() => downloadInviteReport(inv)}
+                                              >
+                                                {downloadingInviteReportId === inv.id
+                                                  ? <Loader2 className="w-3.5 h-3.5 text-menu-icon-download animate-spin" />
+                                                  : <Download className="w-3.5 h-3.5 text-menu-icon-download" />}
+                                                <span className={MENU_ITEM_SCALE_CLASS}>
+                                                  {downloadingInviteReportId === inv.id ? 'Preparing…' : 'Download Report'}
+                                                </span>
+                                              </DropdownMenuItem>
+                                            )}
+                                          </>
                                         );
+                                        return <InvitationActionsMenu actions={actions} extraItems={extraItems} className="w-48" />;
                                       })()}
                                     </td>
                                   </tr>
@@ -6806,12 +6921,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </div>
             ) : isLoading ? (
               /* Loading State */
-              <div className="flex items-center justify-center py-12 tf-loader-center">
-                <div className="text-center">
-                  <Loader2 className="w-10 h-10 text-brand-blue animate-spin mx-auto mb-3" />
-                  <p className="text-gray-600 dark:text-slate-400">Loading assessments...</p>
-                </div>
-              </div>
+              <ListSkeleton />
             ) : filteredAssessments.length === 0 ? (() => {
               /* One shared ListEmptyState for both zeros this list can reach.
                  It picks the flavour itself from `isNarrowed`: a search or
@@ -7473,39 +7583,382 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 body without being part of its flow - an overlay adds no
                 height, which is the whole point of it. */}
             <div className="relative px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
-              {/* The candidate list, shared verbatim with the Invitation
-                  Status tab on an assessment's own page — see
-                  `AssessmentInviteTable`. It was this popup's markup first, so
-                  what it renders here is unchanged; only its home moved. */}
-              <AssessmentInviteTable
-                invitations={trackingInvitations}
-                isInitialLoading={showTrackingInitialLoader}
-                hasActiveFilters={trackingHasActiveFilters}
-                emptyMessage={trackingJob
-                  ? 'No invitations found for any version of this job.'
-                  : 'No invitations found for this assessment.'}
-                showVersionColumns={!!trackingJob}
-                techEnabled={trackingTechEnabled}
-                codingEnabled={trackingCodingEnabled}
-                selectedIds={trackingSelectedIds}
-                onToggleSelect={toggleTrackingSelectOne}
-                canOpenResult={opensTrackedDetails}
-                onOpenResult={openTrackedInviteResult}
-                onResend={setResendTargetInvitation}
-                editingEmailId={editingEmailId}
-                newEmailValue={newEmailValue}
-                onNewEmailChange={setNewEmailValue}
-                onStartEditEmail={(inv) => {
-                  setEditingEmailId(inv.id);
-                  setNewEmailValue(inv.candidate_email);
-                }}
-                onCancelEditEmail={() => {
-                  setEditingEmailId(null);
-                  setNewEmailValue('');
-                }}
-                onSubmitEmail={handleUpdateEmail}
-                isSendingChangeEmail={isSendingChangeEmail}
-              />
+              {showTrackingInitialLoader ? (
+                /* Nothing to show yet, so the spinner IS the body - and it
+                   FILLS it, rather than collapsing the dialog to a 200px box
+                   that then jumps to table height when the rows land. The
+                   dialog's min-height reserves the space; this occupies it. */
+                <div className={TRACKER_DIALOG_PLACEHOLDER_CLASS}>
+                  <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue animate-spin" />
+                </div>
+              ) : trackingInvitations.length === 0 ? (
+                <div className={`${TRACKER_DIALOG_PLACEHOLDER_CLASS} text-gray-500 dark:text-slate-500`}>
+                  <Users className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 text-brand-blue/40" />
+                  <p className="text-xs sm:text-sm">
+                    {trackingHasActiveFilters
+                      ? 'No invitations match the current filters.'
+                      : trackingJob
+                        ? 'No invitations found for any version of this job.'
+                        : 'No invitations found for this assessment.'}
+                  </p>
+                </div>
+              ) : (
+                /* Outer border on the scroll shell rather than the table: the
+                   shell is what stays put, so a border on the table itself would
+                   scroll away with the content. Deliberately no overflow-hidden —
+                   the shell's overflow:auto is what lets the wide auto-layout
+                   table scroll sideways. */
+                <div className="tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0 border border-gray-200 dark:border-slate-700 rounded-lg">
+                  {/* Auto layout, not table-fixed. The colgroup widths summed
+                      past the table's min-width, so every column was scaled
+                      down; combined with the shell's white-space: nowrap the
+                      content overflowed its cell instead of reflowing, and the
+                      sticky header stopped lining up with the rows. Columns now
+                      size to their own content and the shell scrolls sideways.
+                      px-4 on every cell gives the consistent column gutter. */}
+                  <table className="w-max min-w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200 dark:border-slate-700">
+                        <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left" aria-label="Select" />
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CID</th>
+                        {/* Job scope only: with invites from several
+                            assessments in one table, the row has to say which
+                            job version its assessment belongs to - that is the
+                            whole point of tracking a job rather than an
+                            assessment. Reading one assessment there is nothing
+                            to disambiguate, so neither column is there.
+
+                            TWO columns, not one compound cell: a job version
+                            and an assessment version are separate facts about
+                            the row - the job was republished, the assessment
+                            was re-authored - and they do not move together.
+                            Side by side in this order they still read as the
+                            relationship they are: this assessment version, on
+                            that job version. */}
+                        {trackingJob && (
+                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Job Version</th>
+                        )}
+                        {trackingJob && (
+                          <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Assessment Version</th>
+                        )}
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                        {/* hidden md:table-cell mirrors this column's <td>. Without
+                            it the header carried one more cell than the body between
+                            sm and md, shifting every heading after Timeline off its
+                            column. */}
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Timeline</th>
+                        {/* Tech / Coding Score columns are conditional on the
+                            assessment having that round enabled — same rule as
+                            the Results page. Showing a "Coding Score" column
+                            for a JD without a coding round produced a
+                            permanent "—" column that confused recruiters. */}
+                        {trackingTechEnabled && (
+                          <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tech Score</th>
+                        )}
+                        {trackingCodingEnabled && (
+                          <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Coding Score</th>
+                        )}
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider tf-sticky-col">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                      {trackingInvitations.map((invitation: any) => {
+                            const initials = invitation.candidate_name
+                              ?.split(' ')
+                              .map((n: string) => n[0])
+                              .join('')
+                              .toUpperCase()
+                              .slice(0, 2) || '??';
+  
+                        /* Only Completed / Auto Completed rows are interactive —
+                           other statuses have no Result Details to open, so the
+                           row carries no click handler, button role, or pointer
+                           cursor. */
+                        const rowOpensDetails = opensTrackedDetails(invitation);
+
+                        return (
+                          <tr
+                            key={invitation.id}
+                            onClick={rowOpensDetails ? () => openTrackedInviteResult(invitation) : undefined}
+                            onKeyDown={rowOpensDetails ? (e: React.KeyboardEvent) => {
+                              // The row is exposed as a button to assistive tech,
+                              // so it has to answer to the button keys too.
+                              if (e.key !== 'Enter' && e.key !== ' ') return;
+                              e.preventDefault();
+                              openTrackedInviteResult(invitation);
+                            } : undefined}
+                            role={rowOpensDetails ? 'button' : undefined}
+                            tabIndex={rowOpensDetails ? 0 : undefined}
+                            title={rowOpensDetails ? 'View result details' : undefined}
+                            className={rowOpensDetails
+                              ? 'transition-colors cursor-pointer hover:bg-brand-blue/5 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-brand-blue/40'
+                              : 'transition-colors hover:bg-gray-50 dark:hover:bg-slate-800'}
+                          >
+                            {/* stopPropagation: Complete rows navigate on click —
+                                ticking a checkbox must never also open the row.
+                                Only bulk-resendable rows (Invited/Expired) get a
+                                checkbox; the rest keep a fixed-width slot so the
+                                columns stay aligned. */}
+                            <td className="py-3 pl-4 pr-0 align-top tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                              {isBulkResendable(invitation) ? (
+                                <button
+                                  type="button"
+                                  role="checkbox"
+                                  aria-checked={trackingSelectedIds.has(invitation.id)}
+                                  aria-label={`Select ${invitation.candidate_name || invitation.candidate_email || 'candidate'}`}
+                                  onClick={() => toggleTrackingSelectOne(invitation.id)}
+                                  className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
+                                    trackingSelectedIds.has(invitation.id)
+                                      ? 'bg-brand-blue border-brand-blue'
+                                      : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600 hover:border-brand-blue/50'
+                                  }`}
+                                >
+                                  {trackingSelectedIds.has(invitation.id) && <Check className="w-3 h-3 text-white" />}
+                                </button>
+                              ) : (
+                                <span className="inline-block w-5" />
+                              )}
+                            </td>
+                            <td className="py-3 px-4 align-top">
+                              <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
+                                {invitation.candidate_display_id || '-'}
+                              </span>
+                            </td>
+                            {/* The job version this invite's assessment was
+                                built against - the version panel's own blue
+                                chip, so V2 reads the same wherever a recruiter
+                                meets it. */}
+                            {trackingJob && (
+                              <td className="py-3 px-4 align-top">
+                                <VersionChip kind="job" version={invitation._jd_version} />
+                              </td>
+                            )}
+                            {/* The assessment version, in the panel's cyan -
+                                the version and nothing else. The assessment's
+                                own id sat under it and was noise in a column
+                                asked for a version; the assessment is named in
+                                the row's actions and on the page it opens. */}
+                            {trackingJob && (
+                              <td className="py-3 px-4 align-top">
+                                <VersionChip kind="assessment" version={invitation._assessment_version} />
+                              </td>
+                            )}
+                            <td className="py-3 px-4 align-top">
+                              <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-sm flex-shrink-0">
+                                  {initials}
+                                </div>
+                                {/* Capped rather than free: under auto layout a
+                                    single long email would otherwise set the
+                                    column width for the whole table. */}
+                                <div className="min-w-0 max-w-[240px]">
+                                  <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
+                                  <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="py-3 px-4 align-top">
+                              {/* Status is the badge alone. Expiry is resolved inside
+                                  renderInviteStatusBadge, so a lapsed invite renders one Expired
+                                  badge — not its old status with a chip beside it — and
+                                  the failed row's "Incorrect Email" note now lives only
+                                  in the Edit Email flow. */}
+                              {renderInviteStatusBadge(invitation)}
+                            </td>
+                                <td className="py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 hidden md:table-cell">
+                                  <div className="space-y-1">
+                                    {invitation.sent_at && (
+                                      <div className="flex items-center gap-2">
+                                        <Mail className="w-3 h-3 text-status-invited flex-shrink-0" />
+                                        <span className="text-status-invited">Invited: {formatIST(invitation.sent_at)}</span>
+                                  </div>
+                                )}
+                                {invitation.bounced_at && (
+                                  <div className="flex items-center gap-2">
+                                    <RefreshCw className="w-3 h-3 text-red-600 flex-shrink-0" />
+                                    <span className="text-red-600">Bounced: {formatIST(invitation.bounced_at)}</span>
+                                  </div>
+                                )}
+                                {invitation.opened_at && (
+                                  <div className="flex items-center gap-2">
+                                    <Monitor className="w-3 h-3 text-status-progress flex-shrink-0" />
+                                    <span className="text-status-progress">System Check: {formatIST(invitation.opened_at)}</span>
+                                  </div>
+                                )}
+                                {invitation.started_at && (
+                                  <div className="flex items-center gap-2">
+                                    <Play className="w-3 h-3 text-status-progress flex-shrink-0" />
+                                    <span className="text-status-progress">Started: {formatIST(invitation.started_at)}</span>
+                                  </div>
+                                )}
+                                {invitation.completed_at && (
+                                  <div className="flex items-center gap-2">
+                                    <CheckCircle className="w-3 h-3 text-status-completed flex-shrink-0" />
+                                    <span className="text-status-completed">Completed: {formatIST(invitation.completed_at)}</span>
+                                  </div>
+                                )}
+                                {invitation.terminated_at && !invitation.completed_at && (
+                                  <div className="flex items-center gap-2">
+                                    <Ban className="w-3 h-3 text-red-600 flex-shrink-0" />
+                                    <span className="text-red-600">Terminated: {formatIST(invitation.terminated_at)}</span>
+                                  </div>
+                                )}
+                                {/* Expired-at timestamp — shown when the link
+                                    has expired (status='expired' or clock-based
+                                    expiry on a never-started invite). The
+                                    expires_at column holds the deadline; we
+                                    surface it as the moment of expiry. */}
+                                {(() => {
+                                  const s = (invitation.status || '').toLowerCase();
+                                  const clockExpired = !invitation.started_at
+                                    && !invitation.unit_consumed
+                                    && invitation.expires_at
+                                    && new Date(invitation.expires_at) < new Date();
+                                  const isExpired = !invitation.completed_at
+                                    && (s === 'expired' || clockExpired);
+                                  if (!isExpired || !invitation.expires_at) return null;
+                                  return (
+                                    <div className="flex items-center gap-2">
+                                      <Clock className="w-3 h-3 text-status-expired flex-shrink-0" />
+                                      <span className="text-status-expired">Expired at: {formatIST(invitation.expires_at)}</span>
+                                    </div>
+                                  );
+                                })()}
+                                {!invitation.sent_at && !invitation.started_at && (
+                                  <div className="flex items-center gap-2">
+                                    <Clock className="w-3 h-3 text-gray-400 flex-shrink-0" />
+                                    <span>Created: {formatIST(invitation.created_at)}</span>
+                                  </div>
+                                )}
+                              </div>
+                              <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(invitation)} />
+                            </td>
+                            {/* Tech Score / Coding Score columns. Same pattern
+                                as the Results page: percent number on top, small
+                                Pass/Fail tag below, both colored against the 70%
+                                threshold. Rounded so the value matches every
+                                other surface (Results list, Detail view, PDF).
+                                Show "—" until AI scoring is finished — surfacing
+                                0% / Fail mid-evaluation was misleading because
+                                the candidate's answers haven't been judged yet.
+                                Cells are gated on the round being enabled for
+                                this assessment so a Tech-only JD doesn't carry
+                                an empty Coding column. */}
+                            {/* Score is shown when a numeric value is on the
+                                row. Earlier the gate also required
+                                scoring_status === 'completed', but the
+                                listInvitations endpoint didn't include that
+                                field — which silently hid every score. The
+                                backend now ships scoring_status; we still
+                                treat its absence as "show the score if it
+                                exists" so the popup keeps parity with the
+                                Results page. */}
+                            {trackingTechEnabled && (() => {
+                              const techReady =
+                                invitation.technical_score != null
+                                && invitation.scoring_status !== 'processing'
+                                && invitation.scoring_status !== 'pending';
+                              return (
+                                <td className="py-3 px-4 align-top text-sm text-center">
+                                  {techReady ? (
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span className={`font-medium ${invitation.technical_score >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
+                                        {Math.round(invitation.technical_score)}%
+                                      </span>
+                                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.technical_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+                                        {invitation.technical_score >= 70 ? 'Pass' : 'Fail'}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-400">—</span>
+                                  )}
+                                </td>
+                              );
+                            })()}
+                            {trackingCodingEnabled && (() => {
+                              const codingReady =
+                                invitation.coding_score != null
+                                && invitation.scoring_status !== 'processing'
+                                && invitation.scoring_status !== 'pending';
+                              return (
+                                <td className="py-3 px-4 align-top text-sm text-center">
+                                  {codingReady ? (
+                                    <div className="flex flex-col items-center gap-0.5">
+                                      <span className={`font-medium ${invitation.coding_score >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
+                                        {Math.round(invitation.coding_score)}%
+                                      </span>
+                                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.coding_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+                                        {invitation.coding_score >= 70 ? 'Pass' : 'Fail'}
+                                      </span>
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-400">—</span>
+                                  )}
+                                </td>
+                              );
+                            })()}
+                            <td className="py-3 px-4 align-top tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                              {/* Actions collapse into a kebab menu. This uses Radix's
+                                  DropdownMenu rather than the hand-rolled absolute
+                                  dropdown the cards above use, because this table sits
+                                  inside tf-table-shell (overflow: auto) — an absolutely
+                                  positioned menu would be clipped by the scroll
+                                  container. Radix portals the menu out of it. */}
+                              {editingEmailId === invitation.id ? (
+                                /* The email editor stays inline in the cell rather than
+                                   living in the menu: a text input inside a menu fights
+                                   the menu's own keyboard handling. Choosing "Edit Email"
+                                   closes the menu and swaps the cell to this form. Held
+                                   once here — it used to be duplicated across the bounced
+                                   and resendable branches. */
+                                <div className="flex flex-col gap-1.5 min-w-[190px]">
+                                  <input
+                                    type="email"
+                                    value={newEmailValue}
+                                    onChange={e => setNewEmailValue(e.target.value)}
+                                    placeholder="new@email.com"
+                                    className="text-xs border border-gray-200 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue w-full"
+                                    autoFocus
+                                  />
+                                  <div className="flex gap-1">
+                                    <button
+                                      onClick={() => handleUpdateEmail(invitation)}
+                                      disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
+                                      className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                                    >
+                                      <Send className="w-3 h-3" />
+                                      {isSendingChangeEmail ? 'Sending…' : 'Send'}
+                                    </button>
+                                    <button
+                                      onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}
+                                      className="px-2 py-1 text-xs text-gray-600 dark:text-slate-400 hover:bg-slate-100 rounded transition-colors"
+                                    >
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              ) : (
+                                <InvitationActionsMenu
+                                  actions={buildInvitationRowActions(invitation, {
+                                    onResend: (target) => setResendTargetInvitation(target),
+                                    resendingId: isResending ? resendTargetInvitation?.id : null,
+                                    onEditEmail: (target) => { setEditingEmailId(target.id); setNewEmailValue(target.candidate_email); },
+                                    onEdit: (target) => setEditInviteTarget(target),
+                                    onRevoke: (target) => setRevokeInviteTarget(target),
+                                    revokingId: revokeInviteTarget?.id,
+                                    onViewResult: openTrackedInviteResult,
+                                  })}
+                                />
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
               {/* Re-reading rows that are already on screen - Refresh, a page
                   turn, a filter change. The table underneath keeps its exact
@@ -7587,6 +8040,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           );
         })()}
       </ConfirmationDialog>
+
+      {/* Revoke / Edit ("Save & Send") / full-history — shared by the Track
+          Invites popup and the Invitation Status tab (see
+          getInviteAssessmentId / refreshInviteLists above). */}
+      <RevokeInvitationDialog
+        target={revokeInviteTarget}
+        onClose={() => setRevokeInviteTarget(null)}
+        getAssessmentId={getInviteAssessmentId}
+        onRevoked={() => refreshInviteLists(revokeInviteTarget)}
+      />
+      <EditInvitationModal
+        target={editInviteTarget}
+        onClose={() => setEditInviteTarget(null)}
+        getAssessmentId={getInviteAssessmentId}
+        onSaved={() => refreshInviteLists(editInviteTarget)}
+      />
+      <InvitationHistoryDialog
+        target={historyInviteTarget}
+        onClose={() => setHistoryInviteTarget(null)}
+        getAssessmentId={getInviteAssessmentId}
+      />
 
       {/* Bulk resend confirmation for the Invitation Status tab — the same
           ConfirmationDialog, wording and warning tone as the popup's below,
@@ -7766,6 +8240,118 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             </div>
           </div>
         </div>
+        );
+      })()}
+
+      {/* Draft-conflict modal — shown by handleOpenCloneModal instead of the
+          clone confirmation when the lineage already has an unfinished
+          draft. Points the recruiter at that draft rather than letting them
+          create a second one (the backend blocks the second one too, but
+          this avoids the round trip). */}
+      {pendingDraftConflict && (() => {
+        const { target, draft } = pendingDraftConflict;
+        const closeConflict = () => setPendingDraftConflict(null);
+        const lastEdited = draft.updated_at || draft.created_at;
+        // Same fields/fallbacks the clone-confirmation modal uses for its
+        // "Current Job" card, so the JD name/version shown here always
+        // agrees with what that modal (and the list row) would show.
+        const jdShortId = target?.jd_short_id;
+        const jobTitle = target?.jd_title
+          || target?.job?.title
+          || stripVersionFromTitle(target?.title || draft.title || '')
+          || 'This job';
+        const jobVersion = target?.jd_version ?? draft.jd_version ?? 1;
+        const draftVersion = draft.version ?? 1;
+        return (
+          <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-lg overflow-hidden">
+              <div className="px-5 sm:px-7 pt-5 sm:pt-7 pb-5 sm:pb-6">
+                <div className="flex justify-end">
+                  <button
+                    onClick={closeConflict}
+                    className="p-1.5 -mr-1.5 -mt-1 text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+                    aria-label="Close"
+                  >
+                    <X className="w-5 h-5 sm:w-6 sm:h-6" />
+                  </button>
+                </div>
+
+                <div className="flex flex-col items-center text-center -mt-4">
+                  <div className="w-14 h-14 rounded-full bg-amber-50 dark:bg-amber-500/15 flex items-center justify-center">
+                    <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                  </div>
+                  <h3 className="mt-4 text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">
+                    Draft already exists
+                  </h3>
+                  <p className="mt-2 text-sm sm:text-base text-gray-500 dark:text-slate-400 leading-snug">
+                    A draft version already exists for this assessment.
+                    Open the existing draft to continue editing, or cancel to stay here.
+                  </p>
+                </div>
+
+                <div className="mt-5 sm:mt-6 rounded-xl border border-gray-200/80 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 p-3 sm:p-4">
+                  <div className="flex items-start gap-3 sm:gap-4">
+                    <div className="w-11 h-11 rounded-xl bg-blue-50 dark:bg-blue-500/15 flex items-center justify-center flex-shrink-0">
+                      <FileText className="w-5 h-5 text-brand-blue dark:text-blue-300" />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400">Existing Draft</p>
+                      <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1.5">
+                        <span className="text-sm sm:text-base font-bold text-gray-900 dark:text-slate-50 break-words">
+                          {jdShortId ? `${jdShortId.replace(/-/g, ' ')}  ` : ''}
+                          {jobTitle} v{jobVersion} - Assessment V {draftVersion}
+                        </span>
+                        <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 text-xs font-semibold flex-shrink-0">
+                          Draft
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs sm:text-sm text-gray-500 dark:text-slate-400">
+                        {lastEdited && (
+                          <span className="inline-flex items-center gap-1.5">
+                            <Calendar className="w-3.5 h-3.5" />
+                            Last edited on {formatIST(lastEdited)}
+                          </span>
+                        )}
+                        {draft.created_by_name && (
+                          <>
+                            <span aria-hidden="true" className="text-gray-300 dark:text-slate-600">|</span>
+                            <span className="inline-flex items-center gap-1.5">
+                              <Users className="w-3.5 h-3.5" />
+                              Edited by {draft.created_by_name}
+                            </span>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="border-t border-gray-200 dark:border-slate-700 px-5 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
+                <button
+                  onClick={closeConflict}
+                  className="px-5 sm:px-8 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    handleEditAssessment({
+                      id: draft.id,
+                      jd_id: target?.jd_id,
+                      status: 'Draft',
+                      invitations_count: 0,
+                    });
+                    closeConflict();
+                  }}
+                  className="px-5 sm:px-8 py-2.5 text-sm font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow-md shadow-amber-600/25 transition-colors flex items-center justify-center gap-2"
+                >
+                  Open Draft
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
         );
       })()}
 

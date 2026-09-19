@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
 import AssessmentDetailsView from '@/components/AssessmentDetailsView';
+import { DetailPageSkeleton } from '@/components/ui/skeleton-loader';
 import ShareAssessmentModal from '@/components/ShareAssessmentModal';
 import AssessmentPreviewModal from '@/components/AssessmentPreviewModal';
 import AssessmentEditModal from '@/components/AssessmentEditModal';
@@ -280,12 +280,7 @@ function AssessmentDetailsContent() {
    * must not sit there looking interactive.
    */
   if ((isLoading && !assessment) || redirectingToDraft) {
-    return (
-      <main className="tf-loader-page bg-slate-50">
-        <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
-        <span className="ml-3 text-sm text-gray-600 dark:text-slate-400">Loading assessment...</span>
-      </main>
-    );
+    return <DetailPageSkeleton />;
   }
 
   if (error || !assessment) {
@@ -390,17 +385,7 @@ export default function AssessmentDetailsPage() {
   // useSearchParams needs a Suspense boundary in the App Router.
   return (
     <Suspense
-      fallback={
-        <main className="flex-1 overflow-x-clip bg-slate-50">
-          <div className="mx-auto w-full max-w-[1400px]">
-            <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-              <div className="flex items-center justify-center h-64">
-                <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
-              </div>
-            </div>
-          </div>
-        </main>
-      }
+      fallback={<DetailPageSkeleton />}
     >
       <AssessmentDetailsContent />
     </Suspense>

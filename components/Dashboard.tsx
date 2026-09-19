@@ -43,6 +43,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { PLAN_FEATURE_METADATA, PlanFeatureKey } from '@/lib/types/planFeatures';
+import { ListSkeleton } from '@/components/ui/skeleton-loader';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -615,10 +616,7 @@ export default function Dashboard({
           </div>
           <div className="p-6">
             {loadingJDs ? (
-              <div className="flex items-center justify-center py-12 tf-loader-center">
-                <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-                <span className="ml-3 text-gray-600">Loading published jobs...</span>
-              </div>
+              <ListSkeleton rows={3} />
             ) : publishedJDs.length === 0 ? (
               <div className="text-center py-12">
                 <Briefcase className="w-12 h-12 text-gray-400 mx-auto mb-4" />
@@ -729,10 +727,7 @@ export default function Dashboard({
           </div>
           <div className="p-6">
             {loadingJDs ? (
-              <div className="flex items-center justify-center py-12 tf-loader-center">
-                <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-                <span className="ml-3 text-gray-600">Loading drafts...</span>
-              </div>
+              <ListSkeleton rows={3} />
             ) : draftJDs.length === 0 ? (
               <div className="text-center py-12">
                 <FileText className="w-12 h-12 text-gray-400 mx-auto mb-4" />

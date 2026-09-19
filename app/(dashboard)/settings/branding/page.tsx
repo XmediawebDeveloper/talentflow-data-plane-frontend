@@ -7,6 +7,7 @@ import { brandingApi, BrandingSettings, BrandingUpdate } from '@/lib/services/se
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
+import { PageSkeleton } from '@/components/ui/skeleton';
 
 export default function BrandingPage() {
   const { hasPermission } = useAuth();
@@ -142,14 +143,7 @@ export default function BrandingPage() {
   ];
 
   if (isLoading) {
-    return (
-      <main className="flex-1 py-4 md:py-8 overflow-y-auto bg-slate-50 flex items-center justify-center">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-          <p className="font-medium text-gray-600 dark:text-slate-400">Loading branding settings...</p>
-        </div>
-      </main>
-    );
+    return <PageSkeleton variant="form" showStats={false} />;
   }
 
   return (
