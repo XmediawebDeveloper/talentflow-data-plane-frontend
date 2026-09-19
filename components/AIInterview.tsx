@@ -10,6 +10,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import AIInterviewFlowLoader from '@/components/ai-interview/AIInterviewFlowLoader';
+import { Skeleton } from '@/components/ui/skeleton';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { useQuota } from '@/contexts/QuotaContext';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -1629,11 +1630,52 @@ export default function AIInterview() {
   // Loading state. While redirecting, use the SAME message the config page
   // shows so the chained loaders read as one continuous screen rather than a
   // spinner that restarts with different text.
-  if (loading || redirectingToConfig) {
+  // The config redirect keeps the flow spinner (a transient hand-off, not a
+  // page load). The initial list load shows a skeleton mirroring the header +
+  // interview-config rows instead of a spinner.
+  if (redirectingToConfig) {
+    return <AIInterviewFlowLoader message="Loading configuration…" />;
+  }
+  if (loading) {
     return (
-      <AIInterviewFlowLoader
-        message={redirectingToConfig ? 'Loading configuration…' : 'Loading AI interviews…'}
-      />
+      <div className="flex-1 overflow-x-clip bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px] p-4 md:p-8">
+          <div className="mb-6 flex items-center justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <Skeleton className="hidden sm:block h-10 w-10 rounded-lg shrink-0" />
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-56" />
+                <Skeleton className="h-4 w-80 max-w-full" />
+              </div>
+            </div>
+            <Skeleton className="h-10 w-44 rounded-lg" />
+          </div>
+          <div className="space-y-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-gray-100 bg-white p-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
+                    <div className="space-y-2">
+                      <Skeleton className="h-4 w-48" />
+                      <Skeleton className="h-6 w-16 rounded-full" />
+                    </div>
+                  </div>
+                  <div className="hidden items-center gap-8 md:flex">
+                    {Array.from({ length: 3 }).map((_, j) => (
+                      <div key={j} className="space-y-1.5">
+                        <Skeleton className="h-3 w-16" />
+                        <Skeleton className="h-4 w-10" />
+                      </div>
+                    ))}
+                  </div>
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     );
   }
 

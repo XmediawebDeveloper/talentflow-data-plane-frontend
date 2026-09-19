@@ -21,6 +21,7 @@ import { resumeService } from '@/lib/services/resumeService';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 import ScoreTableModal from './ScoreTableModal';
 import ListPagination from './ListPagination';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
@@ -3269,12 +3270,47 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
   const selectedAssessmentData = assessments.find(a => a.id === selectedAssessment);
 
   if (isLoadingAssessments) {
+    // Structure-matched skeleton mirroring the loaded Bulk Invite modal it
+    // replaces: same modal shell + gradient header (icon tile + title/subtitle),
+    // then a body of the quota banner, the assessment-select field and the
+    // expiry field, and the footer action buttons.
     return (
-      <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-[95vw] sm:max-w-md w-full p-6 sm:p-8 text-center">
-          <Loader2 className="w-12 h-12 animate-spin text-gray-600 mx-auto mb-4" />
-          <h3 className="text-lg font-semibold text-gray-900 mb-2">Loading Assessments...</h3>
-          <p className="text-gray-500 text-sm">Checking for existing assessments</p>
+      <div className="fixed inset-0 bg-black/20 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[90dvh] overflow-hidden flex flex-col">
+          {/* Header */}
+          <div className="bg-white border-b border-gray-100 px-6 py-5 flex items-center justify-between shrink-0">
+            <div className="flex items-center gap-3">
+              <Skeleton className="w-10 h-10 rounded-lg" />
+              <div className="space-y-1.5">
+                <Skeleton className="h-5 w-48" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+            </div>
+            <Skeleton className="w-9 h-9 rounded-lg" />
+          </div>
+
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto p-6 space-y-6">
+            {/* Quota banner */}
+            <Skeleton className="h-16 w-full rounded-lg" />
+            {/* Assessment selection field */}
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-40" />
+              <Skeleton className="h-12 w-full rounded-lg" />
+              <Skeleton className="h-3 w-56" />
+            </div>
+            {/* Expiry field */}
+            <div className="space-y-2">
+              <Skeleton className="h-4 w-36" />
+              <Skeleton className="h-12 w-full rounded-lg" />
+            </div>
+          </div>
+
+          {/* Footer actions */}
+          <div className="px-6 py-4 border-t border-gray-200 flex items-center justify-end gap-3 shrink-0">
+            <Skeleton className="h-10 w-24 rounded-lg" />
+            <Skeleton className="h-10 w-36 rounded-lg" />
+          </div>
         </div>
       </div>
     );

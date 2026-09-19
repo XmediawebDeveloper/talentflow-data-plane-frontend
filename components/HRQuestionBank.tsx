@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import ListPagination from '@/components/ListPagination';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
-import { ListSkeleton } from '@/components/ui/skeleton-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Question categories for HR round
 const HR_CATEGORIES = [
@@ -644,7 +644,29 @@ export default function HRQuestionBank() {
 
       {/* Question List */}
       {loading ? (
-        <ListSkeleton />
+        /* Neutral skeleton matching the question-list item layout: icon +
+           question text + badge row, with trailing action buttons. */
+        <div className="space-y-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              <div className="flex items-start gap-3 p-4">
+                <Skeleton className="h-9 w-9 rounded-lg shrink-0 mt-0.5" />
+                <div className="flex-1 min-w-0 space-y-2">
+                  <Skeleton className="h-4 w-3/4" />
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                    <Skeleton className="h-5 w-14 rounded-full" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
       ) : filteredQuestions.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 px-4 bg-white border border-gray-200 rounded-xl shadow-sm">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/20 mb-4">

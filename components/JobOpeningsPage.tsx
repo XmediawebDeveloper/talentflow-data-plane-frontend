@@ -30,7 +30,7 @@ import { toast } from 'sonner';
 import api from '@/lib/services/api';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
-import { TableSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
 
@@ -374,7 +374,47 @@ export default function JobOpeningsPage() {
 
         {/* Jobs Display */}
         {loading ? (
-          <TableSkeleton />
+          /* Skeleton mirrors the jobs table below: same white card + table
+             shell, the same 7 columns in the same order (Job Title,
+             Department, Experience, Status, Applicants, Created, Actions) with
+             the same responsive-hide breakpoints, and 8 body rows sized per
+             column (status/applicants as chips, actions as icon buttons). */
+          <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+            <div className="overflow-x-auto tf-table-shell">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="text-left px-3 sm:px-6 py-3 sm:py-4"><Skeleton className="h-3 w-20" /></th>
+                    <th className="text-left px-3 sm:px-6 py-3 sm:py-4 hidden sm:table-cell"><Skeleton className="h-3 w-24" /></th>
+                    <th className="text-left px-3 sm:px-6 py-3 sm:py-4 hidden md:table-cell"><Skeleton className="h-3 w-20" /></th>
+                    <th className="text-left px-3 sm:px-6 py-3 sm:py-4"><Skeleton className="h-3 w-16" /></th>
+                    <th className="text-left px-3 sm:px-6 py-3 sm:py-4 hidden lg:table-cell"><Skeleton className="h-3 w-20" /></th>
+                    <th className="text-left px-3 sm:px-6 py-3 sm:py-4 hidden lg:table-cell"><Skeleton className="h-3 w-16" /></th>
+                    <th className="text-right px-3 sm:px-6 py-3 sm:py-4 tf-sticky-col"><Skeleton className="h-3 w-16 ml-auto" /></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {Array.from({ length: 8 }).map((_, i) => (
+                    <tr key={i}>
+                      <td className="px-3 sm:px-6 py-3 sm:py-4"><Skeleton className="h-4 w-40" /></td>
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 hidden sm:table-cell"><Skeleton className="h-4 w-24" /></td>
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 hidden md:table-cell"><Skeleton className="h-4 w-20" /></td>
+                      <td className="px-3 sm:px-6 py-3 sm:py-4"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 hidden lg:table-cell"><Skeleton className="h-4 w-10" /></td>
+                      <td className="px-3 sm:px-6 py-3 sm:py-4 hidden lg:table-cell"><Skeleton className="h-4 w-24" /></td>
+                      <td className="px-2 sm:px-6 py-3 sm:py-4 tf-sticky-col">
+                        <div className="flex items-center justify-end gap-0.5 sm:gap-2">
+                          <Skeleton className="h-7 w-7 sm:w-14 rounded" />
+                          <Skeleton className="h-7 w-7 sm:w-14 rounded" />
+                          <Skeleton className="h-7 w-7 rounded" />
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
         ) : jobs.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
             <Briefcase className="w-12 h-12 text-gray-300 mx-auto mb-4" />

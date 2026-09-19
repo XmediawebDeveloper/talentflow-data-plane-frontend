@@ -15,7 +15,7 @@ import {
 import ListPagination from '@/components/ListPagination';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
-import { TableSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type MasterDataType = 'experience' | 'education' | 'industry';
 
@@ -386,7 +386,30 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
       {/* Table */}
       <div className="overflow-hidden rounded-2xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
         {loading ? (
-          <TableSkeleton />
+          <div className="overflow-x-auto tf-table-shell">
+            <table className="w-full">
+              <thead className="bg-gray-50/80">
+                <tr className="text-left">
+                  {config.columns.map((col) => (
+                    <th key={col} className="px-4 py-4">
+                      <Skeleton className="h-3 w-20" />
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                {Array.from({ length: 7 }).map((_, r) => (
+                  <tr key={r}>
+                    {config.columns.map((col, c) => (
+                      <td key={col} className="px-4 py-4">
+                        <Skeleton className={`h-4 ${c === 0 ? 'w-32' : c === config.columns.length - 1 ? 'w-16' : 'w-20'}`} />
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : items.length === 0 ? (
           <div className="p-12 text-center">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 ring-1 ring-brand-blue/15">

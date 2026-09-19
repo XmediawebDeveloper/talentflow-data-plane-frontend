@@ -10,7 +10,7 @@ import RecordPager from '@/components/RecordPager';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import ResumeDetailView from '@/components/ResumeDetailView';
 import ViewResumeButton from '@/components/ui/view-resume-button';
-import { DetailPageSkeleton } from '@/components/ui/skeleton-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface CandidateResultDetailsProps {
   onBack: () => void;
@@ -663,7 +663,89 @@ export default function CandidateResultDetails({
   };
 
   if (isLoadingDetails) {
-    return <DetailPageSkeleton />;
+    // Mirrors the real detail layout below: the blue assessment bar, the
+    // candidate header, the Assessment Info grid card, then the two-column
+    // (left nav / right content) body — so the skeleton lines up with the
+    // page that replaces it rather than a generic block.
+    return (
+      <div className="flex-1 bg-slate-50">
+        {/* Top assessment bar */}
+        <div className="bg-white border-b border-gray-100 shadow-sm">
+          <div className="px-3 sm:px-4 py-3 sm:py-4">
+            <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 lg:gap-4">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                <Skeleton className="w-9 h-9 sm:w-12 sm:h-12 rounded-xl" />
+                <div className="min-w-0 space-y-2">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-5 w-48" />
+                </div>
+              </div>
+              <Skeleton className="h-9 w-40 rounded-lg" />
+            </div>
+          </div>
+        </div>
+
+        {/* Candidate header */}
+        <div className="bg-white border-b border-gray-100 shadow-sm">
+          <div className="px-3 sm:px-4 py-4 sm:py-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                <Skeleton className="w-12 h-12 sm:w-16 sm:h-16 rounded-full" />
+                <div className="min-w-0 space-y-2">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-3.5 w-56" />
+                  <Skeleton className="h-4 w-24 rounded" />
+                </div>
+              </div>
+              <div className="flex items-center gap-3 self-start sm:self-auto">
+                <Skeleton className="h-10 w-32 rounded-lg" />
+                <Skeleton className="h-10 w-24 rounded-lg" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Content */}
+        <div className="py-4 sm:py-6 bg-white">
+          {/* Assessment Info card — grid of icon + label + value cells */}
+          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm p-4 sm:p-6 mb-4 sm:mb-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-3">
+                  <Skeleton className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex-shrink-0" />
+                  <div className="min-w-0 space-y-2">
+                    <Skeleton className="h-3 w-20" />
+                    <Skeleton className="h-4 w-28" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Two-column body: left nav rail + right content card */}
+          <div className="grid grid-cols-[180px_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[220px_minmax(0,1fr)] sm:gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
+            <aside className="self-start bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm">
+              <div className="p-2 sm:p-3">
+                <div className="flex flex-col gap-1.5">
+                  {Array.from({ length: 5 }).map((_, i) => (
+                    <Skeleton key={i} className="h-10 w-full rounded-lg" />
+                  ))}
+                </div>
+              </div>
+            </aside>
+            <div className="min-w-0">
+              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm p-4 sm:p-6 space-y-3">
+                <Skeleton className="h-5 w-40 mb-2" />
+                <Skeleton className="h-3.5 w-full" />
+                <Skeleton className="h-3.5 w-5/6" />
+                <Skeleton className="h-3.5 w-4/6" />
+                <Skeleton className="h-3.5 w-3/4" />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (detailsError) {
@@ -692,9 +774,28 @@ export default function CandidateResultDetails({
   // it and is told about the resume view through onResumeViewChange.
   if (showResume) {
     const resumeBody = isLoadingResume || !resumeDetail ? (
-      <div className="flex items-center justify-center gap-2 text-gray-500 py-20 tf-loader-center">
-        <Loader2 className="h-5 w-5 text-gray-400 animate-spin" />
-        <span className="text-sm">Loading resume...</span>
+      /* Mirrors the ResumeDetailView document that replaces it: a header
+         (avatar + name/subtitle) then a stack of full-width content lines. */
+      <div className="space-y-6">
+        <div className="flex items-start gap-4">
+          <Skeleton className="w-16 h-16 rounded-full flex-shrink-0" />
+          <div className="flex-1 min-w-0 space-y-2">
+            <Skeleton className="h-6 w-2/3" />
+            <Skeleton className="h-4 w-1/2" />
+            <div className="flex gap-2">
+              <Skeleton className="h-5 w-20 rounded-full" />
+              <Skeleton className="h-5 w-24 rounded-full" />
+            </div>
+          </div>
+        </div>
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div key={i} className="rounded-xl border border-gray-100 p-4 sm:p-6 space-y-3">
+            <Skeleton className="h-5 w-40" />
+            <Skeleton className="h-3.5 w-full" />
+            <Skeleton className="h-3.5 w-5/6" />
+            <Skeleton className="h-3.5 w-4/6" />
+          </div>
+        ))}
       </div>
     ) : (
       <ResumeDetailView
@@ -2638,9 +2739,31 @@ export default function CandidateResultDetails({
                       </div>
 
                       {isLoadingEvents ? (
-                        <div className="flex items-center justify-center py-10 text-gray-500 tf-loader-center">
-                          <Loader2 className="w-6 h-6 animate-spin mr-2 text-brand-blue" />
-                          <span className="text-sm">Loading events…</span>
+                        /* Mirrors the Event Log table that replaces it: the same
+                           S.No / Event / Timestamp / Severity / Count column grid,
+                           in the same bordered container, with a few skeleton rows. */
+                        <div className="border border-gray-100 ring-1 ring-black/[0.02] rounded-xl overflow-hidden shadow-sm shadow-brand-blue/5">
+                          <div className="grid grid-cols-[40px_2fr_1fr_1fr_80px] bg-slate-50 border-b border-gray-100 px-4 py-2">
+                            <Skeleton className="h-3 w-8" />
+                            <Skeleton className="h-3 w-16" />
+                            <Skeleton className="h-3 w-16" />
+                            <Skeleton className="h-3 w-14" />
+                            <Skeleton className="h-3 w-10 justify-self-center" />
+                          </div>
+                          <div className="divide-y divide-gray-100">
+                            {Array.from({ length: 6 }).map((_, i) => (
+                              <div key={i} className="grid grid-cols-[40px_2fr_1fr_1fr_80px] items-center px-4 py-3">
+                                <Skeleton className="h-3 w-5" />
+                                <div className="flex items-center gap-2">
+                                  <Skeleton className="h-4 w-4 rounded" />
+                                  <Skeleton className="h-4 w-40" />
+                                </div>
+                                <Skeleton className="h-3 w-16" />
+                                <Skeleton className="h-5 w-16 rounded" />
+                                <Skeleton className="h-5 w-7 rounded-full justify-self-center" />
+                              </div>
+                            ))}
+                          </div>
                         </div>
                       ) : proctoringEvents.length === 0 ? (
                         <div className="text-center py-8 text-gray-500 border border-dashed border-gray-200 rounded-xl bg-slate-50 ring-1 ring-black/[0.02]">

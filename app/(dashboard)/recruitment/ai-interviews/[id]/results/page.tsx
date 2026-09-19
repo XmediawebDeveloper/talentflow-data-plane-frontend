@@ -2,10 +2,80 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
 import AIInterviewResults from '@/components/ai-interview/AIInterviewResults';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
+import { Skeleton } from '@/components/ui/skeleton';
+
+// Neutral-gray skeleton mirroring the AI Interview results page: breadcrumb,
+// header (icon + title + subtitle), 4 stat cards, then the candidate-sessions
+// results table (~6 columns × 8 rows).
+function AIInterviewResultsSkeleton() {
+  return (
+    <main className="flex-1 overflow-x-clip bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          {/* Breadcrumb */}
+          <div className="mb-4 md:mb-6 flex items-center gap-2">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-3 w-3" />
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-3" />
+            <Skeleton className="h-3 w-28" />
+          </div>
+
+          {/* Header: icon + title + subtitle */}
+          <div className="flex items-center gap-3 mb-6">
+            <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
+            <div className="space-y-2">
+              <Skeleton className="h-6 w-64" />
+              <Skeleton className="h-4 w-44" />
+            </div>
+          </div>
+
+          {/* Stat cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 sm:p-5">
+                <Skeleton className="h-3.5 w-20 mb-3" />
+                <Skeleton className="h-7 w-16" />
+              </div>
+            ))}
+          </div>
+
+          {/* Results table — 6 columns × 8 rows */}
+          <div className="rounded-xl border border-gray-100 overflow-hidden">
+            <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-gray-50 px-4 py-4">
+              <Skeleton className="h-9 w-64 rounded-lg" />
+              <Skeleton className="h-9 w-24 rounded-lg" />
+            </div>
+            <div
+              className="hidden md:grid border-b border-gray-100 px-4 py-3"
+              style={{ gridTemplateColumns: 'repeat(6, minmax(0, 1fr))' }}
+            >
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-3.5 w-20" />
+              ))}
+            </div>
+            <div className="divide-y divide-gray-100">
+              {Array.from({ length: 8 }).map((_, r) => (
+                <div
+                  key={r}
+                  className="grid items-center gap-4 px-4 py-4"
+                  style={{ gridTemplateColumns: 'repeat(6, minmax(0, 1fr))' }}
+                >
+                  {Array.from({ length: 6 }).map((_, c) => (
+                    <Skeleton key={c} className="h-4" style={{ width: `${55 + ((r + c) * 7) % 40}%` }} />
+                  ))}
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
 
 function AIInterviewResultsContent() {
   const params = useParams();
@@ -66,11 +136,7 @@ function AIInterviewResultsContent() {
       : undefined;
 
   if (isLoading) {
-    return (
-      <div className="tf-loader-page bg-slate-50">
-        <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
-      </div>
-    );
+    return <AIInterviewResultsSkeleton />;
   }
 
   if (error) {
@@ -101,13 +167,7 @@ function AIInterviewResultsContent() {
 export default function AIInterviewResultsPage() {
   // useSearchParams needs a Suspense boundary in the App Router.
   return (
-    <Suspense
-      fallback={
-        <div className="tf-loader-page bg-slate-50">
-          <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
-        </div>
-      }
-    >
+    <Suspense fallback={<AIInterviewResultsSkeleton />}>
       <AIInterviewResultsContent />
     </Suspense>
   );

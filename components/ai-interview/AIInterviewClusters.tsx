@@ -18,13 +18,13 @@ import type {
   SkillDuplicateFinding,
 } from '@/lib/services/aiInterviewService';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Skeleton } from '@/components/ui/skeleton';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import {
   PRIORITY_LABELS as SHARED_PRIORITY_LABELS,
   normalizePriority as sharedNormalizePriority,
 } from '@/lib/constants/aiInterviewPriority';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
-import AIInterviewFlowLoader from './AIInterviewFlowLoader';
 import { closestDuplicate } from '@/lib/skillDuplicates';
 
 /* ─────────────────────────────────────────────────────────────────────── */
@@ -2643,8 +2643,83 @@ export default function AIInterviewClusters() {
 
   /* ── Loading state ── */
   if (loading) {
+    // Neutral-gray skeleton mirroring the clusters editor: breadcrumb, step
+    // indicator, header (icon + title + subtitle), then the two category
+    // section cards (Must-To-Have / Nice-To-Have), each with a skills pool row
+    // and a couple of cluster rows.
     return (
-      <AIInterviewFlowLoader message="Loading clusters…" />
+      <main className="flex-1 overflow-x-clip bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 pb-24 w-full min-h-[calc(100dvh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            {/* Breadcrumb */}
+            <div className="mb-4 md:mb-6 flex items-center gap-2">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-3" />
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-3 w-3" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+
+            {/* Step indicator */}
+            <div className="flex items-center gap-3 mb-6">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Skeleton className="h-8 w-8 rounded-full" />
+                  <Skeleton className="h-3 w-16" />
+                </div>
+              ))}
+            </div>
+
+            {/* Header: icon + title + subtitle */}
+            <div className="flex items-center gap-3 mb-6">
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-48" />
+                <Skeleton className="h-4 w-64" />
+              </div>
+            </div>
+
+            {/* Category section cards */}
+            <div className="space-y-5">
+              {Array.from({ length: 2 }).map((_, s) => (
+                <div key={s} className="rounded-2xl border border-gray-100 bg-white overflow-hidden">
+                  {/* Section header */}
+                  <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
+                    <div className="flex items-center gap-3">
+                      <Skeleton className="h-9 w-9 rounded-xl" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-5 w-40" />
+                        <Skeleton className="h-3 w-24" />
+                      </div>
+                    </div>
+                  </div>
+                  {/* Skills pool */}
+                  <div className="px-4 pt-4 pb-3 border-b border-gray-100">
+                    <Skeleton className="h-3 w-16 mb-3" />
+                    <div className="flex flex-wrap gap-1.5">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <Skeleton key={i} className="h-6 w-24 rounded-full" />
+                      ))}
+                    </div>
+                  </div>
+                  {/* Cluster rows */}
+                  <div className="p-4 space-y-2.5">
+                    {Array.from({ length: 2 }).map((_, i) => (
+                      <div key={i} className="flex items-center gap-2 rounded-xl border border-gray-100 px-3.5 py-3">
+                        <Skeleton className="h-4 w-4 rounded" />
+                        <Skeleton className="h-5 w-12 rounded" />
+                        <Skeleton className="h-4 flex-1 max-w-[40%]" />
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                        <Skeleton className="h-6 w-6 rounded-full" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </main>
     );
   }
 

@@ -28,6 +28,7 @@ import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromConfig, modeFromDuration } from '@/lib/constants/aiInterviewMode';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const ROUND_LABELS: Record<string, string> = {
   hr: 'HR',
@@ -1245,8 +1246,23 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           {activeTab === 'activity' && (
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-6">
               {activityLoading ? (
-                <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
-                  <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
+                <div className="space-y-3">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <div key={i} className="flex items-center gap-4 p-4 border border-gray-100 ring-1 ring-black/[0.02] rounded-lg">
+                      <Skeleton className="w-5 h-5 rounded-full flex-shrink-0" />
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-4 w-32" />
+                          <Skeleton className="h-5 w-20 rounded-full" />
+                        </div>
+                        <Skeleton className="h-3 w-40" />
+                      </div>
+                      <div className="flex items-center gap-4 flex-shrink-0">
+                        <Skeleton className="h-3 w-20" />
+                        <Skeleton className="h-4 w-4" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : recentActivity.length === 0 ? (
                 <div className="text-center py-12">
@@ -1314,9 +1330,19 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 <p className="text-sm text-gray-600">Complete timeline of all changes made to this interview</p>
               </div>
               {versionsLoading ? (
-                <div className="px-6 py-12 text-center">
-                  <Loader2 className="w-8 h-8 text-brand-blue animate-spin mx-auto mb-3" />
-                  <p className="text-gray-600">Loading version history...</p>
+                <div className="p-6 space-y-6">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="flex items-start gap-4">
+                      <Skeleton className="w-12 h-12 rounded-full flex-shrink-0" />
+                      <div className="flex-1 min-w-0 space-y-2">
+                        <Skeleton className="h-5 w-48" />
+                        <Skeleton className="h-4 w-64" />
+                        <Skeleton className="h-4 w-40" />
+                        <Skeleton className="h-4 w-52" />
+                        <Skeleton className="h-20 w-full rounded-lg mt-2" />
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : versionHistory.length === 0 ? (
                 <div className="px-6 py-12 text-center">
@@ -1828,8 +1854,24 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
                 {/* Candidate list */}
                 {activityLoading ? (
-                  <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
-                    <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
+                  <div className="space-y-3">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 p-3 sm:p-4 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl bg-white">
+                        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
+                          <Skeleton className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex-shrink-0" />
+                          <div className="min-w-0 space-y-1.5">
+                            <Skeleton className="h-4 w-32" />
+                            <Skeleton className="h-3 w-40" />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 sm:gap-4 flex-wrap pl-11 sm:pl-0">
+                          <Skeleton className="h-5 w-20 rounded-full" />
+                          <Skeleton className="h-4 w-10" />
+                          <Skeleton className="h-3 w-24" />
+                          <Skeleton className="h-7 w-24 rounded-md" />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : filtered.length === 0 ? (
                   <div className="text-center py-12 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02]">

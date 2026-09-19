@@ -42,7 +42,7 @@ import {
   getUsageStatus,
   getStatusColor,
 } from '@/lib/services/unitPoolService';
-import { ListSkeleton } from '@/components/ui/skeleton-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 interface TenantUnitPoolProps {
   compact?: boolean;
@@ -252,7 +252,49 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
   }, [pools]);
 
   if (isLoading) {
-    return <ListSkeleton rows={3} />;
+    return (
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        {/* Header */}
+        <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between">
+          <div className="space-y-2">
+            <Skeleton className="h-5 w-32" />
+            <Skeleton className="h-4 w-64" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-8 w-20 rounded-lg" />
+            <Skeleton className="w-8 h-8 rounded-lg" />
+          </div>
+        </div>
+
+        {/* Unit cards grid — 3 columns, each with icon+label, value, progress bar, footer */}
+        <div className="p-6 grid grid-cols-1 md:grid-cols-3 gap-4">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div key={i} className="p-4 rounded-lg border border-gray-200 bg-gray-50">
+              <div className="flex items-center gap-2">
+                <Skeleton className="w-9 h-9 rounded-lg" />
+                <div className="space-y-1.5">
+                  <Skeleton className="h-4 w-24" />
+                  <Skeleton className="h-3 w-8" />
+                </div>
+              </div>
+              <div className="mt-4">
+                <div className="flex items-baseline justify-between">
+                  <Skeleton className="h-7 w-16" />
+                  <Skeleton className="h-4 w-20" />
+                </div>
+                {/* progress bar */}
+                <Skeleton className="mt-2 h-2 w-full rounded-full" />
+                <div className="mt-3 flex items-center justify-between">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+              </div>
+              <Skeleton className="mt-4 h-9 w-full rounded-lg" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
   }
 
   // Standard User: Show restricted view (own consumption only)
