@@ -145,7 +145,7 @@ export default function ResumeTextPreviewModal({
     } catch {
       if (!docxContainerRef.current) return;
       docxContainerRef.current.innerHTML =
-        '<p style="color:#6b7280;font-size:14px;text-align:center;padding:24px">Could not render this document. Download it to view the original file.</p>';
+        '<p style="color:var(--raw-6b7280);font-size:14px;text-align:center;padding:24px">Could not render this document. Download it to view the original file.</p>';
     }
   }, []);
 

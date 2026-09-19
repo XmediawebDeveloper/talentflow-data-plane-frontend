@@ -76,19 +76,19 @@ function ResumeFolderIllustration() {
     >
       <defs>
         <linearGradient id="tf-empty-folder-front" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#93b0f8" />
-          <stop offset="100%" stopColor="#6c92f0" />
+          <stop offset="0%" stopColor="var(--raw-93b0f8)" />
+          <stop offset="100%" stopColor="var(--raw-6c92f0)" />
         </linearGradient>
         <linearGradient id="tf-empty-folder-back" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#5b86ea" />
-          <stop offset="100%" stopColor="#7ba1f4" />
+          <stop offset="0%" stopColor="var(--raw-5b86ea)" />
+          <stop offset="100%" stopColor="var(--raw-7ba1f4)" />
         </linearGradient>
       </defs>
 
       {/* Soft backdrop — overlapping blobs, barely there, so the folder sits on
           something rather than floating on bare white. Wider than the folder on
           both flanks: the point is the halo around it, not a shape behind it. */}
-      <g fill="#eef2fd">
+      <g fill="var(--raw-eef2fd)">
         <circle cx="88" cy="92" r="50" />
         <circle cx="172" cy="92" r="50" />
         <rect x="78" y="92" width="104" height="50" rx="22" />
@@ -102,13 +102,13 @@ function ResumeFolderIllustration() {
       <g>
         <path
           d="M102 12h36l20 20v70h-56z"
-          fill="#f7f9ff"
-          stroke="#b9caf6"
+          fill="var(--raw-f7f9ff)"
+          stroke="var(--raw-b9caf6)"
           strokeWidth="1.6"
           strokeDasharray="5 4"
           strokeLinejoin="round"
         />
-        <path d="M138 12l20 20h-20z" fill="#cfdcfa" />
+        <path d="M138 12l20 20h-20z" fill="var(--raw-cfdcfa)" />
       </g>
 
       {/* Folder — back tab, then the front panel over the document. */}
@@ -122,8 +122,8 @@ function ResumeFolderIllustration() {
       />
 
       {/* Document glyph on the folder face. */}
-      <circle cx="130" cy="108" r="18" fill="#ffffff" fillOpacity="0.22" />
-      <g stroke="#ffffff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none">
+      <circle cx="130" cy="108" r="18" fill="var(--raw-ffffff)" fillOpacity="0.22" />
+      <g stroke="var(--raw-ffffff)" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" fill="none">
         <path d="M124 99h8l4 4v13a1.5 1.5 0 01-1.5 1.5h-10.5a1.5 1.5 0 01-1.5-1.5V100.5A1.5 1.5 0 01124 99z" />
         <path d="M132 99v4h4" />
         <path d="M126 110h8M126 114h5" />
@@ -131,12 +131,12 @@ function ResumeFolderIllustration() {
 
       {/* Sparkle marks — the small asymmetries that keep the composition from
           looking like a centred logo. */}
-      <g stroke="#b9caf6" strokeWidth="1.6" strokeLinecap="round">
+      <g stroke="var(--raw-b9caf6)" strokeWidth="1.6" strokeLinecap="round">
         <path d="M206 32v8M202 36h8" />
         <path d="M210 106v6M207 109h6" />
         <path d="M56 136v6M53 139h6" />
       </g>
-      <g fill="none" stroke="#b9caf6" strokeWidth="1.6">
+      <g fill="none" stroke="var(--raw-b9caf6)" strokeWidth="1.6">
         <circle cx="42" cy="78" r="3.2" />
         <circle cx="222" cy="80" r="3.2" />
       </g>

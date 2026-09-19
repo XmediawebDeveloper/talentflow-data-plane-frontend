@@ -14,6 +14,7 @@ import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
 import { Tooltip } from '@/components/ui/tooltip';
 import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
+import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import AITalentMatchConfirmModal from './AITalentMatchConfirmModal';
 import ResumeUploadModal from './ResumeUploadModal';
 import ResumeVersionsModal from './ResumeVersionsModal';
@@ -25,6 +26,7 @@ import InviteToAssessmentModal from './InviteToAssessmentModal';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import SelectSourceModal from './SelectSourceModal';
 import AssessmentResultsTable from './AssessmentResultsTable';
+import Pagination from './Pagination';
 import JDVersionHistoryModal from './JDVersionHistoryModal';
 import ResumeDetailView from './ResumeDetailView';
 import CandidateScoringDetailPage from './CandidateScoringDetailPage';
@@ -2459,7 +2461,17 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       : aiMatchCandidates.length;
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+    // overflow-x-clip, not overflow-x-hidden/overflow-y-auto: the latter pair
+    // makes this <main> its own scroll container, but it never actually gets
+    // height-bound enough to be what scrolls — the dashboard layout's own
+    // overflow-y-auto div does. `position: sticky` resolves against the
+    // NEAREST scroll container regardless of whether that container is the
+    // one actually moving, so the breadcrumb was pinning to this <main> (which
+    // never scrolls) while the real scrolling happened one level up — visibly
+    // dragging the "stuck" breadcrumb away. `clip` doesn't establish a scroll
+    // container at all, so the app's single real scroller is what sticky
+    // resolves against, matching the working list pages (JobsListing, etc).
+    <main className="flex-1 overflow-x-clip bg-slate-50">
       <div className="mx-auto w-full max-w-[1400px]">
       <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
       {/* Breadcrumb — must be a DIRECT child of the card so `sticky` has the
@@ -4625,6 +4637,9 @@ function AIMatchTabContent({
   const [filterExperienceMin, setFilterExperienceMin] = useState<number | ''>('');
   const [filterExperienceMax, setFilterExperienceMax] = useState<number | ''>('');
   const [sortBy, setSortBy] = useState<'rank' | 'name' | 'score' | 'experience'>('rank');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(25);
+  const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
 
   // Attachments column → Version History popup. Same fetch-and-fallback
   // pattern as the standalone AI Talent Match page's handleAttachmentsClick:
@@ -4712,6 +4727,19 @@ function AIMatchTabContent({
     }
     return sorted;
   }, [candidates, searchQuery, filterThreshold, filterPhone, filterLocation, filterExperienceMin, filterExperienceMax, sortBy]);
+
+  // Reset to page 1 whenever the filtered/sorted set changes shape, so a
+  // narrowing filter never leaves the view stranded on a now-empty page.
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterThreshold, filterPhone, filterLocation, filterExperienceMin, filterExperienceMax, sortBy]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredCandidates.length / itemsPerPage));
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+  const paginatedCandidates = filteredCandidates.slice(
+    (safeCurrentPage - 1) * itemsPerPage,
+    safeCurrentPage * itemsPerPage
+  );
 
   const toggleSelect = (resumeId: string) => {
     setSelectedIds((prev) => {
@@ -4854,14 +4882,111 @@ function AIMatchTabContent({
             <option value="score">Sort by Score</option>
             <option value="experience">Sort by Experience</option>
           </select>
+          <ListViewToggle value={displayMode} onChange={setDisplayMode} className="ml-auto" />
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table / Grid */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-        {/* Bounded viewport: rows scroll vertically (and horizontally) while the
+        {displayMode === 'grid' ? (
+          <div className="min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto p-4">
+            {filteredCandidates.length === 0 ? (
+              <div className="px-4 py-12 text-center text-gray-500 dark:text-slate-500 text-sm">
+                No candidates match the current filters.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                {paginatedCandidates.map((candidate) => {
+                  const isScored = scoredResumeIds.has(candidate.resumeId);
+                  return (
+                    <button
+                      key={candidate.resumeId}
+                      onClick={() => {
+                        if (onViewCandidate) {
+                          try {
+                            sessionStorage.setItem('resumeNavList', JSON.stringify(filteredCandidates.map((c) => c.resumeId)));
+                            sessionStorage.setItem('resumeNavSource', 'job-details');
+                          } catch { /* ignore */ }
+                          onViewCandidate(candidate);
+                        }
+                      }}
+                      className="text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3"
+                    >
+                      <div className="flex items-start gap-2.5">
+                        <div className="w-9 h-9 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-sm text-gray-700 dark:text-slate-300 font-medium flex-shrink-0">
+                          {(candidate.name || 'U').split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-gray-900 dark:text-slate-50 truncate">{candidate.name}</p>
+                          {candidate.title && (
+                            <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{candidate.title}</p>
+                          )}
+                        </div>
+                        <div className={`inline-flex items-center justify-center px-2 py-0.5 rounded-md font-bold text-xs shrink-0 ${
+                          (candidate.rank || 0) >= 7 ? 'bg-green-100 text-green-800 border border-green-300' :
+                          (candidate.rank || 0) >= 4 ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' :
+                          (candidate.rank || 0) >= 1 ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-300 dark:border-slate-700' :
+                          'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 border border-gray-200 dark:border-slate-700'
+                        }`}>
+                          {candidate.rank || '-'}
+                        </div>
+                      </div>
+
+                      <p className="text-xs text-gray-600 dark:text-slate-400 truncate">
+                        {candidate.email || '—'}{candidate.location ? ` · ${candidate.location}` : ''}
+                      </p>
+
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {isScored ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                            <CheckCircle className="w-3 h-3" />
+                            Scored
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded-full text-xs font-medium">
+                            <XCircle className="w-3 h-3" />
+                            Not Scored
+                          </span>
+                        )}
+                        {candidate.experience && (
+                          <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15">
+                            {candidate.experience}
+                          </span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-gray-200 dark:bg-slate-700 rounded-full h-1.5">
+                          <div
+                            className={`h-1.5 rounded-full ${
+                              candidate.matchScore >= 70 ? 'bg-green-500' :
+                              candidate.matchScore >= 45 ? 'bg-yellow-500' : 'bg-red-400'
+                            }`}
+                            style={{ width: `${Math.min(100, candidate.matchScore)}%` }}
+                          />
+                        </div>
+                        <span className="font-medium text-xs shrink-0 text-gray-700 dark:text-slate-300">
+                          {Math.round(candidate.matchScore)}% match
+                        </span>
+                      </div>
+
+                      <div
+                        onClick={(e) => { e.stopPropagation(); handleAttachmentsClick(candidate); }}
+                        className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
+                      >
+                        <Paperclip className="w-3.5 h-3.5" />
+                        Resume ({candidate.attachmentCount ?? 1})
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        ) : (
+        /* Bounded viewport: rows scroll vertically (and horizontally) while the
             header stays pinned. Header background/border live on the cells so the
-            pinned row paints solid over the rows sliding underneath. */}
+            pinned row paints solid over the rows sliding underneath. */
         <div className="min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell">
           <table className="w-full min-w-[1450px] table-auto">
             <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
@@ -4895,7 +5020,7 @@ function AIMatchTabContent({
                   </td>
                 </tr>
               ) : (
-                filteredCandidates.map((candidate, idx) => {
+                paginatedCandidates.map((candidate, idx) => {
                   const isScored = scoredResumeIds.has(candidate.resumeId);
                   const score = candidate.matchScore;
                   const scoreColor = score >= 70 ? 'bg-green-500' : score >= 45 ? 'bg-yellow-500' : 'bg-red-400';
@@ -4999,6 +5124,17 @@ function AIMatchTabContent({
             </tbody>
           </table>
         </div>
+        )}
+        {filteredCandidates.length > 0 && (
+          <Pagination
+            currentPage={safeCurrentPage}
+            totalPages={totalPages}
+            totalItems={filteredCandidates.length}
+            itemsPerPage={itemsPerPage}
+            onPageChange={setCurrentPage}
+            onItemsPerPageChange={(size) => { setItemsPerPage(size); setCurrentPage(1); }}
+          />
+        )}
       </div>
 
       {/* Version History popup — same component and behavior as the

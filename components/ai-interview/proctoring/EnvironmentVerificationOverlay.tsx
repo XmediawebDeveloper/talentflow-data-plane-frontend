@@ -115,13 +115,13 @@ export function EnvironmentVerificationOverlay({
           {challengeId}
         </span>
       ) : (
-        <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[#0F1929] border border-brand-blue/40 rounded-2xl shadow-2xl shadow-black/40 p-7 flex flex-col items-center gap-5">
+        <div className="relative w-full max-w-[95vw] sm:max-w-md mx-4 bg-[var(--raw-0f1929)] border border-brand-blue/40 rounded-2xl shadow-2xl shadow-black/40 p-7 flex flex-col items-center gap-5">
           <div className="flex items-center justify-center w-14 h-14 rounded-full bg-brand-blue/20 border border-brand-blue/40">
             <Smartphone className="w-7 h-7 text-brand-blue" />
           </div>
           <div className="text-center">
             <h3 className="text-white font-semibold text-lg mb-1.5">Environment Verification</h3>
-            <p className="text-[#cbd5e1] text-sm leading-relaxed">
+            <p className="text-[var(--raw-cbd5e1)] text-sm leading-relaxed">
               Scan this QR code with your phone to verify your interview environment.
               Your interview is paused and will resume automatically once you&apos;re done.
             </p>
@@ -139,7 +139,7 @@ export function EnvironmentVerificationOverlay({
           )}
 
           {verificationUrl && (
-            <p className="text-[11px] text-[#94a3b8] break-all text-center max-w-full">{verificationUrl}</p>
+            <p className="text-[11px] text-[var(--raw-94a3b8)] break-all text-center max-w-full">{verificationUrl}</p>
           )}
 
           <div className="w-full text-center text-sm font-mono text-brand-blue border border-brand-blue/20 rounded-lg bg-brand-blue/5 px-3 py-2">

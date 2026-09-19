@@ -40,10 +40,10 @@ interface TeamAnalyticsDashboardProps {
 }
 
 const COLORS = {
-  RS: '#3B82F6', // Blue for Resume Scoring
-  AS: '#14B8A6', // Teal for Assessment
-  AIU: '#06B6D4', // Cyan for AI Interview
-  RU: '#F97316', // Orange for Resume Upload
+  RS: 'var(--raw-3b82f6)', // Blue for Resume Scoring
+  AS: 'var(--raw-14b8a6)', // Teal for Assessment
+  AIU: 'var(--raw-06b6d4)', // Cyan for AI Interview
+  RU: 'var(--raw-f97316)', // Orange for Resume Upload
 };
 
 const UNIT_LABELS: Record<string, string> = {
@@ -361,7 +361,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
             <div className="h-[300px]">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={teamComparisonData} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--raw-e5e7eb)" />
                   <XAxis type="number" tick={{ fontSize: 12 }} />
                   <YAxis
                     type="category"
@@ -373,7 +373,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
                   <Tooltip
                     contentStyle={{
                       backgroundColor: 'white',
-                      border: '1px solid #E5E7EB',
+                      border: '1px solid var(--raw-e5e7eb)',
                       borderRadius: '8px',
                     }}
                   />
@@ -413,7 +413,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
                   <Tooltip
                     contentStyle={{
                       backgroundColor: 'white',
-                      border: '1px solid #E5E7EB',
+                      border: '1px solid var(--raw-e5e7eb)',
                       borderRadius: '8px',
                     }}
                     formatter={(value: number) => [`${value.toFixed(2)} units`, '']}

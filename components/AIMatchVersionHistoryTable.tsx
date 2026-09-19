@@ -205,7 +205,7 @@ export default function AIMatchVersionHistoryTable({
                Select/Action columns elsewhere in the app already use for
                exactly this reason. */
             const isLastRow = rowIndex === versions.length - 1;
-            const rowDivider = isLastRow ? '' : 'shadow-[inset_0_-1px_0_#e5e7eb] dark:shadow-[inset_0_-1px_0_#334155]';
+            const rowDivider = isLastRow ? '' : 'shadow-[inset_0_-1px_0_var(--raw-e5e7eb)] dark:shadow-[inset_0_-1px_0_var(--raw-334155)]';
             // Resolved once per row and shared by every cell that needs it
             // (Status, Experience/Industry, Location, Work Mode/Type) rather
             // than re-resolved per cell.

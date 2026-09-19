@@ -70,12 +70,12 @@ function ProceduralHead({
     }
   });
 
-  const skin     = "#e8ad7c";
-  const skinDark = "#c98d5a";
-  const hair     = "#1c0e06";
-  const lipCol   = "#b84444";
-  const eyeCol   = "#2a1508";
-  const cloth    = "#1e2535";
+  const skin     = "var(--raw-e8ad7c)";
+  const skinDark = "var(--raw-c98d5a)";
+  const hair     = "var(--raw-1c0e06)";
+  const lipCol   = "var(--raw-b84444)";
+  const eyeCol   = "var(--raw-2a1508)";
+  const cloth    = "var(--raw-1e2535)";
 
   return (
     <group>
@@ -98,7 +98,7 @@ function ProceduralHead({
       {/* Forehead soft highlight */}
       <mesh position={[0, 0.18, 0.46]} rotation={[0.3, 0, 0]}>
         <circleGeometry args={[0.16, 32]} />
-        <meshStandardMaterial color="#fce0c0" transparent opacity={0.22} />
+        <meshStandardMaterial color="var(--raw-fce0c0)" transparent opacity={0.22} />
       </mesh>
 
       {/* ── Ears ─────────────────────────────────────── */}
@@ -113,7 +113,7 @@ function ProceduralHead({
       {([-0.163, 0.163] as const).map((x, i) => (
         <mesh key={i} position={[x, 0.225, 0.46]} rotation={[0.08, 0, i === 0 ? 0.2 : -0.2]}>
           <boxGeometry args={[0.09, 0.013, 0.005]} />
-          <meshStandardMaterial color="#4a2808" roughness={0.8} />
+          <meshStandardMaterial color="var(--raw-4a2808)" roughness={0.8} />
         </mesh>
       ))}
 
@@ -133,7 +133,7 @@ function ProceduralHead({
           {/* Pupil */}
           <mesh position={[0, 0, 0.002]}>
             <circleGeometry args={[0.025, 16]} />
-            <meshStandardMaterial color="#050505" />
+            <meshStandardMaterial color="var(--raw-050505)" />
           </mesh>
           {/* Specular highlight */}
           <mesh position={[0.015, 0.015, 0.003]}>
@@ -163,7 +163,7 @@ function ProceduralHead({
       {/* Mouth interior — scaleY animated */}
       <mesh ref={interiorRef} position={[0, -0.162, 0.475]} scale={[0.098, 0.012, 1]}>
         <circleGeometry args={[1, 32]} />
-        <meshStandardMaterial color="#200808" side={THREE.DoubleSide} />
+        <meshStandardMaterial color="var(--raw-200808)" side={THREE.DoubleSide} />
       </mesh>
 
       {/* Lower lip — position.y animated */}
@@ -260,7 +260,7 @@ function ProceduralScene({
       <ambientLight intensity={1.5} />
       <directionalLight position={[1.5, 3,   2.5]} intensity={1.6} />
       <directionalLight position={[-2,  2,  -1.5]} intensity={0.5} />
-      <pointLight       position={[0,   2.2, 1.8]} intensity={0.6} color="#fff5e8" />
+      <pointLight       position={[0,   2.2, 1.8]} intensity={0.6} color="var(--raw-fff5e8)" />
       <ProceduralHead isAiSpeaking={isAiSpeaking} mouthOpenness={mouthOpenness} />
     </>
   );
@@ -278,7 +278,7 @@ function GLBScene({
       <ambientLight intensity={1.4} />
       <directionalLight position={[1.5, 3.5, 2.5]} intensity={1.6} castShadow={false} />
       <directionalLight position={[-2,  2,  -1.5]} intensity={0.5} />
-      <pointLight       position={[0,   2.2, 1.8]} intensity={0.6} color="#fff8f0" />
+      <pointLight       position={[0,   2.2, 1.8]} intensity={0.6} color="var(--raw-fff8f0)" />
       <Suspense fallback={<ProceduralHead isAiSpeaking={isAiSpeaking} mouthOpenness={mouthOpenness} />}>
         <GLBAvatarModel isAiSpeaking={isAiSpeaking} mouthOpenness={mouthOpenness} />
       </Suspense>

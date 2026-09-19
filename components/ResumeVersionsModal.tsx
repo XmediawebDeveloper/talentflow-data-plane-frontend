@@ -130,7 +130,9 @@ export default function ResumeVersionsModal({
   const textFor = async (version: ResumeVersion): Promise<string> => {
     if (version.extracted_text) return version.extracted_text;
     try {
-      const detail = await resumeService.get(version.id);
+      // Only reached from a user-initiated Compare click, so this counts as
+      // the user viewing that version's content.
+      const detail = await resumeService.get(version.id, true);
       return detail?.extracted_text || '';
     } catch {
       return '';

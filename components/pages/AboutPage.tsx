@@ -35,8 +35,8 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
 
   const pageStyle: React.CSSProperties = {
     minHeight: '100vh',
-    backgroundColor: isDark ? '#0F172A' : '#ffffff',
-    color: isDark ? '#ffffff' : '#111827',
+    backgroundColor: isDark ? 'var(--raw-0f172a)' : 'var(--raw-ffffff)',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
   };
 
   const containerStyle: React.CSSProperties = {
@@ -56,8 +56,8 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
     gap: '8px',
     padding: '8px 16px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(59, 130, 246, 0.2)' : '#DBEAFE',
-    color: isDark ? '#93C5FD' : '#2563EB',
+    backgroundColor: isDark ? 'rgba(59, 130, 246, 0.2)' : 'var(--raw-dbeafe)',
+    color: isDark ? 'var(--raw-93c5fd)' : 'var(--raw-2563eb)',
     fontSize: '14px',
     fontWeight: 600,
     marginBottom: '16px',
@@ -66,14 +66,14 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
   const titleStyle: React.CSSProperties = {
     fontSize: isMobile ? '28px' : isTablet ? '40px' : '56px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '16px',
     lineHeight: 1.1,
   };
 
   const subtitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     maxWidth: '672px',
     margin: '0 auto',
     lineHeight: 1.6,
@@ -86,7 +86,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
   const sectionTitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '24px' : isTablet ? '28px' : '32px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '24px',
     textAlign: 'center',
   };
@@ -101,7 +101,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
 
   const storyTextStyle: React.CSSProperties = {
     fontSize: isMobile ? '15px' : isTablet ? '16px' : '18px',
-    color: isDark ? '#CBD5E1' : '#4B5563',
+    color: isDark ? 'var(--raw-cbd5e1)' : 'var(--raw-4b5563)',
     lineHeight: 1.8,
   };
 
@@ -109,7 +109,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
     width: '100%',
     aspectRatio: '16/10',
     borderRadius: '24px',
-    background: 'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+    background: 'linear-gradient(135deg, var(--raw-667eea) 0%, var(--raw-764ba2) 100%)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -125,8 +125,8 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
   const valueCardStyle: React.CSSProperties = {
     padding: isMobile ? '20px' : '32px',
     borderRadius: '16px',
-    border: `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
-    backgroundColor: isDark ? '#1E293B' : '#ffffff',
+    border: `1px solid ${isDark ? 'var(--raw-1e293b)' : 'var(--raw-e5e7eb)'}`,
+    backgroundColor: isDark ? 'var(--raw-1e293b)' : 'var(--raw-ffffff)',
     textAlign: 'center',
   };
 
@@ -144,12 +144,12 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
   const valueTitleStyle: React.CSSProperties = {
     fontSize: '20px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '8px',
   };
 
   const valueDescStyle: React.CSSProperties = {
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     lineHeight: 1.6,
   };
 
@@ -175,18 +175,18 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
     margin: '0 auto 16px',
     fontSize: '36px',
     fontWeight: 700,
-    color: '#ffffff',
+    color: 'var(--raw-ffffff)',
   });
 
   const teamNameStyle: React.CSSProperties = {
     fontSize: '18px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '4px',
   };
 
   const teamRoleStyle: React.CSSProperties = {
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     fontSize: '14px',
     marginBottom: '12px',
   };
@@ -201,7 +201,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
     width: '32px',
     height: '32px',
     borderRadius: '8px',
-    backgroundColor: isDark ? '#334155' : '#F3F4F6',
+    backgroundColor: isDark ? 'var(--raw-334155)' : 'var(--raw-f3f4f6)',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -214,7 +214,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
     gap: isMobile ? '16px' : '24px',
     padding: isMobile ? '24px' : isTablet ? '36px' : '48px',
     borderRadius: isMobile ? '16px' : '24px',
-    background: 'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+    background: 'linear-gradient(135deg, var(--raw-667eea) 0%, var(--raw-764ba2) 100%)',
     marginBottom: isMobile ? '40px' : isTablet ? '60px' : '80px',
   };
 
@@ -225,7 +225,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
   const statNumberStyle: React.CSSProperties = {
     fontSize: isMobile ? '32px' : isTablet ? '40px' : '48px',
     fontWeight: 700,
-    color: '#ffffff',
+    color: 'var(--raw-ffffff)',
     marginBottom: '8px',
   };
 
@@ -238,13 +238,13 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
     textAlign: 'center',
     padding: isMobile ? '32px 20px' : isTablet ? '48px 32px' : '60px 40px',
     borderRadius: isMobile ? '16px' : '24px',
-    backgroundColor: isDark ? '#1E293B' : '#F9FAFB',
+    backgroundColor: isDark ? 'var(--raw-1e293b)' : 'var(--raw-f9fafb)',
   };
 
   const ctaTitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '22px' : isTablet ? '28px' : '36px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '16px',
   };
 
@@ -256,26 +256,26 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
     fontSize: isMobile ? '16px' : '18px',
     fontWeight: 500,
     borderRadius: '12px',
-    background: 'linear-gradient(135deg, #667EEA, #764BA2)',
-    color: '#ffffff',
+    background: 'linear-gradient(135deg, var(--raw-667eea), var(--raw-764ba2))',
+    color: 'var(--raw-ffffff)',
     border: 'none',
     cursor: 'pointer',
   };
 
   const values = [
-    { icon: Target, title: "Mission-Driven", description: "We're on a mission to make hiring fair, efficient, and human-centric.", gradient: "linear-gradient(135deg, #3B82F6, #8B5CF6)" },
-    { icon: Heart, title: "People First", description: "Both candidates and recruiters deserve a better experience.", gradient: "linear-gradient(135deg, #EC4899, #F43F5E)" },
-    { icon: Lightbulb, title: "Innovation", description: "We push the boundaries of what's possible with AI in recruitment.", gradient: "linear-gradient(135deg, #F59E0B, #F97316)" },
-    { icon: Users, title: "Collaboration", description: "Great hiring is a team effort. We build tools that bring people together.", gradient: "linear-gradient(135deg, #22C55E, #14B8A6)" },
-    { icon: Award, title: "Excellence", description: "We hold ourselves to the highest standards in everything we do.", gradient: "linear-gradient(135deg, #8B5CF6, #EC4899)" },
-    { icon: Globe, title: "Global Impact", description: "We're building for teams around the world, in every industry.", gradient: "linear-gradient(135deg, #06B6D4, #3B82F6)" },
+    { icon: Target, title: "Mission-Driven", description: "We're on a mission to make hiring fair, efficient, and human-centric.", gradient: "linear-gradient(135deg, var(--raw-3b82f6), var(--raw-8b5cf6))" },
+    { icon: Heart, title: "People First", description: "Both candidates and recruiters deserve a better experience.", gradient: "linear-gradient(135deg, var(--raw-ec4899), var(--raw-f43f5e))" },
+    { icon: Lightbulb, title: "Innovation", description: "We push the boundaries of what's possible with AI in recruitment.", gradient: "linear-gradient(135deg, var(--raw-f59e0b), var(--raw-f97316))" },
+    { icon: Users, title: "Collaboration", description: "Great hiring is a team effort. We build tools that bring people together.", gradient: "linear-gradient(135deg, var(--raw-22c55e), var(--raw-14b8a6))" },
+    { icon: Award, title: "Excellence", description: "We hold ourselves to the highest standards in everything we do.", gradient: "linear-gradient(135deg, var(--raw-8b5cf6), var(--raw-ec4899))" },
+    { icon: Globe, title: "Global Impact", description: "We're building for teams around the world, in every industry.", gradient: "linear-gradient(135deg, var(--raw-06b6d4), var(--raw-3b82f6))" },
   ];
 
   const team = [
-    { name: "Sarah Chen", role: "CEO & Co-founder", initials: "SC", gradient: "linear-gradient(135deg, #667EEA, #764BA2)" },
-    { name: "Michael Park", role: "CTO & Co-founder", initials: "MP", gradient: "linear-gradient(135deg, #3B82F6, #8B5CF6)" },
-    { name: "Emily Rodriguez", role: "VP of Product", initials: "ER", gradient: "linear-gradient(135deg, #EC4899, #F43F5E)" },
-    { name: "David Kim", role: "VP of Engineering", initials: "DK", gradient: "linear-gradient(135deg, #22C55E, #14B8A6)" },
+    { name: "Sarah Chen", role: "CEO & Co-founder", initials: "SC", gradient: "linear-gradient(135deg, var(--raw-667eea), var(--raw-764ba2))" },
+    { name: "Michael Park", role: "CTO & Co-founder", initials: "MP", gradient: "linear-gradient(135deg, var(--raw-3b82f6), var(--raw-8b5cf6))" },
+    { name: "Emily Rodriguez", role: "VP of Product", initials: "ER", gradient: "linear-gradient(135deg, var(--raw-ec4899), var(--raw-f43f5e))" },
+    { name: "David Kim", role: "VP of Engineering", initials: "DK", gradient: "linear-gradient(135deg, var(--raw-22c55e), var(--raw-14b8a6))" },
   ];
 
   const stats = [
@@ -313,7 +313,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
             </p>
           </div>
           <div style={storyImageStyle}>
-            <Users style={{ width: 120, height: 120, color: '#ffffff' }} />
+            <Users style={{ width: 120, height: 120, color: 'var(--raw-ffffff)' }} />
           </div>
         </div>
 
@@ -326,7 +326,7 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
               return (
                 <div key={index} style={valueCardStyle}>
                   <div style={valueIconStyle(value.gradient)}>
-                    <Icon style={{ width: 32, height: 32, color: '#ffffff' }} />
+                    <Icon style={{ width: 32, height: 32, color: 'var(--raw-ffffff)' }} />
                   </div>
                   <h3 style={valueTitleStyle}>{value.title}</h3>
                   <p style={valueDescStyle}>{value.description}</p>
@@ -357,10 +357,10 @@ export default function AboutPage({ onNavigate }: AboutPageProps) {
                 <p style={teamRoleStyle}>{member.role}</p>
                 <div style={socialLinksStyle}>
                   <div style={socialLinkStyle}>
-                    <Linkedin style={{ width: 16, height: 16, color: isDark ? '#CBD5E1' : '#6B7280' }} />
+                    <Linkedin style={{ width: 16, height: 16, color: isDark ? 'var(--raw-cbd5e1)' : 'var(--raw-6b7280)' }} />
                   </div>
                   <div style={socialLinkStyle}>
-                    <Twitter style={{ width: 16, height: 16, color: isDark ? '#CBD5E1' : '#6B7280' }} />
+                    <Twitter style={{ width: 16, height: 16, color: isDark ? 'var(--raw-cbd5e1)' : 'var(--raw-6b7280)' }} />
                   </div>
                 </div>
               </div>

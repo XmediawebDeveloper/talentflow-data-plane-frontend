@@ -306,23 +306,23 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
                 <AreaChart data={spendTrend} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
                   <defs>
                     <linearGradient id="planFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#0f3c99" stopOpacity={0.25} />
-                      <stop offset="100%" stopColor="#0f3c99" stopOpacity={0} />
+                      <stop offset="0%" stopColor="var(--raw-0f3c99)" stopOpacity={0.25} />
+                      <stop offset="100%" stopColor="var(--raw-0f3c99)" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="overFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#ed881c" stopOpacity={0.25} />
-                      <stop offset="100%" stopColor="#ed881c" stopOpacity={0} />
+                      <stop offset="0%" stopColor="var(--raw-ed881c)" stopOpacity={0.25} />
+                      <stop offset="100%" stopColor="var(--raw-ed881c)" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#6b7280' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} axisLine={false} tickLine={false} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--raw-e5e7eb)" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: 'var(--raw-6b7280)' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 12, fill: 'var(--raw-6b7280)' }} axisLine={false} tickLine={false} />
                   <ReTooltip
-                    contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }}
+                    contentStyle={{ borderRadius: 8, border: '1px solid var(--raw-e5e7eb)', fontSize: 12 }}
                     formatter={(v: any) => [`$${v.toLocaleString()}`, '']}
                   />
-                  <Area type="monotone" dataKey="spend" stroke="#0f3c99" strokeWidth={2} fill="url(#planFill)" />
-                  <Area type="monotone" dataKey="overage" stroke="#ed881c" strokeWidth={2} fill="url(#overFill)" />
+                  <Area type="monotone" dataKey="spend" stroke="var(--raw-0f3c99)" strokeWidth={2} fill="url(#planFill)" />
+                  <Area type="monotone" dataKey="overage" stroke="var(--raw-ed881c)" strokeWidth={2} fill="url(#overFill)" />
                 </AreaChart>
               </ResponsiveContainer>
             </div>

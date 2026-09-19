@@ -71,15 +71,15 @@ const getIconForPlan = (planName: string): typeof Users | typeof Building2 | typ
 // Gradient mapping based on plan name
 const getGradientForPlan = (planName: string, index: number): string => {
   const name = planName.toLowerCase();
-  if (name.includes('enterprise') || name.includes('premium')) return "linear-gradient(135deg, #F97316, #EF4444)";
-  if (name.includes('business') || name.includes('professional') || name.includes('pro')) return "linear-gradient(135deg, #8B5CF6, #EC4899)";
-  if (name.includes('freelancer') || name.includes('starter') || name.includes('basic')) return "linear-gradient(135deg, #3B82F6, #06B6D4)";
+  if (name.includes('enterprise') || name.includes('premium')) return "linear-gradient(135deg, var(--raw-f97316), var(--raw-ef4444))";
+  if (name.includes('business') || name.includes('professional') || name.includes('pro')) return "linear-gradient(135deg, var(--raw-8b5cf6), var(--raw-ec4899))";
+  if (name.includes('freelancer') || name.includes('starter') || name.includes('basic')) return "linear-gradient(135deg, var(--raw-3b82f6), var(--raw-06b6d4))";
 
   // Fallback gradients based on index
   const gradients = [
-    "linear-gradient(135deg, #3B82F6, #06B6D4)",
-    "linear-gradient(135deg, #8B5CF6, #EC4899)",
-    "linear-gradient(135deg, #F97316, #EF4444)",
+    "linear-gradient(135deg, var(--raw-3b82f6), var(--raw-06b6d4))",
+    "linear-gradient(135deg, var(--raw-8b5cf6), var(--raw-ec4899))",
+    "linear-gradient(135deg, var(--raw-f97316), var(--raw-ef4444))",
   ];
   return gradients[index % gradients.length];
 };
@@ -232,8 +232,8 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
 
   const pageStyle: React.CSSProperties = {
     minHeight: '100vh',
-    backgroundColor: isDark ? '#0F172A' : '#ffffff',
-    color: isDark ? '#ffffff' : '#111827',
+    backgroundColor: isDark ? 'var(--raw-0f172a)' : 'var(--raw-ffffff)',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     padding: isMobile ? '40px 0' : isTablet ? '60px 0' : '80px 0',
   };
 
@@ -254,8 +254,8 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     gap: '8px',
     padding: '8px 16px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : '#EDE9FE',
-    color: isDark ? '#C4B5FD' : '#7C3AED',
+    backgroundColor: isDark ? 'rgba(139, 92, 246, 0.2)' : 'var(--raw-ede9fe)',
+    color: isDark ? 'var(--raw-c4b5fd)' : 'var(--raw-7c3aed)',
     fontSize: '14px',
     fontWeight: 600,
     marginBottom: '16px',
@@ -264,14 +264,14 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
   const titleStyle: React.CSSProperties = {
     fontSize: isMobile ? '28px' : isTablet ? '40px' : '56px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '16px',
     lineHeight: 1.1,
   };
 
   const subtitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     maxWidth: '672px',
     margin: '0 auto',
     lineHeight: 1.6,
@@ -288,14 +288,14 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
   const toggleLabelStyle = (isActive: boolean): React.CSSProperties => ({
     fontSize: '18px',
     fontWeight: isActive ? 600 : 400,
-    color: isActive ? (isDark ? '#ffffff' : '#111827') : (isDark ? '#64748B' : '#9CA3AF'),
+    color: isActive ? (isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)') : (isDark ? 'var(--raw-64748b)' : 'var(--raw-9ca3af)'),
   });
 
   const toggleSwitchStyle: React.CSSProperties = {
     width: '56px',
     height: '28px',
     borderRadius: '14px',
-    backgroundColor: isDark ? '#8B5CF6' : '#7C3AED',
+    backgroundColor: isDark ? 'var(--raw-8b5cf6)' : 'var(--raw-7c3aed)',
     position: 'relative',
     cursor: 'pointer',
     border: 'none',
@@ -306,7 +306,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     width: '24px',
     height: '24px',
     borderRadius: '50%',
-    backgroundColor: '#ffffff',
+    backgroundColor: 'var(--raw-ffffff)',
     position: 'absolute',
     top: '2px',
     left: isYearly ? '30px' : '2px',
@@ -317,8 +317,8 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
   const saveBadgeStyle: React.CSSProperties = {
     padding: '4px 12px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(34, 197, 94, 0.2)' : '#DCFCE7',
-    color: isDark ? '#86EFAC' : '#16A34A',
+    backgroundColor: isDark ? 'rgba(34, 197, 94, 0.2)' : 'var(--raw-dcfce7)',
+    color: isDark ? 'var(--raw-86efac)' : 'var(--raw-16a34a)',
     fontSize: '14px',
     fontWeight: 600,
   };
@@ -336,9 +336,9 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     padding: isMobile ? '24px' : '32px',
     borderRadius: isMobile ? '16px' : '24px',
     border: isPopular
-      ? '2px solid #8B5CF6'
-      : `1px solid ${isDark ? '#1E293B' : '#E5E7EB'}`,
-    backgroundColor: isDark ? '#1E293B' : '#ffffff',
+      ? '2px solid var(--raw-8b5cf6)'
+      : `1px solid ${isDark ? 'var(--raw-1e293b)' : 'var(--raw-e5e7eb)'}`,
+    backgroundColor: isDark ? 'var(--raw-1e293b)' : 'var(--raw-ffffff)',
     position: 'relative',
     transform: isPopular && !isMobile && !isTablet ? 'scale(1.05)' : 'none',
     boxShadow: isPopular ? '0 20px 60px rgba(139, 92, 246, 0.2)' : 'none',
@@ -352,8 +352,8 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     transform: 'translateX(-50%)',
     padding: '6px 16px',
     borderRadius: '9999px',
-    background: 'linear-gradient(135deg, #8B5CF6, #EC4899)',
-    color: '#ffffff',
+    background: 'linear-gradient(135deg, var(--raw-8b5cf6), var(--raw-ec4899))',
+    color: 'var(--raw-ffffff)',
     fontSize: '14px',
     fontWeight: 600,
     whiteSpace: 'nowrap',
@@ -373,12 +373,12 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
   const planNameStyle: React.CSSProperties = {
     fontSize: '24px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '8px',
   };
 
   const planDescStyle: React.CSSProperties = {
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     marginBottom: '24px',
   };
 
@@ -389,12 +389,12 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
   const priceAmountStyle: React.CSSProperties = {
     fontSize: isMobile ? '36px' : '48px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
   };
 
   const pricePeriodStyle: React.CSSProperties = {
     fontSize: '18px',
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
   };
 
   const featureListStyle: React.CSSProperties = {
@@ -408,7 +408,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     alignItems: 'center',
     gap: '12px',
     marginBottom: '12px',
-    color: isDark ? '#CBD5E1' : '#374151',
+    color: isDark ? 'var(--raw-cbd5e1)' : 'var(--raw-374151)',
   };
 
   const buttonStyle = (isPopular: boolean): React.CSSProperties => ({
@@ -423,9 +423,9 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     borderRadius: '12px',
     cursor: 'pointer',
     transition: 'all 0.2s',
-    border: isPopular ? 'none' : `2px solid ${isDark ? '#334155' : '#E5E7EB'}`,
-    background: isPopular ? 'linear-gradient(135deg, #8B5CF6, #EC4899)' : 'transparent',
-    color: isPopular ? '#ffffff' : (isDark ? '#ffffff' : '#374151'),
+    border: isPopular ? 'none' : `2px solid ${isDark ? 'var(--raw-334155)' : 'var(--raw-e5e7eb)'}`,
+    background: isPopular ? 'linear-gradient(135deg, var(--raw-8b5cf6), var(--raw-ec4899))' : 'transparent',
+    color: isPopular ? 'var(--raw-ffffff)' : (isDark ? 'var(--raw-ffffff)' : 'var(--raw-374151)'),
   });
 
   const faqSectionStyle: React.CSSProperties = {
@@ -433,7 +433,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
     textAlign: 'center',
     padding: isMobile ? '32px 20px' : isTablet ? '48px 32px' : '60px 40px',
     borderRadius: isMobile ? '16px' : '24px',
-    backgroundColor: isDark ? '#1E293B' : '#F9FAFB',
+    backgroundColor: isDark ? 'var(--raw-1e293b)' : 'var(--raw-f9fafb)',
   };
 
   const loadingStyle: React.CSSProperties = {
@@ -456,8 +456,8 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
             <h1 style={titleStyle}>Choose the right plan for your team</h1>
           </div>
           <div style={loadingStyle}>
-            <Loader2 style={{ width: 48, height: 48, color: '#8B5CF6', animation: 'spin 1s linear infinite' }} />
-            <p style={{ marginTop: '16px', color: isDark ? '#94A3B8' : '#6B7280' }}>Loading plans...</p>
+            <Loader2 style={{ width: 48, height: 48, color: 'var(--raw-8b5cf6)', animation: 'spin 1s linear infinite' }} />
+            <p style={{ marginTop: '16px', color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)' }}>Loading plans...</p>
           </div>
           <style>{`@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }`}</style>
         </div>
@@ -495,14 +495,14 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
         </div>
 
         {error && (
-          <div style={{ textAlign: 'center', marginBottom: '32px', padding: '24px', backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : '#FEF2F2', borderRadius: '12px' }}>
-            <p style={{ color: '#EF4444', marginBottom: '8px' }}>Failed to load pricing plans</p>
-            <p style={{ color: isDark ? '#94A3B8' : '#6B7280', fontSize: '14px' }}>{error}</p>
+          <div style={{ textAlign: 'center', marginBottom: '32px', padding: '24px', backgroundColor: isDark ? 'rgba(239, 68, 68, 0.1)' : 'var(--raw-fef2f2)', borderRadius: '12px' }}>
+            <p style={{ color: 'var(--raw-ef4444)', marginBottom: '8px' }}>Failed to load pricing plans</p>
+            <p style={{ color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)', fontSize: '14px' }}>{error}</p>
           </div>
         )}
 
         {!error && plans.length === 0 && !isLoading && (
-          <div style={{ textAlign: 'center', padding: '48px', color: isDark ? '#94A3B8' : '#6B7280' }}>
+          <div style={{ textAlign: 'center', padding: '48px', color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)' }}>
             <p>No pricing plans available at the moment.</p>
           </div>
         )}
@@ -521,15 +521,15 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
                 {isTrialPlan && (
                   <div style={{
                     ...popularBadgeStyle,
-                    background: 'linear-gradient(135deg, #22C55E, #16A34A)',
+                    background: 'linear-gradient(135deg, var(--raw-22c55e), var(--raw-16a34a))',
                   }}>Free Trial</div>
                 )}
                 {plan.popular && !isTrialPlan && (
                   <div style={popularBadgeStyle}>Most Popular</div>
                 )}
 
-                <div style={iconBoxStyle(isTrialPlan ? 'linear-gradient(135deg, #22C55E, #16A34A)' : plan.gradient)}>
-                  <Icon style={{ width: 28, height: 28, color: '#ffffff' }} />
+                <div style={iconBoxStyle(isTrialPlan ? 'linear-gradient(135deg, var(--raw-22c55e), var(--raw-16a34a))' : plan.gradient)}>
+                  <Icon style={{ width: 28, height: 28, color: 'var(--raw-ffffff)' }} />
                 </div>
 
                 <h3 style={planNameStyle}>{plan.name}</h3>
@@ -537,18 +537,18 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
 
                 <div style={priceStyle}>
                   {isTrialPlan && (price === null || price === 0) ? (
-                    <span style={{ ...priceAmountStyle, color: '#22C55E' }}>Free</span>
+                    <span style={{ ...priceAmountStyle, color: 'var(--raw-22c55e)' }}>Free</span>
                   ) : price !== null && price > 0 ? (
                     <div>
                       <span style={priceAmountStyle}>{currencySymbol}{price}</span>
                       <span style={pricePeriodStyle}>/month</span>
                       {isYearly && (
-                        <p style={{ fontSize: '14px', color: isDark ? '#64748B' : '#9CA3AF', marginTop: '4px' }}>
+                        <p style={{ fontSize: '14px', color: isDark ? 'var(--raw-64748b)' : 'var(--raw-9ca3af)', marginTop: '4px' }}>
                           Billed annually ({currencySymbol}{price * 12}/year)
                         </p>
                       )}
                       {isYearly && plan.monthlyPrice && (
-                        <p style={{ fontSize: '12px', color: '#22C55E', marginTop: '2px' }}>
+                        <p style={{ fontSize: '12px', color: 'var(--raw-22c55e)', marginTop: '2px' }}>
                           You save {currencySymbol}{(plan.monthlyPrice - price) * 12}/year
                         </p>
                       )}
@@ -559,20 +559,20 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
                 </div>
 
                 {isTrialPlan && freeTrialQuotas && (
-                  <div style={{ borderTop: `1px solid ${isDark ? '#334155' : '#E5E7EB'}`, paddingTop: '12px', marginBottom: '16px' }}>
+                  <div style={{ borderTop: `1px solid ${isDark ? 'var(--raw-334155)' : 'var(--raw-e5e7eb)'}`, paddingTop: '12px', marginBottom: '16px' }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '13px' }}>
                       {freeTrialQuotas.max_seats !== undefined && freeTrialQuotas.max_seats !== 0 && (
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: isDark ? '#94A3B8' : '#6B7280' }}>Users</span>
-                          <span style={{ fontWeight: 600, color: isDark ? '#ffffff' : '#111827' }}>
+                          <span style={{ color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)' }}>Users</span>
+                          <span style={{ fontWeight: 600, color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)' }}>
                             {freeTrialQuotas.max_seats === -1 || String(freeTrialQuotas.max_seats).toLowerCase() === 'unlimited' ? 'Unlimited' : freeTrialQuotas.max_seats}
                           </span>
                         </div>
                       )}
                       {freeTrialQuotas.max_jobs !== undefined && freeTrialQuotas.max_jobs !== 0 && (
                         <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <span style={{ color: isDark ? '#94A3B8' : '#6B7280' }}>Jobs</span>
-                          <span style={{ fontWeight: 600, color: isDark ? '#ffffff' : '#111827' }}>
+                          <span style={{ color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)' }}>Jobs</span>
+                          <span style={{ fontWeight: 600, color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)' }}>
                             {freeTrialQuotas.max_jobs === -1 || String(freeTrialQuotas.max_jobs).toLowerCase() === 'unlimited' ? 'Unlimited' : freeTrialQuotas.max_jobs}
                           </span>
                         </div>
@@ -584,7 +584,7 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
                 <ul style={featureListStyle}>
                   {plan.features.map((feature, idx) => (
                     <li key={idx} style={featureItemStyle}>
-                      <Check style={{ width: 20, height: 20, color: '#22C55E', flexShrink: 0 }} />
+                      <Check style={{ width: 20, height: 20, color: 'var(--raw-22c55e)', flexShrink: 0 }} />
                       <span>{feature}</span>
                     </li>
                   ))}
@@ -595,9 +595,9 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
                   style={{
                     ...buttonStyle(plan.popular || isTrialPlan),
                     ...(isTrialPlan && {
-                      background: 'linear-gradient(135deg, #22C55E, #16A34A)',
+                      background: 'linear-gradient(135deg, var(--raw-22c55e), var(--raw-16a34a))',
                       border: 'none',
-                      color: '#ffffff',
+                      color: 'var(--raw-ffffff)',
                     })
                   }}
                 >
@@ -611,10 +611,10 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
 
         {/* FAQ Section */}
         <div style={faqSectionStyle}>
-          <h2 style={{ fontSize: '32px', fontWeight: 700, color: isDark ? '#ffffff' : '#111827', marginBottom: '16px' }}>
+          <h2 style={{ fontSize: '32px', fontWeight: 700, color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)', marginBottom: '16px' }}>
             Questions? We've got answers.
           </h2>
-          <p style={{ color: isDark ? '#94A3B8' : '#6B7280', marginBottom: '24px' }}>
+          <p style={{ color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)', marginBottom: '24px' }}>
             Can't find what you're looking for? Contact our team.
           </p>
           <button
@@ -627,9 +627,9 @@ export default function PricingPage({ onNavigate }: PricingPageProps) {
               fontSize: '16px',
               fontWeight: 500,
               borderRadius: '12px',
-              border: `2px solid ${isDark ? '#334155' : '#E5E7EB'}`,
+              border: `2px solid ${isDark ? 'var(--raw-334155)' : 'var(--raw-e5e7eb)'}`,
               backgroundColor: 'transparent',
-              color: isDark ? '#ffffff' : '#374151',
+              color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-374151)',
               cursor: 'pointer',
             }}
           >

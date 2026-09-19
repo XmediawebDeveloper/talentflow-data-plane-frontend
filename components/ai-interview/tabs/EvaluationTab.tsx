@@ -77,7 +77,7 @@ function ScoreGauge({ score, size = 'lg' }: { score: number; size?: 'lg' | 'sm' 
   return (
     <div className="relative inline-flex items-center justify-center" style={{ width: dim, height: dim }}>
       <svg width={dim} height={dim} className="-rotate-90">
-        <circle cx={dim / 2} cy={dim / 2} r={r} fill="none" stroke="#e5e7eb" strokeWidth={sw} />
+        <circle cx={dim / 2} cy={dim / 2} r={r} fill="none" stroke="var(--raw-e5e7eb)" strokeWidth={sw} />
         <circle cx={dim / 2} cy={dim / 2} r={r} fill="none" className={ring} strokeWidth={sw}
           strokeDasharray={c} strokeDashoffset={offset} strokeLinecap="round"
           style={{ transition: 'stroke-dashoffset 1s ease-out' }} />

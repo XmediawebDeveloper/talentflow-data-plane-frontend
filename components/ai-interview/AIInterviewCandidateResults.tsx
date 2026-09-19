@@ -7,6 +7,7 @@ import { useRouter } from 'next/navigation';
 import { ChevronLeft, ChevronRight, Eye, Loader2, Users } from 'lucide-react';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
+import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -55,6 +56,7 @@ export default function AIInterviewCandidateResults() {
 
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
+  const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
 
   // Search + filter state lives in the shared hook: typed vs applied query,
   // staged vs committed filters, the active count, and a reset that clears
@@ -293,6 +295,7 @@ export default function AIInterviewCandidateResults() {
             <option key={opt.value} value={opt.value}>{opt.label}</option>
           ))}
         </select>
+        <ListViewToggle value={displayMode} onChange={setDisplayMode} />
       </ListToolbar>
 
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
@@ -305,6 +308,140 @@ export default function AIInterviewCandidateResults() {
             emptyTitle="No candidate results yet"
             onReset={search.reset}
           />
+        ) : displayMode === 'grid' ? (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+              {pageRows.map((row) => {
+                const risk = getProctoringRisk(row);
+                return (
+                  <button
+                    key={`${row._config_id}-${row.id}`}
+                    onClick={() => openSession(row)}
+                    className="text-left bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3"
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-sm flex-shrink-0">
+                        {(row.candidate_name || 'U')[0].toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-gray-900 dark:text-slate-50 truncate">
+                          {row.candidate_name || 'Unknown'}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-slate-400 truncate">
+                          {row.candidate_email || '—'}
+                        </p>
+                      </div>
+                      {row.candidate_cid && (
+                        <span className="text-[10px] font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-1.5 py-0.5 rounded shrink-0">
+                          {row.candidate_cid}
+                        </span>
+                      )}
+                    </div>
+
+                    <p className="text-xs text-gray-600 dark:text-slate-400 truncate" title={row._config_title}>
+                      {row._config_title}
+                    </p>
+
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {getStatusIcon(row.status)}
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(row.status)}`}>
+                        {getStatusLabel(row.status)}
+                      </span>
+                      {row.status === 'in_progress' && (
+                        <span className="flex items-center gap-1 px-1.5 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full">
+                          <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                          LIVE
+                        </span>
+                      )}
+                      {row.status === 'completed' && (
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>
+                          {risk.level} risk
+                        </span>
+                      )}
+                    </div>
+
+                    {row.score != null && (
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-gray-200 dark:bg-slate-700 rounded-full h-1.5">
+                          <div
+                            className={`h-1.5 rounded-full ${
+                              row.score >= 70 ? 'bg-green-500' :
+                              row.score >= 50 ? 'bg-brand-orange' : 'bg-red-500'
+                            }`}
+                            style={{ width: `${Math.min(100, row.score)}%` }}
+                          />
+                        </div>
+                        <span className={`font-medium text-xs shrink-0 ${
+                          row.score >= 70 ? 'text-green-600' :
+                          row.score >= 50 ? 'text-brand-orange-deep' : 'text-red-600'
+                        }`}>
+                          {Math.round(row.score)}%
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between text-xs text-gray-500 dark:text-slate-500 pt-2 border-t border-gray-100 dark:border-slate-800">
+                      <span>{formatDuration(row)}</span>
+                      <span>{row.completed_at ? formatIST(row.completed_at) : row.started_at ? formatIST(row.started_at) : '—'}</span>
+                    </div>
+
+                    <div
+                      onClick={(e) => { e.stopPropagation(); openSession(row); }}
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      View Details
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
+                <div className="text-sm text-gray-500 dark:text-slate-400">
+                  Showing {((safePage - 1) * PAGE_SIZE) + 1}–{Math.min(safePage * PAGE_SIZE, filteredRows.length)} of {filteredRows.length}
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={totalPages}
+                      value={goToPage}
+                      onChange={(e) => setGoToPage(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.currentTarget.blur();
+                          commitGoToPage();
+                        }
+                      }}
+                      onBlur={commitGoToPage}
+                      aria-label="Go to page"
+                      className="w-14 h-8 px-2 text-sm text-center border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    />
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={safePage === 1}
+                    className="p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-sm text-brand-blue font-semibold px-2 tabular-nums">
+                    {safePage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={safePage === totalPages}
+                    className="p-1.5 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <>
             <div className="overflow-x-auto tf-table-shell">

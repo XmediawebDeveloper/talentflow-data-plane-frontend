@@ -533,7 +533,7 @@ export default function CandidateResultDetails({
       const { convertApiResume } = await import('@/lib/utils/resumeMapper');
       // The API record is snake_case — ResumeDetailView needs the mapped shape.
       const [data, versions] = await Promise.all([
-        resumeService.get(id),
+        resumeService.get(id, true), // handleViewResume - a genuine user view
         resumeService.getVersions(id).catch(() => []),
       ]);
       setResumeDetail(convertApiResume(data, versions || []));
@@ -718,7 +718,7 @@ export default function CandidateResultDetails({
     // resume-scoring candidate page: max-w-[1400px], p-4 md:p-8, my-4 md:my-5,
     // and mb-4 md:mb-6 under the breadcrumb.
     return (
-      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <main className="flex-1 overflow-x-clip bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
@@ -2271,14 +2271,16 @@ export default function CandidateResultDetails({
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Window Focus Lost</div>
-                        <div className={`text-3xl font-bold tracking-tight ${
-                          detailedResult.proctoring_stats.window_blur_count > 0
-                            ? 'text-red-600'
-                            : 'text-gray-400'
-                        }`}>
-                          {detailedResult.proctoring_stats.window_blur_count}
+                        <div className="flex items-center gap-2">
+                          <div className={`text-3xl font-bold tracking-tight ${
+                            detailedResult.proctoring_stats.window_blur_count > 0
+                              ? 'text-red-600'
+                              : 'text-gray-400'
+                          }`}>
+                            {detailedResult.proctoring_stats.window_blur_count}
+                          </div>
+                          <div className="text-xs text-gray-500">Count</div>
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">times</div>
                       </div>
 
                       {/* Mouse Movement */}
@@ -2299,14 +2301,16 @@ export default function CandidateResultDetails({
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Mouse Movement</div>
-                        <div className={`text-3xl font-bold tracking-tight ${
-                          (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
-                            ? 'text-red-600'
-                            : 'text-gray-400'
-                        }`}>
-                          {detailedResult.proctoring_stats.mouse_movement_count || 0}
+                        <div className="flex items-center gap-2">
+                          <div className={`text-3xl font-bold tracking-tight ${
+                            (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
+                              ? 'text-red-600'
+                              : 'text-gray-400'
+                          }`}>
+                            {detailedResult.proctoring_stats.mouse_movement_count || 0}
+                          </div>
+                          <div className="text-xs text-gray-500">Count</div>
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">times</div>
                       </div>
 
                       {/* Tab Switch */}
@@ -2327,14 +2331,16 @@ export default function CandidateResultDetails({
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Tab Switch</div>
-                        <div className={`text-3xl font-bold tracking-tight ${
-                          detailedResult.proctoring_stats.tab_switch_count > 0
-                            ? 'text-brand-orange-deep'
-                            : 'text-gray-400'
-                        }`}>
-                          {detailedResult.proctoring_stats.tab_switch_count}
+                        <div className="flex items-center gap-2">
+                          <div className={`text-3xl font-bold tracking-tight ${
+                            detailedResult.proctoring_stats.tab_switch_count > 0
+                              ? 'text-brand-orange-deep'
+                              : 'text-gray-400'
+                          }`}>
+                            {detailedResult.proctoring_stats.tab_switch_count}
+                          </div>
+                          <div className="text-xs text-gray-500">Count</div>
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">times</div>
                       </div>
 
                       {/* Copy Count */}
@@ -2355,14 +2361,16 @@ export default function CandidateResultDetails({
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Copy Attempts</div>
-                        <div className={`text-3xl font-bold tracking-tight ${
-                          (detailedResult.proctoring_stats.copy_count || 0) > 0
-                            ? 'text-brand-orange-deep'
-                            : 'text-gray-400'
-                        }`}>
-                          {detailedResult.proctoring_stats.copy_count || 0}
+                        <div className="flex items-center gap-2">
+                          <div className={`text-3xl font-bold tracking-tight ${
+                            (detailedResult.proctoring_stats.copy_count || 0) > 0
+                              ? 'text-brand-orange-deep'
+                              : 'text-gray-400'
+                          }`}>
+                            {detailedResult.proctoring_stats.copy_count || 0}
+                          </div>
+                          <div className="text-xs text-gray-500">Attempts</div>
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">times</div>
                       </div>
 
                       {/* Paste Count */}
@@ -2383,14 +2391,16 @@ export default function CandidateResultDetails({
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Paste Attempts</div>
-                        <div className={`text-3xl font-bold tracking-tight ${
-                          (detailedResult.proctoring_stats.paste_count || 0) > 0
-                            ? 'text-brand-orange-deep'
-                            : 'text-gray-400'
-                        }`}>
-                          {detailedResult.proctoring_stats.paste_count || 0}
+                        <div className="flex items-center gap-2">
+                          <div className={`text-3xl font-bold tracking-tight ${
+                            (detailedResult.proctoring_stats.paste_count || 0) > 0
+                              ? 'text-brand-orange-deep'
+                              : 'text-gray-400'
+                          }`}>
+                            {detailedResult.proctoring_stats.paste_count || 0}
+                          </div>
+                          <div className="text-xs text-gray-500">Attempts</div>
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">times</div>
                       </div>
 
                       {/* Camera Obstructed / Off */}
@@ -2411,14 +2421,16 @@ export default function CandidateResultDetails({
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Camera Obstructed / Off</div>
-                        <div className={`text-3xl font-bold tracking-tight ${
-                          (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
-                            ? 'text-red-600'
-                            : 'text-gray-400'
-                        }`}>
-                          {detailedResult.proctoring_stats.camera_obstructed_count || 0}
+                        <div className="flex items-center gap-2">
+                          <div className={`text-3xl font-bold tracking-tight ${
+                            (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
+                              ? 'text-red-600'
+                              : 'text-gray-400'
+                          }`}>
+                            {detailedResult.proctoring_stats.camera_obstructed_count || 0}
+                          </div>
+                          <div className="text-xs text-gray-500">Detections</div>
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">times</div>
                       </div>
 
                       {/* Face Not Detected */}
@@ -2439,14 +2451,16 @@ export default function CandidateResultDetails({
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Face Not Detected</div>
-                        <div className={`text-3xl font-bold tracking-tight ${
-                          (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
-                            ? 'text-red-600'
-                            : 'text-gray-400'
-                        }`}>
-                          {detailedResult.proctoring_stats.face_not_visible_count || 0}
+                        <div className="flex items-center gap-2">
+                          <div className={`text-3xl font-bold tracking-tight ${
+                            (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
+                              ? 'text-red-600'
+                              : 'text-gray-400'
+                          }`}>
+                            {detailedResult.proctoring_stats.face_not_visible_count || 0}
+                          </div>
+                          <div className="text-xs text-gray-500">Detections</div>
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">detections</div>
                       </div>
 
                       {/* Voice Violations */}
@@ -2467,14 +2481,16 @@ export default function CandidateResultDetails({
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Voice Violations</div>
-                        <div className={`text-3xl font-bold tracking-tight ${
-                          detailedResult.proctoring_stats.voice_violation_count > 0
-                            ? 'text-brand-orange-deep'
-                            : 'text-gray-400'
-                        }`}>
-                          {detailedResult.proctoring_stats.voice_violation_count}
+                        <div className="flex items-center gap-2">
+                          <div className={`text-3xl font-bold tracking-tight ${
+                            detailedResult.proctoring_stats.voice_violation_count > 0
+                              ? 'text-brand-orange-deep'
+                              : 'text-gray-400'
+                          }`}>
+                            {detailedResult.proctoring_stats.voice_violation_count}
+                          </div>
+                          <div className="text-xs text-gray-500">Occurrences</div>
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">occurrences</div>
                       </div>
 
                       {/* Multiple Faces */}
@@ -2495,14 +2511,16 @@ export default function CandidateResultDetails({
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Multiple Faces</div>
-                        <div className={`text-3xl font-bold tracking-tight ${
-                          (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
-                            ? 'text-red-600'
-                            : 'text-gray-400'
-                        }`}>
-                          {detailedResult.proctoring_stats.multiple_faces_count || 0}
+                        <div className="flex items-center gap-2">
+                          <div className={`text-3xl font-bold tracking-tight ${
+                            (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
+                              ? 'text-red-600'
+                              : 'text-gray-400'
+                          }`}>
+                            {detailedResult.proctoring_stats.multiple_faces_count || 0}
+                          </div>
+                          <div className="text-xs text-gray-500">Detections</div>
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">detections</div>
                       </div>
 
                       {/* Fullscreen Exit */}
@@ -2523,14 +2541,16 @@ export default function CandidateResultDetails({
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Fullscreen Exit</div>
-                        <div className={`text-3xl font-bold tracking-tight ${
-                          (detailedResult.proctoring_stats.fullscreen_exit_count || 0) > 0
-                            ? 'text-brand-blue'
-                            : 'text-gray-400'
-                        }`}>
-                          {detailedResult.proctoring_stats.fullscreen_exit_count || 0}
+                        <div className="flex items-center gap-2">
+                          <div className={`text-3xl font-bold tracking-tight ${
+                            (detailedResult.proctoring_stats.fullscreen_exit_count || 0) > 0
+                              ? 'text-brand-blue'
+                              : 'text-gray-400'
+                          }`}>
+                            {detailedResult.proctoring_stats.fullscreen_exit_count || 0}
+                          </div>
+                          <div className="text-xs text-gray-500">Count</div>
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">times</div>
                       </div>
 
                       {/* Screen capture attempts (screenshots + screen recording) */}
@@ -2551,14 +2571,16 @@ export default function CandidateResultDetails({
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Screen Capture Attempt</div>
-                        <div className={`text-3xl font-bold tracking-tight ${
-                          (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
-                            ? 'text-brand-orange-deep'
-                            : 'text-gray-400'
-                        }`}>
-                          {detailedResult.proctoring_stats.screen_capture_count || 0}
+                        <div className="flex items-center gap-2">
+                          <div className={`text-3xl font-bold tracking-tight ${
+                            (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
+                              ? 'text-brand-orange-deep'
+                              : 'text-gray-400'
+                          }`}>
+                            {detailedResult.proctoring_stats.screen_capture_count || 0}
+                          </div>
+                          <div className="text-xs text-gray-500">Attempts</div>
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">attempts</div>
                       </div>
 
                       {/* Other Violations (uncategorized) - Commented out for now */}
@@ -2593,14 +2615,16 @@ export default function CandidateResultDetails({
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Total Violations</div>
-                        <div className={`text-3xl font-bold tracking-tight ${
-                          detailedResult.proctoring_stats.total_violations > 0
-                            ? 'text-red-600'
-                            : 'text-green-600'
-                        }`}>
-                          {detailedResult.proctoring_stats.total_violations}
+                        <div className="flex items-center gap-2">
+                          <div className={`text-3xl font-bold tracking-tight ${
+                            detailedResult.proctoring_stats.total_violations > 0
+                              ? 'text-red-600'
+                              : 'text-green-600'
+                          }`}>
+                            {detailedResult.proctoring_stats.total_violations}
+                          </div>
+                          <div className="text-xs text-gray-500">Total</div>
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">total</div>
                       </div>
                     </div>
 

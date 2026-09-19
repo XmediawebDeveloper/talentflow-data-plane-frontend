@@ -38,8 +38,8 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
 
   const pageStyle: React.CSSProperties = {
     minHeight: '100vh',
-    backgroundColor: isDark ? '#0F172A' : '#ffffff',
-    color: isDark ? '#ffffff' : '#111827',
+    backgroundColor: isDark ? 'var(--raw-0f172a)' : 'var(--raw-ffffff)',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
   };
 
   const containerStyle: React.CSSProperties = {
@@ -59,8 +59,8 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
     gap: '8px',
     padding: '8px 16px',
     borderRadius: '9999px',
-    backgroundColor: isDark ? 'rgba(34, 197, 94, 0.2)' : '#DCFCE7',
-    color: isDark ? '#86EFAC' : '#16A34A',
+    backgroundColor: isDark ? 'rgba(34, 197, 94, 0.2)' : 'var(--raw-dcfce7)',
+    color: isDark ? 'var(--raw-86efac)' : 'var(--raw-16a34a)',
     fontSize: '14px',
     fontWeight: 600,
     marginBottom: '16px',
@@ -69,14 +69,14 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
   const titleStyle: React.CSSProperties = {
     fontSize: isMobile ? '28px' : isTablet ? '40px' : '56px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '16px',
     lineHeight: 1.1,
   };
 
   const subtitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '16px' : isTablet ? '18px' : '20px',
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     maxWidth: '672px',
     margin: '0 auto',
     lineHeight: 1.6,
@@ -108,7 +108,7 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
     height: '48px',
     borderRadius: '12px',
     background: gradient,
-    color: '#ffffff',
+    color: 'var(--raw-ffffff)',
     fontSize: '20px',
     fontWeight: 700,
     marginBottom: '16px',
@@ -117,13 +117,13 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
   const stepTitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '24px' : isTablet ? '28px' : '32px',
     fontWeight: 700,
-    color: isDark ? '#ffffff' : '#111827',
+    color: isDark ? 'var(--raw-ffffff)' : 'var(--raw-111827)',
     marginBottom: '16px',
   };
 
   const stepDescStyle: React.CSSProperties = {
     fontSize: isMobile ? '15px' : isTablet ? '16px' : '18px',
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     lineHeight: 1.6,
     marginBottom: '24px',
   };
@@ -138,7 +138,7 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
     display: 'flex',
     alignItems: 'center',
     gap: '12px',
-    color: isDark ? '#CBD5E1' : '#374151',
+    color: isDark ? 'var(--raw-cbd5e1)' : 'var(--raw-374151)',
   };
 
   const stepImageStyle: React.CSSProperties = {
@@ -167,7 +167,7 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
     marginBottom: isMobile ? '40px' : isTablet ? '60px' : '80px',
     padding: isMobile ? '24px' : isTablet ? '36px' : '48px',
     borderRadius: isMobile ? '16px' : '24px',
-    backgroundColor: isDark ? '#1E293B' : '#F9FAFB',
+    backgroundColor: isDark ? 'var(--raw-1e293b)' : 'var(--raw-f9fafb)',
   };
 
   const statStyle: React.CSSProperties = {
@@ -177,7 +177,7 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
   const statNumberStyle: React.CSSProperties = {
     fontSize: isMobile ? '32px' : isTablet ? '40px' : '48px',
     fontWeight: 700,
-    background: 'linear-gradient(135deg, #667EEA, #764BA2)',
+    background: 'linear-gradient(135deg, var(--raw-667eea), var(--raw-764ba2))',
     WebkitBackgroundClip: 'text',
     WebkitTextFillColor: 'transparent',
     backgroundClip: 'text',
@@ -185,7 +185,7 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
   };
 
   const statLabelStyle: React.CSSProperties = {
-    color: isDark ? '#94A3B8' : '#6B7280',
+    color: isDark ? 'var(--raw-94a3b8)' : 'var(--raw-6b7280)',
     fontSize: '16px',
   };
 
@@ -193,13 +193,13 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
     textAlign: 'center',
     padding: isMobile ? '40px 20px' : isTablet ? '60px 32px' : '80px 40px',
     borderRadius: isMobile ? '16px' : '24px',
-    background: 'linear-gradient(135deg, #667EEA 0%, #764BA2 100%)',
+    background: 'linear-gradient(135deg, var(--raw-667eea) 0%, var(--raw-764ba2) 100%)',
   };
 
   const ctaTitleStyle: React.CSSProperties = {
     fontSize: isMobile ? '24px' : isTablet ? '36px' : '48px',
     fontWeight: 700,
-    color: '#ffffff',
+    color: 'var(--raw-ffffff)',
     marginBottom: '16px',
   };
 
@@ -219,8 +219,8 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
     fontSize: isMobile ? '16px' : '18px',
     fontWeight: 500,
     borderRadius: '12px',
-    backgroundColor: '#ffffff',
-    color: '#7C3AED',
+    backgroundColor: 'var(--raw-ffffff)',
+    color: 'var(--raw-7c3aed)',
     border: 'none',
     cursor: 'pointer',
     boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
@@ -231,7 +231,7 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
       number: "1",
       title: "Upload Resumes",
       description: "Bulk upload resumes in any format - PDF, Word, or even images. Our AI instantly parses and organizes candidate data.",
-      gradient: "linear-gradient(135deg, #3B82F6, #8B5CF6)",
+      gradient: "linear-gradient(135deg, var(--raw-3b82f6), var(--raw-8b5cf6))",
       icon: Upload,
       features: [
         "Drag & drop bulk upload",
@@ -244,7 +244,7 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
       number: "2",
       title: "AI Screening",
       description: "Our AI analyzes each resume against your job requirements, scoring and ranking candidates automatically.",
-      gradient: "linear-gradient(135deg, #8B5CF6, #EC4899)",
+      gradient: "linear-gradient(135deg, var(--raw-8b5cf6), var(--raw-ec4899))",
       icon: Brain,
       features: [
         "Skills matching",
@@ -257,7 +257,7 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
       number: "3",
       title: "Send Assessments",
       description: "Create custom assessments and send them to shortlisted candidates with one click.",
-      gradient: "linear-gradient(135deg, #F97316, #EF4444)",
+      gradient: "linear-gradient(135deg, var(--raw-f97316), var(--raw-ef4444))",
       icon: Send,
       features: [
         "Custom test builder",
@@ -270,7 +270,7 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
       number: "4",
       title: "Video Interviews",
       description: "Conduct live or async video interviews with AI-powered insights and automatic transcription.",
-      gradient: "linear-gradient(135deg, #22C55E, #14B8A6)",
+      gradient: "linear-gradient(135deg, var(--raw-22c55e), var(--raw-14b8a6))",
       icon: Video,
       features: [
         "One-way video",
@@ -283,7 +283,7 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
       number: "5",
       title: "Hire the Best",
       description: "Make data-driven hiring decisions with comprehensive candidate profiles and team feedback.",
-      gradient: "linear-gradient(135deg, #EC4899, #8B5CF6)",
+      gradient: "linear-gradient(135deg, var(--raw-ec4899), var(--raw-8b5cf6))",
       icon: Target,
       features: [
         "Complete candidate profiles",
@@ -329,7 +329,7 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
                   <div style={stepFeaturesStyle}>
                     {step.features.map((feature, idx) => (
                       <div key={idx} style={stepFeatureItemStyle}>
-                        <CheckCircle2 style={{ width: 20, height: 20, color: '#22C55E', flexShrink: 0 }} />
+                        <CheckCircle2 style={{ width: 20, height: 20, color: 'var(--raw-22c55e)', flexShrink: 0 }} />
                         <span>{feature}</span>
                       </div>
                     ))}
@@ -337,7 +337,7 @@ export default function HowItWorksPage({ onNavigate }: HowItWorksPageProps) {
                 </div>
                 <div style={stepImageStyle}>
                   <div style={imageBoxStyle(step.gradient)}>
-                    <Icon style={{ width: 80, height: 80, color: '#ffffff' }} />
+                    <Icon style={{ width: 80, height: 80, color: 'var(--raw-ffffff)' }} />
                   </div>
                 </div>
               </div>

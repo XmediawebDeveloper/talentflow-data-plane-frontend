@@ -51,11 +51,11 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
   );
 
   const sourceData = [
-    { name: 'Job Boards', value: 42, color: '#0f3c99' },
-    { name: 'Referrals', value: 24, color: '#079cc4' },
-    { name: 'LinkedIn', value: 18, color: '#099ab6' },
-    { name: 'Career Site', value: 11, color: '#ed881c' },
-    { name: 'Other', value: 5, color: '#9ca3af' },
+    { name: 'Job Boards', value: 42, color: 'var(--raw-0f3c99)' },
+    { name: 'Referrals', value: 24, color: 'var(--raw-079cc4)' },
+    { name: 'LinkedIn', value: 18, color: 'var(--raw-099ab6)' },
+    { name: 'Career Site', value: 11, color: 'var(--raw-ed881c)' },
+    { name: 'Other', value: 5, color: 'var(--raw-9ca3af)' },
   ];
 
   const topJDs = [
@@ -153,12 +153,12 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
             <div className="h-72 -ml-2">
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={trendData} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
-                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: '#6b7280' }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} axisLine={false} tickLine={false} />
-                  <ReTooltip contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }} />
-                  <Line type="monotone" dataKey="applications" stroke="#0f3c99" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
-                  <Line type="monotone" dataKey="hires" stroke="#ed881c" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--raw-e5e7eb)" vertical={false} />
+                  <XAxis dataKey="month" tick={{ fontSize: 12, fill: 'var(--raw-6b7280)' }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fontSize: 12, fill: 'var(--raw-6b7280)' }} axisLine={false} tickLine={false} />
+                  <ReTooltip contentStyle={{ borderRadius: 8, border: '1px solid var(--raw-e5e7eb)', fontSize: 12 }} />
+                  <Line type="monotone" dataKey="applications" stroke="var(--raw-0f3c99)" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
+                  <Line type="monotone" dataKey="hires" stroke="var(--raw-ed881c)" strokeWidth={2.5} dot={{ r: 3 }} activeDot={{ r: 5 }} />
                 </LineChart>
               </ResponsiveContainer>
             </div>
@@ -251,7 +251,7 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
                     ))}
                   </Pie>
                   <ReTooltip
-                    contentStyle={{ borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 12 }}
+                    contentStyle={{ borderRadius: 8, border: '1px solid var(--raw-e5e7eb)', fontSize: 12 }}
                     formatter={(v: any) => [`${v}%`, '']}
                   />
                 </PieChart>

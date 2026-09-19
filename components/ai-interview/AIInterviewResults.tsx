@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import TabEmptyState from '@/components/ui/tab-empty-state';
+import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useRouter } from 'next/navigation';
 import {
@@ -144,6 +145,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
   });
 
   const [showFilters, setShowFilters] = useState(false);
+  const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
 
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -355,6 +357,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
+          <ListViewToggle value={displayMode} onChange={setDisplayMode} />
         </ListToolbar>
 
         {/* Expanded filters */}
@@ -449,6 +452,157 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
             emptyDescription="Invite candidates to this interview to see their sessions here."
             onReset={search.reset}
           />
+        ) : displayMode === 'grid' ? (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 p-4">
+              {paginatedSessions.map((session) => {
+                const risk = getProctoringRisk(session);
+                const sc = session.status === 'in_progress' ? session.skill_coverage : undefined;
+                const scTotal = sc ? sc.covered.length + sc.medium_covered.length + sc.low_covered.length + sc.uncovered.length : 0;
+                const scCoveredPct = sc && scTotal > 0 ? Math.round(((sc.covered.length + sc.medium_covered.length) / scTotal) * 100) : 0;
+                return (
+                  <button
+                    key={session.id}
+                    onClick={() => handleViewDetails(session)}
+                    className="text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:shadow-md hover:border-brand-blue/20 hover:-translate-y-0.5 transition-all p-4 flex flex-col gap-3"
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-sm flex-shrink-0">
+                        {(session.candidate_name || 'U')[0].toUpperCase()}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-gray-900 truncate">
+                          {session.candidate_name || 'Unknown'}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {session.candidate_email || '—'}
+                        </p>
+                      </div>
+                      {session.candidate_cid && (
+                        <span className="text-[10px] font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-1.5 py-0.5 rounded shrink-0">
+                          {session.candidate_cid}
+                        </span>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {getStatusIcon(session.status)}
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(session.status)}`}>
+                          {getStatusLabel(session.status)}
+                        </span>
+                        {session.status === 'in_progress' && (
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full">
+                            <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                            LIVE
+                          </span>
+                        )}
+                        {session.status === 'completed' && (
+                          <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>
+                            {risk.level} risk
+                          </span>
+                        )}
+                      </div>
+                      {/* Mini skill coverage bar for live sessions */}
+                      {sc && (
+                        <div className="mt-1.5">
+                          <div className="flex items-center gap-1 mb-0.5">
+                            <span className="text-[10px] text-gray-500">{sc.questions_asked}/{sc.total_questions} Q</span>
+                            <span className="text-[10px] text-green-600 font-medium ml-auto">{scCoveredPct}% covered</span>
+                          </div>
+                          <div className="flex h-1 rounded-full overflow-hidden bg-gray-200 w-full">
+                            <div className="bg-green-500" style={{ width: `${Math.round((sc.covered.length / (scTotal || 1)) * 100)}%` }} />
+                            <div className="bg-yellow-400" style={{ width: `${Math.round((sc.medium_covered.length / (scTotal || 1)) * 100)}%` }} />
+                            <div className="bg-orange-400" style={{ width: `${Math.round((sc.low_covered.length / (scTotal || 1)) * 100)}%` }} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {session.score != null && (
+                      <div className="flex items-center gap-2">
+                        <div className="flex-1 bg-gray-200 rounded-full h-1.5">
+                          <div
+                            className={`h-1.5 rounded-full ${
+                              session.score >= 70 ? 'bg-green-500' :
+                              session.score >= 50 ? 'bg-brand-orange' : 'bg-red-500'
+                            }`}
+                            style={{ width: `${Math.min(100, session.score)}%` }}
+                          />
+                        </div>
+                        <span className={`font-medium text-xs shrink-0 ${
+                          session.score >= 70 ? 'text-green-600' :
+                          session.score >= 50 ? 'text-brand-orange-deep' : 'text-red-600'
+                        }`}>
+                          {Math.round(session.score)}%
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between text-xs text-gray-500 pt-2 border-t border-gray-100">
+                      <span>{formatDuration(session)}</span>
+                      <span>{session.completed_at ? formatIST(session.completed_at) : session.started_at ? formatIST(session.started_at) : '—'}</span>
+                    </div>
+
+                    <div
+                      onClick={(e) => { e.stopPropagation(); handleViewDetails(session); }}
+                      className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
+                    >
+                      <Eye className="w-3.5 h-3.5" />
+                      View Details
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Pagination */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 bg-slate-50">
+                <div className="text-sm text-gray-500">
+                  Showing {((currentPage - 1) * PAGE_SIZE) + 1}–{Math.min(currentPage * PAGE_SIZE, totalSessions)} of {totalSessions}
+                </div>
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-sm text-gray-500 whitespace-nowrap">Go to</span>
+                    <input
+                      type="number"
+                      min={1}
+                      max={totalPages}
+                      value={goToPage}
+                      onChange={(e) => setGoToPage(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') {
+                          e.currentTarget.blur();
+                          commitGoToPage();
+                        }
+                      }}
+                      onBlur={commitGoToPage}
+                      aria-label="Go to page"
+                      className="w-14 h-8 px-2 text-sm text-center border border-gray-200 rounded-lg bg-white text-gray-900 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    />
+                  </div>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="text-sm text-brand-blue font-semibold px-2 tabular-nums">
+                    {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <>
             <div className="overflow-x-auto tf-table-shell">
@@ -645,7 +799,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
   if (embedded) return body;
 
   return (
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           <PageBreadcrumb

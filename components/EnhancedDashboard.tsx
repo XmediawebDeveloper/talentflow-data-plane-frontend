@@ -503,10 +503,10 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
   // JD distribution by status (derived from already-fetched jdStatusCounts)
   const jdStatusBars = useMemo(
     () => [
-      { name: 'Published', value: jdStatusCounts.published, fill: '#16a34a' },
-      { name: 'Draft', value: jdStatusCounts.draft, fill: '#ed881c' },
-      { name: 'Disabled', value: jdStatusCounts.disabled, fill: '#dc2626' },
-      { name: 'Archived', value: jdStatusCounts.archived, fill: '#6b7280' },
+      { name: 'Published', value: jdStatusCounts.published, fill: 'var(--raw-16a34a)' },
+      { name: 'Draft', value: jdStatusCounts.draft, fill: 'var(--raw-ed881c)' },
+      { name: 'Disabled', value: jdStatusCounts.disabled, fill: 'var(--raw-dc2626)' },
+      { name: 'Archived', value: jdStatusCounts.archived, fill: 'var(--raw-6b7280)' },
     ],
     [jdStatusCounts],
   );
@@ -680,20 +680,20 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                   <LineChart data={activityTrend} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
                     <defs>
                       <linearGradient id="activityStroke" x1="0" y1="0" x2="1" y2="0">
-                        <stop offset="0%" stopColor="#0e3b98" />
-                        <stop offset="100%" stopColor="#079cc4" />
+                        <stop offset="0%" stopColor="var(--raw-0e3b98)" />
+                        <stop offset="100%" stopColor="var(--raw-079cc4)" />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid stroke="#e5e7eb" strokeDasharray="3 3" vertical={false} />
+                    <CartesianGrid stroke="var(--raw-e5e7eb)" strokeDasharray="3 3" vertical={false} />
                     <XAxis
                       dataKey="label"
-                      stroke="#9ca3af"
+                      stroke="var(--raw-9ca3af)"
                       fontSize={12}
                       tickLine={false}
-                      axisLine={{ stroke: '#e5e7eb' }}
+                      axisLine={{ stroke: 'var(--raw-e5e7eb)' }}
                     />
                     <YAxis
-                      stroke="#9ca3af"
+                      stroke="var(--raw-9ca3af)"
                       fontSize={12}
                       allowDecimals={false}
                       tickLine={false}
@@ -701,15 +701,15 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                       width={28}
                     />
                     <ReTooltip
-                      cursor={{ stroke: '#0f3c99', strokeOpacity: 0.15, strokeWidth: 2 }}
+                      cursor={{ stroke: 'var(--raw-0f3c99)', strokeOpacity: 0.15, strokeWidth: 2 }}
                       contentStyle={{
-                        background: '#ffffff',
-                        border: '1px solid #e5e7eb',
+                        background: 'var(--raw-ffffff)',
+                        border: '1px solid var(--raw-e5e7eb)',
                         borderRadius: 8,
                         fontSize: 12,
                         boxShadow: '0 4px 14px -2px rgb(15 23 42 / 0.06)',
                       }}
-                      labelStyle={{ color: '#0f172a', fontWeight: 600 }}
+                      labelStyle={{ color: 'var(--raw-0f172a)', fontWeight: 600 }}
                       formatter={(v: number) => [`${v}`, 'Actions']}
                     />
                     <Line
@@ -717,8 +717,8 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                       dataKey="count"
                       stroke="url(#activityStroke)"
                       strokeWidth={2.5}
-                      dot={{ r: 3, fill: '#0f3c99', strokeWidth: 0 }}
-                      activeDot={{ r: 5, fill: '#0f3c99', stroke: '#ffffff', strokeWidth: 2 }}
+                      dot={{ r: 3, fill: 'var(--raw-0f3c99)', strokeWidth: 0 }}
+                      activeDot={{ r: 5, fill: 'var(--raw-0f3c99)', stroke: 'var(--raw-ffffff)', strokeWidth: 2 }}
                     />
                   </LineChart>
                 </ResponsiveContainer>
@@ -764,16 +764,16 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
               <div className="h-64" aria-label="Bar chart of job descriptions grouped by status">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={jdStatusBars} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
-                    <CartesianGrid stroke="#e5e7eb" strokeDasharray="3 3" vertical={false} />
+                    <CartesianGrid stroke="var(--raw-e5e7eb)" strokeDasharray="3 3" vertical={false} />
                     <XAxis
                       dataKey="name"
-                      stroke="#9ca3af"
+                      stroke="var(--raw-9ca3af)"
                       fontSize={12}
                       tickLine={false}
-                      axisLine={{ stroke: '#e5e7eb' }}
+                      axisLine={{ stroke: 'var(--raw-e5e7eb)' }}
                     />
                     <YAxis
-                      stroke="#9ca3af"
+                      stroke="var(--raw-9ca3af)"
                       fontSize={12}
                       allowDecimals={false}
                       tickLine={false}
@@ -781,15 +781,15 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                       width={28}
                     />
                     <ReTooltip
-                      cursor={{ fill: '#0f3c99', fillOpacity: 0.06 }}
+                      cursor={{ fill: 'var(--raw-0f3c99)', fillOpacity: 0.06 }}
                       contentStyle={{
-                        background: '#ffffff',
-                        border: '1px solid #e5e7eb',
+                        background: 'var(--raw-ffffff)',
+                        border: '1px solid var(--raw-e5e7eb)',
                         borderRadius: 8,
                         fontSize: 12,
                         boxShadow: '0 4px 14px -2px rgb(15 23 42 / 0.06)',
                       }}
-                      labelStyle={{ color: '#0f172a', fontWeight: 600 }}
+                      labelStyle={{ color: 'var(--raw-0f172a)', fontWeight: 600 }}
                       formatter={(v: number) => [`${v}`, 'Jobs']}
                     />
                     <Bar dataKey="value" radius={[6, 6, 0, 0]} maxBarSize={56}>

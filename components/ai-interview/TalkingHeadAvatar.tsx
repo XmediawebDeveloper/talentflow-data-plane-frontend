@@ -1045,7 +1045,7 @@ export const TalkingHeadAvatar = forwardRef<TalkingHeadHandle, Props>(
         <div
           className="absolute inset-0"
           style={{
-            background: "radial-gradient(ellipse at 50% 40%, #3a3a3f 0%, #2a2a2e 40%, #1a1a1e 75%, #0f0f12 100%)",
+            background: "radial-gradient(ellipse at 50% 40%, var(--raw-3a3a3f) 0%, var(--raw-2a2a2e) 40%, var(--raw-1a1a1e) 75%, var(--raw-0f0f12) 100%)",
           }}
         />
         {/* Subtle studio light spill from top — enhances subject separation */}

@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { Clock, X, ArrowRight, Info } from 'lucide-react';
 import { clearTokens, getTokens } from '@/lib/services/api';
 import { getLoginUrl } from '@/lib/services/authService';
 import { userSettingsApi } from '@/lib/services/settingsService';
@@ -238,36 +239,69 @@ export function SessionTimeoutProvider({ children, skipSettingsLoad = false }: S
       {/* Inactivity Warning Modal */}
       {isWarningVisible && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center">
-          {/* Backdrop */}
+          {/* Backdrop — no onClick handler, cannot be dismissed by clicking outside */}
           <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
 
           {/* Modal */}
-          <div className="relative bg-white rounded-xl shadow-2xl w-full max-w-[95vw] sm:max-w-md mx-4 p-6 animate-in fade-in zoom-in duration-200">
-            <div className="text-center">
-              <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <svg className="w-8 h-8 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-                </svg>
+          <div
+            role="alertdialog"
+            aria-modal="true"
+            aria-labelledby="session-warning-title"
+            aria-describedby="session-warning-desc"
+            className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md mx-4 max-h-[90dvh] overflow-y-auto animate-in fade-in zoom-in duration-200 tf-round-edges"
+          >
+            {/* Close — treated the same as Continue Session: dismissing it is the
+                user proving they're present, not an escape hatch from the timer. */}
+            <button
+              onClick={continueSession}
+              aria-label="Continue session"
+              className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 dark:text-slate-500 dark:hover:text-slate-300 transition-colors"
+            >
+              <X className="w-5 h-5" strokeWidth={2} />
+            </button>
+
+            <div className="px-6 sm:px-8 pt-8 pb-6 text-center">
+              <div className="relative w-20 h-20 mx-auto mb-5">
+                {/* Radiating accent lines around the clock */}
+                <span className="absolute top-1 left-1 w-3 h-0.5 bg-amber-300 dark:bg-amber-500/50 rounded-full rotate-45" />
+                <span className="absolute top-1 right-1 w-3 h-0.5 bg-amber-300 dark:bg-amber-500/50 rounded-full -rotate-45" />
+                <span className="absolute bottom-1 left-1 w-3 h-0.5 bg-amber-300 dark:bg-amber-500/50 rounded-full -rotate-45" />
+                <span className="absolute bottom-1 right-1 w-3 h-0.5 bg-amber-300 dark:bg-amber-500/50 rounded-full rotate-45" />
+                <div className="absolute inset-0 m-auto w-16 h-16 bg-amber-100 dark:bg-amber-500/10 rounded-full flex items-center justify-center">
+                  <Clock className="w-8 h-8 text-amber-600 dark:text-amber-400" strokeWidth={2} />
+                </div>
               </div>
 
-              <h3 className="text-xl font-semibold text-gray-900 mb-2">
+              <h3 id="session-warning-title" className="text-2xl font-bold text-gray-900 dark:text-slate-50 mb-3">
                 Session Expiring Soon
               </h3>
 
-              <p className="text-gray-600 mb-4">
-                Your session will expire in <span className="font-bold text-red-600">{remainingSeconds}</span> seconds due to inactivity.
+              <p id="session-warning-desc" className="text-gray-700 dark:text-slate-300 leading-relaxed">
+                Your session will expire in{' '}
+                <span className="font-bold text-red-600 dark:text-red-400">{remainingSeconds} seconds</span> due to inactivity.
               </p>
 
-              <p className="text-sm text-gray-500 mb-6">
-                Click the button below to continue your session.
+              <p className="text-sm text-gray-500 dark:text-slate-400 mt-3">
+                Click the button below to continue your session and stay signed in.
               </p>
 
               <button
                 onClick={continueSession}
-                className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                autoFocus
+                className="mt-6 w-full flex items-center justify-center gap-2 px-4 py-3.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 text-white rounded-xl shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
               >
                 Continue Session
+                <ArrowRight className="w-4 h-4" strokeWidth={2} />
               </button>
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 sm:px-8 pb-6 pt-5 border-t border-gray-100 dark:border-slate-700/60 flex items-start gap-2.5 text-left">
+              <Info className="w-4 h-4 text-brand-blue dark:text-brand-blue shrink-0 mt-0.5" strokeWidth={2} />
+              <p className="text-xs text-gray-500 dark:text-slate-400 leading-relaxed">
+                For <span className="font-medium text-gray-700 dark:text-slate-300">security</span> reasons, your{' '}
+                <span className="font-medium text-gray-700 dark:text-slate-300">session</span> will be automatically signed out after the timer ends.
+              </p>
             </div>
           </div>
         </div>

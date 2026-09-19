@@ -138,6 +138,28 @@ export function normalizeSkillName(s: string): string {
   return (s || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
+/** Decorative punctuation that never carries skill identity — a recruiter's
+ *  fingers finishing a phrase the way they'd finish a sentence. Deliberately
+ *  excludes the symbols real skill names use (# + / - & ( ) and a mid-word
+ *  period), so "C#", "C++", "Node.js", ".NET", "TCP/IP", "R&D" and
+ *  "Quality Assurance (QA)" are never rejected. Mirrors the intent of the
+ *  backend's `_TRAILING_DECORATION_RE` in
+ *  `semantic_skill_validator.normalize_skill`, but as an INPUT REJECTION
+ *  here rather than a silent fold — this runs while the recruiter is still
+ *  typing, so it can tell them immediately instead of quietly stripping it. */
+const DECORATIVE_PUNCTUATION_RE = /[!?|,;:~^*"'`]/;
+
+/** Returns the first disallowed character found in a candidate skill name, or
+ *  null if it is clean. A period is fine mid-word ("Node.js", "ASP.NET") but
+ *  not used as sentence punctuation: a trailing full stop, or one next to a
+ *  space. */
+export function findInvalidSkillPunctuation(name: string): string | null {
+  const decorative = (name || '').match(DECORATIVE_PUNCTUATION_RE);
+  if (decorative) return decorative[0];
+  if (name.endsWith('.') || /\.\s|\s\./.test(name)) return '.';
+  return null;
+}
+
 /** Punctuation/space-stripped form (keeps # and + so C# ≠ C++). */
 function skillSquish(s: string): string {
   return (s || '').toLowerCase().replace(/[^a-z0-9#+]/g, '');

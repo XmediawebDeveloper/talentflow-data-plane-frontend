@@ -703,10 +703,10 @@ export function EvalReportCombined({
             {radarData.length > 0 ? (
               <ResponsiveContainer width="100%" height={360}>
                 <RadarChart data={radarData}>
-                  <PolarGrid stroke="#E5E7EB" />
-                  <PolarAngleAxis dataKey="skill" tick={{ fill: '#6B7280', fontSize: 12, fontWeight: 500 }} />
-                  <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fill: '#6B7280', fontSize: 10 }} />
-                  <Radar name="Score" dataKey="score" stroke="#4F46E5" fill="#4F46E5" fillOpacity={0.6} strokeWidth={2} />
+                  <PolarGrid stroke="var(--raw-e5e7eb)" />
+                  <PolarAngleAxis dataKey="skill" tick={{ fill: 'var(--raw-6b7280)', fontSize: 12, fontWeight: 500 }} />
+                  <PolarRadiusAxis angle={90} domain={[0, 10]} tick={{ fill: 'var(--raw-6b7280)', fontSize: 10 }} />
+                  <Radar name="Score" dataKey="score" stroke="var(--raw-4f46e5)" fill="var(--raw-4f46e5)" fillOpacity={0.6} strokeWidth={2} />
                 </RadarChart>
               </ResponsiveContainer>
             ) : (

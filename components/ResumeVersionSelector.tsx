@@ -49,7 +49,9 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
       return version.extractedText || version.extracted_text || '';
     }
     try {
-      const detail = await resumeService.get(version.id);
+      // Only reached from a user-initiated Compare click, so this counts as
+      // the user viewing that version's content.
+      const detail = await resumeService.get(version.id, true);
       return detail?.extracted_text || '';
     } catch {
       return '';

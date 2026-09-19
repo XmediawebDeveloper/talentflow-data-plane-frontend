@@ -522,6 +522,23 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     return 'text-red-600';
   };
 
+  // Combined Average, formatted to the same one-decimal style as Must-Have /
+  // Nice-to-Have / Overall Rating (client doc section 9), WITHOUT letting
+  // ordinary rounding push a below-8.00 value up to a displayed "8.0". The
+  // backend's own cap logic treats 8.00 as the Partial/Exact cap boundary
+  // (Partial: "never shown at 8.00 or above"; Exact: "capped when Combined
+  // Average is 8.00 or below") - a true value like 7.96 rounding up to "8.0"
+  // here would read as having crossed that boundary when it hasn't, directly
+  // contradicting the cap explanation shown right below it. Mirrors the same
+  // floor already applied server-side to overall_rating_10.
+  const formatCombinedAverage = (value: number): string => {
+    const rounded = value.toFixed(1);
+    if (value < 8.0 && parseFloat(rounded) >= 8.0) {
+      return '7.9';
+    }
+    return rounded;
+  };
+
   // Worked-through explanation for the Overall Rating tooltip, per the
   // client's 10-point rating document ("Final Version A", Sept 2026). This
   // REPLACES the old Required%/Preferred% weighted-credit explanation
@@ -550,7 +567,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             <p>
               Nice-to-Have Average: {resume.nonEssentialRating10.toFixed(1)}/10.
               {resume.combinedAverage10 != null && (
-                <> Combined Average: ({resume.essentialRating10.toFixed(1)} + {resume.nonEssentialRating10.toFixed(1)}) / 2 = {resume.combinedAverage10.toFixed(2)}.</>
+                <> Combined Average: ({resume.essentialRating10.toFixed(1)} + {resume.nonEssentialRating10.toFixed(1)}) / 2 = {formatCombinedAverage(resume.combinedAverage10)}.</>
               )}
             </p>
             {resume.combinedAverage10 != null && (
@@ -558,7 +575,14 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                 {/* Spelled out the same way the document's own worked
                     examples state it - "Starting Overall Rating: MAX(8.17,
                     8.59) = 8.59" - rather than only describing the rule in
-                    words, so a recruiter can see which side actually won. */}
+                    words, so a recruiter can see which side actually won.
+                    Deliberately kept at the RAW, unrounded Combined Average
+                    here (unlike the "Combined Average: ... = X" line above,
+                    which uses formatCombinedAverage) - this line's whole job
+                    is to show the pre-cap arithmetic that the very next
+                    sentence says gets capped down; flooring it too would
+                    make "MAX(7.5, 7.9) = 7.9 ... capped down to 7.9" read as
+                    if nothing was capped at all. */}
                 Starting Overall Rating: MAX({resume.essentialRating10.toFixed(1)}, {resume.combinedAverage10.toFixed(2)}) = {Math.max(resume.essentialRating10, resume.combinedAverage10).toFixed(2)}.
                 {resume.ratingCapApplied && (
                   isPartial
@@ -625,15 +649,16 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             Nice-to-Have Avg above already gates on). The document itself
             doesn't list this as one of the numbers to show (section 9), but
             showing it lets a recruiter verify the Overall Rating's own
-            arithmetic instead of taking it on faith - kept at 2 decimals,
-            matching how the document itself always writes this figure in
-            its own worked examples (e.g. "8.59"), rather than the 1-decimal
-            format the other three ratings use. */}
+            arithmetic instead of taking it on faith. Shown at one decimal,
+            matching Must-Have/Nice-to-Have/Overall Rating, via
+            formatCombinedAverage - a plain toFixed(1) here could round a
+            true sub-8.00 value (e.g. 7.96) up to a displayed "8.0", which
+            would contradict the cap explanation right below it. */}
         {resume.combinedAverage10 != null && (
           <>
             <span className="text-gray-400">|</span>
             <span className="text-gray-700 flex items-center gap-1">
-              Combined Average: <span className="font-semibold text-gray-900">{resume.combinedAverage10.toFixed(2)}</span>
+              Combined Average: <span className="font-semibold text-gray-900">{formatCombinedAverage(resume.combinedAverage10)}</span>
               <span className="text-gray-500">/10</span>
             </span>
           </>
@@ -828,7 +853,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
           onMouseEnter={cancelHideReasoningTooltip}
           onMouseLeave={hideReasoningTooltip}
         >
-          <div className="whitespace-normal bg-[#e1ebed] text-gray-800 text-xs rounded-xl py-2.5 px-3.5 shadow-xl border border-gray-200 leading-relaxed select-text">
+          <div className="whitespace-normal bg-[var(--raw-e1ebed)] text-gray-800 text-xs rounded-xl py-2.5 px-3.5 shadow-xl border border-gray-200 leading-relaxed select-text">
             {reasoningTooltip.text}
           </div>
         </div>,

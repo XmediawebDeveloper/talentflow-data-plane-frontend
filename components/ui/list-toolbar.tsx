@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Search, SlidersHorizontal, LayoutGrid, List, XCircle } from 'lucide-react';
+import { Search, SlidersHorizontal, XCircle } from 'lucide-react';
 import { cn } from './utils';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 
@@ -10,14 +10,12 @@ import { useDebounce } from '@/lib/hooks/useDebounce';
  * /recruitment/job-openings (components/JobsListing.tsx) — the reference page.
  *
  * Layout, left to right:
- *   [ search ............ ]  [ ☰ | ▦ ]  [ ⚙ More Filters ③ ]  [ ✕ Clear ]  [ 24 of 56 ]
+ *   [ search ............ ]  [ ⚙ More Filters ③ ]  [ ✕ Clear ]  [ 24 of 56 ]
  *
- * Every part after the search box is optional, so pages that have no view
- * toggle or no advanced-filter panel can still use this and stay consistent
- * with the ones that do.
+ * Every part after the search box is optional, so pages that have no
+ * advanced-filter panel can still use this and stay consistent with the ones
+ * that do.
  */
-
-export type ListViewMode = 'grid' | 'list';
 
 export interface ListToolbarProps {
   /**
@@ -34,10 +32,6 @@ export interface ListToolbarProps {
    */
   searchDebounceMs?: number;
   searchPlaceholder?: string;
-
-  /** Grid/list toggle. Omit `onViewModeChange` to hide the toggle entirely. */
-  viewMode?: ListViewMode;
-  onViewModeChange?: (mode: ListViewMode) => void;
 
   /** "More Filters" button. Omit `onToggleFilters` to hide it. */
   onToggleFilters?: () => void;
@@ -63,9 +57,9 @@ export interface ListToolbarProps {
   onClearFilters?: () => void;
 
   /**
-   * Controls placed at the FRONT of the right-hand group, ahead of the view
-   * toggle and More Filters. For page-level actions (Create, Send Invite) that
-   * belong with the list but shouldn't sit past the filter controls.
+   * Controls placed at the FRONT of the right-hand group, ahead of More
+   * Filters. For page-level actions (Create, Send Invite) that belong with
+   * the list but shouldn't sit past the filter controls.
    */
   leadingActions?: React.ReactNode;
 
@@ -74,10 +68,10 @@ export interface ListToolbarProps {
 
   /**
    * The list's count badge (`<ListCountBadge>`), pinned to the very end of the
-   * row — past the view toggle, More Filters, Reset and anything in `children`.
-   * It has its own slot rather than riding `children` because its position is
-   * the point: it lands in the same right-hand corner on every list, so the eye
-   * knows where to find it without reading the row.
+   * row — past More Filters, Reset and anything in `children`. It has its own
+   * slot rather than riding `children` because its position is the point: it
+   * lands in the same right-hand corner on every list, so the eye knows where
+   * to find it without reading the row.
    */
   countBadge?: React.ReactNode;
 
@@ -97,8 +91,6 @@ export default function ListToolbar({
   onSearchChange,
   searchDebounceMs = 300,
   searchPlaceholder = 'Search...',
-  viewMode,
-  onViewModeChange,
   onToggleFilters,
   filtersOpen = false,
   activeFilterCount = 0,
@@ -110,8 +102,6 @@ export default function ListToolbar({
   filterPanel,
   className,
 }: ListToolbarProps) {
-  const showViewToggle = typeof onViewModeChange === 'function';
-
   /* ---- Debounced search -------------------------------------------------
    * The input is uncontrolled by the parent between keystrokes: typing updates
    * local state, and only the settled value is handed up. Every consumer either
@@ -173,40 +163,6 @@ export default function ListToolbar({
 
       <div className="flex flex-wrap items-center gap-2">
         {leadingActions}
-
-        {showViewToggle && (
-          <div className="flex items-center gap-1 bg-brand-blue/5 ring-1 ring-brand-blue/10 p-1 rounded-lg">
-            {/* List first, then grid — the order every toggle in the app uses. */}
-            <button
-              type="button"
-              onClick={() => onViewModeChange!('list')}
-              className={cn(
-                'p-1.5 rounded transition-all',
-                viewMode === 'list'
-                  ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
-                  : 'text-gray-600 hover:text-brand-blue',
-              )}
-              aria-label="List view"
-              title="List view"
-            >
-              <List className="w-4 h-4" />
-            </button>
-            <button
-              type="button"
-              onClick={() => onViewModeChange!('grid')}
-              className={cn(
-                'p-1.5 rounded transition-all',
-                viewMode === 'grid'
-                  ? 'bg-white text-brand-blue shadow-sm shadow-brand-blue/10'
-                  : 'text-gray-600 hover:text-brand-blue',
-              )}
-              aria-label="Grid view"
-              title="Grid view"
-            >
-              <LayoutGrid className="w-4 h-4" />
-            </button>
-          </div>
-        )}
 
         {onToggleFilters && (
           <button

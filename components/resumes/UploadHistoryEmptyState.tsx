@@ -61,7 +61,7 @@ function Sparkle({ cx, cy, s }: { cx: number; cy: number; s: number }) {
   return (
     <path
       d={`M${cx} ${cy - s}Q${cx} ${cy} ${cx + s} ${cy}Q${cx} ${cy} ${cx} ${cy + s}Q${cx} ${cy} ${cx - s} ${cy}Q${cx} ${cy} ${cx} ${cy - s}z`}
-      fill="#b4c8f5"
+      fill="var(--raw-b4c8f5)"
     />
   );
 }
@@ -76,18 +76,18 @@ function TrayIllustration() {
     >
       <defs>
         <linearGradient id="tf-tray-front" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#8fb0f7" />
-          <stop offset="100%" stopColor="#6288ee" />
+          <stop offset="0%" stopColor="var(--raw-8fb0f7)" />
+          <stop offset="100%" stopColor="var(--raw-6288ee)" />
         </linearGradient>
         <linearGradient id="tf-tray-back" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="#5b81ea" />
-          <stop offset="100%" stopColor="#7ba1f4" />
+          <stop offset="0%" stopColor="var(--raw-5b81ea)" />
+          <stop offset="100%" stopColor="var(--raw-7ba1f4)" />
         </linearGradient>
       </defs>
 
       {/* Cloud drifts flanking the tray — they give the object a horizon to sit
           on without drawing a ground line. */}
-      <g fill="#eef2fd">
+      <g fill="var(--raw-eef2fd)">
         <circle cx="66" cy="116" r="26" />
         <circle cx="94" cy="106" r="32" />
         <rect x="44" y="116" width="72" height="30" rx="15" />
@@ -100,14 +100,14 @@ function TrayIllustration() {
       <g>
         <path
           d="M100 18h40l16 16v78h-56z"
-          fill="#ffffff"
-          stroke="#c7d6f8"
+          fill="var(--raw-ffffff)"
+          stroke="var(--raw-c7d6f8)"
           strokeWidth="1.5"
           strokeLinejoin="round"
         />
-        <path d="M140 18l16 16h-16z" fill="#dbe5fb" />
-        <rect x="110" y="44" width="22" height="8" rx="2" fill="#93b0f8" />
-        <g stroke="#cfdcfa" strokeWidth="3" strokeLinecap="round">
+        <path d="M140 18l16 16h-16z" fill="var(--raw-dbe5fb)" />
+        <rect x="110" y="44" width="22" height="8" rx="2" fill="var(--raw-93b0f8)" />
+        <g stroke="var(--raw-cfdcfa)" strokeWidth="3" strokeLinecap="round">
           <path d="M110 64h36" />
           <path d="M110 76h24" />
         </g>
@@ -120,7 +120,7 @@ function TrayIllustration() {
         d="M74 108h112l-14 46a8 8 0 01-7.7 6H95.7a8 8 0 01-7.7-6z"
         fill="url(#tf-tray-front)"
       />
-      <rect x="112" y="128" width="36" height="9" rx="4.5" fill="#ffffff" fillOpacity="0.75" />
+      <rect x="112" y="128" width="36" height="9" rx="4.5" fill="var(--raw-ffffff)" fillOpacity="0.75" />
 
       <Sparkle cx={88} cy={44} s={5} />
       <Sparkle cx={198} cy={54} s={4} />
