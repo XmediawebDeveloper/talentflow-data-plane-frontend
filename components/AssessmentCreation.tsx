@@ -522,6 +522,26 @@ interface AssessmentCreationProps {
    * page's `?edit=<id>`. Ignored on the page, which reads the URL.
    */
   editAssessmentId?: string;
+  /**
+   * VIEW-ONLY. The Configure step exactly as it is — same cards, same rows,
+   * same labels, same spacing — with every control non-operable and the Save
+   * as Draft / Publish card gone, so there is nothing on screen that could
+   * change the record.
+   *
+   * Used by the New Versions tab's preview, which shows a sibling version's
+   * configuration and must not offer to edit it. Off by default, so the
+   * Configure popup and the create flow are untouched.
+   */
+  readOnly?: boolean;
+}
+
+/**
+ * Imperative handle for `embedded` mode: lets `AssessmentConfigureModal`'s own
+ * header close button run the same unsaved-changes check as the in-flow
+ * breadcrumb, instead of closing the popup out from under an active edit.
+ */
+export interface AssessmentCreationHandle {
+  requestClose: () => void;
 }
 
 /**
@@ -604,7 +624,7 @@ function getExperienceRange(job: Pick<Job, 'experience' | 'experience_min' | 'ex
   return { min: 0, max: 0 };
 }
 
-const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreationProps>(function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings, preSelectedJobId, proctoringSettings: initialProctoringSettings, embedded = false, editAssessmentId: embeddedEditAssessmentId }, ref) {
+const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreationProps>(function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings, preSelectedJobId, proctoringSettings: initialProctoringSettings, embedded = false, editAssessmentId: embeddedEditAssessmentId, readOnly = false }, ref) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isTenantAdmin, user } = useAuth();
@@ -4119,13 +4139,19 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
           ) : hrQuestionBank.map((q, idx) => {
             const isSelected = selectedHRQuestions.includes(q.id);
             return (
+              /* The one control in this step that is a <div>, not a form
+                 element — so the read-only fieldset cannot reach it and the
+                 handler and its cursor are dropped here instead. Same row,
+                 same colours; it just no longer responds. */
               <div
                 key={q.id}
-                onClick={() => toggleHRQuestion(q.id)}
-                className={`flex cursor-pointer items-center gap-2.5 p-2 rounded-lg transition-all text-xs ${
+                onClick={readOnly ? undefined : () => toggleHRQuestion(q.id)}
+                className={`flex items-center gap-2.5 p-2 rounded-lg transition-all text-xs ${
+                  readOnly ? 'cursor-default' : 'cursor-pointer'
+                } ${
                   isSelected
                     ? 'bg-brand-blue/5 border border-brand-blue/30 ring-1 ring-brand-blue/10'
-                    : 'bg-slate-50 border border-transparent hover:bg-brand-blue/5'
+                    : `bg-slate-50 border border-transparent${readOnly ? '' : ' hover:bg-brand-blue/5'}`
                 }`}
               >
                 <input
@@ -4405,6 +4431,20 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
           )}
 
           {/* Two Column Layout */}
+          {/* READ-ONLY, in one place rather than a `disabled` on each control.
+              A disabled <fieldset> disables every form control inside it —
+              inputs, the percentage sliders, the round toggles, every button —
+              which is what makes view-only mode COMPLETE: a control added to
+              this step later is non-operable in preview without anyone having
+              to remember it.
+
+              It carries no styling of its own (`m-0 p-0 border-0`), so the
+              step renders pixel-for-pixel as it does in Configure, and
+              `min-w-0` overrides the UA stylesheet's `min-inline-size:
+              min-content` on fieldsets, which would otherwise stop the flex
+              row below from shrinking. `disabled={false}` is inert, so the
+              editable popup and the create flow behave exactly as before. */}
+          <fieldset disabled={readOnly} className="min-w-0 m-0 p-0 border-0">
           <div className="flex flex-col lg:flex-row gap-4 sm:gap-6">
             {/* Left Column - Main Content */}
             <div className="flex-1 space-y-4 sm:space-y-6">
@@ -5056,7 +5096,14 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
               {/* Actions. The Total Duration / Sections pair that used to head
                   this card now sits in Assessment Duration above, where the
                   figures it reports are set — so this card is the two buttons
-                  that end the step and nothing else. */}
+                  that end the step and nothing else.
+
+                  Absent in read-only mode. The fieldset above already makes
+                  both buttons non-operable; a preview should not SHOW an
+                  action that would change the assessment, so the card goes
+                  rather than sitting there greyed out. The sidebar's
+                  `space-y-4` closes the gap on its own. */}
+              {!readOnly && (
               <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-2">
@@ -5099,8 +5146,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   </button>
                 </div>
               </div>
+              )}
             </div>
           </div>
+          </fieldset>
         </div>
 
         {/* The coding round's LANGUAGE PICKER — the 'enable' and 'edit'

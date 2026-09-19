@@ -27,6 +27,13 @@ export default function AssessmentResultsPage() {
   const [assessmentTitle, setAssessmentTitle] = useState<string>('');
   const [assessmentVersion, setAssessmentVersion] = useState<number | null>(null);
   const [jdTitle, setJdTitle] = useState<string>('');
+  // The JD this assessment belongs to. The results view reads all three: the
+  // id to walk the JD's version lineage, the short id and title to name the
+  // job in its header, and the version this assessment was authored against as
+  // the fallback scope when the lineage cannot be loaded.
+  const [jdId, setJdId] = useState<string>('');
+  const [jdShortId, setJdShortId] = useState<string>('');
+  const [jdVersion, setJdVersion] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [allAssessmentIds, setAllAssessmentIds] = useState<string[]>([]);
@@ -43,6 +50,9 @@ export default function AssessmentResultsPage() {
           setAssessmentTitle(stripVersionFromTitle(response.title));
           setAssessmentVersion(response.version ?? null);
           setJdTitle(response.jd_title || '');
+          setJdId(response.jd_id || '');
+          setJdShortId(response.jd_short_id || '');
+          setJdVersion(response.jd_version ?? null);
         } else {
           setError('Assessment not found');
         }
@@ -196,6 +206,9 @@ export default function AssessmentResultsPage() {
         assessmentTitle={assessmentTitle}
         assessmentVersion={assessmentVersion}
         jdTitle={jdTitle}
+        jdId={jdId}
+        jdShortId={jdShortId}
+        jdVersion={jdVersion}
         canDownloadPDF={canDownloadPDF}
         canBatchDownload={canBatchDownload}
         prevId={prevId}

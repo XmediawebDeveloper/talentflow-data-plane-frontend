@@ -3,7 +3,7 @@
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { WorkInProgressIcon } from '@/components/icons/nav-icons';
 import { Briefcase, Search, FileText, User, MapPin, Mail, Phone, CheckCircle, TrendingUp, Download, Clock, History, Eye, X, ArrowLeft, Send, MousePointer, PlayCircle, CheckCircle2, XCircle, Loader2, Square, CheckSquare, Building2, Calendar, Users, ChevronDown, ChevronsUpDown, MoreVertical, Info, PieChart, RefreshCw, Layers, ClipboardList } from 'lucide-react';
-import { useState, useEffect, useRef, useMemo, useId } from 'react';
+import { useState, useEffect, useLayoutEffect, useRef, useMemo, useId } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { useRouter } from 'next/navigation';
 import ScoredResumesTable from './ScoredResumesTable';
@@ -1199,8 +1199,12 @@ export default function ResumeScoringPage({
     }
   }, [initialJdId, initialScoreId, scoredHistory, initialShowProgress, initialJdHandled, isWaitingForInitialJd, pendingScoringData, initialNewScoring, jobs]);
 
-  // After scoring completes: auto-navigate to details view once scoredHistory is refreshed
-  useEffect(() => {
+  // After scoring completes: auto-navigate to details view once scoredHistory is refreshed.
+  // A layout effect, not useEffect: the popup that hid the "Choose JD" view has
+  // already been closed in the same batch that set pendingAutoSelectJdId, and a
+  // plain effect runs after paint - so that view showed for a frame before the
+  // details view replaced it.
+  useLayoutEffect(() => {
     if (!pendingAutoSelectJdId) return;
     const historyItem = scoredHistory.find(h => h.jobId === pendingAutoSelectJdId);
     if (historyItem) {
@@ -1437,7 +1441,16 @@ export default function ResumeScoringPage({
               // Refresh header quota dropdown — Celery just finished deducting RS units on CP
               dispatchUnitsConsumed();
 
-              if (onRefreshHistory) {
+              // Auto-closing/navigating away here used to always fire on
+              // completion, success or not. A permanent-config failure (e.g.
+              // missing scoring API key) now fails fast — a couple of seconds,
+              // not the old ~90s retry loop — so the redirect below fired
+              // before anyone could read the failed row's error message. Only
+              // auto-advance on a clean run; on any failure, leave the modal
+              // open so the user can read it and use Retry/Retry All.
+              if ((status.failed || 0) > 0) {
+                console.log(`[ResumeScoringPage] ${status.failed} item(s) failed — keeping progress modal open`);
+              } else if (onRefreshHistory) {
                 console.log('[ResumeScoringPage] Refreshing scored history...');
                 invalidateGlobalScoredResumes();
                 await onRefreshHistory();
@@ -4207,13 +4220,16 @@ export default function ResumeScoringPage({
           jobTitle={selectedJobData.title}
           onClose={() => setShowResumeSelectionModal(false)}
           onScoringComplete={async () => {
-            setShowResumeSelectionModal(false);
             invalidateGlobalScoredResumes();
+            // The popup stays up while the history refreshes. Closing it first
+            // exposed the "Choose JD" view underneath for the whole fetch.
             await onRefreshHistory?.();
             // Same hand-off the async Celery flow above uses: once
             // scoredHistory carries this job's fresh scores, the sync effect
-            // opens its details view automatically.
+            // opens its details view automatically. Closing the popup in the
+            // same batch means the next paint is already the details view.
             setPendingAutoSelectJdId(selectedJob);
+            setShowResumeSelectionModal(false);
             router.push(`/recruitment/resume-scoring?jd_id=${selectedJob}`, { scroll: false });
           }}
         />

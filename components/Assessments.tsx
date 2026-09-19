@@ -29,6 +29,13 @@ import {
 } from '@/components/ui/dropdown-menu';
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, ASSESSMENT_INVITE_STATUS_OPTIONS, type InviteFilterState } from './InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from './InviteStatCards';
+import AssessmentInviteTable, {
+  InviteStatusBadge,
+  isBulkResendable,
+  isTrackedInviteCompleted,
+  isValidInviteEmail,
+  inviteStatusBucket,
+} from '@/components/assessments/AssessmentInviteTable';
 import ListToolbar from '@/components/ui/list-toolbar';
 import { Skeleton } from '@/components/ui/skeleton';
 import ListCountBadge from '@/components/ui/list-count-badge';
@@ -48,6 +55,15 @@ import type { AssessmentAttemptResponse } from '@/lib/services/assessmentService
 
 import { Job } from '@/lib/types/types';
 import { assessmentService } from '@/lib/services';
+import {
+  buildInvitationRowActions,
+  InvitationActionsMenu,
+  InvitationActionButtons,
+  ViewFullHistoryLink,
+  EditInvitationModal,
+  RevokeInvitationDialog,
+  InvitationHistoryDialog,
+} from '@/components/AssessmentInviteActions';
 /* The job's own version list, for asking about each version by its own id —
    see `loadAssessmentLineage`. Same endpoint the version panel's job half
    already reads through `useJobVersionLineage`. */
@@ -68,7 +84,7 @@ import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import QuotaBadge from '@/components/ui/quota-badge';
 import AllAssessmentsTable from '@/components/assessments/AllAssessmentsTable';
-import AssessmentVersionHistoryPanel, { VersionChip, type AssessmentVersionRow } from '@/components/assessments/AssessmentVersionHistoryPanel';
+import AssessmentVersionHistoryPanel, { type AssessmentVersionRow, VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { latestVersionNumber } from '@/lib/utils/jobOpeningDisplay';
 
@@ -465,6 +481,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // Resend confirmation dialog state
   const [resendTargetInvitation, setResendTargetInvitation] = useState<any | null>(null);
   const [isResending, setIsResending] = useState(false);
+  // Single-invitation Revoke / Edit ("Save & Send") / full-history state —
+  // shared by the Track Invites popup and the Invitation Status tab, since
+  // both surfaces get the full action set and only one is ever visible.
+  const [revokeInviteTarget, setRevokeInviteTarget] = useState<any | null>(null);
+  const [editInviteTarget, setEditInviteTarget] = useState<any | null>(null);
+  const [historyInviteTarget, setHistoryInviteTarget] = useState<any | null>(null);
   // Clone confirmation state — simple confirm-only modal. The recruiter
   // invites V2 candidates manually via the normal invite flow.
   const [cloneTargetAssessment, setCloneTargetAssessment] = useState<any | null>(null);
@@ -1366,8 +1388,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      completed_at/attempt_id check covers both. Every other status — In
      Progress, System Check, Expired, Invited, Terminated, ... — stays on the
      tracking popup: there is no result to show, so the row doesn't navigate. */
-  const isTrackedInviteCompleted = (invitation: any): boolean =>
-    (invitation.status === 'completed' || !!invitation.completed_at) && !!invitation.attempt_id;
 
   const opensTrackedDetails = (invitation: any): boolean =>
     isTrackedInviteCompleted(invitation);
@@ -1391,7 +1411,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      applies. */
   const isInviteExpired = (inv: any): boolean => {
     const s = inv.status;
-    if (['completed', 'failed', 'bounced', 'abandoned', 'expired'].includes(s) || inv.completed_at || inv.bounced_at) return false;
+    if (['completed', 'failed', 'bounced', 'abandoned', 'expired', 'revoked'].includes(s) || inv.completed_at || inv.bounced_at) return false;
     if (inv.unit_consumed) return false;
     return !!(inv.expires_at && new Date(inv.expires_at) < new Date());
   };
@@ -1439,6 +1459,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
     if (s === 'bounced' || inv.bounced_at) {
       return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`}><RefreshCw className="w-3 h-3" /> Bounced</span>;
+    }
+    if (s === 'revoked') {
+      return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`}><Ban className="w-3 h-3" /> Revoked</span>;
     }
     if (s === 'expired') {
       return <span className={`${base} bg-status-expired/10 text-status-expired ring-status-expired/20`}><Clock className="w-3 h-3" /> Expired</span>;
@@ -1516,18 +1539,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      status dropdown and its badges all read this one function, so a card's
      number always matches the rows selecting it produces — including for
      clock-expired invites, which `status` still calls 'sent'. */
-  const inviteStatusBucket = (inv: any): string => {
-    if (isInviteExpired(inv)) return 'expired';
-    if (inv.status === 'completed' || inv.completed_at) return 'completed';
-    if (inv.status === 'failed') return 'failed';
-    if (inv.status === 'bounced' || inv.bounced_at) return 'bounced';
-    if (inv.status === 'expired') return 'expired';
-    if (inv.status === 'abandoned') return 'abandoned';
-    if (inv.status === 'started' || inv.started_at) return 'started';
-    if (inv.status === 'opened' || inv.opened_at) return 'opened';
-    if (inv.status === 'sent' || inv.sent_at) return 'sent';
-    return 'pending';
-  };
 
   /* Bulk Resend on the Invitation Status tab — the popup's control, for the
      rows ticked there. Its own confirm state because the dialog names its own
@@ -1755,10 +1766,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      ('started'), System Check ('opened'), Completed, failed and bounced rows
      get no checkbox — their per-row actions (or lack of one) already say what
      can be done with them. */
-  const isBulkResendable = (inv: any): boolean =>
-    ['sent', 'expired'].includes(inv.status)
-    && !inv.started_at
-    && !inv.completed_at;
   const [trackingSelectedIds, setTrackingSelectedIds] = useState<Set<string>>(new Set());
   const trackingSelectableIds = trackingInvitations.filter(isBulkResendable).map((inv: any) => inv.id);
   const allTrackingSelected =
@@ -3131,8 +3138,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     setShowTrackInvitesModal(true);
   };
 
-  const isValidInviteEmail = (email: string) =>
-    /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 
   // Preview the new expiry the backend will produce. Mirrors backend logic:
   // reuses the original invitation's configured duration, measured from the LAST
@@ -3303,6 +3308,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       toast.error(msg);
     } finally {
       setIsSendingChangeEmail(false);
+    }
+  };
+
+  /** Which invitation an invite-management action targets, and which list to
+   *  refetch afterwards — same rule handleResendInvitation and
+   *  handleUpdateEmail already follow, shared here for Revoke and Edit. */
+  const getInviteAssessmentId = (invitation: any): string | undefined =>
+    invitation?._assessment_id || invitation?.assessment_id || selectedAssessmentForTracking?.id;
+
+  const refreshInviteLists = async (invitation: any) => {
+    if (invitation?._assessment_id) {
+      await loadAllInviteStatuses();
+    } else if (selectedAssessmentForTracking) {
+      await Promise.all([
+        loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters),
+        loadTrackingInvitationSummary(selectedAssessmentForTracking),
+      ]);
     }
   };
 
@@ -6223,6 +6245,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                           </div>
                                         )}
                                       </div>
+                                      <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(inv)} />
                                     </td>
                                     {renderInviteScoreCell(inv, 'technical')}
                                     {renderInviteScoreCell(inv, 'coding')}
@@ -6243,75 +6266,52 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         const hasResult = inviteHasResult(inv);
                                         const scored = inv.scoring_status !== 'pending' && inv.scoring_status !== 'processing';
                                         const canDownload = hasResult && scored && canDownloadInviteReport;
-                                        /* Resend is offered on Expired rows and
-                                           only those. `isInviteResendable` is
-                                           the one definition of that — the bulk
-                                           Resend button and its confirmation
-                                           read the same helper, so a row cannot
-                                           offer an action the bulk path would
-                                           skip, or the reverse. */
-                                        const canResend = isInviteResendable(inv);
-                                        // No trigger at all rather than a menu that
-                                        // opens onto nothing — the popup's rule.
-                                        if (!hasResult && !canResend) return null;
-                                        return (
-                                          <DropdownMenu>
-                                            <DropdownMenuTrigger asChild>
-                                              <button
-                                                aria-label="Actions"
-                                                title="Actions"
-                                                className="p-1.5 text-gray-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 rounded transition-colors"
+                                        // Edit Email/Change Email (the pre-existing
+                                        // failed/bounced "fix the address" flow)
+                                        // isn't wired on this tab — it never had
+                                        // that inline editor UI, only Resend. The
+                                        // new Edit (revoked)/Revoke/Copy Link are
+                                        // added here alongside it.
+                                        const actions = buildInvitationRowActions(inv, {
+                                          onResend: (target) => setResendTargetInvitation(target),
+                                          resendingId: isResending ? resendTargetInvitation?.id : null,
+                                          onEdit: (target) => setEditInviteTarget(target),
+                                          onRevoke: (target) => setRevokeInviteTarget(target),
+                                          revokingId: revokeInviteTarget?.id,
+                                        });
+                                        const extraItems = (
+                                          <>
+                                            {hasResult && (
+                                              <DropdownMenuItem
+                                                className={assessmentDropdownMenuItemClass}
+                                                onSelect={() => openInviteResult(inv)}
                                               >
-                                                <MoreVertical className="w-4 h-4" />
-                                              </button>
-                                            </DropdownMenuTrigger>
-                                            <DropdownMenuContent align="end" className="w-48">
-                                              {hasResult && (
-                                                <DropdownMenuItem
-                                                  className={assessmentDropdownMenuItemClass}
-                                                  onSelect={() => openInviteResult(inv)}
-                                                >
-                                                  <Eye className="w-3.5 h-3.5 text-menu-icon-view" />
-                                                  <span className={MENU_ITEM_SCALE_CLASS}>View Result</span>
-                                                </DropdownMenuItem>
-                                              )}
-                                              {/* Resend — the popup's item, opening
-                                                  the same page-level confirmation
-                                                  (new-link expiry preview and all)
-                                                  through the same state. The work is
-                                                  handleResendInvitation's; nothing
-                                                  about it is reimplemented here. */}
-                                              {canResend && (
-                                                <DropdownMenuItem
-                                                  className={assessmentDropdownMenuItemClass}
-                                                  onSelect={() => setResendTargetInvitation(inv)}
-                                                >
-                                                  <Mail className="w-3.5 h-3.5 text-menu-icon-share" />
-                                                  <span className={MENU_ITEM_SCALE_CLASS}>Resend</span>
-                                                </DropdownMenuItem>
-                                              )}
-                                              {/* Disabled rather than hidden while
-                                                  scoring runs: the action exists for
-                                                  this row, it is just not ready yet,
-                                                  and hiding it would read as "this
-                                                  row has no report". */}
-                                              {hasResult && canDownloadInviteReport && (
-                                                <DropdownMenuItem
-                                                  className={assessmentDropdownMenuItemClass}
-                                                  disabled={!canDownload || downloadingInviteReportId === inv.id}
-                                                  onSelect={() => downloadInviteReport(inv)}
-                                                >
-                                                  {downloadingInviteReportId === inv.id
-                                                    ? <Loader2 className="w-3.5 h-3.5 text-menu-icon-download animate-spin" />
-                                                    : <Download className="w-3.5 h-3.5 text-menu-icon-download" />}
-                                                  <span className={MENU_ITEM_SCALE_CLASS}>
-                                                    {downloadingInviteReportId === inv.id ? 'Preparing…' : 'Download Report'}
-                                                  </span>
-                                                </DropdownMenuItem>
-                                              )}
-                                            </DropdownMenuContent>
-                                          </DropdownMenu>
+                                                <Eye className="w-3.5 h-3.5 text-menu-icon-view" />
+                                                <span className={MENU_ITEM_SCALE_CLASS}>View Result</span>
+                                              </DropdownMenuItem>
+                                            )}
+                                            {/* Disabled rather than hidden while
+                                                scoring runs: the action exists for
+                                                this row, it is just not ready yet,
+                                                and hiding it would read as "this
+                                                row has no report". */}
+                                            {hasResult && canDownloadInviteReport && (
+                                              <DropdownMenuItem
+                                                className={assessmentDropdownMenuItemClass}
+                                                disabled={!canDownload || downloadingInviteReportId === inv.id}
+                                                onSelect={() => downloadInviteReport(inv)}
+                                              >
+                                                {downloadingInviteReportId === inv.id
+                                                  ? <Loader2 className="w-3.5 h-3.5 text-menu-icon-download animate-spin" />
+                                                  : <Download className="w-3.5 h-3.5 text-menu-icon-download" />}
+                                                <span className={MENU_ITEM_SCALE_CLASS}>
+                                                  {downloadingInviteReportId === inv.id ? 'Preparing…' : 'Download Report'}
+                                                </span>
+                                              </DropdownMenuItem>
+                                            )}
+                                          </>
                                         );
+                                        return <InvitationActionsMenu actions={actions} extraItems={extraItems} className="w-48" />;
                                       })()}
                                     </td>
                                   </tr>
@@ -8083,6 +8083,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   </div>
                                 )}
                               </div>
+                              <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(invitation)} />
                             </td>
                             {/* Tech Score / Coding Score columns. Same pattern
                                 as the Results page: percent number on top, small
@@ -8188,72 +8189,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     </button>
                                   </div>
                                 </div>
-                              ) : (() => {
-                                const isCompleted = invitation.status === 'completed' || !!invitation.completed_at;
-                                const isBounced = invitation.status === 'bounced';
-                                // Action rules by status: Invited/Expired → Resend only;
-                                // System Check ('opened') and In Progress → no menu at all;
-                                // Completed → View Results only. Edit Email survives only
-                                // where fixing the address is the point — a failed invite
-                                // (mistyped address) or a bounce.
-                                const canResend = ['sent', 'failed', 'expired'].includes(invitation.status)
-                                  && !invitation.started_at
-                                  && !invitation.completed_at;
-                                const canEditEmail = invitation.status === 'failed'
-                                  && !invitation.started_at
-                                  && !invitation.completed_at;
-
-                                // Nothing actionable — render no trigger rather than an
-                                // empty menu the user can open onto nothing.
-                                if (!isCompleted && !isBounced && !canResend) return null;
-
-                                return (
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <button
-                                        aria-label="Actions"
-                                        title="Actions"
-                                        className="p-1.5 text-gray-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 rounded transition-colors"
-                                      >
-                                        <MoreVertical className="w-4 h-4" />
-                                      </button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent align="end" className="w-44">
-                                      {isCompleted && (
-                                        // Completed-but-no-attempt is a rare orphaned
-                                        // invitation: disabled, so we never silently drop
-                                        // the user on the aggregate results page.
-                                        <DropdownMenuItem
-                                          className={assessmentDropdownMenuItemClass}
-                                          disabled={!invitation.attempt_id}
-                                          onSelect={() => openTrackedInviteResult(invitation)}
-                                        >
-                                          <Eye className="w-3.5 h-3.5 text-menu-icon-view" />
-                                          <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
-                                        </DropdownMenuItem>
-                                      )}
-                                      {canResend && (
-                                        <DropdownMenuItem className={assessmentDropdownMenuItemClass} onSelect={() => setResendTargetInvitation(invitation)}>
-                                          <Mail className="w-3.5 h-3.5 text-menu-icon-share" />
-                                          <span className={MENU_ITEM_SCALE_CLASS}>Resend</span>
-                                        </DropdownMenuItem>
-                                      )}
-                                      {(isBounced || canEditEmail) && (
-                                        <DropdownMenuItem
-                                          className={assessmentDropdownMenuItemClass}
-                                          onSelect={() => {
-                                            setEditingEmailId(invitation.id);
-                                            setNewEmailValue(invitation.candidate_email);
-                                          }}
-                                        >
-                                          <Pencil className="w-3.5 h-3.5 text-menu-icon-edit" />
-                                          <span className={MENU_ITEM_SCALE_CLASS}>{isBounced ? 'Change Email' : 'Edit Email'}</span>
-                                        </DropdownMenuItem>
-                                      )}
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                );
-                              })()}
+                              ) : (
+                                <InvitationActionsMenu
+                                  actions={buildInvitationRowActions(invitation, {
+                                    onResend: (target) => setResendTargetInvitation(target),
+                                    resendingId: isResending ? resendTargetInvitation?.id : null,
+                                    onEditEmail: (target) => { setEditingEmailId(target.id); setNewEmailValue(target.candidate_email); },
+                                    onEdit: (target) => setEditInviteTarget(target),
+                                    onRevoke: (target) => setRevokeInviteTarget(target),
+                                    revokingId: revokeInviteTarget?.id,
+                                    onViewResult: openTrackedInviteResult,
+                                  })}
+                                />
+                              )}
                             </td>
                           </tr>
                         );
@@ -8343,6 +8291,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           );
         })()}
       </ConfirmationDialog>
+
+      {/* Revoke / Edit ("Save & Send") / full-history — shared by the Track
+          Invites popup and the Invitation Status tab (see
+          getInviteAssessmentId / refreshInviteLists above). */}
+      <RevokeInvitationDialog
+        target={revokeInviteTarget}
+        onClose={() => setRevokeInviteTarget(null)}
+        getAssessmentId={getInviteAssessmentId}
+        onRevoked={() => refreshInviteLists(revokeInviteTarget)}
+      />
+      <EditInvitationModal
+        target={editInviteTarget}
+        onClose={() => setEditInviteTarget(null)}
+        getAssessmentId={getInviteAssessmentId}
+        onSaved={() => refreshInviteLists(editInviteTarget)}
+      />
+      <InvitationHistoryDialog
+        target={historyInviteTarget}
+        onClose={() => setHistoryInviteTarget(null)}
+        getAssessmentId={getInviteAssessmentId}
+      />
 
       {/* Bulk resend confirmation for the Invitation Status tab — the same
           ConfirmationDialog, wording and warning tone as the popup's below,

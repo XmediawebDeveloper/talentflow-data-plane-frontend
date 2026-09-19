@@ -95,6 +95,10 @@ function AssessmentDetailsContent() {
   const fetchAssessment = async () => {
     try {
       setIsLoading(true);
+      /* Cleared per attempt, so a failure that is then retried - or switched
+         away from - does not leave the error screen standing over a record
+         that loaded perfectly well. */
+      setError(null);
       const response = await assessmentService.get(assessmentId);
 
       if (response) {
@@ -255,7 +259,27 @@ function AssessmentDetailsContent() {
   const redirectingToDraft =
     !isLoading && !!assessment && assessment.status === 'Draft' && !!assessment.jd_id;
 
-  if (isLoading || redirectingToDraft) {
+  /* THE FULL-PAGE LOADER IS FOR THE FIRST LOAD ONLY.
+   *
+   * `tf-loader-page` is a 60dvh flex box holding a spinner, so returning it
+   * while an assessment is already on screen TORE THE PAGE DOWN: the details
+   * view unmounted, the document collapsed to two-thirds of a viewport, the
+   * scrollbar vanished and came back, and every piece of state the view holds
+   * - the open tab, the loaded job lineage, the scroll position - was reset
+   * and rebuilt. That is the shake seen when switching job version, and it
+   * happened on every switch because a new assessment id refetches here.
+   *
+   * With a record already rendered the view STAYS MOUNTED and keeps showing
+   * it while the next one loads; the switch is reported where it happens -
+   * the spinner on the version row being opened - rather than by blanking
+   * everything. Only an arrival with nothing to show yet gets the full-page
+   * loader, which is the case it was written for.
+   *
+   * `redirectingToDraft` still takes it, mounted or not: that is a route
+   * change about to happen, not a version switch, and the page it is leaving
+   * must not sit there looking interactive.
+   */
+  if ((isLoading && !assessment) || redirectingToDraft) {
     return <DetailPageSkeleton />;
   }
 
@@ -289,6 +313,10 @@ function AssessmentDetailsContent() {
       <>
         <AssessmentDetailsView
           assessment={assessment}
+          /* A record is on screen and another is on its way - the version
+             switch. The view marks itself busy for assistive tech; the
+             visible reporting is the per-row spinner in the version menu. */
+          isReloading={isLoading}
           onBack={handleBack}
           onEdit={() => (assessment.jd_id ? setShowConfigureModal(true) : setShowEditModal(true))}
           onPreview={() => setShowPreviewModal(true)}
@@ -304,6 +332,10 @@ function AssessmentDetailsContent() {
             ? () => router.replace(`/recruitment/assessments/${allAssessmentIds[allAssessmentIds.indexOf(assessmentId) + 1]}`)
             : undefined}
           breadcrumbItems={breadcrumbItems}
+          /* This route does not carry a Version History tab. The assessment's
+             own versions are still reachable here through the version badge in
+             the header; the vertical nav no longer repeats them. */
+          showVersionHistory={false}
         />
 
         {/* Modals */}
