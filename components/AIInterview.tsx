@@ -1,7 +1,6 @@
 'use client';
 
-import { Video, Calendar, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, MessageSquare, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, GitBranch, Activity, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronRight, ChevronDown, Search, ArrowUpDown, Plus, Sparkles, ClipboardList, Mic, Ban, XCircle, Check, Info, RefreshCw } from 'lucide-react';
-import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
+import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, GitBranch, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, Sparkles, ClipboardList, Ban, Check, Info, RefreshCw, Layers, Radar } from 'lucide-react';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef, useCallback, useMemo, type ComponentType } from 'react';
 import { createPortal } from 'react-dom';
@@ -28,6 +27,8 @@ import { formatIST } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import ListPagination from '@/components/ListPagination';
+import ListToolbar from '@/components/ui/list-toolbar';
+import ListCountBadge from '@/components/ui/list-count-badge';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
@@ -39,6 +40,7 @@ import AssessmentVersionHistoryPanel, {
 } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
+import AllInterviewsTable from '@/components/ai-interview/AllInterviewsTable';
 
 /* The version panel's Actions column icon buttons, matched to the Assessment
    page's own (`QUICK_ACTION_BASE` / `QUICK_ACTION_DISABLED` in Assessments.tsx):
@@ -78,9 +80,22 @@ const ROUND_LABELS: Record<string, string> = {
   nice_to_have_skills: 'Nice-to-Have Skills',
 };
 
-type TabKey = 'all' | 'published' | 'draft' | 'completed' | 'archived' | 'candidate-results' | 'processing' | 'audit' | 'consent' | 'settings';
-type OverviewCardKey = 'total' | 'active' | 'invited' | 'score';
+/* Short forms for the version panel's Mode cell pills. */
+const ROUND_SHORT_LABELS: Record<string, string> = {
+  hr: 'HR',
+  technical: 'TECH',
+  behavioral: 'BEH',
+  culture_fit: 'CF',
+  leadership: 'LEAD',
+  problem_solving: 'PS',
+  must_have_skills: 'MHS',
+  nice_to_have_skills: 'NHS',
+};
+
+type TabKey = 'all' | 'all-interviews' | 'published' | 'draft' | 'completed' | 'archived' | 'candidate-results' | 'processing' | 'audit' | 'consent' | 'settings';
+type OverviewCardKey = 'jobs' | 'interviews' | 'active' | 'draft' | 'interviewed';
 const CONFIG_PAGE_SIZE = 10;
+const AI_FILTER_FIELD_CLASS = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40';
 const PROCESSING_PAGE_SIZE = 10;
 const INVITATION_PAGE_SIZE = 10;
 const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
@@ -142,6 +157,10 @@ export default function AIInterview() {
   const aiFiltersActive =
     searchQuery !== '' || modeFilter !== 'all' || creatorFilter !== 'all' ||
     dateFilter !== 'all' || invitedOnly;
+
+  const [showAIFilters, setShowAIFilters] = useState(false);
+  const aiFilterCount =
+    (modeFilter !== 'all' ? 1 : 0) + (creatorFilter !== 'all' ? 1 : 0) + (dateFilter !== 'all' ? 1 : 0);
 
   const clearAIInterviewFilters = () => {
     setSearchQuery('');
@@ -1191,6 +1210,49 @@ export default function AIInterview() {
     return [...byLineage.values()];
   })();
 
+  /* ── Job List row figures (the Assessments Total Jobs row, for interviews) ──
+     Bucketed by the same lineage key the list collapses by, and summed over
+     `filteredConfigs` so a row's figures describe what the tab and filters
+     currently select. */
+  const configLineageKeyOf = (c: AIInterviewResponse) =>
+    c.jd_short_id || c.jd_id || `__unlinked__:${c.id}`;
+  const jobRowTotals = new Map<string, { interviews: number; active: number; invitations: number }>();
+  for (const config of filteredConfigs) {
+    const key = configLineageKeyOf(config);
+    const entry = jobRowTotals.get(key) ?? { interviews: 0, active: 0, invitations: 0 };
+    entry.interviews += 1;
+    if (normalizeConfigStatus(config.status) === 'published') entry.active += 1;
+    entry.invitations += config.invitations_count ?? 0;
+    jobRowTotals.set(key, entry);
+  }
+  /** Job versions: the fetched lineage once loaded, else the newest known version. */
+  const getJobVersionCount = (config: AIInterviewResponse) => {
+    const fetched = config.jd_id ? jdLineage.lineages[config.jd_id] : undefined;
+    if (fetched?.length) return fetched.length;
+    const key = configLineageKeyOf(config);
+    return Math.max(
+      1,
+      ...[...configs, ...archivedConfigs]
+        .filter((c) => configLineageKeyOf(c) === key)
+        .map((c) => c.jd_version ?? 1),
+    );
+  };
+  /** The job's most-invited interview — what the row's Track opens. */
+  const getJobTrackTarget = (config: AIInterviewResponse) => {
+    const key = configLineageKeyOf(config);
+    let best: AIInterviewResponse | null = null;
+    for (const c of [...configs, ...archivedConfigs]) {
+      if (configLineageKeyOf(c) !== key) continue;
+      if (!best || (c.invitations_count ?? 0) > (best.invitations_count ?? 0)) best = c;
+    }
+    return best;
+  };
+
+  /** Every job this tenant has an interview for, before tab and filters. */
+  const allJobsCount = new Set(
+    [...configs, ...archivedConfigs].map((c) => c.jd_short_id || c.jd_id || `__unlinked__:${c.id}`),
+  ).size;
+
   const configTotalPages = Math.max(1, Math.ceil(collapsedConfigs.length / configListItemsPerPage));
   const paginatedConfigs = collapsedConfigs.slice(
     (configListPage - 1) * configListItemsPerPage,
@@ -1274,7 +1336,8 @@ export default function AIInterview() {
     childPlural: 'Interviews',
     childVersionsHeading: 'Interview Versions',
     childNone: 'No interview',
-    detailColumn: { label: 'Rounds', minW: 'min-w-[170px]' },
+    detailColumn: { label: 'Mode', minW: 'min-w-[130px]' },
+    extraDetailColumn: { label: 'Rounds', minW: 'min-w-[170px]' },
     statusLabel: (status?: string) => getStatusLabel(String(status ?? '')),
   };
 
@@ -1418,6 +1481,20 @@ export default function AIInterview() {
                 <Eye className="w-4 h-4 flex-shrink-0 text-menu-icon-view" />
                 <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
               </button>
+              {/* Continue Editing — moved here from the job row, which now
+                  reports the job as a whole, as the Assessments Job List does. */}
+              {config.status === 'draft' && config.jd_id && canUpdateAIInterviews && (
+                <button
+                  onClick={() => {
+                    setOpenMenuId(null);
+                    router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`);
+                  }}
+                  className={VERSION_MENU_ITEM_CLASS}
+                >
+                  <Pencil className="w-4 h-4 flex-shrink-0 text-menu-icon-edit" />
+                  <span className={MENU_ITEM_SCALE_CLASS}>Continue Editing</span>
+                </button>
+              )}
               {isPublished && canInviteAIInterviews && (
                 <button
                   onClick={() => { setShareConfig(config); setOpenMenuId(null); }}
@@ -1596,10 +1673,10 @@ export default function AIInterview() {
                 <span className="text-[10px] text-gray-400 dark:text-slate-500 font-medium uppercase tracking-wider">Platform</span>
               </div>
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight break-words">
-                AI Interview Platform
+                AI Interview Management
               </h1>
               <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 max-w-xl">
-                Configure, launch, and analyze AI-powered interviews. Multi-round evaluations with real-time scoring and proctoring.
+                Run live AI-powered interviews where candidates answer in real time
               </p>
             </div>
           </div>
@@ -1648,92 +1725,81 @@ export default function AIInterview() {
         </div>
 
         {/* Stats Cards — clicking a card drills into the list with the matching tab applied */}
-        <StatsCardGrid className="mb-5 sm:mb-8">
-          {[
+        {(() => {
+          // Every config, active + archived, deduped by id — the same set the
+          // Total Jobs tab and the All Interviews table are built from.
+          const allConfigs = (() => {
+            const seen = new Set(configs.map((c) => c.id));
+            return [...configs, ...archivedConfigs.filter((a) => !seen.has(a.id))];
+          })();
+          // A job is a lineage (`jd_short_id`), exactly as the Total Jobs tab
+          // collapses its cards, so the card and the tab never disagree.
+          const totalJobs = new Set(
+            allConfigs.map((c) => c.jd_short_id || c.jd_id || `__unlinked__:${c.id}`),
+          ).size;
+          const cards = [
             {
-              label: 'Total Configs',
-              value: stats?.total_configs ?? 0,
-              icon: FileText,
-              tone: 'slate',
-              hint: 'All interview templates',
+              label: 'Total Jobs',
+              value: allConfigs.length ? totalJobs : (stats?.total_configs ?? 0),
+              icon: Briefcase,
               tab: 'all' as TabKey,
-              cardKey: 'total' as OverviewCardKey,
+              cardKey: 'jobs' as OverviewCardKey,
             },
             {
-              label: 'Active',
+              label: 'Total Interviews',
+              value: allConfigs.length || (stats?.total_configs ?? 0),
+              icon: FileText,
+              tab: 'all-interviews' as TabKey,
+              cardKey: 'interviews' as OverviewCardKey,
+            },
+            {
+              label: 'Active Interviews',
               // Count Active the SAME way the Active tab does — candidate-flow
-              // statuses (in_progress/scheduled/…) are still published & live
-              // configs (see normalizeConfigStatus), so the stat card and the
-              // tab never disagree and Total = Active + Draft + Archived
-              // reconciles. Fall back to the backend stat only before the
-              // config list has loaded.
+              // statuses (in_progress/scheduled/…) are still published configs
+              // (see normalizeConfigStatus). Fall back to the backend stat only
+              // before the config list has loaded.
               value: configs.length
                 ? configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length
                 : (stats?.published_configs ?? 0),
               icon: Globe,
-              tone: 'emerald',
-              hint: 'Published & live',
-              trend: 'up' as const,
               tab: 'published' as TabKey,
               cardKey: 'active' as OverviewCardKey,
             },
             {
-              label: 'Invite Shared Configs',
-              // Count CONFIGS that have at least one invitation shared (not the
-              // number of candidates). Spans active + archived, deduped by id,
-              // so it matches the list shown when this card is clicked
-              // (tab 'all' + invitedOnly filter).
-              value: (() => {
-                const seen = new Set<string>();
-                let n = 0;
-                for (const c of [...configs, ...archivedConfigs]) {
-                  if (seen.has(c.id)) continue;
-                  seen.add(c.id);
-                  if ((c.invitations_count ?? 0) > 0) n++;
-                }
-                return n;
-              })(),
-              icon: Send,
-              tone: 'blue',
-              hint: 'Configs with invites shared',
-              trend: 'up' as const,
-              tab: 'all' as TabKey,
-              invitedOnly: true,
-              cardKey: 'invited' as OverviewCardKey,
+              label: 'Draft Interviews',
+              value: configs.length
+                ? configs.filter((c) => c.status === 'draft').length
+                : (stats?.draft_configs ?? 0),
+              icon: Pencil,
+              tab: 'draft' as TabKey,
+              cardKey: 'draft' as OverviewCardKey,
             },
             {
-              label: 'Avg. Score',
-              value: stats?.average_score != null ? `${stats.average_score}%` : '—',
-              icon: TrendingUp,
-              tone: 'amber',
-              hint: 'Weighted across rounds',
-              tab: 'all' as TabKey,
-              cardKey: 'score' as OverviewCardKey,
+              label: 'Candidates Interviewed',
+              value: stats?.completed ?? 0,
+              icon: Users,
+              tab: 'candidate-results' as TabKey,
+              cardKey: 'interviewed' as OverviewCardKey,
             },
-          ].map(({ label, value, icon: Icon, hint, trend, tab, invitedOnly: cardInvitedOnly, cardKey }) => {
-            return (
-              <StatsCard
-                key={label}
-                tone="neutral"
-                active={isOverviewCardActive(cardKey)}
-                showClickArrow
-                icon={Icon}
-                label={label}
-                value={value}
-                sparkline={false}
-                onClick={() => openListView(tab, { invitedOnly: !!cardInvitedOnly, cardKey })}
-              >
-                {trend === 'up' && (
-                  <div className="mt-1.5">
-                    <span className="inline-flex items-center gap-1 rounded-md bg-brand-blue/10 px-1.5 py-0.5 text-[10px] font-semibold text-brand-blue ring-1 ring-brand-blue/20">
-                      Live
-                    </span>
-                  </div>
-                )}
-              </StatsCard>
-            );
-          })}
-        </StatsCardGrid>
+          ];
+          return (
+            <StatsCardGrid className="mb-5 sm:mb-8" columns={5}>
+              {cards.map(({ label, value, icon: Icon, tab, cardKey }) => (
+                <StatsCard
+                  key={label}
+                  tone="neutral"
+                  active={isOverviewCardActive(cardKey)}
+                  showClickArrow
+                  icon={Icon}
+                  label={label}
+                  value={value}
+                  sparkline={false}
+                  onClick={() => openListView(tab, { cardKey })}
+                />
+              ))}
+            </StatsCardGrid>
+          );
+        })()}
 
         {pageView === 'list' && (
         <>
@@ -1754,189 +1820,206 @@ export default function AIInterview() {
         </div>
         )}
 
-        {/* Main Content */}
-        <div className="bg-white dark:bg-slate-900 rounded-xl sm:rounded-2xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-          {/* Tabs */}
-          {/* The white→slate gradient is a light-mode lift only; in dark mode it
-              sat as a pale strip above the card. */}
-          <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 bg-gradient-to-b from-white to-slate-50/40 dark:bg-none dark:bg-slate-900">
-            <div className="flex gap-1 sm:gap-2 overflow-x-auto scrollbar-hide -mb-px">
-              {[
-                { key: 'all', label: 'All AI Interviews', count: configs.length + archivedConfigs.length },
-                { key: 'published', label: 'Active', count: configs.filter((c) => normalizeConfigStatus(c.status) === 'published').length },
-                { key: 'draft', label: 'Draft', count: configs.filter((c) => c.status === 'draft').length },
-                // { key: 'completed', label: 'Completed' },
-                { key: 'archived', label: 'Archived', count: stats?.archived_configs ?? archivedConfigs.length },
-                // { key: 'processing', label: 'Processing' },
-                // Candidate sessions across every interview — the Assessments
-                // page's tab of the same name, for AI interviews.
-                { key: 'candidate-results', label: 'Candidate Results' },
-                { key: 'audit', label: 'Activity Logs' },
-                { key: 'settings', label: 'Settings' },
-              ].map(tab => {
-                const isActive = activeTab === tab.key;
-                return (
-                  <button
-                    key={tab.key}
-                    onClick={() => setActiveTab(tab.key as TabKey)}
-                    className={`relative inline-flex items-center gap-1.5 sm:gap-2 py-3 sm:py-3.5 px-2.5 sm:px-3 min-h-[44px] text-xs sm:text-sm border-b-2 transition-all duration-200 whitespace-nowrap ${
-                      isActive
-                        ? 'border-brand-blue text-brand-blue font-medium'
-                        : 'border-transparent text-gray-600 dark:text-slate-400 hover:text-brand-blue font-medium'
-                    }`}
-                  >
-                    {tab.label}
-                    {typeof tab.count === 'number' && (
-                      <span className={`inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-[10px] font-semibold tabular-nums transition-colors ${
-                        isActive
-                          ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
-                          : 'bg-slate-100 text-gray-600 dark:text-slate-400 group-hover:bg-slate-200'
-                      }`}>
-                        {tab.count}
-                      </span>
+        {/* Search + filters, ABOVE the tabs — the Assessments page's order.
+            Only on the tabs that list interview configs; the others bring
+            their own controls. */}
+        {isConfigListTab && (
+          <div className="mb-4">
+            <ListToolbar
+              searchValue={searchQuery}
+              searchDebounceMs={0}
+              onSearchChange={setSearchQuery}
+              searchPlaceholder="Search by job title, ID or skill..."
+              onToggleFilters={() => setShowAIFilters((open) => !open)}
+              filtersOpen={showAIFilters}
+              activeFilterCount={aiFilterCount}
+              filtersApplied={aiFiltersActive}
+              onClearFilters={clearAIInterviewFilters}
+              className="mb-0"
+              countBadge={
+                <ListCountBadge
+                  filtered={collapsedConfigs.length}
+                  total={allJobsCount}
+                  noun="job"
+                />
+              }
+              filterPanel={
+                <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/30 p-3 sm:p-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                    <div>
+                      <label htmlFor="ai-interview-mode" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                        Mode
+                      </label>
+                      <select
+                        id="ai-interview-mode"
+                        value={modeFilter}
+                        onChange={(e) => setModeFilter(e.target.value as typeof modeFilter)}
+                        className={AI_FILTER_FIELD_CLASS}
+                      >
+                        <option value="all">All modes</option>
+                        <option value="timed">Timed</option>
+                        <option value="conversational">Conversational</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="ai-interview-creator" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                        Created by
+                      </label>
+                      <select
+                        id="ai-interview-creator"
+                        value={creatorFilter}
+                        onChange={(e) => setCreatorFilter(e.target.value)}
+                        className={AI_FILTER_FIELD_CLASS}
+                      >
+                        <option value="all">Anyone</option>
+                        {creatorOptions.map((name) => (
+                          <option key={name} value={name}>{name}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="ai-interview-date" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                        Created
+                      </label>
+                      <select
+                        id="ai-interview-date"
+                        value={dateFilter}
+                        onChange={(e) => setDateFilter(e.target.value as DateFilterKey)}
+                        className={AI_FILTER_FIELD_CLASS}
+                      >
+                        <option value="all">Any date</option>
+                        <option value="today">Today</option>
+                        <option value="yesterday">Yesterday</option>
+                        <option value="last_week">Last week</option>
+                        <option value="last_month">Last month</option>
+                        <option value="custom">Custom range…</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label htmlFor="ai-interview-sort" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                        Sort by
+                      </label>
+                      <select
+                        id="ai-interview-sort"
+                        value={sortBy}
+                        onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
+                        className={AI_FILTER_FIELD_CLASS}
+                      >
+                        <option value="newest">Newest</option>
+                        <option value="oldest">Oldest</option>
+                        <option value="active">Active first</option>
+                        <option value="draft">Draft first</option>
+                      </select>
+                    </div>
+                    {dateFilter === 'custom' && (
+                      <>
+                        <div>
+                          <label htmlFor="ai-interview-created-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                            Created from
+                          </label>
+                          <input
+                            id="ai-interview-created-from"
+                            type="date"
+                            value={customDateFrom}
+                            max={customDateTo || undefined}
+                            onChange={(e) => setCustomDateFrom(e.target.value)}
+                            className={`${AI_FILTER_FIELD_CLASS} dark:[color-scheme:dark]`}
+                          />
+                        </div>
+                        <div>
+                          <label htmlFor="ai-interview-created-to" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                            Created to
+                          </label>
+                          <input
+                            id="ai-interview-created-to"
+                            type="date"
+                            value={customDateTo}
+                            min={customDateFrom || undefined}
+                            onChange={(e) => setCustomDateTo(e.target.value)}
+                            className={`${AI_FILTER_FIELD_CLASS} dark:[color-scheme:dark]`}
+                          />
+                        </div>
+                      </>
                     )}
-                  </button>
-                );
-              })}
-            </div>
+                  </div>
+                  <div className="mt-4 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex items-center justify-end gap-2">
+                    <button
+                      onClick={() => setShowAIFilters(false)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
+                    >
+                      Done
+                    </button>
+                  </div>
+                </div>
+              }
+            />
           </div>
+        )}
+
+        {/* Tabs — outside the list card, in the Assessments page's pill row. */}
+        <div className="flex items-center gap-2 flex-wrap mb-3">
+          <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
+          {([
+            { key: 'all', label: 'Total Jobs' },
+            { key: 'all-interviews', label: 'All Interviews' },
+            { key: 'published', label: 'Active' },
+            { key: 'draft', label: 'Draft' },
+            { key: 'archived', label: 'Archived' },
+            // Candidate sessions across every interview — the Assessments
+            // page's tab of the same name, for AI interviews.
+            { key: 'candidate-results', label: 'Candidate Results' },
+          ] as const).map(tab => {
+            const isActive = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key as TabKey)}
+                aria-current={isActive ? 'page' : undefined}
+                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all whitespace-nowrap ${
+                  isActive
+                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                    : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
+                }`}
+              >
+                {tab.label}
+              </button>
+            );
+          })}
+          <div className="flex items-center gap-2 flex-wrap sm:ml-2 sm:border-l sm:border-gray-200 dark:sm:border-slate-700/60 sm:pl-3">
+            {([
+              { key: 'audit', label: 'Activity Logs' },
+              { key: 'settings', label: 'Settings' },
+            ] as const).map(tab => {
+              const isActive = activeTab === tab.key;
+              return (
+                <button
+                  key={tab.key}
+                  onClick={() => setActiveTab(tab.key as TabKey)}
+                  aria-current={isActive ? 'page' : undefined}
+                  className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all whitespace-nowrap ${
+                    isActive
+                      ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
+                      : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+          {/* All Interviews — flat, one row per interview config/version,
+              the same shape as the Assessments page's "All Assessments"
+              table, as opposed to the Total Jobs tab's one-card-per-job
+              (collapsed lineage) list below. */}
+          {activeTab === 'all-interviews' && <AllInterviewsTable />}
 
           {/* Config List (for config-listing tabs) */}
           {isConfigListTab && (
             <div className="p-3 sm:p-6">
-              {/* Filters bar: mode pills + search + sort */}
-              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2.5 sm:gap-3 mb-4 sm:mb-5">
-                <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] self-start overflow-x-auto scrollbar-hide max-w-full">
-                  {(['all', 'timed', 'conversational'] as const).map((m) => {
-                    const isActive = modeFilter === m;
-                    const Icon = m === 'timed' ? Clock : m === 'conversational' ? MessageSquare : Activity;
-                    return (
-                      <button
-                        key={m}
-                        onClick={() => setModeFilter(m)}
-                        className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[36px] rounded-lg text-xs font-medium transition-all duration-200 whitespace-nowrap ${
-                          isActive
-                            ? 'bg-white dark:bg-slate-900 text-brand-blue shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20'
-                            : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
-                        }`}
-                      >
-                        <Icon className="w-3.5 h-3.5 flex-shrink-0" />
-                        {m === 'all' ? 'All' : m === 'timed' ? 'Timed' : 'Conversational'}
-                      </button>
-                    );
-                  })}
-                </div>
-                <div className="flex items-center gap-2 flex-1 lg:justify-end min-w-0 flex-wrap lg:flex-nowrap">
-                  <div className="relative flex-1 lg:max-w-xs min-w-0">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500 pointer-events-none" />
-                    <input
-                      type="text"
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      placeholder="Search title, ID, skill…"
-                      className="w-full pl-9 pr-9 py-2 min-h-[40px] text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue placeholder:text-gray-400 transition-colors"
-                    />
-                    {searchQuery && (
-                      <button
-                        onClick={() => setSearchQuery('')}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded-md text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
-                        aria-label="Clear search"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                  {/* Creator filter */}
-                  <div className="relative flex-shrink-0">
-                    <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                    <select
-                      value={creatorFilter}
-                      onChange={(e) => setCreatorFilter(e.target.value)}
-                      className="appearance-none pl-8 pr-7 py-2 min-h-[40px] text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue cursor-pointer text-gray-700 dark:text-slate-300 font-medium transition-colors max-w-[160px]"
-                      aria-label="Filter by creator"
-                    >
-                      <option value="all">All creators</option>
-                      {creatorOptions.map((name) => (
-                        <option key={name} value={name}>{name}</option>
-                      ))}
-                    </select>
-                    <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 rotate-90 pointer-events-none" />
-                  </div>
-                  {/* Date filter */}
-                  <div className="relative flex-shrink-0">
-                    <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                    <select
-                      value={dateFilter}
-                      onChange={(e) => setDateFilter(e.target.value as DateFilterKey)}
-                      className="appearance-none pl-8 pr-7 py-2 min-h-[40px] text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue cursor-pointer text-gray-700 dark:text-slate-300 font-medium transition-colors"
-                      aria-label="Filter by date"
-                    >
-                      <option value="all">Any date</option>
-                      <option value="today">Today</option>
-                      <option value="yesterday">Yesterday</option>
-                      <option value="last_week">Last week</option>
-                      <option value="last_month">Last month</option>
-                      <option value="custom">Custom range…</option>
-                    </select>
-                    <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 rotate-90 pointer-events-none" />
-                  </div>
-                  <div className="relative flex-shrink-0">
-                    <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
-                    <select
-                      value={sortBy}
-                      onChange={(e) => setSortBy(e.target.value as typeof sortBy)}
-                      className="appearance-none pl-8 pr-7 py-2 min-h-[40px] text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue cursor-pointer text-gray-700 dark:text-slate-300 font-medium transition-colors"
-                    >
-                      <option value="newest">Newest</option>
-                      <option value="oldest">Oldest</option>
-                      <option value="active">Active first</option>
-                      <option value="draft">Draft first</option>
-                    </select>
-                    <ChevronRight className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 dark:text-slate-500 rotate-90 pointer-events-none" />
-                  </div>
-                  {/* Clear — same control as job-openings' toolbar Clear */}
-                  {aiFiltersActive && (
-                    <button
-                      onClick={clearAIInterviewFilters}
-                      className="flex-shrink-0 px-3 py-2 min-h-[40px] rounded-lg font-medium transition-all flex items-center gap-1.5 text-sm text-red-600 dark:text-red-300 border border-red-200 dark:border-red-500/25 bg-red-50 dark:bg-red-500/10 hover:bg-red-100 hover:border-red-300 dark:hover:bg-red-500/20"
-                    >
-                      <XCircle className="w-4 h-4" />
-                      Clear
-                    </button>
-                  )}
-                </div>
-              </div>
-              {/* Custom date range inputs — surface only when 'Custom range' is selected */}
-              {dateFilter === 'custom' && (
-                <div className="flex items-center gap-2 mb-4 sm:mb-5 flex-wrap">
-                  <span className="text-xs font-medium text-gray-500 ml-1">From</span>
-                  <input
-                    type="date"
-                    value={customDateFrom}
-                    onChange={(e) => setCustomDateFrom(e.target.value)}
-                    className="px-3 py-2 min-h-[40px] text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-700 dark:text-slate-300 dark:[color-scheme:dark]"
-                    aria-label="Custom range start date"
-                  />
-                  <span className="text-xs font-medium text-gray-500">To</span>
-                  <input
-                    type="date"
-                    value={customDateTo}
-                    onChange={(e) => setCustomDateTo(e.target.value)}
-                    min={customDateFrom || undefined}
-                    className="px-3 py-2 min-h-[40px] text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-700 dark:text-slate-300 dark:[color-scheme:dark]"
-                    aria-label="Custom range end date"
-                  />
-                  {(customDateFrom || customDateTo) && (
-                    <button
-                      onClick={() => { setCustomDateFrom(''); setCustomDateTo(''); }}
-                      className="inline-flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors"
-                    >
-                      <X className="w-3.5 h-3.5" />
-                      Clear dates
-                    </button>
-                  )}
-                </div>
-              )}
               {collapsedConfigs.length === 0 ? (
                 <div className="text-center py-16 sm:py-20">
                   <div className="relative inline-flex items-center justify-center mb-5">
@@ -1982,18 +2065,18 @@ export default function AIInterview() {
                   )}
                 </div>
               ) : (
+                <>
+                {/* Job List header — the Assessments Total Jobs heading: one
+                    row below is one JOB, so the count is jobs, not configs. */}
+                <div className="flex items-center justify-between gap-3 mb-3 sm:mb-4">
+                  <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
+                    Job List{' '}
+                    <span className="font-normal text-gray-500 dark:text-slate-500">({collapsedConfigs.length})</span>
+                  </h2>
+                </div>
                 <div className="space-y-3">
                   {paginatedConfigs.map((config) => {
-                    const enabledRounds = config.rounds_config
-                      ? config.rounds_config.filter((r: any) => r.enabled !== false)
-                      : [];
                     const normalizedStatus = normalizeConfigStatus(config.status);
-                    /* The Assessments Job List row's pill, matched rather than
-                       re-invented: one `ring-1` chip, a `bg-current` dot, and the
-                       same fixed-width box so the metric columns start on the same
-                       line in every row however long the status word is. The pair
-                       this replaced spelled its own colour for the dot, which is
-                       the one thing that row's pill does not do. */
                     const statusPillStyles: Record<string, string> = {
                       published: 'bg-green-100 text-green-700 ring-green-200 dark:bg-green-500/15 dark:text-green-300 dark:ring-green-500/25',
                       draft: 'bg-brand-orange/10 text-brand-orange-deep dark:text-brand-orange ring-brand-orange/20',
@@ -2011,54 +2094,66 @@ export default function AIInterview() {
                     const statusPill = statusPillStyles[normalizedStatus]
                       || 'bg-slate-100 text-gray-700 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700';
                     const statusPillLabel = statusPillLabels[normalizedStatus] || getStatusLabel(config.status);
-                    /* Three columns where the Job List row has four. An interview
-                       config has no completed-sessions figure on the list response
-                       (`AIInterviewResponse` carries `invitations_count` and nothing
-                       that counts finished sessions), and a fourth column filled
-                       with something that is not a total would read as one. */
+                    const totals = jobRowTotals.get(configLineageKeyOf(config))
+                      ?? { interviews: 0, active: 0, invitations: 0 };
+                    /* The Assessments Job List's four figures, in its order and
+                       colours, for interviews. The fourth is Active Interviews
+                       where that row has Completed: an interview config carries
+                       no finished-sessions count on the list response. */
                     const rowMetrics = [
-                      { key: 'rounds', icon: GitBranch, iconClass: 'text-brand-blue', value: enabledRounds.length, label: 'Rounds' },
-                      { key: 'duration', icon: Clock, iconClass: 'text-brand-cyan', value: getInterviewDuration(config.duration_minutes, (config as any).special_instructions), label: 'Duration' },
-                      { key: 'invitations', icon: Send, iconClass: 'text-brand-orange', value: config.invitations_count ?? 0, label: 'Invitations Sent' },
+                      { key: 'job-versions', icon: Layers, iconClass: 'text-brand-blue', value: getJobVersionCount(config), label: 'Job Versions' },
+                      { key: 'interviews', icon: Video, iconClass: 'text-brand-cyan', value: totals.interviews, label: 'Interviews' },
+                      { key: 'invitations', icon: Send, iconClass: 'text-brand-orange', value: totals.invitations, label: 'Invitations Sent' },
+                      { key: 'active', icon: CheckCircle, iconClass: 'text-menu-icon-activate', value: totals.active, label: 'Active Interviews' },
                     ];
+                    const hasVersionHistory = !!config.jd_id;
+                    const toggleVersions = () => {
+                      if (!config.jd_id) return;
+                      const opening = openVersionsFor !== config.id;
+                      setOpenVersionsFor(opening ? config.id : null);
+                      /* Fetched on the way open, never on render — the loader
+                         no-ops on a cache hit. */
+                      if (opening) jdLineage.ensureLoaded(config.jd_id, config.jd_id);
+                    };
+                    /* Track reads the job's invitations. The tracker is per
+                       interview, so it opens on the job's most-invited one. */
+                    const trackTarget = getJobTrackTarget(config);
+                    const jobInvitations = trackTarget?.invitations_count ?? 0;
+                    const canTrack = jobInvitations > 0 && canInviteAIInterviews;
+                    const trackReason = !canInviteAIInterviews
+                      ? 'You do not have permission to track invitations'
+                      : jobInvitations > 0
+                        ? `Track invitations for this job (${totals.invitations} invitation${totals.invitations === 1 ? '' : 's'} sent)`
+                        : 'No invitations have been sent for this job yet';
+                    const hasBeenShared = (config.invitations_count ?? 0) > 0;
+                    const resultReason = hasBeenShared
+                      ? 'View results'
+                      : normalizedStatus === 'draft'
+                        ? 'Publish the interview to view results'
+                        : 'Share the interview to view results';
 
                     return (
                       <div
                         key={config.id}
-                        onClick={() => router.push(`/recruitment/ai-interviews/${config.id}`)}
-                        /* `@container/ai-row` and the `@4xl` breakpoints below are
-                           the Job List row's, and for its reason: the row is
-                           measured against ITSELF rather than the window, so it
-                           takes the stacked layout whenever it is narrow — in a
-                           dialog, in a split pane — not only on a narrow screen.
-                           See the note on `renderJobListRow` in Assessments.tsx. */
-                        className={`@container/ai-row relative p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 cursor-pointer hover:border-brand-blue/30 ${
-                          openMenuId === config.id ? 'z-40' : 'z-0'
+                        /* One row = one JOB, as on the Assessments Job List:
+                           clicking it opens the job's version history in place,
+                           the same thing View Versions does. The interviews
+                           themselves, with their own actions, are listed inside. */
+                        onClick={() => hasVersionHistory && toggleVersions()}
+                        className={`@container/ai-row relative p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 ${
+                          hasVersionHistory
+                            ? 'cursor-pointer hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'
+                            : 'cursor-default'
                         }`}
                       >
                         <div className="flex flex-col gap-3 @4xl/ai-row:flex-row @4xl/ai-row:items-center @4xl/ai-row:gap-4">
                           {/* Identity — icon, Job ID, title */}
                           <div className="flex items-center gap-2.5 min-w-0 @4xl/ai-row:w-[360px] @4xl/ai-row:flex-shrink-0">
                             <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-                              <Video className="h-4 w-4 text-brand-blue" />
+                              <Briefcase className="h-4 w-4 text-brand-blue" />
                             </div>
                             {config.jd_short_id && (
-                              /* The shared house chip, not the hand-rolled solid
-                                 blue span this row used to draw — same identifier,
-                                 one definition, the same one the Assessments row
-                                 carries. */
                               <JobIdBadge className="flex-shrink-0">{config.jd_short_id}</JobIdBadge>
-                            )}
-                            {config.display_id && (
-                              /* The config's OWN id, which the Job List row has no
-                                 equivalent of: one row there is one job, one row
-                                 here is one interview, so this is the row's handle
-                                 and it would be lost with nowhere else to read it.
-                                 Muted to the `vN` chip's weight so the Job ID
-                                 beside it stays the loud one. */
-                              <span className="px-1.5 py-0.5 text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded ring-1 ring-gray-200 dark:ring-slate-700 flex-shrink-0">
-                                {config.display_id}
-                              </span>
                             )}
                             <h3
                               className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate min-w-0"
@@ -2068,8 +2163,8 @@ export default function AIInterview() {
                             </h3>
                           </div>
 
-                          {/* Status — boxed to a fixed width so the metric columns
-                              line up down the list. */}
+                          {/* Status of the job's representative interview —
+                              boxed to a fixed width so the metric columns line up. */}
                           <div className="flex-shrink-0 @4xl/ai-row:w-[104px]">
                             <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ring-1 ${statusPill}`}>
                               <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
@@ -2077,288 +2172,93 @@ export default function AIInterview() {
                             </span>
                           </div>
 
-                          {/* Metrics. Two columns on a phone, three in a divided
-                              row once there is width for them. */}
-                          <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-3 sm:gap-x-0 sm:gap-y-0 @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0">
+                          {/* Totals for the job. Two columns on a phone, four in a
+                              divided row once there is width for them. */}
+                          <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0">
                             {rowMetrics.map(({ key, icon: MetricIcon, iconClass, value, label }) => (
                               <div
                                 key={key}
                                 className="min-w-0 sm:px-3 sm:border-l sm:border-gray-100 dark:sm:border-slate-700/60 sm:first:border-l-0 sm:first:pl-0"
                               >
-                                <div className="flex items-center gap-1.5 min-w-0">
+                                <div className="flex items-center gap-1.5">
                                   <MetricIcon className={`w-4 h-4 flex-shrink-0 ${iconClass}`} />
-                                  <span className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{value}</span>
+                                  <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{value}</span>
                                 </div>
                                 <p className="text-[11px] text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
                               </div>
                             ))}
                           </div>
 
-                          {/* Actions */}
-                          <div className="flex items-center gap-2 flex-shrink-0 self-start @4xl/ai-row:self-auto @4xl/ai-row:ml-auto" onClick={(e) => e.stopPropagation()}>
-                          {/* View Versions — trigger only; the history it opens is
-                              rendered below the row. First in the cluster and
-                              wearing the row's own button shape, which is where
-                              and how the Assessments Job List row carries it.
+                          {/* Actions — View Versions, Track, Result */}
+                          <div
+                            className="flex items-center gap-2 flex-shrink-0 self-start @4xl/ai-row:self-auto @4xl/ai-row:ml-auto"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            {hasVersionHistory && (
+                              <button
+                                type="button"
+                                onClick={(e) => { e.stopPropagation(); toggleVersions(); }}
+                                aria-expanded={openVersionsFor === config.id}
+                                title={openVersionsFor === config.id ? 'Hide version history' : 'View version history'}
+                                className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
+                                  openVersionsFor === config.id
+                                    ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30'
+                                    : 'bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5'
+                                }`}
+                              >
+                                {openVersionsFor === config.id ? 'Hide' : 'View'} Versions
+                                <ChevronDown
+                                  className={`w-3.5 h-3.5 transition-transform ${
+                                    openVersionsFor === config.id ? 'rotate-180' : ''
+                                  }`}
+                                />
+                              </button>
+                            )}
 
-                              Gated on having a job behind the row at all — the
-                              same test `hasVersionHistory` makes on the
-                              Assessments list. A v1 job still has a history worth
-                              opening here, because the panel lists the interviews
-                              authored against that version, not only the versions
-                              themselves. */}
-                          {!!config.jd_id && (
+                            {hasVersionHistory && (
+                              <button
+                                type="button"
+                                disabled={!canTrack}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (!canTrack || !trackTarget) return;
+                                  void handleViewInvitations(trackTarget);
+                                }}
+                                className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
+                                  canTrack
+                                    ? 'bg-white dark:bg-slate-900 text-brand-cyan border-brand-cyan/30 hover:bg-brand-cyan/5'
+                                    : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                                }`}
+                                aria-label={trackReason}
+                                title={trackReason}
+                              >
+                                <Radar className="w-3.5 h-3.5" />
+                                Track
+                              </button>
+                            )}
+
                             <button
                               type="button"
-                              onClick={() => {
-                                const opening = openVersionsFor !== config.id;
-                                setOpenVersionsFor(opening ? config.id : null);
-                                /* Fetched on the way open, never on render — the
-                                   loader no-ops on a cache hit, so reopening a
-                                   row, or opening a sibling row of the same job,
-                                   costs no second request. */
-                                if (opening && config.jd_id) jdLineage.ensureLoaded(config.jd_id, config.jd_id);
-                              }}
-                              aria-expanded={openVersionsFor === config.id}
-                              title={openVersionsFor === config.id ? 'Hide version history' : 'View version history'}
-                              className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
-                                openVersionsFor === config.id
-                                  ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30'
-                                  : 'bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5'
-                              }`}
-                            >
-                              {openVersionsFor === config.id ? 'Hide' : 'View'} Versions
-                              <ChevronDown
-                                className={`w-3.5 h-3.5 transition-transform ${
-                                  openVersionsFor === config.id ? 'rotate-180' : ''
-                                }`}
-                              />
-                            </button>
-                          )}
-
-                          {/* Edit — draft only (primary action) */}
-                          {config.status === 'draft' && config.jd_id && canUpdateAIInterviews && (
-                            <button
-                              onClick={() => router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`)}
-                              className="h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5"
-                            >
-                              <Pencil className="w-3.5 h-3.5 flex-shrink-0" />
-                              <span className="hidden sm:inline">Continue Editing</span>
-                              <span className="sm:hidden">Edit</span>
-                            </button>
-                          )}
-
-                          {/* Share — secondary, hidden on smallest screens (available via 3-dot menu) */}
-                          {normalizedStatus === 'published' && canShareAIInterviews && (
-                            <button
-                              onClick={() => setShareConfig(config)}
-                              className="hidden sm:inline-flex h-8 px-3 items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all bg-white dark:bg-slate-900 text-brand-cyan border-brand-cyan/30 hover:bg-brand-cyan/5"
-                            >
-                              <Send className="w-3.5 h-3.5 flex-shrink-0" />
-                              Share
-                            </button>
-                          )}
-
-                          {/* Track Invites — secondary */}
-                          {normalizedStatus === 'published' && canInviteAIInterviews && (
-                            <button
-                              onClick={() => handleViewInvitations(config)}
-                              className="h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all bg-white dark:bg-slate-900 text-brand-cyan border-brand-cyan/30 hover:bg-brand-cyan/5"
-                              aria-label="Track invitation status" title="Track invitation status"
-                            >
-                              <Users className="w-3.5 h-3.5 flex-shrink-0" />
-                              <span>Invites{config.invitations_count ? ` · ${config.invitations_count}` : ''}</span>
-                            </button>
-                          )}
-
-                          {/* Results — primary for published */}
-                          {normalizedStatus === 'published' && (
-                            <button
-                              onClick={() => router.push(`/recruitment/ai-interviews/${config.id}/results`)}
-                              className="h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5"
-                              aria-label="View interview results" title="View interview results"
-                            >
-                              <BarChart2 className="w-3.5 h-3.5 flex-shrink-0" />
-                              Results
-                            </button>
-                          )}
-
-                          {/* 3-dot menu */}
-                          <div className="relative flex-shrink-0 z-50" ref={openMenuId === config.id ? menuRef : undefined}>
-                            <button
+                              disabled={!hasBeenShared}
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const willOpen = openMenuId !== config.id;
-                                if (willOpen) {
-                                  // Flip the menu upward when there isn't enough room
-                                  // below the trigger (last cards near the viewport
-                                  // bottom) so it isn't clipped off-screen.
-                                  const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                  setMenuDropUp(window.innerHeight - rect.bottom < 280);
-                                }
-                                setOpenMenuId(willOpen ? config.id : null);
+                                if (!hasBeenShared) return;
+                                router.push(`/recruitment/ai-interviews/${config.id}/results`);
                               }}
-                              className="h-8 w-8 inline-flex items-center justify-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 transition-all"
-                              aria-label="More actions"
+                              className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
+                                hasBeenShared
+                                  ? 'bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5'
+                                  : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
+                              }`}
+                              aria-label={resultReason}
+                              title={resultReason}
                             >
-                              <MoreVertical className="w-4 h-4 text-gray-600" />
+                              <BarChart2 className="w-3.5 h-3.5" />
+                              Result
                             </button>
-                            {openMenuId === config.id && (
-                              <div
-                                onClick={(e) => e.stopPropagation()}
-                                className={`absolute right-0 w-52 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700/60 rounded-lg shadow-xl z-[9999] max-h-[70dvh] overflow-y-auto py-1 ${
-                                menuDropUp ? 'bottom-full mb-1' : 'top-full mt-1'
-                              }`}>
-                                <button
-                                  onClick={() => { router.push(`/recruitment/ai-interviews/${config.id}`); setOpenMenuId(null); }}
-                                  className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 transition-colors"
-                                >
-                                  <Eye className="w-4 h-4 flex-shrink-0 text-menu-icon-view" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
-                                </button>
-                                {config.status === 'published' && canInviteAIInterviews && (
-                                  <button
-                                    onClick={() => { setShareConfig(config); setOpenMenuId(null); }}
-                                    className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 transition-colors"
-                                  >
-                                    <Send className="w-4 h-4 flex-shrink-0 text-menu-icon-share" />
-                                    <span className={MENU_ITEM_SCALE_CLASS}>Share / Invite</span>
-                                  </button>
-                                )}
-                                {config.status === 'published' && canInviteAIInterviews && (
-                                  <button
-                                    onClick={() => handleViewInvitations(config)}
-                                    className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 transition-colors"
-                                  >
-                                    <Users className="w-4 h-4 flex-shrink-0 text-menu-icon-secondary" />
-                                    <span className={MENU_ITEM_SCALE_CLASS}>View Invitations</span>
-                                  </button>
-                                )}
-                                {(canArchiveAIInterviews || canDeleteAIInterviews) && (
-                                  <div className="my-1 h-px bg-gray-100 dark:bg-slate-800" />
-                                )}
-                                {config.status !== 'archived' && canArchiveAIInterviews && (
-                                  <button
-                                    onClick={() => handleArchiveConfig(config)}
-                                    className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 transition-colors"
-                                  >
-                                    <Archive className="w-4 h-4 flex-shrink-0 text-menu-icon-archive" />
-                                    <span className={MENU_ITEM_SCALE_CLASS}>Archive</span>
-                                  </button>
-                                )}
-                                {config.status === 'archived' && canArchiveAIInterviews && (
-                                  <button
-                                    onClick={() => handleUnarchiveConfig(config)}
-                                    className="group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 transition-colors"
-                                  >
-                                    <ArchiveRestore className="w-4 h-4 flex-shrink-0 text-menu-icon-archive" />
-                                    <span className={MENU_ITEM_SCALE_CLASS}>Unarchive</span>
-                                  </button>
-                                )}
-                                {canDeleteAIInterviews && (
-                                  <button
-                                    onClick={() => handleDeleteConfig(config)}
-                                    disabled={!!config.invitations_count && config.invitations_count > 0}
-                                    title={config.invitations_count && config.invitations_count > 0 ? 'Cannot delete — candidates have already started this interview' : ''}
-                                    className={`group w-full flex items-center gap-2 px-4 py-2.5 text-sm ${
-                                      config.invitations_count && config.invitations_count > 0
-                                        ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
-                                        : 'text-red-600 hover:bg-red-50'
-                                    } transition-colors`}
-                                  >
-                                    <Trash2 className="w-4 h-4 flex-shrink-0" />
-                                    <span className={MENU_ITEM_SCALE_CLASS}>Delete</span>
-                                  </button>
-                                )}
-                              </div>
-                            )}
                           </div>
                         </div>
-                        </div>
 
-                        {/* Secondary detail. The Job List row carries nothing like
-                            this — it says the job once and stops — but one row
-                            there is one JOB, where one row here is one CONFIG, and
-                            mode, ASR model, authorship and the JD lineage have no
-                            second home on this page the way a job's do in View
-                            Versions. Kept below the row and at label weight so the
-                            four zones above still read as the Assessments row. */}
-                        <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60 flex items-center gap-x-3 gap-y-1.5 flex-wrap text-[11px] text-gray-500 dark:text-slate-500">
-                          {(() => {
-                            const mode = modeFromConfig(config.special_instructions, config.duration_minutes);
-                            let hasBuffer = false;
-                            try {
-                              const si = JSON.parse(config.special_instructions || '{}');
-                              hasBuffer = !!si.buffer_enabled;
-                            } catch {}
-                            if (mode === 'fixed') {
-                              return (
-                                <span className="inline-flex items-center gap-1 text-brand-orange-deep dark:text-brand-orange">
-                                  <Clock className="w-3 h-3 flex-shrink-0" />
-                                  Timed
-                                </span>
-                              );
-                            }
-                            return (
-                              <span className="inline-flex items-center gap-1 text-brand-cyan">
-                                <MessageSquare className="w-3 h-3 flex-shrink-0" />
-                                {hasBuffer ? 'Conversational + Buffer' : 'Conversational'}
-                              </span>
-                            );
-                          })()}
-                          {(() => {
-                            // Speech-to-Text model chosen for this interview
-                            // (special_instructions.stt_model). Only shown when
-                            // explicitly set so legacy configs (env-default ASR)
-                            // don't imply a choice that wasn't made.
-                            let sttModel: string | undefined;
-                            try {
-                              sttModel = JSON.parse(config.special_instructions || '{}').stt_model;
-                            } catch {}
-                            if (!sttModel) return null;
-                            const opt = getSttModelOption(sttModel);
-                            return (
-                              <span
-                                className="inline-flex items-center gap-1 text-indigo-600 dark:text-indigo-400"
-                                title={`Speech-to-Text model: ${opt.label}`}
-                              >
-                                <Mic className="w-3 h-3 flex-shrink-0" />
-                                {opt.label}
-                              </span>
-                            );
-                          })()}
-                          {enabledRounds.length > 0 && (
-                            <span className="hidden sm:inline-flex items-center gap-1.5">
-                              <GitBranch className="w-3 h-3 flex-shrink-0 text-gray-400 dark:text-slate-500" />
-                              {enabledRounds.map((r: any) => ROUND_LABELS[r.type] || r.type).join(' · ')}
-                            </span>
-                          )}
-                          <span className="inline-flex items-center gap-1.5">
-                            <Calendar className="w-3 h-3 flex-shrink-0 text-gray-400 dark:text-slate-500" />
-                            {formatIST(config.created_at)}
-                          </span>
-                          {config.created_by_name && (
-                            <span className="inline-flex items-center gap-1 text-gray-400 dark:text-slate-500">
-                              by <span className="text-gray-500 dark:text-slate-500">{config.created_by_name}</span>
-                            </span>
-                          )}
-                          {config.jd_version && (
-                            <span className="px-1.5 py-0.5 text-[10px] font-medium bg-slate-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded ring-1 ring-gray-200 dark:ring-slate-700">
-                              v{config.jd_version}
-                            </span>
-                          )}
-                        </div>
-
-                        {/* Version history. The Assessments Job List row's own
-                            panel, not a second table written to look like it —
-                            same two nested levels, columns, chips, date cells and
-                            expand animation, with this page's nouns supplied
-                            through `vocabulary`.
-
-                            Below the whole row rather than inside one of its
-                            columns, which is where that list puts it. Click is
-                            stopped here: a click on a version row must not bubble
-                            to the card behind it and navigate to the interview. */}
                         {openVersionsFor === config.id && config.jd_id && (
                           <div
                             className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60"
@@ -2390,11 +2290,22 @@ export default function AIInterview() {
                                   [config.jd_id ?? '']: interviewId,
                                 }))
                               }
-                              /* The Rounds cell, in place of the assessment
-                                 panel's Round Weightage: an interview's shape is
-                                 which rounds it runs, and there is no percentage
-                                 split behind them to state. */
+                              /* Mode (Timed / Conversational) and Rounds, in place
+                                 of the assessment panel's Round Weightage. */
                               renderChildDetail={(child) => {
+                                const source = configsByJobVersionId.get(child.jd_id || '')
+                                  ?.find((candidate) => candidate.id === child.id);
+                                if (!source) {
+                                  return <span className="text-sm text-gray-500 dark:text-slate-400">&mdash;</span>;
+                                }
+                                const mode = modeFromConfig(source.special_instructions, source.duration_minutes);
+                                return (
+                                  <span className="text-sm font-medium text-gray-900 dark:text-slate-100">
+                                    {mode === 'fixed' ? 'Timed' : 'Conversational'}
+                                  </span>
+                                );
+                              }}
+                              renderChildExtraDetail={(child) => {
                                 const source = configsByJobVersionId.get(child.jd_id || '')
                                   ?.find((candidate) => candidate.id === child.id);
                                 const rounds = (source?.rounds_config || [])
@@ -2403,13 +2314,15 @@ export default function AIInterview() {
                                   return <span className="text-sm text-gray-500 dark:text-slate-400">&mdash;</span>;
                                 }
                                 return (
-                                  <div className="flex flex-col gap-0.5">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
                                     {rounds.map((round, index) => (
-                                      <div key={`${round.type}-${index}`} className="text-xs whitespace-nowrap leading-snug">
-                                        <span className="font-semibold text-gray-900 dark:text-slate-100">
-                                          {ROUND_LABELS[round.type] || round.type}
-                                        </span>
-                                      </div>
+                                      <span
+                                        key={`${round.type}-${index}`}
+                                        title={ROUND_LABELS[round.type] || round.type}
+                                        className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30"
+                                      >
+                                        {ROUND_SHORT_LABELS[round.type] || ROUND_LABELS[round.type] || round.type}
+                                      </span>
                                     ))}
                                   </div>
                                 );
@@ -2440,6 +2353,7 @@ export default function AIInterview() {
                     );
                   })}
                 </div>
+                </>
               )}
 
               <ListPagination
@@ -2451,11 +2365,7 @@ export default function AIInterview() {
                 /* The list is one card per job, but the stat cards and tab badges
                    count every config. Say where the difference went so the footer
                    reconciles with them instead of looking like a miscount. */
-                itemLabel={
-                  filteredConfigs.length > collapsedConfigs.length
-                    ? `interviews (${filteredConfigs.length} configs incl. ${filteredConfigs.length - collapsedConfigs.length} older versions under View Versions)`
-                    : 'interviews'
-                }
+                itemLabel="jobs"
               />
             </div>
           )}
