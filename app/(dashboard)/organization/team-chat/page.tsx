@@ -82,8 +82,10 @@ export default function TeamChatPage() {
   const [showHeaderMenu, setShowHeaderMenu] = useState(false);
   const [showPinnedPanel, setShowPinnedPanel] = useState(false);
   const [mutedChannels, setMutedChannels] = useState<Set<string>>(new Set());
+  const [isUploadingAttachment, setIsUploadingAttachment] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const attachmentInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     fetchChannels();
@@ -350,6 +352,35 @@ export default function TeamChatPage() {
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
+    }
+  };
+
+  const ALLOWED_ATTACHMENT_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+  const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024;
+
+  const handleAttachmentSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file later
+    if (!file || !selectedChannel) return;
+
+    if (!ALLOWED_ATTACHMENT_TYPES.includes(file.type)) {
+      toast.error('Only image files (PNG, JPG, GIF, WebP) can be attached.');
+      return;
+    }
+    if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+      toast.error('Image exceeds the 5MB size limit.');
+      return;
+    }
+
+    setIsUploadingAttachment(true);
+    try {
+      const newMessage = await chatService.uploadAttachment(selectedChannel.id, file);
+      setMessages((prev) => [...prev, newMessage]);
+    } catch (error: any) {
+      console.error('Error uploading attachment:', error);
+      toast.error(error?.response?.data?.detail || 'Failed to upload image');
+    } finally {
+      setIsUploadingAttachment(false);
     }
   };
 
@@ -924,15 +955,29 @@ export default function TeamChatPage() {
                               </span>
                             )}
                             <div
-                              className={`px-4 py-2.5 ${bubbleRadius} ${
-                                isSender
-                                  ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/20'
-                                  : 'bg-slate-100 text-gray-900 ring-1 ring-gray-100'
-                              }`}
+                              className={
+                                message.message_type === 'file' && !message.is_deleted && message.metadata?.file_url
+                                  ? `overflow-hidden ${bubbleRadius} ${isSender ? 'ring-1 ring-brand-blue/20' : 'ring-1 ring-gray-100'}`
+                                  : `px-4 py-2.5 ${bubbleRadius} ${
+                                      isSender
+                                        ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/20'
+                                        : 'bg-slate-100 text-gray-900 ring-1 ring-gray-100'
+                                    }`
+                              }
                             >
-                              <p className="whitespace-pre-wrap text-sm leading-relaxed">
-                                {message.is_deleted ? '[Message deleted]' : message.content}
-                              </p>
+                              {message.message_type === 'file' && !message.is_deleted && message.metadata?.file_url ? (
+                                <a href={message.metadata.file_url} target="_blank" rel="noopener noreferrer">
+                                  <img
+                                    src={message.metadata.file_url}
+                                    alt={message.metadata.file_name || 'Image attachment'}
+                                    className="block max-h-64 max-w-full object-contain"
+                                  />
+                                </a>
+                              ) : (
+                                <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                                  {message.is_deleted ? '[Message deleted]' : message.content}
+                                </p>
+                              )}
                             </div>
 
                             {showMeta && (
@@ -1013,11 +1058,24 @@ export default function TeamChatPage() {
 
               <div className="border-t border-gray-100 p-3 sm:p-4">
                 <div className="flex items-end gap-2 rounded-xl border border-gray-200 bg-white p-2.5 transition-all focus-within:border-brand-blue/30 focus-within:ring-4 focus-within:ring-brand-blue/10">
+                  <input
+                    ref={attachmentInputRef}
+                    type="file"
+                    accept="image/png,image/jpeg,image/gif,image/webp"
+                    onChange={handleAttachmentSelect}
+                    className="hidden"
+                  />
                   <button
-                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue"
-                    aria-label="Attach file" title="Attach file"
+                    onClick={() => attachmentInputRef.current?.click()}
+                    disabled={isUploadingAttachment}
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-lg text-gray-400 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-50"
+                    aria-label="Attach image" title="Attach image"
                   >
-                    <Paperclip className="h-4 w-4" />
+                    {isUploadingAttachment ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Paperclip className="h-4 w-4" />
+                    )}
                   </button>
                   <textarea
                     ref={inputRef}

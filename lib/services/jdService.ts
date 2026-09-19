@@ -501,6 +501,17 @@ export interface JDAccessCheckResponse {
   warnings: string[];
 }
 
+/**
+ * In-flight de-dup for getLineageVersions: several independent callers on the
+ * same page (e.g. the Assessments version panel's own fetch alongside the
+ * shared useJobVersionLineage hook) can ask for the same jdId's lineage
+ * within the same click, which used to fire as two identical HTTP requests.
+ * Keyed by jdId, cleared as soon as the request settles — this only collapses
+ * genuinely-concurrent calls, it is not a data cache, so nothing here can go
+ * stale.
+ */
+const lineageVersionsInFlight = new Map<string, Promise<JDLineageVersion[]>>();
+
 export const jdService = {
   /**
    * Validate a job title against the backend's authoritative JD rules
@@ -910,11 +921,23 @@ export const jdService = {
    * detail page to jump between whole versions (not just a content diff).
    */
   async getLineageVersions(jdId: string): Promise<JDLineageVersion[]> {
+    const inFlight = lineageVersionsInFlight.get(jdId);
+    if (inFlight) return inFlight;
+
+    const request = (async () => {
+      try {
+        const response = await api.get<JDLineageVersion[]>(`/jd/${jdId}/lineage`);
+        return response.data;
+      } catch (error) {
+        throw new Error(handleApiError(error));
+      }
+    })();
+
+    lineageVersionsInFlight.set(jdId, request);
     try {
-      const response = await api.get<JDLineageVersion[]>(`/jd/${jdId}/lineage`);
-      return response.data;
-    } catch (error) {
-      throw new Error(handleApiError(error));
+      return await request;
+    } finally {
+      lineageVersionsInFlight.delete(jdId);
     }
   },
 

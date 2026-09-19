@@ -18,6 +18,32 @@ export default function GlobalScoringProgressIndicator() {
     onRestorePanel
   } = useScoringProgress();
 
+  /* `isMinimized` only flips true one render AFTER `isMainPanelOpen` flips
+     false — that happens in the effect further down, and effects run after
+     the render they were scheduled in has already committed and PAINTED.
+     In between those two renders, this component sees isMainPanelOpen=false
+     (so it stops returning null) while isMinimized is still false — and with
+     nothing else to render, it fell through to its own full "expanded panel"
+     for exactly one frame before the effect caught up and corrected it. That
+     one frame is the flash: a green "Scoring Complete" panel (or the grey
+     in-progress one) popping up and vanishing on every minimize/maximize.
+
+     `justReleased` reads `wasMainPanelOpen`'s ref DURING RENDER, before the
+     effect below has had a chance to update it — so on the very first render
+     where `isMainPanelOpen` goes true -> false, the ref still holds `true`
+     from the render before, and this evaluates true immediately, in the same
+     render as the flip. `effectiveMinimized` folds that into every render
+     decision below, so this component never renders as if a panel is still
+     open once that panel has actually closed — no gap for the flash to
+     appear in. The `isMinimized` effect further down still runs and persists
+     the real flag (so a later render — or a reload — has an authoritative
+     value to read instead of re-deriving `justReleased` off a ref that reset
+     on mount), it just no longer has to win a race against the browser's
+     paint to avoid being seen doing it. */
+  const wasMainPanelOpen = useRef(isMainPanelOpen);
+  const justReleased = wasMainPanelOpen.current && !isMainPanelOpen;
+  const effectiveMinimized = isMinimized || justReleased;
+
   const [expandedJobId, setExpandedJobId] = useState<string | null>(null);
   /* The full popup, opened right where the recruiter is — no page owns this
      instance, so it's built straight from the shared context's own job data
@@ -64,24 +90,47 @@ export default function GlobalScoringProgressIndicator() {
      three-second card each time; on the Resume Scoring page especially, where
      re-opening the popup is routine, that replay made the card feel like it
      was popping up "again and again" for no new reason.
-     A genuinely NEW job id (one this widget hasn't shown the card for yet)
+     A genuinely NEW job id (one whose three seconds haven't elapsed yet)
      still gets its own three-second intro.
 
-     Keyed on the SET of job ids, not the `activeScoringJobs` array itself:
-     that array gets a new reference on every progress tick, and keying on it
-     directly would restart the timer on every tick, leaving the card up
-     forever during an active run. */
+     Timed off each job's own `startedAt` (persisted with the job in
+     localStorage) rather than a "have I shown this one yet" ref. A ref only
+     lives as long as this component instance, so a full page reload — job
+     still running, already shrunk before the reload — remounted with an
+     empty ref and replayed the whole three-second intro as if the job were
+     brand new. Wall-clock time survives the reload; a ref does not.
+
+     It also can't get stuck open. The ref version depended on ONE scheduled
+     `setTimeout` actually firing to ever flip to shrunk — miss that (a
+     rapid `isMinimized` flicker tearing down and rebuilding the effect, for
+     instance) and the card stayed up until something else changed the job-id
+     set. Deriving `shrunk` from elapsed real time instead means every render
+     re-checks it fresh, so even a missed timer self-corrects on the very next
+     one — and a progress tick lands every couple of seconds while a job is
+     actually active. */
   const [shrunk, setShrunk] = useState(false);
-  const introShownForJobId = useRef<Set<string>>(new Set());
-  const jobIdsKey = activeScoringJobs.map(job => job.jobId).sort().join(',');
+  // Number.isFinite guard: a job whose `startedAt` doesn't parse (a stale
+  // localStorage entry from an older build, say) makes `new Date(...).getTime()`
+  // return NaN — and Math.max with ANY NaN in the list returns NaN, poisoning
+  // the whole calculation for every OTHER job too. `elapsed` (Date.now() - NaN)
+  // is then NaN, `NaN >= 3000` is always false, and the fallback setTimeout
+  // below gets a NaN delay — the exact shape of "the card never shrinks, no
+  // matter how long you wait." Falling back to 0 (treat it as infinitely old)
+  // keeps one bad timestamp from wedging the whole widget open.
+  const mostRecentJobStart = Math.max(
+    0,
+    ...activeScoringJobs.map(job => {
+      const t = new Date(job.startedAt).getTime();
+      return Number.isFinite(t) ? t : 0;
+    }),
+  );
   useEffect(() => {
-    if (!isMinimized) {
+    if (!effectiveMinimized) {
       setShrunk(false);
       return;
     }
-    const currentIds = jobIdsKey ? jobIdsKey.split(',') : [];
-    const hasNewJob = currentIds.some(id => !introShownForJobId.current.has(id));
-    if (!hasNewJob) {
+    const elapsed = Date.now() - mostRecentJobStart;
+    if (elapsed >= 3000) {
       setShrunk(true);
       return;
     }
@@ -89,12 +138,9 @@ export default function GlobalScoringProgressIndicator() {
     // from another tab/page) still gets its card — without this it would stay
     // on the round button and the timer below would fire into a no-op.
     setShrunk(false);
-    const timer = setTimeout(() => {
-      currentIds.forEach(id => introShownForJobId.current.add(id));
-      setShrunk(true);
-    }, 3000);
+    const timer = setTimeout(() => setShrunk(true), 3000 - elapsed);
     return () => clearTimeout(timer);
-  }, [isMinimized, jobIdsKey]);
+  }, [effectiveMinimized, mostRecentJobStart]);
 
   /* Hovering the shrunk round button previews the same card it shrank from —
      a transient reveal, not a real un-shrink, so it never touches `shrunk`
@@ -102,12 +148,12 @@ export default function GlobalScoringProgressIndicator() {
      the button snaps straight back to the dot. */
   const [isHoveringShrunk, setIsHoveringShrunk] = useState(false);
 
-  /* Still needed independent of the card/shrunk timing above: when a panel
-     that was open just closed, the widget needs to switch into its own
-     "minimized" mode at all (`isMinimized` context flag) — otherwise nothing
-     here would render. Which of the card/shrunk forms that lands on is
-     decided entirely by the effect above now. */
-  const wasMainPanelOpen = useRef(isMainPanelOpen);
+  /* Persists the real `isMinimized` context flag once a panel-close is
+     confirmed, and advances `wasMainPanelOpen.current` for the NEXT
+     transition. Render-time already reacted to this via `justReleased`
+     above — this is what makes that reaction durable (survives this
+     component re-rendering for an unrelated reason) rather than the only
+     place it's decided. */
   useEffect(() => {
     const justMinimised = wasMainPanelOpen.current && !isMainPanelOpen;
     wasMainPanelOpen.current = isMainPanelOpen;
@@ -240,6 +286,27 @@ export default function GlobalScoringProgressIndicator() {
         />
       </div>
       <Maximize2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
+      {/* Same close as the expanded panel's header X — clears every active job
+          rather than just hiding this card, so the two "close" gestures agree
+          on what closing the whole run actually means. Stops the click from
+          also bubbling into the card's own onClick, which restores the panel.
+          Hidden while scoring is still running: closing here means "forget
+          this run", and a run still in flight in the background isn't done
+          being tracked yet — same reason it's not offered as `onClear` in
+          `JobProgressItem` below until `isComplete`. */}
+      {isAllComplete && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            activeScoringJobs.forEach(job => clearJob(job.jobId));
+          }}
+          className="flex-shrink-0 p-0.5 -m-0.5 rounded hover:bg-white/10 transition-colors"
+          aria-label="Close" title="Close"
+        >
+          <X className="w-4 h-4 text-gray-400 hover:text-white transition-colors" />
+        </button>
+      )}
     </>
   );
 
@@ -251,7 +318,7 @@ export default function GlobalScoringProgressIndicator() {
      transient reveal that never touches `shrunk` itself, so moving the
      pointer away snaps straight back to the dot instead of restarting the
      three-second auto-shrink. */
-  if (isMinimized && shrunk) {
+  if (effectiveMinimized && shrunk) {
     if (isHoveringShrunk) {
       return (
         <div
@@ -292,7 +359,7 @@ export default function GlobalScoringProgressIndicator() {
   }
 
   // The black progress card — what a minimise drops into, before it shrinks.
-  if (isMinimized) {
+  if (effectiveMinimized) {
     return (
       <div
         className={`${cardClassName} animate-in slide-in-from-bottom duration-300`}

@@ -487,6 +487,11 @@ function RecordingTabContent({
               // local-fs blob fallback.
               target="_blank"
               rel="noopener noreferrer"
+              // Native link click - the download itself never hits our backend
+              // for a presigned S3 URL, so log it here rather than after a
+              // fetch resolves. Doesn't call preventDefault, so the download
+              // still proceeds even if this fails.
+              onClick={() => aiInterviewService.logRecordingDownload(interview.id, isCandidate ? 'candidate' : 'screen')}
               className="w-full inline-flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium bg-brand-blue text-white hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/20 ring-1 ring-brand-blue/30 transition-colors"
             >
               <Download className="w-4 h-4" /> Download Recording
@@ -1541,12 +1546,14 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const placeholderMsg = getPlaceholderMessage();
 
   return (
-    // overflow-y-auto makes this <main> the element that actually scrolls, which
-    // is what the sticky breadcrumb below pins against. Without it, overflow-x
-    // alone still makes <main> a scrollport, but the real scrolling happens on
-    // the layout container above it — so the breadcrumb pinned to a scrollport
-    // that never moved and scrolled away with the page.
-    <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 dark:bg-slate-950">
+    // overflow-x-clip, not overflow-x-hidden/overflow-y-auto: that pair made
+    // this <main> its own scroll container without ever being height-bound
+    // enough to actually overflow, so `position: sticky` resolved against a
+    // box that never moved while the dashboard layout's own overflow-y-auto
+    // div did the real scrolling — the breadcrumb visibly scrolled away.
+    // `clip` doesn't establish a scroll container at all, so sticky resolves
+    // against the app's one real scroller, same as the working list pages.
+    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           {/* Breadcrumb — a DIRECT child of the card, not wrapped in a row with

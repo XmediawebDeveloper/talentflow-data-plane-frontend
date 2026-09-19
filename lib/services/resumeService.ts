@@ -275,11 +275,20 @@ export const resumeService = {
   },
 
   /**
-   * Get single resume by ID
+   * Get single resume by ID.
+   *
+   * `logView` must be true ONLY when this call itself IS the user viewing the
+   * resume (e.g. opening the Resume Details page, or the "View Resume" action
+   * in the scoring detail page). Leave it false (the default) for every
+   * incidental fetch - version backfills, data dependencies for some other
+   * page's Personal Info fields, etc. - so those never get recorded as a
+   * "Resume viewed" Audit Log entry.
    */
-  async get(id: string): Promise<Resume> {
+  async get(id: string, logView: boolean = false): Promise<Resume> {
     try {
-      const response = await api.get<Resume>(`/resumes/${id}`);
+      const response = await api.get<Resume>(`/resumes/${id}`, {
+        params: logView ? { log_view: true } : undefined,
+      });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

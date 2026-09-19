@@ -533,7 +533,7 @@ export default function CandidateResultDetails({
       const { convertApiResume } = await import('@/lib/utils/resumeMapper');
       // The API record is snake_case — ResumeDetailView needs the mapped shape.
       const [data, versions] = await Promise.all([
-        resumeService.get(id),
+        resumeService.get(id, true), // handleViewResume - a genuine user view
         resumeService.getVersions(id).catch(() => []),
       ]);
       setResumeDetail(convertApiResume(data, versions || []));
@@ -718,7 +718,7 @@ export default function CandidateResultDetails({
     // resume-scoring candidate page: max-w-[1400px], p-4 md:p-8, my-4 md:my-5,
     // and mb-4 md:mb-6 under the breadcrumb.
     return (
-      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50">
+      <main className="flex-1 overflow-x-clip bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
           <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
