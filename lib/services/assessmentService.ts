@@ -31,6 +31,11 @@ export interface AssessmentCreate {
   coding_percentage?: number;
   coding_topics?: string[];
   coding_languages?: string[];
+  /** True when this create call is also the recruiter's exit — "Save as
+   *  Draft" on the Configure step rather than "Publish" — so the backend can
+   *  log the "Saved as Draft" checkpoint immediately instead of only on
+   *  whatever edit happens to come next. */
+  save_and_exit?: boolean;
 }
 
 export interface AssessmentUpdate {
@@ -453,11 +458,18 @@ export type AuditActivityType =
   | 'assessment_deleted'
   | 'assessment_published'
   | 'assessment_archived'
+  | 'assessment_saved_as_draft'
+  | 'assessment_draft_updated'
+  | 'invites_revoked'
   | 'candidate_invited'
   | 'candidate_started'
   | 'candidate_completed'
   | 'candidate_failed'
-  | 'candidate_expired';
+  | 'candidate_expired'
+  | 'invite_failed'
+  | 'invite_email_changed'
+  | 'candidate_exited'
+  | 'candidate_errored';
 
 export interface CombinedAuditActivity {
   id: string;

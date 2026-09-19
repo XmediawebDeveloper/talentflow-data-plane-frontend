@@ -1,8 +1,9 @@
 import { X, Save, AlertCircle, Clock, FileText, Award, Plus, Trash2, Edit2 } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { assessmentService } from '@/lib/services';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
+import UnsavedChangesModal from '@/components/UnsavedChangesModal';
 
 interface AssessmentEditModalProps {
   isOpen: boolean;
@@ -17,11 +18,25 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
     ...assessment,
     sections: assessment.sections || []
   });
+  // Snapshot of what was loaded, taken once on mount, so Cancel/X can tell
+  // an untouched draft (just close) from an edited one (ask Save/Discard).
+  const initialAssessmentRef = useRef(editedAssessment);
 
   const [errors, setErrors] = useState<any>({});
   const [isSaving, setIsSaving] = useState(false);
+  const [showUnsavedModal, setShowUnsavedModal] = useState(false);
 
   if (!isOpen) return null;
+
+  const isDirty = JSON.stringify(editedAssessment) !== JSON.stringify(initialAssessmentRef.current);
+
+  const handleCloseAttempt = () => {
+    if (isDirty) {
+      setShowUnsavedModal(true);
+    } else {
+      onClose();
+    }
+  };
 
   const handleSave = async (saveAsDraft: boolean = false) => {
     const newErrors: any = {};
@@ -170,7 +185,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleCloseAttempt}
             className="text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg p-1.5 sm:p-2 transition-colors flex-shrink-0"
            aria-label="Close">
             <X className="w-5 h-5" />
@@ -391,7 +406,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
         {/* Footer */}
         <div className="border-t border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 bg-slate-50 dark:bg-slate-950 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 flex-shrink-0">
           <button
-            onClick={onClose}
+            onClick={handleCloseAttempt}
             disabled={isSaving}
             className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50"
           >
@@ -416,6 +431,22 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
           </div>
         </div>
       </div>
+
+      <UnsavedChangesModal
+        isOpen={showUnsavedModal}
+        description="Save your configuration as a draft before leaving?"
+        discardLabel="Discard"
+        onClose={() => setShowUnsavedModal(false)}
+        onDiscard={() => {
+          setShowUnsavedModal(false);
+          onClose();
+        }}
+        onSave={async () => {
+          await handleSave(false);
+          setShowUnsavedModal(false);
+        }}
+        isSaving={isSaving}
+      />
     </div>
   );
 }
