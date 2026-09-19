@@ -1,7 +1,7 @@
 'use client';
 
 import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { Briefcase, Plus, Loader2, Building2, MapPin, Clock, TrendingUp, Calendar, User, Users } from 'lucide-react';
+import { Briefcase, Plus, Building2, MapPin, Clock, TrendingUp, Calendar, User, Users } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -12,6 +12,7 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import JDVersionHistory from '@/components/JDVersionHistory';
+import { ListSkeleton } from '@/components/ui/skeleton-loader';
 
 const normalizeSearchValue = (value?: string | null) => (value || '').toLowerCase().trim();
 const normalizeIdentifier = (value?: string | null) => normalizeSearchValue(value).replace(/[^a-z0-9]/g, '');
@@ -124,10 +125,7 @@ export default function AIInterviewJDSelection() {
 
         {/* JD List */}
         {loadingJds ? (
-          <div className="flex items-center justify-center py-10 sm:py-16 tf-loader-center">
-            <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 animate-spin text-brand-blue" />
-            <span className="ml-2 text-xs sm:text-sm text-gray-500">Loading job descriptions...</span>
-          </div>
+          <ListSkeleton />
         ) : filteredJds.length === 0 ? (
           <div className="text-center py-10 sm:py-16 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-4">
             <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 mx-auto mb-4 flex items-center justify-center">

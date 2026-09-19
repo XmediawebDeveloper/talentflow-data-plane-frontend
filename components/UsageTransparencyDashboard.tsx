@@ -25,6 +25,7 @@ import {
   UNIT_TYPE_NAMES,
 } from '@/lib/services/unitPoolService';
 import { formatIST, formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
+import { PageSkeleton } from '@/components/ui/skeleton';
 
 interface UsageTransparencyDashboardProps {
   onBack?: () => void;
@@ -200,14 +201,7 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
   };
 
   if (loading && !data) {
-    return (
-      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-50 to-gray-100/30 flex items-center justify-center">
-        <div className="flex items-center gap-3">
-          <Loader2 className="w-8 h-8 animate-spin text-gray-700" />
-          <span className="text-lg text-gray-600">Loading usage transparency data...</span>
-        </div>
-      </div>
-    );
+    return <PageSkeleton variant="table" showStats={false} />;
   }
 
   return (

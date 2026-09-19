@@ -25,6 +25,7 @@ import { formatSalaryRange } from '@/lib/utils/salary';
 import { formatOverallScore } from '@/lib/utils/matchStatus';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
+import { DetailPageSkeleton } from '@/components/ui/skeleton-loader';
 
 interface ScoredResume {
   id: string;  // This is the SCORE ID, not resume ID!
@@ -1089,14 +1090,7 @@ Best regards`);
 
   // Show loading state while waiting for complete data
   if (!isDataReady) {
-    return (
-      <div className="min-h-[100dvh] bg-gradient-to-br from-gray-50 via-gray-100 to-white flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-12 w-12 text-gray-800 animate-spin inline-block mb-4" />
-          <p className="text-gray-600 font-medium">Loading candidate details...</p>
-        </div>
-      </div>
-    );
+    return <DetailPageSkeleton />;
   }
 
   return (

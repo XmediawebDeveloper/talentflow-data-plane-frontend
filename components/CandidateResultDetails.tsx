@@ -10,6 +10,7 @@ import RecordPager from '@/components/RecordPager';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import ResumeDetailView from '@/components/ResumeDetailView';
 import ViewResumeButton from '@/components/ui/view-resume-button';
+import { DetailPageSkeleton } from '@/components/ui/skeleton-loader';
 
 interface CandidateResultDetailsProps {
   onBack: () => void;
@@ -662,11 +663,7 @@ export default function CandidateResultDetails({
   };
 
   if (isLoadingDetails) {
-    return (
-      <div className="tf-loader-page bg-slate-50 dark:bg-slate-950">
-        <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
-      </div>
-    );
+    return <DetailPageSkeleton />;
   }
 
   if (detailsError) {

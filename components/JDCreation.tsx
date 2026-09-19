@@ -25,6 +25,7 @@ import { normalizeManualJDToMarkdown, stripEmptyCertificationSections } from '@/
 import { formatSalaryRange, getSalaryCurrencySymbol, normalizeSalaryCurrency, parseSalaryInput } from '@/lib/utils/salary';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
+import { FormSkeleton } from '@/components/ui/skeleton';
 
 type CreationMode = 'ai' | 'manual';
 type Step = 'create' | 'extract' | 'review';
@@ -6883,11 +6884,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // FIX-003: Show loading state when fetching JD in embedded mode
   if (loadingJD) {
     return (
-      <div className="h-full flex items-center justify-center bg-white dark:bg-slate-950">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-brand-blue mx-auto mb-3" />
-          <p className="text-sm text-gray-600 dark:text-slate-400 font-medium">Loading job description...</p>
-        </div>
+      <div className="h-full bg-white dark:bg-slate-950 p-4 sm:p-6 lg:p-8">
+        <FormSkeleton />
       </div>
     );
   }

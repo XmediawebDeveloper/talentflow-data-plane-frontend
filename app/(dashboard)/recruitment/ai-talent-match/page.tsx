@@ -5,8 +5,8 @@ import AITalentMatchPage from '@/components/AITalentMatchPage';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { aiMatchService, AIMatchSessionResponse } from '@/lib/services/aiMatchService';
 import { mapJDToJob } from '@/lib/utils/jobOpeningDisplay';
-import { Loader2 } from 'lucide-react';
 import FeatureGate from '@/components/shared/FeatureGate';
+import { PageSkeleton } from '@/components/ui/skeleton';
 
 interface Job {
   id: string;
@@ -197,14 +197,7 @@ export default function AITalentMatchRoute() {
   }, []);
 
   if (isLoading) {
-    return (
-      <div className="tf-loader-page bg-slate-50 p-4">
-        <div className="text-center">
-          <Loader2 className="w-6 h-6 sm:w-8 sm:h-8 text-brand-blue animate-spin mx-auto mb-3" />
-          <p className="text-sm text-gray-600 dark:text-slate-400 font-medium">Loading jobs...</p>
-        </div>
-      </div>
-    );
+    return <PageSkeleton variant="table" showStats={false} />;
   }
 
   if (error) {

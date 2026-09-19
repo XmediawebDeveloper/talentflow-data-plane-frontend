@@ -2,10 +2,11 @@
 
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useEffect, useState, Suspense, useMemo } from 'react';
-import { ArrowLeft, Loader2, AlertTriangle, XCircle, CreditCard, ShieldX, LogIn } from 'lucide-react';
+import { ArrowLeft, AlertTriangle, XCircle, CreditCard, ShieldX, LogIn } from 'lucide-react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import JDCreation from '@/components/JDCreation';
+import { PageSkeleton } from '@/components/ui/skeleton';
 import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
 import { getJDUsageModules } from '@/lib/utils/jdUsageModules';
 
@@ -539,12 +540,7 @@ function JDCreationContent() {
   }, [editingJD, stageFromUrl]);
 
   if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-        <span className="ml-3 text-gray-600 dark:text-slate-400">Checking access...</span>
-      </div>
-    );
+    return <PageSkeleton variant="form" showStats={false} />;
   }
 
   // Show error screen if access is blocked
@@ -603,12 +599,7 @@ function JDCreationContent() {
 
 export default function JDCreationPage() {
   return (
-    <Suspense fallback={
-      <div className="flex-1 flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-        <span className="ml-3 text-gray-600 dark:text-slate-400">Loading...</span>
-      </div>
-    }>
+    <Suspense fallback={<PageSkeleton variant="form" showStats={false} />}>
       <JDCreationContent />
     </Suspense>
   );

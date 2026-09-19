@@ -1,7 +1,7 @@
 'use client';
 
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
-import { ArrowLeft, MapPin, Calendar, Clock, Briefcase, CheckCircle2, FileText, Users, Edit2, Archive, Loader2, Building2, GraduationCap, User, History, ChevronDown, ChevronUp, Monitor, Search, ChevronLeft, ChevronRight, CheckCircle, XCircle, AlertCircle, Mail, Phone, ClipboardList } from 'lucide-react';
+import { ArrowLeft, MapPin, Calendar, Clock, Briefcase, CheckCircle2, FileText, Users, Edit2, Archive, Building2, GraduationCap, User, History, ChevronDown, ChevronUp, Monitor, Search, ChevronLeft, ChevronRight, CheckCircle, XCircle, AlertCircle, Mail, Phone, ClipboardList } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { useModulePermissions } from '@/lib/hooks/usePermissions';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { DetailPageSkeleton, TableSkeleton } from '@/components/ui/skeleton-loader';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -143,12 +144,7 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
   };
 
   if (loading && !results) {
-    return (
-      <div className="flex items-center justify-center py-12 tf-loader-center">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-        <span className="ml-3 text-gray-500">Loading assessment results...</span>
-      </div>
-    );
+    return <TableSkeleton />;
   }
 
   if (!results || results.assessments_count === 0) {
@@ -257,9 +253,7 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
       {/* Results Table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center py-12 tf-loader-center">
-            <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-          </div>
+          <TableSkeleton />
         ) : results.items.length === 0 ? (
           <div className="p-12 text-center">
             <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -471,12 +465,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
   };
 
   if (loading && !resumes) {
-    return (
-      <div className="flex items-center justify-center py-12 tf-loader-center">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-400" />
-        <span className="ml-3 text-gray-500">Loading scored resumes...</span>
-      </div>
-    );
+    return <TableSkeleton />;
   }
 
   if (!resumes || resumes.total === 0) {
@@ -528,9 +517,7 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
       {/* Results Table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {loading ? (
-          <div className="flex items-center justify-center py-12 tf-loader-center">
-            <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-          </div>
+          <TableSkeleton />
         ) : resumes.items.length === 0 ? (
           <div className="p-12 text-center">
             <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -741,12 +728,7 @@ export default function JDDetailsPage() {
 
 
   if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-gray-50">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-800" />
-        <span className="ml-3 text-gray-600">Loading job description...</span>
-      </div>
-    );
+    return <DetailPageSkeleton />;
   }
 
   if (!jd) {

@@ -6,6 +6,7 @@ import { integrationsApi, Integration } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { PageSkeleton } from '@/components/ui/skeleton';
 
 export default function IntegrationsPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
@@ -76,14 +77,7 @@ export default function IntegrationsPage() {
   };
 
   if (isLoading) {
-    return (
-      <main className="flex-1 overflow-x-hidden overflow-y-auto bg-slate-50 flex items-center justify-center">
-        <div className="w-full max-w-[1400px] mx-auto py-4 md:py-8 flex flex-col items-center gap-3 sm:gap-4">
-          <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-          <p className="text-sm font-semibold text-gray-600 dark:text-slate-400">Loading integrations...</p>
-        </div>
-      </main>
-    );
+    return <PageSkeleton variant="form" showStats={false} />;
   }
 
   return (

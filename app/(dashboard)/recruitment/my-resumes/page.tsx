@@ -15,6 +15,7 @@ import { getDisplaySkills } from '@/lib/utils/resumeSkills';
 import Pagination from '@/components/Pagination';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
+import { PageSkeleton } from '@/components/ui/skeleton';
 import FolderTree, { FOLDER_NAME_MAX_LENGTH, MAX_FOLDER_DEPTH } from '@/components/FolderTree';
 import BulkActionsBar from '@/components/BulkActionsBar';
 import UploadModal from '@/components/UploadModal';
@@ -3114,12 +3115,9 @@ export default function MyResumesPage() {
   };
 
   if (loading) {
-    return (
-      <div className="flex-1 flex items-center justify-center bg-slate-50">
-        <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-        <span className="ml-3 text-sm text-gray-600">Loading resumes...</span>
-      </div>
-    );
+    // Skeleton instead of a spinner during the initial fetch, matching the
+    // route-level loading.tsx so the load reads as one continuous skeleton.
+    return <PageSkeleton variant="table" showStats={false} />;
   }
 
   /* Upload History is only actionable once THIS user has uploaded something.
@@ -3191,7 +3189,11 @@ export default function MyResumesPage() {
         </div>
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+      {/* tf-round-edges instead of overflow-hidden: overflow-hidden makes this
+          card a scroll container, which the sticky search bar below would pin to
+          (scrolling away with the card) instead of to the page. tf-round-edges
+          keeps the rounded corners without creating that scroll container. */}
+      <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
         {/* Bulk Actions Bar - Shows at TOP when resumes selected */}
         {selectedResumes.length > 0 && (() => {
           // Detect the Archived Resumes folder context — when active, the
@@ -3223,7 +3225,10 @@ export default function MyResumesPage() {
           );
         })()}
 
-        <div className="border-b border-gray-200 bg-white p-3">
+        {/* Search pinned to the top of the scroll viewport so it stays reachable
+            while the list scrolls beneath it. Opaque bg so rows don't show
+            through; z above the rows. */}
+        <div className="sticky top-0 z-20 border-b border-gray-200 bg-white p-3">
           <div className="flex flex-col gap-2">
             <div className="flex flex-col gap-2 xl:flex-row xl:items-start">
               <div className="min-w-0 flex-1">

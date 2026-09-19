@@ -54,6 +54,7 @@ import OrganizationTabs from '@/components/organization/OrganizationTabs';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { TableSkeleton } from '@/components/ui/skeleton';
 
 // Types
 interface UserPermissions {
@@ -2262,9 +2263,7 @@ export default function UserManagement() {
       {/* Users Table */}
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 tf-round-edges">
         {isLoading ? (
-          <div className="flex items-center justify-center py-8 sm:py-12 bg-slate-50 dark:bg-slate-950 tf-loader-center">
-            <Loader2 className="w-8 h-8 text-brand-blue animate-spin" />
-          </div>
+          <TableSkeleton />
         ) : (
           <div className="tf-table-shell">
             <table className="w-full">
