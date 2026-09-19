@@ -40,6 +40,28 @@ export interface AIMatchResultItem {
   status: string;
 }
 
+/** A row of `GET /ai-match/jd/{id}/candidates`: the match, with the resume detail
+ *  the client used to fetch one `GET /resumes/{id}` at a time to obtain. */
+export interface JDCandidateItem extends AIMatchResultItem {
+  session_id: string;
+  email?: string;
+  phone?: string;
+  location?: string;
+  current_company?: string;
+  notice_period?: string;
+  uploaded_by?: string;
+  uploaded_by_name?: string;
+  resume_created_at?: string | null;
+  resume_version?: number;
+  version_count?: number;
+}
+
+export interface JDCandidateListResponse {
+  items: JDCandidateItem[];
+  /** DISTINCT candidates for the JD - the exact number, not an upper bound. */
+  total: number;
+}
+
 export interface AIMatchSessionResponse {
   id: string;
   jd_id?: string;
@@ -161,6 +183,24 @@ function transformResultToCandidate(result: AIMatchResultItem): MatchedCandidate
     concerns: result.concerns,
     attachmentCount: 1,
     rank: result.rank,  // Rating (1-10 scale) from backend
+  };
+}
+
+/** Same as `transformResultToCandidate`, but the resume detail comes from the row
+ *  itself rather than from a follow-up request per candidate. */
+function transformJDCandidate(item: JDCandidateItem): MatchedCandidate {
+  return {
+    ...transformResultToCandidate(item),
+    email: item.email || '',
+    phone: item.phone || '',
+    location: item.location || '',
+    currentCompany: item.current_company || '',
+    noticePeriod: item.notice_period || 'Not specified',
+    uploadedBy: item.uploaded_by || '',
+    uploadedByName: item.uploaded_by_name || '',
+    uploadDate: item.resume_created_at || new Date().toISOString(),
+    attachmentCount: item.version_count || 1,
+    resumeVersion: item.resume_version || 1,
   };
 }
 
@@ -286,6 +326,29 @@ export const aiMatchService = {
       const enrichedCandidates = await enrichCandidatesWithResumeDetails(candidates);
 
       return { session, candidates: enrichedCandidates };
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Every candidate matched to a JD, de-duplicated, best rating first.
+   *
+   * Replaces a fan-out that made the Job Details tab slow and its badge wrong: list the
+   * JD's sessions, fetch each session, then fetch a resume per candidate to fill in email
+   * and notice period. On a JD with 6 sessions and 732 match rows that was ~739 requests
+   * for 122 candidates, and the badge showed 732 until they all landed.
+   *
+   * `total` is the distinct candidate count, so the badge is right on first paint.
+   */
+  async listJdCandidates(jdId: string, limit = 1000): Promise<{ candidates: MatchedCandidate[]; total: number }> {
+    try {
+      const response = await api.get<JDCandidateListResponse>(
+        `/ai-match/jd/${jdId}/candidates`,
+        { params: { limit } },
+      );
+      const { items = [], total = 0 } = response.data || {};
+      return { candidates: items.map(transformJDCandidate), total };
     } catch (error) {
       throw new Error(handleApiError(error));
     }

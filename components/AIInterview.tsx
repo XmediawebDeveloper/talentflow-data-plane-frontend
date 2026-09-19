@@ -1270,6 +1270,7 @@ export default function AIInterview() {
      not restated here. */
   const INTERVIEW_VOCABULARY: VersionHistoryVocabulary = {
     ...ASSESSMENT_VOCABULARY,
+    childSingular: 'Interview',
     childPlural: 'Interviews',
     childVersionsHeading: 'Interview Versions',
     childNone: 'No interview',
@@ -2447,7 +2448,14 @@ export default function AIInterview() {
                 totalItems={collapsedConfigs.length}
                 onPageChange={setConfigListPage}
                 onItemsPerPageChange={setConfigListItemsPerPage}
-                itemLabel="interviews"
+                /* The list is one card per job, but the stat cards and tab badges
+                   count every config. Say where the difference went so the footer
+                   reconciles with them instead of looking like a miscount. */
+                itemLabel={
+                  filteredConfigs.length > collapsedConfigs.length
+                    ? `interviews (${filteredConfigs.length} configs incl. ${filteredConfigs.length - collapsedConfigs.length} older versions under View Versions)`
+                    : 'interviews'
+                }
               />
             </div>
           )}
