@@ -2452,16 +2452,16 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     : aiInterviewCreateAction;
 
   /* AI Talent Match Results tab badge — holds the loading placeholder until
-     the deduplicated candidate list finishes building, rather than showing
-     an interim `sum(session.total_matches)` first. That sum double-counts a
+     the server's distinct-candidate total arrives, rather than showing an
+     interim `sum(session.total_matches)` first. That sum double-counts a
      candidate matched across more than one session of this job, so it used
-     to flash a higher number before dropping to the real, lower
-     `aiMatchCandidates.length` — visibly "changing" right as the user opened
-     the tab. Showing nothing until the real count is ready means the badge
-     never has to correct itself. */
-  const aiMatchBadgeCount = (!aiMatchSessionsLoaded || loadingAiMatch)
+     to flash a higher number before dropping to the real, lower count —
+     visibly "changing" right as the user opened the tab. Showing nothing
+     until the real count is ready means the badge never has to correct
+     itself. */
+  const aiMatchBadgeCount = (loadingAiMatch || aiMatchTotal === null)
     ? null
-    : aiMatchCandidates.length;
+    : aiMatchTotal;
 
   return (
     // overflow-x-clip, not overflow-x-hidden/overflow-y-auto: the latter pair
