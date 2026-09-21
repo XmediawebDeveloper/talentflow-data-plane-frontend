@@ -544,15 +544,6 @@ export interface AssessmentCreationHandle {
   requestClose: () => void;
 }
 
-/**
- * Imperative handle for `embedded` mode: lets `AssessmentConfigureModal`'s own
- * header close button run the same unsaved-changes check as the in-flow
- * breadcrumb, instead of closing the popup out from under an active edit.
- */
-export interface AssessmentCreationHandle {
-  requestClose: () => void;
-}
-
 /** The three assessment rounds, by name — each round owns the section of the
  *  same name, which is what the Configure step nests under it. */
 type RoundName = 'HR' | 'Technical' | 'Coding';
@@ -1184,13 +1175,18 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   // on at JD-select time); "manual" = recruiter flipped the toggle. Stays
   // null when Coding is disabled.
   const [codingEnabledSource, setCodingEnabledSource] = useState<'auto' | 'manual' | null>(null);
-  // CREATE mode's `isDirty` signal: there is no saved baseline for a brand
-  // new assessment to diff against (unlike edit mode's comparison against
-  // `editingAssessment`), so this tracks whether the recruiter has actually
-  // touched the Configure step — set from the handlers those controls call
-  // (topic add/remove, percentage change, HR question pick, coding language
-  // pick, coding enable/disable), never from the JD-driven auto-detection
-  // effects that populate the same state before the recruiter gets there.
+  // Whether the recruiter has actually touched the Configure step — set from
+  // the handlers those controls call (topic add/remove, percentage change, HR
+  // question pick, coding language pick, coding enable/disable), never from
+  // the JD-driven auto-detection effects that populate the same state before
+  // the recruiter gets there.
+  //
+  // CREATE mode sends this to the backend as `content_edited`, which picks
+  // which draft checkpoint a Save-as-Draft logs: untouched defaults are
+  // "Assessment Saved as Draft", an edited configuration is "Assessment
+  // Draft Updated". There is no saved baseline for a brand new assessment,
+  // so the server can't work that out for itself the way the update endpoint
+  // does (it diffs content snapshots).
   const [hasConfigureEdits, setHasConfigureEdits] = useState(false);
 
   // HR Question Bank - loaded from the live question bank API for this tenant
@@ -2656,57 +2652,36 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   };
 
   /**
-   * Edit mode: true only while the current form state actually disagrees
-   * with what was loaded from the saved draft — re-derives the same shape
-   * `handleGenerateAssessment` sends the API, compared against the raw saved
-   * fields, rather than a snapshot ref: the HR/coding/section state populates
-   * across a couple of async effects (HR bank load, assessment load) that
-   * don't resolve in a fixed order, so there is no single instant to safely
-   * snapshot "the loaded baseline" from.
+   * Whether leaving the Configure step should stop and ask (the
+   * Unsaved-Changes / Save-as-Draft prompt) instead of just leaving.
    *
-   * Create mode: there is no saved draft to diff against, so this falls back
-   * to `hasConfigureEdits`/`userToggledProctoring` — whether the recruiter
-   * has actually touched a Configure control (see where those are set).
+   * Always, for any configuration the recruiter could save: they get the
+   * choice of leaving a draft checkpoint behind whether or not they changed
+   * anything first — the same unconditional prompt the AI Interview wizard
+   * shows on its way out.
+   *
+   * There is deliberately no content diff here any more. WHICH checkpoint
+   * the save records is decided by the server from the content it receives
+   * — "Assessment Saved as Draft" when nothing changed, "Assessment Draft
+   * Updated" when something did (see update_assessment) — so a second,
+   * client-side answer to the same question could only disagree with it.
+   *
+   * Two exceptions: a read-only preview has nothing to save, and an edit
+   * whose record is still loading has nothing to save YET — the step is on
+   * its loader and the only configuration in state is the defaults for a NEW
+   * assessment, which is not something to offer to keep.
+   *
+   * Deliberately NOT gated on `editingAssessment` as well. A settled read that
+   * produced no record still leaves a savable form on screen, and gating the
+   * prompt on the record meant the one case the rule exists for — open a
+   * configuration, change nothing, leave — could exit silently with no
+   * checkpoint written and nothing on screen to say so.
    */
   const isDirty = useMemo(() => {
-    if (!isEditMode) return hasConfigureEdits || userToggledProctoring;
-    if (!editingAssessment || !editLoadSettled) return false;
-
-    const sameSet = (a: string[], b: string[]): boolean => {
-      const as = [...a].map(v => v.trim().toLowerCase()).sort();
-      const bs = [...b].map(v => v.trim().toLowerCase()).sort();
-      return as.length === bs.length && as.every((v, i) => v === bs[i]);
-    };
-
-    const hrSection = sections.find(s => s.name === 'HR');
-    const technicalSection = sections.find(s => s.name === 'Technical');
-    const codingSection = sections.find(s => s.name === 'Coding');
-
-    if ((hrSection?.enabled ?? true) !== (editingAssessment.hr_enabled ?? true)) return true;
-    const currentHRTexts = (hrSection?.enabled ? selectedHRQuestions : [])
-      .map(id => hrQuestionBank.find(q => q.id === id)?.text)
-      .filter((t): t is string => !!t);
-    const savedHRTexts = (Array.isArray(editingAssessment.hr_topics) ? editingAssessment.hr_topics : [])
-      .map((t: any) => t?.text)
-      .filter((t: any): t is string => !!t);
-    if (!sameSet(currentHRTexts, savedHRTexts)) return true;
-
-    if ((technicalSection?.enabled ?? false) !== (editingAssessment.technical_enabled ?? false)) return true;
-    if ((technicalSection?.percentage ?? 0) !== (editingAssessment.technical_percentage ?? 0)) return true;
-    if (!sameSet((technicalSection?.topics as unknown as string[]) || [], editingAssessment.technical_topics || [])) return true;
-
-    if ((codingSection?.enabled ?? false) !== (editingAssessment.coding_enabled ?? false)) return true;
-    if ((codingSection?.percentage ?? 0) !== (editingAssessment.coding_percentage ?? 0)) return true;
-    if (!sameSet((codingSection?.topics as unknown as string[]) || [], editingAssessment.coding_topics || [])) return true;
-    if (!sameSet(selectedCodingLanguages, editingAssessment.coding_languages || [])) return true;
-
-    if (proctoringEnabled !== (editingAssessment.proctoring_enabled ?? true)) return true;
-
-    return false;
-  }, [
-    isEditMode, editingAssessment, editLoadSettled, hasConfigureEdits, userToggledProctoring,
-    sections, selectedHRQuestions, hrQuestionBank, selectedCodingLanguages, proctoringEnabled,
-  ]);
+    if (readOnly) return false;
+    if (isEditMode && !editLoadSettled) return false;
+    return true;
+  }, [readOnly, isEditMode, editLoadSettled]);
 
   // The root "Assessments" breadcrumb (and the popup chrome's own close
   // button, via the imperative handle below). Route it through here instead
@@ -2837,8 +2812,15 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
         // Create new assessment. `save_and_exit` tells the backend this
         // create call is ALSO the recruiter's exit (Save as Draft rather
         // than Publish), so it can log the "Saved as Draft" checkpoint
-        // immediately instead of only on whatever edit comes next.
-        resultAssessment = await assessmentService.create({ ...assessmentData, save_and_exit: saveAsDraft });
+        // immediately instead of only on whatever edit comes next, and
+        // `content_edited` tells it which checkpoint that is — untouched
+        // defaults "Saved as Draft", an edited configuration "Draft
+        // Updated" (see `hasConfigureEdits`).
+        resultAssessment = await assessmentService.create({
+          ...assessmentData,
+          save_and_exit: saveAsDraft,
+          content_edited: hasConfigureEdits || userToggledProctoring,
+        });
 
         // If not saving as draft, publish immediately
         if (!saveAsDraft) {
