@@ -60,6 +60,7 @@ import {
   InvitationActionsMenu,
   InvitationActionButtons,
   ViewFullHistoryLink,
+  hasMoreTimelineHistory,
   EditInvitationModal,
   RevokeInvitationDialog,
   InvitationHistoryDialog,
@@ -6220,7 +6221,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                           ))
                                         )}
                                       </div>
-                                      <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(inv)} />
+                                      {hasMoreTimelineHistory(inv) && (
+                                        <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(inv)} />
+                                      )}
                                     </td>
                                     {renderInviteScoreCell(inv, 'technical')}
                                     {renderInviteScoreCell(inv, 'coding')}
@@ -8013,7 +8016,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       ))
                                     )}
                                   </div>
-                                  <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(invitation)} />
+                                  {hasMoreTimelineHistory(invitation) && (
+                                    <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(invitation)} />
+                                  )}
                                 </td>
                             {/* Tech Score / Coding Score columns. Same pattern
                                 as the Results page: percent number on top, small
