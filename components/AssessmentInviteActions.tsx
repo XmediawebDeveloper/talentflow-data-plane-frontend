@@ -194,6 +194,26 @@ const inferMissingExpiries = (
   return [...events, ...inferred];
 };
 
+/** An invitation can lapse at most once per send: between one "Invited" and
+ *  the next there is a single deadline. More than one "Expired at" in that
+ *  stretch is always an artefact — rows written out of order around a resend,
+ *  or by older code that re-logged the same lapse — so keep the earliest and
+ *  drop the rest. A fresh send ("Invited") starts a new stretch, so a genuine
+ *  Invited -> Expired -> Invited -> Expired history is untouched. */
+const collapseRepeatedExpiries = (sorted: TimelineEntry[]): TimelineEntry[] => {
+  let expiredSinceLastSend = false;
+  return sorted.filter((entry) => {
+    if (entry.label === 'Invited') {
+      expiredSinceLastSend = false;
+      return true;
+    }
+    if (entry.label !== 'Expired at') return true;
+    if (expiredSinceLastSend) return false;
+    expiredSinceLastSend = true;
+    return true;
+  });
+};
+
 const FALLBACK_MATCH_WINDOW_MS = 2 * 60 * 1000;
 const buildFullTimeline = (
   inv: any,
@@ -223,7 +243,13 @@ const buildFullTimeline = (
   // column here would make the very fields a resend rewrites decide whether
   // history from BEFORE that resend still shows.
   const clockExpired = !inv.started_at && !inv.unit_consumed && inv.expires_at && new Date(inv.expires_at) < new Date();
-  const isLiveExpired = !inv.completed_at && (resolveInviteStatus(inv) === 'expired' || clockExpired);
+  // A revoked invitation was killed by the recruiter, not by its deadline —
+  // even when a stale expires_at (older revokes overwrote it with the revoke
+  // time) says the clock ran out, "Expired at" would be a phantom line.
+  const isLiveExpired =
+    !inv.completed_at &&
+    resolveInviteStatus(inv) !== 'revoked' &&
+    (resolveInviteStatus(inv) === 'expired' || clockExpired);
   const fallback: [string, string | null | undefined][] = [
     ['assessment_invite', inv.created_at],
     ['assessment_start', inv.started_at],
@@ -260,9 +286,10 @@ const buildFullTimeline = (
   if (inv.bounced_at) out.push({ label: 'Bounced', at: inv.bounced_at, Icon: RefreshCw, tone: 'text-red-600' });
   if (inv.opened_at) out.push({ label: 'System Check', at: inv.opened_at, Icon: Monitor, tone: 'text-brand-cyan' });
 
-  return inferMissingExpiries(out, inv.expires_at && inv.sent_at ? new Date(inv.expires_at).getTime() - new Date(inv.sent_at).getTime() : 0, 'assessment_invitation_expired').sort(
+  const merged = inferMissingExpiries(out, inv.expires_at && inv.sent_at ? new Date(inv.expires_at).getTime() - new Date(inv.sent_at).getTime() : 0, 'assessment_invitation_expired').sort(
     (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
   );
+  return collapseRepeatedExpiries(merged);
 };
 
 /** Compact per-row timeline preview — capped at the 4 most recent events
