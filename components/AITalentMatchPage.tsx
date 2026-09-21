@@ -2,6 +2,7 @@
 
 import Image from 'next/image';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { Button } from '@/components/ui/button';
 import { ArrowUpDown, Sparkles, BarChart3, Search, ChevronDown, ChevronRight, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video } from 'lucide-react';
 import {
   DropdownMenu,
@@ -318,9 +319,9 @@ export default function AITalentMatchPage({
   const CANDIDATE_AVATAR_PALETTE = [
     { bg: 'bg-blue-100', text: 'text-blue-700' },
     { bg: 'bg-rose-100', text: 'text-rose-700' },
-    { bg: 'bg-emerald-100', text: 'text-emerald-700' },
+    { bg: 'bg-success-subtle', text: 'text-success' },
     { bg: 'bg-violet-100', text: 'text-violet-700' },
-    { bg: 'bg-amber-100', text: 'text-amber-700' },
+    { bg: 'bg-warning-subtle', text: 'text-warning' },
     { bg: 'bg-cyan-100', text: 'text-cyan-700' },
   ];
   const avatarColorFor = (key: string) => {
@@ -793,9 +794,9 @@ export default function AITalentMatchPage({
   // banded on the 1-10 rating rather than the raw percentage.
   const candidateScoreBadgeClass = (score: number) => {
     const band = matchBandForRating(toMatchRating(score));
-    if (band === 'exact') return 'bg-green-100 text-green-700 border-green-300';
+    if (band === 'exact') return 'bg-success-subtle text-success border-success-line';
     if (band === 'partial') return 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20';
-    return 'bg-red-100 text-red-700 border-red-300';
+    return 'bg-destructive-subtle text-destructive border-destructive-line';
   };
 
   // Same three colours as candidateScoreBadgeClass, for the entered-job
@@ -803,9 +804,9 @@ export default function AITalentMatchPage({
   // raw score, so it bands directly instead of going through toMatchRating.
   const rankBadgeClass = (rank: number) => {
     const band = matchBandForRating(rank);
-    if (band === 'exact') return 'bg-green-100 text-green-700 border-green-300';
+    if (band === 'exact') return 'bg-success-subtle text-success border-success-line';
     if (band === 'partial') return 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20';
-    return 'bg-red-100 text-red-700 border-red-300';
+    return 'bg-destructive-subtle text-destructive border-destructive-line';
   };
 
   const clearCandidateFilters = candidateSearch.reset;
@@ -1837,14 +1838,14 @@ export default function AITalentMatchPage({
   };
 
   const getMatchColor = (score: number) => {
-    if (score >= 85) return 'text-green-600';
+    if (score >= 85) return 'text-success';
     if (score >= 70) return 'text-brand-cyan';
     if (score >= 50) return 'text-brand-orange-deep';
     return 'text-gray-600';
   };
 
   const getMatchBgColor = (score: number) => {
-    if (score >= 85) return 'bg-green-100 border-green-300 text-green-700';
+    if (score >= 85) return 'bg-success-subtle border-success-line text-success';
     if (score >= 70) return 'bg-brand-cyan/10 border-brand-cyan/30 text-brand-cyan';
     if (score >= 50) return 'bg-brand-orange/10 border-brand-orange/30 text-brand-orange-deep';
     return 'bg-gray-100 border-gray-300 text-gray-700';
@@ -1940,18 +1941,14 @@ export default function AITalentMatchPage({
             <div className="min-h-[50dvh] flex items-center justify-center">
               {matchError ? (
                 <div className="text-center max-w-md">
-                  <div className="w-12 h-12 bg-red-50 ring-1 ring-red-200 rounded-full flex items-center justify-center mx-auto mb-3">
-                    <XCircle className="w-6 h-6 text-red-600" />
+                  <div className="w-12 h-12 bg-destructive-subtle ring-1 ring-destructive-line rounded-full flex items-center justify-center mx-auto mb-3">
+                    <XCircle className="w-6 h-6 text-destructive" />
                   </div>
                   <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Matching failed</h2>
                   <p className="text-sm text-gray-600 mb-4">{matchError}</p>
-                  <button
-                    onClick={() => selectedJob && handleRunAIMatch(selectedJob)}
-                    disabled={!selectedJob}
-                    className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
+                  <Button variant="primary" size="md" onClick={() => selectedJob && handleRunAIMatch(selectedJob)} disabled={!selectedJob}>
                     Run AI Match
-                  </button>
+                  </Button>
                 </div>
               ) : (
                 <div className="flex items-center gap-3 text-gray-600">
@@ -2285,7 +2282,8 @@ export default function AITalentMatchPage({
             )}
             */}
             
-            <button
+            <Button
+              variant="primary"
               onClick={() => {
                 if (!canRunAiMatch) {
                   toast.error('You do not have permission to run AI matching operations');
@@ -2297,16 +2295,12 @@ export default function AITalentMatchPage({
                 router.push('/recruitment/ai-talent-match', { scroll: false });
               }}
               disabled={!canRunAiMatch}
-              className={`w-full sm:w-auto px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2 shadow-sm ${
-                canRunAiMatch
-                  ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-              }`}
+              className="w-full sm:w-auto"
               title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
             >
               <Sparkles className="w-3.5 h-3.5" />
               Run AI Match
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -2633,13 +2627,14 @@ export default function AITalentMatchPage({
                   {/* Panel footer: "Done" applies the selection and reveals the
                       toolbar Clear — same flow as job-openings. */}
                   <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
-                    <button
+                    <Button
                       // The controls above commit as they change, so Done just closes.
+                      variant="secondary"
+                      size="sm"
                       onClick={() => setShowCandidateFilters(false)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
                     >
                       Done
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
@@ -2663,12 +2658,9 @@ export default function AITalentMatchPage({
                     : 'Run AI Match on a job to see matched candidates here.'}
                 </p>
                 {candidateFiltersApplied && (
-                  <button
-                    onClick={clearCandidateFilters}
-                    className="mt-4 px-3 py-2 rounded-lg text-sm font-medium text-brand-blue bg-brand-blue/5 border border-brand-blue/20 hover:bg-brand-blue/10 transition-colors"
-                  >
+                  <Button variant="secondary" size="sm" onClick={clearCandidateFilters} className="mt-4">
                     Clear filters
-                  </button>
+                  </Button>
                 )}
               </div>
             ) : (
@@ -2762,20 +2754,26 @@ export default function AITalentMatchPage({
                                 </td>
                                 <td className="px-4 py-4 align-top">
                                   <div className="flex items-center gap-1.5">
-                                    <button
+                                    <Button
+                                      variant="secondary"
+                                      size="sm"
                                       onClick={() => openCandidateResume(row, sortedCandidateRows)}
                                       title="View Resume"
-                                      className="p-2 bg-white dark:bg-slate-900 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-all border border-gray-200 dark:border-slate-700"
+                                      aria-label="View Resume"
+                                      className="px-2"
                                     >
-                                      <Eye className="w-4 h-4 text-gray-600 dark:text-slate-400" />
-                                    </button>
-                                    <button
+                                      <Eye className="w-4 h-4" />
+                                    </Button>
+                                    <Button
+                                      variant="secondary"
+                                      size="sm"
                                       onClick={() => handleAttachmentsClick(row.best)}
                                       title="Attachments"
-                                      className="p-2 bg-white dark:bg-slate-900 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-all border border-gray-200 dark:border-slate-700"
+                                      aria-label="Attachments"
+                                      className="px-2"
                                     >
-                                      <Paperclip className="w-4 h-4 text-gray-600 dark:text-slate-400" />
-                                    </button>
+                                      <Paperclip className="w-4 h-4" />
+                                    </Button>
                                   </div>
                                 </td>
                               </tr>
@@ -2943,22 +2941,24 @@ export default function AITalentMatchPage({
                         </div>
 
                         <div className="flex items-center gap-1.5">
-                          <button
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={() => openCandidateResume(row, sortedCandidateRows)}
                             title="View Resume"
-                            className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
                           >
                             <Eye className="w-3.5 h-3.5" />
                             View
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={() => handleAttachmentsClick(row.best)}
                             title="Attachments"
-                            className="flex items-center gap-1.5 px-2.5 py-2 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
                           >
                             <Paperclip className="w-3.5 h-3.5" />
                             Attachments
-                          </button>
+                          </Button>
                         </div>
 
                         {isExpanded && (
@@ -3117,21 +3117,21 @@ export default function AITalentMatchPage({
                 {selectedAllResumeEntries.length > 0 && (
                   <div className="flex flex-wrap items-center gap-2">
                     {canRunScoring && (
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => { void handleScoreSelectedAllResumes(); }}
-                        className="px-3 py-1.5 bg-brand-orange hover:bg-brand-orange-deep text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm shadow-brand-orange/25 ring-1 ring-white/10"
+                        icon={<ClipboardList className="w-3.5 h-3.5" />}
                       >
-                        <ClipboardList className="w-3.5 h-3.5" />
                         Score ({selectedAllResumeEntries.length})
-                      </button>
+                      </Button>
                     )}
                     {(hasPermission('canCreateAssessments') || isTenantAdmin || canCreateAIInterviews) && (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
-                          <button className="px-3 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                            <Send className="w-3.5 h-3.5" />
+                          <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5" />}>
                             Invite ({selectedAllResumeEntries.length})
-                          </button>
+                          </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-56 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                           {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
@@ -3281,12 +3281,9 @@ export default function AITalentMatchPage({
                   </div>
 
                   <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
-                    <button
-                      onClick={() => setShowCandidateFilters(false)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
-                    >
+                    <Button variant="secondary" size="sm" onClick={() => setShowCandidateFilters(false)}>
                       Done
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
@@ -3314,12 +3311,9 @@ export default function AITalentMatchPage({
                     : 'Run AI Match on a job to see matched resumes here.'}
                 </p>
                 {candidateFiltersApplied && (
-                  <button
-                    onClick={clearCandidateFilters}
-                    className="mt-4 px-3 py-2 rounded-lg text-sm font-medium text-brand-blue bg-brand-blue/5 border border-brand-blue/20 hover:bg-brand-blue/10 transition-colors"
-                  >
+                  <Button variant="secondary" size="sm" onClick={clearCandidateFilters} className="mt-4">
                     Clear filters
-                  </button>
+                  </Button>
                 )}
               </div>
             ) : matchDisplayMode === 'grid' ? (
@@ -3373,25 +3367,25 @@ export default function AITalentMatchPage({
                       <div className="flex flex-wrap gap-1">
                         <SkillsList
                           skills={row.best.skills}
-                          chipClassName="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] bg-brand-blue/10 text-brand-blue border border-brand-blue/20 whitespace-nowrap"
-                          moreClassName="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] text-brand-blue font-medium whitespace-nowrap hover:bg-brand-blue/10 transition-colors cursor-pointer"
+                          chipClassName="inline-flex items-center px-2 py-0.5 rounded-full text-2xs bg-brand-blue/10 text-brand-blue border border-brand-blue/20 whitespace-nowrap"
+                          moreClassName="inline-flex items-center px-2 py-0.5 rounded-full text-2xs text-brand-blue font-medium whitespace-nowrap hover:bg-brand-blue/10 transition-colors cursor-pointer"
                         />
                       </div>
 
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {scored ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-medium">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-success-subtle text-success rounded-full text-2xs font-medium">
                             <CheckCircle className="w-3 h-3" />
                             Scored
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded-full text-[10px] font-medium">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded-full text-2xs font-medium">
                             <XCircle className="w-3 h-3" />
                             Not Scored
                           </span>
                         )}
                         {row.location && (
-                          <span className="text-[10px] text-gray-500 dark:text-slate-500 truncate">{row.location}</span>
+                          <span className="text-2xs text-gray-500 dark:text-slate-500 truncate">{row.location}</span>
                         )}
                       </div>
 
@@ -3550,17 +3544,19 @@ export default function AITalentMatchPage({
                             </span>
                           </td>
                           <td className="py-3 px-4 align-middle whitespace-nowrap">
-                            <button
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               onClick={(e) => { e.stopPropagation(); handleAttachmentsClick(row.best); }}
-                              className="flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
+                              title="Attachments"
                             >
                               <Paperclip className="w-3.5 h-3.5" />
                               {row.best.attachmentCount || 1}
-                            </button>
+                            </Button>
                           </td>
                           <td className="py-3 px-4 align-middle whitespace-nowrap">
                             {row.resumeId && allScoredResumeIds.has(row.resumeId) ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-success-subtle text-success rounded-full text-xs font-medium">
                                 <CheckCircle className="w-3 h-3" />
                                 Scored
                               </span>
@@ -3860,13 +3856,14 @@ export default function AITalentMatchPage({
               {/* Panel footer: "Done" applies the selection and reveals the
                   toolbar Clear - same flow as job-openings. */}
               <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
-                <button
+                <Button
                   // The controls above commit as they change, so Done just closes.
+                  variant="secondary"
+                  size="sm"
                   onClick={() => setShowHistoryFilters(false)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
                 >
                   Done
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -3927,9 +3924,9 @@ export default function AITalentMatchPage({
                             <span className={`inline-flex h-7 items-center px-2 py-0.5 rounded-full text-xs gap-1.5 border flex-shrink-0 ${
                               jobData.currentVersion > 1
                                 ? 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20'
-                                : 'bg-green-50 text-green-700 border-green-200'
+                                : 'bg-success-subtle text-success border-success-line'
                             }`}>
-                              <div className={`w-1.5 h-1.5 rounded-full ${jobData.currentVersion > 1 ? 'bg-brand-orange' : 'bg-green-500'}`}></div>
+                              <div className={`w-1.5 h-1.5 rounded-full ${jobData.currentVersion > 1 ? 'bg-brand-orange' : 'bg-success'}`}></div>
                               {jobData.currentVersion > 1 ? 'Republished' : 'Published'}
                             </span>
                           )}
@@ -3943,13 +3940,15 @@ export default function AITalentMatchPage({
                           {/* Match History — every run across this job's whole
                               lineage, with the Exact/Partial/No Match roll-up
                               Resume Scoring's own History icon opens. */}
-                          <button
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={(e) => { e.stopPropagation(); openMatchHistoryModal(item, historyKey); }}
-                            className="inline-flex h-7 w-7 items-center justify-center p-1.5 rounded-lg border border-brand-cyan/20 bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan/15 transition-colors flex-shrink-0"
+                            className="px-2 flex-shrink-0"
                             aria-label="Match History" title="Match History"
                           >
                             <History className="w-3.5 h-3.5" />
-                          </button>
+                          </Button>
                         </div>
                         <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
                         {jobData?.department && (
@@ -4003,7 +4002,7 @@ export default function AITalentMatchPage({
                             {item.totalMatches} {item.totalMatches === 1 ? 'candidate' : 'candidates'} matched
                           </span>
                         ) : (
-                          <span className="flex items-center gap-1.5 px-2 py-0.5 bg-amber-50 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400 ring-1 ring-amber-200 dark:ring-amber-500/30 rounded-lg">
+                          <span className="flex items-center gap-1.5 px-2 py-0.5 bg-warning-subtle text-warning ring-1 ring-warning-line rounded-lg">
                             <AlertCircle className="w-4 h-4" />
                             No candidates matched
                           </span>
@@ -4154,7 +4153,8 @@ export default function AITalentMatchPage({
               <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
                 Start using AI Talent Match to find the best candidates for your jobs. Our AI will analyze and rank candidates based on job fit.
               </p>
-              <button
+              <Button
+                variant="primary"
                 onClick={() => {
                   if (!canRunAiMatch) {
                     toast.error('You do not have permission to run AI matching operations');
@@ -4165,16 +4165,11 @@ export default function AITalentMatchPage({
                   router.push('/recruitment/ai-talent-match', { scroll: false });
                 }}
                 disabled={!canRunAiMatch}
-                className={`px-4 py-2 rounded-lg transition-all font-medium shadow-sm inline-flex items-center gap-2 text-sm ${
-                  canRunAiMatch
-                    ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-                }`}
                 title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
               >
                 <Sparkles className="w-4 h-4" />
                 Run AI Match Now
-              </button>
+              </Button>
             </div>
           </div>
         ) : (
@@ -4187,13 +4182,9 @@ export default function AITalentMatchPage({
               <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
                 No matched jobs match your current filters. Try adjusting your search criteria.
               </p>
-              <button
-                onClick={clearHistoryFilters}
-                className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 inline-flex items-center gap-2 text-sm"
-              >
-                <X className="w-4 h-4" />
+              <Button variant="secondary" size="md" onClick={clearHistoryFilters} icon={<X className="w-4 h-4" />}>
                 Clear All Filters
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -4245,9 +4236,9 @@ export default function AITalentMatchPage({
 
         const statCards: { label: string; value: number; icon: typeof FileText; iconBg: string; iconColor: string; valueColor: string }[] = [
           { label: 'Total Candidates Matched', value: totalMatched, icon: FileText, iconBg: 'bg-brand-blue/10', iconColor: 'text-brand-blue', valueColor: 'text-gray-900 dark:text-slate-50' },
-          { label: 'Rating 10', value: exactCount, icon: Star, iconBg: 'bg-green-100', iconColor: 'text-green-700', valueColor: 'text-green-700' },
+          { label: 'Rating 10', value: exactCount, icon: Star, iconBg: 'bg-success-subtle', iconColor: 'text-success', valueColor: 'text-success' },
           { label: 'Rating 9 – 7', value: partialCount, icon: Users, iconBg: 'bg-brand-orange/10', iconColor: 'text-brand-orange-deep', valueColor: 'text-brand-orange-deep' },
-          { label: 'Rating Below 7', value: noMatchCount, icon: AlertCircle, iconBg: 'bg-red-100', iconColor: 'text-red-600', valueColor: 'text-red-600' },
+          { label: 'Rating Below 7', value: noMatchCount, icon: AlertCircle, iconBg: 'bg-destructive-subtle', iconColor: 'text-destructive', valueColor: 'text-destructive' },
         ];
 
         // One row per version, with its own Rating Breakdown — computed once
@@ -4291,9 +4282,9 @@ export default function AITalentMatchPage({
         const filterLabelClass = 'block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1';
 
         const distributionRows: { label: string; value: number; barClass: string; textClass: string }[] = [
-          { label: 'Rating 10', value: exactCount, barClass: 'bg-green-500', textClass: 'text-green-700' },
+          { label: 'Rating 10', value: exactCount, barClass: 'bg-success', textClass: 'text-success' },
           { label: 'Rating 9 – 7', value: partialCount, barClass: 'bg-brand-orange', textClass: 'text-brand-orange-deep' },
-          { label: 'Below 7', value: noMatchCount, barClass: 'bg-red-500', textClass: 'text-red-600' },
+          { label: 'Below 7', value: noMatchCount, barClass: 'bg-destructive', textClass: 'text-destructive' },
         ];
 
         // Single action: jump straight to this version's match results — no
@@ -4342,21 +4333,22 @@ export default function AITalentMatchPage({
                   </div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => loadAIMatchVersionHistory(modalKey, modalItem.jobId)}
                     disabled={loadingHistoryJobId === modalKey}
                     title="Fetch the latest match history"
                     aria-label="Refresh"
-                    className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${loadingHistoryJobId === modalKey ? 'animate-spin' : ''}`} />
                     <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
                       {loadingHistoryJobId === modalKey ? 'Refreshing...' : 'Refresh'}
                     </span>
-                  </button>
-                  <button onClick={() => setMatchHistoryModal(null)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" aria-label="Close">
-                    <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-                  </button>
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => setMatchHistoryModal(null)} className="px-2" aria-label="Close">
+                    <X className="w-5 h-5" />
+                  </Button>
                 </div>
               </div>
 
@@ -4501,14 +4493,16 @@ export default function AITalentMatchPage({
                         </div>
                         {isHistoryModalFilterActive && (
                           <div className="flex-shrink-0">
-                            <button
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               type="button"
                               onClick={resetModalFilters}
-                              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium border border-red-200 dark:border-red-900/50 rounded-full text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors whitespace-nowrap"
+                              className="rounded-full"
                             >
                               <XCircle className="w-4 h-4" />
                               Reset
-                            </button>
+                            </Button>
                           </div>
                         )}
                       </div>
@@ -4537,9 +4531,9 @@ export default function AITalentMatchPage({
                                 <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom text-right">Action</th>
                               </tr>
                               <tr className="text-left bg-brand-sky dark:bg-slate-800">
-                                <th className="py-1.5 px-3 font-semibold text-green-700">10</th>
+                                <th className="py-1.5 px-3 font-semibold text-success">10</th>
                                 <th className="py-1.5 px-3 font-semibold text-brand-orange-deep">9 – 7</th>
-                                <th className="py-1.5 px-3 font-semibold text-red-600">Below 7</th>
+                                <th className="py-1.5 px-3 font-semibold text-destructive">Below 7</th>
                               </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -4574,12 +4568,12 @@ export default function AITalentMatchPage({
                                     <td className="py-2.5 px-3">
                                       <span className="inline-flex px-2 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue font-semibold">{candidateCount}</span>
                                     </td>
-                                    <td className="py-2.5 px-3 text-center font-semibold text-green-700 bg-green-50/60 dark:bg-green-500/10">{v10}</td>
+                                    <td className="py-2.5 px-3 text-center font-semibold text-success bg-success-subtle/60">{v10}</td>
                                     <td className="py-2.5 px-3 text-center font-semibold text-brand-orange-deep bg-orange-50/60 dark:bg-orange-500/10">{v9to7}</td>
-                                    <td className="py-2.5 px-3 text-center font-semibold text-red-600 bg-red-50/60 dark:bg-red-500/10">{vBelow7}</td>
+                                    <td className="py-2.5 px-3 text-center font-semibold text-destructive bg-destructive-subtle/60">{vBelow7}</td>
                                     <td className="py-2.5 px-3 whitespace-nowrap">
-                                      <span className={`inline-flex items-center gap-1.5 ${isCompleted ? 'text-green-700' : 'text-gray-500'}`}>
-                                        <span className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-green-500' : 'bg-gray-400'}`} />
+                                      <span className={`inline-flex items-center gap-1.5 ${isCompleted ? 'text-success' : 'text-gray-500'}`}>
+                                        <span className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-success' : 'bg-gray-400'}`} />
                                         {statusLabel}
                                       </span>
                                     </td>
@@ -4611,8 +4605,8 @@ export default function AITalentMatchPage({
                                   <span className="px-2 py-0.5 rounded-md font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35">
                                     v{version.versionNumber}
                                   </span>
-                                  <span className={`inline-flex items-center gap-1.5 ${isCompleted ? 'text-green-700' : 'text-gray-500'}`}>
-                                    <span className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-green-500' : 'bg-gray-400'}`} />
+                                  <span className={`inline-flex items-center gap-1.5 ${isCompleted ? 'text-success' : 'text-gray-500'}`}>
+                                    <span className={`w-1.5 h-1.5 rounded-full ${isCompleted ? 'bg-success' : 'bg-gray-400'}`} />
                                     {statusLabel}
                                   </span>
                                 </div>
@@ -4625,17 +4619,17 @@ export default function AITalentMatchPage({
                                   <span className="font-semibold text-gray-900 dark:text-slate-100">{candidateCount}</span>
                                 </div>
                                 <div className="grid grid-cols-3 gap-2 mb-2 text-center">
-                                  <div className="rounded bg-green-50 dark:bg-green-500/10 py-1">
-                                    <div className="font-semibold text-green-700">{v10}</div>
-                                    <div className="text-[10px] text-gray-500 dark:text-slate-500">10</div>
+                                  <div className="rounded bg-success-subtle py-1">
+                                    <div className="font-semibold text-success">{v10}</div>
+                                    <div className="text-2xs text-gray-500 dark:text-slate-500">10</div>
                                   </div>
                                   <div className="rounded bg-orange-50 dark:bg-orange-500/10 py-1">
                                     <div className="font-semibold text-brand-orange-deep">{v9to7}</div>
-                                    <div className="text-[10px] text-gray-500 dark:text-slate-500">9–7</div>
+                                    <div className="text-2xs text-gray-500 dark:text-slate-500">9–7</div>
                                   </div>
-                                  <div className="rounded bg-red-50 dark:bg-red-500/10 py-1">
-                                    <div className="font-semibold text-red-600">{vBelow7}</div>
-                                    <div className="text-[10px] text-gray-500 dark:text-slate-500">Below 7</div>
+                                  <div className="rounded bg-destructive-subtle py-1">
+                                    <div className="font-semibold text-destructive">{vBelow7}</div>
+                                    <div className="text-2xs text-gray-500 dark:text-slate-500">Below 7</div>
                                   </div>
                                 </div>
                                 <div className="flex justify-end">
@@ -4682,12 +4676,9 @@ export default function AITalentMatchPage({
                   <Info className="w-3.5 h-3.5 flex-shrink-0" />
                   Match rating is based on AI similarity between candidate resumes and the job description (1 - 10 scale).
                 </p>
-                <button
-                  onClick={() => setMatchHistoryModal(null)}
-                  className="px-4 py-2 rounded-lg text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 transition-colors shadow-sm shadow-brand-blue/25 flex-shrink-0"
-                >
+                <Button variant="secondary" size="md" onClick={() => setMatchHistoryModal(null)} className="flex-shrink-0">
                   Close
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -4816,18 +4807,16 @@ export default function AITalentMatchPage({
                   )}
                   <>
                   {canRunScoring && (
-                  <button
+                  <Button
+                      variant="secondary"
+                      size="md"
                       onClick={() => handleSubmitToScoring()}
                       disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
-                    className={`px-3 py-2 text-white rounded-lg transition-all font-medium text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial ${
-                      availableUnits !== null && selectedCandidates.length > availableUnits
-                        ? 'bg-gray-400 cursor-not-allowed opacity-50'
-                        : 'bg-brand-orange hover:bg-brand-orange-deep shadow-sm shadow-brand-orange/25 ring-1 ring-white/10'
-                    }`}
+                      icon={<ClipboardList className="w-3.5 h-3.5" />}
+                      className="flex-1 sm:flex-initial"
                     >
-                      <ClipboardList className="w-3.5 h-3.5" />
                       Score ({selectedCandidates.length})
-                    </button>
+                    </Button>
                   )}
                   {/* "Invite" replaces the old standalone Assessment button —
                       a dropdown of the two invite destinations, so a bulk
@@ -4838,12 +4827,9 @@ export default function AITalentMatchPage({
                   {(hasPermission('canCreateAssessments') || isTenantAdmin || canCreateAIInterviews) && (
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <button
-                          className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-sm flex items-center justify-center gap-2 flex-1 sm:flex-initial shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
-                        >
-                          <Send className="w-3.5 h-3.5" />
+                        <Button variant="primary" size="md" icon={<Send className="w-3.5 h-3.5" />} className="flex-1 sm:flex-initial">
                           Invite ({selectedCandidates.length})
-                        </button>
+                        </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" className="w-56 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
                         {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
@@ -4936,7 +4922,8 @@ export default function AITalentMatchPage({
               <p className="text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto mb-4">
                 AI Talent Match has not been run for this job yet. Run AI matching to find candidates that match this job description.
               </p>
-              <button
+              <Button
+                variant="primary"
                 onClick={() => {
                   if (!canRunAiMatch) {
                     toast.error('You do not have permission to run AI matching operations');
@@ -4945,16 +4932,11 @@ export default function AITalentMatchPage({
                   handleRunAIMatch(selectedJob);
                 }}
                 disabled={!canRunAiMatch}
-                className={`px-4 py-2 rounded-lg transition-all font-medium shadow-sm inline-flex items-center gap-2 text-sm ${
-                  canRunAiMatch
-                    ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer'
-                    : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60'
-                }`}
                 title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
               >
                 <Sparkles className="w-4 h-4" />
                 Run AI Match
-              </button>
+              </Button>
             </div>
           ) : (
           <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm">
@@ -5135,7 +5117,7 @@ export default function AITalentMatchPage({
                     </td>
                     <td className="px-4 py-4">
                       {scoredResumeIds.has(candidate.resumeId) ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 ring-1 ring-green-200 dark:bg-green-900/30 dark:text-green-400 dark:ring-green-800">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-success-subtle text-success ring-1 ring-success-line">
                           <CheckCircle className="w-3 h-3" />
                           Scored
                         </span>
@@ -5295,7 +5277,7 @@ export default function AITalentMatchPage({
                         {candidate.attachmentCount || 1}
                       </button>
                       {scoredResumeIds.has(candidate.resumeId) ? (
-                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 ring-1 ring-green-200 dark:bg-green-900/30 dark:text-green-400 dark:ring-green-800">
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium bg-success-subtle text-success ring-1 ring-success-line">
                           <CheckCircle className="w-3 h-3" />
                           Scored
                         </span>
@@ -5579,7 +5561,7 @@ export default function AITalentMatchPage({
                                     </>
                                   );
                                 })()}
-                                <span className="text-xs px-2 py-0.5 bg-green-100 text-green-700 rounded-full font-medium">
+                                <span className="text-xs px-2 py-0.5 bg-success-subtle text-success rounded-full font-medium">
                                   Active
                                 </span>
                               </div>
@@ -5635,26 +5617,28 @@ export default function AITalentMatchPage({
                 {selectedAssessments.length} assessment{selectedAssessments.length !== 1 ? 's' : ''} selected
               </div>
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <button
+                <Button
+                  variant="secondary"
+                  size="md"
                   onClick={() => {
                     setIsAssessmentModalOpen(false);
                     setSelectedAssessments([]);
                     setAssessmentSearchQuery('');
                     setPendingInviteRecipients(null);
                   }}
-                  className="px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-200 rounded-lg transition-colors"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="primary"
+                  size="md"
                   onClick={handleProceedToInvite}
                   disabled={selectedAssessments.length === 0}
-                  className="flex items-center justify-center gap-2 px-4 sm:px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white text-sm rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  icon={<Mail className="w-4 h-4" />}
                 >
-                  <Mail className="w-4 h-4" />
                   <span className="hidden sm:inline">Proceed to Send Invitations</span>
                   <span className="sm:hidden">Send Invitations</span>
-                </button>
+                </Button>
               </div>
             </div>
           </div>

@@ -1170,11 +1170,11 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
           <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
         );
       case 'success':
-        return <CheckCircle className="w-6 h-6 text-green-500" />;
+        return <CheckCircle className="w-6 h-6 text-success" />;
       case 'warning':
-        return <AlertTriangle className="w-6 h-6 text-yellow-500" />;
+        return <AlertTriangle className="w-6 h-6 text-warning" />;
       case 'error':
-        return <XCircle className="w-6 h-6 text-red-500" />;
+        return <XCircle className="w-6 h-6 text-destructive" />;
     }
   };
 
@@ -1226,7 +1226,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
                   <div className="flex items-center gap-2">
                     <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
                       step.completed
-                        ? 'bg-green-500 text-white'
+                        ? 'bg-success text-white'
                         : step.active
                           ? 'bg-blue-600 text-white'
                           : 'bg-gray-300 text-gray-600'
@@ -1234,14 +1234,14 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
                       {step.completed ? <Check className="w-4 h-4" /> : index + 1}
                     </div>
                     <span className={`text-sm font-medium hidden sm:block ${
-                      step.active ? 'text-gray-900' : step.completed ? 'text-green-600' : 'text-gray-500'
+                      step.active ? 'text-gray-900' : step.completed ? 'text-success' : 'text-gray-500'
                     }`}>
                       {step.label}
                     </span>
                   </div>
                   {index < steps.length - 1 && (
                     <div className={`w-8 sm:w-16 h-0.5 mx-2 ${
-                      step.completed ? 'bg-green-500' : 'bg-gray-300'
+                      step.completed ? 'bg-success' : 'bg-gray-300'
                     }`} />
                   )}
                 </div>
@@ -1317,8 +1317,8 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
                 {/* Internet */}
                 <div className="flex items-center justify-between p-5 bg-gray-50 rounded-xl">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                      <Wifi className="w-6 h-6 text-green-600" />
+                    <div className="w-12 h-12 bg-success-subtle rounded-xl flex items-center justify-center">
+                      <Wifi className="w-6 h-6 text-success" />
                     </div>
                     <div>
                       <p className="font-semibold text-gray-900">Internet Connection</p>
@@ -1345,8 +1345,8 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
                 {/* Microphone */}
                 <div className="flex items-center justify-between p-5 bg-gray-50 rounded-xl">
                   <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center">
-                      <Mic className="w-6 h-6 text-amber-600" />
+                    <div className="w-12 h-12 bg-warning-subtle rounded-xl flex items-center justify-center">
+                      <Mic className="w-6 h-6 text-warning" />
                     </div>
                     <div>
                       <p className="font-semibold text-gray-900">Microphone</p>
@@ -1360,9 +1360,9 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
 
               {/* Status Message */}
               {allChecksComplete && (
-                <div className="mt-6 p-5 bg-green-50 rounded-xl flex items-center gap-4">
-                  <CheckCircle className="w-6 h-6 text-green-600" />
-                  <p className="text-green-700 font-semibold">All checks passed! You&apos;re ready to start.</p>
+                <div className="mt-6 p-5 bg-success-subtle rounded-xl flex items-center gap-4">
+                  <CheckCircle className="w-6 h-6 text-success" />
+                  <p className="text-success font-semibold">All checks passed! You&apos;re ready to start.</p>
                 </div>
               )}
 
@@ -1377,9 +1377,9 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
                 const anyError = checks.some(c => c.status === 'error');
                 if (inProgress || !anyError) return null;
                 return (
-                  <div className="mt-6 p-5 bg-amber-50 rounded-xl flex items-center gap-4">
-                    <AlertCircle className="w-6 h-6 text-amber-600" />
-                    <p className="text-amber-700 font-medium">Some checks failed. Please resolve the issues above.</p>
+                  <div className="mt-6 p-5 bg-warning-subtle rounded-xl flex items-center gap-4">
+                    <AlertCircle className="w-6 h-6 text-warning" />
+                    <p className="text-warning font-medium">Some checks failed. Please resolve the issues above.</p>
                   </div>
                 );
               })()}
@@ -1393,17 +1393,17 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
 
               {/* Prominent Camera In Use Error Box */}
               {cameraInUseError && (
-                <div className="mt-6 p-6 bg-red-50 border-2 border-red-300 rounded-xl">
+                <div className="mt-6 p-6 bg-destructive-subtle border-2 border-destructive-line rounded-xl">
                   <div className="flex items-start gap-4">
                     <div className="flex-shrink-0">
-                      <XCircle className="w-8 h-8 text-red-600" />
+                      <XCircle className="w-8 h-8 text-destructive" />
                     </div>
                     <div className="flex-1">
-                      <h4 className="text-lg font-bold text-red-900 mb-2">Camera Is In Use</h4>
-                      <p className="text-red-800 mb-4">{cameraInUseError}</p>
-                      <div className="bg-white rounded-lg p-4 border border-red-200">
-                        <p className="font-semibold text-red-900 mb-2">How to fix this:</p>
-                        <ol className="list-decimal list-inside space-y-2 text-red-800 text-sm">
+                      <h4 className="text-lg font-bold text-destructive-strong mb-2">Camera Is In Use</h4>
+                      <p className="text-destructive-strong mb-4">{cameraInUseError}</p>
+                      <div className="bg-white rounded-lg p-4 border border-destructive-line">
+                        <p className="font-semibold text-destructive-strong mb-2">How to fix this:</p>
+                        <ol className="list-decimal list-inside space-y-2 text-destructive-strong text-sm">
                           <li>Close any apps using your camera (Zoom, Teams, Skype, FaceTime, Google Meet)</li>
                           <li>Close other browser tabs that may be using your camera</li>
                           {isIOS && (

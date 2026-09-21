@@ -57,7 +57,7 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
       enabled: assessmentInfo.has_coding_round,
       name: 'Coding Round',
       icon: Code,
-      color: 'bg-green-500'
+      color: 'bg-success'
     }
   ].filter(r => r.enabled);
 
@@ -114,7 +114,7 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
                       aria-current={step.active ? 'step' : undefined}
                       className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
                       step.completed
-                        ? 'bg-green-500 text-white'
+                        ? 'bg-success text-white'
                         : step.active
                           ? 'bg-blue-600 text-white'
                           : 'bg-gray-300 text-gray-600'
@@ -123,7 +123,7 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
                       {step.completed ? <Check className="w-4 h-4" /> : index + 1}
                     </div>
                     <span className={`text-sm font-medium ${
-                      step.active ? 'text-gray-900' : step.completed ? 'text-green-600' : 'text-gray-500'
+                      step.active ? 'text-gray-900' : step.completed ? 'text-success' : 'text-gray-500'
                     }`}>
                       <span className="sm:hidden">{step.active ? step.label : ''}</span>
                       <span className="hidden sm:inline">{step.label}</span>
@@ -131,7 +131,7 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
                   </div>
                   {index < steps.length - 1 && (
                     <div className={`w-8 sm:w-16 h-0.5 mx-2 ${
-                      step.completed ? 'bg-green-500' : 'bg-gray-300'
+                      step.completed ? 'bg-success' : 'bg-gray-300'
                     }`} />
                   )}
                 </div>
@@ -213,8 +213,8 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
                 </div>
               </div>
               <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-green-100 rounded-xl flex items-center justify-center">
-                  <Camera className="w-7 h-7 text-green-600" />
+                <div className="w-14 h-14 bg-success-subtle rounded-xl flex items-center justify-center">
+                  <Camera className="w-7 h-7 text-success" />
                 </div>
                 <div>
                   <p className="font-semibold text-gray-900">Camera Access</p>
@@ -235,27 +235,27 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
         </div>
 
         {/* Important Notes Section */}
-        <div className="w-full bg-amber-50 border-b border-amber-200 py-6">
+        <div className="w-full bg-warning-subtle border-b border-warning-line py-6">
           <div className="w-full px-6 lg:px-12">
             <div className="flex items-start gap-4">
-              <AlertTriangle className="w-6 h-6 text-amber-600 flex-shrink-0 mt-1" />
+              <AlertTriangle className="w-6 h-6 text-warning flex-shrink-0 mt-1" />
               <div>
-                <p className="font-semibold text-amber-800 text-lg mb-2">Important Notes</p>
-                <ul className="text-amber-700 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <p className="font-semibold text-warning-strong text-lg mb-2">Important Notes</p>
+                <ul className="text-warning grid grid-cols-1 sm:grid-cols-2 gap-2">
                   <li className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-amber-600 rounded-full"></span>
+                    <span className="w-1.5 h-1.5 bg-warning rounded-full"></span>
                     Recovery is supported if a network or client failure occurs
                   </li>
                   <li className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-amber-600 rounded-full"></span>
+                    <span className="w-1.5 h-1.5 bg-warning rounded-full"></span>
                     Tab switching is monitored
                   </li>
                   <li className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-amber-600 rounded-full"></span>
+                    <span className="w-1.5 h-1.5 bg-warning rounded-full"></span>
                     Copy/paste actions are tracked
                   </li>
                   <li className="flex items-center gap-2">
-                    <span className="w-1.5 h-1.5 bg-amber-600 rounded-full"></span>
+                    <span className="w-1.5 h-1.5 bg-warning rounded-full"></span>
                     Answer all questions before submitting
                   </li>
                 </ul>
@@ -268,7 +268,7 @@ export function LandingScreen({ assessmentInfo, onBegin }: LandingScreenProps) {
         <div className="w-full bg-white py-8">
           <div className="w-full px-6 lg:px-12">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
-              <div className="flex items-center gap-3 text-green-600">
+              <div className="flex items-center gap-3 text-success">
                 <CheckCircle className="w-7 h-7" />
                 <span className="font-semibold text-lg">Ready to begin your assessment</span>
               </div>

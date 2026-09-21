@@ -11,6 +11,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import AIInterviewFlowLoader from '@/components/ai-interview/AIInterviewFlowLoader';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { useQuota } from '@/contexts/QuotaContext';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -1543,7 +1544,7 @@ export default function AIInterview() {
                   className={`group w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors ${
                     hasBeenShared
                       ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
-                      : 'text-red-600 hover:bg-red-50'
+                      : 'text-destructive hover:bg-destructive-subtle'
                   }`}
                 >
                   <Trash2 className="w-4 h-4 flex-shrink-0" />
@@ -1567,13 +1568,13 @@ export default function AIInterview() {
   const getStatusBadge = (status: string) => {
     switch (normalizeConfigStatus(status)) {
       case 'published':
-        return 'bg-emerald-100 dark:bg-emerald-500/15 text-emerald-700 dark:text-emerald-300';
+        return 'bg-success-subtle text-success';
       case 'draft':
-        return 'bg-amber-100 dark:bg-amber-500/15 text-amber-700 dark:text-amber-300';
+        return 'bg-warning-subtle text-warning';
       case 'completed':
         return 'bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300';
       case 'cancelled':
-        return 'bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300';
+        return 'bg-destructive-subtle text-destructive';
       case 'archived':
         return 'bg-orange-100 dark:bg-orange-500/15 text-orange-700 dark:text-orange-300';
       default:
@@ -1708,11 +1709,11 @@ export default function AIInterview() {
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2 mb-1">
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-brand-blue text-white text-[10px] font-medium tracking-wide shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-brand-blue text-white text-2xs font-medium tracking-wide shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                   <Sparkles className="w-3 h-3" />
                   AI Interview
                 </span>
-                <span className="text-[10px] text-gray-400 dark:text-slate-500 font-medium uppercase tracking-wider">Platform</span>
+                <span className="text-2xs text-gray-400 dark:text-slate-500 font-medium uppercase tracking-wider">Platform</span>
               </div>
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight break-words">
                 AI Interview Management
@@ -1746,22 +1747,19 @@ export default function AIInterview() {
               </button>
             )}
             {canShareAIInterviews && (
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => { setInvitePickerSearch(''); setShowInvitePicker(true); }}
-                className="inline-flex items-center gap-1.5 border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue px-3.5 py-2 rounded-lg hover:bg-brand-blue/5 transition-all duration-200 text-xs font-medium shadow-sm"
+                icon={<Send className="w-3.5 h-3.5" />}
               >
-                <Send className="w-3.5 h-3.5 flex-shrink-0" />
-                <span>Send Invite</span>
-              </button>
+                Send Invite
+              </Button>
             )}
             {canCreateAIInterviews && (
-              <button
-                onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
-                className="group inline-flex items-center gap-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white px-3.5 py-2 rounded-lg hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200 text-xs font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-              >
-                <Plus className="w-3.5 h-3.5 flex-shrink-0 transition-transform duration-200 group-hover:rotate-90" />
-                <span>Create AI Interview</span>
-              </button>
+              <Button variant="primary" size="sm" onClick={() => router.push('/recruitment/ai-interviews/jd-selection')} icon={<Plus className="w-3.5 h-3.5" />}>
+                Create AI Interview
+              </Button>
             )}
           </div>
         </div>
@@ -1985,12 +1983,9 @@ export default function AIInterview() {
                     )}
                   </div>
                   <div className="mt-4 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex items-center justify-end gap-2">
-                    <button
-                      onClick={() => setShowAIFilters(false)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
-                    >
+                    <Button variant="secondary" size="sm" onClick={() => setShowAIFilters(false)}>
                       Done
-                    </button>
+                    </Button>
                   </div>
                 </div>
               }
@@ -2089,21 +2084,14 @@ export default function AIInterview() {
                       : 'Set up your first AI interview to start evaluating candidates with multi-round, AI-driven assessments.'}
                   </p>
                   {!searchQuery && activeTab !== 'archived' && canCreateAIInterviews && (
-                    <button
-                      onClick={() => router.push('/recruitment/ai-interviews/jd-selection')}
-                      className="group inline-flex items-center gap-2 px-5 py-2.5 text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-xl hover:shadow-lg hover:shadow-brand-blue/20 hover:-translate-y-0.5 transition-all duration-200 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-                    >
-                      <Plus className="w-4 h-4 transition-transform duration-200 group-hover:rotate-90" />
+                    <Button variant="primary" size="md" onClick={() => router.push('/recruitment/ai-interviews/jd-selection')} icon={<Plus className="w-4 h-4" />}>
                       Create your first interview
-                    </button>
+                    </Button>
                   )}
                   {searchQuery && (
-                    <button
-                      onClick={() => setSearchQuery('')}
-                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                    >
+                    <Button variant="secondary" size="md" onClick={() => setSearchQuery('')}>
                       Clear search
-                    </button>
+                    </Button>
                   )}
                 </div>
               ) : (
@@ -2120,10 +2108,10 @@ export default function AIInterview() {
                   {paginatedConfigs.map((config) => {
                     const normalizedStatus = normalizeConfigStatus(config.status);
                     const statusPillStyles: Record<string, string> = {
-                      published: 'bg-green-100 text-green-700 ring-green-200 dark:bg-green-500/15 dark:text-green-300 dark:ring-green-500/25',
+                      published: 'bg-success-subtle text-success ring-success-line',
                       draft: 'bg-brand-orange/10 text-brand-orange-deep dark:text-brand-orange ring-brand-orange/20',
                       completed: 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20',
-                      cancelled: 'bg-red-100 text-red-700 ring-red-200 dark:bg-red-500/15 dark:text-red-300 dark:ring-red-500/25',
+                      cancelled: 'bg-destructive-subtle text-destructive ring-destructive-line',
                       archived: 'bg-brand-orange/10 text-brand-orange-deep dark:text-brand-orange ring-brand-orange/20',
                     };
                     const statusPillLabels: Record<string, string> = {
@@ -2226,7 +2214,7 @@ export default function AIInterview() {
                                   <MetricIcon className={`w-4 h-4 flex-shrink-0 ${iconClass}`} />
                                   <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{value}</span>
                                 </div>
-                                <p className="text-[11px] text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
+                                <p className="text-2xs text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
                               </div>
                             ))}
                           </div>
@@ -2361,7 +2349,7 @@ export default function AIInterview() {
                                       <span
                                         key={`${round.type}-${index}`}
                                         title={ROUND_LABELS[round.type] || round.type}
-                                        className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold whitespace-nowrap bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30"
+                                        className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold whitespace-nowrap bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30"
                                       >
                                         {ROUND_SHORT_LABELS[round.type] || ROUND_LABELS[round.type] || round.type}
                                       </span>
@@ -2444,7 +2432,7 @@ export default function AIInterview() {
                             Started {formatIST(session.started_at)}
                           </span>
                         )}
-                        <span className="px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] sm:text-xs font-medium bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20">
+                        <span className="px-2 sm:px-2.5 py-0.5 rounded-full text-2xs sm:text-xs font-medium bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20">
                           In Progress
                         </span>
                       </div>
@@ -2591,12 +2579,9 @@ export default function AIInterview() {
                   </div>
 
                   <div className="pt-6 border-t border-gray-100 dark:border-slate-700/60">
-                    <button
-                      onClick={handleSaveSettings}
-                      className="px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
-                    >
+                    <Button variant="primary" size="md" onClick={handleSaveSettings}>
                       Save Settings
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
@@ -2650,7 +2635,7 @@ export default function AIInterview() {
                                   <Icon className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />
                                   <div className="min-w-0">
                                     <div className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">{label}</div>
-                                    <div className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 hidden sm:block">{desc}</div>
+                                    <div className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 hidden sm:block">{desc}</div>
                                   </div>
                                 </div>
                                 <input
@@ -2700,11 +2685,11 @@ export default function AIInterview() {
                             </div>
 
                             <h4 className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mt-4 sm:mt-6">Violation Risk Score Thresholds</h4>
-                            <p className="text-[11px] text-gray-500 dark:text-slate-500 mb-2">Set the score boundaries for Low / Medium / High risk in the Violations tab. Each violation scores 1 pt (Low), 2 pts (Medium), or 3 pts (High).</p>
+                            <p className="text-2xs text-gray-500 dark:text-slate-500 mb-2">Set the score boundaries for Low / Medium / High risk in the Violations tab. Each violation scores 1 pt (Low), 2 pts (Medium), or 3 pts (High).</p>
                             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                               <div>
                                 <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">
-                                  Low Risk ≤ <span className="font-semibold text-green-600">{proctoringSettings.violation_low_threshold} pts</span>
+                                  Low Risk ≤ <span className="font-semibold text-success">{proctoringSettings.violation_low_threshold} pts</span>
                                 </label>
                                 <input
                                   type="number"
@@ -2724,7 +2709,7 @@ export default function AIInterview() {
                               </div>
                               <div>
                                 <label className="block text-xs text-gray-600 dark:text-slate-400 mb-1">
-                                  Medium Risk ≤ <span className="font-semibold text-yellow-600">{proctoringSettings.violation_medium_threshold} pts</span>
+                                  Medium Risk ≤ <span className="font-semibold text-warning">{proctoringSettings.violation_medium_threshold} pts</span>
                                 </label>
                                 <input
                                   type="number"
@@ -2738,8 +2723,8 @@ export default function AIInterview() {
                                 />
                               </div>
                               <div className="flex flex-col justify-end pb-1">
-                                <p className="text-xs text-red-600 font-medium">High Risk &gt; {proctoringSettings.violation_medium_threshold} pts</p>
-                                <p className="text-[10px] text-gray-400 dark:text-slate-500 mt-1">Automatically calculated from Medium threshold</p>
+                                <p className="text-xs text-destructive font-medium">High Risk &gt; {proctoringSettings.violation_medium_threshold} pts</p>
+                                <p className="text-2xs text-gray-400 dark:text-slate-500 mt-1">Automatically calculated from Medium threshold</p>
                               </div>
                             </div>
                           </div>
@@ -2747,12 +2732,9 @@ export default function AIInterview() {
                       </div>
 
                       <div className="pt-6 border-t border-gray-100 dark:border-slate-700/60">
-                        <button
-                          onClick={handleSaveProctoringSettings}
-                          className="px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
-                        >
+                        <Button variant="primary" size="md" onClick={handleSaveProctoringSettings}>
                           Save Proctoring Settings
-                        </button>
+                        </Button>
                       </div>
                     </>
                   )}
@@ -2818,10 +2800,10 @@ export default function AIInterview() {
         const jobCount = collapse(configs).length;
 
         const statusPillStyles: Record<string, string> = {
-          published: 'bg-green-100 text-green-700 ring-green-200 dark:bg-green-500/15 dark:text-green-300 dark:ring-green-500/25',
+          published: 'bg-success-subtle text-success ring-success-line',
           draft: 'bg-brand-orange/10 text-brand-orange-deep dark:text-brand-orange ring-brand-orange/20',
           completed: 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20',
-          cancelled: 'bg-red-100 text-red-700 ring-red-200 dark:bg-red-500/15 dark:text-red-300 dark:ring-red-500/25',
+          cancelled: 'bg-destructive-subtle text-destructive ring-destructive-line',
           archived: 'bg-brand-orange/10 text-brand-orange-deep dark:text-brand-orange ring-brand-orange/20',
         };
         const statusPillLabels: Record<string, string> = {
@@ -2867,13 +2849,9 @@ export default function AIInterview() {
                     <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Open a job&rsquo;s versions, then pick the interview version to send</p>
                   </div>
                 </div>
-                <button
-                  onClick={closePicker}
-                  className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
-                  aria-label="Close"
-                >
+                <Button variant="secondary" size="sm" onClick={closePicker} aria-label="Close" className="px-2 flex-shrink-0">
                   <X className="w-5 h-5" />
-                </button>
+                </Button>
               </div>
 
               {/* Content */}
@@ -2976,7 +2954,7 @@ export default function AIInterview() {
                                     <MetricIcon className={`w-4 h-4 flex-shrink-0 ${iconClass}`} />
                                     <span className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{value}</span>
                                   </div>
-                                  <p className="text-[11px] text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
+                                  <p className="text-2xs text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
                                 </div>
                               ))}
                             </div>
@@ -3083,13 +3061,12 @@ export default function AIInterview() {
                   )}
                 </div>
                 <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
-                  <button
-                    onClick={closePicker}
-                    className="flex-1 sm:flex-none px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
-                  >
+                  <Button variant="secondary" size="md" onClick={closePicker} className="flex-1 sm:flex-none">
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="md"
                     onClick={() => {
                       if (!chosen || blockedReason) {
                         toast.error(blockedReason ?? 'Please select an interview version');
@@ -3099,11 +3076,11 @@ export default function AIInterview() {
                       closePicker();
                     }}
                     disabled={!chosen || !!blockedReason}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm whitespace-nowrap bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                    icon={<Mail className="w-4 h-4" />}
+                    className="flex-1 sm:flex-none whitespace-nowrap"
                   >
-                    <Mail className="w-4 h-4" />
                     Continue
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -3212,7 +3189,7 @@ export default function AIInterview() {
                         <span className="hidden sm:inline">AI Interview - Invite Status Tracking</span>
                         <span className="sm:hidden">Invite Status</span>
                       </h2>
-                      <p className="text-[10px] sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">
+                      <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">
                         {viewInvitationsConfig.jd_title || viewInvitationsConfig.position}
                       </p>
                     </div>
@@ -3222,14 +3199,15 @@ export default function AIInterview() {
                   {/* Refetches the live statuses in place — the popup stays
                       open, the icon spins while the request runs, and the
                       handler's guard drops repeat clicks until it settles. */}
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={handleRefreshInvitations}
                     disabled={isRefreshingInvites || loadingInvitations}
                     title="Fetch the latest invite statuses"
                     aria-label="Refresh"
-                    className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                    icon={<RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isRefreshingInvites ? 'animate-spin' : ''}`} />}
                   >
-                    <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${isRefreshingInvites ? 'animate-spin' : ''}`} />
                     {/* The label swaps to "Refreshing..." mid-request, and the
                         longer word used to widen the button and shove the
                         close X sideways. The span reserves the wider word's
@@ -3237,14 +3215,10 @@ export default function AIInterview() {
                     <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
                       {isRefreshingInvites ? 'Refreshing...' : 'Refresh'}
                     </span>
-                  </button>
-                  <button
-                    onClick={() => setViewInvitationsConfig(null)}
-                    className="p-2 text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors"
-                    aria-label="Close"
-                  >
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => setViewInvitationsConfig(null)} aria-label="Close" className="px-2">
                     <X className="w-4 h-4 sm:w-5 sm:h-5" />
-                  </button>
+                  </Button>
                 </div>
               </div>
 
@@ -3328,7 +3302,7 @@ export default function AIInterview() {
                       type="button"
                       onClick={() => setBulkRevokeConfirmOpen(true)}
                       disabled={isBulkRevoking}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 ring-1 ring-red-200 dark:ring-red-500/20 rounded-lg hover:bg-red-100 dark:hover:bg-red-500/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-destructive bg-destructive-subtle ring-1 ring-destructive-line rounded-lg hover:bg-destructive-subtle dark:hover:bg-destructive/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                     >
                       <Ban className="w-3.5 h-3.5" />
                       Revoke Selected ({selectedInviteIds.size})
@@ -3392,7 +3366,7 @@ export default function AIInterview() {
                   Invite More and Close overflowed a 320px row. First/Last drop out
                   below sm — Prev/Next and the indicator are enough there. */}
               <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
-                <p className="text-[11px] sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
+                <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
                   {invitationResultsLabel}
                 </p>
                 <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
@@ -3428,24 +3402,22 @@ export default function AIInterview() {
                       </button>
                     </>
                   )}
-                  <button
+                  <Button
+                    variant="primary"
+                    size="sm"
                     onClick={() => {
                       // Remember where we came from so closing Share returns here.
                       setShareReturnToInvites(viewInvitationsConfig);
                       setViewInvitationsConfig(null);
                       setShareConfig(viewInvitationsConfig);
                     }}
-                    className="flex items-center justify-center gap-1.5 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                    icon={<Send className="w-3.5 h-3.5" />}
                   >
-                    <Send className="w-3.5 h-3.5 flex-shrink-0" />
                     Invite More
-                  </button>
-                  <button
-                    onClick={() => setViewInvitationsConfig(null)}
-                    className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                  >
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => setViewInvitationsConfig(null)}>
                     Close
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -3459,34 +3431,20 @@ export default function AIInterview() {
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
             <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">{confirmAction.title}</h3>
-              <button
-                onClick={() => setConfirmAction(null)}
-                className="p-1.5 text-gray-500 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-gray-700 rounded-lg transition-colors flex-shrink-0"
-                aria-label="Close"
-              >
+              <Button variant="secondary" size="sm" onClick={() => setConfirmAction(null)} aria-label="Close" className="px-2 flex-shrink-0">
                 <X className="w-5 h-5" />
-              </button>
+              </Button>
             </div>
             <div className="px-5 sm:px-6 py-4 flex-1 overflow-y-auto">
               <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">{confirmAction.message}</p>
             </div>
             <div className="px-5 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/50 flex items-center justify-end gap-2 sm:gap-3 shrink-0">
-              <button
-                onClick={() => setConfirmAction(null)}
-                className="px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-              >
+              <Button variant="secondary" size="sm" onClick={() => setConfirmAction(null)}>
                 Cancel
-              </button>
-              <button
-                onClick={confirmAction.onConfirm}
-                className={`px-3 sm:px-4 py-2 text-xs sm:text-sm text-white rounded-lg transition-colors shadow-md ring-1 ring-white/10 ${
-                  confirmAction.destructive
-                    ? 'bg-red-600 hover:bg-red-700 shadow-red-600/25'
-                    : 'bg-brand-blue hover:bg-brand-blue-2 shadow-brand-blue/25'
-                }`}
-              >
+              </Button>
+              <Button variant={confirmAction.destructive ? 'destructive' : 'primary'} size="sm" onClick={confirmAction.onConfirm}>
                 Confirm
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -3497,21 +3455,17 @@ export default function AIInterview() {
           <div className="w-full max-w-[95vw] sm:max-w-md rounded-2xl bg-white dark:bg-slate-900 shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
             <div className="px-6 pt-5 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
               <h2 className="text-lg font-bold text-gray-900 dark:text-slate-50 tracking-tight">AI Interview Published</h2>
-              <button
-                onClick={() => setShowPublishedModal(false)}
-                className="p-1.5 text-gray-500 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-gray-700 rounded-lg transition-colors flex-shrink-0"
-                aria-label="Close"
-              >
+              <Button variant="secondary" size="sm" onClick={() => setShowPublishedModal(false)} aria-label="Close" className="px-2 flex-shrink-0">
                 <X className="w-5 h-5" />
-              </button>
+              </Button>
             </div>
             <div className="px-6 py-5 text-center flex-1 overflow-y-auto">
               <div className="relative inline-flex items-center justify-center mb-4">
-                <span className="absolute w-2 h-2 rounded-full bg-green-400 animate-ping" style={{ top: -4, left: 10 }} />
+                <span className="absolute w-2 h-2 rounded-full bg-success animate-ping" style={{ top: -4, left: 10 }} />
                 <span className="absolute w-1.5 h-1.5 rounded-full bg-brand-blue/60 animate-ping" style={{ top: 8, right: -2, animationDelay: '0.2s' }} />
                 <span className="absolute w-2 h-2 rounded-full bg-brand-cyan/60 animate-ping" style={{ bottom: 0, left: -2, animationDelay: '0.4s' }} />
-                <div className="w-16 h-16 bg-green-100 dark:bg-green-500/15 ring-1 ring-green-200 dark:ring-green-500/25 rounded-full flex items-center justify-center">
-                  <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-300" />
+                <div className="w-16 h-16 bg-success-subtle ring-1 ring-success-line rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-8 h-8 text-success" />
                 </div>
               </div>
               <p className="text-sm text-gray-500 dark:text-slate-500 mb-4">
@@ -3525,12 +3479,9 @@ export default function AIInterview() {
               </div>
             </div>
             <div className="px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/50 flex items-center justify-end shrink-0">
-              <button
-                onClick={() => setShowPublishedModal(false)}
-                className="px-4 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-              >
+              <Button variant="secondary" size="md" onClick={() => setShowPublishedModal(false)}>
                 Close
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -3700,13 +3651,9 @@ export default function AIInterview() {
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md">
             <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between">
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Edit Invitation</h3>
-              <button
-                onClick={() => { if (!savingEditInvite) setEditInviteTarget(null); }}
-                className="p-1.5 text-gray-500 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-gray-700 rounded-lg transition-colors"
-                aria-label="Close"
-              >
+              <Button variant="secondary" size="sm" onClick={() => { if (!savingEditInvite) setEditInviteTarget(null); }} aria-label="Close" className="px-2">
                 <X className="w-5 h-5" />
-              </button>
+              </Button>
             </div>
             <div className="px-5 sm:px-6 py-4 space-y-4">
               <p className="text-sm text-gray-500 dark:text-slate-500">
@@ -3732,14 +3679,12 @@ export default function AIInterview() {
               </div>
             </div>
             <div className="px-5 sm:px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-end gap-2">
-              <button
-                onClick={() => setEditInviteTarget(null)}
-                disabled={savingEditInvite}
-                className="px-4 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50"
-              >
+              <Button variant="secondary" size="md" onClick={() => setEditInviteTarget(null)} disabled={savingEditInvite}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
                 onClick={async () => {
                   const inv = editInviteTarget;
                   if (!inv) return;
@@ -3778,11 +3723,10 @@ export default function AIInterview() {
                   }
                 }}
                 disabled={savingEditInvite}
-                className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50"
+                icon={savingEditInvite ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
               >
-                {savingEditInvite && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
                 Save & Send
-              </button>
+              </Button>
             </div>
           </div>
         </div>

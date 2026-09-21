@@ -1359,7 +1359,7 @@ Best regards`);
                             <Icon className="w-4 h-4 text-brand-blue" />
                           </span>
                           <span className="min-w-0">
-                            <span className="block text-[11px] leading-none text-gray-500 mb-0.5">{label}</span>
+                            <span className="block text-2xs leading-none text-gray-500 mb-0.5">{label}</span>
                             <span className="block text-sm text-gray-900 truncate group-hover:text-brand-blue transition-colors">
                               {value}
                             </span>

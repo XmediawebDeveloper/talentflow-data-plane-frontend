@@ -29,10 +29,10 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 
 const STATUS_CONFIG: Record<VerificationStatus, { label: string; color: string; icon: LucideIcon }> = {
   PENDING: { label: 'Pending', color: 'bg-gray-100 text-gray-700 border border-gray-200', icon: Clock },
-  MATCH: { label: 'Match', color: 'bg-green-100 text-green-800 border border-green-200', icon: CheckCircle2 },
-  MISMATCH: { label: 'Mismatch', color: 'bg-red-100 text-red-800 border border-red-200', icon: XCircle },
-  NOT_FOUND: { label: 'Not Found', color: 'bg-amber-100 text-amber-800 border border-amber-200', icon: AlertTriangle },
-  ERROR: { label: 'Error', color: 'bg-red-100 text-red-800 border border-red-200', icon: XCircle },
+  MATCH: { label: 'Match', color: 'bg-success-subtle text-success-strong border border-success-line', icon: CheckCircle2 },
+  MISMATCH: { label: 'Mismatch', color: 'bg-destructive-subtle text-destructive-strong border border-destructive-line', icon: XCircle },
+  NOT_FOUND: { label: 'Not Found', color: 'bg-warning-subtle text-warning-strong border border-warning-line', icon: AlertTriangle },
+  ERROR: { label: 'Error', color: 'bg-destructive-subtle text-destructive-strong border border-destructive-line', icon: XCircle },
 };
 
 function formatAction(action: string): string {
@@ -192,7 +192,7 @@ export default function LogVerificationPage() {
                 <ShieldCheck className="h-6 w-6 text-white" />
               </div>
               <div>
-                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-2xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
                   <Sparkles className="h-3 w-3 text-brand-orange" />
                   Integrity check
                 </div>
@@ -223,7 +223,7 @@ export default function LogVerificationPage() {
               <div className="min-w-0">
                 <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Pending</p>
                 <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{stats.pending}</p>
-                <p className="text-[10px] sm:text-xs text-gray-400 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1 truncate">
+                <p className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1 truncate">
                   <Clock className="w-3 h-3 flex-shrink-0" />
                   <span className="truncate">Awaiting verification</span>
                 </p>
@@ -242,8 +242,8 @@ export default function LogVerificationPage() {
               <div className="min-w-0">
                 <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Verified / Match</p>
                 <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-brand-teal mt-1 sm:mt-2">{stats.match}</p>
-                <p className="text-[10px] sm:text-xs text-gray-400 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1 truncate">
-                  <CheckCircle2 className="w-3 h-3 text-green-500 flex-shrink-0" />
+                <p className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1 truncate">
+                  <CheckCircle2 className="w-3 h-3 text-success flex-shrink-0" />
                   <span className="truncate">Audit logs confirmed</span>
                 </p>
               </div>
@@ -260,14 +260,14 @@ export default function LogVerificationPage() {
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Mismatches</p>
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-red-700 mt-1 sm:mt-2">{stats.mismatch}</p>
-                <p className="text-[10px] sm:text-xs text-gray-400 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1 truncate">
-                  <XCircle className="w-3 h-3 text-red-500 flex-shrink-0" />
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-destructive mt-1 sm:mt-2">{stats.mismatch}</p>
+                <p className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1 truncate">
+                  <XCircle className="w-3 h-3 text-destructive flex-shrink-0" />
                   <span className="truncate">Field discrepancies found</span>
                 </p>
               </div>
-              <div className="w-9 h-9 sm:w-11 sm:h-11 lg:w-12 lg:h-12 bg-red-100 ring-1 ring-red-200 rounded-xl flex items-center justify-center flex-shrink-0">
-                <XCircle className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-red-600" />
+              <div className="w-9 h-9 sm:w-11 sm:h-11 lg:w-12 lg:h-12 bg-destructive-subtle ring-1 ring-destructive-line rounded-xl flex items-center justify-center flex-shrink-0">
+                <XCircle className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-destructive" />
               </div>
             </div>
           </button>
@@ -279,9 +279,9 @@ export default function LogVerificationPage() {
             <div className="flex items-start justify-between gap-2">
               <div className="min-w-0">
                 <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Not Found</p>
-                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-amber-700 mt-1 sm:mt-2">{stats.notFound}</p>
-                <p className="text-[10px] sm:text-xs text-gray-400 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1 truncate">
-                  <AlertTriangle className="w-3 h-3 text-amber-500 flex-shrink-0" />
+                <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-warning mt-1 sm:mt-2">{stats.notFound}</p>
+                <p className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1 truncate">
+                  <AlertTriangle className="w-3 h-3 text-warning flex-shrink-0" />
                   <span className="truncate">{stats.error > 0 ? `+ ${stats.error} errors` : 'No matching audit entry'}</span>
                 </p>
               </div>
@@ -334,10 +334,10 @@ export default function LogVerificationPage() {
                 <button
                   onClick={handleClearAll}
                   disabled={isVerifying}
-                  className="inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 bg-white dark:bg-slate-900 border border-red-200 rounded-lg sm:rounded-xl hover:bg-red-50 hover:border-red-300 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
+                  className="inline-flex items-center justify-center gap-2 h-10 px-3 sm:px-4 bg-white dark:bg-slate-900 border border-destructive-line rounded-lg sm:rounded-xl hover:bg-destructive-subtle hover:border-destructive-line transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium"
                 >
-                  <Trash2 className="w-4 h-4 text-red-500" />
-                  <span className="text-sm font-medium text-red-600">Clear All</span>
+                  <Trash2 className="w-4 h-4 text-destructive" />
+                  <span className="text-sm font-medium text-destructive">Clear All</span>
                 </button>
               </div>
               <span className="text-sm text-gray-500 dark:text-slate-500 bg-gray-100 dark:bg-slate-800 px-3 py-1.5 rounded-full font-medium">
@@ -431,7 +431,7 @@ export default function LogVerificationPage() {
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
                           <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-gray-700 to-gray-900 text-white flex items-center justify-center text-[10px] font-semibold shadow-sm">
+                            <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-gray-700 to-gray-900 text-white flex items-center justify-center text-2xs font-semibold shadow-sm">
                               {(entry.expected.user_email || 'U').charAt(0).toUpperCase()}
                             </div>
                             <span className="text-sm text-gray-600 dark:text-slate-400 truncate max-w-[160px]" title={entry.expected.user_email}>
@@ -507,7 +507,7 @@ export default function LogVerificationPage() {
                       <div>
                         <h4 className="text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-3">
                           Actual Audit Log
-                          {!entry.result.actual && <span className="text-amber-600 ml-2">(not found)</span>}
+                          {!entry.result.actual && <span className="text-warning ml-2">(not found)</span>}
                         </h4>
                         {entry.result.actual ? (
                           <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 divide-y divide-gray-100 dark:divide-slate-700/60 overflow-hidden">
@@ -535,8 +535,8 @@ export default function LogVerificationPage() {
                             </div>
                           </div>
                         ) : (
-                          <div className="bg-white dark:bg-slate-900 rounded-xl border border-amber-200 p-6 text-center">
-                            <AlertTriangle className="w-8 h-8 text-amber-400 mx-auto mb-2" />
+                          <div className="bg-white dark:bg-slate-900 rounded-xl border border-warning-line p-6 text-center">
+                            <AlertTriangle className="w-8 h-8 text-warning mx-auto mb-2" />
                             <p className="text-sm text-gray-600 dark:text-slate-400">
                               {entry.result.error || 'No matching audit log entry found within the search window.'}
                             </p>
@@ -548,19 +548,19 @@ export default function LogVerificationPage() {
                     {/* Mismatches */}
                     {entry.result.mismatches.length > 0 && (
                       <div className="mt-5 max-w-4xl">
-                        <h4 className="text-xs font-semibold text-red-600 uppercase tracking-wider mb-3">Field Mismatches</h4>
-                        <div className="bg-red-50 rounded-xl border border-red-200 divide-y divide-red-100 overflow-hidden">
+                        <h4 className="text-xs font-semibold text-destructive uppercase tracking-wider mb-3">Field Mismatches</h4>
+                        <div className="bg-destructive-subtle rounded-xl border border-destructive-line divide-y divide-red-100 overflow-hidden">
                           {entry.result.mismatches.map((m, idx) => (
                             <div key={idx} className="flex items-start px-4 py-3 gap-6">
-                              <span className="text-xs font-semibold text-red-700 min-w-[100px] capitalize">{m.field.replace(/_/g, ' ')}</span>
+                              <span className="text-xs font-semibold text-destructive min-w-[100px] capitalize">{m.field.replace(/_/g, ' ')}</span>
                               <div className="flex-1 grid grid-cols-2 gap-4">
                                 <div>
-                                  <span className="text-[10px] font-medium text-gray-400 dark:text-slate-500 uppercase">Expected</span>
+                                  <span className="text-2xs font-medium text-gray-400 dark:text-slate-500 uppercase">Expected</span>
                                   <p className="text-sm text-gray-900 dark:text-slate-50 mt-0.5">{m.expected || '—'}</p>
                                 </div>
                                 <div>
-                                  <span className="text-[10px] font-medium text-gray-400 dark:text-slate-500 uppercase">Actual</span>
-                                  <p className="text-sm text-red-700 mt-0.5 font-medium">{m.actual || '—'}</p>
+                                  <span className="text-2xs font-medium text-gray-400 dark:text-slate-500 uppercase">Actual</span>
+                                  <p className="text-sm text-destructive mt-0.5 font-medium">{m.actual || '—'}</p>
                                 </div>
                               </div>
                             </div>
@@ -594,15 +594,15 @@ export default function LogVerificationPage() {
                 {formatIST(lastReport.completedAt)}
               </span>
               <span className="text-gray-700 dark:text-slate-300 font-medium">{lastReport.summary.total} checked</span>
-              <span className="text-green-700 font-medium">{lastReport.summary.match} matched</span>
+              <span className="text-success font-medium">{lastReport.summary.match} matched</span>
               {lastReport.summary.mismatch > 0 && (
-                <span className="text-red-700 font-medium">{lastReport.summary.mismatch} mismatched</span>
+                <span className="text-destructive font-medium">{lastReport.summary.mismatch} mismatched</span>
               )}
               {lastReport.summary.notFound > 0 && (
-                <span className="text-amber-700 font-medium">{lastReport.summary.notFound} not found</span>
+                <span className="text-warning font-medium">{lastReport.summary.notFound} not found</span>
               )}
               {lastReport.summary.error > 0 && (
-                <span className="text-red-600 font-medium">{lastReport.summary.error} errors</span>
+                <span className="text-destructive font-medium">{lastReport.summary.error} errors</span>
               )}
             </div>
           </div>

@@ -36,7 +36,7 @@ interface JDVersionHistoryProps {
    rather than imported from a list component so this file has no dependency on
    any one page's helpers. */
 const STATUS_STYLES: Record<string, string> = {
-  published: 'bg-green-100 text-green-700 ring-green-200',
+  published: 'bg-success-subtle text-success ring-success-line',
   draft: 'bg-gray-100 text-gray-700 ring-gray-200',
   disabled: 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20',
   archived: 'bg-gray-100 text-gray-500 ring-gray-200',

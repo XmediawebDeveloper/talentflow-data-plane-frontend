@@ -21,6 +21,7 @@ import AssessmentPreviewModal from './AssessmentPreviewModal';
 import AssessmentEditModal from './AssessmentEditModal';
 import JDVersionHistoryModal from '@/components/JDVersionHistoryModal';
 import AssessmentDetailsView from './AssessmentDetailsView';
+import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -45,7 +46,7 @@ import ListCountBadge from '@/components/ui/list-count-badge';
    records at all and no filters of its own. Both are documented at their
    definitions, and this page had been hand-rolling four variants of them. */
 import ListEmptyState from '@/components/ui/list-empty-state';
-import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
+import TabEmptyState from '@/components/ui/tab-empty-state';
 /* The Position filter's control. The same SearchableSelect the All Assessments
    table uses for its Job filter — a plain <select> stops working once the
    option list is drawn from data, which a tenant's job list is. */
@@ -1436,7 +1437,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      yet, so there is nothing for them to stay in step with. */
   const renderInviteStatusBadge = (inv: any) => {
     const s = inv.status;
-    const base = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1";
+    const base = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs sm:text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1";
     /* Resolved first so a lapsed invite shows only the Expired badge — never
        the stale pre-expiry status. */
     if (isInviteExpired(inv)) {
@@ -1456,19 +1457,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       );
     }
     if (s === 'failed') {
-      return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`}><X className="w-3 h-3" /> Invite Failed</span>;
+      return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}><X className="w-3 h-3" /> Invite Failed</span>;
     }
     if (s === 'bounced' || inv.bounced_at) {
-      return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`}><RefreshCw className="w-3 h-3" /> Bounced</span>;
+      return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}><RefreshCw className="w-3 h-3" /> Bounced</span>;
     }
     if (s === 'revoked') {
-      return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`}><Ban className="w-3 h-3" /> Revoked</span>;
+      return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}><Ban className="w-3 h-3" /> Revoked</span>;
     }
     if (s === 'expired') {
       return <span className={`${base} bg-status-expired/10 text-status-expired ring-status-expired/20`}><Clock className="w-3 h-3" /> Expired</span>;
     }
     if (s === 'abandoned') {
-      return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`} title="Ended before completion — the candidate left the assessment"><Ban className="w-3 h-3" /> Terminated</span>;
+      return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`} title="Ended before completion — the candidate left the assessment"><Ban className="w-3 h-3" /> Terminated</span>;
     }
     if (s === 'started' || inv.started_at) {
       return <span className={`${base} bg-status-progress/10 text-status-progress ring-status-progress/20`}><Play className="w-3 h-3" /> In Progress</span>;
@@ -1525,10 +1526,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     return (
       <td className="px-4 py-4 align-middle text-sm text-center">
         <div className="flex flex-col items-center gap-0.5">
-          <span className={`font-medium ${passed ? 'text-brand-blue' : 'text-red-600'}`}>
+          <span className={`font-medium ${passed ? 'text-brand-blue' : 'text-destructive'}`}>
             {Math.round(score)}%
           </span>
-          <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ring-1 ${passed ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+          <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${passed ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
             {passed ? 'Pass' : 'Fail'}
           </span>
         </div>
@@ -2098,7 +2099,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   };
 
   const resultStatusClass = (status?: string) => {
-    if (status === 'completed') return 'bg-green-100 text-green-700';
+    if (status === 'completed') return 'bg-success-subtle text-success';
     if (status === 'in_progress') return 'bg-blue-100 text-blue-700';
     return 'bg-gray-100 text-gray-600';
   };
@@ -3758,7 +3759,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       <span
         className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ring-1 ${
           status === 'Active'
-            ? 'bg-green-100 text-green-700 ring-green-200'
+            ? 'bg-success-subtle text-success ring-success-line'
             : status === 'Draft'
             ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
             : status === 'Archived'
@@ -3954,7 +3955,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <MetricIcon className={`w-4 h-4 flex-shrink-0 ${iconClass}`} />
                 <span className="text-sm font-semibold text-gray-900 dark:text-slate-50">{value}</span>
               </div>
-              <p className="text-[11px] text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
+              <p className="text-2xs text-gray-500 dark:text-slate-500 truncate mt-0.5">{label}</p>
             </div>
           ))}
         </div>
@@ -4035,25 +4036,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               ? `Track the assessments created for this job's versions (${invitationsSent} invitation${invitationsSent === 1 ? '' : 's'} sent)`
               : 'No invitations have been sent for this job yet';
             return (
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
                 disabled={!hasInvitations}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!hasInvitations) return;
                   void handleTrackJob(assessment);
                 }}
-                className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
-                  hasInvitations
-                    ? 'bg-white dark:bg-slate-900 text-brand-cyan border-brand-cyan/30 hover:bg-brand-cyan/5'
-                    : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                }`}
+                icon={<Radar className="w-3.5 h-3.5" />}
                 aria-label={reason}
                 title={reason}
               >
-                <Radar className="w-3.5 h-3.5" />
                 Track
-              </button>
+              </Button>
             );
           })()}
 
@@ -4080,25 +4077,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 ? 'Publish the assessment to view results'
                 : 'Share the assessment to view results';
             return (
-              <button
-                type="button"
+              <Button
+                variant="secondary"
+                size="sm"
                 disabled={!hasBeenShared}
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!hasBeenShared) return;
                   router.push(`/recruitment/assessments/${assessment.id}/results`);
                 }}
-                className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
-                  hasBeenShared
-                    ? 'bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5'
-                    : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                }`}
+                icon={<BarChart className="w-3.5 h-3.5" />}
                 aria-label={reason}
                 title={reason}
               >
-                <BarChart className="w-3.5 h-3.5" />
                 Result
-              </button>
+              </Button>
             );
           })()}
 
@@ -4426,6 +4419,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     'h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 border rounded-md transition-all';
   const QUICK_ACTION_DISABLED =
     'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed';
+  /* One neutral enabled style for every icon-only quick action (Share/Track/
+     Results), replacing the old per-action accent (teal/cyan/blue) that put 3
+     competing colors on one row — the "no extra color, all buttons the same"
+     rule the UI–UX guidelines require. */
+  const QUICK_ACTION_ENABLED =
+    'border-gray-300 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-gray-400';
 
   /* `variant` is the trigger's chrome, not its behaviour:
        'default' — the borderless 32px button the Job List row carries;
@@ -4565,7 +4564,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   className={`group w-full px-4 py-2.5 text-sm flex items-center gap-2 transition-colors ${
                     revokeDisabled
                       ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-red-700 hover:bg-red-50'
+                      : 'text-destructive hover:bg-destructive-subtle'
                   }`}
                 >
                   <Ban className={`w-4 h-4 flex-shrink-0 ${revokeDisabled ? 'text-gray-300' : ''}`} />
@@ -4633,7 +4632,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   className={`group w-full px-4 py-2.5 text-sm flex items-center gap-2 ${
                     isDisabled
                       ? 'text-gray-400 cursor-not-allowed opacity-60'
-                      : 'text-red-600 hover:bg-red-50'
+                      : 'text-destructive hover:bg-destructive-subtle'
                   }`}
                 >
                   <Trash2 className="w-4 h-4 flex-shrink-0" />
@@ -4714,11 +4713,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               setShowShareModal(true);
             }}
             disabled={isShareBlocked}
-            className={`${QUICK_ACTION_BASE} ${
-              isShareBlocked
-                ? QUICK_ACTION_DISABLED
-                : 'text-brand-teal border-brand-teal/40 hover:bg-brand-teal/10 hover:border-brand-teal'
-            }`}
+            className={`${QUICK_ACTION_BASE} ${isShareBlocked ? QUICK_ACTION_DISABLED : QUICK_ACTION_ENABLED}`}
             aria-label={shareBlockedReason || 'Share via email'}
             title={shareBlockedReason || 'Share via email'}
           >
@@ -4735,11 +4730,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       <button
         onClick={() => handleTrackInvites(assessment)}
         disabled={!hasBeenShared}
-        className={`${QUICK_ACTION_BASE} ${
-          hasBeenShared
-            ? 'text-brand-cyan border-brand-cyan/40 hover:bg-brand-cyan/10 hover:border-brand-cyan'
-            : QUICK_ACTION_DISABLED
-        }`}
+        className={`${QUICK_ACTION_BASE} ${hasBeenShared ? QUICK_ACTION_ENABLED : QUICK_ACTION_DISABLED}`}
         aria-label={hasBeenShared ? `Track invitation status (${invitationsSent})` : 'Share the assessment to track invitations'}
         title={hasBeenShared ? `Track invitation status (${invitationsSent})` : 'Share the assessment to track invitations'}
       >
@@ -4773,11 +4764,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             ? 'Publish the assessment to view results'
             : 'Share the assessment to view results'
         }
-        className={`${QUICK_ACTION_BASE} ${
-          hasBeenShared
-            ? 'text-brand-blue border-brand-blue/40 hover:bg-brand-blue/10 hover:border-brand-blue'
-            : QUICK_ACTION_DISABLED
-        }`}
+        className={`${QUICK_ACTION_BASE} ${hasBeenShared ? QUICK_ACTION_ENABLED : QUICK_ACTION_DISABLED}`}
       >
         <BarChart className="w-3.5 h-3.5" />
       </button>
@@ -4830,22 +4817,25 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               />
             )}
             {canAccessHRQuestionBank && (
-              <button
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => {
                   // Tells the question bank which module to name in its breadcrumb.
                   try { sessionStorage.setItem('questionBankSource', 'assessments'); } catch { /* ignore */ }
                   router.push('/recruitment/hr-question-bank');
                 }}
-                className="flex items-center gap-1.5 border border-brand-blue/30 text-brand-blue bg-white dark:bg-slate-900 px-3 py-2 rounded-lg hover:bg-brand-blue/5 transition-colors shadow-sm text-sm"
+                icon={<ClipboardList className="w-4 h-4" />}
               >
-                <ClipboardList className="w-4 h-4" />
                 <span className="hidden sm:inline">HR Question Bank</span>
                 <span className="sm:hidden">Questions</span>
-              </button>
+              </Button>
             )}
             {/* Send Invite — same permission as the per-row Share action. */}
             {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
-              <button
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={handleSendInvite}
                 disabled={shareableAssessments.length === 0}
                 title={
@@ -4853,28 +4843,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     ? 'Publish an assessment before inviting candidates'
                     : 'Send an assessment invitation'
                 }
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg transition-colors shadow-sm text-sm border ${
-                  shareableAssessments.length === 0
-                    ? 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed'
-                    : 'border-brand-blue/30 text-brand-blue bg-white dark:bg-slate-900 hover:bg-brand-blue/5'
-                }`}
+                icon={<Mail className="w-4 h-4" />}
               >
-                <Mail className="w-4 h-4" />
                 <span className="hidden sm:inline">Send Invite</span>
                 <span className="sm:hidden">Invite</span>
-              </button>
+              </Button>
             )}
             {onOpenCandidateView && (
-              <button
-                onClick={onOpenCandidateView}
-                className="flex items-center gap-1.5 border border-brand-blue/30 text-brand-blue bg-white dark:bg-slate-900 px-3 py-2 rounded-lg hover:bg-brand-blue/5 transition-colors shadow-sm text-sm"
-              >
-                <Eye className="w-4 h-4" />
+              <Button variant="secondary" size="md" onClick={onOpenCandidateView} icon={<Eye className="w-4 h-4" />}>
                 Preview Candidate View
-              </button>
+              </Button>
             )}
             {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
-              <button
+              <Button
+                variant="primary"
+                size="md"
                 onClick={() => {
                   if (!canCreateAssessment) {
                     toast.error('You do not have permission to create assessments');
@@ -4884,64 +4867,52 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 }}
                 disabled={!canCreateAssessment || (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0)}
                 title={!canCreateAssessment ? 'You do not have permission to create assessments' : (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0 ? 'No assessment units available' : '')}
-                className={`flex items-center gap-1.5 px-3 sm:px-4 py-2 rounded-lg transition-all shadow-md text-sm ${
-                  !canCreateAssessment || (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0)
-                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60 shadow-none'
-                    : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-brand-blue/25 ring-1 ring-white/10'
-                }`}
+                icon={<Sparkles className="w-4 h-4" />}
               >
-                <Sparkles className="w-4 h-4" />
                 <span className="hidden sm:inline">Create Assessment</span>
                 <span className="sm:hidden">Create</span>
-              </button>
+              </Button>
             )}
           </div>
         </div>
 
         {/* Low Quota Warning Banner */}
         {!isUnlimited && availableUnits !== null && availableUnits > 0 && availableUnits <= 3 && (
-          <div className="mb-4 sm:mb-6 bg-amber-50 border border-amber-300 rounded-lg p-3 sm:p-4">
+          <div className="mb-4 sm:mb-6 bg-warning-subtle border border-warning-line rounded-lg p-3 sm:p-4">
             <div className="flex flex-col sm:flex-row items-start gap-3">
-              <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
-                <AlertTriangle className="w-4 h-4 text-amber-600" />
+              <div className="w-9 h-9 rounded-full bg-warning-subtle flex items-center justify-center flex-shrink-0">
+                <AlertTriangle className="w-4 h-4 text-warning" />
               </div>
               <div className="flex-1">
-                <h3 className="text-sm font-semibold text-amber-800 mb-0.5">Low Assessment Quota</h3>
-                <p className="text-sm text-amber-700">
+                <h3 className="text-sm font-semibold text-warning-strong mb-0.5">Low Assessment Quota</h3>
+                <p className="text-sm text-warning">
                   You have only <span className="font-semibold">{availableUnits}</span> assessment unit{availableUnits !== 1 ? 's' : ''} remaining out of {totalUnits}.
                   {' '}Consider purchasing add-on credits to avoid interruptions.
                 </p>
               </div>
-              <button
-                onClick={() => window.location.href = '/subscription/usage-quotas'}
-                className="px-4 py-2 bg-amber-600 text-white rounded-lg text-sm font-medium hover:bg-amber-700 transition-colors flex-shrink-0"
-              >
+              <Button variant="primary" size="md" onClick={() => window.location.href = '/subscription/usage-quotas'} className="flex-shrink-0">
                 Add Credits
-              </button>
+              </Button>
             </div>
           </div>
         )}
 
         {/* Quota Exhausted Banner — only show when units were actually consumed */}
         {!isUnlimited && availableUnits !== null && availableUnits <= 0 && stats.units_consumed > 0 && (
-          <div className="mb-4 sm:mb-6 bg-red-50 border border-red-300 rounded-lg p-3 sm:p-4">
+          <div className="mb-4 sm:mb-6 bg-destructive-subtle border border-destructive-line rounded-lg p-3 sm:p-4">
             <div className="flex flex-col sm:flex-row items-start gap-3">
-              <div className="w-9 h-9 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
-                <Lock className="w-4 h-4 text-red-600" />
+              <div className="w-9 h-9 rounded-full bg-destructive-subtle flex items-center justify-center flex-shrink-0">
+                <Lock className="w-4 h-4 text-destructive" />
               </div>
               <div className="flex-1">
-                <h3 className="text-sm font-semibold text-red-800 mb-0.5">Assessment Quota Exhausted</h3>
-                <p className="text-sm text-red-700">
+                <h3 className="text-sm font-semibold text-destructive-strong mb-0.5">Assessment Quota Exhausted</h3>
+                <p className="text-sm text-destructive">
                   You have used all {totalUnits} assessment units in your current plan. Purchase add-on credits or upgrade your plan to create more assessments.
                 </p>
               </div>
-              <button
-                onClick={() => window.location.href = '/subscription/usage-quotas'}
-                className="px-4 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors flex items-center gap-2 flex-shrink-0"
-              >
-                <Plus className="w-4 h-4" />
+              <Button variant="primary" size="md" onClick={() => window.location.href = '/subscription/usage-quotas'} icon={<Plus className="w-4 h-4" />} className="flex-shrink-0">
                 Add Credits
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -5207,13 +5178,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   {/* Panel footer: "Done" applies the selection and reveals the
                       toolbar Clear — same flow as job-openings. */}
                   <div className="mt-4 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex items-center justify-end gap-2">
-                    <button
+                    <Button
                       // The controls above commit as they change, so Done just closes.
+                      variant="secondary"
+                      size="sm"
                       onClick={() => setShowAssessmentFilters(false)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
                     >
                       Done
-                    </button>
+                    </Button>
                   </div>
                 </div>
               )}
@@ -5428,13 +5400,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </>
                   ) : completedCandidatesError ? (
                     <div className="p-6 text-center">
-                      <p className="text-sm text-red-600 mb-3">{completedCandidatesError}</p>
-                      <button
-                        onClick={loadAllCompletedCandidates}
-                        className="px-4 py-2 text-sm bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-colors"
-                      >
+                      <p className="text-sm text-destructive mb-3">{completedCandidatesError}</p>
+                      <Button variant="primary" size="md" onClick={loadAllCompletedCandidates}>
                         Retry
-                      </button>
+                      </Button>
                     </div>
                   ) : total === 0 ? (
                     /* The shared tab empty state — this tab has no search or
@@ -5553,11 +5522,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   </td>
                                   <td className="px-4 py-4 align-middle text-center">
                                     <div className="flex flex-col items-center gap-1">
-                                      <span className={`text-lg font-semibold ${typeof result.technical_score === 'number' ? (result.technical_score >= RESULT_PASS_MARK ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}`}>
+                                      <span className={`text-lg font-semibold ${typeof result.technical_score === 'number' ? (result.technical_score >= RESULT_PASS_MARK ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
                                         {typeof result.technical_score === 'number' ? `${Math.round(result.technical_score)}%` : '-'}
                                       </span>
                                       {typeof result.technical_score === 'number' && (
-                                        <span className={`text-xs font-medium ${result.technical_score >= RESULT_PASS_MARK ? 'text-green-600' : 'text-red-600'}`}>
+                                        <span className={`text-xs font-medium ${result.technical_score >= RESULT_PASS_MARK ? 'text-success' : 'text-destructive'}`}>
                                           {result.technical_score >= RESULT_PASS_MARK ? 'Pass' : 'Fail'}
                                         </span>
                                       )}
@@ -5565,11 +5534,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   </td>
                                   <td className="px-4 py-4 align-middle text-center">
                                     <div className="flex flex-col items-center gap-1">
-                                      <span className={`text-lg font-semibold ${typeof result.coding_score === 'number' ? (result.coding_score >= RESULT_PASS_MARK ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}`}>
+                                      <span className={`text-lg font-semibold ${typeof result.coding_score === 'number' ? (result.coding_score >= RESULT_PASS_MARK ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
                                         {typeof result.coding_score === 'number' ? `${Math.round(result.coding_score)}%` : '-'}
                                       </span>
                                       {typeof result.coding_score === 'number' && (
-                                        <span className={`text-xs font-medium ${result.coding_score >= RESULT_PASS_MARK ? 'text-green-600' : 'text-red-600'}`}>
+                                        <span className={`text-xs font-medium ${result.coding_score >= RESULT_PASS_MARK ? 'text-success' : 'text-destructive'}`}>
                                           {result.coding_score >= RESULT_PASS_MARK ? 'Pass' : 'Fail'}
                                         </span>
                                       )}
@@ -5590,7 +5559,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       )}
                                       {result.completed_at && (
                                         <div className="flex items-center gap-2 whitespace-nowrap">
-                                          <CheckCircle className="w-3 h-3 text-green-500" />
+                                          <CheckCircle className="w-3 h-3 text-success" />
                                           <span>Completed: {formatIST(result.completed_at)}</span>
                                         </div>
                                       )}
@@ -5611,14 +5580,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   </td>
                                   <td className="px-2 sm:px-4 py-4 align-middle tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                                     <div className="flex items-center justify-center">
-                                      <button
+                                      <Button
+                                        variant="primary"
+                                        size="sm"
                                         onClick={() => openCandidateResult(result, pageItems)}
-                                        className="inline-flex items-center justify-center w-9 h-9 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
                                         title="View candidate result"
                                         aria-label={`View result for ${result.candidate_name || 'candidate'}`}
                                       >
                                         <Eye className="w-3.5 h-3.5 shrink-0" />
-                                      </button>
+                                      </Button>
                                     </div>
                                   </td>
                                 </tr>
@@ -5805,13 +5775,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </>
                   ) : inviteStatusError ? (
                     <div className="p-6 text-center">
-                      <p className="text-sm text-red-600 mb-3">{inviteStatusError}</p>
-                      <button
-                        onClick={loadAllInviteStatuses}
-                        className="px-4 py-2 text-sm bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-colors"
-                      >
+                      <p className="text-sm text-destructive mb-3">{inviteStatusError}</p>
+                      <Button variant="primary" size="md" onClick={loadAllInviteStatuses}>
                         Retry
-                      </button>
+                      </Button>
                     </div>
                   ) : totalInvites === 0 ? (
                     /* Nothing invited anywhere: the shared tab empty state,
@@ -5924,7 +5891,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     badges use. tabular-nums so a segment
                                     doesn't change width as its count refreshes
                                     underneath. */}
-                                <span className={`inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-[10px] font-semibold tabular-nums ring-1 transition-colors ${segment.text} ${segment.tint} ${segment.ring}`}>
+                                <span className={`inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-2xs font-semibold tabular-nums ring-1 transition-colors ${segment.text} ${segment.tint} ${segment.ring}`}>
                                   {segment.value.toLocaleString()}
                                 </span>
                               </button>
@@ -5996,37 +5963,38 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 Absent (not disabled) under the other filters,
                                 for the same reason Export is. */}
                             {showInviteBulkResend && (
-                              <button
+                              <Button
+                                variant="primary"
+                                size="sm"
                                 onClick={() => setShowInviteBulkResendConfirm(true)}
                                 disabled={isBulkResending}
                                 title="Resend a fresh link to the selected expired invitations"
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-semibold bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-nowrap"
+                                icon={isBulkResending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
                               >
-                                {isBulkResending
-                                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                                  : <Mail className="w-3.5 h-3.5" />}
                                 {isBulkResending ? 'Sending…' : `Resend (${resendableSelectedRows.length})`}
-                              </button>
+                              </Button>
                             )}
                             {showInviteExport && (
-                              <button
+                              <Button
+                                variant="secondary"
+                                size="sm"
                                 onClick={() => setShowInviteExportModal(true)}
                                 title="Export the selected completed invitations"
-                                className="flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors font-medium whitespace-nowrap"
+                                icon={<FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                               >
-                                <FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                                 Export ({selectedInviteRows.length})
-                              </button>
+                              </Button>
                             )}
-                            <button
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               onClick={loadAllInviteStatuses}
                               disabled={isLoadingInviteStatus}
                               title="Fetch the latest invite statuses"
-                              className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                              icon={<RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isLoadingInviteStatus ? 'animate-spin' : ''}`} />}
                             >
-                              <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${isLoadingInviteStatus ? 'animate-spin' : ''}`} />
                               Refresh
-                            </button>
+                            </Button>
                           </div>
                         </div>
 
@@ -6338,13 +6306,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   </p>
                                 </div>
                               </div>
-                              <button
+                              <Button
+                                variant="secondary"
+                                size="sm"
                                 onClick={() => setShowInviteExportModal(false)}
-                                className="p-1 text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 rounded-md hover:bg-gray-100 dark:hover:bg-slate-800 flex-shrink-0"
+                                className="px-2 flex-shrink-0"
                                 aria-label="Close"
                               >
                                 <X className="w-5 h-5" />
-                              </button>
+                              </Button>
                             </div>
 
                             <div className="p-5 overflow-y-auto flex-1">
@@ -6359,8 +6329,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800'
                                   }`}
                                 >
-                                  <div className="w-12 h-12 bg-green-100 dark:bg-green-500/15 rounded-lg flex items-center justify-center flex-shrink-0">
-                                    <FileText className="w-6 h-6 text-green-700 dark:text-green-300" />
+                                  <div className="w-12 h-12 bg-success-subtle rounded-lg flex items-center justify-center flex-shrink-0">
+                                    <FileText className="w-6 h-6 text-success" />
                                   </div>
                                   <div className="flex-1 min-w-0">
                                     <div className="font-bold text-gray-900 dark:text-slate-50">CSV Format</div>
@@ -6406,21 +6376,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             </div>
 
                             <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200 dark:border-slate-700 shrink-0">
-                              <button
-                                onClick={() => setShowInviteExportModal(false)}
-                                className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-                              >
+                              <Button variant="secondary" size="md" onClick={() => setShowInviteExportModal(false)}>
                                 Cancel
-                              </button>
-                              <button
+                              </Button>
+                              <Button
+                                variant="primary"
+                                size="md"
                                 onClick={() => (inviteExportFormat === 'csv'
                                   ? exportInvitesToCSV(selectedInviteRows)
                                   : exportInvitesToXLS(selectedInviteRows))}
-                                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm"
+                                icon={<Download className="w-4 h-4" />}
                               >
-                                <Download className="w-4 h-4" />
                                 Export
-                              </button>
+                              </Button>
                             </div>
                           </div>
                         </div>
@@ -6520,9 +6488,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <>
                         {/* Error Message */}
                         {topicsError && (
-                          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                            <AlertTriangle className="w-4 h-4 text-red-500" />
-                            <p className="text-sm text-red-700">{topicsError}</p>
+                          <div className="flex items-center gap-2 p-3 bg-destructive-subtle border border-destructive-line rounded-lg">
+                            <AlertTriangle className="w-4 h-4 text-destructive" />
+                            <p className="text-sm text-destructive">{topicsError}</p>
                           </div>
                         )}
 
@@ -6552,13 +6520,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </div>
                               <div>
                                 <h3 className="text-xs sm:text-sm font-medium text-white">Topic Availability</h3>
-                                <p className="text-[10px] sm:text-xs text-white/80">
+                                <p className="text-2xs sm:text-xs text-white/80">
                                   Control which topics are available
                                 </p>
                               </div>
                             </div>
                             {isSavingTopics && (
-                              <span className="text-[10px] sm:text-xs text-white/80 flex items-center gap-1">
+                              <span className="text-2xs sm:text-xs text-white/80 flex items-center gap-1">
                                 <RefreshCw className="w-3 h-3 animate-spin" />
                                 Saving...
                               </span>
@@ -6574,8 +6542,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 <Users className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-brand-blue" />
                               </div>
                               <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
-                                <h4 className="text-[11px] sm:text-sm font-medium text-gray-900 dark:text-slate-50">HR</h4>
-                                <span className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
+                                <h4 className="text-2xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">HR</h4>
+                                <span className={`px-1.5 sm:px-2 py-0.5 rounded text-2xs sm:text-xs font-medium ${
                                   topicSettings.hr_enabled
                                     ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                                     : 'bg-slate-200 text-gray-600'
@@ -6588,7 +6556,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </div>
                             </div>
                             <div className="flex items-center gap-1.5 flex-shrink-0">
-                              <span className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 font-medium">
+                              <span className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 font-medium">
                                 {topicSettings.hr_enabled ? 'ON' : 'OFF'}
                               </span>
                               <button
@@ -6608,7 +6576,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </button>
                             </div>
                           </div>
-                          <p className="text-[10px] sm:text-sm text-gray-600 dark:text-slate-400 pl-9 sm:pl-[52px]">
+                          <p className="text-2xs sm:text-sm text-gray-600 dark:text-slate-400 pl-9 sm:pl-[52px]">
                             Behavioral questions, cultural fit, and soft skills evaluation.
                           </p>
                         </div>
@@ -6621,8 +6589,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 <Brain className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-brand-cyan" />
                               </div>
                               <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
-                                <h4 className="text-[11px] sm:text-sm font-medium text-gray-900 dark:text-slate-50">Technical</h4>
-                                <span className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
+                                <h4 className="text-2xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">Technical</h4>
+                                <span className={`px-1.5 sm:px-2 py-0.5 rounded text-2xs sm:text-xs font-medium ${
                                   topicSettings.technical_enabled
                                     ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                                     : 'bg-slate-200 text-gray-600'
@@ -6635,7 +6603,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </div>
                             </div>
                             <div className="flex items-center gap-1.5 flex-shrink-0">
-                              <span className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 font-medium">
+                              <span className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 font-medium">
                                 {topicSettings.technical_enabled ? 'ON' : 'OFF'}
                               </span>
                               <button
@@ -6655,7 +6623,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </button>
                             </div>
                           </div>
-                          <p className="text-[10px] sm:text-sm text-gray-600 dark:text-slate-400 pl-9 sm:pl-[52px]">
+                          <p className="text-2xs sm:text-sm text-gray-600 dark:text-slate-400 pl-9 sm:pl-[52px]">
                             Domain knowledge, tools, regulations, and workflows.
                           </p>
                         </div>
@@ -6668,8 +6636,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 <Code className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-brand-orange" />
                               </div>
                               <div className="flex flex-wrap items-center gap-1 sm:gap-2 min-w-0">
-                                <h4 className="text-[11px] sm:text-sm font-medium text-gray-900 dark:text-slate-50">Coding</h4>
-                                <span className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
+                                <h4 className="text-2xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">Coding</h4>
+                                <span className={`px-1.5 sm:px-2 py-0.5 rounded text-2xs sm:text-xs font-medium ${
                                   topicSettings.coding_enabled
                                     ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                                     : 'bg-slate-200 text-gray-600'
@@ -6682,7 +6650,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </div>
                             </div>
                             <div className="flex items-center gap-1.5 flex-shrink-0">
-                              <span className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 font-medium">
+                              <span className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 font-medium">
                                 {topicSettings.coding_enabled ? 'ON' : 'OFF'}
                               </span>
                               <button
@@ -6702,16 +6670,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </button>
                             </div>
                           </div>
-                          <p className="text-[10px] sm:text-sm text-gray-600 dark:text-slate-400 pl-9 sm:pl-[52px]">
+                          <p className="text-2xs sm:text-sm text-gray-600 dark:text-slate-400 pl-9 sm:pl-[52px]">
                             Algorithms, data structures, frameworks, and patterns.
                           </p>
                         </div>
 
                         {/* Important Notice */}
-                        <div className="flex items-start gap-2 p-3 sm:p-4 bg-amber-50 rounded-lg border border-amber-200">
-                          <Info className="w-4 h-4 sm:w-5 sm:h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+                        <div className="flex items-start gap-2 p-3 sm:p-4 bg-warning-subtle rounded-lg border border-warning-line">
+                          <Info className="w-4 h-4 sm:w-5 sm:h-5 text-warning flex-shrink-0 mt-0.5" />
                           <div>
-                            <p className="text-xs sm:text-sm text-amber-800">
+                            <p className="text-xs sm:text-sm text-warning-strong">
                               <span className="font-medium">Important:</span> Disabled topics won't appear in section distribution when creating assessments. Existing assessments remain unchanged.
                             </p>
                           </div>
@@ -6775,15 +6743,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </>
                 ) : proctoringError && !proctoringSettings ? (
                   <div className="flex flex-col items-center justify-center py-8 sm:py-12">
-                    <AlertTriangle className="w-10 h-10 sm:w-12 sm:h-12 text-red-400 mb-3 sm:mb-4" />
-                    <p className="text-sm text-red-600 mb-3 sm:mb-4 text-center">{proctoringError}</p>
-                    <button
-                      onClick={loadProctoringData}
-                      className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-                    >
-                      <RefreshCw className="w-4 h-4" />
+                    <AlertTriangle className="w-10 h-10 sm:w-12 sm:h-12 text-destructive mb-3 sm:mb-4" />
+                    <p className="text-sm text-destructive mb-3 sm:mb-4 text-center">{proctoringError}</p>
+                    <Button variant="primary" size="md" onClick={loadProctoringData} icon={<RefreshCw className="w-4 h-4" />}>
                       Retry
-                    </button>
+                    </Button>
                   </div>
                 ) : proctoringSettings && (
                   <>
@@ -6796,20 +6760,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </div>
                           <div>
                             <h3 className="text-xs sm:text-sm font-medium text-white">Proctoring Settings</h3>
-                            <p className="text-[10px] sm:text-xs text-white/80">
+                            <p className="text-2xs sm:text-xs text-white/80">
                               Configure security features
                             </p>
                           </div>
                         </div>
                         <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
                           {isSavingProctoring && (
-                            <span className="text-[10px] sm:text-xs text-white/80 flex items-center gap-1">
+                            <span className="text-2xs sm:text-xs text-white/80 flex items-center gap-1">
                               <RefreshCw className="w-3 h-3 animate-spin" />
                               <span className="hidden sm:inline">Saving...</span>
                             </span>
                           )}
                           {flaggedCount > 0 && (
-                            <span className="px-2 sm:px-3 py-0.5 sm:py-1 bg-red-500 text-white rounded-full text-[10px] sm:text-xs font-medium whitespace-nowrap">
+                            <span className="px-2 sm:px-3 py-0.5 sm:py-1 bg-destructive text-white rounded-full text-2xs sm:text-xs font-medium whitespace-nowrap">
                               {flaggedCount} Flagged
                             </span>
                           )}
@@ -6819,9 +6783,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
                     {/* Error Message */}
                     {proctoringError && (
-                      <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                        <AlertTriangle className="w-4 h-4 text-red-500" />
-                        <p className="text-sm text-red-700">{proctoringError}</p>
+                      <div className="flex items-center gap-2 p-3 bg-destructive-subtle border border-destructive-line rounded-lg">
+                        <AlertTriangle className="w-4 h-4 text-destructive" />
+                        <p className="text-sm text-destructive">{proctoringError}</p>
                       </div>
                     )}
 
@@ -6836,7 +6800,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             </div>
                             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 min-w-0">
                               <h4 className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">Proctoring Mode</h4>
-                              <span className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
+                              <span className={`px-1.5 sm:px-2 py-0.5 rounded text-2xs sm:text-xs font-medium ${
                                 proctoringSettings.proctoring_enabled
                                   ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
                                   : 'bg-slate-200 text-gray-600'
@@ -6847,7 +6811,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </div>
                           {/* Toggle Switch */}
                           <div className="flex items-center gap-1.5 flex-shrink-0">
-                            <span className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 font-medium">
+                            <span className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 font-medium">
                               {proctoringSettings.proctoring_enabled ? 'ON' : 'OFF'}
                             </span>
                             <button
@@ -6868,7 +6832,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </div>
                         </div>
                         {/* Description */}
-                        <p className="text-[10px] sm:text-sm text-gray-600 dark:text-slate-400">
+                        <p className="text-2xs sm:text-sm text-gray-600 dark:text-slate-400">
                           {proctoringSettings.proctoring_enabled
                             ? 'Advanced monitoring is active for test integrity.'
                             : 'Standard mode — no advanced monitoring. Enable for high-stakes assessments.'
@@ -6878,7 +6842,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         {proctoringSettings.proctoring_enabled && (
                           <div className="flex items-start gap-1.5 sm:gap-2 p-2 sm:p-3 bg-brand-blue/5 rounded-lg ring-1 ring-brand-blue/15">
                             <Info className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue flex-shrink-0 mt-0.5" />
-                            <p className="text-[10px] sm:text-xs text-gray-700 dark:text-slate-300">
+                            <p className="text-2xs sm:text-xs text-gray-700 dark:text-slate-300">
                               <span className="font-medium">Privacy:</span> Candidates are informed before starting. Recordings stored for {proctoringSettings.recording_retention_days} days.
                             </p>
                           </div>
@@ -6908,8 +6872,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <IconComponent className="w-3 h-3 sm:w-4 sm:h-4 text-gray-600 dark:text-slate-400" />
                                 </div>
                                 <div className="min-w-0">
-                                  <div className="text-[10px] sm:text-sm font-medium text-gray-900 dark:text-slate-50 leading-tight">{feature.name}</div>
-                                  <div className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 line-clamp-1 sm:line-clamp-2 hidden sm:block">{feature.description}</div>
+                                  <div className="text-2xs sm:text-sm font-medium text-gray-900 dark:text-slate-50 leading-tight">{feature.name}</div>
+                                  <div className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 line-clamp-1 sm:line-clamp-2 hidden sm:block">{feature.description}</div>
                                 </div>
                               </div>
                               <button
@@ -6917,7 +6881,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 disabled={isSavingProctoring || !proctoringSettings.proctoring_enabled}
                                 className={`relative w-9 sm:w-11 h-5 sm:h-6 rounded-full transition-colors flex-shrink-0 ${
                                   isEnabled && proctoringSettings.proctoring_enabled
-                                    ? 'bg-green-500'
+                                    ? 'bg-success'
                                     : 'bg-gray-300'
                                 } ${isSavingProctoring || !proctoringSettings.proctoring_enabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
@@ -6951,7 +6915,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             onClick={() => updateProctoringSettings({ email_masking_enabled: !proctoringSettings.email_masking_enabled })}
                             disabled={isSavingProctoring}
                             className={`relative w-14 h-7 rounded-full transition-colors ${
-                              proctoringSettings.email_masking_enabled ? 'bg-green-500' : 'bg-gray-300'
+                              proctoringSettings.email_masking_enabled ? 'bg-success' : 'bg-gray-300'
                             } ${isSavingProctoring ? 'opacity-50 cursor-not-allowed' : ''}`}
                           >
                             <div className={`absolute top-0.5 w-6 h-6 rounded-full bg-white shadow-md transition-transform ${
@@ -6982,7 +6946,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] sm:text-xs text-gray-600 dark:text-slate-400 mb-1.5 sm:mb-2">Max Violations Before Flag</label>
+                          <label className="block text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mb-1.5 sm:mb-2">Max Violations Before Flag</label>
                           <input
                             type="number"
                             value={proctoringSettings.max_violations_before_flag}
@@ -6994,7 +6958,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] sm:text-xs text-gray-600 dark:text-slate-400 mb-1.5 sm:mb-2">Recording Retention (Days)</label>
+                          <label className="block text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mb-1.5 sm:mb-2">Recording Retention (Days)</label>
                           <input
                             type="number"
                             value={proctoringSettings.recording_retention_days}
@@ -7012,7 +6976,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-3 sm:p-6">
                       <div className="flex items-center justify-between mb-3 sm:mb-4">
                         <h3 className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">Recent Proctoring Events</h3>
-                        <span className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500">{proctoringEventsTotal} total</span>
+                        <span className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500">{proctoringEventsTotal} total</span>
                       </div>
                       {isLoadingProctoringEvents ? (
                         <div className="space-y-2 sm:space-y-3">
@@ -7044,32 +7008,32 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <div key={event.id} className="flex items-center justify-between gap-2 p-2.5 sm:p-3 bg-gray-50 dark:bg-slate-800/50 rounded-lg">
                               <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                                 <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                                  event.severity === 'high' ? 'bg-red-100' :
-                                  event.severity === 'medium' ? 'bg-yellow-100' : 'bg-gray-100'
+                                  event.severity === 'high' ? 'bg-destructive-subtle' :
+                                  event.severity === 'medium' ? 'bg-warning-subtle' : 'bg-gray-100'
                                 }`}>
                                   <AlertTriangle className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${
-                                    event.severity === 'high' ? 'text-red-500' :
-                                    event.severity === 'medium' ? 'text-yellow-500' : 'text-gray-400'
+                                    event.severity === 'high' ? 'text-destructive' :
+                                    event.severity === 'medium' ? 'text-warning' : 'text-gray-400'
                                   }`} />
                                 </div>
                                 <div className="min-w-0">
                                   <div className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50 capitalize truncate">
                                     {event.event_type.replace(/_/g, ' ')}
                                   </div>
-                                  <div className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 truncate">
+                                  <div className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 truncate">
                                     {event.candidate_name || 'Unknown'} • {event.assessment_title || 'Assessment'}
                                   </div>
                                 </div>
                               </div>
                               <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
-                                <span className={`px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs font-medium ${
-                                  event.severity === 'high' ? 'bg-red-100 text-red-700' :
-                                  event.severity === 'medium' ? 'bg-yellow-100 text-yellow-700' : 'bg-gray-100 text-gray-600'
+                                <span className={`px-1.5 sm:px-2 py-0.5 rounded text-2xs sm:text-xs font-medium ${
+                                  event.severity === 'high' ? 'bg-destructive-subtle text-destructive' :
+                                  event.severity === 'medium' ? 'bg-warning-subtle text-warning' : 'bg-gray-100 text-gray-600'
                                 }`}>
                                   {event.severity}
                                 </span>
                                 {event.reviewed ? (
-                                  <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-500" />
+                                  <CheckCircle2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-success" />
                                 ) : (
                                   <span className="w-2 h-2 bg-orange-400 rounded-full" />
                                 )}
@@ -7143,7 +7107,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   action={copy.canCreate ? (
                     /* The page's own Create action, permission handling and
                        all, in the shared empty-state button class. */
-                    <button
+                    <Button
+                      variant="primary"
+                      size="md"
                       onClick={() => {
                         if (!canCreateAssessment) {
                           toast.error('You do not have permission to create assessments');
@@ -7153,11 +7119,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       }}
                       disabled={!canCreateAssessment}
                       title={!canCreateAssessment ? 'You do not have permission to create assessments' : ''}
-                      className={TAB_EMPTY_ACTION_CLASS}
+                      icon={<Sparkles className="w-4 h-4" />}
                     >
-                      <Sparkles className="w-4 h-4" />
                       Create Assessment
-                    </button>
+                    </Button>
                   ) : undefined}
                 />
               );
@@ -7250,13 +7215,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Open a job&rsquo;s versions, then pick the assessment version to send</p>
                   </div>
                 </div>
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={closeInvitePicker}
-                  className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
+                  className="px-2 flex-shrink-0"
                   aria-label="Close"
                 >
                   <X className="w-5 h-5" />
-                </button>
+                </Button>
               </div>
 
               {/* Content */}
@@ -7474,13 +7441,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   })()}
                 </div>
                 <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
-                  <button
-                    onClick={closeInvitePicker}
-                    className="flex-1 sm:flex-none px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
-                  >
+                  <Button variant="secondary" size="md" onClick={closeInvitePicker} className="flex-1 sm:flex-none">
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="primary"
+                    size="md"
                     onClick={() => {
                       const choice = resolveInvitePickerChoice();
                       const blocked = invitePickerBlockedReason(choice);
@@ -7520,11 +7486,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       setShowShareModal(true);
                     }}
                     disabled={!!invitePickerBlockedReason(resolveInvitePickerChoice())}
-                    className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm whitespace-nowrap bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                    icon={<Mail className="w-4 h-4" />}
+                    className="flex-1 sm:flex-none whitespace-nowrap"
                   >
-                    <Mail className="w-4 h-4" />
                     Continue
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>
@@ -7622,7 +7588,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         single assessment names itself, as before. */}
                     {trackingJob ? (
                       <p
-                        className="text-[10px] sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate"
+                        className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate"
                         title={`${trackingJob.jobId ? trackingJob.jobId + ' - ' : ''}${trackingJob.jobTitle}`}
                       >
                         {trackingJob.jobId ? `${trackingJob.jobId} - ` : ''}
@@ -7634,7 +7600,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         </span>
                       </p>
                     ) : (
-                      <p className="text-[10px] sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">{selectedAssessmentForTracking.title}</p>
+                      <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">{selectedAssessmentForTracking.title}</p>
                     )}
                   </div>
                 </div>
@@ -7643,14 +7609,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 {/* Refetches the live statuses in place — the popup stays open,
                     the icon spins while the request runs, and the handler's
                     guard drops repeat clicks until it settles. */}
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={refreshTrackingInvitations}
                   disabled={isRefreshingTracking || isLoadingInvitations}
                   title="Fetch the latest invite statuses"
                   aria-label="Refresh"
-                  className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  icon={<RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isRefreshingTracking ? 'animate-spin' : ''}`} />}
                 >
-                  <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${isRefreshingTracking ? 'animate-spin' : ''}`} />
                   {/* The label swaps to "Refreshing..." mid-request, and the
                       longer word used to widen the button and shove the close
                       X sideways - a small shake of its own, right where the
@@ -7659,13 +7626,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
                     {isRefreshingTracking ? 'Refreshing...' : 'Refresh'}
                   </span>
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={closeTrackInvitesModal}
-                  className="p-2 text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors"
+                  className="px-2"
                  aria-label="Close">
                   <X className="w-4 h-4 sm:w-5 sm:h-5" />
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -7756,17 +7725,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 {/* Bulk Resend — appears once something is ticked. Count and
                     targets are the still-eligible selection only. */}
                 {trackingSelectedIds.size > 0 && (
-                  <button
-                    type="button"
+                  <Button
+                    variant="primary"
+                    size="sm"
                     onClick={() => setShowBulkResendConfirm(true)}
                     disabled={isBulkResending}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-semibold bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-nowrap"
+                    icon={isBulkResending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
                   >
-                    {isBulkResending
-                      ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      : <Mail className="w-3.5 h-3.5" />}
                     {isBulkResending ? 'Sending…' : `Resend (${trackingSelectedIds.size})`}
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
@@ -8044,10 +8011,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 <td className="py-3 px-4 align-top text-sm text-center">
                                   {techReady ? (
                                     <div className="flex flex-col items-center gap-0.5">
-                                      <span className={`font-medium ${invitation.technical_score >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
+                                      <span className={`font-medium ${invitation.technical_score >= 70 ? 'text-brand-blue' : 'text-destructive'}`}>
                                         {Math.round(invitation.technical_score)}%
                                       </span>
-                                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.technical_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+                                      <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.technical_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
                                         {invitation.technical_score >= 70 ? 'Pass' : 'Fail'}
                                       </span>
                                     </div>
@@ -8066,10 +8033,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 <td className="py-3 px-4 align-top text-sm text-center">
                                   {codingReady ? (
                                     <div className="flex flex-col items-center gap-0.5">
-                                      <span className={`font-medium ${invitation.coding_score >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
+                                      <span className={`font-medium ${invitation.coding_score >= 70 ? 'text-brand-blue' : 'text-destructive'}`}>
                                         {Math.round(invitation.coding_score)}%
                                       </span>
-                                      <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.coding_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+                                      <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.coding_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
                                         {invitation.coding_score >= 70 ? 'Pass' : 'Fail'}
                                       </span>
                                     </div>
@@ -8103,20 +8070,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     autoFocus
                                   />
                                   <div className="flex gap-1">
-                                    <button
+                                    <Button
+                                      variant="primary"
+                                      size="sm"
                                       onClick={() => handleUpdateEmail(invitation)}
                                       disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
-                                      className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                                      icon={<Send className="w-3 h-3" />}
                                     >
-                                      <Send className="w-3 h-3" />
                                       {isSendingChangeEmail ? 'Sending…' : 'Send'}
-                                    </button>
-                                    <button
-                                      onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}
-                                      className="px-2 py-1 text-xs text-gray-600 dark:text-slate-400 hover:bg-slate-100 rounded transition-colors"
-                                    >
+                                    </Button>
+                                    <Button variant="secondary" size="sm" onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}>
                                       Cancel
-                                    </button>
+                                    </Button>
                                   </div>
                                 </div>
                               ) : (
@@ -8166,7 +8131,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 hidden below sm — Prev/Next and the page indicator are enough on a
                 phone, and the full set comes back from sm up. */}
             <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
-              <p className="text-[11px] sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
+              <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
                 {trackingResultsLabel}
               </p>
               <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
@@ -8177,12 +8142,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     onPageChange={setTrackingCurrentPage}
                   />
                 )}
-                <button
-                  onClick={closeTrackInvitesModal}
-                  className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
-                >
+                <Button variant="secondary" size="sm" onClick={closeTrackInvitesModal}>
                   Close
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -8208,13 +8170,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           const preview = computeResendExpiryPreview(resendTargetInvitation);
           if (!preview) return null;
           return (
-            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-              <p className="text-amber-900 font-medium mb-1">New link expiry</p>
-              <p className="text-amber-800">
+            <div className="bg-warning-subtle border border-warning-line rounded-lg p-3 text-sm">
+              <p className="text-warning-strong font-medium mb-1">New link expiry</p>
+              <p className="text-warning-strong">
                 Valid for <strong>{preview.durationLabel}</strong> from now — expires on{' '}
                 <strong>{preview.dateLabel}</strong>.
               </p>
-              <p className="text-amber-700 text-xs mt-2">
+              <p className="text-warning text-xs mt-2">
                 Same duration as the original invitation.
               </p>
             </div>
@@ -8322,14 +8284,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     {nextVersion} before publishing.
                   </p>
                 </div>
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={closeIfIdle}
                   disabled={isCloning}
-                  className="p-1.5 -mr-1.5 -mt-1 text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 flex-shrink-0"
+                  className="px-2 -mr-1.5 -mt-1 flex-shrink-0"
                   aria-label="Close"
                 >
                   <X className="w-5 h-5 sm:w-6 sm:h-6" />
-                </button>
+                </Button>
               </div>
 
               {/* FROM — the job the lineage belongs to, which the new version
@@ -8372,10 +8336,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               {/* TO — what the confirm button actually produces: a draft, which
                   is why the panel is amber and carries the same Draft pill the
                   lists use. */}
-              <div className="rounded-xl border border-amber-200/70 bg-amber-50 p-3 sm:p-4">
+              <div className="rounded-xl border border-warning-line/70 bg-warning-subtle p-3 sm:p-4">
                 <div className="flex items-start gap-3 sm:gap-4">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-amber-100 flex items-center justify-center flex-shrink-0">
-                    <FileText className="w-5 h-5 text-amber-600" />
+                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-xl bg-warning-subtle flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-5 h-5 text-warning" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400">New Assessment Version</p>
@@ -8383,7 +8347,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <span className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50">
                         Assessment Version {nextVersion}
                       </span>
-                      <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 text-xs sm:text-sm font-semibold">
+                      <span className="px-2.5 py-1 rounded-lg bg-warning-subtle text-warning-strong text-xs sm:text-sm font-semibold">
                         Draft
                       </span>
                     </div>
@@ -8394,30 +8358,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
             {/* Actions */}
             <div className="flex-shrink-0 border-t border-gray-200 dark:border-slate-700 px-5 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
-              <button
-                onClick={closeIfIdle}
-                disabled={isCloning}
-                className="px-5 sm:px-8 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              >
+              <Button variant="secondary" size="md" onClick={closeIfIdle} disabled={isCloning}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
                 onClick={handleConfirmClone}
                 disabled={isCloning}
-                className="px-5 sm:px-8 py-2.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                icon={isCloning ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
               >
-                {isCloning ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Duplicating…
-                  </>
-                ) : (
+                {isCloning ? 'Duplicating…' : (
                   <>
                     Create Version {nextVersion}
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -8448,18 +8405,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-lg overflow-hidden">
               <div className="px-5 sm:px-7 pt-5 sm:pt-7 pb-5 sm:pb-6">
                 <div className="flex justify-end">
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={closeConflict}
-                    className="p-1.5 -mr-1.5 -mt-1 text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+                    className="px-2 -mr-1.5 -mt-1"
                     aria-label="Close"
                   >
                     <X className="w-5 h-5 sm:w-6 sm:h-6" />
-                  </button>
+                  </Button>
                 </div>
 
                 <div className="flex flex-col items-center text-center -mt-4">
-                  <div className="w-14 h-14 rounded-full bg-amber-50 dark:bg-amber-500/15 flex items-center justify-center">
-                    <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+                  <div className="w-14 h-14 rounded-full bg-warning-subtle flex items-center justify-center">
+                    <AlertTriangle className="w-6 h-6 text-warning" />
                   </div>
                   <h3 className="mt-4 text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">
                     Draft already exists
@@ -8482,7 +8441,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           {jdShortId ? `${jdShortId.replace(/-/g, ' ')}  ` : ''}
                           {jobTitle} v{jobVersion} - Assessment V {draftVersion}
                         </span>
-                        <span className="px-2.5 py-1 rounded-lg bg-amber-100 text-amber-800 text-xs font-semibold flex-shrink-0">
+                        <span className="px-2.5 py-1 rounded-lg bg-warning-subtle text-warning-strong text-xs font-semibold flex-shrink-0">
                           Draft
                         </span>
                       </div>
@@ -8509,13 +8468,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </div>
 
               <div className="border-t border-gray-200 dark:border-slate-700 px-5 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
-                <button
-                  onClick={closeConflict}
-                  className="px-5 sm:px-8 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-                >
+                <Button variant="secondary" size="md" onClick={closeConflict}>
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="primary"
+                  size="md"
                   onClick={() => {
                     handleEditAssessment({
                       id: draft.id,
@@ -8525,11 +8483,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     });
                     closeConflict();
                   }}
-                  className="px-5 sm:px-8 py-2.5 text-sm font-semibold bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow-md shadow-amber-600/25 transition-colors flex items-center justify-center gap-2"
                 >
                   Open Draft
                   <ArrowRight className="w-4 h-4" />
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -8554,13 +8511,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         variant="warning"
       >
         {revokeTargetAssessment && (
-          <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm">
-            <p className="text-amber-900 font-medium mb-1">
+          <div className="bg-warning-subtle border border-warning-line rounded-lg p-3 text-sm">
+            <p className="text-warning-strong font-medium mb-1">
               {revokeCount === null
                 ? 'Counting eligible invitations…'
                 : `${revokeCount} link${revokeCount === 1 ? '' : 's'} will be revoked.`}
             </p>
-            <p className="text-amber-800 text-xs mt-1">
+            <p className="text-warning-strong text-xs mt-1">
               Only candidates who have <strong>not yet opened</strong> their invitation are affected. Anyone already in progress or completed will be left alone and can finish.
             </p>
           </div>

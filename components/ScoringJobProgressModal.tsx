@@ -2,6 +2,7 @@
 
 import { X, ClipboardList, Clock, Loader2, CheckCircle2, XCircle, AlertCircle, Minus, Maximize2, User, FileText, RotateCcw, Timer } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
+import { Button } from '@/components/ui/button';
 
 export interface ResumeProgressItem {
   resumeId: string;
@@ -198,7 +199,7 @@ export default function ScoringJobProgressModal({
       case 'completed':
         return <CheckCircle2 className="w-4 h-4 text-brand-cyan" />;
       case 'failed':
-        return <XCircle className="w-4 h-4 text-red-500" />;
+        return <XCircle className="w-4 h-4 text-destructive" />;
       case 'already_scored':
         return <AlertCircle className="w-4 h-4 text-brand-orange-deep" />;
       default:
@@ -215,7 +216,7 @@ export default function ScoringJobProgressModal({
       case 'completed':
         return 'bg-brand-cyan/5 border-brand-cyan/20';
       case 'failed':
-        return 'bg-red-50 border-red-200';
+        return 'bg-destructive-subtle border-destructive-line';
       case 'already_scored':
         return 'bg-brand-orange/5 border-brand-orange/20';
       default:
@@ -278,21 +279,25 @@ export default function ScoringJobProgressModal({
 
             <div className="flex items-center gap-1">
               {onMinimize && (
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={onMinimize}
-                  className="w-8 h-8 flex items-center justify-center text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors"
+                  className="w-8 px-0"
                   aria-label="Minimize" title="Minimize"
                 >
                   <Minus className="w-4 h-4" />
-                </button>
+                </Button>
               )}
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={onClose}
-                className="w-8 h-8 flex items-center justify-center text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors"
+                className="w-8 px-0"
                 aria-label="Close" title="Close"
               >
                 <X className="w-4 h-4" />
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -339,8 +344,8 @@ export default function ScoringJobProgressModal({
               <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Done: <span className="font-semibold text-brand-cyan">{overallCompleted - alreadyScoredCount}</span></span>
             </div>
             <div className="flex items-center gap-1.5">
-              <XCircle className="w-3.5 h-3.5 text-red-500" />
-              <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Failed: <span className="font-semibold text-red-600">{overallFailed}</span></span>
+              <XCircle className="w-3.5 h-3.5 text-destructive" />
+              <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Failed: <span className="font-semibold text-destructive">{overallFailed}</span></span>
             </div>
           </div>
 
@@ -371,14 +376,14 @@ export default function ScoringJobProgressModal({
                   <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
                     item.status === 'processing' ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15' :
                     item.status === 'completed' ? 'bg-brand-cyan/10 ring-1 ring-brand-cyan/20' :
-                    item.status === 'failed' ? 'bg-red-100' :
+                    item.status === 'failed' ? 'bg-destructive-subtle' :
                     item.status === 'already_scored' ? 'bg-brand-orange/10 ring-1 ring-brand-orange/20' :
                     'bg-gray-100 dark:bg-slate-800'
                   }`}>
                     <User className={`w-4 h-4 sm:w-5 sm:h-5 ${
                       item.status === 'processing' ? 'text-brand-blue' :
                       item.status === 'completed' ? 'text-brand-cyan' :
-                      item.status === 'failed' ? 'text-red-600' :
+                      item.status === 'failed' ? 'text-destructive' :
                       item.status === 'already_scored' ? 'text-brand-orange-deep' :
                       'text-gray-500 dark:text-slate-500'
                     }`} />
@@ -390,7 +395,7 @@ export default function ScoringJobProgressModal({
                       {item.candidateName || 'Unknown Candidate'}
                     </p>
                     {item.status === 'failed' && item.errorMessage && (
-                      <p className="text-xs text-red-500 truncate">{item.errorMessage}</p>
+                      <p className="text-xs text-destructive truncate">{item.errorMessage}</p>
                     )}
                   </div>
 
@@ -400,7 +405,7 @@ export default function ScoringJobProgressModal({
                     <span className={`text-xs sm:text-sm font-medium ${
                       item.status === 'processing' ? 'text-brand-blue' :
                       item.status === 'completed' ? 'text-brand-cyan' :
-                      item.status === 'failed' ? 'text-red-600' :
+                      item.status === 'failed' ? 'text-destructive' :
                       item.status === 'already_scored' ? 'text-brand-orange-deep' :
                       'text-gray-500 dark:text-slate-500'
                     }`}>
@@ -412,14 +417,12 @@ export default function ScoringJobProgressModal({
 
                   {/* Retry button for failed items */}
                   {item.status === 'failed' && onRetryFailed && (
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => handleRetry(item.resumeId, stableJobProgressData[0]?.jobId || '')}
                       disabled={retryingItems.has(item.resumeId)}
-                      className={`flex items-center gap-1 px-2 sm:px-3 py-1 sm:py-1.5 rounded-lg text-xs font-medium transition-colors flex-shrink-0 ${
-                        retryingItems.has(item.resumeId)
-                          ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                          : 'bg-brand-blue/5 text-brand-blue hover:bg-brand-blue/10 border border-brand-blue/20'
-                      }`}
+                      className="flex-shrink-0"
                       aria-label="Retry scoring" title="Retry scoring"
                     >
                       {retryingItems.has(item.resumeId) ? (
@@ -433,7 +436,7 @@ export default function ScoringJobProgressModal({
                           <span className="hidden sm:inline">Retry</span>
                         </>
                       )}
-                    </button>
+                    </Button>
                   )}
                 </div>
               ))}

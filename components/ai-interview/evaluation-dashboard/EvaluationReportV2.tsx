@@ -277,7 +277,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                   <div key={`mh-${i}`} className="grid grid-cols-[30%_15%_15%_minmax(0,1fr)_15%] items-center gap-2 py-2 border-b border-gray-100 last:border-b-0">
                     <div className="text-sm font-semibold text-gray-900 truncate">{s.name}</div>
                     <div>
-                      <span className={`inline-block text-[10px] font-bold text-white px-2 py-0.5 rounded ${tagBg}`}>
+                      <span className={`inline-block text-2xs font-bold text-white px-2 py-0.5 rounded ${tagBg}`}>
                         {s.tag}
                       </span>
                     </div>
@@ -308,7 +308,7 @@ export function EvaluationReportV2({ data, aiConfidence, evaluationId }: Props) 
                   <div key={`nh-${i}`} className="grid grid-cols-[30%_15%_15%_minmax(0,1fr)_15%] items-center gap-2 py-2 border-b border-gray-100 last:border-b-0">
                     <div className="text-sm font-semibold text-gray-900 truncate">{s.name}</div>
                     <div>
-                      <span className={`inline-block text-[10px] font-bold text-white px-2 py-0.5 rounded ${tagBg}`}>
+                      <span className={`inline-block text-2xs font-bold text-white px-2 py-0.5 rounded ${tagBg}`}>
                         {s.tag}
                       </span>
                     </div>

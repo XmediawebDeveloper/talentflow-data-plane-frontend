@@ -138,9 +138,9 @@ export function QuestionDistributionPopover({
   const priorityLabel = (p: number) => (p >= 3 ? 'P1' : p === 2 ? 'P2' : 'P3');
   const priorityClass = (p: number) =>
     p >= 3
-      ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
+      ? 'bg-success-subtle text-success ring-success-line'
       : p === 2
-        ? 'bg-amber-50 text-amber-700 ring-amber-200'
+        ? 'bg-warning-subtle text-warning ring-warning-line'
         : 'bg-rose-50 text-rose-700 ring-rose-200';
 
   const renderRow = (row: DistRow, sectionKey: 'mth' | 'nth') => {
@@ -152,7 +152,7 @@ export function QuestionDistributionPopover({
       >
         <td className="align-top px-2 py-1.5 w-[40px]">
           <span
-            className={`text-[11px] font-mono font-semibold ${
+            className={`text-2xs font-mono font-semibold ${
               sectionKey === 'mth' ? 'text-brand-blue' : 'text-brand-cyan'
             }`}
           >
@@ -164,10 +164,10 @@ export function QuestionDistributionPopover({
             {chips.map((s, i) => (
               <span
                 key={`${row.q}-chip-${i}`}
-                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium ring-1 ${priorityClass(s.priority)}`}
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium ring-1 ${priorityClass(s.priority)}`}
               >
                 {s.name}
-                <span className="text-[9px] font-semibold opacity-80">{priorityLabel(s.priority)}</span>
+                <span className="text-2xs font-semibold opacity-80">{priorityLabel(s.priority)}</span>
               </span>
             ))}
           </div>
@@ -178,17 +178,17 @@ export function QuestionDistributionPopover({
 
   const renderSection = (rows: DistRow[], label: string, sectionKey: 'mth' | 'nth') => (
     <div>
-      <div className="text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+      <div className="text-2xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
         {label} ({rows.length})
       </div>
       <div className="border border-gray-100 rounded-md overflow-hidden tf-table-shell">
         <table className="w-full text-left">
           <thead className="bg-gray-50 border-b border-gray-100">
             <tr>
-              <th className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-[40px]">
+              <th className="px-2 py-1.5 text-2xs font-semibold text-gray-500 uppercase tracking-wider w-[40px]">
                 Q#
               </th>
-              <th className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
+              <th className="px-2 py-1.5 text-2xs font-semibold text-gray-500 uppercase tracking-wider">
                 Skills
               </th>
             </tr>
@@ -213,7 +213,7 @@ export function QuestionDistributionPopover({
         <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
           <div>
             <div className="text-sm font-semibold text-gray-900">Question Distribution</div>
-            <div className="text-[11px] text-gray-500">
+            <div className="text-2xs text-gray-500">
               {totalQ} questions · {totalSkillsCovered} skills covered
             </div>
           </div>

@@ -9,14 +9,14 @@ interface AssessmentWatermarkProps {
 }
 
 const BASE_POSITIONS = [
-  { top: 10, left: 8, size: 'text-[11px] md:text-xs' },
+  { top: 10, left: 8, size: 'text-2xs md:text-xs' },
   { top: 18, left: 56, size: 'text-xs md:text-sm' },
-  { top: 34, left: 24, size: 'text-[11px] md:text-xs' },
+  { top: 34, left: 24, size: 'text-2xs md:text-xs' },
   { top: 42, left: 70, size: 'text-xs md:text-sm' },
   { top: 58, left: 10, size: 'text-xs md:text-sm' },
-  { top: 64, left: 48, size: 'text-[11px] md:text-xs' },
+  { top: 64, left: 48, size: 'text-2xs md:text-xs' },
   { top: 78, left: 18, size: 'text-xs md:text-sm' },
-  { top: 84, left: 62, size: 'text-[11px] md:text-xs' },
+  { top: 84, left: 62, size: 'text-2xs md:text-xs' },
 ] as const;
 
 const POSITION_REFRESH_MS = 10000;

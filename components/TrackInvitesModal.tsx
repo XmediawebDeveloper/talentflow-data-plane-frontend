@@ -273,7 +273,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
   // -> Completed / Terminated); the underlying status values are unchanged.
   const getStatusBadge = (inv: any) => {
     const effective = getEffectiveStatus(inv);
-    const base = "inline-flex items-center gap-1 px-2 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1";
+    const base = "inline-flex items-center gap-1 px-2 py-0.5 sm:py-1 rounded-full text-2xs sm:text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1";
     if (effective === 'completed') {
       return <span className={`${base} bg-brand-blue/10 text-brand-blue ring-brand-blue/20`}><CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Completed</span>;
     }
@@ -326,7 +326,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                 <span className="hidden sm:inline">Invite Status Tracking</span>
                 <span className="sm:hidden">Invite Status</span>
               </h2>
-              <p className="text-[10px] sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">{jdTitle}</p>
+              <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">{jdTitle}</p>
             </div>
           </div>
           <button
@@ -386,7 +386,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
 
         {!isLoading && invitations.length > 0 && (
           <div className="px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
-            <p className="text-[11px] sm:text-xs text-gray-500 dark:text-slate-500">{resultsLabel}</p>
+            <p className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500">{resultsLabel}</p>
           </div>
         )}
 
@@ -427,12 +427,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                     <div key={invitation.id} className="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 p-2.5">
                       {/* Candidate row */}
                       <div className="flex items-center gap-2 min-w-0 mb-1.5">
-                        <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center text-brand-blue font-medium text-[10px] flex-shrink-0">
+                        <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center text-brand-blue font-medium text-2xs flex-shrink-0">
                           {initials}
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-gray-900 dark:text-slate-50 text-xs truncate">{invitation.candidate_name}</p>
-                          <p className="text-[10px] text-gray-500 dark:text-slate-500 truncate break-all">{invitation.candidate_email}</p>
+                          <p className="text-2xs text-gray-500 dark:text-slate-500 truncate break-all">{invitation.candidate_email}</p>
                         </div>
                         {getStatusBadge(invitation)}
                       </div>
@@ -440,25 +440,25 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                       {/* CID + Assessment + the secondary Expired flag the
                           desktop table shows next to the status badge. */}
                       <div className="flex items-center gap-1.5 mb-1.5 min-w-0">
-                        <span className="text-[9px] font-mono font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/15 px-1 py-0.5 rounded flex-shrink-0">
+                        <span className="text-2xs font-mono font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/15 px-1 py-0.5 rounded flex-shrink-0">
                           {invitation.candidate_display_id || '-'}
                         </span>
-                        <span className="text-[10px] text-gray-600 dark:text-slate-400 truncate flex-1">{invitation.assessment_title}</span>
+                        <span className="text-2xs text-gray-600 dark:text-slate-400 truncate flex-1">{invitation.assessment_title}</span>
                         {isInvExpired(invitation) && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20 whitespace-nowrap flex-shrink-0">
+                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-2xs font-medium ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20 whitespace-nowrap flex-shrink-0">
                             <Clock className="w-2.5 h-2.5" /> Expired
                           </span>
                         )}
                       </div>
 
                       {invitation.status === 'failed' && (
-                        <p className="text-[10px] text-red-600 mb-1.5">Incorrect Email</p>
+                        <p className="text-2xs text-red-600 mb-1.5">Incorrect Email</p>
                       )}
 
                       {/* Timeline — a two-column grid rather than a free wrap,
                           so the entries line up instead of staggering by the
                           width of whichever label came before them. */}
-                      <div className="text-[10px] text-gray-500 dark:text-slate-500 grid grid-cols-2 gap-x-3 gap-y-0.5 mb-1">
+                      <div className="text-2xs text-gray-500 dark:text-slate-500 grid grid-cols-2 gap-x-3 gap-y-0.5 mb-1">
                         {timelineEvents(invitation).map(({ label, at, Icon, tone }, i) => (
                           <div key={`${label}-${i}`} className="flex items-center gap-1 min-w-0">
                             <Icon className={`w-2.5 h-2.5 flex-shrink-0 ${tone}`} />
@@ -474,32 +474,32 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                         <div className="flex items-center justify-between mb-1.5">
                           <div>
                             {getEffectiveStatus(invitation) === 'completed' ? (
-                              <div className="flex items-center gap-1 text-[10px]">
+                              <div className="flex items-center gap-1 text-2xs">
                                 <span className="text-gray-600 dark:text-slate-400">Score:</span>
                                 <span className={`font-medium ${invitation.passed ? 'text-brand-blue' : 'text-red-600'}`}>
                                   {invitation.overall_score != null ? `${Math.round(invitation.overall_score)}%` : 'N/A'}
                                 </span>
                                 {invitation.passed !== null && (
-                                  <span className={`text-[9px] px-1 py-0.5 rounded ring-1 ${invitation.passed ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+                                  <span className={`text-2xs px-1 py-0.5 rounded ring-1 ${invitation.passed ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
                                     {invitation.passed ? 'Pass' : 'Fail'}
                                   </span>
                                 )}
                               </div>
                             ) : getEffectiveStatus(invitation) === 'started' ? (
-                              <div className="flex items-center gap-1 text-[10px]">
+                              <div className="flex items-center gap-1 text-2xs">
                                 <span className="text-gray-600 dark:text-slate-400">Progress:</span>
                                 <span className="font-medium text-brand-orange-deep">
                                   {invitation.progress_percent != null ? `${invitation.progress_percent}%` : 'In Progress'}
                                 </span>
                               </div>
                             ) : (
-                              <span className="text-[10px] text-gray-400 dark:text-slate-500">—</span>
+                              <span className="text-2xs text-gray-400 dark:text-slate-500">—</span>
                             )}
                           </div>
                           {getEffectiveStatus(invitation) === 'completed' && invitation.attempt_id && (
                             <button
                               onClick={() => openResult(invitation)}
-                              className="flex items-center gap-1 px-1.5 py-0.5 text-[10px] text-brand-blue hover:bg-brand-blue/5 rounded transition-colors"
+                              className="flex items-center gap-1 px-1.5 py-0.5 text-2xs text-brand-blue hover:bg-brand-blue/5 rounded transition-colors"
                             >
                               <Eye className="w-3 h-3" />
                               View
@@ -643,7 +643,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                                     <span className={`font-medium ${v >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
                                       {Math.round(v)}%
                                     </span>
-                                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ring-1 ${v >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+                                    <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${v >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
                                       {v >= 70 ? 'Pass' : 'Fail'}
                                     </span>
                                   </div>
@@ -666,7 +666,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                                     <span className={`font-medium ${v >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
                                       {Math.round(v)}%
                                     </span>
-                                    <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ring-1 ${v >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+                                    <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${v >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
                                       {v >= 70 ? 'Pass' : 'Fail'}
                                     </span>
                                   </div>
@@ -697,7 +697,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
         {/* Footer — stacks on phones; First/Last drop out below sm, matching the
             Assessments and AI Interviews trackers. */}
         <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
-          <p className="text-[11px] sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
+          <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
             {/* The filtered count, not the raw total — the number has to agree
                 with the rows actually on screen. */}
             {resultsLabel}

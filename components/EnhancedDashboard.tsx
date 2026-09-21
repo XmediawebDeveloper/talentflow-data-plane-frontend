@@ -447,7 +447,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
   const getActivityIcon = (action: string) => {
     if (action.includes('login')) return <LogIn className="h-4 w-4 text-brand-blue" />;
     if (action.includes('logout')) return <LogOut className="h-4 w-4 text-gray-500" />;
-    if (action.includes('jd_create') || action.includes('jd_publish')) return <Briefcase className="h-4 w-4 text-green-600" />;
+    if (action.includes('jd_create') || action.includes('jd_publish')) return <Briefcase className="h-4 w-4 text-success" />;
     if (action.includes('jd_update')) return <Edit2 className="h-4 w-4 text-brand-orange" />;
     if (action.includes('jd_archive')) return <Archive className="h-4 w-4 text-gray-500" />;
     if (action.includes('resume_upload')) return <Upload className="h-4 w-4 text-brand-cyan" />;
@@ -459,7 +459,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
 
   const getActivityAccent = (action: string): string => {
     if (action.includes('login')) return 'bg-brand-blue/10 ring-brand-blue/15';
-    if (action.includes('jd_create') || action.includes('jd_publish')) return 'bg-green-50 ring-green-100';
+    if (action.includes('jd_create') || action.includes('jd_publish')) return 'bg-success-subtle ring-success-line';
     if (action.includes('jd_update')) return 'bg-brand-orange/10 ring-brand-orange/15';
     if (action.includes('resume_upload')) return 'bg-brand-cyan/10 ring-brand-cyan/15';
     if (action.includes('scoring')) return 'bg-brand-orange/10 ring-brand-orange-deep/15';
@@ -562,15 +562,15 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           <div className="grid gap-4 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             {/* Published JDs */}
             <div
-              className="group p-4 rounded-xl border border-green-100 bg-gradient-to-br from-green-50 to-green-50/40 hover:border-green-300 hover:shadow-md hover:shadow-green-100 dark:bg-green-900/20 dark:border-green-800 dark:hover:border-green-700 transition-all cursor-pointer"
+              className="group p-4 rounded-xl border border-success-line bg-gradient-to-br from-green-50 to-green-50/40 hover:border-success-line hover:shadow-md hover:shadow-green-100 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=published')}
             >
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-green-600 dark:text-green-400 mb-1 sm:mb-2 tracking-tight">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-success mb-1 sm:mb-2 tracking-tight">
                 {jdStatusCounts.published}
               </div>
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-green-100 dark:bg-green-900/40 rounded-lg ring-1 ring-green-200/60">
-                  <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                <div className="p-1.5 bg-success-subtle rounded-lg ring-1 ring-success-line/60">
+                  <CheckCircle className="h-4 w-4 text-success" />
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Published</h3>
@@ -581,15 +581,15 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
 
             {/* Draft JDs */}
             <div
-              className="group p-4 rounded-xl border border-brand-orange/20 bg-gradient-to-br from-brand-orange/10 to-brand-orange/5 hover:border-brand-orange/40 hover:shadow-md hover:shadow-brand-orange/10 dark:bg-yellow-900/20 dark:border-yellow-800 dark:hover:border-yellow-700 transition-all cursor-pointer"
+              className="group p-4 rounded-xl border border-brand-orange/20 bg-gradient-to-br from-brand-orange/10 to-brand-orange/5 hover:border-brand-orange/40 hover:shadow-md hover:shadow-brand-orange/10 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=draft')}
             >
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-brand-orange-deep dark:text-yellow-400 mb-1 sm:mb-2 tracking-tight">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-brand-orange-deep mb-1 sm:mb-2 tracking-tight">
                 {jdStatusCounts.draft}
               </div>
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-brand-orange/15 dark:bg-yellow-900/40 rounded-lg ring-1 ring-brand-orange/20">
-                  <Edit2 className="h-4 w-4 text-brand-orange-deep dark:text-yellow-400" />
+                <div className="p-1.5 bg-brand-orange/15 rounded-lg ring-1 ring-brand-orange/20">
+                  <Edit2 className="h-4 w-4 text-brand-orange-deep" />
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Draft</h3>
@@ -600,15 +600,15 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
 
             {/* Disabled JDs */}
             <div
-              className="group p-4 rounded-xl border border-red-100 bg-gradient-to-br from-red-50 to-red-50/40 hover:border-red-300 hover:shadow-md hover:shadow-red-100 dark:bg-red-900/20 dark:border-red-800 dark:hover:border-red-700 transition-all cursor-pointer"
+              className="group p-4 rounded-xl border border-destructive-line bg-gradient-to-br from-red-50 to-red-50/40 hover:border-destructive-line hover:shadow-md hover:shadow-red-100 transition-all cursor-pointer"
               onClick={() => router.push('/recruitment/job-openings?status=disabled')}
             >
-              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-red-600 dark:text-red-400 mb-1 sm:mb-2 tracking-tight">
+              <div className="text-2xl sm:text-3xl lg:text-4xl font-bold text-destructive mb-1 sm:mb-2 tracking-tight">
                 {jdStatusCounts.disabled}
               </div>
               <div className="flex items-center gap-2">
-                <div className="p-1.5 bg-red-100 dark:bg-red-900/40 rounded-lg ring-1 ring-red-200/60">
-                  <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+                <div className="p-1.5 bg-destructive-subtle rounded-lg ring-1 ring-destructive-line/60">
+                  <AlertCircle className="h-4 w-4 text-destructive" />
                 </div>
                 <div>
                   <h3 className="text-sm font-semibold text-gray-900 dark:text-gray-100">Disabled</h3>
@@ -858,7 +858,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                         <p className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
                           {jd.title || 'Untitled'}
                         </p>
-                        <Badge className="bg-green-100 text-green-700 hover:bg-green-100">
+                        <Badge className="bg-success-subtle text-success hover:bg-success-subtle">
                           Published
                         </Badge>
                       </div>
@@ -1076,8 +1076,8 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             <span className="relative flex h-2 w-2" aria-hidden="true">
-              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-              <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+              <span className="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
             </span>
             <span className="inline-flex items-center rounded-full border border-brand-cyan/20 bg-white dark:bg-slate-900 px-2.5 py-1 text-xs font-medium text-brand-blue shadow-sm">
               Last 24 hours

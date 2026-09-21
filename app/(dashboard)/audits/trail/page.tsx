@@ -696,16 +696,16 @@ export default function AuditTrailPage() {
   const getActionStatus = (action: string, errorOrigin?: string | null): { label: string; color: string } => {
     // Use error_origin for session-based events when available
     if (errorOrigin === 'SYSTEM')
-      return { label: 'System Failure', color: 'bg-red-100 text-red-800 border border-red-200' };
+      return { label: 'System Failure', color: 'bg-destructive-subtle text-destructive-strong border border-destructive-line' };
     if (errorOrigin === 'TENANT')
-      return { label: 'Tenant Interrupted', color: 'bg-amber-100 text-amber-800 border border-amber-200' };
+      return { label: 'Tenant Interrupted', color: 'bg-warning-subtle text-warning-strong border border-warning-line' };
     if (action.includes('_failed') || action === 'login_failed' || action === 'session_interrupted' || action === 'assessment_error')
-      return { label: 'Failed', color: 'bg-red-100 text-red-800 border border-red-200' };
+      return { label: 'Failed', color: 'bg-destructive-subtle text-destructive-strong border border-destructive-line' };
     if (action === 'quota_exhausted' || action === 'user_limit_exceeded')
       return { label: 'Blocked', color: 'bg-orange-100 text-orange-800 border border-orange-200' };
     if (action.includes('_blocked') || action.includes('_denied'))
       return { label: 'Denied', color: 'bg-orange-100 text-orange-800 border border-orange-200' };
-    return { label: 'Success', color: 'bg-green-100 text-green-800 border border-green-200' };
+    return { label: 'Success', color: 'bg-success-subtle text-success-strong border border-success-line' };
   };
 
   // Get brief details summary from details JSONB
@@ -733,15 +733,15 @@ export default function AuditTrailPage() {
   // Get impact level (severity based on status and error_origin)
   const getImpactLevel = (log: AuditLog): { label: string; color: string } => {
     // Use error_origin when available for session-based events
-    if (log.error_origin === 'SYSTEM') return { label: 'High', color: 'text-red-600' };
-    if (log.error_origin === 'TENANT') return { label: 'Medium', color: 'text-amber-600' };
+    if (log.error_origin === 'SYSTEM') return { label: 'High', color: 'text-destructive' };
+    if (log.error_origin === 'TENANT') return { label: 'Medium', color: 'text-warning' };
     const status = getActionStatus(log.action, log.error_origin);
-    if (status.label === 'Failed' || status.label === 'System Failure') return { label: 'High', color: 'text-red-600' };
-    if (status.label === 'Blocked') return { label: 'High', color: 'text-red-600' };
-    if (status.label === 'Denied' || status.label === 'Tenant Interrupted') return { label: 'Medium', color: 'text-amber-600' };
+    if (status.label === 'Failed' || status.label === 'System Failure') return { label: 'High', color: 'text-destructive' };
+    if (status.label === 'Blocked') return { label: 'High', color: 'text-destructive' };
+    if (status.label === 'Denied' || status.label === 'Tenant Interrupted') return { label: 'Medium', color: 'text-warning' };
     if (log.action.includes('delete') || log.action.includes('remove') || log.action.includes('cancel'))
-      return { label: 'Medium', color: 'text-amber-600' };
-    return { label: 'Low', color: 'text-green-600' };
+      return { label: 'Medium', color: 'text-warning' };
+    return { label: 'Low', color: 'text-success' };
   };
 
   // Get impact text (unit consumption impact)
@@ -823,14 +823,14 @@ export default function AuditTrailPage() {
                 <ScrollText className="h-6 w-6 text-white" />
               </div>
               <div>
-                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-2xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
                   <Sparkles className="h-3 w-3 text-brand-orange" />
                   Activity ledger
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <h1 className="text-lg sm:text-xl font-semibold tracking-tight">Audit Trail</h1>
                   {quotaData?.tenant_code && (
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-[10px] sm:text-xs font-mono font-medium bg-white/10 text-white ring-1 ring-white/15">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-md text-2xs sm:text-xs font-mono font-medium bg-white/10 text-white ring-1 ring-white/15">
                       {quotaData.tenant_code}
                     </span>
                   )}
@@ -890,9 +890,9 @@ export default function AuditTrailPage() {
               >
                 <div className="flex items-start justify-between">
                   <div className="min-w-0">
-                    <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Total Actions</p>
+                    <p className="text-2xs sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Total Actions</p>
                     <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{stats.total_actions.toLocaleString()}</p>
-                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                    <p className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
                       <Calendar className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       Last {stats.period_days} days
                     </p>
@@ -909,9 +909,9 @@ export default function AuditTrailPage() {
               >
                 <div className="flex items-start justify-between">
                   <div className="min-w-0">
-                    <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Active Users</p>
+                    <p className="text-2xs sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Active Users</p>
                     <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{totalUsers}</p>
-                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                    <p className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
                       <TrendingUp className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {userFilter ? 'Filtering by 1 user' : 'Click to filter'}
                     </p>
@@ -928,9 +928,9 @@ export default function AuditTrailPage() {
               >
                 <div className="flex items-start justify-between">
                   <div className="min-w-0">
-                    <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Action Types</p>
+                    <p className="text-2xs sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Action Types</p>
                     <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{Object.keys(stats.actions_by_type).length}</p>
-                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                    <p className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
                       <Filter className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {actionFilter ? 'Filtering by 1 action' : 'Click to filter'}
                     </p>
@@ -947,9 +947,9 @@ export default function AuditTrailPage() {
               >
                 <div className="flex items-start justify-between">
                   <div className="min-w-0">
-                    <p className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Entity Types</p>
+                    <p className="text-2xs sm:text-xs md:text-sm font-medium text-gray-600 dark:text-slate-400">Entity Types</p>
                     <p className="text-lg sm:text-2xl md:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1 sm:mt-2">{Object.keys(stats.actions_by_entity).length}</p>
-                    <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
+                    <p className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 mt-1 sm:mt-2 flex items-center gap-1">
                       <ScrollText className="w-2.5 h-2.5 sm:w-3 sm:h-3 flex-shrink-0" />
                       {entityFilter ? 'Filtering by 1 entity' : 'Click to filter'}
                     </p>
@@ -1104,7 +1104,7 @@ export default function AuditTrailPage() {
           <div className="px-3 sm:px-4 md:px-5 pt-3 sm:pt-4 md:pt-5 pb-3 sm:pb-4 border-b border-gray-100 dark:border-slate-700/60">
             <div className="flex items-center justify-between">
               <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">Audit Records</span>
-              <span className="text-[10px] sm:text-xs md:text-sm text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-medium">{total} records</span>
+              <span className="text-2xs sm:text-xs md:text-sm text-gray-600 dark:text-slate-400 bg-gray-100 dark:bg-slate-800 px-2 sm:px-3 py-1 sm:py-1.5 rounded-full font-medium">{total} records</span>
             </div>
           </div>
 
@@ -1128,7 +1128,7 @@ export default function AuditTrailPage() {
                   <select
                     value={actionFilter}
                     onChange={(e) => { setActionFilter(e.target.value); setPage(1); }}
-                    className="appearance-none w-full pl-2.5 sm:pl-4 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-[10px] sm:text-xs md:text-sm cursor-pointer text-gray-900 dark:text-slate-50"
+                    className="appearance-none w-full pl-2.5 sm:pl-4 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-2xs sm:text-xs md:text-sm cursor-pointer text-gray-900 dark:text-slate-50"
                   >
                     <option value="">All Actions</option>
                     {availableActions.map(action => (
@@ -1141,7 +1141,7 @@ export default function AuditTrailPage() {
                   <select
                     value={entityFilter}
                     onChange={(e) => { setEntityFilter(e.target.value); setPage(1); }}
-                    className="appearance-none w-full pl-2.5 sm:pl-4 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-[10px] sm:text-xs md:text-sm cursor-pointer text-gray-900 dark:text-slate-50"
+                    className="appearance-none w-full pl-2.5 sm:pl-4 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-2xs sm:text-xs md:text-sm cursor-pointer text-gray-900 dark:text-slate-50"
                   >
                     <option value="">All Entities</option>
                     {availableEntities.map(entity => (
@@ -1155,7 +1155,7 @@ export default function AuditTrailPage() {
                   <select
                     value={dateRange}
                     onChange={(e) => { setDateRange(e.target.value); setPage(1); }}
-                    className="appearance-none w-full pl-7 sm:pl-9 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-[10px] sm:text-xs md:text-sm cursor-pointer text-gray-900 dark:text-slate-50"
+                    className="appearance-none w-full pl-7 sm:pl-9 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-2xs sm:text-xs md:text-sm cursor-pointer text-gray-900 dark:text-slate-50"
                   >
                     <option value="7">7 days</option>
                     <option value="30">30 days</option>
@@ -1169,7 +1169,7 @@ export default function AuditTrailPage() {
                   <select
                     value={errorOriginFilter}
                     onChange={(e) => { setErrorOriginFilter(e.target.value as '' | ErrorOrigin); setPage(1); }}
-                    className="appearance-none w-full pl-7 sm:pl-9 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-[10px] sm:text-xs md:text-sm cursor-pointer text-gray-900 dark:text-slate-50"
+                    className="appearance-none w-full pl-7 sm:pl-9 pr-7 sm:pr-10 py-1.5 sm:py-2.5 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg sm:rounded-xl focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue transition-all text-2xs sm:text-xs md:text-sm cursor-pointer text-gray-900 dark:text-slate-50"
                   >
                     <option value="">All Origins</option>
                     <option value="TENANT">Tenant</option>
@@ -1218,40 +1218,40 @@ export default function AuditTrailPage() {
                   <div key={log.id} className="p-3 sm:p-4 space-y-2">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-7 h-7 rounded-lg bg-brand-blue text-white flex items-center justify-center text-[10px] font-semibold flex-shrink-0">
+                        <div className="w-7 h-7 rounded-lg bg-brand-blue text-white flex items-center justify-center text-2xs font-semibold flex-shrink-0">
                           {(log.user_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                         </div>
                         <div className="min-w-0">
                           <p className="text-xs font-medium text-gray-900 dark:text-slate-50 truncate">{log.user_name || 'Unknown'}</p>
-                          <p className="text-[10px] text-gray-500 dark:text-slate-500 truncate">{log.user_email || ''}</p>
+                          <p className="text-2xs text-gray-500 dark:text-slate-500 truncate">{log.user_email || ''}</p>
                         </div>
                       </div>
                       <button
                         onClick={() => setSelectedLog(log)}
-                        className="flex items-center gap-1 px-2 py-1 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md text-[10px] font-medium flex-shrink-0"
+                        className="flex items-center gap-1 px-2 py-1 text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-md text-2xs font-medium flex-shrink-0"
                       >
                         <Eye className="w-3 h-3" />
                         View
                       </button>
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold ${getActionColor(log.action)}`}>
+                      <span className={`inline-flex px-1.5 py-0.5 rounded text-2xs font-semibold ${getActionColor(log.action)}`}>
                         {log.action_label}
                       </span>
-                      <span className={`inline-flex px-1.5 py-0.5 rounded text-[10px] font-semibold ${actionStatus.color}`}>
+                      <span className={`inline-flex px-1.5 py-0.5 rounded text-2xs font-semibold ${actionStatus.color}`}>
                         {actionStatus.label}
                       </span>
-                      <span className={`text-[10px] font-semibold ${impactLevel.color}`}>
+                      <span className={`text-2xs font-semibold ${impactLevel.color}`}>
                         {impactLevel.label}
                       </span>
                     </div>
-                    <div className="flex items-center justify-between text-[10px] text-gray-500 dark:text-slate-500">
+                    <div className="flex items-center justify-between text-2xs text-gray-500 dark:text-slate-500">
                       <div className="flex items-center gap-1">
                         <Clock className="w-2.5 h-2.5 flex-shrink-0" />
                         <span>{formatDate(log.created_at)}</span>
                       </div>
                       {impact.text !== '—' && (
-                        <span className={`font-semibold ${impact.negative ? 'text-red-700' : impact.positive ? 'text-green-600' : 'text-gray-500 dark:text-slate-500'}`}>
+                        <span className={`font-semibold ${impact.negative ? 'text-destructive' : impact.positive ? 'text-success' : 'text-gray-500 dark:text-slate-500'}`}>
                           {impact.text}
                         </span>
                       )}
@@ -1381,7 +1381,7 @@ export default function AuditTrailPage() {
                         </td>
                         <td className="px-4 py-4 whitespace-nowrap">
                           {impact.text !== '—' ? (
-                            <span className={`inline-flex items-center gap-1 text-sm font-semibold ${impact.negative ? 'text-red-700' : impact.positive ? 'text-green-600' : 'text-gray-500 dark:text-slate-500'}`}>
+                            <span className={`inline-flex items-center gap-1 text-sm font-semibold ${impact.negative ? 'text-destructive' : impact.positive ? 'text-success' : 'text-gray-500 dark:text-slate-500'}`}>
                               {impact.text}
                             </span>
                           ) : (
@@ -1410,13 +1410,13 @@ export default function AuditTrailPage() {
           {filteredLogs.length > 0 && (
             <div className="px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 bg-gray-50/50 dark:bg-slate-800/50">
               <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4">
-                <p className="text-[10px] sm:text-xs md:text-sm text-gray-600 dark:text-slate-400">
+                <p className="text-2xs sm:text-xs md:text-sm text-gray-600 dark:text-slate-400">
                   Showing <span className="font-semibold text-gray-900 dark:text-slate-50">{Math.min((page - 1) * pageSize + 1, total)}</span>–<span className="font-semibold text-gray-900 dark:text-slate-50">{Math.min(page * pageSize, total)}</span> of <span className="font-semibold text-gray-900 dark:text-slate-50">{total}</span>
                 </p>
               </div>
               <div className="flex items-center gap-1.5 sm:gap-2 self-end sm:self-auto">
                 <div className="flex items-center gap-1.5">
-                  <span className="hidden sm:inline text-[10px] sm:text-xs md:text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">Go to</span>
+                  <span className="hidden sm:inline text-2xs sm:text-xs md:text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">Go to</span>
                   <input
                     type="number"
                     min={1}
@@ -1431,7 +1431,7 @@ export default function AuditTrailPage() {
                     }}
                     onBlur={jumpToPage}
                     aria-label="Go to page"
-                    className="w-12 sm:w-14 h-7 sm:h-8 px-1.5 sm:px-2 text-[10px] sm:text-xs md:text-sm text-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-900 dark:text-slate-50"
+                    className="w-12 sm:w-14 h-7 sm:h-8 px-1.5 sm:px-2 text-2xs sm:text-xs md:text-sm text-center bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-gray-900 dark:text-slate-50"
                   />
                 </div>
 
@@ -1444,7 +1444,7 @@ export default function AuditTrailPage() {
                   <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 </button>
 
-                <span className="text-[10px] sm:text-xs md:text-sm font-medium text-gray-700 dark:text-slate-300 px-1 whitespace-nowrap">
+                <span className="text-2xs sm:text-xs md:text-sm font-medium text-gray-700 dark:text-slate-300 px-1 whitespace-nowrap">
                   <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
                 </span>
 
@@ -1477,7 +1477,7 @@ export default function AuditTrailPage() {
                 </div>
                 <div className="min-w-0">
                   <h3 className="text-sm sm:text-base md:text-lg font-bold text-gray-900 dark:text-slate-50">Audit Log Details</h3>
-                  <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500">Complete event information</p>
+                  <p className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500">Complete event information</p>
                 </div>
               </div>
               <button
@@ -1492,38 +1492,38 @@ export default function AuditTrailPage() {
             <div className="p-3 sm:p-4 md:p-6 flex-1 min-h-0 overflow-y-auto space-y-3 sm:space-y-4 md:space-y-5">
               {/* User & Action Header */}
               <div className="flex items-start gap-2.5 sm:gap-3 md:gap-4 pb-3 sm:pb-4 md:pb-5 border-b border-gray-100 dark:border-slate-700/60">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 rounded-lg sm:rounded-xl bg-brand-blue text-white flex items-center justify-center text-[10px] sm:text-xs md:text-sm font-bold flex-shrink-0 shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
+                <div className="w-8 h-8 sm:w-10 sm:h-10 md:w-11 md:h-11 rounded-lg sm:rounded-xl bg-brand-blue text-white flex items-center justify-center text-2xs sm:text-xs md:text-sm font-bold flex-shrink-0 shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
                   {(selectedLog.user_name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-semibold text-xs sm:text-sm md:text-base text-gray-900 dark:text-slate-50">{selectedLog.user_name || 'Unknown User'}</p>
                   {selectedLog.actor_role && (
-                    <p className="text-[10px] sm:text-xs md:text-sm text-gray-500 dark:text-slate-500 truncate capitalize">{selectedLog.actor_role.replace(/_/g, ' ').toLowerCase()}</p>
+                    <p className="text-2xs sm:text-xs md:text-sm text-gray-500 dark:text-slate-500 truncate capitalize">{selectedLog.actor_role.replace(/_/g, ' ').toLowerCase()}</p>
                   )}
                 </div>
-                <span className={`inline-flex px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-semibold flex-shrink-0 ${getActionColor(selectedLog.action)}`}>
+                <span className={`inline-flex px-2 sm:px-3 py-1 sm:py-1.5 rounded-md sm:rounded-lg text-2xs sm:text-xs font-semibold flex-shrink-0 ${getActionColor(selectedLog.action)}`}>
                   {selectedLog.action_label}
                 </span>
               </div>
 
               {/* Log ID */}
               <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
-                <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Log ID</p>
-                <p className="text-[10px] sm:text-xs font-mono text-gray-700 dark:text-slate-300 break-all">{selectedLog.id}</p>
+                <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Log ID</p>
+                <p className="text-2xs sm:text-xs font-mono text-gray-700 dark:text-slate-300 break-all">{selectedLog.id}</p>
               </div>
 
               {/* Summary Info */}
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                 <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
-                  <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">When</p>
+                  <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">When</p>
                   <p className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">{formatDate(selectedLog.created_at)}</p>
                 </div>
                 <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
-                  <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Entity</p>
+                  <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Entity</p>
                   <p className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50 capitalize">{selectedLog.entity_type?.replace(/_/g, ' ') || '—'}</p>
                 </div>
                 <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
-                  <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">IP Address</p>
+                  <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">IP Address</p>
                   <p className="text-xs sm:text-sm font-mono font-medium text-gray-900 dark:text-slate-50 break-all">{selectedLog.ip_address || '—'}</p>
                 </div>
               </div>
@@ -1540,8 +1540,8 @@ export default function AuditTrailPage() {
                   return (
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                       <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
-                        <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Status</p>
-                        {(() => { const s = getActionStatus(selectedLog.action, selectedLog.error_origin); return <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-[10px] sm:text-xs font-semibold ${s.color}`}>{s.label}</span>; })()}
+                        <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Status</p>
+                        {(() => { const s = getActionStatus(selectedLog.action, selectedLog.error_origin); return <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-2xs sm:text-xs font-semibold ${s.color}`}>{s.label}</span>; })()}
                       </div>
                       <div className="hidden sm:block" /><div className="hidden sm:block" />
                     </div>
@@ -1551,9 +1551,9 @@ export default function AuditTrailPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3">
                     {hasUnits ? (
                       <div className="bg-gray-100 dark:bg-slate-800 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
-                        <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Impact</p>
+                        <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Impact</p>
                         <div className="flex items-baseline gap-1.5">
-                          <span className={`text-sm sm:text-lg font-bold ${modalImpact.negative ? 'text-red-700' : 'text-gray-900 dark:text-slate-50'}`}>
+                          <span className={`text-sm sm:text-lg font-bold ${modalImpact.negative ? 'text-destructive' : 'text-gray-900 dark:text-slate-50'}`}>
                             {modalImpact.text}
                           </span>
                         </div>
@@ -1561,7 +1561,7 @@ export default function AuditTrailPage() {
                     ) : <div className="hidden sm:block" />}
                     {hasBalance ? (
                       <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
-                        <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Available</p>
+                        <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Available</p>
                         <div className="flex items-baseline gap-1.5">
                           <span className="text-xs sm:text-sm text-gray-500 dark:text-slate-500">{modalBalanceBefore}</span>
                           <span className="text-gray-300 dark:text-slate-500">→</span>
@@ -1570,8 +1570,8 @@ export default function AuditTrailPage() {
                       </div>
                     ) : <div className="hidden sm:block" />}
                     <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
-                      <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Status</p>
-                      {(() => { const s = getActionStatus(selectedLog.action, selectedLog.error_origin); return <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-[10px] sm:text-xs font-semibold ${s.color}`}>{s.label}</span>; })()}
+                      <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Status</p>
+                      {(() => { const s = getActionStatus(selectedLog.action, selectedLog.error_origin); return <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-2xs sm:text-xs font-semibold ${s.color}`}>{s.label}</span>; })()}
                     </div>
                   </div>
                 );
@@ -1580,69 +1580,69 @@ export default function AuditTrailPage() {
               {/* Entity ID (if present) */}
               {selectedLog.entity_id && (
                 <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5">
-                  <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Entity ID</p>
-                  <p className="text-[10px] sm:text-xs md:text-sm font-mono text-gray-700 dark:text-slate-300 truncate" title={selectedLog.entity_id}>{selectedLog.entity_id}</p>
+                  <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Entity ID</p>
+                  <p className="text-2xs sm:text-xs md:text-sm font-mono text-gray-700 dark:text-slate-300 truncate" title={selectedLog.entity_id}>{selectedLog.entity_id}</p>
                 </div>
               )}
 
               {/* Session Details (shown when session fields exist) */}
               {(selectedLog.session_start_time || selectedLog.error_origin || selectedLog.module_type) && (
                 <div>
-                  <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-1.5 sm:mb-2.5">Session Details</p>
+                  <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-1.5 sm:mb-2.5">Session Details</p>
                   <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl divide-y divide-gray-100 dark:divide-slate-700/60 overflow-hidden">
                     {selectedLog.module_type && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-[10px] sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Module</span>
+                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Module</span>
                         <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">{MODULE_TYPE_LABELS[selectedLog.module_type] || selectedLog.module_type}</span>
                       </div>
                     )}
                     {selectedLog.session_start_time && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-[10px] sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Session Start</span>
+                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Session Start</span>
                         <span className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">{formatDate(selectedLog.session_start_time)}</span>
                       </div>
                     )}
                     {selectedLog.interruption_time && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-[10px] sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Interruption</span>
-                        <span className="text-xs sm:text-sm text-red-700">{formatDate(selectedLog.interruption_time)}</span>
+                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Interruption</span>
+                        <span className="text-xs sm:text-sm text-destructive">{formatDate(selectedLog.interruption_time)}</span>
                       </div>
                     )}
                     {selectedLog.session_end_time && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-[10px] sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Session End</span>
+                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Session End</span>
                         <span className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">{formatDate(selectedLog.session_end_time)}</span>
                       </div>
                     )}
                     {selectedLog.total_session_duration != null && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-[10px] sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Duration</span>
+                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Duration</span>
                         <span className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50">{formatSessionDuration(selectedLog.total_session_duration)}</span>
                       </div>
                     )}
                     <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                      <span className="text-[10px] sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Error Origin</span>
-                      <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-semibold ${ERROR_ORIGIN_COLORS[selectedLog.error_origin]}`}>
+                      <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Error Origin</span>
+                      <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-2xs sm:text-xs font-semibold ${ERROR_ORIGIN_COLORS[selectedLog.error_origin]}`}>
                         {ERROR_ORIGIN_LABELS[selectedLog.error_origin]}
                       </span>
                     </div>
                     {selectedLog.error_code && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-[10px] sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Error Code</span>
-                        <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-semibold ${ERROR_CODE_COLORS[selectedLog.error_code] || 'bg-gray-50 text-gray-600'}`}>
+                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Error Code</span>
+                        <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-2xs sm:text-xs font-semibold ${ERROR_CODE_COLORS[selectedLog.error_code] || 'bg-gray-50 text-gray-600'}`}>
                           {ERROR_CODE_LABELS[selectedLog.error_code] || selectedLog.error_code}
                         </span>
                       </div>
                     )}
                     <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                      <span className="text-[10px] sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Refund Flag</span>
-                      <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-[10px] sm:text-xs font-semibold ${REFUND_FLAG_COLORS[selectedLog.refund_flag]}`}>
+                      <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Refund Flag</span>
+                      <span className={`inline-flex px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md sm:rounded-lg text-2xs sm:text-xs font-semibold ${REFUND_FLAG_COLORS[selectedLog.refund_flag]}`}>
                         {selectedLog.refund_flag}
                       </span>
                     </div>
                     {selectedLog.error_origin !== 'NONE' && (selectedLog.units_consumed ?? 0) > 0 && (
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-[10px] sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Billing Impact</span>
+                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Billing Impact</span>
                         <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 break-words">{getBillingImpact(selectedLog.error_origin).description}</span>
                       </div>
                     )}
@@ -1659,7 +1659,7 @@ export default function AuditTrailPage() {
                 return true;
               }).length > 0 && (
                 <div>
-                  <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-1.5 sm:mb-2.5">Event Details</p>
+                  <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-1.5 sm:mb-2.5">Event Details</p>
                   <div className="bg-gray-50 dark:bg-slate-800/50 rounded-lg sm:rounded-xl divide-y divide-gray-100 dark:divide-slate-700/60 overflow-hidden">
                     {Object.entries(selectedLog.details)
                       .filter(([key, value]) => {
@@ -1705,17 +1705,17 @@ export default function AuditTrailPage() {
                 <div className="space-y-2 sm:space-y-3">
                 <div className="flex items-center gap-1.5 sm:gap-2">
                   <Cpu className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue flex-shrink-0" />
-                  <p className="text-[10px] sm:text-[11px] font-medium text-brand-blue uppercase tracking-wider">AI Generation Audit</p>
+                  <p className="text-2xs sm:text-2xs font-medium text-brand-blue uppercase tracking-wider">AI Generation Audit</p>
                 </div>
 
                 {/* Model Version + Generation Timestamp */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                   <div className="bg-brand-blue/5 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5 ring-1 ring-brand-blue/15">
-                    <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">AI Model Version</p>
+                    <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">AI Model Version</p>
                     <p className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50">{aiAuditData.ai_model_version || 'N/A'}</p>
                   </div>
                   <div className="bg-brand-blue/5 rounded-lg sm:rounded-xl p-2.5 sm:p-3 md:p-3.5 ring-1 ring-brand-blue/15">
-                    <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Generation Timestamp</p>
+                    <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider mb-0.5 sm:mb-1">Generation Timestamp</p>
                     <p className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50">
                       {formatIST(aiAuditData.questions_generated_at)}
                     </p>
@@ -1725,32 +1725,32 @@ export default function AuditTrailPage() {
                 {/* Input Parameters Table */}
                 <div className="bg-gray-50 rounded-lg sm:rounded-xl divide-y divide-gray-100 overflow-hidden">
                   <div className="px-3 sm:px-4 py-2 sm:py-2.5 bg-gray-100/50 dark:bg-slate-800">
-                    <p className="text-[10px] sm:text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Input Parameters</p>
+                    <p className="text-2xs sm:text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Input Parameters</p>
                   </div>
                   {aiAuditData.generation_params ? (
                     <>
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-[10px] sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">JD Title</span>
+                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">JD Title</span>
                         <span className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 break-words">{aiAuditData.generation_params.jd_title || 'N/A'}</span>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-[10px] sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Experience</span>
+                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Experience</span>
                         <span className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 capitalize">{aiAuditData.generation_params.experience_level?.replace(/_/g, ' ') || 'N/A'}</span>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-[10px] sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Duration</span>
+                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Duration</span>
                         <span className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">{aiAuditData.generation_params.duration_minutes ? `${aiAuditData.generation_params.duration_minutes} min` : 'N/A'}</span>
                       </div>
                       <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                        <span className="text-[10px] sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Questions</span>
+                        <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Questions</span>
                         <span className="text-xs sm:text-sm text-gray-900 dark:text-slate-50">{aiAuditData.generation_params.total_questions_generated ?? 'N/A'}</span>
                       </div>
                       {aiAuditData.generation_params.rounds_config && aiAuditData.generation_params.rounds_config.length > 0 && (
                         <div className="flex flex-col sm:flex-row sm:items-start px-3 sm:px-4 py-2 sm:py-3 gap-0.5 sm:gap-4">
-                          <span className="text-[10px] sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Rounds</span>
+                          <span className="text-2xs sm:text-xs font-medium text-gray-500 dark:text-slate-500 sm:min-w-[140px] flex-shrink-0 sm:pt-0.5">Rounds</span>
                           <div className="flex flex-wrap gap-1 sm:gap-1.5">
                             {aiAuditData.generation_params.rounds_config.map((round: any, idx: number) => (
-                              <span key={idx} className="px-1.5 sm:px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 rounded text-[10px] sm:text-xs font-medium capitalize">
+                              <span key={idx} className="px-1.5 sm:px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 rounded text-2xs sm:text-xs font-medium capitalize">
                                 {round.type} ({round.weightage}%)
                               </span>
                             ))}

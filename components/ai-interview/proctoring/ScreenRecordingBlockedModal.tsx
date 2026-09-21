@@ -116,7 +116,7 @@ export function ScreenRecordingBlockedModal() {
             I Understand
           </button>
 
-          <p className="mt-4 text-[11px] text-gray-400">
+          <p className="mt-4 text-2xs text-gray-400">
             {wasBlocked ? 'Blocked' : 'Detected'}: {current.source}
           </p>
         </div>

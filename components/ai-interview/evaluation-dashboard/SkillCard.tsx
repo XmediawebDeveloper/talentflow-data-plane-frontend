@@ -69,7 +69,7 @@ export function SkillCard({ cluster, expanded, onToggle }: SkillCardProps) {
                 <div className="text-3xl font-bold" style={{ fontFamily: 'var(--font-mono)', color: priorityStyle.border }}>
                   {coveragePct}%
                 </div>
-                <div className="text-[10px] text-gray-500 mt-0.5">{coveredCount}/{totalSkills} skills</div>
+                <div className="text-2xs text-gray-500 mt-0.5">{coveredCount}/{totalSkills} skills</div>
               </div>
               <div className="w-32 h-3 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden">
                 <div

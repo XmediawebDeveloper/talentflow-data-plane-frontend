@@ -155,7 +155,7 @@ export default function SkillCoveragePanel({
                           )}
                           <span className="text-gray-300 truncate max-w-[120px]">{item.skill}</span>
                           {showFollowUp && (
-                            <span className="shrink-0 text-[9px] px-1 py-px rounded bg-amber-900/70 text-amber-400 font-semibold border border-amber-700/50">
+                            <span className="shrink-0 text-2xs px-1 py-px rounded bg-amber-900/70 text-amber-400 font-semibold border border-amber-700/50">
                               Follow-up
                             </span>
                           )}
@@ -164,7 +164,7 @@ export default function SkillCoveragePanel({
                         {/* Right: Q number + coverage level */}
                         <div className="flex items-center gap-1.5 ml-2 shrink-0">
                           {displayQNum != null && (
-                            <span className={`text-[10px] font-mono font-semibold tabular-nums ${
+                            <span className={`text-2xs font-mono font-semibold tabular-nums ${
                               isActiveSkill ? 'text-blue-400' : 'text-gray-500'
                             }`}>
                               Q{displayQNum}

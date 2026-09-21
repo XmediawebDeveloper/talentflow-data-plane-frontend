@@ -12,6 +12,7 @@ import ListToolbar from '@/components/ui/list-toolbar';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 type CategoryFilter = 'all' | 'assessment_lifecycle' | 'candidate_activity';
 
@@ -40,21 +41,21 @@ const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
 const ACTIVITY_COLORS: Record<string, { bg: string; text: string; icon: string; border: string }> = {
   assessment_created: { bg: 'bg-brand-blue/5', text: 'text-brand-blue', icon: 'text-brand-blue', border: 'border-brand-blue/20' },
   assessment_updated: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
-  assessment_deleted: { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500', border: 'border-red-200' },
-  assessment_published: { bg: 'bg-green-50', text: 'text-green-700', icon: 'text-green-500', border: 'border-green-200' },
+  assessment_deleted: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
+  assessment_published: { bg: 'bg-success-subtle', text: 'text-success', icon: 'text-success', border: 'border-success-line' },
   assessment_archived: { bg: 'bg-slate-50', text: 'text-gray-700', icon: 'text-gray-500', border: 'border-gray-200' },
   assessment_saved_as_draft: { bg: 'bg-brand-blue/5', text: 'text-brand-blue', icon: 'text-brand-blue', border: 'border-brand-blue/20' },
   assessment_draft_updated: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
   invites_revoked: { bg: 'bg-slate-50', text: 'text-gray-700', icon: 'text-gray-500', border: 'border-gray-200' },
   candidate_invited: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
   candidate_started: { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', icon: 'text-brand-orange', border: 'border-brand-orange/20' },
-  candidate_completed: { bg: 'bg-green-50', text: 'text-green-700', icon: 'text-green-500', border: 'border-green-200' },
-  candidate_failed: { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500', border: 'border-red-200' },
+  candidate_completed: { bg: 'bg-success-subtle', text: 'text-success', icon: 'text-success', border: 'border-success-line' },
+  candidate_failed: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
   candidate_expired: { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', icon: 'text-brand-orange', border: 'border-brand-orange/20' },
-  invite_failed: { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500', border: 'border-red-200' },
+  invite_failed: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
   invite_email_changed: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
   candidate_exited: { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', icon: 'text-brand-orange', border: 'border-brand-orange/20' },
-  candidate_errored: { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500', border: 'border-red-200' },
+  candidate_errored: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
 };
 
 export default function AssessmentAuditTrail() {
@@ -288,7 +289,7 @@ export default function AssessmentAuditTrail() {
                 <SegmentIcon className={`w-3.5 h-3.5 flex-shrink-0 ${segment.text}`} />
                 <span className="hidden sm:inline">{segment.label}</span>
                 <span className="sm:hidden">{segment.short}</span>
-                <span className={`inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-[10px] font-semibold tabular-nums ring-1 transition-colors ${segment.text} ${segment.tint} ${segment.ring}`}>
+                <span className={`inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-2xs font-semibold tabular-nums ring-1 transition-colors ${segment.text} ${segment.tint} ${segment.ring}`}>
                   {isLoading ? '—' : segment.value.toLocaleString()}
                 </span>
               </button>
@@ -306,7 +307,7 @@ export default function AssessmentAuditTrail() {
             { icon: Plus, value: stats.assessments_created, label: 'created', text: 'text-brand-blue' },
             { icon: Mail, value: stats.candidates_invited, label: 'invited', text: 'text-brand-cyan' },
             { icon: Clock, value: stats.candidates_in_progress, label: 'in progress', text: 'text-brand-orange' },
-            { icon: CheckCircle, value: stats.candidates_completed, label: 'completed', text: 'text-green-600' },
+            { icon: CheckCircle, value: stats.candidates_completed, label: 'completed', text: 'text-success' },
           ]).map((item, index) => {
             const ItemIcon = item.icon;
             return (
@@ -339,13 +340,15 @@ export default function AssessmentAuditTrail() {
               </p>
             </div>
 
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={handleExportAuditLogs}
-              className="self-start sm:self-auto px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 rounded-md hover:bg-slate-100 transition-colors flex items-center gap-1.5 sm:gap-2"
+              className="self-start sm:self-auto"
+              icon={<Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
             >
-              <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               Export Logs
-            </button>
+            </Button>
           </div>
 
           {/* Search + filters in the job-openings format. */}
@@ -391,12 +394,13 @@ export default function AssessmentAuditTrail() {
               {/* Panel footer: "Done" applies the selection and reveals the
                   toolbar Clear - same flow as job-openings. */}
               <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
-                <button
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={() => { search.applyFilters(); setShowFilters(false); }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
                 >
                   Done
-                </button>
+                </Button>
               </div>
             </div>
             }
@@ -478,7 +482,7 @@ export default function AssessmentAuditTrail() {
                               <h4 className={`text-sm sm:text-base font-medium ${colors.text}`}>
                                 {activity.title}
                               </h4>
-                              <span className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${
+                              <span className={`text-2xs sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${
                                 activity.category === 'assessment_lifecycle'
                                   ? 'bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20'
                                   : 'bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/20'
@@ -486,15 +490,15 @@ export default function AssessmentAuditTrail() {
                                 {getCategoryLabel(activity.category)}
                               </span>
                               {activity.passed !== null && activity.passed !== undefined && (
-                                <span className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${
-                                  activity.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                <span className={`text-2xs sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${
+                                  activity.passed ? 'bg-success-subtle text-success' : 'bg-destructive-subtle text-destructive'
                                 }`}>
                                   {activity.passed ? 'Passed' : 'Failed'}
                                 </span>
                               )}
                             </div>
                             <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">{activity.description}</p>
-                            <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1.5 sm:mt-2 text-[10px] sm:text-xs text-gray-500">
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1.5 sm:mt-2 text-2xs sm:text-xs text-gray-500">
                               {activity.actor_name && (
                                 <span className="flex items-center gap-1">
                                   <User className="w-3 h-3 flex-shrink-0" />
@@ -517,7 +521,7 @@ export default function AssessmentAuditTrail() {
                           </div>
                           <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:gap-0 flex-shrink-0 mt-1 sm:mt-0">
                             <p className="text-xs sm:text-sm text-gray-500">{formatTimestamp(activity.timestamp)}</p>
-                            <button className="sm:mt-1 text-[10px] sm:text-xs text-gray-400 hover:text-brand-blue">
+                            <button className="sm:mt-1 text-2xs sm:text-xs text-gray-400 hover:text-brand-blue">
                               <Eye className="w-3 h-3 inline mr-0.5 sm:mr-1" />
                               {isExpanded ? 'Hide' : 'Details'}
                             </button>
@@ -561,7 +565,7 @@ export default function AssessmentAuditTrail() {
                           {activity.assessment_id && (
                             <div className="break-all">
                               <span className="text-gray-500">Assessment ID:</span>
-                              <span className="ml-1.5 sm:ml-2 text-gray-900 font-mono text-[10px] sm:text-xs">{activity.assessment_id}</span>
+                              <span className="ml-1.5 sm:ml-2 text-gray-900 font-mono text-2xs sm:text-xs">{activity.assessment_id}</span>
                             </div>
                           )}
                         </div>

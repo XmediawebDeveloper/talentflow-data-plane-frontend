@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { Resume } from '@/lib/types/types';
 import { FileText, Clock, History, User, File, HardDrive } from 'lucide-react';
 import ResumeVersionSelector from './ResumeVersionSelector';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
@@ -109,29 +110,36 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
             </div>
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
-            <button
+            <Button
+              tone="onColor"
+              variant="secondary"
+              size="sm"
               onClick={handleDownload}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2 text-sm text-white border border-white/30 rounded-lg hover:bg-white/15 transition-colors"
+              icon={<Download className="w-4 h-4" />}
             >
-              <Download className="w-4 h-4" />
               <span className="hidden sm:inline">Download</span>
-            </button>
-            <button
+            </Button>
+            <Button
+              tone="onColor"
+              variant="secondary"
+              size="sm"
               onClick={handleShare}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2 text-sm text-white border border-white/30 rounded-lg hover:bg-white/15 transition-colors"
+              icon={<Send className="w-4 h-4" />}
             >
-              <Send className="w-4 h-4" />
               <span className="hidden sm:inline">Share</span>
-            </button>
+            </Button>
             {/* Embedded view is reached via the breadcrumb, so no back control */}
             {!embedded && (
-              <button
+              <Button
+                tone="onColor"
+                variant="secondary"
+                size="sm"
                 onClick={onClose}
-                className="text-white hover:bg-white/20 p-2 rounded-lg transition-colors"
                 aria-label="Close"
+                className="px-2"
               >
                 <X className="w-5 h-5" />
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -141,32 +149,35 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
         <div className="bg-gray-50 border-b border-gray-200 px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             {onEdit && (
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => onEdit(resume)}
-                className="flex items-center gap-2 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-white transition-colors text-sm"
+                icon={<Edit2 className="w-4 h-4" />}
               >
-                <Edit2 className="w-4 h-4" />
                 Edit
-              </button>
+              </Button>
             )}
             {onDelete && (
-              <button
+              <Button
+                variant="destructive"
+                size="sm"
                 onClick={handleDelete}
-                className="flex items-center gap-2 px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 transition-colors text-sm"
+                icon={<Trash2 className="w-4 h-4" />}
               >
-                <Trash2 className="w-4 h-4" />
                 Delete
-              </button>
+              </Button>
             )}
           </div>
           {onApplyToJob && (
-            <button
+            <Button
+              variant="primary"
+              size="sm"
               onClick={handleApplyToJob}
-              className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm shadow-md"
+              icon={<Send className="w-4 h-4" />}
             >
-              <Send className="w-4 h-4" />
               Apply to Job
-            </button>
+            </Button>
           )}
         </div>
         )}
@@ -252,7 +263,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
             {/* Professional Summary */}
             <div className="bg-white border border-gray-200 rounded-lg p-6">
               <div className="flex items-center gap-2 mb-4">
-                <Star className="w-5 h-5 text-yellow-600" />
+                <Star className="w-5 h-5 text-warning" />
                 <h2 className="text-gray-900">Professional Summary</h2>
               </div>
               <p className="text-gray-700 leading-relaxed">{detailedResume.summary}</p>
@@ -293,7 +304,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                       <div className="space-y-2">
                         {exp.achievements.map((achievement, achIndex) => (
                           <div key={achIndex} className="flex items-start gap-2 text-sm text-gray-700">
-                            <ChevronRight className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                            <ChevronRight className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
                             <span>{achievement}</span>
                           </div>
                         ))}
@@ -341,7 +352,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
             {/* Skills */}
             <div className="bg-white border border-gray-200 rounded-lg p-6">
               <div className="flex items-center gap-2 mb-6">
-                <Code className="w-5 h-5 text-green-600" />
+                <Code className="w-5 h-5 text-success" />
                 <h2 className="text-gray-900">Skills</h2>
               </div>
               
@@ -358,9 +369,9 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                       <div className="w-full bg-gray-200 rounded-full h-2">
                         <div
                           className={`h-2 rounded-full ${
-                            skill.level >= 90 ? 'bg-green-600' :
+                            skill.level >= 90 ? 'bg-success' :
                             skill.level >= 75 ? 'bg-blue-600' :
-                            skill.level >= 60 ? 'bg-yellow-600' :
+                            skill.level >= 60 ? 'bg-warning' :
                             'bg-orange-600'
                           }`}
                           style={{ width: `${skill.level}%` }}
@@ -376,7 +387,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                 <h3 className="text-gray-900 mb-4">Soft Skills</h3>
                 <div className="flex flex-wrap gap-2">
                   {detailedResume.skills.soft.map((skill, index) => (
-                    <span key={index} className="px-4 py-2 bg-green-50 text-green-700 rounded-lg text-sm border border-green-200">
+                    <span key={index} className="px-4 py-2 bg-success-subtle text-success rounded-lg text-sm border border-success-line">
                       {skill}
                     </span>
                   ))}
@@ -388,7 +399,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
             {detailedResume.certifications.length > 0 && (
               <div className="bg-white border border-gray-200 rounded-lg p-6">
                 <div className="flex items-center gap-2 mb-6">
-                  <Award className="w-5 h-5 text-yellow-600" />
+                  <Award className="w-5 h-5 text-warning" />
                   <h2 className="text-gray-900">Certifications</h2>
                 </div>
                 <div className="space-y-4">
@@ -399,7 +410,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                     const certDate = typeof cert === 'object' ? cert.date : null;
                     const certId = typeof cert === 'object' ? (cert.credentialId || cert.credential_id) : null;
                     return (
-                    <div key={index} className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                    <div key={index} className="p-4 bg-warning-subtle border border-warning-line rounded-lg">
                       <div className="flex items-start justify-between">
                         <div>
                           <h3 className="text-gray-900 mb-1">{certName}</h3>
@@ -414,7 +425,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                             {certId && <span>ID: {certId}</span>}
                           </div>
                         </div>
-                        <Award className="w-6 h-6 text-yellow-600" />
+                        <Award className="w-6 h-6 text-warning" />
                       </div>
                     </div>
                     );
@@ -635,7 +646,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                     return (
                       <div key={version.id} className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
                         <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
-                          index === 0 ? 'bg-green-500' : 'bg-gray-400'
+                          index === 0 ? 'bg-success' : 'bg-gray-400'
                         }`} />
                         <div className="flex-1">
                           <div className="flex items-center justify-between mb-1">
@@ -649,7 +660,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                           </div>
                         </div>
                         {index === 0 && (
-                          <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">
+                          <span className="px-2 py-1 bg-success-subtle text-success rounded text-xs">
                             Active
                           </span>
                         )}
@@ -658,7 +669,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                   })
                 ) : (
                   <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
-                    <div className="w-2 h-2 rounded-full flex-shrink-0 bg-green-500" />
+                    <div className="w-2 h-2 rounded-full flex-shrink-0 bg-success" />
                     <div className="flex-1">
                       <div className="flex items-center justify-between mb-1">
                         <span className="text-sm text-gray-900">Resume uploaded</span>
@@ -670,7 +681,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                         Uploaded by <span className="text-gray-900">{resume.uploadedBy === 'current-user' ? 'You' : resume.uploadedBy}</span>
                       </div>
                     </div>
-                    <span className="px-2 py-1 bg-green-100 text-green-700 rounded text-xs">
+                    <span className="px-2 py-1 bg-success-subtle text-success rounded text-xs">
                       Active
                     </span>
                   </div>
@@ -695,7 +706,7 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                 </div>
                 <div className="text-center">
                   <div className="text-xs text-gray-500 mb-1">Status</div>
-                  <div className="inline-flex items-center px-2 py-1 bg-green-100 text-green-700 rounded text-xs">
+                  <div className="inline-flex items-center px-2 py-1 bg-success-subtle text-success rounded text-xs">
                     Active
                   </div>
                 </div>

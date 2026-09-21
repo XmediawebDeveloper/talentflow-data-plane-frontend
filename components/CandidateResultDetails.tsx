@@ -10,6 +10,7 @@ import RecordPager from '@/components/RecordPager';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import ResumeDetailView from '@/components/ResumeDetailView';
 import ViewResumeButton from '@/components/ui/view-resume-button';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface CandidateResultDetailsProps {
@@ -616,15 +617,15 @@ export default function CandidateResultDetails({
 
   // Helper functions
   const getScoreColor = (score: number) => {
-    if (score >= 70) return 'text-green-600';
+    if (score >= 70) return 'text-success';
     if (score >= 40) return 'text-brand-orange-deep';
-    return 'text-red-600';
+    return 'text-destructive';
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Completed':
-        return 'bg-green-100 text-green-700 ring-1 ring-green-200';
+        return 'bg-success-subtle text-success ring-1 ring-success-line';
       case 'In Progress':
         return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
       case 'Pending':
@@ -752,14 +753,15 @@ export default function CandidateResultDetails({
     return (
       <div className="flex-1 bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-          <p className="text-red-600 mb-4">{detailsError}</p>
-          <button
+          <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
+          <p className="text-destructive mb-4">{detailsError}</p>
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={onBack}
-            className="px-4 py-2 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg text-sm transition-colors"
           >
             Back to Results
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -996,8 +998,8 @@ export default function CandidateResultDetails({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 ring-1 ring-green-200 flex items-center justify-center flex-shrink-0">
-                <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 ring-1 ring-success-line flex items-center justify-center flex-shrink-0">
+                <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-success" />
               </div>
               <div>
                 <div className="text-xs sm:text-sm text-gray-600">Completed</div>
@@ -1058,8 +1060,8 @@ export default function CandidateResultDetails({
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 ring-1 ring-green-200 flex items-center justify-center flex-shrink-0">
-                <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 ring-1 ring-success-line flex items-center justify-center flex-shrink-0">
+                <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-success" />
               </div>
               <div>
                 <div className="text-xs sm:text-sm text-gray-600">Submission Time</div>
@@ -1088,10 +1090,10 @@ export default function CandidateResultDetails({
                     className={`w-full rounded-lg px-3 py-2.5 text-left text-xs sm:text-sm transition-colors flex items-center justify-between gap-2 ${
                       isActive
                         ? tab.danger
-                          ? 'bg-red-50 text-red-700 font-medium ring-1 ring-red-200'
+                          ? 'bg-destructive-subtle text-destructive font-medium ring-1 ring-destructive-line'
                           : 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
                         : tab.danger
-                          ? 'text-gray-600 hover:bg-red-50 hover:text-red-700'
+                          ? 'text-gray-600 hover:bg-destructive-subtle hover:text-destructive'
                           : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                     }`}
                   >
@@ -1103,7 +1105,7 @@ export default function CandidateResultDetails({
                       <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${
                         tab.danger
                           ? isActive || tab.count > 0
-                            ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
+                            ? 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line'
                             : 'bg-slate-100 text-gray-600'
                           : isActive
                             ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
@@ -1151,7 +1153,7 @@ export default function CandidateResultDetails({
                         return (
                           <span
                             key={`mhs-${idx}`}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 rounded-full text-xs border border-green-200"
+                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-success-subtle text-success rounded-full text-xs border border-success-line"
                           >
                             <CheckCircle className="w-3 h-3" />
                             {name}
@@ -1180,7 +1182,7 @@ export default function CandidateResultDetails({
                             className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-50 text-gray-600 rounded-full text-xs border border-gray-200"
                           >
                             {name}
-                            <span className="text-[10px] text-gray-400">(preferred)</span>
+                            <span className="text-2xs text-gray-400">(preferred)</span>
                           </span>
                         );
                       })}
@@ -1293,7 +1295,7 @@ export default function CandidateResultDetails({
                                   Not Scored
                                 </span>
                               ) : scoringDone ? (
-                                <span className="px-2 py-0.5 bg-green-100 text-green-700 ring-1 ring-green-200 rounded text-xs font-medium">
+                                <span className="px-2 py-0.5 bg-success-subtle text-success ring-1 ring-success-line rounded text-xs font-medium">
                                   Scored (0-10)
                                 </span>
                               ) : (
@@ -1362,12 +1364,12 @@ export default function CandidateResultDetails({
                       {/* Legend */}
                       <div className="flex items-center gap-4 text-xs">
                         <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block flex-shrink-0" />
-                          <span className="text-green-700 font-medium">{submittedQ} Submitted</span>
+                          <span className="w-2.5 h-2.5 rounded-sm bg-success inline-block flex-shrink-0" />
+                          <span className="text-success font-medium">{submittedQ} Submitted</span>
                         </span>
                         <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-sm bg-red-400 inline-block flex-shrink-0" />
-                          <span className="text-red-600 font-medium">{unansweredQ + skippedQ} Unanswered</span>
+                          <span className="w-2.5 h-2.5 rounded-sm bg-destructive inline-block flex-shrink-0" />
+                          <span className="text-destructive font-medium">{unansweredQ + skippedQ} Unanswered</span>
                         </span>
                       </div>
                     </div>
@@ -1410,32 +1412,32 @@ export default function CandidateResultDetails({
                   <span className="text-gray-700">Displayed in reports</span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 mt-1.5 flex-shrink-0"></div>
-                  <span className="text-gray-700"><strong className="text-yellow-700">NOT part of PASS/FAIL</strong> decision</span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-warning mt-1.5 flex-shrink-0"></div>
+                  <span className="text-gray-700"><strong className="text-warning">NOT part of PASS/FAIL</strong> decision</span>
                 </div>
               </div>
             </div>
 
             {/* Technical & Coding Rules */}
-            <div className="bg-white rounded-lg border-2 border-green-300 p-4">
+            <div className="bg-white rounded-lg border-2 border-success-line p-4">
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                  <CheckCircle className="w-4 h-4 text-green-600" />
+                <div className="w-8 h-8 bg-success-subtle rounded-lg flex items-center justify-center">
+                  <CheckCircle className="w-4 h-4 text-success" />
                 </div>
                 <h3 className="text-gray-900">Technical & Coding</h3>
               </div>
               <div className="space-y-2 text-sm">
                 <div className="flex items-start gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-600 mt-1.5 flex-shrink-0"></div>
+                  <div className="w-1.5 h-1.5 rounded-full bg-success mt-1.5 flex-shrink-0"></div>
                   <span className="text-gray-700">Rating scale: <strong>0-10</strong> per question</span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-600 mt-1.5 flex-shrink-0"></div>
+                  <div className="w-1.5 h-1.5 rounded-full bg-success mt-1.5 flex-shrink-0"></div>
                   <span className="text-gray-700">Minimum passing: <strong>≥7 per question</strong></span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-600 mt-1.5 flex-shrink-0"></div>
-                  <span className="text-gray-700"><strong className="text-green-700">Used for PASS/FAIL</strong> determination</span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-success mt-1.5 flex-shrink-0"></div>
+                  <span className="text-gray-700"><strong className="text-success">Used for PASS/FAIL</strong> determination</span>
                 </div>
               </div>
             </div>
@@ -1476,15 +1478,15 @@ export default function CandidateResultDetails({
           </div>
 
           {/* Final Result Calculation */}
-          <div className="mt-4 bg-gradient-to-r from-green-50 to-gray-50 border-2 border-green-300 rounded-lg p-4">
+          <div className="mt-4 bg-gradient-to-r from-green-50 to-gray-50 border-2 border-success-line rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
-              <Award className="w-5 h-5 text-green-600" />
+              <Award className="w-5 h-5 text-success" />
               <h3 className="text-gray-900">Final Assessment Result</h3>
             </div>
             <div className="text-sm text-gray-700">
               <strong>PASS</strong> if <strong>ALL</strong> evaluated sections (Technical + Coding) pass
             </div>
-            <div className="mt-2 flex items-center gap-2 text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-3 py-2">
+            <div className="mt-2 flex items-center gap-2 text-xs text-warning bg-warning-subtle border border-warning-line rounded px-3 py-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <span>Remember: HR section is excluded from final PASS/FAIL calculation</span>
             </div>
@@ -1507,10 +1509,10 @@ export default function CandidateResultDetails({
                 </div>
               </div>
               {(!detailedResult.candidate_insights?.interview_strength) && (
-                <button
+                <Button
+                  variant="primary"
                   onClick={handleGenerateInsights}
                   disabled={isGeneratingInsights}
-                  className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                 >
                   {isGeneratingInsights ? (
                     <>
@@ -1523,7 +1525,7 @@ export default function CandidateResultDetails({
                       Generate Insights
                     </>
                   )}
-                </button>
+                </Button>
               )}
             </div>
             <div className="p-4 sm:p-6">
@@ -1531,12 +1533,12 @@ export default function CandidateResultDetails({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 {/* Interview Strength */}
                 {detailedResult.candidate_insights.interview_strength && (
-                  <div className="bg-green-50 rounded-xl p-4 border border-green-200 ring-1 ring-green-100">
-                    <h3 className="text-green-800 font-medium mb-3 flex items-center gap-2">
+                  <div className="bg-success-subtle rounded-xl p-4 border border-success-line ring-1 ring-success-line">
+                    <h3 className="text-success-strong font-medium mb-3 flex items-center gap-2">
                       <CheckCircle className="w-4 h-4" />
                       Interview Strength
                     </h3>
-                    <p className="text-sm text-green-700">
+                    <p className="text-sm text-success">
                       {detailedResult.candidate_insights.interview_strength}
                     </p>
                   </div>
@@ -1588,10 +1590,11 @@ export default function CandidateResultDetails({
                   <p className="text-gray-600 mb-4">
                     Click &quot;Generate Insights&quot; to analyze this candidate&apos;s Technical and Coding performance
                   </p>
-                  <button
+                  <Button
+                    variant="primary"
                     onClick={handleGenerateInsights}
                     disabled={isGeneratingInsights}
-                    className="px-6 py-3 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 mx-auto disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                    className="mx-auto"
                   >
                     {isGeneratingInsights ? (
                       <>
@@ -1604,7 +1607,7 @@ export default function CandidateResultDetails({
                         Generate AI Insights
                       </>
                     )}
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -1745,7 +1748,7 @@ export default function CandidateResultDetails({
                                   ? 'bg-slate-50'
                                   : isNotAnswered
                                     ? 'bg-slate-50'
-                                    : (q.is_correct ? 'bg-green-50' : 'bg-red-50')
+                                    : (q.is_correct ? 'bg-success-subtle' : 'bg-destructive-subtle')
                               }`}>
                                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
                                   <div className="flex-1 min-w-0">
@@ -1764,9 +1767,9 @@ export default function CandidateResultDetails({
                                         isNotAnswered ? (
                                           <span className="px-2 py-0.5 bg-gray-100 text-gray-600 ring-1 ring-gray-200 rounded text-xs font-medium">Not Answered</span>
                                         ) : q.is_correct ? (
-                                          <span className="px-2 py-0.5 bg-green-100 text-green-700 ring-1 ring-green-200 rounded text-xs font-medium">Correct</span>
+                                          <span className="px-2 py-0.5 bg-success-subtle text-success ring-1 ring-success-line rounded text-xs font-medium">Correct</span>
                                         ) : (
-                                          <span className="px-2 py-0.5 bg-red-100 text-red-700 ring-1 ring-red-200 rounded text-xs font-medium">Incorrect</span>
+                                          <span className="px-2 py-0.5 bg-destructive-subtle text-destructive ring-1 ring-destructive-line rounded text-xs font-medium">Incorrect</span>
                                         )
                                       )}
                                     </div>
@@ -1827,7 +1830,7 @@ export default function CandidateResultDetails({
                                             {q.sample_input && (
                                               <div>
                                                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Input</div>
-                                                <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
+                                                <pre className="bg-gray-900 text-success p-3 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
                                                   {q.sample_input}
                                                 </pre>
                                               </div>
@@ -1835,7 +1838,7 @@ export default function CandidateResultDetails({
                                             {q.sample_output && (
                                               <div>
                                                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Expected Output</div>
-                                                <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
+                                                <pre className="bg-gray-900 text-success p-3 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
                                                   {q.sample_output}
                                                 </pre>
                                               </div>
@@ -2009,9 +2012,9 @@ export default function CandidateResultDetails({
                                             const isSelected = selectedSet.has(oid);
                                             const isWrongSelection = isSelected && !isCorrect;
                                             const wrap = isCorrect
-                                              ? 'bg-green-50 border-green-300 ring-1 ring-green-200 text-green-900'
+                                              ? 'bg-success-subtle border-success-line ring-1 ring-success-line text-success-strong'
                                               : isWrongSelection
-                                                ? 'bg-red-50 border-red-300 ring-1 ring-red-200 text-red-900'
+                                                ? 'bg-destructive-subtle border-destructive-line ring-1 ring-destructive-line text-destructive-strong'
                                                 : 'bg-slate-50 border-gray-100 ring-1 ring-black/[0.02] text-gray-800';
                                             const badge = isCorrect
                                               ? 'bg-gradient-to-br from-green-600 to-emerald-600 text-white shadow-sm shadow-green-600/25'
@@ -2028,12 +2031,12 @@ export default function CandidateResultDetails({
                                                 </span>
                                                 <div className="flex-1 text-sm">
                                                   <div>{opt.text}</div>
-                                                  <div className="mt-1 flex items-center gap-2 text-[11px] font-medium">
+                                                  <div className="mt-1 flex items-center gap-2 text-2xs font-medium">
                                                     {isCorrect && (
-                                                      <span className="text-green-700">Correct answer</span>
+                                                      <span className="text-success">Correct answer</span>
                                                     )}
                                                     {isSelected && (
-                                                      <span className={isCorrect ? 'text-green-700' : 'text-red-700'}>
+                                                      <span className={isCorrect ? 'text-success' : 'text-destructive'}>
                                                         • Candidate answer
                                                       </span>
                                                     )}
@@ -2062,7 +2065,7 @@ export default function CandidateResultDetails({
                                       </div>
                                       <div className={`rounded-lg p-4 ${
                                         q.question_type === 'coding'
-                                          ? 'bg-slate-900 text-green-400 font-mono text-sm overflow-x-auto ring-1 ring-black/20'
+                                          ? 'bg-slate-900 text-success font-mono text-sm overflow-x-auto ring-1 ring-black/20'
                                           : 'bg-slate-50 ring-1 ring-black/[0.03] text-gray-800'
                                       }`}>
                                         {q.question_type === 'coding' ? (
@@ -2158,8 +2161,8 @@ export default function CandidateResultDetails({
                                                 </div>
                                                 <span className={`inline-flex w-fit items-center rounded px-2 py-0.5 text-xs font-medium uppercase ring-1 ${
                                                   testCase.passed
-                                                    ? 'bg-green-100 text-green-700 ring-green-200'
-                                                    : 'bg-red-100 text-red-700 ring-red-200'
+                                                    ? 'bg-success-subtle text-success ring-success-line'
+                                                    : 'bg-destructive-subtle text-destructive ring-destructive-line'
                                                 }`}>
                                                   {testCase.passed ? 'Pass' : 'Fail'}
                                                 </span>
@@ -2191,7 +2194,7 @@ export default function CandidateResultDetails({
                                                       <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
                                                         Why It Failed
                                                       </div>
-                                                      <div className="rounded border border-red-200 ring-1 ring-red-100 bg-red-50 p-3 font-mono text-sm text-red-800">
+                                                      <div className="rounded border border-destructive-line ring-1 ring-destructive-line bg-destructive-subtle p-3 font-mono text-sm text-destructive-strong">
                                                         <pre className="whitespace-pre-wrap">{testCase.error}</pre>
                                                       </div>
                                                     </div>
@@ -2216,7 +2219,7 @@ export default function CandidateResultDetails({
                                     )}
 
                                   {q.candidate_code_submission && (!q.candidate_test_results?.details || q.candidate_test_results.details.length === 0) && (
-                                    <div className="rounded-lg border border-red-200 ring-1 ring-red-100 bg-red-50 p-4 text-sm text-red-800">
+                                    <div className="rounded-lg border border-destructive-line ring-1 ring-destructive-line bg-destructive-subtle p-4 text-sm text-destructive-strong">
                                       No judged test-case results were recorded for this coding submission. This result should be rescored.
                                     </div>
                                   )}
@@ -2232,16 +2235,16 @@ export default function CandidateResultDetails({
                                 {q.correct_answer && q.correct_answer.length > 0 && !(['single_choice', 'multiple_choice', 'mcq'].includes(String(q.question_type || '').toLowerCase())) && (
                                   <div>
                                     <div className="flex items-center gap-2 mb-3">
-                                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 ring-1 ring-green-200 flex items-center justify-center flex-shrink-0">
-                                        <CheckCircle className="w-4 h-4 text-green-600" />
+                                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 ring-1 ring-success-line flex items-center justify-center flex-shrink-0">
+                                        <CheckCircle className="w-4 h-4 text-success" />
                                       </div>
                                       <div className="text-sm font-medium text-gray-800">CORRECT ANSWER</div>
                                     </div>
-                                    <div className="bg-green-50 ring-1 ring-green-100 rounded-lg p-4">
+                                    <div className="bg-success-subtle ring-1 ring-success-line rounded-lg p-4">
                                       {q.correct_answer.map((opt, i) => {
                                         const option = q.options?.find(o => o.id === opt);
                                         return (
-                                          <div key={i} className="flex items-center gap-2 mb-1 text-green-800">
+                                          <div key={i} className="flex items-center gap-2 mb-1 text-success-strong">
                                             <CheckCircle className="w-4 h-4" />
                                             <span>{option?.text || opt}</span>
                                           </div>
@@ -2274,9 +2277,9 @@ export default function CandidateResultDetails({
                                 {/* Strengths — hidden for MCQ. */}
                                 {!isHRRound && !isMCQQuestion && ((q.strengths && q.strengths.length > 0) || (q.question_type === 'coding' && q.candidate_test_results?.strengths && q.candidate_test_results.strengths.length > 0)) && (
                                   <div className="pt-4 border-t border-gray-100">
-                                    <div className="bg-green-50 ring-1 ring-green-100 rounded-lg p-4">
-                                      <div className="text-sm font-medium text-green-800 mb-2">Strengths</div>
-                                      <ul className="text-sm text-green-700 space-y-1">
+                                    <div className="bg-success-subtle ring-1 ring-success-line rounded-lg p-4">
+                                      <div className="text-sm font-medium text-success-strong mb-2">Strengths</div>
+                                      <ul className="text-sm text-success space-y-1">
                                         {(q.strengths && q.strengths.length > 0 ? q.strengths : (q.candidate_test_results?.strengths || [])).map((s, i) => (
                                           <li key={i} className="flex items-start gap-2">
                                             <CheckCircle className="w-3 h-3 mt-1 flex-shrink-0" />
@@ -2336,9 +2339,9 @@ export default function CandidateResultDetails({
                         <div className="text-sm text-gray-600 mb-1">Integrity Status</div>
                         <span className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ring-1 ${
                           detailedResult.proctoring_stats.integrity_status === 'clean'
-                            ? 'bg-green-100 text-green-800 ring-green-200'
+                            ? 'bg-success-subtle text-success-strong ring-success-line'
                             : detailedResult.proctoring_stats.integrity_status === 'flagged'
-                            ? 'bg-red-100 text-red-800 ring-red-200'
+                            ? 'bg-destructive-subtle text-destructive-strong ring-destructive-line'
                             : 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
                         }`}>
                           {detailedResult.proctoring_stats.integrity_status === 'clean' && <CheckCircle className="w-4 h-4 mr-2" />}
@@ -2354,17 +2357,17 @@ export default function CandidateResultDetails({
                       {/* Window Focus Lost */}
                       <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         detailedResult.proctoring_stats.window_blur_count > 0
-                          ? 'bg-red-50 border-red-200 ring-red-100'
+                          ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           detailedResult.proctoring_stats.window_blur_count > 0
-                            ? 'bg-red-100 ring-red-200'
+                            ? 'bg-destructive-subtle ring-destructive-line'
                             : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <Eye className={`w-6 h-6 ${
                             detailedResult.proctoring_stats.window_blur_count > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`} />
                         </div>
@@ -2372,7 +2375,7 @@ export default function CandidateResultDetails({
                         <div className="flex items-center gap-2">
                           <div className={`text-3xl font-bold tracking-tight ${
                             detailedResult.proctoring_stats.window_blur_count > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`}>
                             {detailedResult.proctoring_stats.window_blur_count}
@@ -2384,17 +2387,17 @@ export default function CandidateResultDetails({
                       {/* Mouse Movement */}
                       <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
-                          ? 'bg-red-50 border-red-200 ring-red-100'
+                          ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
-                            ? 'bg-red-100 ring-red-200'
+                            ? 'bg-destructive-subtle ring-destructive-line'
                             : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <MousePointer className={`w-6 h-6 ${
                             (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`} />
                         </div>
@@ -2402,7 +2405,7 @@ export default function CandidateResultDetails({
                         <div className="flex items-center gap-2">
                           <div className={`text-3xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`}>
                             {detailedResult.proctoring_stats.mouse_movement_count || 0}
@@ -2504,17 +2507,17 @@ export default function CandidateResultDetails({
                       {/* Camera Obstructed / Off */}
                       <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
-                          ? 'bg-red-50 border-red-200 ring-red-100'
+                          ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
-                            ? 'bg-red-100 ring-red-200'
+                            ? 'bg-destructive-subtle ring-destructive-line'
                             : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <Eye className={`w-6 h-6 ${
                             (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`} />
                         </div>
@@ -2522,7 +2525,7 @@ export default function CandidateResultDetails({
                         <div className="flex items-center gap-2">
                           <div className={`text-3xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`}>
                             {detailedResult.proctoring_stats.camera_obstructed_count || 0}
@@ -2534,17 +2537,17 @@ export default function CandidateResultDetails({
                       {/* Face Not Detected */}
                       <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
-                          ? 'bg-red-50 border-red-200 ring-red-100'
+                          ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
-                            ? 'bg-red-100 ring-red-200'
+                            ? 'bg-destructive-subtle ring-destructive-line'
                             : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <UserX className={`w-6 h-6 ${
                             (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`} />
                         </div>
@@ -2552,7 +2555,7 @@ export default function CandidateResultDetails({
                         <div className="flex items-center gap-2">
                           <div className={`text-3xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`}>
                             {detailedResult.proctoring_stats.face_not_visible_count || 0}
@@ -2594,17 +2597,17 @@ export default function CandidateResultDetails({
                       {/* Multiple Faces */}
                       <div className={`rounded-xl p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
-                          ? 'bg-red-50 border-red-200 ring-red-100'
+                          ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
-                            ? 'bg-red-100 ring-red-200'
+                            ? 'bg-destructive-subtle ring-destructive-line'
                             : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <User className={`w-6 h-6 ${
                             (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`} />
                         </div>
@@ -2612,7 +2615,7 @@ export default function CandidateResultDetails({
                         <div className="flex items-center gap-2">
                           <div className={`text-3xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`}>
                             {detailedResult.proctoring_stats.multiple_faces_count || 0}
@@ -2698,26 +2701,26 @@ export default function CandidateResultDetails({
                       {/* Total Violations */}
                       <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         detailedResult.proctoring_stats.total_violations > 0
-                          ? 'bg-red-50 border-red-300 ring-red-200'
-                          : 'bg-green-50 border-green-200 ring-green-100'
+                          ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
+                          : 'bg-success-subtle border-success-line ring-success-line'
                       }`}>
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           detailedResult.proctoring_stats.total_violations > 0
-                            ? 'bg-red-100 ring-red-200'
-                            : 'bg-green-100 ring-green-200'
+                            ? 'bg-destructive-subtle ring-destructive-line'
+                            : 'bg-success-subtle ring-success-line'
                         }`}>
                           <ShieldAlert className={`w-6 h-6 ${
                             detailedResult.proctoring_stats.total_violations > 0
-                              ? 'text-red-600'
-                              : 'text-green-600'
+                              ? 'text-destructive'
+                              : 'text-success'
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Total Violations</div>
                         <div className="flex items-center gap-2">
                           <div className={`text-3xl font-bold tracking-tight ${
                             detailedResult.proctoring_stats.total_violations > 0
-                              ? 'text-red-600'
-                              : 'text-green-600'
+                              ? 'text-destructive'
+                              : 'text-success'
                           }`}>
                             {detailedResult.proctoring_stats.total_violations}
                           </div>
@@ -2796,15 +2799,15 @@ export default function CandidateResultDetails({
                                   case 'devtools_detected':        return { label: 'DevTools Attempt',        icon: <Monitor className="w-4 h-4" />,      color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
                                   case 'copy_attempt':             return { label: 'Copy Attempt',             icon: <Clipboard className="w-4 h-4" />,    color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
                                   case 'paste_attempt':            return { label: 'Paste Attempt',            icon: <MousePointer className="w-4 h-4" />, color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
-                                  case 'camera_disabled':          return { label: 'Camera Disabled',          icon: <Eye className="w-4 h-4" />,          color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
-                                  case 'camera_obstructed':        return { label: 'Camera Obstructed',        icon: <Eye className="w-4 h-4" />,          color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
-                                  case 'microphone_disabled':      return { label: 'Microphone Disabled',      icon: <Volume2 className="w-4 h-4" />,      color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
+                                  case 'camera_disabled':          return { label: 'Camera Disabled',          icon: <Eye className="w-4 h-4" />,          color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
+                                  case 'camera_obstructed':        return { label: 'Camera Obstructed',        icon: <Eye className="w-4 h-4" />,          color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
+                                  case 'microphone_disabled':      return { label: 'Microphone Disabled',      icon: <Volume2 className="w-4 h-4" />,      color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
                                   case 'voice_detected':           return { label: 'Voice Detected',           icon: <Volume2 className="w-4 h-4" />,      color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
-                                  case 'multiple_voices':          return { label: 'Multiple Voices',          icon: <Volume2 className="w-4 h-4" />,      color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
-                                  case 'multiple_faces':           return { label: 'Multiple Faces',           icon: <User className="w-4 h-4" />,         color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
-                                  case 'face_missing':             return { label: 'Face Not Detected',       icon: <UserX className="w-4 h-4" />,        color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
+                                  case 'multiple_voices':          return { label: 'Multiple Voices',          icon: <Volume2 className="w-4 h-4" />,      color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
+                                  case 'multiple_faces':           return { label: 'Multiple Faces',           icon: <User className="w-4 h-4" />,         color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
+                                  case 'face_missing':             return { label: 'Face Not Detected',       icon: <UserX className="w-4 h-4" />,        color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
                                   case 'screenshot_attempt':       return { label: 'Screenshot Attempt',      icon: <Maximize className="w-4 h-4" />,     color: 'text-brand-blue',        bg: 'bg-brand-blue/5',    severity: 'high'   };
-                                  case 'screen_recording_attempt': return { label: 'Screen Recording Attempt', icon: <Monitor className="w-4 h-4" />,      color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
+                                  case 'screen_recording_attempt': return { label: 'Screen Recording Attempt', icon: <Monitor className="w-4 h-4" />,      color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
                                   case 'fullscreen_exit':          return { label: 'Fullscreen Exit',          icon: <Maximize className="w-4 h-4" />,     color: 'text-brand-blue',        bg: 'bg-brand-blue/5',    severity: 'medium'   };
                                   default:                         return { label: row.event_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), icon: <AlertCircle className="w-4 h-4" />, color: 'text-slate-600', bg: 'bg-slate-50', severity: 'low' };
                                 }
@@ -2812,8 +2815,8 @@ export default function CandidateResultDetails({
 
                               const severityBadge = (() => {
                                 switch (cfg.severity) {
-                                  case 'critical': return 'bg-red-100 text-red-700 ring-1 ring-red-200';
-                                  case 'high':     return 'bg-red-100 text-red-700 ring-1 ring-red-200';
+                                  case 'critical': return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
+                                  case 'high':     return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
                                   case 'medium':   return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
                                   case 'low':      return 'bg-slate-100 text-slate-600 ring-1 ring-slate-200';
                                   default:         return 'bg-slate-100 text-slate-600 ring-1 ring-slate-200';
@@ -2849,7 +2852,7 @@ export default function CandidateResultDetails({
                                   {/* Count */}
                                   <div className="flex justify-center">
                                     <span className={`inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-full text-xs font-bold ring-1 ${
-                                      row.count >= 5 ? 'bg-red-100 text-red-700 ring-red-200' :
+                                      row.count >= 5 ? 'bg-destructive-subtle text-destructive ring-destructive-line' :
                                       row.count >= 3 ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20' :
                                       'bg-slate-100 text-slate-700 ring-slate-200'
                                     }`}>
@@ -2915,10 +2918,10 @@ export default function CandidateResultDetails({
 
                     {/* Summary Note */}
                     {detailedResult.proctoring_stats.total_violations === 0 ? (
-                      <div className="bg-green-50 border border-green-200 ring-1 ring-green-100 rounded-xl p-6 text-center shadow-sm shadow-green-600/5">
-                        <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
-                        <h4 className="text-lg font-medium text-green-800 mb-1 tracking-tight">No Violations Detected</h4>
-                        <p className="text-sm text-green-700">
+                      <div className="bg-success-subtle border border-success-line ring-1 ring-success-line rounded-xl p-6 text-center shadow-sm shadow-green-600/5">
+                        <CheckCircle className="w-12 h-12 text-success mx-auto mb-3" />
+                        <h4 className="text-lg font-medium text-success-strong mb-1 tracking-tight">No Violations Detected</h4>
+                        <p className="text-sm text-success">
                           This candidate completed the assessment without any proctoring violations.
                         </p>
                       </div>

@@ -21,6 +21,7 @@ import { assessmentService, type AssessmentResponse } from '@/lib/services/asses
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { Button } from '@/components/ui/button';
 
 /* Same batch size and same reason as the Assessments dashboard's own list: the
    /assessments endpoint takes only jd_id, status, search and paging, so every
@@ -93,8 +94,8 @@ const toRow = (a: AssessmentResponse): AssessmentRow => {
    dashboard's row pills use — and slate for the two terminal states, which are
    deliberately quieter than both. */
 const STATUS_BADGE: Record<string, string> = {
-  Active: 'bg-green-100 text-green-700 ring-green-200 dark:bg-green-500/15 dark:text-green-300 dark:ring-green-400/30',
-  Draft: 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20 dark:bg-amber-500/15 dark:text-amber-300 dark:ring-amber-400/30',
+  Active: 'bg-success-subtle text-success ring-success-line',
+  Draft: 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20',
   Completed: 'bg-slate-100 text-slate-600 ring-slate-200 dark:bg-slate-700/40 dark:text-slate-300 dark:ring-slate-600',
   Archived: 'bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-700/40 dark:text-slate-400 dark:ring-slate-600',
 };
@@ -147,7 +148,7 @@ function CreatedBy({ name }: { name: string }) {
     <span className="inline-flex items-center gap-2 min-w-0">
       <span
         aria-hidden="true"
-        className="h-6 w-6 flex-shrink-0 rounded-full bg-slate-100 dark:bg-slate-700/60 text-[10px] font-semibold text-slate-600 dark:text-slate-300 flex items-center justify-center ring-1 ring-slate-200 dark:ring-slate-600"
+        className="h-6 w-6 flex-shrink-0 rounded-full bg-slate-100 dark:bg-slate-700/60 text-2xs font-semibold text-slate-600 dark:text-slate-300 flex items-center justify-center ring-1 ring-slate-200 dark:ring-slate-600"
       >
         {initials}
       </span>
@@ -756,21 +757,12 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                 </div>
 
                 <div className="flex items-center justify-end gap-2 mt-3">
-                  <button
-                    type="button"
-                    onClick={clearAll}
-                    className="h-9 px-3 inline-flex items-center gap-1.5 rounded-lg text-sm font-medium text-gray-600 dark:text-slate-400 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
-                  >
-                    <X className="w-4 h-4" />
+                  <Button variant="secondary" size="sm" onClick={clearAll} icon={<X className="w-4 h-4" />}>
                     Clear All
-                  </button>
-                  <button
-                    type="button"
-                    onClick={applyFilters}
-                    className="h-9 px-4 inline-flex items-center rounded-lg text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 transition-colors"
-                  >
+                  </Button>
+                  <Button variant="primary" size="sm" onClick={applyFilters}>
                     Apply Filters
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}
@@ -860,8 +852,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                   {!isLoading && error && (
                     <tr>
                       <td colSpan={columnCount} className="px-6 py-14 text-center tf-wrap">
-                        <div className="w-14 h-14 rounded-full bg-red-50 dark:bg-red-500/10 ring-1 ring-red-100 dark:ring-red-500/20 flex items-center justify-center mx-auto mb-4">
-                          <AlertTriangle className="w-7 h-7 text-red-500" />
+                        <div className="w-14 h-14 rounded-full bg-destructive-subtle ring-1 ring-destructive-line flex items-center justify-center mx-auto mb-4">
+                          <AlertTriangle className="w-7 h-7 text-destructive" />
                         </div>
                         <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
                           Unable to load assessments
@@ -869,14 +861,9 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
                           Something went wrong while loading the assessment list. Please try again.
                         </p>
-                        <button
-                          type="button"
-                          onClick={retry}
-                          className="inline-flex items-center gap-2 h-9 px-4 rounded-lg text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25 transition-colors"
-                        >
-                          <RefreshCw className="w-4 h-4" />
+                        <Button variant="primary" size="sm" onClick={retry} icon={<RefreshCw className="w-4 h-4" />}>
                           Retry
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   )}
@@ -899,14 +886,9 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                             : 'Assessments you create will be listed here.'}
                         </p>
                         {isNarrowed && (
-                          <button
-                            type="button"
-                            onClick={clearAll}
-                            className="inline-flex items-center gap-2 h-9 px-4 rounded-lg text-sm font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 hover:bg-brand-blue/10 transition-colors"
-                          >
-                            <X className="w-4 h-4" />
+                          <Button variant="secondary" size="sm" onClick={clearAll} icon={<X className="w-4 h-4" />}>
                             Clear Filters
-                          </button>
+                          </Button>
                         )}
                       </td>
                     </tr>

@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { Button } from '@/components/ui/button';
 import type {
   AIInterviewResponse,
   AIInterviewRoundConfig,
@@ -116,7 +117,7 @@ function getTimedModePercentages(nthEnabled: boolean, hrEnabled: boolean) {
 function PriorityBadge({ p }: { p: number }) {
   const { label, color } = getPriorityLabel(p);
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full border ${color}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 text-2xs font-medium rounded-full border ${color}`}>
       {label}
     </span>
   );
@@ -148,10 +149,10 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 function HRQuestionStageBadge({ stage }: { stage?: string }) {
   const normalized = stage === 'opening' ? 'opening' : 'closing';
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold uppercase tracking-wide ${
       normalized === 'opening'
         ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
-        : 'bg-green-100 text-green-700 ring-1 ring-green-200'
+        : 'bg-success-subtle text-success ring-1 ring-success-line'
     }`}>
       {normalized}
     </span>
@@ -449,7 +450,7 @@ export default function AIInterviewPreview() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-semibold text-gray-900">Flexible — {bufferEnabled ? 35 : 30} min</p>
                     {bufferEnabled && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-2xs font-medium rounded-full bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
                         <Timer className="w-3 h-3" />
                         +5 min buffer
                       </span>
@@ -599,11 +600,11 @@ export default function AIInterviewPreview() {
               <ol className="space-y-2">
                 {(hrRound.hr_questions as AIInterviewHRQuestion[]).map((q, idx) => (
                   <li key={q.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-slate-50 border border-gray-100">
-                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-[10px] font-bold flex items-center justify-center mt-0.5">{idx + 1}</span>
+                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-2xs font-bold flex items-center justify-center mt-0.5">{idx + 1}</span>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm text-gray-800">{q.question_text}</p>
                       <div className="mt-1 flex flex-wrap items-center gap-2">
-                        <span className="text-[10px] text-gray-400">{q.answer_type === 'yes_no' ? 'Yes / No' : 'Text answer'}</span>
+                        <span className="text-2xs text-gray-400">{q.answer_type === 'yes_no' ? 'Yes / No' : 'Text answer'}</span>
                         <HRQuestionStageBadge stage={q.stage} />
                       </div>
                     </div>
@@ -621,7 +622,7 @@ export default function AIInterviewPreview() {
               label="Recording"
               value={
                 interview.recording_enabled ? (
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 ring-1 ring-green-200">
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-success-subtle text-success ring-1 ring-success-line">
                     <Video className="w-3 h-3" /> Enabled
                   </span>
                 ) : (
@@ -679,44 +680,31 @@ export default function AIInterviewPreview() {
       <div className="fixed bottom-0 left-0 right-0 z-40">
         <div className="mx-auto w-full max-w-[1400px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 ring-1 ring-black/[0.02] shadow-lg shadow-brand-blue/5 rounded-t-2xl px-4 md:px-8 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <button
-              onClick={goBack}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
-            >
-              <ArrowLeft className="w-4 h-4" />
+            <Button variant="secondary" size="md" onClick={goBack} icon={<ArrowLeft className="w-4 h-4" />}>
               Back to Clusters
-            </button>
-            <button
-              onClick={handleDiscard}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
-            >
+            </Button>
+            <Button variant="danger" size="md" onClick={handleDiscard}>
               Discard
-            </button>
+            </Button>
           </div>
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleSaveAsDraft}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
-            >
+            <Button variant="secondary" size="md" onClick={handleSaveAsDraft}>
               Save as Draft
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
               onClick={() => setShowConfirm(true)}
               disabled={publishing}
-              className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              icon={publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
             >
-              {publishing ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Publishing...
-                </>
-              ) : (
+              {publishing ? 'Publishing...' : (
                 <>
                   Publish Interview
                   <ChevronRight className="w-4 h-4" />
                 </>
               )}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

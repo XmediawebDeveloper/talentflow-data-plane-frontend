@@ -17,6 +17,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 interface AssessmentResultsProps {
   onBack: () => void;
@@ -752,7 +753,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Pending': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
-      case 'Completed': return 'bg-green-100 text-green-700 ring-1 ring-green-200';
+      case 'Completed': return 'bg-success-subtle text-success ring-1 ring-success-line';
       case 'In Progress': return 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20';
       default: return 'bg-gray-100 text-gray-700 ring-1 ring-gray-200';
     }
@@ -1122,10 +1123,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   };
 
   const getScoreColor = (percentage: number) => {
-    if (percentage >= 80) return 'text-green-600';
+    if (percentage >= 80) return 'text-success';
     if (percentage >= 60) return 'text-brand-blue';
     if (percentage >= 40) return 'text-brand-orange-deep';
-    return 'text-red-600';
+    return 'text-destructive';
   };
 
   const passingThreshold = assessmentDetails?.passing_threshold ?? 70;
@@ -1481,28 +1482,30 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
               {/* AS-26: Bulk PDF Download Button — only for users with download_pdf permission */}
               {canBatchDownload && selectedRows.length > 0 && (
-                <button
+                <Button
+                  variant="primary"
                   onClick={handleDownloadBulkPDFs}
                   disabled={downloadingBulkPDF}
-                  className="px-3 sm:px-6 py-2 sm:py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                >
-                  {downloadingBulkPDF ? (
+                  className="whitespace-nowrap"
+                  icon={downloadingBulkPDF ? (
                     <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
                   ) : (
                     <Download className="w-4 h-4 sm:w-5 sm:h-5" />
                   )}
+                >
                   <span className="hidden sm:inline">{downloadingBulkPDF ? 'Downloading...' : `Download PDFs (${selectedRows.length})`}</span>
                   <span className="sm:hidden">{downloadingBulkPDF ? '...' : `PDFs (${selectedRows.length})`}</span>
-                </button>
+                </Button>
               )}
-              <button
+              <Button
+                variant="primary"
                 onClick={() => setShowExportModal(true)}
-                className="px-3 sm:px-6 py-2 sm:py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-1.5 sm:gap-2 text-xs sm:text-sm whitespace-nowrap"
+                className="whitespace-nowrap"
+                icon={<FileText className="w-4 h-4 sm:w-5 sm:h-5" />}
               >
-                <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
                 <span className="hidden sm:inline">Export Results</span>
                 <span className="sm:hidden">Export</span>
-              </button>
+              </Button>
 
             </div>
           </div>
@@ -1532,15 +1535,15 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           <button
             type="button"
             onClick={() => openCandidateList('Completed')}
-            className="text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 hover:border-green-300 hover:shadow-md hover:shadow-green-500/10 transition-all"
+            className="text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 hover:border-success-line hover:shadow-md hover:shadow-green-500/10 transition-all"
           >
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-gray-600 text-xs sm:text-sm mb-1">Completed</div>
-                <div className="text-xl sm:text-2xl text-green-600 tracking-tight">{completedCount}</div>
+                <div className="text-xl sm:text-2xl text-success tracking-tight">{completedCount}</div>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-success-line flex items-center justify-center">
+                <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-success" />
               </div>
             </div>
           </button>
@@ -1724,7 +1727,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <div className="col-span-2 sm:col-span-1 flex items-center gap-2 sm:gap-3">
                 {/* Clear Filters Button */}
                 {(Object.keys(roundFilters).length > 0 || searchQuery || statusFilter !== 'all' || passFailFilter !== 'all' || dateFrom || dateTo) && (
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => {
                       setRoundFilters({});
                       setSearchQuery('');
@@ -1734,11 +1739,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       setDateTo('');
                       setCurrentPage(1);
                     }}
-                    className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-xs sm:text-sm"
+                    icon={<X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                   >
-                    <X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     Clear
-                  </button>
+                  </Button>
                 )}
 
               {/* AS-24: Customize Columns Button */}
@@ -1879,7 +1883,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           <div className="rounded-lg bg-gray-50 p-2">
                             <div className="text-gray-500">Pass / Fail</div>
                             {passFail ? (
-                              <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium mt-1 ${passFail === 'Pass' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                              <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium mt-1 ${passFail === 'Pass' ? 'bg-success-subtle text-success' : 'bg-destructive-subtle text-destructive'}`}>
                                 {passFail}
                               </span>
                             ) : (
@@ -1907,7 +1911,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {assessmentDetails?.technical_enabled && (
                             <div className="rounded-lg bg-gray-50 p-2">
                               <div className="text-gray-500">Tech</div>
-                              <div className={candidate.tech_score !== undefined ? (candidate.tech_score >= passingThreshold ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}>
+                              <div className={candidate.tech_score !== undefined ? (candidate.tech_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-400'}>
                                 {candidate.tech_score !== undefined ? `${candidate.tech_score}%` : '-'}
                               </div>
                             </div>
@@ -1915,7 +1919,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {assessmentDetails?.coding_enabled && (
                             <div className="rounded-lg bg-gray-50 p-2">
                               <div className="text-gray-500">Coding</div>
-                              <div className={candidate.coding_score !== undefined ? (candidate.coding_score >= passingThreshold ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}>
+                              <div className={candidate.coding_score !== undefined ? (candidate.coding_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-400'}>
                                 {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
                               </div>
                             </div>
@@ -1927,18 +1931,22 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         )}
 
                         <div className="mt-3 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
-                          <button
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={() => viewCandidateDetails(candidate)}
-                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                            className="w-9 h-9 px-0"
                             title="View Details"
                             aria-label={`View details for ${candidate.name || 'candidate'}`}
                           >
                             <Eye className="w-3.5 h-3.5 shrink-0" />
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
                             disabled={downloadingPDF === candidate.id}
-                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-orange hover:bg-brand-orange-deep text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-9 h-9 px-0"
                             title="Download PDF Report"
                             aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
                           >
@@ -1947,7 +1955,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             ) : (
                               <Download className="w-3 h-3" />
                             )}
-                          </button>
+                          </Button>
                         </div>
                       </div>
                     </div>
@@ -2188,11 +2196,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                                 was confusing because 69% rendered gray even
                                 though it failed the 70% threshold. Now color
                                 matches the Pass/Fail outcome consistently. */}
-                            <span className={`text-lg font-semibold ${candidate.tech_score !== undefined ? (candidate.tech_score >= passingThreshold ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}`}>
+                            <span className={`text-lg font-semibold ${candidate.tech_score !== undefined ? (candidate.tech_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
                               {candidate.tech_score !== undefined ? `${candidate.tech_score}%` : '-'}
                             </span>
                             {candidate.tech_score !== undefined && (
-                              <span className={`text-xs font-medium ${candidate.tech_score >= passingThreshold ? 'text-green-600' : 'text-red-600'}`}>
+                              <span className={`text-xs font-medium ${candidate.tech_score >= passingThreshold ? 'text-success' : 'text-destructive'}`}>
                                 {candidate.tech_score >= passingThreshold ? 'Pass' : 'Fail'}
                               </span>
                             )}
@@ -2202,11 +2210,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {isColumnEnabled('codingScore') && assessmentDetails?.coding_enabled && (
                         <td className="px-4 py-4 text-center">
                           <div className="flex items-center justify-center gap-2">
-                            <span className={`text-lg font-semibold ${candidate.coding_score !== undefined ? (candidate.coding_score >= passingThreshold ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}`}>
+                            <span className={`text-lg font-semibold ${candidate.coding_score !== undefined ? (candidate.coding_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
                               {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
                             </span>
                             {candidate.coding_score !== undefined && (
-                              <span className={`text-xs font-medium ${candidate.coding_score >= passingThreshold ? 'text-green-600' : 'text-red-600'}`}>
+                              <span className={`text-xs font-medium ${candidate.coding_score >= passingThreshold ? 'text-success' : 'text-destructive'}`}>
                                 {candidate.coding_score >= passingThreshold ? 'Pass' : 'Fail'}
                               </span>
                             )}
@@ -2237,7 +2245,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             )}
                             {candidate.completed_at && (
                               <div className="inline-flex shrink-0 items-center gap-2">
-                                <CheckCircle className="w-3 h-3 shrink-0 text-green-500" />
+                                <CheckCircle className="w-3 h-3 shrink-0 text-success" />
                                 <span>Completed: {formatTimelineDate(candidate.completed_at)}</span>
                               </div>
                             )}
@@ -2268,18 +2276,22 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       )}
                       <td className="px-2 sm:px-4 py-4 tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-nowrap">
-                          <button
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={() => viewCandidateDetails(candidate)}
-                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                            className="w-9 h-9 px-0"
                             title="View Details"
                             aria-label={`View details for ${candidate.name || 'candidate'}`}
                           >
                             <Eye className="w-3.5 h-3.5 shrink-0" />
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={() => handleDownloadPDF(candidate.id, candidate.candidateDisplayId)}
                             disabled={downloadingPDF === candidate.id}
-                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-orange hover:bg-brand-orange-deep text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-9 h-9 px-0"
                             title="Download PDF Report"
                             aria-label={`Download PDF report for ${candidate.name || 'candidate'}`}
                           >
@@ -2288,7 +2300,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             ) : (
                               <Download className="w-3 h-3 flex-shrink-0" />
                             )}
-                          </button>
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -2353,8 +2365,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       onClick={() => handleFormatSelect('csv')}
                       className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border border-gray-200 rounded-xl hover:bg-brand-blue/5 hover:border-brand-blue/30 transition-all group"
                     >
-                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 flex items-center justify-center transition-colors flex-shrink-0">
-                        <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-green-700" />
+                      <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-success-line flex items-center justify-center transition-colors flex-shrink-0">
+                        <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-success" />
                       </div>
                       <div className="text-left flex-1 min-w-0">
                         <div className="text-sm sm:text-base font-medium text-gray-900">CSV Format</div>
@@ -2430,13 +2442,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       <button
                         onClick={handleExportSelected}
                         disabled={isExporting}
-                        className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-green-400 rounded-xl hover:bg-green-50 transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
+                        className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border-2 border-success-line rounded-xl hover:bg-success-subtle transition-all group disabled:opacity-60 disabled:cursor-not-allowed"
                       >
-                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 flex items-center justify-center transition-colors flex-shrink-0">
+                        <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-success-line flex items-center justify-center transition-colors flex-shrink-0">
                           {isExporting ? (
-                            <Loader2 className="w-4 h-4 text-green-700 animate-spin" />
+                            <Loader2 className="w-4 h-4 text-success animate-spin" />
                           ) : (
-                            <CheckSquare className="w-5 h-5 sm:w-6 sm:h-6 text-green-700" />
+                            <CheckSquare className="w-5 h-5 sm:w-6 sm:h-6 text-success" />
                           )}
                         </div>
                         <div className="text-left flex-1 min-w-0">
@@ -2498,22 +2510,24 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 </div>
 
                 <div className="flex items-center justify-between gap-3 p-4 sm:p-5 border-t border-gray-100">
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => setExportStep('format')}
-                    className="flex items-center gap-2 px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-md transition-colors"
+                    icon={<ArrowLeft className="w-4 h-4" />}
                   >
-                    <ArrowLeft className="w-4 h-4" />
                     Back
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => {
                       setShowExportModal(false);
                       setExportStep('format');
                     }}
-                    className="px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-md transition-colors"
                   >
                     Cancel
-                  </button>
+                  </Button>
                 </div>
               </>
             )}

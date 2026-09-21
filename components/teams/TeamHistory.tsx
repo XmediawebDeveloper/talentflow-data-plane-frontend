@@ -140,7 +140,7 @@ export default function TeamHistory() {
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${config.bg} ${config.color}`}>
+                      <span className={`rounded-full px-2.5 py-1 text-2xs font-medium ${config.bg} ${config.color}`}>
                         {config.label}
                       </span>
                       <span className="truncate text-sm font-medium text-gray-900">{entry.team_name}</span>

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import axios from 'axios';
+import { Button } from '@/components/ui/button';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 const verifyApi = axios.create({ baseURL: API_BASE_URL });
@@ -920,7 +921,7 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
             {String(Math.floor((linkSecondsRemaining ?? 0) / 60)).padStart(2, '0')}:
             {String((linkSecondsRemaining ?? 0) % 60).padStart(2, '0')}
           </span>
-          <span className="text-[11px] text-[var(--raw-94a3b8)]">Link will expire when the timer ends</span>
+          <span className="text-2xs text-[var(--raw-94a3b8)]">Link will expire when the timer ends</span>
         </div>
       )}
 
@@ -931,13 +932,14 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           <p className="text-sm text-[var(--raw-94a3b8)] max-w-xs">
             Environment verification must be recorded in landscape mode. Turn your phone sideways to continue.
           </p>
-          <button
+          <Button
+            variant="primary"
             type="button"
             onClick={() => { void handleRotateTap(); }}
-            className="mt-1 px-6 py-3 rounded-xl bg-brand-blue text-white font-medium text-sm hover:opacity-90 transition-opacity"
+            className="mt-1"
           >
             ⟳ Rotate my screen
-          </button>
+          </Button>
           <p className="text-xs text-amber-300 max-w-xs leading-relaxed">
             Didn't rotate? Your phone's <strong>rotation lock</strong> is probably on. Open your control
             centre / notification shade and tap the rotation-lock icon to turn it off, then turn your
@@ -959,13 +961,14 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           <h1 className="text-lg font-semibold">Unable to verify</h1>
           <p className="text-sm text-[var(--raw-94a3b8)]">{errorMessage}</p>
           {canRetryUpload && (
-            <button
+            <Button
+              variant="primary"
               type="button"
               onClick={() => { void handleSubmit(); }}
-              className="w-full py-3 rounded-xl bg-brand-blue text-white font-medium text-sm hover:opacity-90 transition-opacity"
+              className="w-full"
             >
               Retry
-            </button>
+            </Button>
           )}
         </div>
       )}
@@ -997,23 +1000,24 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
                   <li className="flex items-center gap-1.5"><span className="text-brand-blue">•</span> Left to Right</li>
                   <li className="flex items-center gap-1.5"><span className="text-brand-blue">•</span> Right to Left</li>
                 </ul>
-                <p className="mt-1.5 text-[13px] text-[var(--raw-94a3b8)]">
+                <p className="mt-1.5 text-sm text-[var(--raw-94a3b8)]">
                   Move slowly and keep the phone steady — no sudden movements.
                 </p>
                 <div className="mt-2 flex items-center gap-1.5 px-2">
                   <span className="text-xl inline-block animate-[tf-instr-curve_1.6s_ease-in-out_infinite_alternate]">📱</span>
-                  <span className="text-[11px] text-[var(--raw-94a3b8)]">left → right → left</span>
+                  <span className="text-2xs text-[var(--raw-94a3b8)]">left → right → left</span>
                 </div>
               </div>
             </div>
           </div>
-          <button
+          <Button
+            variant="primary"
             type="button"
             onClick={() => { void startVerificationFlow(); }}
-            className="w-full py-3 rounded-xl bg-brand-blue text-white font-medium text-sm hover:opacity-90 transition-opacity"
+            className="w-full"
           >
             Next
-          </button>
+          </Button>
           <style>{`
             @keyframes tf-instr-curve {
               0%   { transform: translateX(-8px) translateY(0) rotate(-12deg); }
@@ -1111,13 +1115,14 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
               <span className="w-2 h-2 rounded-full bg-amber-400" />
               Recording paused
             </div>
-            <button
+            <Button
+              variant="primary"
               type="button"
               onClick={handlePanNext}
-              className="w-full py-3 rounded-xl bg-brand-blue text-white font-medium text-sm hover:opacity-90 transition-opacity"
+              className="w-full"
             >
               Next
-            </button>
+            </Button>
           </>
         ) : (
           <>
@@ -1144,13 +1149,14 @@ export function MobileEnvironmentVerificationPortal({ token }: MobileEnvironment
           <p className="text-sm text-[var(--raw-94a3b8)]">
             Your 10-second verification video is ready. Tap Submit to send it and resume your interview.
           </p>
-          <button
+          <Button
+            variant="primary"
             type="button"
             onClick={handleSubmit}
-            className="w-full py-3 rounded-xl bg-brand-blue text-white font-medium text-sm hover:opacity-90 transition-opacity"
+            className="w-full"
           >
             Submit
-          </button>
+          </Button>
         </div>
       )}
 

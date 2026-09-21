@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import { useState, useCallback, useRef, useEffect, memo } from "react";
+import { Button } from "@/components/ui/button";
 import { TalkingHeadAvatar, type TalkingHeadHandle } from "./TalkingHeadAvatar";
 import { Webcam, WebcamRef } from "./Webcam";
 import { MicWaveform } from "./MicWaveform";
@@ -381,7 +382,7 @@ const YouAvatar = ({ photoUrl }: { photoUrl?: string | null }) => {
   }
   return (
     <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 mt-0.5 shadow-sm">
-      <span className="text-white text-[8px] font-bold">You</span>
+      <span className="text-white text-2xs font-bold">You</span>
     </div>
   );
 };
@@ -430,9 +431,9 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
         <YouAvatar photoUrl={candidatePhotoUrl} />
         <div className="max-w-[80%]">
           <div className="flex items-center justify-end gap-2 mb-0.5">
-            <span className="text-[10px] font-semibold text-emerald-600">Your Response</span>
+            <span className="text-2xs font-semibold text-emerald-600">Your Response</span>
             {msg.responseTimeSeconds != null && (
-              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold tabular-nums ${
+              <span className={`inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-2xs font-bold tabular-nums ${
                 msg.responseTimeSeconds <= 30
                   ? 'bg-red-100 text-red-600 border border-red-200'
                   : msg.responseTimeSeconds <= 60
@@ -448,7 +449,7 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
             <p className="text-sm leading-relaxed">{msg.content}</p>
           </div>
           {msg.timestamp && (
-            <p className="text-[10px] text-gray-400 mt-0.5 text-right">{msg.timestamp}</p>
+            <p className="text-2xs text-gray-400 mt-0.5 text-right">{msg.timestamp}</p>
           )}
         </div>
       </div>
@@ -464,7 +465,7 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
       />
       <div className="max-w-[80%]">
         <div className="flex items-center gap-1.5 mb-0.5">
-          <span className="text-[10px] font-semibold text-purple-600">BINA</span>
+          <span className="text-2xs font-semibold text-purple-600">BINA</span>
         </div>
         <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
           {/* pre-line: keeps the committed opening warm-up (role summary +
@@ -472,7 +473,7 @@ const MessageRow = (({ msg, candidatePhotoUrl }: MessageRowProps) => {
           <p className="text-sm leading-relaxed whitespace-pre-line">{msg.content}</p>
         </div>
         {msg.timestamp && (
-          <p className="text-[10px] text-gray-400 mt-0.5">{msg.timestamp}</p>
+          <p className="text-2xs text-gray-400 mt-0.5">{msg.timestamp}</p>
         )}
       </div>
     </div>
@@ -504,7 +505,7 @@ const LiveAIBubble = (({ text }: LiveAIBubbleProps) => {
       />
       <div className="max-w-[80%]">
         <div className="flex items-center gap-1.5 mb-0.5">
-          <span className="text-[10px] font-semibold text-purple-600">BINA</span>
+          <span className="text-2xs font-semibold text-purple-600">BINA</span>
         </div>
         <div className="px-3.5 py-2.5 bg-violet-50 text-violet-900 rounded-2xl rounded-tl-sm border border-violet-200 shadow-sm">
           <div className="flex items-center gap-1 mb-1.5">
@@ -9473,7 +9474,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           {/* text */}
           <div className="relative min-w-0 flex-1">
             <span className="text-white font-bold block leading-tight tracking-tight drop-shadow-sm" style={{ fontSize: 15 }}>{cfg.title}</span>
-            <span className="text-white/85 text-[11px] leading-snug block">{cfg.subtitle}</span>
+            <span className="text-white/85 text-2xs leading-snug block">{cfg.subtitle}</span>
           </div>
           {cfg.dismissible && (
             <button
@@ -9514,12 +9515,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 ? status
                 : 'This interview link is already open in another window or device. Please continue there. If you just closed it, wait a few seconds and reopen this link.'}
             </p>
-            <button
+            <Button
+              tone="onColor"
+              variant="secondary"
               onClick={() => window.location.reload()}
-              className="px-5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-sm font-semibold border border-white/20 transition-colors"
+              className="rounded-xl"
             >
               Reload &amp; try again
-            </button>
+            </Button>
           </div>
         </div>
       )}
@@ -9658,7 +9661,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             </div>
             <div>
               <span className="text-blue-300 font-semibold block" style={{ fontSize: 14 }}>Could you repeat that?</span>
-              <span className="text-[var(--raw-94a3b8)] text-[11px]">We had trouble hearing you clearly</span>
+              <span className="text-[var(--raw-94a3b8)] text-2xs">We had trouble hearing you clearly</span>
             </div>
           </div>
         </div>
@@ -9667,7 +9670,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       {/* ── DEV DEBUG OVERLAY — draggable, opt-in only (?debug=1 or dev build) ── */}
       {devMonitorEnabled && (
       <div
-        className="fixed z-[999] font-mono text-[10px] select-none"
+        className="fixed z-[999] font-mono text-2xs select-none"
         style={{ left: debugPos.x, top: debugPos.y, minWidth: 230, maxWidth: 260 }}
       >
         <div className="rounded-xl overflow-hidden shadow-2xl" style={{ background: 'rgba(8,8,20,0.93)', border: '1px solid rgba(99,102,241,0.55)', backdropFilter: 'blur(8px)' }}>
@@ -9679,9 +9682,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             onPointerMove={_dbgOnPointerMove}
             onPointerUp={_dbgOnPointerUp}
           >
-            <span className="text-indigo-300 font-bold tracking-wider text-[9px]">⠿ DEV MONITOR</span>
+            <span className="text-indigo-300 font-bold tracking-wider text-2xs">⠿ DEV MONITOR</span>
             <button
-              className="text-indigo-400 hover:text-white px-1 text-[10px]"
+              className="text-indigo-400 hover:text-white px-1 text-2xs"
               onPointerDown={e => e.stopPropagation()}
               onClick={() => setDebugOpen(o => !o)}
             >{debugOpen ? '▲' : '▼'}</button>
@@ -9760,7 +9763,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             {/* Label */}
             <div className="absolute top-3 left-3 z-10 flex items-center gap-1.5">
               <div className="w-1.5 h-1.5 rounded-full bg-purple-400 animate-pulse shrink-0" />
-              <span className="text-gray-400 text-[11px] font-medium tracking-wide uppercase">Bina · AI Interviewer</span>
+              <span className="text-gray-400 text-2xs font-medium tracking-wide uppercase">Bina · AI Interviewer</span>
             </div>
 
             {/* TalkingHead fills this half */}
@@ -9839,7 +9842,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             {bridgeCaption && (
               <div className="absolute bottom-14 left-1/2 -translate-x-1/2 z-10 max-w-[80%] px-4 py-2 rounded-xl bg-purple-950/60 backdrop-blur-md border border-purple-400/40 shadow-lg animate-in fade-in duration-200">
                 <div className="flex items-center gap-2 mb-1">
-                  <span className="px-2 py-0.5 rounded-full bg-purple-500/30 border border-purple-400/40 text-[10px] font-semibold uppercase tracking-wider text-purple-100">
+                  <span className="px-2 py-0.5 rounded-full bg-purple-500/30 border border-purple-400/40 text-2xs font-semibold uppercase tracking-wider text-purple-100">
                     Bina · Transition
                   </span>
                 </div>
@@ -9859,7 +9862,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 <div className={`w-1.5 h-1.5 rounded-full animate-pulse ${
                   isAiSpeaking ? 'bg-purple-400' : isRecording ? 'bg-red-400' : 'bg-amber-400'
                 }`} />
-                <span className={`text-[11px] font-semibold ${
+                <span className={`text-2xs font-semibold ${
                   isAiSpeaking ? 'text-purple-300' : isRecording ? 'text-red-300' : 'text-amber-300'
                 }`}>
                   {isAiSpeaking ? (isClarification ? 'Clarifying...' : 'Speaking...') : isRecording ? (isMuted ? 'Muted' : 'Your turn') : isProcessing ? 'Processing...' : isConnected ? 'Ready' : 'Connecting...'}
@@ -9874,7 +9877,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 the webcam frame (top-right corner) so it reads as an overlay on
                 the candidate's own video, not floating in the dark strip above. */}
             <div className="absolute top-0 left-0 right-0 z-10 px-3 pt-2.5 pb-1 flex items-center">
-              <span className="text-gray-400 text-[11px] font-medium uppercase tracking-wide">You</span>
+              <span className="text-gray-400 text-2xs font-medium uppercase tracking-wide">You</span>
             </div>
 
             {/* Webcam feed fills this half */}
@@ -9901,7 +9904,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                     : 'bg-black/45 border-red-400/50'
                 }`}>
                   <span className={`w-1.5 h-1.5 rounded-full bg-red-300 ${isRecording && !isMuted ? 'animate-pulse' : 'opacity-70'}`} />
-                  <span className="text-red-50 text-[10px] font-bold tracking-wide">REC</span>
+                  <span className="text-red-50 text-2xs font-bold tracking-wide">REC</span>
                 </div>
               )}
 
@@ -9918,7 +9921,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       ) : (
                         <Mic className="w-3.5 h-3.5 text-emerald-300 shrink-0" />
                       )}
-                      <span className="text-white/80 text-[11px] truncate">
+                      <span className="text-white/80 text-2xs truncate">
                         {activeMicLabel || "Microphone"}
                       </span>
                     </div>
@@ -9932,7 +9935,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                     </div>
                   </div>
                   {isRecording && !isMuted && micInputLow && (
-                    <div className="mt-1 text-[10px] leading-tight text-amber-200">
+                    <div className="mt-1 text-2xs leading-tight text-amber-200">
                       Microphone input is low. Check headset mic or system input.
                     </div>
                   )}
@@ -9960,7 +9963,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               </div>
               <div>
                 <h2 className="text-sky-900 font-bold leading-tight" style={{ fontSize: 15 }}>Chat with BINA</h2>
-                <p className="text-sky-800/70 text-[11px] leading-tight">Live AI-powered interview</p>
+                <p className="text-sky-800/70 text-2xs leading-tight">Live AI-powered interview</p>
               </div>
             </div>
 
@@ -9968,13 +9971,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               {/* LIVE badge — FIRST in the header, green. */}
               <div className="flex items-center gap-1 px-2 py-1 bg-white/55 rounded-full border border-white/70">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                <span className="text-emerald-700 text-[10px] font-bold">LIVE</span>
+                <span className="text-emerald-700 text-2xs font-bold">LIVE</span>
               </div>
               {/* Identity verified */}
               {(faceVerification || voiceVerification) && (
                 <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-lg bg-white/55 border border-white/70">
                   <ShieldCheck className="w-3 h-3 text-sky-700" />
-                  <span className="text-sky-800 text-[10px] font-semibold">ID VERIFIED</span>
+                  <span className="text-sky-800 text-2xs font-semibold">ID VERIFIED</span>
                 </div>
               )}
               {/* Q counter — animates on each change */}
@@ -9999,7 +10002,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   moved to the front of the header (green) — see above / below. */}
               {/* Closing indicator */}
               {isClosing && (
-                <div className="px-2 py-1 bg-orange-100 border border-orange-300 text-orange-700 rounded-lg text-[10px] font-medium animate-pulse">Ending...</div>
+                <div className="px-2 py-1 bg-orange-100 border border-orange-300 text-orange-700 rounded-lg text-2xs font-medium animate-pulse">Ending...</div>
               )}
               {/* End Interview button — hidden once closing has started so it
                   can't be clicked again (the "Ending..." badge shows instead). */}
@@ -10075,7 +10078,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                   Rendered as its own row BELOW the icon+timer row so it
                   doesn't overlap (was previously inside the flex-row). */}
               {lindaSpokeSeconds !== null && fullSlotSeconds !== null && lindaSpokeSeconds >= 5 && (
-                <div className="pl-7 mt-1 text-[10px] text-gray-500 leading-snug">
+                <div className="pl-7 mt-1 text-2xs text-gray-500 leading-snug">
                   Bina used {lindaSpokeSeconds}s of the {fullSlotSeconds}s question slot — you have {questionTimerTotalRef.current}s to answer.
                 </div>
               )}
@@ -10145,13 +10148,13 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               <div className="flex gap-2 flex-row-reverse">
                 <YouAvatar photoUrl={candidatePhotoUrl} />
                 <div className="max-w-[80%]">
-                  <span className="text-[10px] font-semibold text-emerald-600 mb-0.5 block text-right">Your Response</span>
+                  <span className="text-2xs font-semibold text-emerald-600 mb-0.5 block text-right">Your Response</span>
                   <div className="px-3.5 py-2.5 bg-emerald-50 text-emerald-900 rounded-2xl rounded-tr-sm border border-emerald-200 shadow-sm">
                     {(isRecording || currentTranscript) ? (
                       <>
                         <div className="flex items-center gap-1 mb-1">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                          <span className="text-emerald-600 text-[10px] font-medium">
+                          <span className="text-emerald-600 text-2xs font-medium">
                             {currentTranscript ? 'speaking…' : candidateLiveTranscriptEnabled ? 'listening…' : 'recording…'}
                           </span>
                         </div>
@@ -10321,7 +10324,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       className={`flex items-center justify-center w-36 h-36 sm:w-48 sm:h-48 rounded-full bg-black/70 backdrop-blur-md ring-4 ${ring} shadow-2xl`}
                       style={{ animation: 'cdPulse 1s ease-in-out' }}
                     >
-                      <span className={`font-black tabular-nums ${accent}`} style={{ fontSize: '5rem', lineHeight: 1 }}>{num}</span>
+                      <span className={`font-bold tabular-nums ${accent}`} style={{ fontSize: '5rem', lineHeight: 1 }}>{num}</span>
                     </div>
                     {!isPre && !isLastQ && (
                       <button
@@ -10374,7 +10377,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       </button>
                     )}
                   </div>
-                  <p className="mt-3 text-[11px] text-white/60">Still recording — just keep speaking to continue.</p>
+                  <p className="mt-3 text-2xs text-white/60">Still recording — just keep speaking to continue.</p>
                 </div>
               </div>
             )}
@@ -10399,7 +10402,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 {/* Recording badge */}
                 <div className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-full bg-red-50 border border-red-100">
                   <span className="w-1.5 h-1.5 rounded-full bg-red-400 animate-pulse" />
-                  <span className="text-red-500 text-[11px] font-semibold">REC</span>
+                  <span className="text-red-500 text-2xs font-semibold">REC</span>
                 </div>
 
                 {/* Next Question button.
@@ -10675,7 +10678,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 UI falls through to the full "Interview paused" state. */}
             {gracePeriodRemaining !== null && (
               <div className="w-full rounded-xl border border-amber-400/40 bg-amber-500/10 px-4 py-3 text-center">
-                <span className="block text-[11px] font-semibold text-amber-200 uppercase tracking-wider mb-1">
+                <span className="block text-2xs font-semibold text-amber-200 uppercase tracking-wider mb-1">
                   Auto-pause in
                 </span>
                 <span className={`font-mono font-bold text-3xl tabular-nums ${
@@ -10683,7 +10686,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 }`}>
                   {gracePeriodRemaining}s
                 </span>
-                <span className="block text-[10px] text-amber-300/80 mt-1">
+                <span className="block text-2xs text-amber-300/80 mt-1">
                   Return now to continue without interruption
                 </span>
               </div>
@@ -10692,15 +10695,15 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             <div className="w-full grid grid-cols-2 gap-3">
               {/* Global timer */}
               <div className="flex flex-col items-center gap-1 rounded-xl bg-white/5 border border-white/10 px-4 py-3">
-                <span className="text-[10px] font-semibold text-[var(--raw-64748b)] uppercase tracking-widest">Interview Time</span>
+                <span className="text-2xs font-semibold text-[var(--raw-64748b)] uppercase tracking-widest">Interview Time</span>
                 <span className={`font-mono font-bold text-xl tabular-nums ${remainingSeconds <= 60 ? 'text-red-400' : 'text-white'}`}>
                   {formatTime(remainingSeconds)}
                 </span>
-                <span className="text-[9px] text-[var(--raw-475569)] font-medium">remaining</span>
+                <span className="text-2xs text-[var(--raw-475569)] font-medium">remaining</span>
               </div>
               {/* Question timer */}
               <div className="flex flex-col items-center gap-1 rounded-xl bg-white/5 border border-white/10 px-4 py-3">
-                <span className="text-[10px] font-semibold text-[var(--raw-64748b)] uppercase tracking-widest">Question Time</span>
+                <span className="text-2xs font-semibold text-[var(--raw-64748b)] uppercase tracking-widest">Question Time</span>
                 {questionTimerSeconds !== null ? (
                   <>
                     <span className={`font-mono font-bold text-xl tabular-nums ${
@@ -10710,7 +10713,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                       {(questionTimerExpired || questionTimerSeconds <= 0) ? '00:00' : formatTime(questionTimerSeconds)}
                     </span>
                     {questionNumber !== null && totalQuestions !== null && (
-                      <span className="text-[9px] text-[var(--raw-475569)] font-medium">Q {questionNumber} / {totalQuestions}</span>
+                      <span className="text-2xs text-[var(--raw-475569)] font-medium">Q {questionNumber} / {totalQuestions}</span>
                     )}
                   </>
                 ) : (
@@ -10803,7 +10806,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
             </div>
             {mediaPauseSecondsRemaining !== null && (
               <div className="w-full rounded-xl border border-red-400/40 bg-red-500/10 px-4 py-3 text-center">
-                <span className="block text-[11px] font-semibold text-red-200 uppercase tracking-wider mb-1">
+                <span className="block text-2xs font-semibold text-red-200 uppercase tracking-wider mb-1">
                   Interview will end in
                 </span>
                 <span className={`font-mono font-bold text-3xl tabular-nums ${
@@ -10811,7 +10814,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 }`}>
                   {formatTime(mediaPauseSecondsRemaining)}
                 </span>
-                <span className="block text-[10px] text-red-300/80 mt-1">
+                <span className="block text-2xs text-red-300/80 mt-1">
                   Reconnect it now to continue without interruption
                 </span>
               </div>
@@ -10881,7 +10884,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
                 contact your recruiter if this was accidental.
               </p>
             </div>
-            <div className="w-full text-center text-[11px] text-red-300/80 border border-red-500/20 rounded-lg bg-red-500/5 px-3 py-2">
+            <div className="w-full text-center text-2xs text-red-300/80 border border-red-500/20 rounded-lg bg-red-500/5 px-3 py-2">
               Interview session ended
             </div>
           </div>

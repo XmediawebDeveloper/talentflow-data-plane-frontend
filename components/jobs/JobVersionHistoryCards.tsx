@@ -149,7 +149,7 @@ export default function JobVersionHistoryCards({
                     v{version.version_number ?? 1}
                   </span>
                   {version.isLatest && (
-                    <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wide text-white bg-brand-blue ring-1 ring-white/10">
+                    <span className="px-1.5 py-0.5 rounded-md text-2xs font-semibold uppercase tracking-wide text-white bg-brand-blue ring-1 ring-white/10">
                       Latest
                     </span>
                   )}

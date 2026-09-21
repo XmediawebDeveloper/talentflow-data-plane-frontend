@@ -115,9 +115,9 @@ export default function DashboardRecentActivity({ loading, items }: Props) {
                     <span className="text-gray-500"> · {a.action_display || a.action}</span>
                   </p>
                   {detailText && (
-                    <p className="truncate text-[11px] text-gray-500">{detailText}</p>
+                    <p className="truncate text-2xs text-gray-500">{detailText}</p>
                   )}
-                  <p className="mt-0.5 text-[11px] text-gray-400">{a.time_ago}</p>
+                  <p className="mt-0.5 text-2xs text-gray-400">{a.time_ago}</p>
                 </div>
               </li>
             );

@@ -113,7 +113,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
       <>
         <div className={`p-2.5 sm:p-3 rounded-xl border shadow-sm transition-all ${
           limits.is_at_limit
-            ? 'bg-red-50/60 border-red-200 ring-1 ring-red-100'
+            ? 'bg-destructive-subtle/60 border-destructive-line ring-1 ring-destructive-line'
             : limits.approaching_limit
             ? 'bg-brand-orange/5 border-brand-orange/30 ring-1 ring-brand-orange/10'
             : 'bg-white border-gray-200 hover:border-brand-blue/30 hover:shadow-md'
@@ -142,7 +142,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
                     setShowAddSeatsModal(true);
                   }
                 }}
-                className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-blue hover:bg-brand-blue-2 text-white text-[10px] sm:text-xs font-medium rounded-lg transition-all flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-blue hover:bg-brand-blue-2 text-white text-2xs sm:text-xs font-medium rounded-lg transition-all flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
               >
                 <Plus className="w-3 h-3" />
                 Add Seats
@@ -173,7 +173,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
   return (
     <div className={`p-4 sm:p-5 rounded-xl border bg-white shadow-sm hover:shadow-md transition-all ${
       limits.is_at_limit
-        ? 'border-red-200 ring-1 ring-red-100'
+        ? 'border-destructive-line ring-1 ring-destructive-line'
         : limits.approaching_limit
         ? 'border-brand-orange/30 ring-1 ring-brand-orange/10'
         : 'border-gray-200 hover:border-brand-blue/30'
@@ -193,7 +193,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-sm sm:text-base font-semibold text-gray-900">User Seats</h3>
               {limits.is_at_limit ? (
-                <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-red-200 bg-red-50 text-red-700">At limit</span>
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-destructive-line bg-destructive-subtle text-destructive">At limit</span>
               ) : limits.approaching_limit ? (
                 <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-brand-orange/30 bg-brand-orange/10 text-brand-orange-deep">Nearing</span>
               ) : (
@@ -222,7 +222,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
         <div className="flex items-center justify-between text-xs sm:text-sm mb-1.5">
           <span className="text-gray-500">Usage</span>
           <span className={`font-semibold ${
-            limits.is_at_limit ? 'text-red-600' : limits.approaching_limit ? 'text-brand-orange-deep' : 'text-brand-blue'
+            limits.is_at_limit ? 'text-destructive' : limits.approaching_limit ? 'text-brand-orange-deep' : 'text-brand-blue'
           }`}>
             {Math.round(limits.usage_percentage)}%
           </span>
@@ -237,13 +237,13 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
 
       {/* Warning messages */}
       {limits.is_at_limit && (
-        <div className="mt-4 flex items-start gap-3 p-3 sm:p-4 bg-red-50 border border-red-200 rounded-xl ring-1 ring-red-100">
+        <div className="mt-4 flex items-start gap-3 p-3 sm:p-4 bg-destructive-subtle border border-destructive-line rounded-xl ring-1 ring-destructive-line">
           <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center flex-shrink-0 shadow-sm shadow-red-500/25 ring-1 ring-white/10">
             <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs sm:text-sm font-semibold text-red-800">User limit reached</p>
-            <p className="text-[10px] sm:text-sm text-red-700 mt-0.5">
+            <p className="text-xs sm:text-sm font-semibold text-destructive-strong">User limit reached</p>
+            <p className="text-2xs sm:text-sm text-destructive mt-0.5">
               {isTrial
                 ? 'Purchasing additional seats is only available for paid subscriptions. Please upgrade your plan.'
                 : 'You cannot add more users. Purchase additional seats, upgrade your plan, or deactivate existing users.'}
@@ -285,7 +285,7 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-xs sm:text-sm font-semibold text-brand-orange-deep">Approaching user limit</p>
-            <p className="text-[10px] sm:text-sm text-gray-600 mt-0.5">
+            <p className="text-2xs sm:text-sm text-gray-600 mt-0.5">
               Only {limits.available_slots} user slot{limits.available_slots !== 1 ? 's' : ''} remaining.
               Consider adding more seats or upgrading your plan.
             </p>

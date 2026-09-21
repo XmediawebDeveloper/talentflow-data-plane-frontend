@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Globe, CheckCircle, ChevronRight, MessageSquare } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface StepLanguageSelectProps {
   availableLanguages: string[];
@@ -82,7 +83,7 @@ export default function StepLanguageSelect({
           </div>
 
           {/* Current selection indicator */}
-          <p className="text-sm text-green-600 font-medium">
+          <p className="text-sm text-success font-medium">
             Current Selection: {selectedLanguage}
           </p>
         </div>
@@ -99,15 +100,16 @@ export default function StepLanguageSelect({
 
       {/* Continue button */}
       <div className="flex justify-center pt-2">
-        <button
+        <Button
           type="button"
+          variant="primary"
           onClick={onContinue}
           disabled={submitting}
-          className="px-8 py-3 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-sm"
+          className="px-8"
         >
           {submitting ? 'Loading...' : 'Continue'}
           {!submitting && <ChevronRight className="w-4 h-4" />}
-        </button>
+        </Button>
       </div>
     </div>
   );

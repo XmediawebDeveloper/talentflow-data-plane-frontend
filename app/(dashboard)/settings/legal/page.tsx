@@ -4,6 +4,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useState, useEffect } from 'react';
 import { ScrollText, CheckCircle, AlertCircle, Eye, X, FileText, Shield, Cookie, Sparkles } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import type { IconComponent } from '@/lib/types/icon';
 import { termsService } from '@/lib/services/termsService';
 import type { DocumentType } from '@/lib/services/termsService';
@@ -114,7 +115,7 @@ export default function LegalCompliancePage() {
             <ScrollText className="h-6 w-6 text-white" />
           </div>
           <div>
-            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-2xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
               <Sparkles className="h-3 w-3 text-brand-orange" />
               Compliance trail
             </div>
@@ -162,7 +163,7 @@ export default function LegalCompliancePage() {
             </div>
           </div>
         ) : error ? (
-          <div className="flex items-center justify-center py-16 text-red-500">
+          <div className="flex items-center justify-center py-16 text-destructive">
             <AlertCircle className="w-5 h-5 mr-2" />
             <span>{error}</span>
           </div>
@@ -178,12 +179,12 @@ export default function LegalCompliancePage() {
             <table className="w-full">
               <thead>
                 <tr className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60">
-                  <th className="text-left text-[11px] font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Version</th>
-                  <th className="text-left text-[11px] font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Title</th>
-                  <th className="text-left text-[11px] font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Accepted By</th>
-                  <th className="text-left text-[11px] font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Accepted On</th>
-                  <th className="text-left text-[11px] font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Status</th>
-                  <th className="text-left text-[11px] font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Document</th>
+                  <th className="text-left text-2xs font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Version</th>
+                  <th className="text-left text-2xs font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Title</th>
+                  <th className="text-left text-2xs font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Accepted By</th>
+                  <th className="text-left text-2xs font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Accepted On</th>
+                  <th className="text-left text-2xs font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Status</th>
+                  <th className="text-left text-2xs font-semibold text-brand-blue uppercase tracking-wider px-6 py-3">Document</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
@@ -210,13 +211,10 @@ export default function LegalCompliancePage() {
                     </td>
                     <td className="px-6 py-4">
                       {TITLE_TO_DOCUMENT_TYPE[record.terms_title || ''] ? (
-                        <button
-                          onClick={() => handleView(record)}
-                          className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/[0.06] hover:bg-brand-blue/[0.12] ring-1 ring-brand-blue/15 rounded-lg transition-colors"
-                        >
+                        <Button variant="secondary" size="sm" onClick={() => handleView(record)} className="text-xs">
                           <Eye className="w-3.5 h-3.5" />
                           View
-                        </button>
+                        </Button>
                       ) : (
                         <span className="text-xs text-gray-400 dark:text-slate-500">—</span>
                       )}
@@ -257,13 +255,16 @@ export default function LegalCompliancePage() {
                   {viewingDoc && <p className="text-white/85 text-xs">Version {viewingDoc.version}</p>}
                 </div>
               </div>
-              <button
+              <Button
+                tone="onColor"
+                variant="secondary"
+                size="sm"
                 onClick={closeModal}
-                className="relative p-1.5 rounded-lg bg-white/10 ring-1 ring-white/20 hover:bg-white/20 transition-colors"
                 aria-label="Close"
+                className="px-2"
               >
-                <X className="w-4 h-4 text-white" />
-              </button>
+                <X className="w-4 h-4" />
+              </Button>
             </div>
 
             {/* Body */}
@@ -279,7 +280,7 @@ export default function LegalCompliancePage() {
                   <Skeleton className="h-4 w-4/5" />
                 </div>
               ) : docError ? (
-                <div className="flex items-center justify-center py-16 text-red-500">
+                <div className="flex items-center justify-center py-16 text-destructive">
                   <AlertCircle className="w-5 h-5 mr-2" />
                   <span>{docError}</span>
                 </div>

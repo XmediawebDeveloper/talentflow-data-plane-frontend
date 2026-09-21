@@ -35,7 +35,7 @@ interface TeamMemberUsageProps {
 
 const UNIT_TYPE_CONFIG = {
   RS: { label: 'Resume Scoring', icon: FileText, color: 'bg-blue-500', textColor: 'text-blue-600' },
-  AS: { label: 'Assessment', icon: ClipboardCheck, color: 'bg-green-500', textColor: 'text-green-600' },
+  AS: { label: 'Assessment', icon: ClipboardCheck, color: 'bg-success', textColor: 'text-success' },
   AIU: { label: 'AI Interview', icon: Users, color: 'bg-purple-500', textColor: 'text-purple-600' },
   RU: { label: 'Resume Storage', icon: Upload, color: 'bg-orange-500', textColor: 'text-orange-600' },
 };
@@ -137,10 +137,10 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
 
   if (!isTenantAdmin) {
     return (
-      <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-6 text-center">
-        <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-yellow-800 mb-2">Access Restricted</h3>
-        <p className="text-yellow-700">
+      <div className="bg-warning-subtle border border-warning-line rounded-xl p-6 text-center">
+        <AlertCircle className="w-12 h-12 text-warning mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-warning-strong mb-2">Access Restricted</h3>
+        <p className="text-warning">
           Only administrators can view individual member usage data.
         </p>
       </div>
@@ -194,13 +194,13 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-red-800 mb-2">Error Loading Data</h3>
-        <p className="text-red-700">{error}</p>
+      <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-6 text-center">
+        <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-destructive-strong mb-2">Error Loading Data</h3>
+        <p className="text-destructive">{error}</p>
         <button
           onClick={fetchMembersUsage}
-          className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          className="mt-4 px-4 py-2 bg-destructive text-white rounded-lg hover:bg-destructive transition-colors"
         >
           Retry
         </button>
@@ -343,7 +343,7 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
                     </div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-center">
-                    <div className="text-sm font-medium text-green-600">
+                    <div className="text-sm font-medium text-success">
                       {(member.by_type.AS?.total_consumed || 0).toFixed(1)}
                     </div>
                     <div className="text-xs text-gray-500">

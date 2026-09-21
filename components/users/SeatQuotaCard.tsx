@@ -136,7 +136,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
   if (isInvalidData) {
     const usersToDeactivate = seatData.used - seatData.limit;
     return (
-      <div className={`rounded-xl border border-red-200 bg-white shadow-sm ring-1 ring-red-100 ${compact ? 'p-3 sm:p-4' : 'p-3 sm:p-4 lg:p-5'}`}>
+      <div className={`rounded-xl border border-destructive-line bg-white shadow-sm ring-1 ring-destructive-line ${compact ? 'p-3 sm:p-4' : 'p-3 sm:p-4 lg:p-5'}`}>
         <div className="flex items-start gap-2 sm:gap-3">
           <div className="w-9 h-9 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center bg-gradient-to-br from-red-500 to-red-600 shadow-md shadow-red-500/25 ring-1 ring-white/10 flex-shrink-0">
             <AlertTriangle className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
@@ -144,13 +144,13 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h3 className="text-sm sm:text-base font-semibold text-gray-900">User Limit Exceeded</h3>
-              <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-red-200 bg-red-50 text-red-700">Action required</span>
+              <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-destructive-line bg-destructive-subtle text-destructive">Action required</span>
             </div>
             <p className="text-xs sm:text-sm text-gray-600 mt-1">
               You have {seatData.used} active users, but your plan allows only {seatData.limit}.
               Please deactivate {usersToDeactivate} user{usersToDeactivate > 1 ? 's' : ''} or upgrade your plan.
             </p>
-            <p className="text-[10px] sm:text-xs text-gray-400 mt-1.5 sm:mt-2">
+            <p className="text-2xs sm:text-xs text-gray-400 mt-1.5 sm:mt-2">
               This may have occurred due to a recent plan downgrade.
             </p>
             {onDeactivateExcess && (
@@ -189,7 +189,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="text-sm sm:text-base font-semibold text-gray-900">User Seats</h3>
-                <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-red-200 bg-red-50 text-red-700">At limit</span>
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium ring-1 ring-destructive-line bg-destructive-subtle text-destructive">At limit</span>
               </div>
               <p className="text-xs sm:text-sm text-gray-500 mt-0.5">{planName}</p>
             </div>
@@ -210,7 +210,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
         <div className="mb-3 sm:mb-4">
           <div className="flex items-center justify-between text-xs sm:text-sm mb-1.5">
             <span className="text-gray-500">Usage</span>
-            <span className="font-semibold text-red-600">100%</span>
+            <span className="font-semibold text-destructive">100%</span>
           </div>
           <div className="h-2 sm:h-2.5 bg-gray-100 rounded-full overflow-hidden ring-1 ring-gray-200/60">
             <div className="h-full bg-gradient-to-r from-red-500 to-red-600 transition-all duration-300 w-full" />
@@ -230,14 +230,14 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
         )}
 
         {/* Exhausted Warning - always show since card only appears when at limit */}
-        <div className="mb-3 sm:mb-4 p-3 bg-red-50 border border-red-200 rounded-xl ring-1 ring-red-100">
+        <div className="mb-3 sm:mb-4 p-3 bg-destructive-subtle border border-destructive-line rounded-xl ring-1 ring-destructive-line">
           <div className="flex items-start gap-2.5">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-red-500 to-red-600 flex items-center justify-center flex-shrink-0 shadow-sm shadow-red-500/25">
               <AlertTriangle className="w-4 h-4 text-white" />
             </div>
             <div className="flex-1">
-              <p className="text-xs sm:text-sm font-semibold text-red-800">Quota Exhausted</p>
-              <p className="text-[10px] sm:text-sm text-red-700 mt-0.5">
+              <p className="text-xs sm:text-sm font-semibold text-destructive-strong">Quota Exhausted</p>
+              <p className="text-2xs sm:text-sm text-destructive mt-0.5">
                 You have reached your user seat limit. Purchase additional seats to add more users.
               </p>
             </div>
@@ -253,7 +253,7 @@ export default function SeatQuotaCard({ onRefresh, onDeactivateExcess, compact =
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-xs sm:text-sm font-semibold text-brand-orange-deep">Not available on Free Trial</p>
-              <p className="text-[10px] sm:text-xs text-gray-600 mt-0.5">
+              <p className="text-2xs sm:text-xs text-gray-600 mt-0.5">
                 Purchasing additional seats is only available for paid subscriptions.
               </p>
             </div>

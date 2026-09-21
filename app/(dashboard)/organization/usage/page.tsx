@@ -58,7 +58,7 @@ export default function UsagePage() {
               <BarChart3 className="h-6 w-6 text-white" />
             </div>
             <div>
-              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-2xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
                 <Sparkles className="h-3 w-3 text-brand-orange" />
                 Consumption tracking
               </div>

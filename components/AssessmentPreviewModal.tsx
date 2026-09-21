@@ -1,4 +1,5 @@
 import { X, Clock, Users, Brain, Code, BarChart, Sparkles, Shield, Video } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface AssessmentPreviewModalProps {
   isOpen: boolean;
@@ -58,7 +59,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 mb-1 flex-wrap">
                 <h2 className="text-base sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Assessment Preview</h2>
-                <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-[10px] sm:text-xs flex items-center gap-1">
+                <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-2xs sm:text-xs flex items-center gap-1">
                   <Sparkles className="w-3 h-3" />
                   Configuration View
                 </span>
@@ -68,12 +69,14 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
               </p>
             </div>
           </div>
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={onClose}
-            className="text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg p-2 transition-colors flex-shrink-0"
-           aria-label="Close">
+            className="px-2 flex-shrink-0"
+            aria-label="Close">
             <X className="w-5 h-5 sm:w-6 sm:h-6" />
-          </button>
+          </Button>
         </div>
 
         {/* Content */}
@@ -152,11 +155,11 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                   <div className="flex items-center gap-2 mb-2 flex-wrap">
                     <Users className="w-4 h-4 text-brand-blue flex-shrink-0" />
                     <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50">HR Section</h4>
-                    <span className="ml-auto px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-[10px] sm:text-xs font-medium">
+                    <span className="ml-auto px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded text-2xs sm:text-xs font-medium">
                       Not Scored
                     </span>
                   </div>
-                  <p className="text-[11px] sm:text-xs text-gray-700 dark:text-slate-300">
+                  <p className="text-2xs sm:text-xs text-gray-700 dark:text-slate-300">
                     Responses recorded and displayed in reports for review, but <strong>NOT included in PASS/FAIL decision</strong>
                   </p>
                 </div>
@@ -175,12 +178,12 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                           ? 'Technical'
                           : 'Coding'}
                     </h4>
-                    <span className="ml-auto px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-[10px] sm:text-xs font-medium">
+                    <span className="ml-auto px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-2xs sm:text-xs font-medium">
                       Scored
                     </span>
                   </div>
-                  <p className="text-[11px] sm:text-xs text-gray-700 dark:text-slate-300 mb-2">Each question scored 0-10. <strong>Pass requires:</strong></p>
-                  <ul className="text-[11px] sm:text-xs text-gray-700 dark:text-slate-300 space-y-1">
+                  <p className="text-2xs sm:text-xs text-gray-700 dark:text-slate-300 mb-2">Each question scored 0-10. <strong>Pass requires:</strong></p>
+                  <ul className="text-2xs sm:text-xs text-gray-700 dark:text-slate-300 space-y-1">
                     <li>• ≥70% of questions scoring ≥7 <strong>OR</strong></li>
                     <li>• Section average ≥7.0</li>
                   </ul>
@@ -216,11 +219,11 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                       <div className="flex items-center gap-2 flex-wrap">
                         <h3 className="font-semibold text-gray-900 dark:text-slate-50 text-sm sm:text-base">{section.name} Section</h3>
                         {section.scoringType === 'informational' ? (
-                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700 rounded text-[10px] sm:text-xs font-medium">
+                          <span className="px-2 py-0.5 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700 rounded text-2xs sm:text-xs font-medium">
                             Informational Only
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-[10px] sm:text-xs font-medium">
+                          <span className="px-2 py-0.5 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded text-2xs sm:text-xs font-medium">
                             Scored (0-10 scale)
                           </span>
                         )}
@@ -230,7 +233,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                   <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:gap-1">
                     <div className="text-xl sm:text-2xl font-semibold text-brand-blue">{section.percentage}%</div>
                     {section.scoringType === 'scored' && (
-                      <span className="text-[10px] sm:text-xs text-brand-cyan">Counts to PASS/FAIL</span>
+                      <span className="text-2xs sm:text-xs text-brand-cyan">Counts to PASS/FAIL</span>
                     )}
                   </div>
                 </div>
@@ -278,12 +281,13 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
 
         {/* Footer */}
         <div className="border-t border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 bg-slate-50 dark:bg-slate-950 flex items-center justify-end flex-shrink-0">
-          <button
+          <Button
+            variant="primary"
             onClick={onClose}
-            className="w-full sm:w-auto px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors"
+            className="w-full sm:w-auto"
           >
             Close
-          </button>
+          </Button>
         </div>
       </div>
     </div>

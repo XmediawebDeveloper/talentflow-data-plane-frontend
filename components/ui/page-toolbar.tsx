@@ -133,7 +133,7 @@ function ToolbarTabs<T extends string>({ value, onChange, options, className }: 
             {typeof opt.count === 'number' && (
               <span
                 className={cn(
-                  'ml-1.5 px-1.5 py-0.5 rounded text-[10px] font-semibold',
+                  'ml-1.5 px-1.5 py-0.5 rounded text-2xs font-semibold',
                   active
                     ? 'bg-white/20 text-white'
                     : 'bg-gray-200 dark:bg-slate-700 text-gray-700 dark:text-slate-300',

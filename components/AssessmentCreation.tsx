@@ -2,6 +2,7 @@
 
 import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Sparkles, AlertCircle, CheckCircle2, Code, Users, Brain, BarChart, FileText, Shield, Star, Video, Info, Eye, Edit3, MoreVertical, Loader2, Lock, Search, ChevronDown } from 'lucide-react';
 import type { AssessmentResponse, HRTopic } from '@/lib/services/assessmentService';
+import { Button } from '@/components/ui/button';
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -94,13 +95,13 @@ function AssessmentStatusBadge({
   if (!created) return null;
   return (
     <span
-      className="px-2 sm:px-2.5 py-1 bg-green-100 text-green-700 ring-1 ring-green-200 rounded text-xs inline-flex items-center gap-1 whitespace-nowrap"
+      className="px-2 sm:px-2.5 py-1 bg-success-subtle text-success ring-1 ring-success-line rounded text-xs inline-flex items-center gap-1 whitespace-nowrap"
       title={createdAt ? `Assessment created ${formatISTDate(createdAt)}` : undefined}
     >
       <CheckCircle2 className="w-3 h-3 flex-shrink-0" />
       Assessment Created
       {createdAt && (
-        <span className="text-[11px] font-normal text-green-700/80">· {formatISTDate(createdAt)}</span>
+        <span className="text-2xs font-normal text-success/80">· {formatISTDate(createdAt)}</span>
       )}
     </span>
   );
@@ -123,7 +124,7 @@ function AssessmentCreatedLabel({ created }: { created: boolean }) {
     <span
       className={`px-2 sm:px-2.5 py-1 rounded text-xs inline-flex items-center gap-1 whitespace-nowrap ring-1 ${
         created
-          ? 'bg-green-100 text-green-700 ring-green-200'
+          ? 'bg-success-subtle text-success ring-success-line'
           : 'bg-slate-100 text-slate-500 ring-slate-200'
       }`}
     >
@@ -355,7 +356,7 @@ function JDSkillsReveal({
               {skills.map(skill => (
                 <span
                   key={skill}
-                  className="px-2 py-0.5 bg-slate-50 text-gray-600 ring-1 ring-gray-200 rounded-full text-[11px] break-words"
+                  className="px-2 py-0.5 bg-slate-50 text-gray-600 ring-1 ring-gray-200 rounded-full text-2xs break-words"
                 >
                   {skill}
                 </span>
@@ -1331,9 +1332,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
               </div>
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Add New Question</h3>
             </div>
-            <button type="button" onClick={closeAddHRQuizModal} className="p-1.5 text-gray-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors" aria-label="Close">
+            <Button variant="secondary" size="sm" type="button" onClick={closeAddHRQuizModal} className="px-2" aria-label="Close">
               <X className="w-5 h-5" />
-            </button>
+            </Button>
           </div>
 
           <div className="flex-1 overflow-y-auto space-y-4 px-4 sm:px-6 py-4">
@@ -1385,7 +1386,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     onClick={() => setNewHRQuestion(prev => ({ ...prev, correct_answer: 'Yes' }))}
                     className={`flex-1 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all ${
                       newHRQuestion.correct_answer === 'Yes'
-                        ? 'border-green-500 bg-green-50 text-green-700 ring-1 ring-green-200'
+                        ? 'border-success-line bg-success-subtle text-success ring-1 ring-success-line'
                         : 'border-gray-200 bg-white text-gray-700 hover:border-brand-blue/30 hover:text-brand-blue'
                     }`}
                   >
@@ -1396,7 +1397,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     onClick={() => setNewHRQuestion(prev => ({ ...prev, correct_answer: 'No' }))}
                     className={`flex-1 rounded-lg border-2 px-4 py-2.5 text-sm font-medium transition-all ${
                       newHRQuestion.correct_answer === 'No'
-                        ? 'border-green-500 bg-green-50 text-green-700 ring-1 ring-green-200'
+                        ? 'border-success-line bg-success-subtle text-success ring-1 ring-success-line'
                         : 'border-gray-200 bg-white text-gray-700 hover:border-brand-blue/30 hover:text-brand-blue'
                     }`}
                   >
@@ -1408,22 +1409,22 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
           </div>
 
           <div className="flex-shrink-0 flex justify-end gap-2 sm:gap-3 border-t border-gray-100 bg-slate-50 px-4 sm:px-6 py-3">
-            <button
+            <Button
+              variant="secondary"
               type="button"
               onClick={closeAddHRQuizModal}
-              className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
             >
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
               type="button"
               onClick={handleSaveHRQuestion}
               disabled={isSavingHRQuestion}
-              className="inline-flex items-center gap-2 rounded-lg bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 px-4 py-2 text-sm disabled:opacity-60 transition-colors"
+              icon={<FileText className="w-4 h-4" />}
             >
-              <FileText className="w-4 h-4" />
               {isSavingHRQuestion ? 'Saving...' : 'Save Question'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -3357,14 +3358,15 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   </p>
                 </div>
                 {canCreateJd && (
-                  <button
+                  <Button
+                    variant="primary"
                     onClick={handleCreateNewJD}
-                    className="px-3 sm:px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center gap-2 text-sm flex-shrink-0"
+                    className="flex-shrink-0"
+                    icon={<Plus className="w-4 h-4" />}
                   >
-                    <Plus className="w-4 h-4" />
                     <span className="hidden sm:inline">Create New Job</span>
                     <span className="sm:hidden">New Job</span>
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -3996,13 +3998,14 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                           : 'Create and publish a Job first to create assessments'}
                     </p>
                     {canCreateJd && availableJobs.length === 0 && (
-                      <button
+                      <Button
+                        variant="primary"
                         onClick={handleCreateNewJD}
-                        className="mt-4 px-3 sm:px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center gap-2 mx-auto text-sm"
+                        className="mt-4 mx-auto"
+                        icon={<Plus className="w-4 h-4" />}
                       >
-                        <Plus className="w-4 h-4" />
                         Create New Job
-                      </button>
+                      </Button>
                     )}
                   </div>
                 )}
@@ -4120,14 +4123,16 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
             `ml-auto` on the right group, so the two ends stay put when the
             row wraps on a narrow card. */}
         <div className="flex items-center justify-between flex-wrap gap-2 text-xs mb-3">
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             type="button"
             onClick={openAddHRQuizModal}
-            className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1.5 font-medium text-gray-700 transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue flex-shrink-0"
+            className="flex-shrink-0"
+            icon={<Plus className="w-3.5 h-3.5" />}
           >
-            <Plus className="w-3.5 h-3.5" />
             Add Quiz
-          </button>
+          </Button>
           <span className={selectedHRQuestions.length >= HR_QUESTION_LIMIT ? 'text-brand-orange-deep font-medium' : 'text-gray-500'}>{selectedHRQuestions.length}/{HR_QUESTION_LIMIT} selected (max {HR_QUESTION_LIMIT})</span>
         </div>
 
@@ -4162,9 +4167,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   readOnly
                   className="w-4 h-4 rounded border-gray-200 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0 pointer-events-none"
                 />
-                <span className="w-5 h-5 flex items-center justify-center bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded text-[10px] font-medium flex-shrink-0">{idx + 1}</span>
+                <span className="w-5 h-5 flex items-center justify-center bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded text-2xs font-medium flex-shrink-0">{idx + 1}</span>
                 <span className={`flex-1 ${isSelected ? 'text-gray-900' : 'text-gray-500'}`}>{q.text}</span>
-                <span className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ${
+                <span className={`px-1.5 py-0.5 rounded text-2xs font-medium flex-shrink-0 ${
                   q.type === 'Yes/No' ? 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' : 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20'
                 }`}>{q.type}</span>
                 {/* HR is "No Timer" — per-question time is not surfaced because
@@ -4227,19 +4232,21 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 <div className="flex items-center justify-between gap-2 mb-2">
                   <label className="text-xs text-gray-600">
                     Choose your programming language
-                    <span className="ml-2 text-[11px] text-gray-400 font-normal">
+                    <span className="ml-2 text-2xs text-gray-400 font-normal">
                       {chosen.length}/{MAX_CODING_LANGUAGES} selected
                       {atMax ? ' — maximum reached' : ''}
                     </span>
                   </label>
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     type="button"
                     onClick={openCodingLanguageEditor}
-                    className="inline-flex items-center gap-1 rounded-lg border border-gray-200 bg-white px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue flex-shrink-0"
+                    className="flex-shrink-0"
+                    icon={<Plus className="w-3.5 h-3.5" />}
                   >
-                    <Plus className="w-3.5 h-3.5" />
                     {chosen.length > 0 ? 'Change' : 'Select'}
-                  </button>
+                  </Button>
                 </div>
                 {chosen.length === 0 ? (
                   <p className="text-xs text-gray-500">
@@ -4260,7 +4267,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                         <button
                           type="button"
                           onClick={() => toggleLanguageSelection(lang)}
-                          className="text-brand-blue/60 hover:text-red-600 transition-colors"
+                          className="text-brand-blue/60 hover:text-destructive transition-colors"
                           aria-label={`Remove ${lang}`}
                         >
                           <X className="w-3 h-3" />
@@ -4278,7 +4285,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
             <label className="text-xs text-gray-600 mb-2 block">
               Percentage Allocation
               {section.name === 'Coding' && (
-                <span className="ml-2 text-[11px] text-gray-400 font-normal">
+                <span className="ml-2 text-2xs text-gray-400 font-normal">
                   Allowed: 35% / 50% / 75% / 100%
                 </span>
               )}
@@ -4329,14 +4336,15 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 }`}
                 className="flex-1 px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm text-gray-900"
               />
-              <button
+              <Button
+                variant="primary"
                 onClick={() => addTopic(section.name)}
-                className="px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all flex items-center justify-center gap-1 text-sm flex-shrink-0"
+                className="flex-shrink-0"
+                icon={<Plus className="w-4 h-4" />}
               >
-                <Plus className="w-4 h-4" />
                 <span className="hidden sm:inline">Add Topic</span>
                 <span className="sm:hidden">Add</span>
-              </button>
+              </Button>
             </div>
             <div className="flex flex-wrap gap-2">
               {section.topics.map((topic, idx) => (
@@ -4464,7 +4472,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   </div>
                   <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium flex-shrink-0 ${
                     hasAtLeastOneEnabled
-                      ? 'bg-green-50 text-green-700 ring-1 ring-green-200'
+                      ? 'bg-success-subtle text-success ring-1 ring-success-line'
                       : 'bg-slate-100 text-slate-600 ring-1 ring-slate-200'
                   }`}>
                     <CheckCircle2 className="w-3.5 h-3.5" />
@@ -4479,9 +4487,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     percentage total, and the sliders that set it now live in
                     this card. */}
                 {!isPercentageValid && (
-                  <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2">
-                    <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
-                    <div className="text-sm text-yellow-800">
+                  <div className="mb-4 p-3 bg-warning-subtle border border-warning-line rounded-lg flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
+                    <div className="text-sm text-warning-strong">
                       {!hasAtLeastOneEnabled && (
                         <p>At least one assessment round must be enabled.</p>
                       )}
@@ -4546,7 +4554,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                               <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
                                 <span className="text-sm sm:text-base font-medium text-gray-900">Coding Round</span>
                                 {isAutoEnabled ? (
-                                  <span className="px-1.5 sm:px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Auto (IT Job)</span>
+                                  <span className="px-1.5 sm:px-2 py-0.5 bg-success-subtle text-success rounded text-xs">Auto (IT Job)</span>
                                 ) : (
                                   <span className="px-1.5 sm:px-2 py-0.5 bg-slate-100 text-slate-500 rounded text-xs">Auto (Not Required)</span>
                                 )}
@@ -4635,7 +4643,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                           </div>
                           <span className="text-xs sm:text-sm text-gray-500 flex-shrink-0">
                             Total:{' '}
-                            <span className={`font-bold ${isPercentageValid ? 'text-green-600' : 'text-red-500'}`}>
+                            <span className={`font-bold ${isPercentageValid ? 'text-success' : 'text-destructive'}`}>
                               {totalPercentage}%
                             </span>
                           </span>
@@ -4736,7 +4744,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                         <div className="flex items-center gap-2 mb-1">
                           <span className="font-medium text-gray-900">Proctoring Mode</span>
                           <span className={`px-2 py-0.5 rounded text-xs font-medium ${
-                            proctoringEnabled ? 'bg-green-100 text-green-700' : 'bg-gray-200 text-gray-600'
+                            proctoringEnabled ? 'bg-success-subtle text-success' : 'bg-gray-200 text-gray-600'
                           }`}>
                             {proctoringEnabled ? 'Enabled' : 'Disabled'}
                           </span>
@@ -4920,14 +4928,16 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                           drops every choice on this screen. The JD's page is
                           still one click away from inside the dialog. */}
                       {jdId && (
-                        <button
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           type="button"
                           onClick={() => setJdFullViewFor({ id: jdId, title: selectedJob.title })}
-                          className="inline-flex items-center gap-1.5 rounded-lg border border-brand-blue/20 bg-white px-2.5 py-1 text-xs font-medium text-brand-blue transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/40 flex-shrink-0"
+                          className="flex-shrink-0"
                         >
                           View JD
                           <FileText className="w-3.5 h-3.5" />
-                        </button>
+                        </Button>
                       )}
                     </div>
                     <p className="mt-1.5 text-xs text-gray-500 leading-snug">
@@ -4971,7 +4981,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                               their skills are behind the count. */}
                           {fact.items && fact.items.length === 0 && (
                             <div className="mt-2 pl-11">
-                              <p className="text-[11px] text-gray-500">None listed on this JD.</p>
+                              <p className="text-2xs text-gray-500">None listed on this JD.</p>
                             </div>
                           )}
                         </div>
@@ -5087,7 +5097,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     the bottom edge. Same words, same colours. */}
                 <div className="mt-3 bg-slate-50 rounded-xl p-3 flex items-start gap-2">
                   <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
-                  <p className="text-[11px] text-gray-500 leading-snug">
+                  <p className="text-2xs text-gray-500 leading-snug">
                     HR questions (from Question Bank) are separate and not timed.
                   </p>
                 </div>
@@ -5107,20 +5117,22 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
               <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-2">
-                  <button
+                  <Button
+                    variant="secondary"
                     onClick={() => handleGenerateAssessment(true)}
                     disabled={!isPercentageValid || isGenerating}
-                    className="flex-1 px-3 sm:px-4 py-2 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm disabled:bg-gray-100 disabled:cursor-not-allowed"
+                    className="flex-1"
                   >
                     {generatingAction === 'draft' ? 'Saving...' : 'Save as Draft'}
-                  </button>
+                  </Button>
                   {/* Publish from here: the assessment is created and made
                       live by this button, and the Publish Assessment STEP that
                       follows reports it. Because the work happens here, the
                       button carries its own progress — otherwise a recruiter
                       would press it and watch nothing happen while the create
                       and publish calls run. The same two gates still apply. */}
-                  <button
+                  <Button
+                    variant="primary"
                     onClick={() => handleGenerateAssessment(false)}
                     disabled={!isPercentageValid || !hasValidHRSelection || isGenerating}
                     title={
@@ -5130,7 +5142,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                           ? 'Select at least one HR question before publishing'
                           : ''
                     }
-                    className="flex-1 px-3 sm:px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-all disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-1.5 text-sm"
+                    className="flex-1"
                   >
                     {generatingAction === 'publish' ? (
                       <>
@@ -5143,7 +5155,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                         Publish
                       </>
                     )}
-                  </button>
+                  </Button>
                 </div>
               </div>
               )}
@@ -5178,16 +5190,16 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
             <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-md w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
               {/* Header */}
-              <div className="flex-shrink-0 bg-red-50 border-b border-red-200 px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
+              <div className="flex-shrink-0 bg-destructive-subtle border-b border-destructive-line px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-red-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <Code className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-destructive-subtle rounded-xl flex items-center justify-center flex-shrink-0">
+                    <Code className="w-4 h-4 sm:w-5 sm:h-5 text-destructive" />
                   </div>
                   <div className="min-w-0">
                     <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">
                       Disable Coding Round?
                     </h3>
-                    <p className="text-xs sm:text-sm text-red-700">
+                    <p className="text-xs sm:text-sm text-destructive">
                       This will remove the coding assessment
                     </p>
                   </div>
@@ -5210,18 +5222,20 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
 
               {/* Actions */}
               <div className="flex-shrink-0 bg-slate-50 px-4 sm:px-6 py-3 rounded-b-xl flex flex-col sm:flex-row gap-2 sm:gap-3">
-                <button
+                <Button
+                  variant="secondary"
                   onClick={handleCancelCodingAction}
-                  className="flex-1 px-4 py-2 border border-gray-200 bg-white text-sm text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                  className="flex-1"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="destructive"
                   onClick={handleConfirmCodingAction}
-                  className="flex-1 px-4 py-2 rounded-lg text-sm transition-colors bg-red-600 text-white hover:bg-red-700 shadow-md shadow-red-500/25 ring-1 ring-white/10"
+                  className="flex-1"
                 >
                   Yes, Disable
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -5232,14 +5246,14 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
           <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
             <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-md w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
               {/* Header */}
-              <div className="flex-shrink-0 bg-amber-50 border-b border-amber-200 px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
+              <div className="flex-shrink-0 bg-warning-subtle border-b border-warning-line px-4 sm:px-6 py-3 sm:py-4 rounded-t-xl">
                 <div className="flex items-center gap-2 sm:gap-3">
-                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0">
-                    <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-amber-600" />
+                  <div className="w-8 h-8 sm:w-10 sm:h-10 bg-warning-subtle rounded-xl flex items-center justify-center flex-shrink-0">
+                    <AlertCircle className="w-4 h-4 sm:w-5 sm:h-5 text-warning" />
                   </div>
                   <div>
                     <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Cannot Disable Round</h3>
-                    <p className="text-xs sm:text-sm text-amber-700">Minimum requirement not met</p>
+                    <p className="text-xs sm:text-sm text-warning">Minimum requirement not met</p>
                   </div>
                 </div>
               </div>
@@ -5253,12 +5267,13 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
 
               {/* Actions */}
               <div className="flex-shrink-0 bg-slate-50 px-4 sm:px-6 py-3 rounded-b-xl">
-                <button
+                <Button
+                  variant="primary"
                   onClick={() => setShowMinRoundPopup(false)}
-                  className="w-full px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm rounded-lg transition-colors"
+                  className="w-full"
                 >
                   Got it
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -5446,42 +5461,36 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     gated on the id the publish call returned - without it
                     there is nothing to open. */}
                 {publishedAssessment.id && (
-                  <button
+                  <Button
+                    variant="secondary"
                     type="button"
                     onClick={() => router.push(`/recruitment/assessments/${publishedAssessment.id}`)}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-brand-blue/20 text-brand-blue font-semibold hover:bg-brand-blue/5 hover:border-brand-blue/40 rounded-lg transition-colors text-sm"
+                    icon={<Eye className="w-4 h-4" />}
                   >
-                    <Eye className="w-4 h-4" />
                     View Assessment
-                  </button>
+                  </Button>
                 )}
                 {publishedAssessment.id && (
                   /* `?share=1` opens the assessment's own Share dialog on
                      arrival, so inviting candidates is one step from here
                      rather than a hunt through the list. */
-                  <button
+                  <Button
+                    variant="secondary"
                     type="button"
                     onClick={() => router.push(`/recruitment/assessments/${publishedAssessment.id}?share=1`)}
-                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-white border border-brand-blue/20 text-brand-blue font-semibold hover:bg-brand-blue/5 hover:border-brand-blue/40 rounded-lg transition-colors text-sm"
+                    icon={<Share2 className="w-4 h-4" />}
                   >
-                    <Share2 className="w-4 h-4" />
                     Share Invites
-                  </button>
+                  </Button>
                 )}
-                <button
+                <Button
+                  variant="primary"
                   type="button"
                   onClick={goToAssessmentsList}
-                  /* `border border-transparent` matches the two outlined
-                     buttons' box: their 1px border is inside their height, so
-                     without one here the filled button came out 2px shorter.
-                     In the desktop row `align-items: stretch` hid that; once
-                     the three stack on a phone it showed as one odd button in
-                     the column. */
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white font-semibold shadow-md shadow-brand-blue/25 ring-1 ring-white/10 border border-transparent rounded-lg transition-colors text-sm"
+                  icon={<ArrowRight className="w-4 h-4" />}
                 >
-                  <ArrowRight className="w-4 h-4" />
                   Go to Assessments
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -5517,7 +5526,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
             <div className="w-full">
           <div className="mb-6 sm:mb-8">
             <div className="flex items-center gap-2 sm:gap-3 mb-2">
-              <CheckCircle2 className="w-6 h-6 sm:w-8 sm:h-8 text-green-600 flex-shrink-0" />
+              <CheckCircle2 className="w-6 h-6 sm:w-8 sm:h-8 text-success flex-shrink-0" />
               <h1 className="text-base sm:text-lg lg:text-xl font-semibold text-gray-900 tracking-tight">Assessment Definition Saved Successfully</h1>
             </div>
             <p className="text-sm sm:text-base text-gray-600">
@@ -5526,32 +5535,32 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
           </div>
 
           {/* Unique Question Generation Highlight */}
-          <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-green-300 rounded-xl p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="bg-gradient-to-r from-green-50 to-emerald-50 border-2 border-success-line rounded-xl p-4 sm:p-6 mb-4 sm:mb-6">
             <div className="flex items-start gap-3 sm:gap-4">
-              <div className="p-2 sm:p-3 bg-green-600 rounded-xl flex-shrink-0">
+              <div className="p-2 sm:p-3 bg-success rounded-xl flex-shrink-0">
                 <Sparkles className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="text-sm sm:text-base text-green-900 mb-2 tracking-tight">Unique Question Generation Enabled</h3>
-                <p className="text-xs sm:text-sm text-green-800 mb-3">
+                <h3 className="text-sm sm:text-base text-success-strong mb-2 tracking-tight">Unique Question Generation Enabled</h3>
+                <p className="text-xs sm:text-sm text-success-strong mb-3">
                   <strong>Each candidate will receive a completely unique set of questions</strong> when they take this assessment. 
                   This ensures fairness, prevents question sharing, and maintains assessment integrity.
                 </p>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-green-800">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm text-success-strong">
                   <div className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
                     <span>Fresh questions generated per candidate</span>
                   </div>
                   <div className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
                     <span>Same difficulty & topic coverage</span>
                   </div>
                   <div className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
                     <span>Prevents answer memorization</span>
                   </div>
                   <div className="flex items-start gap-2">
-                    <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                    <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
                     <span>Fair & standardized evaluation</span>
                   </div>
                 </div>
@@ -5572,8 +5581,8 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 <div className="text-xs sm:text-sm text-brand-blue mb-1 font-medium">Duration</div>
                 <div className="text-lg sm:text-2xl text-gray-900 font-semibold tracking-tight">{duration} min</div>
               </div>
-              <div className="p-3 sm:p-4 bg-green-50 ring-1 ring-green-200 rounded-xl">
-                <div className="text-xs sm:text-sm text-green-700 mb-1 font-medium">Sections</div>
+              <div className="p-3 sm:p-4 bg-success-subtle ring-1 ring-success-line rounded-xl">
+                <div className="text-xs sm:text-sm text-success mb-1 font-medium">Sections</div>
                 <div className="text-lg sm:text-2xl text-gray-900 font-semibold tracking-tight">{generatedAssessment?.sections.length}</div>
               </div>
               <div className="p-3 sm:p-4 bg-brand-orange/10 ring-1 ring-brand-orange/15 rounded-xl">
@@ -5597,12 +5606,12 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
               {/* Technical + Coding Info */}
-              <div className="bg-white rounded-xl p-3 sm:p-4 border border-green-200 ring-1 ring-green-100">
+              <div className="bg-white rounded-xl p-3 sm:p-4 border border-success-line ring-1 ring-success-line">
                 <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <Brain className="w-4 h-4 text-brand-cyan" />
                   <Code className="w-4 h-4 text-brand-orange-deep" />
                   <h4 className="text-xs sm:text-sm text-gray-900 font-medium">Technical + Coding</h4>
-                  <span className="ml-auto px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
+                  <span className="ml-auto px-2 py-0.5 bg-success-subtle text-success rounded text-xs">
                     Scored
                   </span>
                 </div>
@@ -5616,8 +5625,8 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
               </div>
             </div>
 
-            <div className="mt-4 bg-green-100 border border-green-300 rounded-xl p-3">
-              <p className="text-sm text-green-900 text-center">
+            <div className="mt-4 bg-success-subtle border border-success-line rounded-xl p-3">
+              <p className="text-sm text-success-strong text-center">
                 <strong>Final Result:</strong> PASS/FAIL determined by Technical + Coding sections only
               </p>
             </div>
@@ -5640,7 +5649,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                             Informational Only
                           </span>
                         ) : (
-                          <span className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">
+                          <span className="px-2 py-0.5 bg-success-subtle text-success rounded text-xs">
                             Scored (0-10 scale)
                           </span>
                         )}
@@ -5650,7 +5659,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                   <div className="flex flex-col items-start sm:items-end gap-1">
                     <div className="text-xl sm:text-2xl text-brand-blue font-semibold tracking-tight">{section.percentage}%</div>
                     {section.name !== 'HR' && (
-                      <span className="text-xs text-green-600">Counts to PASS/FAIL</span>
+                      <span className="text-xs text-success">Counts to PASS/FAIL</span>
                     )}
                   </div>
                 </div>
@@ -5684,21 +5693,22 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
           {/* Actions */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div className="text-xs sm:text-sm text-gray-600">
-              Status: <span className={`font-medium ${generatedAssessment?.status === 'Active' ? 'text-green-600' : 'text-yellow-600'}`}>
+              Status: <span className={`font-medium ${generatedAssessment?.status === 'Active' ? 'text-success' : 'text-warning'}`}>
                 {generatedAssessment?.status === 'Active' ? 'Published' : 'Draft'}
               </span>
             </div>
-            <button
+            <Button
+              variant="primary"
               onClick={() => {
                 // Let parent handle navigation to avoid double router.push()
                 onCreateAssessment(generatedAssessment);
               }}
-              className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 text-sm rounded-lg transition-colors flex items-center justify-center gap-2"
+              className="w-full sm:w-auto"
+              icon={<CheckCircle2 className="w-4 h-4" />}
             >
-              <CheckCircle2 className="w-4 h-4" />
               <span className="hidden sm:inline">Done - Go to Assessments</span>
               <span className="sm:hidden">Done</span>
-            </button>
+            </Button>
           </div>
 
           {renderAddHRQuizModal()}

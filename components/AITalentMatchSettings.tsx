@@ -24,8 +24,8 @@ export default function AITalentMatchSettings({
 
   const getSpeedBadge = (speed: string) => {
     const colors: Record<string, string> = {
-      fast: 'bg-green-100 text-green-700',
-      medium: 'bg-yellow-100 text-yellow-700',
+      fast: 'bg-success-subtle text-success',
+      medium: 'bg-warning-subtle text-warning',
       slow: 'bg-orange-100 text-orange-700',
     };
     return colors[speed] || colors.medium;

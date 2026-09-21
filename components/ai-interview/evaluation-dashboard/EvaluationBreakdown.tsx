@@ -168,14 +168,14 @@ export function EvaluationBreakdown({
               <div className="p-3 rounded-lg bg-emerald-50 border border-emerald-200">
                 <div className="text-xs text-emerald-700 mb-1 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>MUST-HAVE</div>
                 <div className="text-xl text-emerald-900 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{Math.round(weights.mustHave)}%</div>
-                {presentCount < 2 && <div className="text-[10px] text-emerald-600 mt-1" style={{ fontFamily: 'var(--font-mono)' }}>base 70% → {Math.round(weights.mustHave)}%</div>}
+                {presentCount < 2 && <div className="text-2xs text-emerald-600 mt-1" style={{ fontFamily: 'var(--font-mono)' }}>base 70% → {Math.round(weights.mustHave)}%</div>}
               </div>
             )}
             {sectionsPresent.niceToHave && (
               <div className="p-3 rounded-lg bg-amber-50 border border-amber-200">
                 <div className="text-xs text-amber-700 mb-1 font-semibold" style={{ fontFamily: 'var(--font-mono)' }}>NICE-TO-HAVE</div>
                 <div className="text-xl text-amber-900 font-bold" style={{ fontFamily: 'var(--font-mono)' }}>{Math.round(weights.niceToHave)}%</div>
-                {presentCount < 2 && <div className="text-[10px] text-amber-600 mt-1" style={{ fontFamily: 'var(--font-mono)' }}>base 30% → {Math.round(weights.niceToHave)}%</div>}
+                {presentCount < 2 && <div className="text-2xs text-amber-600 mt-1" style={{ fontFamily: 'var(--font-mono)' }}>base 30% → {Math.round(weights.niceToHave)}%</div>}
               </div>
             )}
           </div>
@@ -183,11 +183,11 @@ export function EvaluationBreakdown({
             <summary className="cursor-pointer hover:text-gray-700">How is this calculated?</summary>
             <div className="mt-2 p-3 bg-gray-50 dark:bg-gray-900/30 rounded border border-gray-200 dark:border-gray-700" style={{ fontFamily: 'var(--font-mono)' }}>
               <div className="mb-1">w_section = (base_section / Σ base_of_present_sections) × 100</div>
-              <div className="text-[11px] text-gray-400 mt-2">Examples:</div>
-              <div className="text-[11px]">• Both: MHS = 70%, NHS = 30%</div>
-              <div className="text-[11px]">• MHS only: 100%</div>
-              <div className="text-[11px]">• NHS only: 100%</div>
-              <div className="text-[11px] text-gray-400 mt-1">HR section is review-only and excluded from scoring.</div>
+              <div className="text-2xs text-gray-400 mt-2">Examples:</div>
+              <div className="text-2xs">• Both: MHS = 70%, NHS = 30%</div>
+              <div className="text-2xs">• MHS only: 100%</div>
+              <div className="text-2xs">• NHS only: 100%</div>
+              <div className="text-2xs text-gray-400 mt-1">HR section is review-only and excluded from scoring.</div>
             </div>
           </details>
         </div>

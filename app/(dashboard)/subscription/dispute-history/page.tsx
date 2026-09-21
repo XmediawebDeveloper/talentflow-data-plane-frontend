@@ -241,10 +241,10 @@ export default function DisputeHistoryPage() {
       case 'open':
       case 'pending':
       case 'under_review':
-        return <Clock className="h-3.5 w-3.5 text-amber-600" />;
+        return <Clock className="h-3.5 w-3.5 text-warning" />;
       case 'lost':
       case 'rejected':
-        return <XCircle className="h-3.5 w-3.5 text-red-600" />;
+        return <XCircle className="h-3.5 w-3.5 text-destructive" />;
       default:
         return <AlertTriangle className="h-3.5 w-3.5 text-brand-orange-deep" />;
     }
@@ -258,10 +258,10 @@ export default function DisputeHistoryPage() {
       case 'open':
       case 'pending':
       case 'under_review':
-        return 'bg-amber-100 text-amber-700 ring-1 ring-amber-200';
+        return 'bg-warning-subtle text-warning ring-1 ring-warning-line';
       case 'lost':
       case 'rejected':
-        return 'bg-red-100 text-red-700 ring-1 ring-red-200';
+        return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
       default:
         return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
     }
@@ -491,11 +491,11 @@ export default function DisputeHistoryPage() {
 
         {/* Error State */}
         {error && (
-          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50/80 p-4 ring-1 ring-red-100">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive-subtle text-destructive">
               <AlertCircle className="h-5 w-5" />
             </span>
-            <p className="text-sm font-medium text-red-700">{error}</p>
+            <p className="text-sm font-medium text-destructive">{error}</p>
           </div>
         )}
 
@@ -633,7 +633,7 @@ export default function DisputeHistoryPage() {
                         </span>
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${getStatusStyles(dispute.metadata?.dispute_status || dispute.dispute_status || dispute.status || 'unknown')}`}>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-medium ${getStatusStyles(dispute.metadata?.dispute_status || dispute.dispute_status || dispute.status || 'unknown')}`}>
                           {getStatusIcon(dispute.metadata?.dispute_status || dispute.dispute_status || dispute.status || 'unknown')}
                           {dispute.metadata?.dispute_status || dispute.dispute_status || dispute.status || '-'}
                         </span>
@@ -708,33 +708,33 @@ export default function DisputeHistoryPage() {
               <div className="flex-1 min-h-0 space-y-5 overflow-y-auto p-5 sm:p-6">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Issue Date</p>
+                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Issue Date</p>
                     <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedDispute.issue_date)}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Deadline</p>
+                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Deadline</p>
                     <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedDispute.metadata?.deadline || selectedDispute.deadline || null)}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Dispute Status</p>
-                    <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${getStatusStyles(selectedDispute.metadata?.dispute_status || selectedDispute.dispute_status || selectedDispute.status)}`}>
+                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Dispute Status</p>
+                    <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-medium ${getStatusStyles(selectedDispute.metadata?.dispute_status || selectedDispute.dispute_status || selectedDispute.status)}`}>
                       {getStatusIcon(selectedDispute.metadata?.dispute_status || selectedDispute.dispute_status || selectedDispute.status)}
                       {selectedDispute.metadata?.dispute_status || selectedDispute.dispute_status || selectedDispute.status}
                     </span>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Original Invoice</p>
+                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Original Invoice</p>
                     <p className="mt-1 break-all font-mono text-sm font-semibold text-gray-900 dark:text-slate-50">{selectedDispute.metadata?.original_invoice_number || '-'}</p>
                   </div>
                   {selectedDispute.payment_method && (
                     <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Payment Method</p>
+                      <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Payment Method</p>
                       <p className="mt-1 text-sm font-semibold capitalize text-gray-900 dark:text-slate-50">{selectedDispute.payment_method}</p>
                     </div>
                   )}
                   {selectedDispute.paid_at && (
                     <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Paid At</p>
+                      <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Paid At</p>
                       <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedDispute.paid_at)}</p>
                     </div>
                   )}
@@ -742,7 +742,7 @@ export default function DisputeHistoryPage() {
 
                 <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                   <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-2.5">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Dispute Details</p>
+                    <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Dispute Details</p>
                   </div>
                   <div className="space-y-3 p-4">
                     <div className="flex items-start justify-between gap-4">
@@ -780,7 +780,7 @@ export default function DisputeHistoryPage() {
 
                 {selectedDispute.metadata?.razorpay_dispute_id && (
                   <div className="rounded-xl border border-brand-cyan/20 bg-brand-cyan/[0.05] p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-cyan">Razorpay Dispute ID</p>
+                    <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-brand-cyan">Razorpay Dispute ID</p>
                     <p className="mt-1 break-all font-mono text-sm text-gray-900 dark:text-slate-50">{selectedDispute.metadata.razorpay_dispute_id}</p>
                   </div>
                 )}

@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 // FIX-003: Import Sheet for inline JD creation
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Button } from '@/components/ui/button';
 import JDCreation from '@/components/JDCreation';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
 import DisableJobModal from '@/components/DisableJobModal';
@@ -468,11 +469,11 @@ export default function JDListPage() {
     const displayStatus = isRepublished ? 'republished' : status;
 
     const configs: Record<string, { bg: string; text: string; dot: string }> = {
-      draft: { bg: 'bg-yellow-50', text: 'text-yellow-700', dot: 'bg-yellow-500' },
-      published: { bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
+      draft: { bg: 'bg-warning-subtle', text: 'text-warning', dot: 'bg-warning' },
+      published: { bg: 'bg-success-subtle', text: 'text-success', dot: 'bg-success' },
       republished: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
       archived: { bg: 'bg-gray-50', text: 'text-gray-600', dot: 'bg-gray-400' },
-      disabled: { bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-400' },
+      disabled: { bg: 'bg-destructive-subtle', text: 'text-destructive', dot: 'bg-destructive' },
     };
     const config = configs[displayStatus] || configs.draft;
     return (
@@ -511,13 +512,13 @@ export default function JDListPage() {
           />
         {/* JD01 & JD03: Access Error Banner */}
         {accessError && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <div className="mb-6 p-4 bg-destructive-subtle border border-destructive-line rounded-lg flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
             <div>
-              <h3 className="text-sm font-medium text-red-800">Access Restricted</h3>
-              <p className="text-sm text-red-700 mt-1">{accessError}</p>
+              <h3 className="text-sm font-medium text-destructive-strong">Access Restricted</h3>
+              <p className="text-sm text-destructive mt-1">{accessError}</p>
               {accessCheck?.failed_checks && accessCheck.failed_checks.length > 0 && (
-                <ul className="text-sm text-red-600 mt-2 list-disc list-inside">
+                <ul className="text-sm text-destructive mt-2 list-disc list-inside">
                   {accessCheck.failed_checks.map((check, idx) => (
                     <li key={idx}>{check}</li>
                   ))}
@@ -529,14 +530,14 @@ export default function JDListPage() {
 
         {/* JD03: Unit availability warning */}
         {accessCheck && !accessCheck.units.passed && accessCheck.can_create_jd && (
-          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+          <div className="mb-6 p-4 bg-warning-subtle border border-warning-line rounded-lg flex items-start gap-3">
+            <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
             <div>
-              <h3 className="text-sm font-medium text-yellow-800">Low Unit Availability</h3>
-              <p className="text-sm text-yellow-700 mt-1">
+              <h3 className="text-sm font-medium text-warning-strong">Low Unit Availability</h3>
+              <p className="text-sm text-warning mt-1">
                 Some units are running low. You can still create JDs, but scoring/assessment features may be limited.
               </p>
-              <div className="flex gap-4 mt-2 text-xs text-yellow-700">
+              <div className="flex gap-4 mt-2 text-xs text-warning">
                 {!accessCheck.units.RS.sufficient && (
                   <span>Resume Scoring: {accessCheck.units.RS.available} remaining</span>
                 )}
@@ -560,16 +561,17 @@ export default function JDListPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <button
+            <Button
+              variant="secondary"
               onClick={handleExportJDs}
               disabled={jds.length === 0}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium border border-gray-300 text-gray-700 hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              icon={<Download className="w-4 h-4" />}
               title={selectedJds.length > 0 ? `Export ${selectedJds.length} selected JDs` : 'Export all JDs'}
             >
-              <Download className="w-4 h-4" />
               {selectedJds.length > 0 ? `Export (${selectedJds.length})` : 'Export CSV'}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
               onClick={() => {
                 // FIX-003: Open sheet instead of navigating
                 if (canCreateJD) {
@@ -578,16 +580,11 @@ export default function JDListPage() {
                 }
               }}
               disabled={!canCreateJD || accessCheckLoading}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium transition-colors ${
-                canCreateJD
-                  ? 'bg-gray-800 text-white hover:bg-gray-900'
-                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              }`}
+              icon={<Plus className="w-4 h-4" />}
               title={!canCreateJD ? accessError || 'Cannot create JD' : 'Create a new job description'}
             >
-              <Plus className="w-4 h-4" />
               Create New JD
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -647,7 +644,7 @@ export default function JDListPage() {
                       <div className="border-t border-gray-100 my-1" />
                       <button
                         onClick={() => { handleBulkDelete(); setBulkActionsOpen(false); }}
-                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-destructive hover:bg-destructive-subtle"
                       >
                         <Trash2 className="w-4 h-4" />
                         Delete Selected
@@ -768,17 +765,17 @@ export default function JDListPage() {
                 : 'Create your first job description to get started'}
             </p>
             {!searchQuery && statusFilter === 'all' && canCreateJD && (
-              <button
+              <Button
+                variant="primary"
                 onClick={() => {
                   // FIX-003: Open sheet instead of navigating
                   setEditingJDId(null);
                   setShowJDSheet(true);
                 }}
-                className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
+                icon={<Plus className="w-4 h-4" />}
               >
-                <Plus className="w-4 h-4" />
                 Create New JD
-              </button>
+              </Button>
             )}
           </div>
         ) : (
@@ -838,7 +835,7 @@ export default function JDListPage() {
                         </span>
                         {jd.published_at && (
                           <span className="flex items-center gap-1">
-                            <CheckCircle2 className="w-4 h-4 text-green-500" />
+                            <CheckCircle2 className="w-4 h-4 text-success" />
                             Posted {formatISTDate(jd.published_at)}
                           </span>
                         )}
@@ -874,27 +871,31 @@ export default function JDListPage() {
                   {/* Actions - View, Edit buttons and 3-dot menu - FIX-008: Mobile-friendly */}
                   <div className="flex items-center gap-2 flex-shrink-0">
                     {/* View Button - icon only on mobile */}
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => router.push(`/recruitment/jd-details?id=${jd.id}`)}
-                      className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 whitespace-nowrap"
+                      icon={<Eye className="w-4 h-4" />}
+                      className="whitespace-nowrap"
                     >
-                      <Eye className="w-4 h-4" />
-                      <span className="text-sm hidden sm:inline">View</span>
-                    </button>
+                      <span className="hidden sm:inline">View</span>
+                    </Button>
 
                     {/* Edit Button - FIX-003: Open in sheet, icon only on mobile */}
                     {/* ✅ PERMISSION FIX: Only show Edit button if user has canUpdateJD permission */}
                     {jdPerms.canUpdate && (
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => {
                           setEditingJDId(jd.id);
                           setShowJDSheet(true);
                         }}
-                        className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors border border-gray-200 whitespace-nowrap"
+                        icon={<Edit2 className="w-4 h-4" />}
+                        className="whitespace-nowrap"
                       >
-                        <Edit2 className="w-4 h-4" />
-                        <span className="text-sm hidden sm:inline">Edit</span>
-                      </button>
+                        <span className="hidden sm:inline">Edit</span>
+                      </Button>
                     )}
 
                     {/* More Actions Dropdown (3-dot menu) */}
@@ -933,7 +934,7 @@ export default function JDListPage() {
                           {jd.status === 'draft' && (
                             <button
                               onClick={() => { handlePublish(jd.id); setActiveDropdown(null); }}
-                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-green-700 hover:bg-green-50"
+                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-success hover:bg-success-subtle"
                             >
                               <CheckCircle2 className="w-4 h-4" />
                               Publish
@@ -1014,7 +1015,7 @@ export default function JDListPage() {
                                   });
                                   setActiveDropdown(null);
                                 }}
-                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50"
+                                className="w-full flex items-center gap-2 px-4 py-2 text-sm text-destructive hover:bg-destructive-subtle"
                               >
                                 <Trash2 className="w-4 h-4" />
                                 Delete

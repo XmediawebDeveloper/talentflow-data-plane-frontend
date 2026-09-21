@@ -7,6 +7,7 @@ import { toast } from 'sonner';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 export default function IntegrationsPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
@@ -135,7 +136,7 @@ export default function IntegrationsPage() {
               <LinkIcon className="h-5 w-5 text-brand-blue" />
             </div>
             <div>
-              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-brand-orange/5 ring-1 ring-brand-orange/20 px-2.5 py-0.5 text-[11px] font-semibold text-brand-orange-deep">
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-brand-orange/5 ring-1 ring-brand-orange/20 px-2.5 py-0.5 text-2xs font-semibold text-brand-orange-deep">
                 <Sparkles className="h-3 w-3 text-brand-orange-deep" />
                 Connected apps
               </div>
@@ -203,13 +204,15 @@ export default function IntegrationsPage() {
                   <div className="flex items-center gap-2 shrink-0">
                     {integration.is_connected ? (
                       <>
-                        <button className="p-2 rounded-lg text-gray-500 dark:text-slate-500 transition hover:bg-brand-blue/5 hover:text-brand-blue" aria-label="Settings" title="Settings">
+                        <Button variant="secondary" size="sm" className="px-2" aria-label="Settings" title="Settings">
                           <Settings className="w-4 h-4" />
-                        </button>
-                        <button
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
                           onClick={() => disconnectIntegration(integration.integration_type)}
                           disabled={disconnectingId === integration.integration_type}
-                          className="p-2 rounded-lg text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                          className="px-2"
                           aria-label="Disconnect" title="Disconnect"
                         >
                           {disconnectingId === integration.integration_type ? (
@@ -217,13 +220,13 @@ export default function IntegrationsPage() {
                           ) : (
                             <Trash2 className="w-4 h-4" />
                           )}
-                        </button>
+                        </Button>
                       </>
                     ) : (
-                      <button
+                      <Button
+                        variant="primary"
                         onClick={() => connectIntegration(integration.integration_type)}
                         disabled={connectingId === integration.integration_type}
-                        className="inline-flex items-center justify-center gap-1.5 sm:gap-2 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white text-sm font-semibold rounded-lg ring-1 ring-white/10 shadow-md shadow-brand-blue/25 transition-all disabled:opacity-50"
                       >
                         {connectingId === integration.integration_type ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
@@ -231,7 +234,7 @@ export default function IntegrationsPage() {
                           <Plus className="w-4 h-4" />
                         )}
                         {connectingId === integration.integration_type ? 'Connecting...' : 'Connect'}
-                      </button>
+                      </Button>
                     )}
                   </div>
                 </div>
@@ -246,9 +249,9 @@ export default function IntegrationsPage() {
           <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mb-4">
             Let us know what tools you&apos;d like to connect with TalentFlow.
           </p>
-          <button className="inline-flex items-center justify-center px-4 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-sm text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue font-semibold rounded-lg transition-colors">
+          <Button variant="secondary">
             Request Integration
-          </button>
+          </Button>
         </div>
       </div>
       </div>

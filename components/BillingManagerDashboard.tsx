@@ -17,6 +17,7 @@ import {
   Calendar,
   CheckCircle2,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import {
   ResponsiveContainer,
   LineChart,
@@ -201,12 +202,13 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
                 </span>
               </div>
             </div>
-            <button
+            <Button
+              variant="secondary"
               onClick={() => router.push('/subscription/current-plan')}
-              className="mt-5 w-full py-2.5 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg text-sm font-medium transition-colors inline-flex items-center justify-center gap-1"
+              className="mt-5 w-full"
             >
               Manage plan <ArrowRight className="w-4 h-4" />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -224,12 +226,14 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
                   <span className="font-semibold text-brand-orange-deep"> {projectedExhaustion.daysLeft} days</span>.
                 </p>
               </div>
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => router.push('/subscription/current-plan')}
-                className="px-4 py-2 bg-brand-orange text-white rounded-lg text-sm font-medium hover:bg-brand-orange-deep transition-colors flex-shrink-0"
+                className="flex-shrink-0"
               >
                 Top up
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -272,7 +276,7 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                  <div className="flex items-center justify-between mt-1.5 text-[11px] text-gray-500">
+                  <div className="flex items-center justify-between mt-1.5 text-2xs text-gray-500">
                     <span>{pct}% used</span>
                     <span>{(limit - used).toLocaleString()} remaining</span>
                   </div>
@@ -347,7 +351,7 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
                     <div className="flex items-center justify-between mb-1.5">
                       <div className="min-w-0">
                         <div className="text-sm font-medium text-gray-900 truncate">{c.name}</div>
-                        <div className="text-[11px] text-gray-500">{c.team}</div>
+                        <div className="text-2xs text-gray-500">{c.team}</div>
                       </div>
                       <span className="text-sm tabular-nums text-gray-700 ml-3">{c.credits}</span>
                     </div>
@@ -379,11 +383,11 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
             <table className="w-full">
               <thead className="bg-gray-50 border-b border-gray-100">
                 <tr>
-                  <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Invoice</th>
-                  <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Date</th>
-                  <th className="px-6 py-3 text-right text-[11px] font-medium text-gray-500 uppercase tracking-wider">Amount</th>
-                  <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-500 uppercase tracking-wider">Status</th>
-                  <th className="px-6 py-3 text-right text-[11px] font-medium text-gray-500 uppercase tracking-wider">Action</th>
+                  <th className="px-6 py-3 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider">Invoice</th>
+                  <th className="px-6 py-3 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-3 text-right text-2xs font-medium text-gray-500 uppercase tracking-wider">Amount</th>
+                  <th className="px-6 py-3 text-left text-2xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                  <th className="px-6 py-3 text-right text-2xs font-medium text-gray-500 uppercase tracking-wider">Action</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -393,7 +397,7 @@ export default function BillingManagerDashboard({ user, tenant }: BillingManager
                     <td className="px-6 py-4 text-sm text-gray-600">{formatISTDate(inv.date)}</td>
                     <td className="px-6 py-4 text-sm text-right tabular-nums text-gray-900">${inv.amount.toLocaleString()}</td>
                     <td className="px-6 py-4">
-                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-green-50 text-green-700 ring-1 ring-green-100">
+                      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-2xs font-medium bg-success-subtle text-success ring-1 ring-success-line">
                         <CheckCircle2 className="w-3 h-3" />
                         Paid
                       </span>

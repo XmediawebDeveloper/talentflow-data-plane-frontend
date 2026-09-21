@@ -61,8 +61,8 @@ interface ClusterInsightsTabProps {
 type CoverageLevel = 'not_covered' | 'low' | 'medium' | 'high';
 
 const COVERAGE_STYLES: Record<CoverageLevel, { label: string; badge: string; dot: string; icon: any }> = {
-  high:        { label: 'High',        badge: 'bg-emerald-50 text-emerald-700 border-emerald-200', dot: 'bg-emerald-500', icon: CheckCircle2 },
-  medium:      { label: 'Medium',      badge: 'bg-amber-50 text-amber-700 border-amber-200',       dot: 'bg-amber-400',   icon: AlertCircle },
+  high:        { label: 'High',        badge: 'bg-success-subtle text-success border-success-line', dot: 'bg-success', icon: CheckCircle2 },
+  medium:      { label: 'Medium',      badge: 'bg-warning-subtle text-warning border-warning-line',       dot: 'bg-warning',   icon: AlertCircle },
   low:         { label: 'Low',         badge: 'bg-orange-50 text-orange-700 border-orange-200',    dot: 'bg-orange-400',  icon: MinusCircle },
   not_covered: { label: 'Not Covered', badge: 'bg-gray-100 text-gray-500 border-gray-200',         dot: 'bg-gray-300',    icon: XCircle },
 };
@@ -101,7 +101,7 @@ function CoverageBadge({ level }: { level: CoverageLevel }) {
   const s = COVERAGE_STYLES[level];
   const Icon = s.icon;
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${s.badge}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium border ${s.badge}`}>
       <Icon className="w-3 h-3" />
       {s.label}
     </span>
@@ -170,7 +170,7 @@ function QuestionTable({ groups }: { groups: QGroup[] }) {
   return (
     <div className="overflow-x-auto tf-table-shell">
       <table className="w-full text-xs">
-        <thead className="bg-gray-100 text-gray-600 uppercase tracking-wide text-[10px]">
+        <thead className="bg-gray-100 text-gray-600 uppercase tracking-wide text-2xs">
           <tr>
             <th className="px-3 py-2 text-left font-semibold w-14">Q #</th>
             <th className="px-3 py-2 text-left font-semibold w-24">Type</th>
@@ -198,23 +198,23 @@ function QuestionTable({ groups }: { groups: QGroup[] }) {
             return (
               <tr key={i} className="align-top">
                 <td className="px-3 py-2 align-top">
-                  <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">
+                  <span className="text-2xs font-semibold text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">
                     Q{g.main.question_number}
                   </span>
                 </td>
                 <td className="px-3 py-2 align-top">
-                  <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${mainType.cls}`}>
+                  <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ${mainType.cls}`}>
                     {mainType.text}
                   </span>
                 </td>
                 <td className="px-3 py-2 align-top">
-                  <div className="text-[12px] font-medium text-gray-800 leading-snug">{qText}</div>
+                  <div className="text-xs font-medium text-gray-800 leading-snug">{qText}</div>
                   {hasFu && (
                     <div className="mt-2 pl-3 border-l-2 border-violet-200 space-y-2">
                       {!isOpen ? (
                         <button
                           onClick={() => toggle(i)}
-                          className="text-[10px] text-violet-600 hover:text-violet-800 flex items-center gap-1"
+                          className="text-2xs text-violet-600 hover:text-violet-800 flex items-center gap-1"
                         >
                           <ChevronDown className="w-3 h-3" />
                           {expandLabel}
@@ -223,7 +223,7 @@ function QuestionTable({ groups }: { groups: QGroup[] }) {
                         <>
                           <button
                             onClick={() => toggle(i)}
-                            className="text-[10px] text-violet-600 hover:text-violet-800 flex items-center gap-1"
+                            className="text-2xs text-violet-600 hover:text-violet-800 flex items-center gap-1"
                           >
                             <ChevronUp className="w-3 h-3" />
                             Hide
@@ -234,9 +234,9 @@ function QuestionTable({ groups }: { groups: QGroup[] }) {
                             return (
                               <div key={fi}>
                                 <div className="flex items-center gap-1.5 mb-0.5">
-                                  <span className={`text-[10px] font-semibold ${sl.color} ${sl.bg} rounded px-1.5 py-0.5`}>{sl.tag}</span>
+                                  <span className={`text-2xs font-semibold ${sl.color} ${sl.bg} rounded px-1.5 py-0.5`}>{sl.tag}</span>
                                 </div>
-                                <div className="text-[11px] font-medium text-gray-700 leading-snug">{fuQ}</div>
+                                <div className="text-2xs font-medium text-gray-700 leading-snug">{fuQ}</div>
                               </div>
                             );
                           })}
@@ -246,15 +246,15 @@ function QuestionTable({ groups }: { groups: QGroup[] }) {
                   )}
                 </td>
                 <td className="px-3 py-2 align-top">
-                  <div className="text-[12px] text-gray-700 leading-snug whitespace-pre-wrap">{aText}</div>
+                  <div className="text-xs text-gray-700 leading-snug whitespace-pre-wrap">{aText}</div>
                   {hasFu && isOpen && (
                     <div className="mt-2 pl-3 border-l-2 border-violet-200 space-y-2">
                       {g.followUps.map((fu, fi) => {
                         const sl = subLabel(g.followUps, fi);
                         const fuA = fu.answer || fu.response_text || '—';
                         return (
-                          <div key={fi} className="text-[11px] text-gray-600 leading-snug whitespace-pre-wrap">
-                            <span className={`text-[10px] font-semibold ${sl.color} mr-1`}>{sl.tag}:</span>
+                          <div key={fi} className="text-2xs text-gray-600 leading-snug whitespace-pre-wrap">
+                            <span className={`text-2xs font-semibold ${sl.color} mr-1`}>{sl.tag}:</span>
                             {fuA}
                           </div>
                         );
@@ -332,7 +332,7 @@ export default function ClusterInsightsTab({
           </div>
           {capabilityScoreReasoning && (
             <div className="mt-3 pt-3 border-t border-gray-700">
-              <div className="text-[11px] text-gray-400 leading-relaxed">{capabilityScoreReasoning}</div>
+              <div className="text-2xs text-gray-400 leading-relaxed">{capabilityScoreReasoning}</div>
             </div>
           )}
         </div>
@@ -389,14 +389,14 @@ export default function ClusterInsightsTab({
                       >
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="text-sm font-semibold text-gray-900">{cluster.cluster_name}</span>
-                          <span className={`px-1.5 py-0.5 text-[10px] rounded border ${
-                            (cluster.priority_label === 'High' || cluster.priority >= 3) ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                            (cluster.priority_label === 'Medium' || cluster.priority === 2) ? 'bg-amber-50 text-amber-700 border-amber-200' :
+                          <span className={`px-1.5 py-0.5 text-2xs rounded border ${
+                            (cluster.priority_label === 'High' || cluster.priority >= 3) ? 'bg-success-subtle text-success border-success-line' :
+                            (cluster.priority_label === 'Medium' || cluster.priority === 2) ? 'bg-warning-subtle text-warning border-warning-line' :
                             'bg-orange-50 text-orange-700 border-orange-200'
                           }`}>
                             {cluster.priority_label || (cluster.priority >= 3 ? 'High' : cluster.priority === 2 ? 'Medium' : 'Low')} Priority
                           </span>
-                          <span className="text-[11px] text-gray-400">
+                          <span className="text-2xs text-gray-400">
                             {cluster.evaluated}/{cluster.total} skills
                           </span>
                         </div>

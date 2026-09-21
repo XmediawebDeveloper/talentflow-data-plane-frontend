@@ -10,6 +10,7 @@ import { useAuth } from '@/lib/hooks/useAuth';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 export default function ApiManagementPage() {
   const { hasPermission } = useAuth();
@@ -197,7 +198,7 @@ export default function ApiManagementPage() {
                 <Key className="h-5 w-5 text-brand-blue" />
               </div>
               <div>
-                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-brand-orange/5 ring-1 ring-brand-orange/20 px-2.5 py-0.5 text-[11px] font-semibold text-brand-orange-deep">
+                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-brand-orange/5 ring-1 ring-brand-orange/20 px-2.5 py-0.5 text-2xs font-semibold text-brand-orange-deep">
                   <Sparkles className="h-3 w-3 text-brand-orange-deep" />
                   Developer access
                 </div>
@@ -206,13 +207,10 @@ export default function ApiManagementPage() {
               </div>
             </div>
             {canManage && (
-              <button
-                onClick={() => setShowCreateModal(true)}
-                className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 font-semibold transition-all"
-              >
+              <Button variant="primary" onClick={() => setShowCreateModal(true)}>
                 <Plus className="w-4 h-4" />
                 Create API Key
-              </button>
+              </Button>
             )}
           </div>
         </section>
@@ -227,13 +225,10 @@ export default function ApiManagementPage() {
               <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2">No API Keys</h3>
               <p className="text-gray-500 dark:text-slate-500 mb-4">Create your first API key to start using the TalentFlow API.</p>
               {canManage && (
-                <button
-                  onClick={() => setShowCreateModal(true)}
-                  className="inline-flex items-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 font-semibold transition-all"
-                >
+                <Button variant="primary" onClick={() => setShowCreateModal(true)}>
                   <Plus className="w-4 h-4" />
                   Create API Key
-                </button>
+                </Button>
               )}
             </div>
           ) : (
@@ -257,13 +252,15 @@ export default function ApiManagementPage() {
                       <code className="px-3 py-1.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15 rounded-lg text-sm font-mono">
                         {apiKey.key_prefix}
                       </code>
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => copyKey(apiKey.key_prefix)}
-                        className="p-1.5 rounded-lg text-gray-500 dark:text-slate-500 transition hover:bg-brand-blue/5 hover:text-brand-blue"
+                        className="px-2"
                         aria-label="Copy key prefix" title="Copy key prefix"
                       >
                         <Copy className="w-4 h-4" />
-                      </button>
+                      </Button>
                     </div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 dark:text-slate-500">
                       <span className="flex items-center gap-1">
@@ -278,18 +275,22 @@ export default function ApiManagementPage() {
                   </div>
                   {canManage && (
                     <div className="flex items-center gap-2 shrink-0">
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => regenerateKey(apiKey.id)}
                         disabled={regeneratingId === apiKey.id}
-                        className="p-2 rounded-lg text-gray-500 dark:text-slate-500 transition hover:bg-brand-blue/5 hover:text-brand-blue disabled:opacity-50"
+                        className="px-2"
                         aria-label="Regenerate key" title="Regenerate key"
                       >
                         <RefreshCw className={`w-4 h-4 ${regeneratingId === apiKey.id ? 'animate-spin' : ''}`} />
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
                         onClick={() => deleteKey(apiKey.id)}
                         disabled={deletingId === apiKey.id}
-                        className="p-2 rounded-lg text-red-600 transition hover:bg-red-50 disabled:opacity-50"
+                        className="px-2"
                         aria-label="Delete key" title="Delete key"
                       >
                         {deletingId === apiKey.id ? (
@@ -297,7 +298,7 @@ export default function ApiManagementPage() {
                         ) : (
                           <Trash2 className="w-4 h-4" />
                         )}
-                      </button>
+                      </Button>
                     </div>
                   )}
                 </div>
@@ -341,12 +342,9 @@ export default function ApiManagementPage() {
                     {newlyCreatedKey ? 'API Key Created' : 'Create API Key'}
                   </h2>
                 </div>
-                <button
-                  onClick={closeCreateModal}
-                  className="p-1.5 rounded-lg bg-white dark:bg-slate-900 text-gray-500 dark:text-slate-500 ring-1 ring-gray-200 dark:ring-slate-700 hover:bg-brand-blue/5 hover:text-brand-blue transition"
-                 aria-label="Close">
+                <Button variant="secondary" size="sm" onClick={closeCreateModal} className="px-2" aria-label="Close">
                   <X className="w-4 h-4" />
-                </button>
+                </Button>
               </div>
             </div>
 
@@ -366,20 +364,14 @@ export default function ApiManagementPage() {
                     <code className="flex-1 px-3 py-2 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15 rounded-lg text-sm font-mono break-all">
                       {newlyCreatedKey}
                     </code>
-                    <button
-                      onClick={() => copyKey(newlyCreatedKey)}
-                      className="p-2 rounded-lg text-gray-500 dark:text-slate-500 hover:bg-brand-blue/5 hover:text-brand-blue transition flex-shrink-0"
-                    >
+                    <Button variant="secondary" size="sm" onClick={() => copyKey(newlyCreatedKey)} className="px-2 flex-shrink-0" aria-label="Copy API key">
                       <Copy className="w-4 h-4" />
-                    </button>
+                    </Button>
                   </div>
                 </div>
-                <button
-                  onClick={closeCreateModal}
-                  className="w-full inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 font-semibold transition-all"
-                >
+                <Button variant="primary" onClick={closeCreateModal} className="w-full">
                   Done
-                </button>
+                </Button>
               </div>
             ) : (
               <div>
@@ -412,20 +404,18 @@ export default function ApiManagementPage() {
                   </select>
                 </div>
                 <div className="flex gap-3">
-                  <button
-                    onClick={closeCreateModal}
-                    className="flex-1 px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-semibold transition"
-                  >
+                  <Button variant="secondary" onClick={closeCreateModal} className="flex-1">
                     Cancel
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="primary"
                     onClick={handleCreateKey}
                     disabled={isCreating || !newKeyName.trim()}
-                    className="flex-1 inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 font-semibold transition-all disabled:opacity-60"
+                    className="flex-1"
                   >
                     {isCreating && <Loader2 className="w-4 h-4 animate-spin" />}
                     {isCreating ? 'Creating...' : 'Create Key'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             )}

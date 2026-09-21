@@ -283,7 +283,7 @@ export default function AddSeatsModal({
             <div className="min-w-0">
               <div className="flex items-center gap-2 mb-0.5 flex-wrap">
                 <h2 className="text-lg sm:text-xl font-bold text-white">Add User Seats</h2>
-                <span className="inline-flex items-center gap-1 text-[10px] font-semibold bg-white/20 text-white px-2 py-0.5 rounded-full ring-1 ring-white/30 backdrop-blur-sm">
+                <span className="inline-flex items-center gap-1 text-2xs font-semibold bg-white/20 text-white px-2 py-0.5 rounded-full ring-1 ring-white/30 backdrop-blur-sm">
                   <Sparkles className="w-2.5 h-2.5" />
                   INSTANT
                 </span>
@@ -364,26 +364,26 @@ export default function AddSeatsModal({
               <>
                 {/* Success */}
                 {purchaseSuccess && (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-xl ring-1 ring-green-100 flex items-start gap-3 animate-in slide-in-from-top duration-200">
+                  <div className="p-4 bg-success-subtle border border-success-line rounded-xl ring-1 ring-success-line flex items-start gap-3 animate-in slide-in-from-top duration-200">
                     <div className="w-9 h-9 bg-gradient-to-br from-green-500 to-green-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-md shadow-green-500/25 ring-1 ring-white/10">
                       <CheckCircle2 className="w-4 h-4 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-green-800 text-sm">Purchase Successful!</p>
-                      <p className="text-xs text-green-700 mt-0.5">{purchaseSuccess}</p>
+                      <p className="font-semibold text-success-strong text-sm">Purchase Successful!</p>
+                      <p className="text-xs text-success mt-0.5">{purchaseSuccess}</p>
                     </div>
                   </div>
                 )}
 
                 {/* Error */}
                 {error && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-xl ring-1 ring-red-100 flex items-start gap-3 animate-in slide-in-from-top duration-200">
+                  <div className="p-4 bg-destructive-subtle border border-destructive-line rounded-xl ring-1 ring-destructive-line flex items-start gap-3 animate-in slide-in-from-top duration-200">
                     <div className="w-9 h-9 bg-gradient-to-br from-red-500 to-red-600 rounded-lg flex items-center justify-center flex-shrink-0 shadow-md shadow-red-500/25 ring-1 ring-white/10">
                       <AlertCircle className="w-4 h-4 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-red-800 text-sm">Purchase Failed</p>
-                      <p className="text-xs text-red-700 mt-0.5">{error}</p>
+                      <p className="font-semibold text-destructive-strong text-sm">Purchase Failed</p>
+                      <p className="text-xs text-destructive mt-0.5">{error}</p>
                     </div>
                   </div>
                 )}
@@ -528,7 +528,7 @@ export default function AddSeatsModal({
               )}
             </button>
           </div>
-          <p className="text-center text-[11px] text-gray-500 dark:text-slate-500 mt-3 flex items-center justify-center gap-1.5">
+          <p className="text-center text-2xs text-gray-500 dark:text-slate-500 mt-3 flex items-center justify-center gap-1.5">
             <ShieldCheck className="w-3 h-3 text-brand-cyan" />
             <span>Secured by Razorpay · 256-bit SSL encryption</span>
           </p>

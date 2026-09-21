@@ -321,7 +321,7 @@ export function SQLQuestionView({
                                 {queryResult.columns?.map((column) => (
                                   <th
                                     key={column}
-                                    className="px-3 py-3 text-left text-[11px] font-medium uppercase tracking-wider text-gray-500 break-words"
+                                    className="px-3 py-3 text-left text-2xs font-medium uppercase tracking-wider text-gray-500 break-words"
                                   >
                                     {column}
                                   </th>

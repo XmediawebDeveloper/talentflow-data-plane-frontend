@@ -399,7 +399,7 @@ export default function PaymentMethodsPage() {
                           {method.card_type} •••• {method.card_last_four}
                         </p>
                         {method.is_default && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-brand-teal/10 px-2.5 py-1 text-[11px] font-medium text-brand-teal ring-1 ring-brand-teal/15">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-brand-teal/10 px-2.5 py-1 text-2xs font-medium text-brand-teal ring-1 ring-brand-teal/15">
                             <ShieldCheck className="h-3 w-3" />
                             Default
                           </span>
@@ -501,11 +501,11 @@ export default function PaymentMethodsPage() {
                     onChange={(e) => setFormData({ ...formData, cardholderName: e.target.value })}
                     placeholder="Name as it appears on the card"
                     className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
-                      formErrors.cardholderName ? 'border-red-300 focus:border-red-300 focus:ring-red-100' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
+                      formErrors.cardholderName ? 'border-destructive-line focus:border-destructive-line focus:ring-destructive-line' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                     }`}
                   />
                   {formErrors.cardholderName && (
-                    <p className="mt-1 text-xs text-red-500">{formErrors.cardholderName}</p>
+                    <p className="mt-1 text-xs text-destructive">{formErrors.cardholderName}</p>
                   )}
                 </label>
 
@@ -515,7 +515,7 @@ export default function PaymentMethodsPage() {
                     Card Number <span className="text-brand-orange">*</span>
                   </span>
                   <div className={`flex items-center gap-2 rounded-xl border bg-white dark:bg-slate-900 px-3 py-2.5 transition-all focus-within:ring-4 ${
-                    formErrors.cardNumber ? 'border-red-300 focus-within:border-red-300 focus-within:ring-red-100' : 'border-gray-200 dark:border-slate-700 focus-within:border-brand-blue/30 focus-within:ring-brand-blue/10'
+                    formErrors.cardNumber ? 'border-destructive-line focus-within:border-destructive-line focus-within:ring-destructive-line' : 'border-gray-200 dark:border-slate-700 focus-within:border-brand-blue/30 focus-within:ring-brand-blue/10'
                   }`}>
                     <CreditCard className="h-4 w-4 text-gray-400 dark:text-slate-500" />
                     <input
@@ -528,7 +528,7 @@ export default function PaymentMethodsPage() {
                     />
                   </div>
                   {formErrors.cardNumber && (
-                    <p className="mt-1 text-xs text-red-500">{formErrors.cardNumber}</p>
+                    <p className="mt-1 text-xs text-destructive">{formErrors.cardNumber}</p>
                   )}
                 </label>
 
@@ -545,11 +545,11 @@ export default function PaymentMethodsPage() {
                       placeholder="MM"
                       maxLength={2}
                       className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
-                        formErrors.expiryMonth ? 'border-red-300 focus:border-red-300 focus:ring-red-100' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
+                        formErrors.expiryMonth ? 'border-destructive-line focus:border-destructive-line focus:ring-destructive-line' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                       }`}
                     />
                     {formErrors.expiryMonth && (
-                      <p className="mt-1 text-xs text-red-500">{formErrors.expiryMonth}</p>
+                      <p className="mt-1 text-xs text-destructive">{formErrors.expiryMonth}</p>
                     )}
                   </label>
                   <label className="block">
@@ -563,11 +563,11 @@ export default function PaymentMethodsPage() {
                       placeholder="YYYY"
                       maxLength={4}
                       className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
-                        formErrors.expiryYear ? 'border-red-300 focus:border-red-300 focus:ring-red-100' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
+                        formErrors.expiryYear ? 'border-destructive-line focus:border-destructive-line focus:ring-destructive-line' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                       }`}
                     />
                     {formErrors.expiryYear && (
-                      <p className="mt-1 text-xs text-red-500">{formErrors.expiryYear}</p>
+                      <p className="mt-1 text-xs text-destructive">{formErrors.expiryYear}</p>
                     )}
                   </label>
                   <label className="block">
@@ -581,11 +581,11 @@ export default function PaymentMethodsPage() {
                       placeholder="•••"
                       maxLength={4}
                       className={`w-full rounded-xl border bg-white dark:bg-slate-900 px-4 py-2.5 text-sm text-gray-900 dark:text-slate-50 outline-none transition-all placeholder:text-gray-400 focus:ring-4 ${
-                        formErrors.cvv ? 'border-red-300 focus:border-red-300 focus:ring-red-100' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
+                        formErrors.cvv ? 'border-destructive-line focus:border-destructive-line focus:ring-destructive-line' : 'border-gray-200 dark:border-slate-700 focus:border-brand-blue/30 focus:ring-brand-blue/10'
                       }`}
                     />
                     {formErrors.cvv && (
-                      <p className="mt-1 text-xs text-red-500">{formErrors.cvv}</p>
+                      <p className="mt-1 text-xs text-destructive">{formErrors.cvv}</p>
                     )}
                   </label>
                 </div>

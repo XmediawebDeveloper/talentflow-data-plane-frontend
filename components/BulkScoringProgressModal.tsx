@@ -1,6 +1,7 @@
 import { X, Clock, CheckCircle2, XCircle, AlertCircle, Loader2, Database, FolderOpen, Target, TrendingUp, RotateCcw, Minus, Maximize2, RefreshCw, SlidersHorizontal, ChevronDown, Eye, ClipboardList } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import ListPagination from '@/components/ListPagination';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/components/providers/AuthProvider';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
@@ -51,9 +52,9 @@ export interface ScoringProgressItem {
 // Score text colours, matched to the three Match Result badge colours so the
 // number and the verdict beside it read as one statement.
 const SCORE_TEXT_CLASS: Record<string, string> = {
-  'Exact Match': 'text-base font-semibold text-green-700',
+  'Exact Match': 'text-base font-semibold text-success',
   'Partial Match': 'text-base font-semibold text-brand-orange-deep',
-  'No Match': 'text-base font-semibold text-red-700',
+  'No Match': 'text-base font-semibold text-destructive',
 };
 
 interface BulkScoringProgressModalProps {
@@ -378,11 +379,11 @@ export default function BulkScoringProgressModal({
       case 'Scoring in progress':
         return <Loader2 className="w-4 h-4 text-brand-blue animate-spin" />;
       case 'Scored successfully':
-        return <CheckCircle2 className="w-4 h-4 text-green-500" />;
+        return <CheckCircle2 className="w-4 h-4 text-success" />;
       case 'Already Scored - Skipped':
         return <CheckCircle2 className="w-4 h-4 text-brand-cyan" />;
       case 'Failed':
-        return <XCircle className="w-4 h-4 text-red-500" />;
+        return <XCircle className="w-4 h-4 text-destructive" />;
       default:
         return <Clock className="w-4 h-4 text-gray-500 dark:text-slate-500" />;
     }
@@ -395,11 +396,11 @@ export default function BulkScoringProgressModal({
       case 'Scoring in progress':
         return 'bg-brand-blue/10 text-brand-blue border-brand-blue/20';
       case 'Scored successfully':
-        return 'bg-green-50 text-green-700 border-green-200';
+        return 'bg-success-subtle text-success border-success-line';
       case 'Already Scored - Skipped':
         return 'bg-brand-cyan/10 text-brand-cyan border-brand-cyan/20';
       case 'Failed':
-        return 'bg-red-50 text-red-700 border-red-200';
+        return 'bg-destructive-subtle text-destructive border-destructive-line';
       default:
         return 'bg-gray-50 dark:bg-slate-800/50 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700';
     }
@@ -414,7 +415,7 @@ export default function BulkScoringProgressModal({
 
     switch (result) {
       case 'Exact Match':
-        badgeClass = 'bg-green-100 text-green-700 border-green-300';
+        badgeClass = 'bg-success-subtle text-success border-success-line';
         icon = <CheckCircle2 className="w-3 h-3" />;
         displayText = 'Exact Match';
         break;
@@ -424,7 +425,7 @@ export default function BulkScoringProgressModal({
         displayText = 'Partial Match';
         break;
       case 'No Match':
-        badgeClass = 'bg-red-100 text-red-700 border-red-300';
+        badgeClass = 'bg-destructive-subtle text-destructive border-destructive-line';
         icon = <XCircle className="w-3 h-3" />;
         displayText = 'No Match';
         break;
@@ -512,13 +513,15 @@ export default function BulkScoringProgressModal({
             {/* Action buttons - always visible */}
             <div className="flex items-center gap-1.5 flex-shrink-0">
               {isAllComplete && (
-                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-green-50 dark:bg-green-500/10 text-green-700 dark:text-green-400 ring-1 ring-green-200 dark:ring-green-500/30 rounded-full text-xs font-medium">
+                <div className="hidden sm:flex items-center gap-1.5 px-2.5 py-1 bg-success-subtle text-success ring-1 ring-success-line rounded-full text-xs font-medium">
                   <CheckCircle2 className="w-3 h-3" />
                   Complete
                 </div>
               )}
               {onRefresh && (
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={async () => {
                     if (refreshing) return;
                     setRefreshing(true);
@@ -529,21 +532,23 @@ export default function BulkScoringProgressModal({
                     }
                   }}
                   disabled={refreshing}
-                  className="w-8 h-8 flex items-center justify-center text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50"
+                  className="w-8 px-0"
                   aria-label="Refresh"
                   title="Refresh"
                 >
                   <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-                </button>
+                </Button>
               )}
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => { setIsMinimizedInternal(true); onMinimize?.(); }}
-                className="w-8 h-8 flex items-center justify-center text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                className="w-8 px-0"
                 aria-label="Minimize to background"
                 title="Run in background"
               >
                 <Minus className="w-4 h-4" />
-              </button>
+              </Button>
               {/* Close appears only once every row has settled. While work is
                   still queued or running, Minimise is the way out — closing
                   mid-run reads as "cancel this", which it never did, and it
@@ -555,13 +560,15 @@ export default function BulkScoringProgressModal({
                   nothing) would have no close button at all and no rows that
                   could ever settle to grow one. */}
               {(isAllComplete || totalResumes === 0) && (
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={onClose}
-                  className="w-8 h-8 flex items-center justify-center text-gray-400 dark:text-slate-500 hover:text-gray-700 dark:hover:text-slate-200 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+                  className="w-8 px-0"
                   aria-label="Close modal"
                 >
                   <X className="w-4 h-4" />
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -575,7 +582,7 @@ export default function BulkScoringProgressModal({
               </div>
             )}
             {isAllComplete && (
-              <div className="flex sm:hidden items-center gap-1 text-green-700 dark:text-green-400 text-xs font-medium flex-shrink-0">
+              <div className="flex sm:hidden items-center gap-1 text-success text-xs font-medium flex-shrink-0">
                 <CheckCircle2 className="w-3 h-3" />
                 Done
               </div>
@@ -590,7 +597,7 @@ export default function BulkScoringProgressModal({
               run that is finished. */}
           <div className="h-1.5 w-full bg-gray-100 dark:bg-slate-800">
             <div
-              className={`h-full transition-[width] duration-500 ease-out ${isAllComplete ? 'bg-green-500' : 'bg-brand-blue'}`}
+              className={`h-full transition-[width] duration-500 ease-out ${isAllComplete ? 'bg-success' : 'bg-brand-blue'}`}
               style={{
                 width: `${totalResumes > 0
                   ? Math.round(((completedCount + skippedCount + failedCount) / totalResumes) * 100)
@@ -626,9 +633,9 @@ export default function BulkScoringProgressModal({
             {[
               { key: 'queued', label: 'Queue', count: queuedCount, icon: <Clock className="w-4 h-4" />, tone: 'text-blue-600 dark:text-blue-300' },
               { key: 'in-progress', label: 'Processing', count: inProgressCount, icon: <Loader2 className={`w-4 h-4 ${inProgressCount > 0 ? 'animate-spin' : ''}`} />, tone: 'text-brand-blue' },
-              { key: 'completed', label: 'Done', count: completedCount, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'text-green-600 dark:text-green-400' },
-              { key: 'skipped', label: 'Skipped', count: skippedCount, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'text-amber-600 dark:text-amber-400' },
-              { key: 'failed', label: 'Failed', count: failedCount, icon: <XCircle className="w-4 h-4" />, tone: 'text-red-600 dark:text-red-400' },
+              { key: 'completed', label: 'Done', count: completedCount, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'text-success' },
+              { key: 'skipped', label: 'Skipped', count: skippedCount, icon: <CheckCircle2 className="w-4 h-4" />, tone: 'text-warning' },
+              { key: 'failed', label: 'Failed', count: failedCount, icon: <XCircle className="w-4 h-4" />, tone: 'text-destructive' },
             ].map(stat => {
               const isActive = statusFilter === stat.key;
               return (
@@ -654,14 +661,11 @@ export default function BulkScoringProgressModal({
           {/* Bulk Retry Button */}
           {filterByJobId && onRetryFailed && failedCount > 0 && (
             <div className="mt-3 flex justify-end">
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={handleBulkRetryFailed}
                 disabled={bulkRetrying}
-                className={`flex items-center gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg transition-all hover:shadow-md text-xs sm:text-sm font-medium ${
-                  bulkRetrying
-                    ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                    : 'bg-brand-blue text-white hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
-                }`}
                 aria-label="Retry all failed resumes at once" title="Retry all failed resumes at once"
               >
                 {bulkRetrying ? (
@@ -669,7 +673,7 @@ export default function BulkScoringProgressModal({
                 ) : (
                   <><RefreshCw className="w-3.5 h-3.5" /><span>Retry All</span></>
                 )}
-              </button>
+              </Button>
             </div>
           )}
         </div>
@@ -746,7 +750,7 @@ export default function BulkScoringProgressModal({
               <SlidersHorizontal className="w-3.5 h-3.5" />
               Filters
               {activeExtraFilterCount > 0 && (
-                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-brand-blue text-white text-[10px] font-semibold">
+                <span className="inline-flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-brand-blue text-white text-2xs font-semibold">
                   {activeExtraFilterCount}
                 </span>
               )}
@@ -961,7 +965,7 @@ export default function BulkScoringProgressModal({
                               {item.status}
                             </span>
                             {item.status === 'Failed' && (
-                              <div className="flex items-start gap-1 text-xs text-red-600 mt-1 max-w-[280px] whitespace-normal break-words">
+                              <div className="flex items-start gap-1 text-xs text-destructive mt-1 max-w-[280px] whitespace-normal break-words">
                                 <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
                                 <span>{item.errorReason || 'Scoring failed. Please contact your administrator.'}</span>
                               </div>
@@ -1005,27 +1009,26 @@ export default function BulkScoringProgressModal({
                         <td className="py-3 px-4 whitespace-nowrap tf-sticky-col">
                           <div className="flex items-center gap-2">
                             {item.resumeId && (
-                              <button
+                              <Button
+                                variant="secondary"
+                                size="sm"
                                 onClick={() => openResume(item.resumeId)}
                                 aria-label="View resume"
                                 title="View resume"
-                                className="inline-flex items-center justify-center w-8 h-8 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-500 dark:text-slate-400 hover:border-brand-blue/40 hover:text-brand-blue transition-colors"
+                                className="w-8 px-0"
                               >
                                 <Eye className="w-4 h-4" />
-                              </button>
+                              </Button>
                             )}
                             {onRetryFailed && item.status === 'Failed' && (
-                              <button
+                              <Button
+                                variant="secondary"
+                                size="sm"
                                 onClick={() => handleRetry(item)}
                                 disabled={retryingItems.has(item.id)}
-                                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                                  retryingItems.has(item.id)
-                                    ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                                    : 'bg-brand-blue/5 text-brand-blue hover:bg-brand-blue/10 ring-1 ring-brand-blue/20'
-                                }`}
                               >
                                 {retryingItems.has(item.id) ? <><Loader2 className="w-3 h-3 animate-spin" />Retrying...</> : <><RotateCcw className="w-3 h-3" />Retry</>}
-                              </button>
+                              </Button>
                             )}
                             {!item.resumeId && !(onRetryFailed && item.status === 'Failed') && (
                               <span className="text-sm text-gray-400 dark:text-slate-500">&mdash;</span>
@@ -1074,7 +1077,7 @@ export default function BulkScoringProgressModal({
                       </span>
                     </div>
                     {item.status === 'Failed' && (
-                      <div className="flex items-start gap-1 text-xs text-red-600 mb-2">
+                      <div className="flex items-start gap-1 text-xs text-destructive mb-2">
                         <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
                         <span>{item.errorReason || 'Scoring failed. Please contact your administrator.'}</span>
                       </div>
@@ -1103,26 +1106,26 @@ export default function BulkScoringProgressModal({
                         <span className={SCORE_TEXT_CLASS[item.matchResult]}>{formatOverallScore(item.overallRating10, item.score)}</span>
                       )}
                       {item.resumeId && (
-                        <button
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           onClick={() => openResume(item.resumeId)}
                           aria-label="View resume"
                           title="View resume"
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-300"
+                          icon={<Eye className="w-3 h-3" />}
                         >
-                          <Eye className="w-3 h-3" />
                           View
-                        </button>
+                        </Button>
                       )}
                       {onRetryFailed && item.status === 'Failed' && (
-                        <button
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           onClick={() => handleRetry(item)}
                           disabled={retryingItems.has(item.id)}
-                          className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium ${
-                            retryingItems.has(item.id) ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500' : 'bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20'
-                          }`}
                         >
                           {retryingItems.has(item.id) ? <><Loader2 className="w-3 h-3 animate-spin" />Retrying</> : <><RotateCcw className="w-3 h-3" />Retry</>}
-                        </button>
+                        </Button>
                       )}
                     </div>
                   </div>
@@ -1201,13 +1204,14 @@ export default function BulkScoringProgressModal({
               </p>
 
               {anyFiltersApplied && (
-                <button
+                <Button
+                  variant="primary"
                   onClick={clearAllFilters}
-                  className="mt-5 inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-lg bg-[var(--raw-2563eb)] hover:bg-[var(--raw-1d4ed8)] text-white font-medium text-sm shadow-sm shadow-[var(--raw-2563eb)]/25 ring-1 ring-white/10 hover:shadow-md transition-all"
+                  className="mt-5"
+                  icon={<RefreshCw className="w-4 h-4" />}
                 >
-                  <RefreshCw className="w-4 h-4" />
                   Clear Filters
-                </button>
+                </Button>
               )}
             </div>
           )}

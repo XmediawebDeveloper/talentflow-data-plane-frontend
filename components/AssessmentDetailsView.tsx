@@ -30,6 +30,7 @@ import AssessmentInviteTable, {
   isTrackedInviteCompleted,
 } from '@/components/assessments/AssessmentInviteTable';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 interface AssessmentDetailsViewProps {
   assessment: any;
@@ -442,10 +443,10 @@ export default function AssessmentDetailsView({
    *  lowercase status the lineage endpoint returns. */
   const jobVersionStatusChipClass = (status?: string) => {
     switch ((status || '').toLowerCase()) {
-      case 'published': return 'bg-green-100 text-green-700 ring-1 ring-green-200';
+      case 'published': return 'bg-success-subtle text-success ring-1 ring-success-line';
       case 'republished': return 'bg-blue-100 text-blue-700 ring-1 ring-blue-200';
-      case 'draft': return 'bg-yellow-100 text-yellow-700 ring-1 ring-yellow-200';
-      case 'disabled': return 'bg-red-100 text-red-700 ring-1 ring-red-200';
+      case 'draft': return 'bg-warning-subtle text-warning ring-1 ring-warning-line';
+      case 'disabled': return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
       case 'archived': return 'bg-purple-100 text-purple-700 ring-1 ring-purple-200';
       default: return 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700';
     }
@@ -1386,7 +1387,7 @@ export default function AssessmentDetailsView({
                 {assessment.status && (
                   <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${
                     assessment.status === 'Active'
-                      ? 'bg-green-50 text-green-700 border-green-200'
+                      ? 'bg-success-subtle text-success border-success-line'
                       : assessment.status === 'Draft'
                         ? 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/20'
                         : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700'
@@ -1479,7 +1480,7 @@ export default function AssessmentDetailsView({
                           <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 tracking-tight">
                             Job Versions
                           </span>
-                          <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                          <span className="text-2xs text-gray-500 dark:text-slate-400">
                             {sortedJobVersions.length} version{sortedJobVersions.length === 1 ? '' : 's'}
                           </span>
                         </div>
@@ -1558,12 +1559,12 @@ export default function AssessmentDetailsView({
                                         newest, and separate the moment you are
                                         not. */}
                                     {version.is_latest_version && (
-                                      <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-brand-blue/10 text-brand-blue">
+                                      <span className="flex-shrink-0 text-2xs px-1.5 py-0.5 rounded-full font-medium bg-brand-blue/10 text-brand-blue">
                                         Current
                                       </span>
                                     )}
                                     {version.status && (
-                                      <span className={`flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded-full font-medium capitalize ${jobVersionStatusChipClass(version.status)}`}>
+                                      <span className={`flex-shrink-0 text-2xs px-1.5 py-0.5 rounded-full font-medium capitalize ${jobVersionStatusChipClass(version.status)}`}>
                                         {version.status}
                                       </span>
                                     )}
@@ -1579,7 +1580,7 @@ export default function AssessmentDetailsView({
                                         reader. */}
                                     <span
                                       aria-hidden
-                                      className="ml-auto flex-shrink-0 text-[11px] font-medium text-brand-blue group-hover:text-brand-blue-2 group-hover:underline"
+                                      className="ml-auto flex-shrink-0 text-2xs font-medium text-brand-blue group-hover:text-brand-blue-2 group-hover:underline"
                                     >
                                       View
                                     </span>
@@ -1592,7 +1593,7 @@ export default function AssessmentDetailsView({
                                       it, and the line goes entirely when
                                       neither is known. */}
                                   {(author || versionDate) && (
-                                    <div className="pl-6 mt-0.5 flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-slate-400">
+                                    <div className="pl-6 mt-0.5 flex items-center gap-1.5 text-2xs text-gray-500 dark:text-slate-400">
                                       {author && (
                                         <span className="truncate" title={author}>Created by {author}</span>
                                       )}
@@ -1651,7 +1652,7 @@ export default function AssessmentDetailsView({
                             Assessment Versions
                           </span>
                           {selectedJobVersionNumber != null && (
-                            <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                            <span className="text-2xs text-gray-500 dark:text-slate-400">
                               Job V{selectedJobVersionNumber}
                             </span>
                           )}
@@ -1673,7 +1674,7 @@ export default function AssessmentDetailsView({
                             <div className="text-xs font-medium text-gray-700 dark:text-slate-200">
                               No Assessment Version Available
                             </div>
-                            <div className="mt-0.5 text-[11px] text-gray-500 dark:text-slate-400">
+                            <div className="mt-0.5 text-2xs text-gray-500 dark:text-slate-400">
                               {selectedJobVersionNumber != null
                                 ? `No assessment version is currently associated with Job V${selectedJobVersionNumber}.`
                                 : 'This assessment is not linked to a job version.'}
@@ -1709,18 +1710,18 @@ export default function AssessmentDetailsView({
                                   </span>
                                   <div className="flex items-center gap-1">
                                     {version.status && (
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300 capitalize">
+                                      <span className="text-2xs px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300 capitalize">
                                         {version.status}
                                       </span>
                                     )}
                                     {isSwitching ? (
                                       <Loader2 className="w-3 h-3 animate-spin text-brand-blue" />
                                     ) : isCurrentVersion ? (
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue">
+                                      <span className="text-2xs px-1.5 py-0.5 rounded-full bg-brand-blue/10 text-brand-blue">
                                         Selected
                                       </span>
                                     ) : (version.version ?? 0) === latestAssessmentVersion ? (
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
+                                      <span className="text-2xs px-1.5 py-0.5 rounded-full bg-success-subtle text-success">
                                         Latest
                                       </span>
                                     ) : null}
@@ -1736,7 +1737,7 @@ export default function AssessmentDetailsView({
                                     version holds more than one assessment at
                                     the same version number. */}
                                 {(version.published_at || version.created_at) && (
-                                  <div className="text-[11px] text-gray-500 dark:text-slate-400 truncate">
+                                  <div className="text-2xs text-gray-500 dark:text-slate-400 truncate">
                                     {formatIST(version.published_at || version.created_at)}
                                   </div>
                                 )}
@@ -1776,31 +1777,30 @@ export default function AssessmentDetailsView({
           : '';
         const disabled = !!blockedReason;
         return (
-          <button
+          <Button
+            variant="primary"
+            size="sm"
             onClick={disabled ? undefined : onShare}
             disabled={disabled}
             title={blockedReason}
-            className={`px-3 py-1.5 sm:px-4 sm:py-2 rounded-lg ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 transition-all flex items-center gap-1.5 sm:gap-2 font-medium text-xs sm:text-sm ${
-              disabled
-                ? 'bg-gray-200 dark:bg-slate-700 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                : 'bg-brand-blue hover:bg-brand-blue-2 text-white'
-            }`}
+            icon={<Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
           >
-            <Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
             Share
-          </button>
+          </Button>
         );
               })()}
               {onEdit && canCreateAssessments && (
-                <button
+                <Button
                   type="button"
+                  variant="secondary"
+                  size="sm"
                   onClick={onEdit}
                   aria-label="Edit assessment"
                   title="Edit assessment"
-                  className="h-9 w-9 inline-flex items-center justify-center rounded-lg border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue transition-all flex-shrink-0"
+                  className="h-9 w-9 px-0 flex-shrink-0"
                 >
                   <Edit2 className="w-4 h-4" />
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -1999,13 +1999,13 @@ export default function AssessmentDetailsView({
                                   {section.type !== 'hr' && (
                                     <div className="flex items-stretch gap-1.5 sm:gap-2 flex-shrink-0">
                                       <div className="px-2.5 py-1.5 bg-white rounded-lg border border-gray-200 ring-1 ring-black/[0.02]">
-                                        <div className="text-[11px] text-gray-600 leading-none mb-1">Question Type</div>
+                                        <div className="text-2xs text-gray-600 leading-none mb-1">Question Type</div>
                                         <div className="text-xs text-gray-900 font-medium leading-none whitespace-nowrap">
                                           {section.type === 'coding' ? 'Code Challenge' : 'Mixed Format'}
                                         </div>
                                       </div>
                                       <div className="px-2.5 py-1.5 bg-white rounded-lg border border-gray-200 ring-1 ring-black/[0.02]">
-                                        <div className="text-[11px] text-gray-600 leading-none mb-1">Weightage</div>
+                                        <div className="text-2xs text-gray-600 leading-none mb-1">Weightage</div>
                                         <div className="text-xs text-gray-900 font-medium leading-none whitespace-nowrap">{section.percentage}%</div>
                                       </div>
                                     </div>
@@ -2077,10 +2077,10 @@ export default function AssessmentDetailsView({
                   };
                   const complexityColor = (val: string | null | undefined) => {
                     const map: Record<string, string> = {
-                      low: 'bg-green-100 text-green-700 ring-1 ring-green-200',
-                      medium: 'bg-yellow-100 text-yellow-700 ring-1 ring-yellow-200',
+                      low: 'bg-success-subtle text-success ring-1 ring-success-line',
+                      medium: 'bg-warning-subtle text-warning ring-1 ring-warning-line',
                       high: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
-                      expert: 'bg-red-100 text-red-700 ring-1 ring-red-200',
+                      expert: 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line',
                     };
                     return val ? (map[val] || 'bg-slate-100 text-gray-700 ring-1 ring-gray-200') : 'bg-slate-100 text-gray-700 ring-1 ring-gray-200';
                   };
@@ -2096,7 +2096,7 @@ export default function AssessmentDetailsView({
                       mid: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20',
                       senior: 'bg-brand-blue-2/15 text-brand-blue-2 ring-1 ring-brand-blue-2/25',
                       lead: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
-                      expert: 'bg-red-100 text-red-700 ring-1 ring-red-200',
+                      expert: 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line',
                     };
                     return val ? (map[val] || 'bg-slate-100 text-gray-700 ring-1 ring-gray-200') : 'bg-slate-100 text-gray-700 ring-1 ring-gray-200';
                   };
@@ -2189,7 +2189,7 @@ export default function AssessmentDetailsView({
                                 </div>
                                 <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Coding Requirement</span>
                               </div>
-                              <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${assessment.coding_enabled ? 'bg-green-100 text-green-700 ring-1 ring-green-200' : 'bg-slate-100 text-gray-600 ring-1 ring-gray-200'}`}>
+                              <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${assessment.coding_enabled ? 'bg-success-subtle text-success ring-1 ring-success-line' : 'bg-slate-100 text-gray-600 ring-1 ring-gray-200'}`}>
                                 {assessment.coding_enabled ? 'Required' : 'Not Required'}
                               </span>
                             </div>
@@ -2328,7 +2328,7 @@ export default function AssessmentDetailsView({
                                     <div>
                                       <div className="flex items-center justify-between mb-2">
                                         <span className="text-sm text-gray-700">Passed (≥70%)</span>
-                                        <span className="text-sm font-semibold text-green-700">{pct(passed)}%</span>
+                                        <span className="text-sm font-semibold text-success">{pct(passed)}%</span>
                                       </div>
                                       <div className="w-full bg-gray-100 rounded-full h-2">
                                         <div
@@ -2356,7 +2356,7 @@ export default function AssessmentDetailsView({
                                     <div>
                                       <div className="flex items-center justify-between mb-2">
                                         <span className="text-sm text-gray-700">Below Average (&lt;50%)</span>
-                                        <span className="text-sm font-semibold text-red-600">{pct(below)}%</span>
+                                        <span className="text-sm font-semibold text-destructive">{pct(below)}%</span>
                                       </div>
                                       <div className="w-full bg-gray-100 rounded-full h-2">
                                         <div
@@ -2390,7 +2390,7 @@ export default function AssessmentDetailsView({
                                     <div>
                                       <div className="flex items-center justify-between mb-2">
                                         <span className="text-sm text-gray-700">Passed (≥70%)</span>
-                                        <span className="text-sm font-semibold text-green-700">{pct(passed)}%</span>
+                                        <span className="text-sm font-semibold text-success">{pct(passed)}%</span>
                                       </div>
                                       <div className="w-full bg-gray-100 rounded-full h-2">
                                         <div
@@ -2418,7 +2418,7 @@ export default function AssessmentDetailsView({
                                     <div>
                                       <div className="flex items-center justify-between mb-2">
                                         <span className="text-sm text-gray-700">Below Average (&lt;50%)</span>
-                                        <span className="text-sm font-semibold text-red-600">{pct(below)}%</span>
+                                        <span className="text-sm font-semibold text-destructive">{pct(below)}%</span>
                                       </div>
                                       <div className="w-full bg-gray-100 rounded-full h-2">
                                         <div
@@ -2493,18 +2493,20 @@ export default function AssessmentDetailsView({
               {/* The popup's Refresh, down to the spinning icon and the
                   reserved label width that stops the button resizing
                   mid-request. */}
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={refreshInvites}
                 disabled={inviteRefreshing || inviteLoading}
                 title="Fetch the latest invite statuses"
                 aria-label="Refresh"
-                className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed w-fit"
+                className="w-fit"
+                icon={<RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${inviteRefreshing ? 'animate-spin' : ''}`} />}
               >
-                <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${inviteRefreshing ? 'animate-spin' : ''}`} />
                 <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
                   {inviteRefreshing ? 'Refreshing...' : 'Refresh'}
                 </span>
-              </button>
+              </Button>
             </div>
 
             {/* Stat row doubles as the status filter — same component, buckets
@@ -2582,17 +2584,19 @@ export default function AssessmentDetailsView({
                   Select All ({inviteSelectableIds.length})
                 </button>
                 {inviteSelectedIds.size > 0 && (
-                  <button
+                  <Button
                     type="button"
+                    variant="primary"
+                    size="sm"
                     onClick={() => setShowInviteBulkResend(true)}
                     disabled={isBulkResendingInvites}
-                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-semibold bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-nowrap"
-                  >
-                    {isBulkResendingInvites
+                    className="whitespace-nowrap"
+                    icon={isBulkResendingInvites
                       ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       : <Mail className="w-3.5 h-3.5" />}
+                  >
                     {isBulkResendingInvites ? 'Sending…' : `Resend (${inviteSelectedIds.size})`}
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
@@ -2644,7 +2648,7 @@ export default function AssessmentDetailsView({
             {/* The popup's footer, less its Close button — a tab has nothing
                 to close. */}
             <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0 rounded-b-xl">
-              <p className="text-[11px] sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
+              <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
                 {inviteResultsLabel}
               </p>
               <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
@@ -2730,9 +2734,9 @@ export default function AssessmentDetailsView({
                       const getActivityInfo = () => {
                         switch (activity._eventType) {
                           case 'completed':
-                            return { icon: CheckCircle, color: 'text-green-700 bg-green-100 ring-1 ring-green-200', label: 'Completed assessment' };
+                            return { icon: CheckCircle, color: 'text-success bg-success-subtle ring-1 ring-success-line', label: 'Completed assessment' };
                           case 'terminated':
-                            return { icon: Ban, color: 'text-red-700 bg-red-100 ring-1 ring-red-200', label: 'Terminated before completion' };
+                            return { icon: Ban, color: 'text-destructive bg-destructive-subtle ring-1 ring-destructive-line', label: 'Terminated before completion' };
                           case 'started':
                             return { icon: Play, color: 'text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20', label: 'Started the assessment (In Progress)' };
                           case 'opened':
@@ -2740,7 +2744,7 @@ export default function AssessmentDetailsView({
                           case 'sent':
                             return { icon: Mail, color: 'text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20', label: 'Invitation email sent' };
                           case 'bounced':
-                            return { icon: XCircle, color: 'text-red-700 bg-red-100 ring-1 ring-red-200', label: 'Email bounced' };
+                            return { icon: XCircle, color: 'text-destructive bg-destructive-subtle ring-1 ring-destructive-line', label: 'Email bounced' };
                           case 'expired':
                             return { icon: XCircle, color: 'text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20', label: 'Invitation expired' };
                           case 'invited':
@@ -2793,7 +2797,7 @@ export default function AssessmentDetailsView({
                                     </div>
                                   )}
                                   {activity.passed != null && (
-                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${activity.passed ? 'bg-green-100 text-green-700 ring-1 ring-green-200' : 'bg-red-100 text-red-700 ring-1 ring-red-200'}`}>
+                                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${activity.passed ? 'bg-success-subtle text-success ring-1 ring-success-line' : 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line'}`}>
                                       {activity.passed ? 'Passed' : 'Failed'}
                                     </span>
                                   )}
@@ -2973,7 +2977,7 @@ export default function AssessmentDetailsView({
                     so the panel says so rather than leaving the reader to
                     infer it. */}
                 {selectedJobVersionNumber != null && (
-                  <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                  <span className="text-2xs text-gray-500 dark:text-slate-400">
                     Job V{selectedJobVersionNumber}
                   </span>
                 )}
@@ -3027,12 +3031,12 @@ export default function AssessmentDetailsView({
                     : statusRaw === 'archived' ? 'Archived'
                     : 'Draft';
                   const statusChipClass = statusRaw === 'published'
-                    ? 'bg-green-100 text-green-800 ring-1 ring-green-200'
+                    ? 'bg-success-subtle text-success-strong ring-1 ring-success-line'
                     : statusRaw === 'archived'
                     ? 'bg-gray-100 text-gray-700 ring-1 ring-gray-200'
                     : statusRaw === 'closed'
                     ? 'bg-blue-100 text-blue-800 ring-1 ring-blue-200'
-                    : 'bg-amber-100 text-amber-800 ring-1 ring-amber-200';
+                    : 'bg-warning-subtle text-warning-strong ring-1 ring-warning-line';
 
                   return (
                     <div
@@ -3113,15 +3117,17 @@ export default function AssessmentDetailsView({
                             in this list is found BY a job, so this is a guard,
                             not a case the tab shows. */}
                         {sibling.jd_id && (
-                          <button
+                          <Button
                             type="button"
+                            variant="secondary"
+                            size="sm"
                             onClick={() => setPreviewVersion(sibling)}
                             title="Preview configure settings"
                             aria-label={`Preview configure settings for Version ${sibling.version || 1}`}
-                            className="flex-shrink-0 p-2 rounded-lg border border-gray-200 bg-white text-gray-600 hover:text-brand-blue hover:border-brand-blue/40 hover:bg-brand-blue/5 transition-colors focus:outline-none focus:ring-1 focus:ring-brand-blue/30"
+                            className="flex-shrink-0 px-2"
                           >
                             <Eye className="w-4 h-4" />
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </div>
@@ -3166,8 +3172,8 @@ export default function AssessmentDetailsView({
             </div>
           ) : jdError ? (
             <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-3 sm:px-4 lg:px-6 py-8 text-center">
-              <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
-              <p className="text-sm text-red-600">{jdError}</p>
+              <AlertCircle className="w-8 h-8 text-destructive mx-auto mb-2" />
+              <p className="text-sm text-destructive">{jdError}</p>
             </div>
           ) : jdLoading || !jdData ? (
             <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-3 sm:px-4 lg:px-6 py-12 flex items-center justify-center tf-loader-center">

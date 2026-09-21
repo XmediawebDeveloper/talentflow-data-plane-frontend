@@ -8,7 +8,6 @@ import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
-import { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import InviteShareModal from './InviteShareModal';
 import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
@@ -22,6 +21,7 @@ import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 import ScoreTableModal from './ScoreTableModal';
 import ListPagination from './ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
@@ -1422,16 +1422,17 @@ Best regards`);
     return (
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button
+          <Button
+            variant="primary"
+            size="sm"
             aria-label="Invite"
             disabled={rowInviteDisabled}
             title={rowInviteDisabled ? rowInviteDisabledTitle : 'Invite'}
-            className="px-3 py-1.5 text-xs text-white rounded-md transition-all flex items-center gap-1.5 shadow-sm hover:shadow-md bg-brand-blue hover:bg-brand-blue-2 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:bg-brand-blue"
           >
             <UserPlus className="w-3.5 h-3.5" />
             Invite
             <ChevronDown className="w-3 h-3" />
-          </button>
+          </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
@@ -1556,9 +1557,9 @@ Best regards`);
   const AVATAR_PALETTE = [
     { bg: 'bg-blue-100', text: 'text-blue-700' },
     { bg: 'bg-rose-100', text: 'text-rose-700' },
-    { bg: 'bg-emerald-100', text: 'text-emerald-700' },
+    { bg: 'bg-success-subtle', text: 'text-success' },
     { bg: 'bg-violet-100', text: 'text-violet-700' },
-    { bg: 'bg-amber-100', text: 'text-amber-700' },
+    { bg: 'bg-warning-subtle', text: 'text-warning' },
     { bg: 'bg-cyan-100', text: 'text-cyan-700' },
   ];
   const avatarColorFor = (key: string) => {
@@ -1580,14 +1581,16 @@ Best regards`);
         <h2 className="text-gray-900">{title}</h2>
         {/* Score Resumes — opens the host's "Select Applicants to Score" modal. */}
         {onScoreResumes && (
-          <button
+          <Button
+            variant="primary"
+            size="md"
             onClick={onScoreResumes}
-            className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 self-start sm:self-auto"
+            icon={<ClipboardList className="w-4 h-4" />}
+            className="self-start sm:self-auto"
           >
-            <ClipboardList className="w-4 h-4" />
             <span className="hidden sm:inline">Score Resumes</span>
             <span className="sm:hidden">Score</span>
-          </button>
+          </Button>
         )}
       </div>
 
@@ -1619,30 +1622,30 @@ Best regards`);
         >
           {/* Customize Columns — hidden on the narrowest screens, where the row
               has no space for it and the table scrolls horizontally anyway. */}
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => setShowColumnModal(true)}
-            className="hidden sm:flex px-3 py-2 text-sm border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors items-center gap-2 whitespace-nowrap"
+            icon={<SlidersHorizontal className="w-4 h-4" />}
+            className="hidden sm:flex whitespace-nowrap"
           >
-            <SlidersHorizontal className="w-4 h-4" />
             <span className="hidden md:inline">Customize Columns</span>
             <span className="md:hidden">Columns</span>
-          </button>
+          </Button>
 
           {/* One Export for both states — handleExportExcel already exports the
               selection, and asks for one when there isn't any. It just leads
               more strongly once rows are picked. */}
           {canExport && (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={handleExportExcel}
-              className={`px-3 py-2 text-sm rounded-lg transition-colors flex items-center gap-2 whitespace-nowrap ${
-                selectedResumes.length > 0
-                  ? 'bg-green-600 text-white hover:bg-green-700'
-                  : 'border border-gray-300 text-gray-700 hover:bg-gray-50'
-              }`}
+              icon={<FileDown className="w-4 h-4" />}
+              className="whitespace-nowrap"
             >
-              <FileDown className="w-4 h-4" />
               Export
-            </button>
+            </Button>
           )}
           <ListViewToggle value={displayMode} onChange={setDisplayMode} />
         </ListToolbar>
@@ -1809,13 +1812,14 @@ Best regards`);
             {/* Panel footer: "Done" applies the selection and reveals the
                 toolbar Clear — same flow as job-openings. */}
             <div className="mt-4 pt-3 border-t border-gray-200 flex items-center justify-end gap-2">
-              <button
+              <Button
                 // The controls above commit as they change, so Done just closes.
+                variant="secondary"
+                size="sm"
                 onClick={() => setShowFilters(false)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
               >
                 Done
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -1861,26 +1865,27 @@ Best regards`);
             {selectedResumes.length > 0 && (
               <>
                 {canExport && (
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={handleDownloadBulkScorecards}
                     disabled={bulkDownloading}
-                    className="h-9 px-3.5 text-sm border border-gray-300 text-gray-900 bg-gray-50 rounded-full hover:bg-gray-100 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded-full"
+                    icon={bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
                   >
-                    {bulkDownloading ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Download className="w-4 h-4" />
-                    )}
                     {bulkDownloading ? 'Downloading...' : `Download (${selectedResumes.length})`}
-                  </button>
+                  </Button>
                 )}
                 {canCreateAssessments && (
-                  <button
+                  <Button
+                    variant="primary"
+                    size="sm"
                     onClick={() => setShowBulkInviteModal(true)}
                     /* Bulk Invite goes to assessments too, so it takes the same
                        "is there one on this JD" gate as the per-row entry. */
                     disabled={!canInviteAssessment || availableUnits === 0}
-                    className="h-9 px-3.5 text-sm bg-blue-600 text-white rounded-full hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="rounded-full"
+                    icon={<Send className="w-4 h-4" />}
                     title={
                       !canInviteAssessment
                         ? 'No published assessment for this job yet'
@@ -1889,9 +1894,8 @@ Best regards`);
                           : `Bulk invite ${selectedResumes.length} candidates`
                     }
                   >
-                    <Send className="w-4 h-4" />
                     Bulk Invite ({selectedResumes.length})
-                  </button>
+                  </Button>
                 )}
               </>
             )}
@@ -1947,10 +1951,9 @@ Best regards`);
               imageSrc="/scored-resumes-empty-state.webp"
               imageAlt="Scored resumes illustration"
               action={onScoreResumesFromEmptyState ? (
-                <button onClick={onScoreResumesFromEmptyState} className={TAB_EMPTY_ACTION_CLASS}>
-                  <ClipboardList className="w-4 h-4" />
+                <Button variant="primary" size="md" onClick={onScoreResumesFromEmptyState} icon={<ClipboardList className="w-4 h-4" />}>
                   Score Resumes
-                </button>
+                </Button>
               ) : undefined}
             />
           ) : (
@@ -1980,7 +1983,7 @@ Best regards`);
                       <p className="text-xs text-gray-500 truncate">{resume.email || '—'}</p>
                     </div>
                     {versionCount != null && versionCount > 1 && (
-                      <span className="text-[10px] font-medium text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full shrink-0 whitespace-nowrap">
+                      <span className="text-2xs font-medium text-blue-700 bg-blue-50 border border-blue-200 px-1.5 py-0.5 rounded-full shrink-0 whitespace-nowrap">
                         {versionCount} versions
                       </span>
                     )}
@@ -2011,13 +2014,15 @@ Best regards`);
                     className="flex items-center gap-1.5 mt-1"
                     onClick={(e) => e.stopPropagation()}
                   >
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => onViewCandidate && onViewCandidate(resume)}
-                      className="flex-1 inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
+                      icon={<Eye className="w-3.5 h-3.5" />}
+                      className="flex-1"
                     >
-                      <Eye className="w-3.5 h-3.5" />
                       View
-                    </button>
+                    </Button>
                     {renderInviteButton(resume)}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
@@ -2363,13 +2368,15 @@ Best regards`);
                             </div>
                           </div>
                           {onViewCandidate && (
-                            <button
+                            <Button
+                              variant="secondary"
+                              size="sm"
                               onClick={(e) => { e.stopPropagation(); onViewCandidate(row); }}
-                              className="mt-2 w-full px-3 py-1.5 text-xs font-medium text-brand-blue border border-brand-blue/30 rounded-md hover:bg-brand-blue/5 transition-colors flex items-center justify-center gap-1.5"
+                              icon={<Eye className="w-3.5 h-3.5" />}
+                              className="mt-2 w-full"
                             >
-                              <Eye className="w-3.5 h-3.5" />
                               Open Match
-                            </button>
+                            </Button>
                           )}
                         </div>
                       ))}
@@ -2483,10 +2490,9 @@ Best regards`);
             imageSrc="/scored-resumes-empty-state.webp"
             imageAlt="Scored resumes illustration"
             action={onScoreResumesFromEmptyState ? (
-              <button onClick={onScoreResumesFromEmptyState} className={TAB_EMPTY_ACTION_CLASS}>
-                <ClipboardList className="w-4 h-4" />
+              <Button variant="primary" size="md" onClick={onScoreResumesFromEmptyState} icon={<ClipboardList className="w-4 h-4" />}>
                 Score Resumes
-              </button>
+              </Button>
             ) : undefined}
           />
         )}
@@ -2594,20 +2600,26 @@ Best regards`);
                   Same two blockers as the table row's Assessment entry: no
                   published assessment on this JD, or no units left. */}
               {canCreateAssessments && (resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') && (
-                (!canInviteAssessment || availableUnits === 0) ? (
-                  <div className="relative group">
-                    <button
-                      disabled
-                      className="w-full px-4 py-2 text-sm text-gray-400 bg-gray-200 rounded-md cursor-not-allowed flex items-center justify-center gap-2 opacity-60"
-                    >
-                      <UserPlus className="w-4 h-4" />
-                      Invite for Assessment
-                    </button>
-                    {/* Tooltip */}
+                <div className="relative group">
+                  <Button
+                    variant="primary"
+                    size="md"
+                    disabled={!canInviteAssessment || availableUnits === 0}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setInviteCandidate(resume);
+                      setShowInviteModal(true);
+                    }}
+                    icon={<UserPlus className="w-4 h-4" />}
+                    className="w-full"
+                  >
+                    Invite for Assessment
+                  </Button>
+                  {(!canInviteAssessment || availableUnits === 0) && (
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-30">
                       <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 whitespace-nowrap shadow-lg">
                         <div className="flex items-center gap-2">
-                          <AlertCircle className="w-3.5 h-3.5 text-red-400" />
+                          <AlertCircle className="w-3.5 h-3.5 text-destructive" />
                           <span>
                             {!canInviteAssessment
                               ? 'No published assessment for this job yet'
@@ -2619,73 +2631,54 @@ Best regards`);
                         </div>
                       </div>
                     </div>
-                  </div>
-                ) : (
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setInviteCandidate(resume);
-                      setShowInviteModal(true);
-                    }}
-                    className={`w-full px-4 py-2 text-sm text-white rounded-md transition-all flex items-center justify-center gap-2 shadow-sm hover:shadow-md ${
-                      resume.matchStatus === 'Exact Match'
-                        ? 'bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700'
-                        : 'bg-gradient-to-r from-yellow-600 to-amber-600 hover:from-yellow-700 hover:to-amber-700'
-                    }`}
-                  >
-                    <UserPlus className="w-4 h-4" />
-                    Invite for Assessment
-                  </button>
-                )
+                  )}
+                </div>
               )}
-              
+
               {canExport && (
-              <button
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleDownloadScorecard(resume.id);
                 }}
                 disabled={downloadingId === resume.id}
-                className="w-full px-4 py-2 text-sm text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full"
+                icon={downloadingId === resume.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               >
-                {downloadingId === resume.id ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Downloading...
-                  </>
-                ) : (
-                  <>
-                    <Download className="w-4 h-4" />
-                    Download Scorecard
-                  </>
-                )}
-              </button>
+                {downloadingId === resume.id ? 'Downloading...' : 'Download Scorecard'}
+              </Button>
               )}
 
               {resume.resumeId && (
-                <button
+                <Button
+                  variant="secondary"
+                  size="md"
                   onClick={(e) => {
                     e.stopPropagation();
                     setViewResumeCandidate(resume);
                   }}
-                  className="w-full px-4 py-2 text-sm text-gray-800 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors flex items-center justify-center gap-2"
+                  icon={<FileText className="w-4 h-4" />}
+                  className="w-full"
                 >
-                  <FileText className="w-4 h-4" />
                   View Resume
-                </button>
+                </Button>
               )}
 
               {canShareResume && resume.resumeId && (
-                <button
+                <Button
+                  variant="secondary"
+                  size="md"
                   onClick={(e) => {
                     e.stopPropagation();
                     openShareModal(resume);
                   }}
-                  className="w-full px-4 py-2 text-sm text-gray-800 border border-gray-300 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors flex items-center justify-center gap-2"
+                  icon={<Share2 className="w-4 h-4" />}
+                  className="w-full"
                 >
-                  <Share2 className="w-4 h-4" />
                   Share Resume
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -2703,10 +2696,9 @@ Best regards`);
             imageSrc="/scored-resumes-empty-state.webp"
             imageAlt="Scored resumes illustration"
             action={onScoreResumesFromEmptyState ? (
-              <button onClick={onScoreResumesFromEmptyState} className={TAB_EMPTY_ACTION_CLASS}>
-                <ClipboardList className="w-4 h-4" />
+              <Button variant="primary" size="md" onClick={onScoreResumesFromEmptyState} icon={<ClipboardList className="w-4 h-4" />}>
                 Score Resumes
-              </button>
+              </Button>
             ) : undefined}
           />
         )}
@@ -2793,13 +2785,15 @@ Best regards`);
                     <p className="text-sm text-gray-500">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
                   </div>
                 </div>
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={closeShareModal}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                  className="px-2"
                   aria-label="Close"
                 >
-                  <X className="w-5 h-5 text-gray-500" />
-                </button>
+                  <X className="w-5 h-5" />
+                </Button>
               </div>
 
               <div className="space-y-4">
@@ -2825,15 +2819,17 @@ Best regards`);
                         </div>
                       </div>
                       <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      <button
+                      <Button
                         type="button"
+                        variant="secondary"
+                        size="sm"
                         onClick={() => setIsSharePreviewOpen(true)}
-                        className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors"
+                        className="flex-shrink-0 px-2"
                         aria-label={`View ${shareCandidate.candidateName}'s resume`}
                         title="View resume"
                       >
                         <Eye className="w-4 h-4" />
-                      </button>
+                      </Button>
                     </div>
 
                     {/* The scorecard PDF, built on demand — same download
@@ -2855,23 +2851,25 @@ Best regards`);
                         </div>
                       </div>
                       <Paperclip className="w-4 h-4 text-gray-400 flex-shrink-0" />
-                      <button
+                      <Button
                         type="button"
+                        variant="secondary"
+                        size="sm"
                         onClick={handlePreviewScorecard}
                         disabled={loadingScorecardPreview}
-                        className="flex-shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10 transition-colors disabled:opacity-50"
+                        className="flex-shrink-0 px-2"
                         aria-label={`View ${shareCandidate.candidateName}'s scorecard`}
                         title="View scorecard"
                       >
                         {loadingScorecardPreview ? <Loader2 className="w-4 h-4 animate-spin" /> : <Eye className="w-4 h-4" />}
-                      </button>
+                      </Button>
                     </div>
                   </div>
                 </div>
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Recipient Email <span className="text-red-500">*</span>
+                    Recipient Email <span className="text-destructive">*</span>
                   </label>
                   <input
                     type="email"
@@ -2906,29 +2904,18 @@ Best regards`);
               </div>
 
               <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
-                <button
-                  onClick={closeShareModal}
-                  className="px-4 py-2 text-gray-700 hover:bg-slate-100 rounded-lg transition-colors"
-                >
+                <Button variant="secondary" size="md" onClick={closeShareModal}>
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="primary"
+                  size="md"
                   onClick={handleSendShareEmail}
                   disabled={isSendingEmail || !shareEmail.trim()}
-                  className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                  icon={isSendingEmail ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 >
-                  {isSendingEmail ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Sending...
-                    </>
-                  ) : (
-                    <>
-                      <Send className="w-4 h-4" />
-                      Send Email
-                    </>
-                  )}
-                </button>
+                  {isSendingEmail ? 'Sending...' : 'Send Email'}
+                </Button>
               </div>
             </div>
           </div>
@@ -2985,21 +2972,24 @@ Best regards`);
                 </div>
               </div>
               <div className="flex items-center gap-2 flex-shrink-0">
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => handleDownloadScorecard(shareCandidate.id)}
                   disabled={downloadingId === shareCandidate.id}
-                  className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm cursor-pointer disabled:opacity-50"
+                  icon={<Download className="w-4 h-4" />}
                 >
-                  <Download className="w-4 h-4" />
                   <span className="hidden sm:inline">Download</span>
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={closeScorecardPreview}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                  className="px-2"
                   aria-label="Close"
                 >
-                  <X className="w-5 h-5 text-gray-500" />
-                </button>
+                  <X className="w-5 h-5" />
+                </Button>
               </div>
             </div>
             <div className="flex-1 min-h-0">
@@ -3052,12 +3042,14 @@ Best regards`);
                   </p>
                 </div>
               </div>
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setShowExportModal(false)}
-                className="p-1 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 flex-shrink-0"
+                className="px-2 flex-shrink-0"
                aria-label="Close">
                 <X className="w-5 h-5" />
-              </button>
+              </Button>
             </div>
 
             <div className="p-5 overflow-y-auto flex-1">
@@ -3072,8 +3064,8 @@ Best regards`);
                       : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
                   }`}
                 >
-                  <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <FileText className="w-6 h-6 text-green-700" />
+                  <div className="w-12 h-12 bg-success-subtle rounded-lg flex items-center justify-center flex-shrink-0">
+                    <FileText className="w-6 h-6 text-success" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="font-bold text-gray-900">CSV Format</div>
@@ -3119,19 +3111,17 @@ Best regards`);
             </div>
 
             <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200 shrink-0">
-              <button
-                onClick={() => setShowExportModal(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-              >
+              <Button variant="secondary" size="md" onClick={() => setShowExportModal(false)}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
                 onClick={() => (exportFormat === 'csv' ? exportToCSV() : exportToXLS())}
-                className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-sm"
+                icon={<Download className="w-4 h-4" />}
               >
-                <Download className="w-4 h-4" />
                 Export
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -3323,20 +3313,22 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
           {/* Header */}
           <div className="px-6 py-4 border-b border-gray-200 flex items-center justify-between shrink-0">
             <h3 className="text-gray-900 text-lg font-medium">No Assessment Found</h3>
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={onClose}
-              className="text-gray-400 hover:text-gray-600 p-1"
+              className="px-2"
               aria-label="Close"
             >
-              <X className="w-5 h-5 text-gray-500" />
-            </button>
+              <X className="w-5 h-5" />
+            </Button>
           </div>
 
           {/* Body */}
           <div className="px-6 py-6 overflow-y-auto flex-1">
             <div className="text-center">
-              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <AlertCircle className="w-10 h-10 text-amber-600" />
+              <div className="w-16 h-16 bg-warning-subtle rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="w-10 h-10 text-warning" />
               </div>
               <p className="text-gray-600 text-sm">
                 There is no published assessment for this job description yet.
@@ -3347,12 +3339,9 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
 
           {/* Footer */}
           <div className="px-6 py-4 border-t border-gray-200 flex justify-center shrink-0">
-            <button
-              onClick={onClose}
-              className="px-6 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
-            >
+            <Button variant="secondary" size="md" onClick={onClose}>
               Close
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -3373,12 +3362,14 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
               <p className="text-blue-100 text-sm">{jobTitle}</p>
             </div>
           </div>
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={onClose}
-            className="text-white hover:bg-white hover:bg-opacity-20 p-2 rounded-lg transition-colors"
+            className="px-2"
            aria-label="Close">
             <X className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
 
         {/* Content */}
@@ -3391,8 +3382,8 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
             if (isUnlimited) return null;
             return (
               <div className={`px-4 py-3 rounded-lg border text-sm flex items-start gap-2 ${
-                isInsufficient ? 'bg-red-50 border-red-200 text-red-800'
-                : isLow ? 'bg-amber-50 border-amber-200 text-amber-800'
+                isInsufficient ? 'bg-destructive-subtle border-destructive-line text-destructive-strong'
+                : isLow ? 'bg-warning-subtle border-warning-line text-warning-strong'
                 : 'bg-blue-50 border-blue-200 text-blue-800'
               }`}>
                 {isInsufficient
@@ -3515,15 +3506,15 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Candidates to Invite ({validCandidates.length})
               </label>
-              <div className="max-h-60 overflow-y-auto border border-green-200 rounded-lg bg-green-50">
+              <div className="max-h-60 overflow-y-auto border border-success-line rounded-lg bg-success-subtle">
                 {validCandidates.map((resume, index) => (
                   <div
                     key={resume.id}
                     className={`p-3 flex items-center gap-3 ${
-                      index < validCandidates.length - 1 ? 'border-b border-green-100' : ''
+                      index < validCandidates.length - 1 ? 'border-b border-success-line' : ''
                     }`}
                   >
-                    <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center text-green-600 font-medium text-sm">
+                    <div className="w-8 h-8 bg-success-subtle rounded-full flex items-center justify-center text-success font-medium text-sm">
                       {index + 1}
                     </div>
                     <div className="flex-1">
@@ -3588,8 +3579,8 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
               (() => {
                 const insufficient = quotaStats !== null && quotaStats.total_quota < 999999 && quotaStats.available < validCandidates.length;
                 return (
-                  <span className={insufficient ? 'text-red-600 font-medium' : 'text-gray-600'}>
-                    <strong className={insufficient ? 'text-red-600' : 'text-green-600'}>{validCandidates.length}</strong> invitation{validCandidates.length !== 1 ? 's' : ''} will be sent
+                  <span className={insufficient ? 'text-destructive font-medium' : 'text-gray-600'}>
+                    <strong className={insufficient ? 'text-destructive' : 'text-success'}>{validCandidates.length}</strong> invitation{validCandidates.length !== 1 ? 's' : ''} will be sent
                     {insufficient && ` — only ${quotaStats!.available} unit(s) available`}
                     {!insufficient && noMatchCandidates.length > 0 && (
                       <span className="ml-2 text-gray-500">({noMatchCandidates.length} excluded)</span>
@@ -3602,29 +3593,18 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
             )}
           </div>
           <div className="flex items-center gap-3">
-            <button
-              onClick={onClose}
-              className="px-5 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
-            >
+            <Button variant="secondary" size="md" onClick={onClose}>
               Cancel
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
               onClick={handleSendBulkInvitations}
               disabled={!selectedAssessment || isSubmitting || validCandidates.length === 0 || (quotaStats !== null && quotaStats.available === 0 && quotaStats.total_quota < 999999)}
-              className="px-6 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              icon={isSubmitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
             >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Sending...
-                </>
-              ) : (
-                <>
-                  <Send className="w-4 h-4" />
-                  Send Invitations
-                </>
-              )}
-            </button>
+              {isSubmitting ? 'Sending...' : 'Send Invitations'}
+            </Button>
           </div>
         </div>
       </div>
