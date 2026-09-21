@@ -516,6 +516,7 @@ function JDCreationContent() {
       // experience on edit. Forward it so it round-trips.
       job_level: editingJD.job_level,
       industry_type: editingJD.industry_type,
+      industry_suggested_name: editingJD.industry_suggested_name,
       // role_family is decided during EXTRACTION so publish can resolve
       // master_role_families by code instead of paying a classification LLM call.
       // If this mapping drops it, the edited JD reverts to role_family=null and

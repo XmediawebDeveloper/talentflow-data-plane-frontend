@@ -2,40 +2,71 @@
 
 import { useState, useEffect, useCallback } from 'react';
 
+/** Why connectivity is considered lost — the two cases read very differently
+ *  to a candidate mid-assessment, so they must not share one message.
+ *    'browser' — the device itself is offline (navigator.onLine / offline event).
+ *    'server'  — the device is online but our server could not be reached, which
+ *                is what a backend restart or deploy looks like from here.
+ *    null      — reachable. */
+export type OfflineReason = 'browser' | 'server' | null;
+
 interface NetworkStatusHook {
   isOnline: boolean;
+  offlineReason: OfflineReason;
   isSlowConnection: boolean;
   connectionType: string;
   lastOnlineTime: Date | null;
   retryPendingRequests: () => Promise<void>;
 }
 
+/* How long a connectivity probe may take before it counts as a failure.
+   Was 1500ms, which the assessment page could miss on its own: it runs face
+   detection on the main thread, and a stalled main thread delays the fetch's
+   own callbacks past the deadline even on a perfect connection. */
+const PROBE_TIMEOUT_MS = 4000;
+/* Consecutive failed probes before declaring the server unreachable. A single
+   miss is not evidence — one slow probe during a server restart, a CPU spike or
+   a GC pause used to be enough to tell a candidate their internet was down. */
+const PROBE_FAILURES_BEFORE_OFFLINE = 2;
+const PROBE_INTERVAL_MS = 2000;
+
 /**
  * Hook for monitoring network connectivity and connection quality.
  * Detects online/offline status, slow connections, and provides retry capabilities.
  */
 export function useNetworkStatus(): NetworkStatusHook {
-  const [isOnline, setIsOnline] = useState(true);
+  /* Split deliberately: the DEVICE being offline and OUR SERVER being
+     unreachable are different facts with different messages, and only the
+     first is the candidate's problem. `isOnline` stays the AND of the two so
+     every existing consumer keeps its old meaning. */
+  const [browserOnline, setBrowserOnline] = useState(true);
+  const [serverReachable, setServerReachable] = useState(true);
   const [isSlowConnection, setIsSlowConnection] = useState(false);
   const [connectionType, setConnectionType] = useState('unknown');
   const [lastOnlineTime, setLastOnlineTime] = useState<Date | null>(null);
+  /* Offline overall if EITHER is false; the device's own state is reported
+     first because "you are offline" is only true when it actually is. */
+  const isOnline = browserOnline && serverReachable;
+  const offlineReason: OfflineReason = !browserOnline
+    ? 'browser'
+    : (!serverReachable ? 'server' : null);
   const [pendingRetries, setPendingRetries] = useState<(() => Promise<void>)[]>([]);
 
   // Detect network status changes via browser events (fast path)
   useEffect(() => {
     const handleOnline = () => {
       console.log('[NETWORK] Connection restored (browser event)');
-      setIsOnline(true);
+      setBrowserOnline(true);
       setLastOnlineTime(new Date());
     };
 
     const handleOffline = () => {
       console.log('[NETWORK] Connection lost (browser event)');
-      setIsOnline(false);
+      setBrowserOnline(false);
     };
 
     // Check initial state
-    setIsOnline(navigator.onLine);
+    setBrowserOnline(navigator.onLine);
 
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
@@ -51,35 +82,49 @@ export function useNetworkStatus(): NetworkStatusHook {
   // WiFi-connected-but-no-internet, ISP drops, or VPN disconnects. Polling a real
   // HTTP request is the only reliable way to detect those cases.
   useEffect(() => {
-    // Shadow the current online state in a closure var so the poll callback
-    // can compare without stale-closure issues (state setters are always stable).
-    let localIsOnline = navigator.onLine;
+    /* Shadow the current state in closure vars so the poll callback can compare
+       without stale-closure issues (state setters are always stable). */
+    let localReachable = true;
+    let consecutiveFailures = 0;
+    /* One probe at a time. The interval is shorter than the timeout, so without
+       this a slow probe would overlap the next and a single stall could stack
+       up several "failures" that are really one event. */
+    let probeInFlight = false;
 
     const checkConnectivity = async () => {
+      if (probeInFlight) return;
+      probeInFlight = true;
       try {
         // Use a HEAD request to a tiny resource; cache:no-store forces a real round-trip.
         await fetch('/favicon.ico', {
           method: 'HEAD',
           cache: 'no-store',
           // AbortSignal.timeout is widely supported in modern browsers
-          signal: AbortSignal.timeout(1500),
+          signal: AbortSignal.timeout(PROBE_TIMEOUT_MS),
         });
-        if (!localIsOnline) {
-          localIsOnline = true;
-          setIsOnline(true);
+        consecutiveFailures = 0;
+        if (!localReachable) {
+          localReachable = true;
+          setServerReachable(true);
           setLastOnlineTime(new Date());
-          console.log('[NETWORK] Connectivity restored (active poll)');
+          console.log('[NETWORK] Server reachable again (active poll)');
         }
       } catch {
-        if (localIsOnline) {
-          localIsOnline = false;
-          setIsOnline(false);
-          console.log('[NETWORK] Connectivity lost (active poll)');
+        consecutiveFailures += 1;
+        /* Recovery is immediate but failure has to be repeated — the expensive
+           direction to get wrong is telling a candidate mid-assessment that
+           their connection dropped when it did not. */
+        if (localReachable && consecutiveFailures >= PROBE_FAILURES_BEFORE_OFFLINE) {
+          localReachable = false;
+          setServerReachable(false);
+          console.log(`[NETWORK] Server unreachable after ${consecutiveFailures} consecutive probes`);
         }
+      } finally {
+        probeInFlight = false;
       }
     };
 
-    const pollInterval = setInterval(checkConnectivity, 2000);
+    const pollInterval = setInterval(checkConnectivity, PROBE_INTERVAL_MS);
     return () => clearInterval(pollInterval);
   }, []);
 
@@ -142,6 +187,7 @@ export function useNetworkStatus(): NetworkStatusHook {
 
   return {
     isOnline,
+    offlineReason,
     isSlowConnection,
     connectionType,
     lastOnlineTime,
