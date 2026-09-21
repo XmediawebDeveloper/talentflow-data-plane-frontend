@@ -250,6 +250,26 @@ const inferMissingExpiries = (
   return [...events, ...inferred];
 };
 
+/** An invitation can lapse at most once per send: between one "Invited" and
+ *  the next there is a single deadline. More than one "Expired at" in that
+ *  stretch is always an artefact — rows written out of order around a resend,
+ *  or by older code that re-logged the same lapse — so keep the earliest and
+ *  drop the rest. A fresh send ("Invited") starts a new stretch, so a genuine
+ *  Invited -> Expired -> Invited -> Expired history is untouched. */
+const collapseRepeatedExpiries = (sorted: TimelineEntry[]): TimelineEntry[] => {
+  let expiredSinceLastSend = false;
+  return sorted.filter((entry) => {
+    if (entry.label === 'Invited') {
+      expiredSinceLastSend = false;
+      return true;
+    }
+    if (entry.label !== 'Expired at') return true;
+    if (expiredSinceLastSend) return false;
+    expiredSinceLastSend = true;
+    return true;
+  });
+};
+
 const FALLBACK_MATCH_WINDOW_MS = 2 * 60 * 1000;
 const buildFullTimeline = (
   inv: any,
@@ -280,7 +300,13 @@ const buildFullTimeline = (
   // decide whether history from BEFORE that resend still shows.
   const clockExpired =
     !inv.started_at && !inv.unit_consumed && inv.expires_at && new Date(inv.expires_at) < new Date();
-  const isLiveExpired = !inv.completed_at && ((inv.status || '').toLowerCase() === 'expired' || clockExpired);
+  // Revoked is the recruiter's doing, not the deadline's: once the (untouched)
+  // expires_at later slips into the past, clockExpired would otherwise add an
+  // "Expired at" line after the Revoked one.
+  const isLiveExpired =
+    !inv.completed_at &&
+    (inv.status || '').toLowerCase() !== 'revoked' &&
+    ((inv.status || '').toLowerCase() === 'expired' || clockExpired);
   const fallback: [string, string | null | undefined][] = [
     // created_at specifically, not invitation_sent_at — the latter is
     // overwritten to the LATEST send time by every resend, so using it here
@@ -315,9 +341,10 @@ const buildFullTimeline = (
     }
   }
 
-  return inferMissingExpiries(out, inv.expires_at && inv.invitation_sent_at ? new Date(inv.expires_at).getTime() - new Date(inv.invitation_sent_at).getTime() : 0, 'ai_interview_invite_expired').sort(
+  const merged = inferMissingExpiries(out, inv.expires_at && inv.invitation_sent_at ? new Date(inv.expires_at).getTime() - new Date(inv.invitation_sent_at).getTime() : 0, 'ai_interview_invite_expired').sort(
     (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
   );
+  return collapseRepeatedExpiries(merged);
 };
 
 /** Badge wording and colours kept in one place so a recruiter reads the same
