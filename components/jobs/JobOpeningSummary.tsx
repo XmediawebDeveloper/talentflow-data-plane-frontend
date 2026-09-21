@@ -46,18 +46,11 @@ type JobWithListingExtras = Job & {
  * scrolling inside itself when it genuinely cannot fit rather than clipping.
  * Off by default — the Job Openings list wraps them, and it stays that way.
  */
-export function JobOpeningMeta({ job, singleLine = false }: { job: Job; singleLine?: boolean }) {
+/** The row's items on their own, so a host can put them in a row of its own
+ *  making — see `mergeInfoRows` on <JobOpeningSummary>. */
+function JobOpeningMetaItems({ job }: { job: Job }) {
   return (
-    <div
-      className={`flex items-center text-sm text-gray-600 dark:text-slate-400 ${
-        singleLine
-          /* [&>span]:flex-shrink-0 matters: a flex item can shrink below its
-             own content width even under flex-nowrap, which with nowrap text
-             would push the label out of its box instead of scrolling the row. */
-          ? 'flex-nowrap gap-x-3 whitespace-nowrap overflow-x-auto [&>span]:flex-shrink-0'
-          : 'flex-wrap gap-x-3 gap-y-1.5'
-      }`}
-    >
+    <>
       {job.experience && (
         <span className="flex items-center gap-1.5">
           <TrendingUp className="w-4 h-4 text-gray-400 dark:text-slate-500" />
@@ -82,10 +75,63 @@ export function JobOpeningMeta({ job, singleLine = false }: { job: Job; singleLi
           Last Updated: {formatLastUpdated(job.updated_at)}
         </span>
       )}
-      <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800 rounded-lg">
-        <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-        {job.applicants} {job.applicants === 1 ? 'applicant' : 'applicants'}
+      {/* A record with no applicant count at all (the AI Interview flow's JD
+          list carries none) said " applicants" with nothing in front of it. */}
+      {job.applicants != null && (
+        <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800 rounded-lg">
+          <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          {job.applicants} {job.applicants === 1 ? 'applicant' : 'applicants'}
+        </span>
+      )}
+    </>
+  );
+}
+
+/** Role / industry / location / employment type / work mode, as items. */
+function JobOpeningPrimaryItems({ job }: { job: Job }) {
+  return (
+    <>
+      {job.department && (
+        <span className="flex items-center gap-1.5">
+          <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          {job.department}
+        </span>
+      )}
+      <span className="flex items-center gap-1.5">
+        <Building2 className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+        {formatIndustryType(job.industry_type)}
       </span>
+      <span className="flex items-center gap-1.5">
+        <MapPin className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+        {job.location && job.location.trim() ? job.location : '-'}
+      </span>
+      <span className="flex items-center gap-1.5">
+        <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+        {formatEmploymentType(job.employmentType)}
+      </span>
+      {job.workMode && (
+        <span className="flex items-center gap-1.5">
+          <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          <span className="capitalize">{job.workMode}</span>
+        </span>
+      )}
+    </>
+  );
+}
+
+/* [&>span]:flex-shrink-0 matters: a flex item can shrink below its own content
+   width even under flex-nowrap, which with nowrap text would push the label out
+   of its box instead of scrolling the row. */
+const SINGLE_LINE_ROW = 'flex-nowrap gap-x-3 whitespace-nowrap overflow-x-auto scrollbar-hide [&>span]:flex-shrink-0';
+
+export function JobOpeningMeta({ job, singleLine = false }: { job: Job; singleLine?: boolean }) {
+  return (
+    <div
+      className={`flex items-center text-sm text-gray-600 dark:text-slate-400 ${
+        singleLine ? SINGLE_LINE_ROW : 'flex-wrap gap-x-3 gap-y-1.5'
+      }`}
+    >
+      <JobOpeningMetaItems job={job} />
     </div>
   );
 }
@@ -99,6 +145,19 @@ interface JobOpeningSummaryProps {
   showMetaRow?: boolean;
   /** Keep that row on one horizontal line — see <JobOpeningMeta>. */
   metaSingleLine?: boolean;
+  /**
+   * Same treatment for the role / industry / location / type row above it.
+   * Off by default: the Job Openings list wraps it.
+   */
+  infoSingleLine?: boolean;
+  /**
+   * Draw BOTH info rows as one line — role, industry, location, type, work
+   * mode, experience, dates, author and applicants in a single nowrap row that
+   * scrolls if it has to. The AI Interview wizard's header uses it, where the
+   * card shares its width with action buttons and two stacked rows made the
+   * card twice as tall as what it was describing. Implies `infoSingleLine`.
+   */
+  mergeInfoRows?: boolean;
   /** Extra badges after the vN chip — a per-surface addition, e.g. a tick. */
   trailingBadges?: React.ReactNode;
 }
@@ -117,6 +176,8 @@ export default function JobOpeningSummary({
   job,
   showMetaRow = true,
   metaSingleLine = false,
+  infoSingleLine = false,
+  mergeInfoRows = false,
   trailingBadges,
 }: JobOpeningSummaryProps) {
   const displayStatus = getDisplayStatus(job.status, job.currentVersion);
@@ -160,39 +221,30 @@ export default function JobOpeningSummary({
         {trailingBadges}
       </div>
 
-      {/* Primary Info Row 1 - Role / Industry / Location / Employment / Mode */}
-      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 text-sm text-gray-600 dark:text-slate-400 mb-1.5">
-        {job.department && (
-          <span className="flex items-center gap-1.5">
-            <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-            {job.department}
-          </span>
-        )}
-        <span className="flex items-center gap-1.5">
-          <Building2 className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-          {formatIndustryType(job.industry_type)}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <MapPin className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-          {job.location && job.location.trim() ? job.location : '-'}
-        </span>
-        <span className="flex items-center gap-1.5">
-          <Briefcase className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-          {formatEmploymentType(job.employmentType)}
-        </span>
-        {job.workMode && (
-          <span className="flex items-center gap-1.5">
-            <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
-            <span className="capitalize">{job.workMode}</span>
-          </span>
-        )}
-      </div>
-
-      {/* Primary Info Row 2 - Experience / Dates / Posted By / Applicants */}
-      {showMetaRow && (
-        <div className="mb-2">
-          <JobOpeningMeta job={job} singleLine={metaSingleLine} />
+      {mergeInfoRows ? (
+        /* Both rows as one line */
+        <div className={`flex items-center text-sm text-gray-600 dark:text-slate-400 mb-2 ${SINGLE_LINE_ROW}`}>
+          <JobOpeningPrimaryItems job={job} />
+          {showMetaRow && <JobOpeningMetaItems job={job} />}
         </div>
+      ) : (
+        <>
+          {/* Primary Info Row 1 - Role / Industry / Location / Employment / Mode */}
+          <div
+            className={`flex items-center text-sm text-gray-600 dark:text-slate-400 mb-1.5 ${
+              infoSingleLine ? SINGLE_LINE_ROW : 'flex-wrap gap-x-3 gap-y-1.5'
+            }`}
+          >
+            <JobOpeningPrimaryItems job={job} />
+          </div>
+
+          {/* Primary Info Row 2 - Experience / Dates / Posted By / Applicants */}
+          {showMetaRow && (
+            <div className="mb-2">
+              <JobOpeningMeta job={job} singleLine={metaSingleLine} />
+            </div>
+          )}
+        </>
       )}
 
       {/* Additional Info Row - Salary & Skills */}

@@ -4,8 +4,9 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, CheckCircle2, Loader2, Clock, Shield, Users,
-  Brain, Video, Globe, Zap, Timer, Layers, Settings,
-  ChevronRight, FileText, CheckCircle,
+  Brain, Video, Globe, Timer, Layers, Settings,
+  ChevronRight, ChevronDown, CheckCircle, ClipboardList, Mic, Pencil, Play, Eye,
+  Bot, Share2, ArrowRight,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -15,10 +16,22 @@ import type {
   AIInterviewHRQuestion,
 } from '@/lib/services/aiInterviewService';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromDuration } from '@/lib/constants/aiInterviewMode';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
+import WizardDiscardButton from './WizardDiscardButton';
 import AIInterviewFlowLoader from './AIInterviewFlowLoader';
+import { SectionHeader, SummaryLocation, SummaryTips } from './ConfigSummary';
+import { QuestionDistributionPopover } from './QuestionDistributionPopover';
+import { distributeSkillsLocally } from '@/lib/utils/questionDistribution';
+import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
+import JDFullViewModal from '@/components/jobs/JDFullViewModal';
+import ShareAIInterviewModal from './ShareAIInterviewModal';
+import SuccessAnimation from '@/components/ui/success-animation';
+import type { Job } from '@/lib/types/types';
+import { formatIndustryType } from '@/lib/utils/jobOpeningDisplay';
+import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 
 /* ─────────────────────────────────────────────────────────────────────── */
@@ -122,17 +135,67 @@ function PriorityBadge({ p }: { p: number }) {
   );
 }
 
-function SectionCard({ title, icon: Icon, children }: { title: string; icon: React.ComponentType<{ className?: string }>; children: React.ReactNode }) {
+/**
+ * One reviewable part of the configuration.
+ *
+ * Collapsible, because this page is a single long scroll of everything the
+ * previous three steps produced — a recruiter checking one thing should be
+ * able to fold away the rest. `action` carries the card's own way back to the
+ * step that owns it, so "this is wrong" has an answer on the row itself.
+ */
+function SectionCard({
+  title,
+  icon: Icon,
+  badge,
+  action,
+  defaultOpen = true,
+  children,
+}: {
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge?: React.ReactNode;
+  action?: React.ReactNode;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
       <div className="flex items-center gap-3 px-5 py-3.5 border-b border-gray-100 bg-slate-50/60">
-        <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
           <Icon className="w-5 h-5 text-brand-blue" />
         </div>
         <h3 className="text-sm font-semibold text-gray-800 tracking-tight">{title}</h3>
+        {badge}
+        <div className="ml-auto flex items-center gap-2">
+          {action}
+          <button
+            type="button"
+            onClick={() => setOpen(o => !o)}
+            aria-expanded={open}
+            title={open ? `Hide ${title}` : `Show ${title}`}
+            className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
+          >
+            <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+          </button>
+        </div>
       </div>
-      <div className="p-5">{children}</div>
+      {open && <div className="p-5">{children}</div>}
     </div>
+  );
+}
+
+/** "This is wrong" → the step that can fix it. */
+function EditInConfigureButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-brand-blue border border-brand-blue/30 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue transition-colors"
+    >
+      <Pencil className="w-3.5 h-3.5" />
+      Edit
+    </button>
   );
 }
 
@@ -151,7 +214,7 @@ function HRQuestionStageBadge({ stage }: { stage?: string }) {
     <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
       normalized === 'opening'
         ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
-        : 'bg-green-100 text-green-700 ring-1 ring-green-200'
+        : 'bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25'
     }`}>
       {normalized}
     </span>
@@ -181,8 +244,20 @@ export default function AIInterviewPreview() {
   const [skillWeights, setSkillWeights] = useState<Record<string, 'high' | 'medium' | 'low'>>({});
   const [interviewMode, setInterviewMode] = useState<'fixed' | 'flexible'>('fixed');
   const [bufferEnabled, setBufferEnabled] = useState<boolean>(false);
+  /* Which speech-to-text engine Configure picked — named in the overview so
+     the review covers what the candidate will actually be transcribed by. */
+  const [sttModel, setSttModel] = useState<string | undefined>(undefined);
   const [publishing, setPublishing] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
+  /* The intro video opens in a dialog from the Settings row. */
+  const [showVideoPreview, setShowVideoPreview] = useState(false);
+  /* The JD opens in a dialog from its card — reading it is a check made
+     WHILE reviewing, and leaving the flow to make it would drop the review. */
+  const [jdViewOpen, setJdViewOpen] = useState(false);
+  /* Flipped by a successful publish: the page then shows the published
+     screen in place of the review. */
+  const [published, setPublished] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
 
   /* Load data */
   const loadInterview = useCallback(async () => {
@@ -206,6 +281,7 @@ export default function AIInterviewPreview() {
           setSkillWeights(parsed.skill_weights ?? {});
           setInterviewMode(parsed.interview_mode === 'flexible' ? 'flexible' : 'fixed');
           setBufferEnabled(!!parsed.buffer_enabled);
+          if (typeof parsed.stt_model === 'string') setSttModel(parsed.stt_model);
         } catch {
           setInterviewMode(modeFromDuration(data.duration_minutes));
         }
@@ -227,7 +303,6 @@ export default function AIInterviewPreview() {
   const mode: 'fixed' | 'flexible' = interviewMode;
   const duration = interview?.duration_minutes ?? 30;
   const position = interview?.position ?? interview?.jd_title ?? 'Untitled Position';
-  const experienceLevel = interview?.jd_experience_level ?? '—';
 
   const mthRound = rounds.find(r => r.type === 'must_have_skills' || r.type === 'must_to_have' || r.type === 'technical');
   const nthRound = rounds.find(r => r.type === 'nice_to_have_skills' || r.type === 'nice_to_have');
@@ -252,6 +327,46 @@ export default function AIInterviewPreview() {
     return map;
   }, [mode, mthRound, nthRound, hrRound, timedAllocation]);
   const languages = interview?.available_languages ?? (interview?.ai_voice_language ? [interview.ai_voice_language] : ['English']);
+  const sttOption = getSttModelOption(sttModel);
+  /* The JD as the Job Openings summary reads it. `experience` is the stored
+     level ("mid") capitalised; `currentVersion` is left unset on purpose so
+     the status reads "Published" rather than "Republished". */
+  const jdAsJob: Job = {
+    id: interview?.jd_id ?? id,
+    job_id: interview?.jd_short_id,
+    title: interview?.jd_title ?? position,
+    status: 'Published',
+    location: interview?.jd_location ?? '',
+    daysActive: 0,
+    requiredMatch: 0,
+    industry_type: interview?.jd_industry_type,
+    experience: interview?.jd_experience_level
+      ? interview.jd_experience_level.charAt(0).toUpperCase() + interview.jd_experience_level.slice(1)
+      : undefined,
+    versionNumber: interview?.jd_version ?? undefined,
+  };
+  /* Configure owns everything the Settings and HR cards show, so their Edit
+     goes there with this config loaded rather than to a dead end. */
+  const editInConfigure = () => {
+    if (publishing) return;
+    if (interview?.jd_id) {
+      router.push(
+        `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(interview.jd_id)}&config_id=${id}${originParam}`,
+      );
+    } else {
+      router.push('/recruitment/ai-interviews/jd-selection');
+    }
+  };
+  /* "Technical + HR" or just "Technical": named from the rounds that are
+     actually enabled rather than from the stored interview_type, which is the
+     same string for every config this flow produces. */
+  const interviewTypeLabel = hrRound?.enabled ? 'Technical + HR' : 'Technical';
+  const totalPreviewQuestions = enabledRounds.reduce(
+    (sum, r) => sum + (timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0), 0,
+  );
+  const totalPreviewMinutes = enabledRounds.reduce(
+    (sum, r) => sum + (timedPreviewDurations[r.type] ?? r.duration_minutes), 0,
+  );
 
   /**
    * Where leaving this flow lands. A recruiter who started on a JD's Job
@@ -271,18 +386,13 @@ export default function AIInterviewPreview() {
     try {
       await aiInterviewService.publishConfig(id);
       setShowConfirm(false);
-      toast.success('AI Interview published!');
-      if (exitHref) {
-        // Straight to the job's AI interview results, which now has a live
-        // config to show.
-        router.push(`${exitHref}&tab=ai-interview-results`);
-        return;
-      }
-      const params = new URLSearchParams({
-        published: '1',
-        title: position,
-      });
-      router.push(`/recruitment/ai-interviews?${params.toString()}`);
+      /* Stay here and show the published screen — it is where the recruiter
+         invites the first candidates from. The list page used to receive a
+         `?published=1` redirect and raise a self-closing dialog, which read as
+         an interruption on a page they had not chosen to go to. The record is
+         marked published locally so the share form treats it as live. */
+      setInterview(prev => (prev ? { ...prev, status: 'published' } : prev));
+      setPublished(true);
     } catch {
       toast.error('Failed to publish');
     } finally {
@@ -334,6 +444,116 @@ export default function AIInterviewPreview() {
     );
   }
 
+  /* ───────────── Published ───────────── */
+  if (published) {
+    const listHref = exitHref ? `${exitHref}&tab=ai-interview-results` : '/recruitment/ai-interviews';
+    return (
+      <>
+        <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+          <div className="mx-auto w-full max-w-[1400px]">
+            <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+              <PageBreadcrumb
+                className="mb-4 md:mb-6"
+                items={[
+                  { label: 'Dashboard', href: '/dashboard' },
+                  { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+                  { label: position },
+                ]}
+              />
+              <AIInterviewStepIndicator currentStep={CURRENT_STEP} />
+
+              <div className="mx-auto w-full max-w-3xl py-8 sm:py-12 text-center">
+                {/* The published tick, animated — the same Lottie every other
+                    "published" screen plays (JD creation among them). It
+                    replaces the tinted disc outright: it brings its own circle
+                    and throws particles past its edge, and a ring behind it
+                    would draw a hard line straight through the burst. */}
+                <div className="flex justify-center">
+                  <SuccessAnimation />
+                </div>
+
+                <h1 className="mt-6 text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight">
+                  AI Interview Published!
+                </h1>
+                <p className="mt-3 text-sm sm:text-base text-gray-500 max-w-xl mx-auto">
+                  Your AI interview has been successfully published and is now live.
+                  You can invite candidates and track their responses.
+                </p>
+
+                {/* What was published */}
+                <div className="mt-8 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-slate-50/60 p-4 sm:p-5 text-left flex items-start gap-4">
+                  <div className="w-14 h-14 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                    <Bot className="w-7 h-7 text-brand-blue" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-xs text-gray-500">AI Interview</p>
+                    <p className="text-base sm:text-lg font-semibold text-gray-900 truncate">
+                      {position} - AI Interview
+                    </p>
+                    <div className="mt-2 flex flex-wrap items-center gap-2">
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-brand-blue text-white shadow-sm shadow-brand-blue/25">
+                        AI Interview
+                      </span>
+                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-white text-gray-700 ring-1 ring-gray-200">
+                        {mode === 'fixed' ? duration : bufferEnabled ? 35 : 30} mins
+                      </span>
+                      {mode === 'fixed' && (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-white text-gray-700 ring-1 ring-gray-200">
+                          {totalPreviewQuestions} Questions
+                        </span>
+                      )}
+                      {interview.jd_short_id && (
+                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                          {interview.jd_short_id}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-6 pt-6 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <button
+                    type="button"
+                    onClick={() => router.push(`/recruitment/ai-interviews/${encodeURIComponent(id)}`)}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                  >
+                    <Eye className="w-4 h-4" />
+                    View Interview
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setShareOpen(true)}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    Share Invite Link
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => router.push(listHref)}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                  >
+                    <ArrowRight className="w-4 h-4" />
+                    Go to AI Interviews
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        {shareOpen && (
+          <ShareAIInterviewModal
+            isOpen
+            config={interview}
+            onClose={() => setShareOpen(false)}
+            onInviteSent={() => setShareOpen(false)}
+          />
+        )}
+      </>
+    );
+  }
+
   /* ───────────── Preview mode ───────────── */
   return (
     <>
@@ -362,105 +582,134 @@ export default function AIInterviewPreview() {
                     ]
               }
             />
+            {/* Step indicator — a direct child of the card, so it can stick. */}
+            <AIInterviewStepIndicator currentStep={CURRENT_STEP} />
+
             {/* Header */}
             <div className="mb-6">
-              {/* Step indicator */}
-              <AIInterviewStepIndicator
-                currentStep={CURRENT_STEP}
-                // Nothing is edited on this page, so no save is needed before
-                // leaving — jump straight to any earlier step. Step 1 drops the
-                // origin param since picking a different JD ends the job context.
-                onStepClick={(step) => {
-                  if (publishing) return;
-                  if (step === 3) goBack();
-                  // Configure needs a jd_id to load; without one it would just
-                  // bounce back to Select JD, so send the user there directly.
-                  else if (step === 2 && interview?.jd_id) router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${encodeURIComponent(interview.jd_id)}&config_id=${id}${originParam}`);
-                  else router.push('/recruitment/ai-interviews/jd-selection');
-                }}
-              />
-
               {/* Header row */}
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+              <div className="flex items-start gap-3">
+                <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                   <CheckCircle className="w-5 h-5 text-brand-blue" />
                 </div>
-                <h1 className="text-xl font-semibold text-gray-900 tracking-tight">Review &amp; Publish</h1>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-1.5">
+                    <h1 className="text-xl font-semibold text-gray-900 tracking-tight">Review &amp; Publish</h1>
+                    {/* The same stealth dot the Clusters step carries after its
+                        heading: the per-question skill plan, one click away on
+                        the last screen before publishing. Reads the SAVED plan
+                        through the shared popover, so this page, the invite
+                        details page and the results page cannot drift. */}
+                    {(mthClusters.length > 0 || nthClusters.length > 0) && (
+                      <QuestionDistributionPopover
+                        specialInstructions={interview.special_instructions}
+                        clusters={[...mthClusters, ...nthClusters]}
+                        hrQuestions={hrRound?.enabled ? ((hrRound.hr_questions as AIInterviewHRQuestion[] | undefined) ?? []) : []}
+                        /* Without this the dot vanishes on any draft whose
+                           distribution was never saved — the Clusters step only
+                           persists one on finalize, and its backend call is
+                           allowed to fail silently. The thunk runs only when
+                           nothing is saved. */
+                        fallback={() => ({
+                          mth: distributeSkillsLocally(mthClusters, timedAllocation.mthQuestions ?? 0),
+                          nth: nthRound?.enabled
+                            ? distributeSkillsLocally(nthClusters, timedAllocation.nthQuestions ?? 0)
+                            : [],
+                        })}
+                      />
+                    )}
+                  </div>
+                  <p className="text-sm text-gray-500 mt-0.5">
+                    Review your interview configuration before publishing. You can go back and make changes if needed.
+                  </p>
+                </div>
               </div>
             </div>
 
-      <div className="space-y-5">
-        {/* ── JD Info Card ── */}
-        <div className="rounded-xl overflow-hidden border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-          <div className="bg-brand-blue px-5 py-4 ring-1 ring-white/10">
-            <div className="flex items-center gap-2 mb-1">
-              <FileText className="w-4 h-4 text-white/80" />
-              <span className="text-xs font-medium text-white/80 uppercase tracking-wide">Job Description</span>
+      {/* Two columns, as on Configure and Clusters: the configuration on the
+          left, the same Configuration Summary on the right, so the last step
+          of the flow reads like the two before it. */}
+      {/* No `items-start`: the sidebar column has to stretch to the row's
+          full height, or its sticky card has nothing to travel inside and
+          scrolls off after one screen, leaving the right half blank. */}
+      <div className="flex flex-col lg:flex-row gap-6 lg:items-stretch">
+      <div className="flex-1 min-w-0 space-y-5">
+        {/* ── JD card ──────────────────────────────────────────────────────
+            The same row the JD picker and Configure draw, so the record reads
+            the same on every step: id, title, status, version, then the
+            role facts on one line. Built from the JD fields the interview
+            record carries; what it does not carry (employment type, posted
+            date, author) the summary simply leaves out. */}
+        <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 px-4 py-3.5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <JobOpeningSummary job={jdAsJob} mergeInfoRows />
             </div>
-            <h2 className="text-lg font-bold text-white tracking-tight">{position}</h2>
-          </div>
-          <div className="bg-white px-5 py-4">
-            <div className="grid grid-cols-4 gap-4">
-              <div>
-                <p className="text-xs text-gray-500 mb-0.5">JD ID</p>
-                {interview.jd_short_id ? (
-                  <span className="inline-flex items-center px-2 py-0.5 text-xs font-mono font-semibold bg-brand-blue text-white rounded shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                    {interview.jd_short_id}
-                  </span>
-                ) : (
-                  <p className="text-sm font-medium text-gray-900">—</p>
-                )}
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-0.5">JD Title</p>
-                <p className="text-sm font-medium text-gray-900">{interview.jd_title ?? '—'}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-0.5">Experience Level</p>
-                <p className="text-sm font-medium text-gray-900">{experienceLevel}</p>
-              </div>
-              <div>
-                <p className="text-xs text-gray-500 mb-0.5">Industry</p>
-                <p className="text-sm font-medium text-gray-900">{interview.jd_industry_type ?? '—'}</p>
-              </div>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-shrink-0">
+              {interview.jd_id && (
+                <button
+                  type="button"
+                  onClick={() => setJdViewOpen(true)}
+                  className="inline-flex items-center justify-center gap-1.5 text-sm text-brand-blue border border-brand-blue/40 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg hover:bg-brand-blue/10 hover:border-brand-blue transition-colors whitespace-nowrap"
+                  title="Read this job description"
+                >
+                  <Eye className="w-4 h-4" />
+                  View JD
+                </button>
+              )}
             </div>
           </div>
         </div>
 
-        {/* ── Interview Mode Card ── */}
-        <SectionCard title="Interview Mode" icon={Zap}>
-          <div className="flex items-center gap-3">
-            {mode === 'fixed' ? (
-              <>
-                <div className="w-10 h-10 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
-                  <Timer className="w-5 h-5 text-brand-cyan" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">Timed — {duration} min</p>
-                  <p className="text-xs text-gray-500">Structured interview with timed rounds</p>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-                  <Zap className="w-5 h-5 text-brand-blue" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="text-sm font-semibold text-gray-900">Flexible — {bufferEnabled ? 35 : 30} min</p>
-                    {bufferEnabled && (
-                      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-[11px] font-medium rounded-full bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
-                        <Timer className="w-3 h-3" />
-                        +5 min buffer
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    Adaptive interview with dynamic pacing{bufferEnabled ? ' · buffer time enabled' : ''}
-                  </p>
-                </div>
-              </>
-            )}
+        {/* ── Interview Overview ── */}
+        <SectionCard title="Interview Overview" icon={Brain}>
+          {/* The three facts that decide what the candidate meets: how long and
+              under what pacing, what transcribes them, and which rounds run. */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-3 flex items-start gap-3">
+              <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center flex-shrink-0">
+                <Timer className="w-4 h-4 text-brand-cyan" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] text-gray-500">Interview Mode</p>
+                <p className="text-sm font-semibold text-gray-900">
+                  {mode === 'fixed' ? 'Timed Interview' : 'Conversational'}
+                </p>
+                <p className="text-[11px] text-gray-500">
+                  {mode === 'fixed'
+                    ? `${duration} minutes`
+                    : `${bufferEnabled ? 35 : 30} minutes${bufferEnabled ? ' · +5 min buffer' : ''}`}
+                </p>
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-3 flex items-start gap-3">
+              <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                <Mic className="w-4 h-4 text-brand-blue" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] text-gray-500">AI Model</p>
+                <p className="text-sm font-semibold text-gray-900 truncate">{sttOption.label}</p>
+                {sttOption.recommended && (
+                  <span className="inline-flex items-center mt-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25">
+                    Recommended
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-3 flex items-start gap-3">
+              <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
+                <Layers className="w-4 h-4 text-brand-orange-deep" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[11px] text-gray-500">Interview Type</p>
+                <p className="text-sm font-semibold text-gray-900">{interviewTypeLabel}</p>
+                <p className="text-[11px] text-gray-500">
+                  {enabledRounds.length} round{enabledRounds.length === 1 ? '' : 's'}
+                </p>
+              </div>
+            </div>
           </div>
         </SectionCard>
 
@@ -520,7 +769,25 @@ export default function AIInterviewPreview() {
 
         {/* ── Skill Clusters Card ── */}
         {(mthClusters.length > 0 || nthClusters.length > 0) && (
-          <SectionCard title="Skill Clusters" icon={Layers}>
+          <SectionCard
+            title="Skill Clusters"
+            icon={Layers}
+            badge={
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-gray-600 ring-1 ring-gray-200/70">
+                {mthClusters.length + nthClusters.length} cluster{mthClusters.length + nthClusters.length === 1 ? '' : 's'}
+              </span>
+            }
+            action={
+              <button
+                type="button"
+                onClick={goBack}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-brand-blue border border-brand-blue/30 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue transition-colors"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                View / Edit Clusters
+              </button>
+            }
+          >
             <div className="space-y-6">
               {/* Must-To-Have Clusters */}
               {mthClusters.length > 0 && (
@@ -586,7 +853,18 @@ export default function AIInterviewPreview() {
         )}
 
         {/* ── HR Round Card ── */}
-        <SectionCard title="HR Round" icon={Users}>
+        <SectionCard
+          title="HR Round"
+          icon={Users}
+          badge={
+            hrRound?.enabled && hrRound.hr_questions?.length ? (
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                {hrRound.hr_questions.length} question{hrRound.hr_questions.length === 1 ? '' : 's'}
+              </span>
+            ) : undefined
+          }
+          action={<EditInConfigureButton onClick={editInConfigure} />}
+        >
           {mode === 'fixed' && hrRound?.enabled && (
             <div className="mt-4 space-y-0 divide-y divide-gray-100">
               <InfoRow label="Questions" value={`${timedAllocation.hrQuestions}`} />
@@ -614,57 +892,208 @@ export default function AIInterviewPreview() {
           )}
         </SectionCard>
 
-        {/* ── Settings Card ── */}
-        <SectionCard title="Settings" icon={Settings}>
-          <div className="space-y-0 divide-y divide-gray-100">
-            <InfoRow
-              label="Recording"
-              value={
-                interview.recording_enabled ? (
-                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 ring-1 ring-green-200">
-                    <Video className="w-3 h-3" /> Enabled
+        {/* ── Settings Card ──────────────────────────────────────────────
+            Three settings, one compact row each: name on the left, its value
+            on the right, and — where there is something to do with it — the
+            control beside the value. They were `InfoRow`s stacked with an
+            inline <video> player wedged between two of them, which made the
+            card's rows different heights and its dividers land at random. */}
+        <SectionCard title="Settings" icon={Settings} action={<EditInConfigureButton onClick={editInConfigure} />}>
+          <div className="rounded-lg border border-gray-100 ring-1 ring-black/[0.02] divide-y divide-gray-100 overflow-hidden">
+            <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+              <span className="text-sm text-gray-600">Recording</span>
+              {interview.recording_enabled ? (
+                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25">
+                  <Video className="w-3 h-3" /> Enabled
+                </span>
+              ) : (
+                <span className="text-sm text-gray-400">Disabled</span>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+              <span className="text-sm text-gray-600">Introduction Video</span>
+              {interview.introduction_video_url ? (
+                <div className="flex items-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                    <Video className="w-3 h-3" /> Uploaded
                   </span>
-                ) : (
-                  <span className="text-sm text-gray-400">Disabled</span>
-                )
-              }
-            />
-            {interview.introduction_video_url ? (
-              <div className="py-3 border-b border-gray-100">
-                <p className="text-sm text-gray-500 mb-2">Introduction Video</p>
-                <video
-                  src={interview.introduction_video_url}
-                  controls
-                  className="w-full max-w-md rounded-lg border border-gray-200 bg-black"
-                  style={{ maxHeight: '240px' }}
-                >
-                  Your browser does not support the video tag.
-                </video>
-              </div>
-            ) : (
-              <InfoRow
-                label="Introduction Video"
-                value={<span className="text-sm text-gray-400">None</span>}
-              />
-            )}
-            <InfoRow
-              label="Languages"
-              value={
-                <div className="flex flex-wrap gap-1.5 justify-end">
-                  {languages.map(lang => (
-                    <span
-                      key={lang}
-                      className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-brand-blue/5 text-xs text-brand-blue ring-1 ring-brand-blue/20"
-                    >
-                      <Globe className="w-3 h-3 text-brand-blue" />
-                      {lang}
-                    </span>
-                  ))}
+                  {/* The player opens on demand rather than sitting in the row:
+                      a 240px video between two 40px rows was the single thing
+                      breaking this card's rhythm. */}
+                  <button
+                    type="button"
+                    onClick={() => setShowVideoPreview(true)}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium text-brand-blue border border-brand-blue/30 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue transition-colors"
+                  >
+                    <Play className="w-3.5 h-3.5" />
+                    Preview
+                  </button>
                 </div>
-              }
-            />
+              ) : (
+                <span className="text-sm text-gray-400">None</span>
+              )}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+              <span className="text-sm text-gray-600">Languages</span>
+              <div className="flex flex-wrap items-center gap-1.5 justify-end">
+                {languages.map(lang => (
+                  <span
+                    key={lang}
+                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-brand-blue/5 text-xs text-brand-blue ring-1 ring-brand-blue/20"
+                  >
+                    <Globe className="w-3 h-3 text-brand-blue" />
+                    {lang}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
         </SectionCard>
+      </div>
+
+      {/* ── Configuration Summary sidebar ── */}
+      <div className="w-full lg:w-72 xl:w-80 flex-shrink-0">
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto scrollbar-auto-hide">
+          <div className="mb-4">
+            <SectionHeader
+              icon={ClipboardList}
+              title="Configuration Summary"
+              subtitle="What this interview will look like once published."
+            />
+          </div>
+
+          <div className="border border-gray-100 rounded-lg overflow-hidden mb-4 ring-1 ring-black/[0.02]">
+            <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
+              <span className="text-xs font-medium text-brand-blue">Job Details</span>
+            </div>
+            <div className="divide-y divide-gray-50">
+              <div className="px-3 py-2 flex items-start justify-between gap-2">
+                <span className="text-xs text-gray-500 flex-shrink-0">Role Title</span>
+                <span className="text-xs font-semibold text-gray-900 text-right">{position}</span>
+              </div>
+              {interview.jd_short_id && (
+                <div className="px-3 py-2 flex items-start justify-between gap-2">
+                  <span className="text-xs text-gray-500 flex-shrink-0">JD ID</span>
+                  <span className="text-xs font-semibold text-gray-900 text-right">{interview.jd_short_id}</span>
+                </div>
+              )}
+              {interview.jd_experience_level && (
+                <div className="px-3 py-2 flex items-start justify-between gap-2">
+                  <span className="text-xs text-gray-500 flex-shrink-0">Level</span>
+                  <span className="text-xs font-semibold text-gray-900 text-right">{interview.jd_experience_level}</span>
+                </div>
+              )}
+              {interview.jd_industry_type && (
+                <div className="px-3 py-2 flex items-start justify-between gap-2">
+                  <span className="text-xs text-gray-500 flex-shrink-0">Industry</span>
+                  <span className="text-xs font-semibold text-gray-900 text-right">{formatIndustryType(interview.jd_industry_type)}</span>
+                </div>
+              )}
+              {interview.jd_location && (
+                <div className="px-3 py-2 flex items-center justify-between gap-2">
+                  <span className="text-xs text-gray-500 flex-shrink-0">Location</span>
+                  <SummaryLocation value={interview.jd_location} />
+                </div>
+              )}
+              {interview.jd_version != null && (
+                <div className="px-3 py-2 flex items-start justify-between gap-2">
+                  <span className="text-xs text-gray-500 flex-shrink-0">JD Version</span>
+                  <span className="text-xs font-semibold text-gray-900 text-right">v{interview.jd_version}</span>
+                </div>
+              )}
+              <div className="px-3 py-2 flex items-center justify-between gap-2">
+                <span className="text-xs text-gray-500 flex-shrink-0">Interview Mode</span>
+                <span className="text-xs font-semibold text-gray-900 text-right">
+                  {mode === 'fixed' ? 'Timed' : 'Conversational'}
+                </span>
+              </div>
+              <div className="px-3 py-2 flex items-center justify-between gap-2">
+                <span className="text-xs text-gray-500 flex-shrink-0">Total Duration</span>
+                <span className="text-xs font-semibold text-gray-900 text-right">
+                  {mode === 'fixed' ? duration : bufferEnabled ? 35 : 30} min
+                </span>
+              </div>
+              {interview.created_by_name && (
+                <div className="px-3 py-2 flex items-start justify-between gap-2">
+                  <span className="text-xs text-gray-500 flex-shrink-0">Created By</span>
+                  <span className="text-xs font-semibold text-gray-900 text-right">{interview.created_by_name}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {mode === 'fixed' && enabledRounds.length > 0 && (
+            <div className="border border-gray-100 rounded-lg overflow-hidden mb-4 ring-1 ring-black/[0.02]">
+              <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                <span className="text-xs font-medium text-brand-blue">
+                  Question Budget (Total: {totalPreviewQuestions})
+                </span>
+                <span className="text-xs text-gray-400">{totalPreviewMinutes} min</span>
+              </div>
+              <div className="tf-table-shell">
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="px-3 py-1.5 text-left font-medium text-gray-400">Round</th>
+                      <th className="px-3 py-1.5 text-right font-medium text-gray-400">Q</th>
+                      <th className="px-3 py-1.5 text-right font-medium text-gray-400">Clusters</th>
+                      <th className="px-3 py-1.5 text-right font-medium text-gray-400">Time</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {enabledRounds.map(r => {
+                      const isMth = r.type === 'must_have_skills' || r.type === 'must_to_have' || r.type === 'technical';
+                      const isNth = r.type === 'nice_to_have_skills' || r.type === 'nice_to_have';
+                      const label = isMth ? 'Must-to-Have' : isNth ? 'Nice-to-Have' : r.type === 'hr' ? 'HR Round' : r.type;
+                      const clusterCount = isMth ? mthClusters.length : isNth ? nthClusters.length : null;
+                      return (
+                        <tr key={r.type} className="border-b border-gray-50 last:border-0">
+                          <td className="px-3 py-2 text-gray-600">{label}</td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">
+                            {timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0}
+                          </td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">
+                            {clusterCount !== null ? clusterCount : '—'}
+                          </td>
+                          <td className="px-3 py-2 text-right font-semibold text-gray-900">
+                            {timedPreviewDurations[r.type] ?? r.duration_minutes}m
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              <SummaryTips />
+            </div>
+          )}
+
+          {(mthClusters.length > 0 || nthClusters.length > 0) && (
+            <div className="border border-gray-100 rounded-lg overflow-hidden ring-1 ring-black/[0.02]">
+              <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
+                <span className="text-xs font-medium text-brand-blue">Clusters</span>
+              </div>
+              <div className="p-3 space-y-3">
+                {[
+                  { label: 'Must-to-Have', count: mthClusters.length, show: mthClusters.length > 0 },
+                  { label: 'Nice-to-Have', count: nthClusters.length, show: nthClusters.length > 0 },
+                ]
+                  .filter(row => row.show)
+                  .map(row => (
+                    <div key={row.label} className="flex items-center justify-between">
+                      <span className="text-xs text-gray-600">{row.label}</span>
+                      <span className="text-xs font-semibold text-advice-positive">
+                        {row.count} cluster{row.count === 1 ? '' : 's'}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
       </div>
 
           </div>{/* closes content card */}
@@ -686,12 +1115,7 @@ export default function AIInterviewPreview() {
               <ArrowLeft className="w-4 h-4" />
               Back to Clusters
             </button>
-            <button
-              onClick={handleDiscard}
-              className="flex items-center gap-2 px-3 py-2 text-sm font-medium text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
-            >
-              Discard
-            </button>
+            <WizardDiscardButton onClick={handleDiscard} />
           </div>
           <div className="flex items-center gap-2">
             <button
@@ -720,6 +1144,36 @@ export default function AIInterviewPreview() {
           </div>
         </div>
       </div>
+
+      {/* ── Job description, in place ── */}
+      {jdViewOpen && interview.jd_id && (
+        <JDFullViewModal
+          jdId={interview.jd_id}
+          jdTitle={interview.jd_title ?? position}
+          onClose={() => setJdViewOpen(false)}
+        />
+      )}
+
+      {/* ── Introduction video ── */}
+      <Dialog open={showVideoPreview} onOpenChange={setShowVideoPreview}>
+        <DialogContent className="sm:max-w-2xl p-0 overflow-hidden">
+          <DialogHeader className="px-4 pt-4 pb-2 bg-gray-50 border-b border-gray-100">
+            <DialogTitle className="text-sm font-semibold tracking-tight">Introduction Video</DialogTitle>
+            <DialogDescription className="text-xs text-gray-500">
+              What the candidate sees before the interview starts.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="px-4 pb-4 pt-3">
+            <div className="rounded-lg overflow-hidden bg-black aspect-video">
+              {showVideoPreview && interview.introduction_video_url && (
+                <video src={interview.introduction_video_url} controls autoPlay className="w-full h-full object-contain">
+                  Your browser does not support the video tag.
+                </video>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Confirmation Dialog ── */}
       <ConfirmationDialog

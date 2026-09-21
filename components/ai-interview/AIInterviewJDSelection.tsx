@@ -16,12 +16,23 @@ import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { lineageKey, isSelectableVersion } from '@/lib/utils/jobOpeningDisplay';
 import type { Job } from '@/lib/types/types';
+import { publishedJdToJob as toJob } from '@/lib/utils/publishedJdToJob';
 import { ListSkeleton } from '@/components/ui/skeleton-loader';
 
 const normalizeSearchValue = (value?: string | null) => (value || '').toLowerCase().trim();
 const normalizeIdentifier = (value?: string | null) => normalizeSearchValue(value).replace(/[^a-z0-9]/g, '');
 const normalizeTitleSearch = (value?: string | null) =>
   normalizeSearchValue(value).replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+
+/** Newest version of a lineage first — publish count, then creation date as
+ *  the tie-break for rows the endpoint sends without one. */
+const latestVersionFirst = (a: PublishedJD, b: PublishedJD): number => {
+  const versionDelta = (b.current_version ?? 1) - (a.current_version ?? 1);
+  if (versionDelta !== 0) return versionDelta;
+  const aTime = a.created_at ? new Date(a.created_at).getTime() : 0;
+  const bTime = b.created_at ? new Date(b.created_at).getTime() : 0;
+  return bTime - aTime;
+};
 
 const JD_RADIO_GROUP = 'ai-interview-jd-version-selection';
 const ADD_BUTTON_DISABLED = 'bg-slate-200 text-slate-400 ring-slate-300/60 shadow-none cursor-not-allowed';
@@ -41,34 +52,6 @@ function InterviewCreatedLabel({ created }: { created: boolean }) {
     </span>
   );
 }
-
-/** A published JD in the shape the Job Openings summary reads — the same row
- *  the Assessments "Select Job Description" picker draws. */
-const toJob = (jd: PublishedJD): Job => ({
-  id: jd.id,
-  job_id: jd.job_id,
-  title: jd.title,
-  status: 'Published',
-  location: jd.location || '',
-  daysActive: 0,
-  requiredMatch: 0,
-  department: jd.department,
-  industry_type: jd.industry_type,
-  experience: jd.experience_min != null
-    ? `${jd.experience_min}${jd.experience_max ? `-${jd.experience_max}` : '+'} years`
-    : undefined,
-  experience_min: jd.experience_min,
-  experience_max: jd.experience_max,
-  skills: jd.must_have_skills,
-  must_have_skills: jd.must_have_skills,
-  nice_to_have_skills: jd.nice_to_have_skills,
-  postedDate: jd.published_at || jd.created_at,
-  postedBy: jd.created_by_name,
-  employmentType: jd.employment_type,
-  currentVersion: jd.current_version,
-  versionNumber: jd.current_version ?? 1,
-  created_at: jd.created_at,
-});
 
 export default function AIInterviewJDSelection() {
   const router = useRouter();
@@ -157,9 +140,33 @@ export default function AIInterviewJDSelection() {
   // state say something accurate instead of "create a JD first".
   const allConfigured = jds.length > 0 && selectableJds.length === 0;
 
-  const jdTotalPages = Math.max(1, Math.ceil(filteredJds.length / jdItemsPerPage));
+  /* ONE CARD PER JOB, not per version.
+     `/ai-interview/jds-for-interview` can return several versions of the same
+     lineage, and every one of them carries the same `job_id` — which IS the
+     lineage key the selection is held against. Rendered raw, ticking one
+     card's radio lit every sibling card as selected (each matched
+     `jdPick.lineage`) and pushed the rest of the list into its
+     blocked-by-another-pick state. Collapsing restores this picker's contract,
+     the same one the Assessments picker keeps: a card is a JOB, and its other
+     versions are reached through View Versions. */
+  const lineageBuckets = new Map<string, PublishedJD[]>();
+  for (const jd of filteredJds) {
+    const key = lineageKey(toJob(jd));
+    const bucket = lineageBuckets.get(key);
+    if (bucket) bucket.push(jd);
+    else lineageBuckets.set(key, [jd]);
+  }
+  /* The row stands on the newest version that can still take an interview, so
+     a job whose latest version is already configured still offers the one
+     below it instead of dropping off the list. */
+  const lineageJds = Array.from(lineageBuckets.values(), bucket => {
+    const newestFirst = [...bucket].sort(latestVersionFirst);
+    return newestFirst.find(jd => !versionHasInterview(jd.id)) ?? newestFirst[0];
+  });
+
+  const jdTotalPages = Math.max(1, Math.ceil(lineageJds.length / jdItemsPerPage));
   const jdSafePage = Math.min(jdPage, jdTotalPages);
-  const pagedJds = filteredJds.slice((jdSafePage - 1) * jdItemsPerPage, jdSafePage * jdItemsPerPage);
+  const pagedJds = lineageJds.slice((jdSafePage - 1) * jdItemsPerPage, jdSafePage * jdItemsPerPage);
 
   const jdPickOnThisPage = !!jdPick && pagedJds.some(jd => lineageKey(toJob(jd)) === jdPick.lineage);
 
@@ -243,9 +250,9 @@ export default function AIInterviewJDSelection() {
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                       <span className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
                         Select a Job Opening
-                        {filteredJds.length > 0 && (
+                        {lineageJds.length > 0 && (
                           <span className="ml-2 font-normal text-gray-500">
-                            &mdash; {filteredJds.length} available
+                            &mdash; {lineageJds.length} available
                           </span>
                         )}
                       </span>
@@ -487,7 +494,7 @@ export default function AIInterviewJDSelection() {
                       );
                     })}
 
-                    {filteredJds.length === 0 && (
+                    {lineageJds.length === 0 && (
                       <div className="text-center py-8 sm:py-12 text-gray-500">
                         <Briefcase className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-3 opacity-50" />
                         <p className="text-sm sm:text-base">
@@ -516,11 +523,11 @@ export default function AIInterviewJDSelection() {
                       </div>
                     )}
 
-                    {filteredJds.length > 0 && (
+                    {lineageJds.length > 0 && (
                       <ListPagination
                         currentPage={jdSafePage}
                         itemsPerPage={jdItemsPerPage}
-                        totalItems={filteredJds.length}
+                        totalItems={lineageJds.length}
                         onPageChange={setJdPage}
                         onItemsPerPageChange={(size) => { setJdItemsPerPage(size); setJdPage(1); }}
                         itemLabel="published jobs"

@@ -169,6 +169,18 @@ export default function DashboardLayout({
   // is suppressed — the user must click OK on the modal to log out.
   const [sessionExpiredVisible, setSessionExpiredVisible] = useState(false);
 
+  /* The shell owns scrolling. It is `h-[100dvh]` with its own scroller
+     inside, so the DOCUMENT must never scroll while a dashboard route is up —
+     when it did, the page grew a second scrollbar at the window edge and a
+     blank run below the shell equal to whatever body-level element had
+     poked past the viewport. Marked on <html> so the rule is scoped to these
+     routes; the marketing and candidate-facing layouts keep normal document
+     scrolling. Removed on unmount for the same reason. */
+  useEffect(() => {
+    document.documentElement.classList.add('tf-app-shell');
+    return () => document.documentElement.classList.remove('tf-app-shell');
+  }, []);
+
   useEffect(() => {
     const handleSessionExpired = () => setSessionExpiredVisible(true);
     window.addEventListener(SESSION_EXPIRED_EVENT, handleSessionExpired);
