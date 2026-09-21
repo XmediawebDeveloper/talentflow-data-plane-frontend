@@ -1146,6 +1146,21 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         width: { ideal: 1920 },
         height: { ideal: 1080 },
         displaySurface: 'monitor',
+        // Without this, Chrome/Edge burn the LIVE system mouse cursor into
+        // every captured frame — including the blanked-white frame grabbed
+        // for the share-bar vision check. On an otherwise 100% blank check
+        // frame, that cursor is exactly the kind of small dark unexplained
+        // mark _SHARE_BAR_VISION_PROMPT's GOLDEN RULE tells the model to
+        // flag on sight (confirmed from a real blocked attempt's persisted
+        // screenshot: pure white, nothing else, one visible cursor arrow) —
+        // and its screen position (so its reported corner/side) just tracks
+        // wherever the candidate's mouse happens to be, which is why the
+        // "foreign_app_detected" label kept naming a different corner each
+        // retry for the same candidate with nothing actually open. 'never'
+        // is honoured by Chrome/Edge; harmless for the interview recording
+        // itself since the candidate isn't expected to interact with their
+        // own desktop during the interview anyway.
+        cursor: 'never',
       },
       audio: true,
       preferCurrentTab: false,
@@ -1794,15 +1809,30 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       };
       const grabFrame = async (): Promise<Blob | null> => {
         let canvas = grabCanvas();
-        // Up to 4 extra retries (~1.4s worst case) waiting for the blank to
-        // actually land before giving up and using whatever's latest — better
-        // than an unbounded wait, but closes the gap the fixed rVFC wait left
-        // open on slower hardware.
-        for (let attempt = 0; canvas && !looksBlank(canvas) && attempt < 4; attempt++) {
+        // Up to 10 extra retries (~3.5s worst case) waiting for the blank to
+        // actually land before giving up. Raised from 4 (~1.4s) after a real
+        // capture (sharebar_original_bd1bbdbc.jpg) showed the swap still
+        // hadn't landed even after the previous budget — on a loaded/slower
+        // machine the OS screen-capture pipeline can lag well past ~1.5s.
+        let confirmedBlank = canvas ? looksBlank(canvas) : false;
+        for (let attempt = 0; canvas && !confirmedBlank && attempt < 10; attempt++) {
           await new Promise<void>((r) => window.setTimeout(r, 350));
           canvas = grabCanvas();
+          confirmedBlank = canvas ? looksBlank(canvas) : false;
         }
-        if (!canvas) return null;
+        // Verified from a real blocked candidate's persisted screenshot
+        // (sharebar_original_*.jpg): on some machines the blank/white swap
+        // still hasn't visually landed after every retry, and sending that
+        // still-fully-rendered page (our own dark background, the card, the
+        // in-page sharing-bar MOCK graphic) to the vision check is worse than
+        // not checking at all — the model reads our own mock bar as the real
+        // one ("expanded sharing bar visible") and/or the pixel backstop (which
+        // assumes a flat white background) reads normal gradient shading as a
+        // foreign blob, falsely blocking a candidate who did everything right.
+        // Fail the same way an outright capture failure already does (return
+        // null → caller re-prompts via the existing hard gate) rather than
+        // ever sending a confirmed-not-blank frame.
+        if (!canvas || !confirmedBlank) return null;
         return await new Promise<Blob | null>((resolve) => canvas!.toBlob((b) => resolve(b), 'image/jpeg', 0.9));
       };
 
