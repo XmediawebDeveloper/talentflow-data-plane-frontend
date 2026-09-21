@@ -12,7 +12,7 @@ import { decodePlanId } from '@/lib/utils/planEncoder';
 import { toast } from 'sonner';
 import { useQuota } from '@/contexts/QuotaContext';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { PageSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import DowngradeWarningModal from '@/components/subscription/DowngradeWarningModal';
 import { getPreviousPlan } from '@/lib/services/subscriptionService';
 import { useRazorpay } from '@/lib/hooks/useRazorpay';
@@ -554,6 +554,88 @@ const formatQuotaValue = (value: number | string | undefined | null | Record<str
   }
   return String(value);
 };
+
+// Neutral-gray skeleton mirroring the Current Plan layout: hero header,
+// subscription nav tabs, the "Your Current Plan" card (title + status badge +
+// 4-stat grid), and a 3-card plans grid. Shared with loading.tsx.
+export function CurrentPlanLoadingSkeleton() {
+  return (
+    <main className="flex-1 overflow-x-clip bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          {/* Hero header */}
+          <section className="mb-5 rounded-2xl border border-gray-100 bg-gray-50 p-4 sm:p-5 lg:p-6">
+            <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
+              <div className="flex items-start gap-3">
+                <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
+                <div className="space-y-2">
+                  <Skeleton className="h-6 w-40" />
+                  <Skeleton className="h-4 w-96 max-w-full" />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-2 sm:min-w-[260px]">
+                <Skeleton className="h-14 rounded-xl" />
+                <Skeleton className="h-14 rounded-xl" />
+              </div>
+            </div>
+          </section>
+
+          {/* Subscription nav tabs */}
+          <section className="mb-5">
+            <div className="border-b border-gray-200">
+              <div className="flex gap-4 pb-2.5">
+                {Array.from({ length: 7 }).map((_, i) => (
+                  <Skeleton key={i} className="h-4 w-24" />
+                ))}
+              </div>
+            </div>
+          </section>
+
+          {/* Your Current Plan card */}
+          <div className="mb-4 sm:mb-6 lg:mb-8 rounded-xl border border-gray-200 bg-white p-3 sm:p-4 lg:p-6">
+            <div className="mb-4 flex flex-col gap-2 sm:mb-6 sm:flex-row sm:items-center sm:justify-between">
+              <div className="space-y-2">
+                <Skeleton className="h-5 w-40" />
+                <Skeleton className="h-3.5 w-64" />
+              </div>
+              <Skeleton className="h-7 w-24 rounded-full" />
+            </div>
+            <div className="grid grid-cols-2 gap-2 sm:gap-4 md:grid-cols-4 lg:gap-6">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="rounded-lg border border-gray-200 bg-gray-50 p-2.5 sm:p-3 lg:p-4">
+                  <Skeleton className="mb-2 h-3.5 w-16" />
+                  <Skeleton className="h-6 w-24" />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Plans grid */}
+          <div className="grid grid-cols-1 gap-4 sm:gap-5 lg:grid-cols-3">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="rounded-2xl border border-gray-100 bg-white p-5 sm:p-6">
+                <div className="mb-4 flex items-center gap-3">
+                  <Skeleton className="h-10 w-10 rounded-xl" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-20" />
+                  </div>
+                </div>
+                <Skeleton className="mb-4 h-8 w-28" />
+                <div className="space-y-2">
+                  <Skeleton className="h-3 w-full" />
+                  <Skeleton className="h-3 w-5/6" />
+                  <Skeleton className="h-3 w-2/3" />
+                </div>
+                <Skeleton className="mt-5 h-10 w-full rounded-xl" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
 
 function CurrentPlanContent() {
   const router = useRouter();
@@ -1857,7 +1939,7 @@ function CurrentPlanContent() {
   };
 
   if (isLoading) {
-    return <PageSkeleton variant="cards" showStats />;
+    return <CurrentPlanLoadingSkeleton />;
   }
 
   // NOTE: Suspended accounts are now fully blocked by the dashboard layout overlay
@@ -3747,11 +3829,7 @@ function CurrentPlanContent() {
 
 export default function CurrentPlanPage() {
   return (
-    <Suspense fallback={
-      <div className="tf-loader-page">
-        <Loader2 className="w-8 h-8 animate-spin text-gray-600 dark:text-slate-400" />
-      </div>
-    }>
+    <Suspense fallback={<CurrentPlanLoadingSkeleton />}>
       <CurrentPlanContent />
     </Suspense>
   );

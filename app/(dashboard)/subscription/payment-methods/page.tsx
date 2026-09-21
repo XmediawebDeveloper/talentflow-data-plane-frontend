@@ -7,7 +7,7 @@ import { handleUnauthorized } from '@/lib/services/api';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
-import { CardGridSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 
 interface PaymentMethod {
@@ -330,8 +330,31 @@ export default function PaymentMethodsPage() {
           </div>
         )}
 
-        {/* Loading State */}
-        {loading && <CardGridSkeleton count={3} />}
+        {/* Loading State — mirrors the stacked payment-method cards (card icon, type/last-four, cardholder line, actions) */}
+        {loading && (
+          <div className="space-y-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <div key={i} className="rounded-2xl border border-gray-100 bg-white p-5 sm:p-6">
+                <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+                  <div className="flex min-w-0 items-center gap-4">
+                    <Skeleton className="h-12 w-16 shrink-0 rounded-xl" />
+                    <div className="min-w-0 space-y-2">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Skeleton className="h-4 w-40" />
+                        <Skeleton className="h-5 w-16 rounded-full" />
+                      </div>
+                      <Skeleton className="h-3.5 w-56" />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Skeleton className="h-10 w-28 rounded-xl" />
+                    <Skeleton className="h-10 w-10 rounded-xl" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* Empty State */}
         {!loading && paymentMethods.length === 0 && (

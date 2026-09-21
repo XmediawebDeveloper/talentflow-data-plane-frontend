@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { PublishedJD, AIInterviewRoundConfig } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
-import { TableSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import { findInvalidSkillPunctuation } from '@/lib/skillDuplicates';
 
 interface RoundConfig {
@@ -393,7 +393,35 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
             </div>
 
             {loadingJds ? (
-              <TableSkeleton />
+              <div className="grid grid-cols-1 gap-3">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="p-5 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5"
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Skeleton className="h-5 w-48" />
+                          <Skeleton className="h-5 w-20 rounded-full" />
+                        </div>
+                        <div className="flex items-center gap-4 mt-1.5">
+                          <Skeleton className="h-3.5 w-20" />
+                          <Skeleton className="h-3.5 w-16" />
+                          <Skeleton className="h-3.5 w-24" />
+                          <Skeleton className="h-3.5 w-14" />
+                        </div>
+                        <div className="flex flex-wrap gap-1.5 mt-2">
+                          {Array.from({ length: 5 }).map((_, j) => (
+                            <Skeleton key={j} className="h-5 w-16 rounded-full" />
+                          ))}
+                        </div>
+                      </div>
+                      <Skeleton className="h-4 w-4 rounded flex-shrink-0 mt-1" />
+                    </div>
+                  </div>
+                ))}
+              </div>
             ) : filteredJds.length === 0 ? (
               <div className="text-center py-16 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
                 <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300" />

@@ -3,7 +3,7 @@
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useState, useEffect } from 'react';
 import { ScrollText, CheckCircle, AlertCircle, Eye, X, FileText, Shield, Cookie, Sparkles } from 'lucide-react';
-import { Skeleton, TableSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { IconComponent } from '@/lib/types/icon';
 import { termsService } from '@/lib/services/termsService';
 import type { DocumentType } from '@/lib/services/termsService';
@@ -137,8 +137,29 @@ export default function LegalCompliancePage() {
         </div>
 
         {loading ? (
-          <div className="p-4 sm:p-6">
-            <TableSkeleton columns={6} />
+          <div className="overflow-x-auto tf-table-shell">
+            {/* Neutral skeleton matching the Acceptance History table columns:
+                Version, Title, Accepted By, Accepted On, Status, Document. */}
+            <div className="grid grid-cols-6 gap-4 border-b border-gray-100 bg-gray-50 px-6 py-3">
+              {['w-16', 'w-20', 'w-24', 'w-24', 'w-16', 'w-20'].map((w, i) => (
+                <Skeleton key={i} className={`h-3 ${w}`} />
+              ))}
+            </div>
+            <div className="divide-y divide-gray-100">
+              {Array.from({ length: 6 }).map((_, r) => (
+                <div key={r} className="grid grid-cols-6 items-center gap-4 px-6 py-4">
+                  <Skeleton className="h-5 w-14 rounded-full" />
+                  <Skeleton className="h-4 w-28" />
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-3 w-32" />
+                  </div>
+                  <Skeleton className="h-4 w-28" />
+                  <Skeleton className="h-6 w-20 rounded-full" />
+                  <Skeleton className="h-7 w-16 rounded-lg" />
+                </div>
+              ))}
+            </div>
           </div>
         ) : error ? (
           <div className="flex items-center justify-center py-16 text-red-500">

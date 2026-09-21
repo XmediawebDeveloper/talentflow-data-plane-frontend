@@ -223,10 +223,7 @@ export default function AIInterviewJDSelection() {
 
               <div className="p-4 sm:p-6">
                 {loadingJds ? (
-                  <div className="text-center py-8 sm:py-12">
-                    <Loader2 className="w-8 h-8 sm:w-10 sm:h-10 text-brand-blue animate-spin mx-auto mb-3" />
-                    <p className="text-sm sm:text-base text-gray-500">Loading job descriptions...</p>
-                  </div>
+                  <ListSkeleton rows={5} />
                 ) : (
                   <div className="space-y-3" ref={jdListRef}>
                     <div className="mb-4">

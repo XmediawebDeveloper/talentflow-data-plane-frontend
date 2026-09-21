@@ -6,7 +6,7 @@ import { Plus, Clock, Loader2, ChevronLeft, ChevronRight, Search, X, Trash2, Shi
 import { useAuth } from '@/lib/hooks/useAuth';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
-import ResumeTable from '@/components/ResumeTable';
+import ResumeTable, { ResumeTableSkeleton } from '@/components/ResumeTable';
 import StatsCards from '@/components/StatsCards';
 import SearchFilterBarCompact from '@/components/SearchFilterBarCompact';
 import BulkActionsBar from '@/components/BulkActionsBar';
@@ -40,7 +40,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import FeatureGate from '@/components/shared/FeatureGate';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { PageSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
@@ -958,9 +958,43 @@ export default function ResumeDatabasePage() {
   };
 
   if (loading && resumes.length === 0) {
-    // Skeleton instead of a spinner during the initial fetch — matches the
-    // route-level loading.tsx so refresh → mount → fetch reads as one skeleton.
-    return <PageSkeleton variant="table" showStats={false} />;
+    // Exact-match skeleton: the same page chrome (breadcrumb, header, search bar)
+    // and a table skeleton that mirrors ResumeTable's real columns — so the
+    // placeholder lines up with the content that replaces it, not a generic block.
+    return (
+      <main className="flex-1 overflow-x-clip bg-slate-50">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            {/* Breadcrumb */}
+            <div className="mb-4 md:mb-6 flex items-center gap-2">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-3" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+            {/* Header: icon, title + count pill, description */}
+            <div className="flex items-start gap-3 mb-5">
+              <Skeleton className="hidden sm:block h-9 w-9 rounded-lg shrink-0" />
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Skeleton className="h-6 w-52" />
+                  <Skeleton className="h-5 w-20 rounded-full" />
+                </div>
+                <Skeleton className="h-4 w-80 max-w-full" />
+              </div>
+            </div>
+            {/* Search + table card */}
+            <div className="bg-white rounded-xl border border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges overflow-hidden">
+              <div className="p-3 flex gap-2 items-center border-b border-gray-200">
+                <Skeleton className="h-9 flex-1 rounded-lg" />
+                <Skeleton className="h-9 w-24 rounded-lg" />
+                <Skeleton className="h-9 w-20 rounded-lg" />
+              </div>
+              <ResumeTableSkeleton rows={8} />
+            </div>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   return (

@@ -58,7 +58,34 @@ import teamService, { AllTeamsUsageSummary, TeamMembersUsageSummary } from '@/li
 import dashboardService, { SubscriptionUnits } from '@/lib/services/dashboardService';
 import { featurePermissionService, UserLimitsResponse } from '@/lib/services/featurePermissionService';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
-import { TableSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
+
+/* Neutral-gray table skeleton whose columns mirror a specific usage-history
+   tab. `cols` is one width class (e.g. 'w-24') per column, in table order. */
+function UsageTableSkeleton({ cols, rows = 8 }: { cols: string[]; rows?: number }) {
+  const gridStyle = { gridTemplateColumns: `repeat(${cols.length}, minmax(0, 1fr))` };
+  return (
+    <div className="overflow-x-auto tf-table-shell">
+      <div
+        className="grid gap-4 border-b border-gray-200 bg-gray-50 px-4 py-3"
+        style={gridStyle}
+      >
+        {cols.map((w, i) => (
+          <Skeleton key={i} className={`h-3 ${w}`} />
+        ))}
+      </div>
+      <div className="divide-y divide-gray-100">
+        {Array.from({ length: rows }).map((_, r) => (
+          <div key={r} className="grid items-center gap-4 px-4 py-3" style={gridStyle}>
+            {cols.map((_w, c) => (
+              <Skeleton key={c} className="h-4" style={{ width: `${55 + ((r + c) * 7) % 40}%` }} />
+            ))}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 
@@ -511,7 +538,8 @@ function FeatureWiseTab({
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   if (isLoading) {
-    return <TableSkeleton />;
+    // Feature, User, Entity, Units, Status, Balance After, Date & Time.
+    return <UsageTableSkeleton cols={['w-24', 'w-24', 'w-20', 'w-12', 'w-16', 'w-20', 'w-24']} />;
   }
 
   if (!items.length) {
@@ -680,7 +708,8 @@ function UserWiseTab({
   const paginatedUsers = users.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   if (isLoading) {
-    return <TableSkeleton />;
+    // #, User, RS, AS, AIU, RU, Total, Success / Failed, Last Active.
+    return <UsageTableSkeleton cols={['w-6', 'w-24', 'w-14', 'w-14', 'w-14', 'w-14', 'w-14', 'w-20', 'w-20']} />;
   }
 
   if (!users.length) {
@@ -784,7 +813,8 @@ function TeamWiseTab({
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
 
   if (isLoading) {
-    return <TableSkeleton />;
+    // #, Team, RS, AS, AIU, RU, JDs Created, Assessments.
+    return <UsageTableSkeleton cols={['w-6', 'w-28', 'w-14', 'w-14', 'w-14', 'w-14', 'w-16', 'w-20']} />;
   }
 
   if (!teamsData?.teams?.length) {
@@ -1076,7 +1106,8 @@ function RefundsTab({
   };
 
   if (isLoading) {
-    return <TableSkeleton />;
+    // Type, Feature, Units, Before, After, Actor, Reason, Date.
+    return <UsageTableSkeleton cols={['w-16', 'w-20', 'w-12', 'w-14', 'w-14', 'w-24', 'w-28', 'w-20']} />;
   }
 
   if (unavailable) {

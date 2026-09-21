@@ -190,8 +190,13 @@ const buildFullTimeline = (
   return out.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 };
 
-/** Compact per-row timeline preview — every entry, not just the latest. */
-export const timelineEvents = (inv: any): TimelineEntry[] => buildFullTimeline(inv, inv.timeline || []);
+/** Compact per-row timeline preview — capped at the 4 most recent events
+ *  (still oldest-first among themselves); older ones drop off the cell but
+ *  stay reachable via "View full history", which reads the uncapped trail
+ *  separately. */
+const COMPACT_TIMELINE_LIMIT = 4;
+export const timelineEvents = (inv: any): TimelineEntry[] =>
+  buildFullTimeline(inv, inv.timeline || []).slice(-COMPACT_TIMELINE_LIMIT);
 
 /* ── Row-action builder ─────────────────────────────────────────────────
    One function, called by all three surfaces, so the status rules for

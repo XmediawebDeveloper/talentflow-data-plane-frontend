@@ -11,26 +11,27 @@ function Skeleton({ className, ...props }: React.ComponentProps<"div">) {
 }
 
 function PageHeroSkeleton({ className }: { className?: string }) {
+  // Neutral gray, never brand-blue — a loading placeholder should read as
+  // "content pending", not as a coloured banner.
   return (
     <section
       className={cn(
-        "relative mb-6 overflow-hidden rounded-2xl bg-gradient-to-br from-brand-blue/90 via-brand-blue-2/90 to-brand-teal/90 p-5 sm:p-6 lg:p-7 ring-1 ring-white/10",
+        "relative mb-6 rounded-2xl border border-gray-100 bg-white p-5 sm:p-6 lg:p-7",
         className,
       )}
     >
       <div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex w-full max-w-3xl flex-col gap-3">
-          <div className="h-5 w-40 rounded-full bg-white/15 animate-pulse" />
           <div className="flex items-start gap-3">
-            <div className="h-12 w-12 shrink-0 rounded-xl bg-white/15 animate-pulse" />
+            <Skeleton className="h-12 w-12 shrink-0 rounded-xl" />
             <div className="flex w-full flex-col gap-2">
-              <div className="h-7 w-56 rounded-md bg-white/20 animate-pulse" />
-              <div className="h-4 w-full max-w-lg rounded bg-white/12 animate-pulse" />
-              <div className="h-4 w-2/3 rounded bg-white/12 animate-pulse" />
+              <Skeleton className="h-7 w-56" />
+              <Skeleton className="h-4 w-full max-w-lg" />
+              <Skeleton className="h-4 w-2/3" />
             </div>
           </div>
         </div>
-        <div className="h-10 w-28 rounded-xl bg-white/20 animate-pulse" />
+        <Skeleton className="h-10 w-28 rounded-xl" />
       </div>
     </section>
   );

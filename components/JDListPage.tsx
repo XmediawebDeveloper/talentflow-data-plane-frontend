@@ -19,7 +19,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 // ✅ PERMISSION FIX: Import permission hook for CRUD checks
 import { useModulePermissions } from '@/lib/hooks/usePermissions';
 import { useAuth } from '@/components/providers/AuthProvider';
-import { ListSkeleton } from '@/components/ui/skeleton-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -711,7 +711,53 @@ export default function JDListPage() {
 
         {/* JD List */}
         {loading ? (
-          <ListSkeleton />
+          /* Skeleton mirrors the JD card list below: same `space-y-4` stack of
+             `bg-white rounded-xl border p-6` cards, each with the checkbox, the
+             header row (JD chip + title + status/method badges), the meta chip
+             row, a two-line description, and the three-stat footer, plus the
+             right-hand View / Edit / more-actions controls. */
+          <div className="space-y-4">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="flex items-start gap-4">
+                  <div className="flex items-start gap-4 flex-1 min-w-0 overflow-hidden">
+                    <Skeleton className="w-4 h-4 mt-1 rounded" />
+                    <div className="flex-1">
+                      {/* Header row: JD id chip, title, status + method badges */}
+                      <div className="flex items-center gap-3 mb-2">
+                        <Skeleton className="h-6 w-16 rounded-md" />
+                        <Skeleton className="h-6 w-56" />
+                        <Skeleton className="h-6 w-20 rounded-full" />
+                        <Skeleton className="h-6 w-14 rounded-full" />
+                      </div>
+                      {/* Meta chip row */}
+                      <div className="flex items-center gap-4 mb-3 flex-wrap">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="hidden sm:block h-4 w-24" />
+                        <Skeleton className="hidden sm:block h-4 w-28" />
+                      </div>
+                      {/* Description (two lines) */}
+                      <Skeleton className="h-4 w-full mb-2" />
+                      <Skeleton className="h-4 w-4/5" />
+                      {/* Stats footer */}
+                      <div className="flex items-center gap-6 mt-4 pt-4 border-t border-gray-100">
+                        <Skeleton className="h-4 w-24" />
+                        <Skeleton className="h-4 w-20" />
+                        <Skeleton className="h-4 w-28" />
+                      </div>
+                    </div>
+                  </div>
+                  {/* Right-hand actions */}
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    <Skeleton className="h-8 w-16 rounded-lg" />
+                    <Skeleton className="h-8 w-16 rounded-lg" />
+                    <Skeleton className="h-9 w-9 rounded-lg" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : jds.length === 0 ? (
           <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
             <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />

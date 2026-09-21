@@ -2,10 +2,73 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
 import AIInterviewDetailsView from '@/components/ai-interview/AIInterviewDetailsView';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import { Skeleton } from '@/components/ui/skeleton';
+
+// Neutral-gray skeleton mirroring the AI Interview details view: breadcrumb,
+// header bar (icon + title + subtitle + action buttons), a tab bar, then the
+// stacked info section cards.
+function AIInterviewDetailsSkeleton() {
+  return (
+    <main className="flex-1 overflow-x-clip bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          {/* Breadcrumb */}
+          <div className="mb-4 md:mb-6 flex items-center gap-2">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-3 w-3" />
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-3" />
+            <Skeleton className="h-3 w-28" />
+          </div>
+
+          {/* Header: icon + title + subtitle + action buttons */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
+              <div className="space-y-2">
+                <Skeleton className="h-6 w-64" />
+                <Skeleton className="h-4 w-44" />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Skeleton className="h-9 w-20 rounded-lg" />
+              <Skeleton className="h-9 w-28 rounded-lg" />
+              <Skeleton className="h-9 w-9 rounded-lg" />
+            </div>
+          </div>
+
+          {/* Tab bar */}
+          <div className="flex gap-2 border-b border-gray-100 pb-3 mb-6 overflow-hidden">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-8 w-28 rounded-lg" />
+            ))}
+          </div>
+
+          {/* Section cards */}
+          <div className="space-y-6">
+            {Array.from({ length: 3 }).map((_, card) => (
+              <div key={card} className="rounded-xl border border-gray-100 bg-white p-5 sm:p-6">
+                <div className="flex items-center gap-2 mb-4">
+                  <Skeleton className="h-9 w-9 rounded-lg" />
+                  <Skeleton className="h-6 w-48" />
+                </div>
+                <div className="space-y-2.5">
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-11/12" />
+                  <Skeleton className="h-4 w-5/6" />
+                  <Skeleton className="h-4 w-2/3" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
 
 function AIInterviewDetailsContent() {
   const params = useParams();
@@ -84,11 +147,7 @@ function AIInterviewDetailsContent() {
       : undefined;
 
   if (isLoading) {
-    return (
-      <div className="tf-loader-page bg-slate-50">
-        <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
-      </div>
-    );
+    return <AIInterviewDetailsSkeleton />;
   }
 
   if (error || !config) {
@@ -133,13 +192,7 @@ function AIInterviewDetailsContent() {
 export default function AIInterviewDetailsPage() {
   // useSearchParams needs a Suspense boundary in the App Router.
   return (
-    <Suspense
-      fallback={
-        <div className="tf-loader-page bg-slate-50">
-          <Loader2 className="h-6 w-6 text-brand-blue animate-spin" />
-        </div>
-      }
-    >
+    <Suspense fallback={<AIInterviewDetailsSkeleton />}>
       <AIInterviewDetailsContent />
     </Suspense>
   );

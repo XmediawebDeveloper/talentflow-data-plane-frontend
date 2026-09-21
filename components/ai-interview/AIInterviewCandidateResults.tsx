@@ -4,10 +4,11 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Eye, Loader2, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, Users } from 'lucide-react';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
+import { Skeleton } from '@/components/ui/skeleton';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -196,9 +197,65 @@ export default function AIInterviewCandidateResults() {
 
   if (isLoading) {
     return (
-      <div className="flex items-center justify-center py-16 tf-loader-center">
-        <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-        <span className="ml-2 text-sm text-gray-600 dark:text-slate-400">Loading candidate results…</span>
+      <div>
+        {/* Toolbar mirror */}
+        <div className="flex items-center justify-between gap-3 mb-4">
+          <Skeleton className="h-10 w-full max-w-md rounded-lg" />
+          <div className="flex gap-2">
+            <Skeleton className="h-10 w-32 rounded-lg" />
+            <Skeleton className="h-10 w-24 rounded-lg" />
+          </div>
+        </div>
+
+        {/* Table mirror — same columns/order as the real candidate results table */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+          <div className="overflow-x-auto tf-table-shell">
+            <table className="w-full text-sm">
+              <thead className="bg-slate-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700">
+                <tr>
+                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-right px-4 py-3 tf-sticky-col"><Skeleton className="h-3 w-20 ml-auto" /></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <tr key={i}>
+                    <td className="px-4 py-3"><Skeleton className="h-5 w-14 rounded-md" /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="w-7 h-7 rounded-full" />
+                        <Skeleton className="h-4 w-28" />
+                      </div>
+                    </td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <Skeleton className="h-1.5 w-16 rounded-full" />
+                        <Skeleton className="h-4 w-8" />
+                      </div>
+                    </td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-14" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                    <td className="px-4 py-3 text-right"><Skeleton className="h-7 w-24 rounded-md ml-auto" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
       </div>
     );
   }

@@ -53,7 +53,7 @@ import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
-import { DetailPageSkeleton, TableSkeleton } from '@/components/ui/skeleton-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Legacy aliases — both now use the centralized IST formatter
 const formatToIST = formatIST;
@@ -2199,7 +2199,58 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
      This cannot hang: the restore above clears `pendingResumeId` as soon as the
      rows land, whether or not one of them matched. */
   if (pendingResumeId && !viewingScoredResume) {
-    return <DetailPageSkeleton />;
+    /* Placeholder for the CandidateScoringDetailPage this resolves into —
+       mirrors that page's real shape: a breadcrumb bar, a candidate header
+       (avatar + name/title + score badges), the Overview / Score Table /
+       Personal Info / View JD tab strip, then the Overview section cards. */
+    return (
+      <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+        <div className="mx-auto w-full max-w-[1400px] p-4 md:p-6 space-y-5">
+          {/* Breadcrumb */}
+          <div className="flex items-center gap-2">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-3 w-3" />
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-3" />
+            <Skeleton className="h-3 w-28" />
+          </div>
+
+          {/* Candidate header */}
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 p-5 flex items-start gap-4">
+            <Skeleton className="h-16 w-16 rounded-full shrink-0" />
+            <div className="flex-1 space-y-2">
+              <Skeleton className="h-6 w-56" />
+              <Skeleton className="h-4 w-40" />
+              <div className="flex gap-2 pt-1">
+                <Skeleton className="h-6 w-24 rounded-full" />
+                <Skeleton className="h-6 w-20 rounded-full" />
+              </div>
+            </div>
+            <Skeleton className="h-9 w-28 rounded-lg" />
+          </div>
+
+          {/* Tab strip */}
+          <div className="flex gap-6 border-b border-gray-200 dark:border-slate-700 pb-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-4 w-24" />
+            ))}
+          </div>
+
+          {/* Overview section cards */}
+          {Array.from({ length: 3 }).map((_, i) => (
+            <div
+              key={i}
+              className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 p-5 space-y-3"
+            >
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-3.5 w-full" />
+              <Skeleton className="h-3.5 w-5/6" />
+              <Skeleton className="h-3.5 w-2/3" />
+            </div>
+          ))}
+        </div>
+      </main>
+    );
   }
 
   // Candidate detail from the AI Interview Result tab — rendered inline so the
@@ -3878,7 +3929,44 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       {activeTab === 'scored-resumes' && (
         <div ref={scoredResumesSectionRef} className="mt-0 scroll-mt-5">
           {loadingScoredResumes ? (
-            <TableSkeleton />
+            /* Mirrors ScoredResumesTable: a search / filter toolbar, then the
+               scored-resumes table with the same columns in the same order
+               (Candidate Name, Match Status, Score, Experience, Scored By /
+               Date, Resume Version) plus its leading select checkbox. */
+            <div className="space-y-4">
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 p-4 flex items-center gap-3">
+                <Skeleton className="h-10 flex-1 rounded-lg" />
+                <Skeleton className="h-10 w-24 rounded-lg" />
+                <Skeleton className="h-10 w-10 rounded-lg" />
+              </div>
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[900px] table-auto">
+                    <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                      <tr>
+                        <th className="w-10 px-4 py-3 align-middle"><Skeleton className="h-4 w-4 rounded" /></th>
+                        {['Candidate Name', 'Match Status', 'Score', 'Experience', 'Scored By / Date', 'Resume Version'].map((h) => (
+                          <th key={h} className="px-4 py-3 text-left align-middle"><Skeleton className="h-3 w-20" /></th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="bg-white dark:bg-slate-900 divide-y divide-gray-200 dark:divide-slate-700">
+                      {Array.from({ length: 8 }).map((_, r) => (
+                        <tr key={r}>
+                          <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-4 rounded" /></td>
+                          <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-32" /></td>
+                          <td className="px-4 py-4 align-middle"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                          <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-10" /></td>
+                          <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-14" /></td>
+                          <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-28" /></td>
+                          <td className="px-4 py-4 align-middle"><Skeleton className="h-5 w-12 rounded-full" /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           ) : scoredResumes.length === 0 ? (
             <TabEmptyState
               icon={Users}
@@ -3967,7 +4055,53 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       {activeTab === 'ai-interview-results' && (
         <div className="mt-0" ref={aiInterviewResultsSectionRef}>
           {loadingAIInterviewConfig ? (
-            <TableSkeleton />
+            /* Mirrors the AIInterviewResults tab: a row of stat cards, a filter
+               bar, then the candidate table with the same columns in order
+               (CID, Candidate, Email, Status, Score, Duration, Started At,
+               Completed At, Proctoring Risk, Actions). */
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div key={i} className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 p-4 space-y-2">
+                    <Skeleton className="h-3.5 w-20" />
+                    <Skeleton className="h-7 w-16" />
+                  </div>
+                ))}
+              </div>
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 p-4 flex items-center gap-3">
+                <Skeleton className="h-10 flex-1 rounded-lg" />
+                <Skeleton className="h-10 w-32 rounded-lg" />
+              </div>
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 overflow-hidden">
+                <div className="overflow-x-auto tf-table-shell">
+                  <table className="w-full min-w-[1000px] text-sm">
+                    <thead className="bg-slate-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700">
+                      <tr>
+                        {['CID', 'Candidate', 'Email', 'Status', 'Score', 'Duration', 'Started At', 'Completed At', 'Proctoring Risk', 'Actions'].map((h) => (
+                          <th key={h} className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
+                      {Array.from({ length: 8 }).map((_, r) => (
+                        <tr key={r}>
+                          <td className="px-4 py-4"><Skeleton className="h-4 w-12" /></td>
+                          <td className="px-4 py-4"><Skeleton className="h-4 w-32" /></td>
+                          <td className="px-4 py-4"><Skeleton className="h-4 w-40" /></td>
+                          <td className="px-4 py-4"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                          <td className="px-4 py-4"><Skeleton className="h-4 w-10" /></td>
+                          <td className="px-4 py-4"><Skeleton className="h-4 w-12" /></td>
+                          <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
+                          <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
+                          <td className="px-4 py-4"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                          <td className="px-4 py-4"><Skeleton className="h-7 w-7 rounded-md" /></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           ) : aiInterviewConfigError ? (
             <div className="text-center py-16">
               <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">{aiInterviewConfigError}</p>
@@ -4753,7 +4887,65 @@ function AIMatchTabContent({
   const selectedCandidates = candidates.filter((c) => selectedIds.has(c.resumeId));
 
   if (loading) {
-    return <TableSkeleton />;
+    /* Mirrors this tab's real layout: a search + filters card, then the
+       AI-match table with the same columns in order (select, Match Rating,
+       Candidate Name, Email, Phone, Location, Skills, Experience, Uploaded
+       By, Uploaded Date, Scored Status, Attachments). */
+    return (
+      <div className="space-y-4">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 p-4 space-y-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <Skeleton className="h-10 flex-1 min-w-[200px] rounded-lg" />
+            <Skeleton className="h-10 w-32 rounded-lg" />
+            <Skeleton className="h-10 w-28 rounded-lg" />
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <Skeleton className="h-10 w-40 rounded-lg" />
+            <Skeleton className="h-10 w-40 rounded-lg" />
+            <Skeleton className="h-10 w-28 rounded-lg" />
+            <Skeleton className="h-10 w-28 rounded-lg" />
+          </div>
+        </div>
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1100px] table-auto">
+              <thead className="[&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                <tr>
+                  <th className="px-4 py-3 w-10 align-middle"><Skeleton className="h-4 w-4 rounded" /></th>
+                  {['Match Rating', 'Candidate Name', 'Email', 'Phone', 'Location', 'Skills', 'Experience', 'Uploaded By', 'Uploaded Date', 'Scored Status', 'Attachments'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left align-middle"><Skeleton className="h-3 w-20" /></th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200 dark:divide-slate-700">
+                {Array.from({ length: 8 }).map((_, r) => (
+                  <tr key={r}>
+                    <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-4 rounded" /></td>
+                    <td className="px-4 py-4 align-middle"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                    <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-32" /></td>
+                    <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-40" /></td>
+                    <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-28" /></td>
+                    <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-24" /></td>
+                    <td className="px-4 py-4 align-middle">
+                      <div className="flex gap-1">
+                        <Skeleton className="h-5 w-12 rounded-full" />
+                        <Skeleton className="h-5 w-12 rounded-full" />
+                        <Skeleton className="h-5 w-10 rounded-full" />
+                      </div>
+                    </td>
+                    <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-10" /></td>
+                    <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-20" /></td>
+                    <td className="px-4 py-4 align-middle"><Skeleton className="h-4 w-24" /></td>
+                    <td className="px-4 py-4 align-middle"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                    <td className="px-4 py-4 align-middle"><Skeleton className="h-7 w-7 rounded-md" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (candidates.length === 0) {

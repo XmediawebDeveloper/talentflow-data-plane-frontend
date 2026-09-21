@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ListPagination from '@/components/ListPagination';
-import { TableSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -628,8 +628,43 @@ export default function UnitDisputesPage() {
           </div>
         )}
 
-        {/* Loading */}
-        {loading && <TableSkeleton rows={6} columns={5} />}
+        {/* Loading — mirrors the disputes table columns (ID, Date, Unit Type, Units, Reason, Status, Actions) */}
+        {loading && (
+          <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
+            <div className="border-b border-gray-100 bg-gray-50 px-4 py-4 sm:px-6">
+              <Skeleton className="h-4 w-24" />
+              <Skeleton className="mt-1.5 h-3 w-32" />
+            </div>
+            <div className="overflow-x-auto">
+              <div className="min-w-[900px]">
+                {/* Header */}
+                <div className="grid grid-cols-[160px_110px_90px_90px_160px_140px_100px] gap-4 border-b border-gray-100 px-4 py-4">
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-3 w-12" />
+                  <Skeleton className="mx-auto h-3 w-16" />
+                  <Skeleton className="ml-auto h-3 w-12" />
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="mx-auto h-3 w-14" />
+                  <Skeleton className="ml-auto h-3 w-16" />
+                </div>
+                {/* Rows */}
+                <div className="divide-y divide-gray-100">
+                  {Array.from({ length: 6 }).map((_, r) => (
+                    <div key={r} className="grid grid-cols-[160px_110px_90px_90px_160px_140px_100px] items-center gap-4 px-4 py-4">
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="mx-auto h-5 w-12 rounded-full" />
+                      <Skeleton className="ml-auto h-4 w-8" />
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="mx-auto h-6 w-20 rounded-full" />
+                      <Skeleton className="ml-auto h-7 w-14 rounded-md" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Empty */}
         {!loading && !error && filteredDisputes.length === 0 && (
@@ -929,9 +964,22 @@ export default function UnitDisputesPage() {
                     <p className="mb-4 text-sm text-gray-600 dark:text-slate-400">Select the consumption record you want to dispute.</p>
 
                     {loadingLogs && (
-                      <div className="flex flex-col items-center justify-center py-10 tf-loader-center tf-loader-center--compact">
-                        <Loader2 className="h-8 w-8 animate-spin text-brand-blue" />
-                        <p className="mt-3 text-sm font-medium text-gray-600 dark:text-slate-400">Loading consumption history...</p>
+                      <div className="mb-4 space-y-2">
+                        {/* Mirrors each consumption-log card: unit badge +
+                            units, a meta line, and the id line. */}
+                        {Array.from({ length: LOG_PAGE_SIZE }).map((_, i) => (
+                          <div key={i} className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-3">
+                            <div className="flex items-center justify-between">
+                              <div className="flex items-center gap-2">
+                                <Skeleton className="h-5 w-10 rounded-full" />
+                                <Skeleton className="h-4 w-16" />
+                              </div>
+                              <Skeleton className="h-4 w-4" />
+                            </div>
+                            <Skeleton className="mt-1.5 h-3 w-2/3" />
+                            <Skeleton className="mt-1 h-3 w-28" />
+                          </div>
+                        ))}
                       </div>
                     )}
 

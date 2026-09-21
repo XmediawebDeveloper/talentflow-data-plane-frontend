@@ -11,7 +11,6 @@ import {
   Users,
   AlertTriangle,
   TrendingUp,
-  Loader2,
   Info,
   Plus,
   ShoppingCart
@@ -19,6 +18,7 @@ import {
 import { toast } from 'sonner';
 import { featurePermissionService, UserLimitsResponse } from '@/lib/services/featurePermissionService';
 import { useQuota } from '@/contexts/QuotaContext';
+import { Skeleton } from '@/components/ui/skeleton';
 import AddSeatsModal from './AddSeatsModal';
 
 interface UserLimitsProps {
@@ -54,11 +54,44 @@ export default function UserLimits({ onUpgradeClick, onAddSeatsClick, compact = 
   };
 
   if (isLoading) {
+    // Compact skeleton mirrors the compact card: icon + "users" label, then a thin usage bar.
+    if (compact) {
+      return (
+        <div className="p-2.5 sm:p-3 rounded-xl border border-gray-200 bg-white shadow-sm">
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Skeleton className="w-7 h-7 rounded-lg flex-shrink-0" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+          </div>
+          <div className="mt-2">
+            <Skeleton className="h-1.5 w-full rounded-full" />
+          </div>
+        </div>
+      );
+    }
+    // Full skeleton mirrors the full card: icon + title/plan, right-side count, then usage progress bar.
     return (
-      <div className={`${compact ? 'p-3' : 'p-4'} bg-white rounded-xl border border-gray-200 shadow-sm`}>
-        <div className="flex items-center justify-center gap-2 text-gray-500">
-          <Loader2 className="w-4 h-4 text-brand-blue animate-spin" />
-          <span className="text-sm">Loading limits...</span>
+      <div className="p-4 sm:p-5 rounded-xl border border-gray-200 bg-white shadow-sm">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <Skeleton className="w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex-shrink-0" />
+            <div className="min-w-0 space-y-2">
+              <Skeleton className="h-4 sm:h-5 w-28" />
+              <Skeleton className="h-3 sm:h-4 w-20" />
+            </div>
+          </div>
+          <div className="text-right flex-shrink-0 space-y-2">
+            <Skeleton className="h-6 sm:h-8 w-16 ml-auto" />
+            <Skeleton className="h-3 sm:h-4 w-20 ml-auto" />
+          </div>
+        </div>
+        <div className="mt-4">
+          <div className="flex items-center justify-between mb-1.5">
+            <Skeleton className="h-3 w-10" />
+            <Skeleton className="h-3 w-8" />
+          </div>
+          <Skeleton className="h-2 w-full rounded-full" />
         </div>
       </div>
     );
