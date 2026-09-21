@@ -217,6 +217,39 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
  *  timestamp — "no rows at all" would wrongly suppress the fallback for the
  *  gap case above, since a later real row still makes loggedActions.has(...)
  *  true. */
+/** Rows that expired and were resent BEFORE expiry was audit-logged have no
+ *  "Expired at" record anywhere, so the resend made that line vanish. The
+ *  deadline is still derivable: every resend re-applies the original validity
+ *  window (span = expires_at - last-send time, both untouched by anything
+ *  else), so the earlier deadline was that Invited's time plus the span. Only
+ *  a plain Invited -> (next) Invited pair qualifies, and only when the derived
+ *  deadline really falls before the resend; if anything else (revoke, start,
+ *  a real Expired row...) sits in between, the gap isn't an expiry.
+ *  Real audit rows never reach this: it only fills a hole they left. */
+const INFERENCE_SAFE_LABELS = new Set(['System Check', 'Email Read']);
+const inferMissingExpiries = (
+  events: TimelineEntry[],
+  spanMs: number,
+  expiredAction: string
+): TimelineEntry[] => {
+  if (!(spanMs > 0)) return events;
+  const sorted = [...events].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  const inferred: TimelineEntry[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    if (sorted[i].label !== 'Invited') continue;
+    let j = i + 1;
+    while (j < sorted.length && sorted[j].label !== 'Invited') j++;
+    if (j >= sorted.length) break;
+    const between = sorted.slice(i + 1, j);
+    if (between.some((e) => !INFERENCE_SAFE_LABELS.has(e.label))) continue;
+    const deadline = new Date(sorted[i].at).getTime() + spanMs;
+    if (deadline < new Date(sorted[j].at).getTime()) {
+      inferred.push({ ...describeTimelineAction(expiredAction), at: new Date(deadline).toISOString() });
+    }
+  }
+  return [...events, ...inferred];
+};
+
 const FALLBACK_MATCH_WINDOW_MS = 2 * 60 * 1000;
 const buildFullTimeline = (
   inv: any,
@@ -282,7 +315,9 @@ const buildFullTimeline = (
     }
   }
 
-  return out.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  return inferMissingExpiries(out, inv.expires_at && inv.invitation_sent_at ? new Date(inv.expires_at).getTime() - new Date(inv.invitation_sent_at).getTime() : 0, 'ai_interview_invite_expired').sort(
+    (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
+  );
 };
 
 /** Badge wording and colours kept in one place so a recruiter reads the same
