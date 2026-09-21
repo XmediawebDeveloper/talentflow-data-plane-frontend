@@ -21,6 +21,7 @@ import { assessmentService, type AssessmentResponse } from '@/lib/services/asses
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 
 /* Same batch size and same reason as the Assessments dashboard's own list: the
    /assessments endpoint takes only jd_id, status, search and paging, so every
@@ -591,6 +592,15 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   };
 
   const columnCount = COLUMNS.length + 1; // + Actions
+  /* Whether the table has data rows to lay out — and so whether its header
+     belongs on screen at all.
+     With none, the header is the only thing left forcing a width: its cells are
+     `nowrap`, so the table stays wider than `tf-table-shell` and the single
+     empty-state cell gets centred across THAT width rather than the visible
+     one — the message drifts off the side behind a horizontal scrollbar that
+     exists only to reach it. Nothing to label means nothing to be wide for.
+     See `TABLE_EMPTY_PANEL_CLASS`. */
+  const hasBodyRows = isLoading || (!error && pageRows.length > 0);
 
   return (
     <div className={embedded ? 'w-full' : 'flex-1 overflow-x-clip bg-slate-50'}>
@@ -789,6 +799,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
           <div className="rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
             <div ref={scrollRef} className="tf-table-shell">
               <table className="w-full text-sm border-collapse">
+                {hasBodyRows && (
                 <thead>
                   <tr className="border-b border-gray-200 dark:border-slate-700">
                     {COLUMNS.map((col) => {
@@ -830,6 +841,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                     </th>
                   </tr>
                 </thead>
+                )}
 
                 <tbody>
                   {/* ── 8. Loading ── Skeleton rows INSIDE the real table, so
@@ -859,7 +871,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                       toolbar above it survive the failure. */}
                   {!isLoading && error && (
                     <tr>
-                      <td colSpan={columnCount} className="px-6 py-14 text-center tf-wrap">
+                      <td colSpan={columnCount} className="p-0"><div className={TABLE_EMPTY_PANEL_CLASS}>
                         <div className="w-14 h-14 rounded-full bg-red-50 dark:bg-red-500/10 ring-1 ring-red-100 dark:ring-red-500/20 flex items-center justify-center mx-auto mb-4">
                           <AlertTriangle className="w-7 h-7 text-red-500" />
                         </div>
@@ -877,6 +889,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                           <RefreshCw className="w-4 h-4" />
                           Retry
                         </button>
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -886,7 +899,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                       Filters, the second has nothing to clear. */}
                   {!isLoading && !error && pageRows.length === 0 && (
                     <tr>
-                      <td colSpan={columnCount} className="px-6 py-14 text-center tf-wrap">
+                      <td colSpan={columnCount} className="p-0"><div className={TABLE_EMPTY_PANEL_CLASS}>
                         <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
                           <ClipboardList className="w-7 h-7 text-brand-blue" />
                         </div>
@@ -908,6 +921,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                             Clear Filters
                           </button>
                         )}
+                        </div>
                       </td>
                     </tr>
                   )}

@@ -65,10 +65,6 @@ import {
   InvitationHistoryDialog,
   timelineEvents,
 } from '@/components/AssessmentInviteActions';
-/* The job's own version list, for asking about each version by its own id —
-   see `loadAssessmentLineage`. Same endpoint the version panel's job half
-   already reads through `useJobVersionLineage`. */
-import { jdService } from '@/lib/services/jdService';
 /* Resume versions live on the scoring records — see the join in
    loadAllCompletedCandidates. */
 import { scoringService } from '@/lib/services/scoringService';
@@ -88,6 +84,20 @@ import AllAssessmentsTable from '@/components/assessments/AllAssessmentsTable';
 import AssessmentVersionHistoryPanel, { type AssessmentVersionRow, VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { latestVersionNumber } from '@/lib/utils/jobOpeningDisplay';
+/* The Job Opening → Job Version → Assessment retrieval, as one implementation
+   shared with every surface that reports on a whole job. It owns both halves
+   this page kept getting wrong on its own: one request PER JOB VERSION (a
+   single `jd_id` request answers only for the version it named), and resolving
+   an assessment's job version from the JD ROW it points at rather than from its
+   own `jd_version` snapshot. See the module header. */
+import {
+  loadJobAssessmentHierarchy,
+  resolveJobVersionsByJdId,
+  jobVersionOfAssessment,
+  listAllAssessments,
+  type JobAssessmentHierarchy,
+} from '@/lib/utils/jobAssessmentHierarchy';
+import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 
 
 /** What the version-history helpers below read off an assessment row — the
@@ -459,6 +469,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     jobTitle: string;
     jdId: string;
     assessments: any[];
+    /** JD row id → job version number, resolved with the assessments above so
+     *  every row can be stamped with the version it actually belongs to rather
+     *  than with the `jd_version` snapshot on the record. */
+    jobVersionByJdId: Map<string, number>;
   } | null>(null);
   const [selectedAssessmentForTracking, setSelectedAssessmentForTracking] = useState<any>(null);
   const [trackingInvitations, setTrackingInvitations] = useState<any[]>([]);
@@ -627,6 +641,47 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   useEffect(() => { void loadJdsWithAssessments(); }, []);
 
   /**
+   * JD row id → job version number, accumulated from every lineage this page
+   * has resolved.
+   *
+   * The answer to "which job version does this assessment belong to". An
+   * assessment names the JD ROW it was authored against (`jd_id`), and that row
+   * is one job version exactly — while the `jd_version` number on the record is
+   * a snapshot the backend stamps at creation that comes back as 1 for
+   * assessments authored against later versions. Reading the number first is
+   * what put every row under Job v1.
+   *
+   * A ref, not state: it is read while a load is building its rows (each row is
+   * stamped with its version as it is merged), never during render, so filling
+   * it must not schedule one. It only ever grows — a JD row's version number
+   * does not change — so a hit is always as good as a fetch.
+   */
+  const jobVersionByJdIdRef = useRef<Map<string, number>>(new Map());
+
+  const rememberJobVersions = (resolved: Map<string, number>) => {
+    for (const [id, version] of resolved) jobVersionByJdIdRef.current.set(id, version);
+    return jobVersionByJdIdRef.current;
+  };
+
+  /**
+   * The last resolved Job Opening → Job Version → Assessment hierarchy per job,
+   * keyed by EVERY JD row of that job rather than only the one it was requested
+   * for.
+   *
+   * Keyed that way because the assessments list collapses a job's lineage down
+   * to one representative row, and which version that is changes with the sort
+   * and the filters. A hierarchy is about the whole job, so a request made
+   * under any of its versions must be answerable from the entry another version
+   * already filled — otherwise the same job is fetched once per version anyone
+   * happens to click.
+   *
+   * Alongside `assessmentLineages` (the rows, which are state because the
+   * version panel renders them) and written in the same place, so the two
+   * cannot disagree. This half is a ref: only event handlers read it.
+   */
+  const jobHierarchyRef = useRef<Map<string, JobAssessmentHierarchy>>(new Map());
+
+  /**
    * Every assessment authored against ANY version of this job.
    *
    * ONE REQUEST PER JOB VERSION, merged and deduped by assessment id — not
@@ -674,36 +729,25 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (assessmentLineages[jdId] && !force) return assessmentLineages[jdId];
     setLoadingLineages(prev => ({ ...prev, [jdId]: true }));
     try {
-      /* The job's versions, from the endpoint that is authoritative about
-         them. A lineage that fails to load falls back to the card's own JD
-         row, which is exactly the single-request behaviour this replaces —
-         degraded, but never worse than it was. */
-      let versionIds: string[] = [jdId];
-      try {
-        const lineage = await jdService.getLineageVersions(jdId);
-        const ids = lineage.map(v => v.id).filter(Boolean);
-        if (ids.length) versionIds = [...new Set([jdId, ...ids])];
-      } catch (error) {
-        console.log('[TalentFlow] Failed to load JD lineage for assessment versions:', error);
+      /* The retrieval itself lives in `loadJobAssessmentHierarchy` — the
+         lineage lookup, the one-request-per-version fan-out, the dedupe by
+         assessment id and the job-version resolution, in one place shared with
+         every other surface that reports on a whole job. What stays here is
+         this page's caching of the result.
+         A lineage that fails to load degrades to the card's own JD row, which
+         is exactly the single-request behaviour this replaces — never worse
+         than it was. */
+      const hierarchy = await loadJobAssessmentHierarchy(jdId);
+      /* Learned once, reused by everything that has to name a row's job
+         version: the tracking popup, the Invitation Status tab, the Candidate
+         Results tab. */
+      rememberJobVersions(hierarchy.jobVersionByJdId);
+      /* Under every version of the job, not just the one asked about — see the
+         ref's own note. */
+      for (const versionJdId of [jdId, ...hierarchy.jdIds]) {
+        jobHierarchyRef.current.set(versionJdId, hierarchy);
       }
-
-      const responses = await Promise.all(
-        versionIds.map(versionId =>
-          assessmentService
-            .list({ jd_id: versionId, page_size: 50 })
-            /* One version failing must not blank the others — it contributes
-               nothing and the rest of the merge stands. */
-            .catch(() => ({ items: [] as unknown[] })),
-        ),
-      );
-
-      const byAssessmentId = new Map<string, AssessmentVersionRow>();
-      for (const response of responses) {
-        for (const row of ((response.items || []) as AssessmentVersionRow[])) {
-          if (row?.id) byAssessmentId.set(row.id, row);
-        }
-      }
-      const rows = [...byAssessmentId.values()];
+      const rows = hierarchy.assessments as unknown as AssessmentVersionRow[];
       setAssessmentLineages(prev => ({ ...prev, [jdId]: rows }));
       /* Returned as well as cached. `setAssessmentLineages` is not visible to
          the caller until the next render, and the duplicate flow has to read
@@ -1893,14 +1937,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      assessments and the record itself does not say which. `_assessment_id` is
      the field the row actions already read (resend, revoke, edit email, open
      result), so stamping it is what makes them act on the invite's own
-     assessment rather than on the row the popup was opened from. */
-  const stampJobScopedInvite = (invitation: any, scoped: any) => ({
+     assessment rather than on the row the popup was opened from.
+
+     The job version comes from the JD ROW the assessment points at, resolved
+     when the popup's scope was built (`trackingJob.jobVersionByJdId`), and only
+     then from `scoped.jd_version`. That field is a creation-time snapshot which
+     comes back as 1 for assessments authored against a later version, so
+     reading it first filed every candidate of every version under Job v1 —
+     the same precedence `jobVersionOf` follows in the version panel. */
+  const stampJobScopedInvite = (invitation: any, scoped: any, jobVersionByJdId: Map<string, number>) => ({
     ...invitation,
     _assessment_id: scoped.id,
     _assessment_short_id: scoped.short_id,
     _assessment_title: scoped.title,
     _assessment_version: scoped.version ?? 1,
-    _jd_version: scoped.jd_version ?? 1,
+    _jd_version: jobVersionOfAssessment(scoped, jobVersionByJdId) ?? 1,
   });
 
   /* Newest invite first, across assessments - the order the single-assessment
@@ -1990,7 +2041,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 page_size: JOB_TRACKING_FETCH_SIZE,
               });
               return (scopedResponse.items || []).map((invitation: any) =>
-                stampJobScopedInvite(invitation, scoped),
+                stampJobScopedInvite(invitation, scoped, trackingJob.jobVersionByJdId),
               );
             } catch (error) {
               console.error('Failed to load invitations for assessment', scoped.id, error);
@@ -2139,12 +2190,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     setIsLoadingCompletedCandidates(true);
     setCompletedCandidatesError(null);
     try {
-      const assessmentsResp = await assessmentService.list({ page: 1, page_size: 500 });
-      const items = assessmentsResp.items || [];
+      /* Every assessment of every job version, paged to the end rather than
+         asked for one fixed page — a tenant past that page size lost whole
+         assessments off the reply, and with them their candidates. */
+      const items = await listAllAssessments();
       if (items.length === 0) {
         setCompletedCandidates([]);
         return;
       }
+      /* Which job version each assessment belongs to, resolved from the JD ROW
+         it points at. One lineage lookup per job answers for all of its
+         versions, so this costs a request per job rather than per assessment. */
+      const jobVersionByJdId = rememberJobVersions(
+        await resolveJobVersionsByJdId(items.map((a) => a.jd_id)),
+      );
       // Results rather than invitations: the attempt carries the scores and the
       // pass/fail verdict this tab is about.
       const results = await Promise.all(
@@ -2157,11 +2216,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               _assessment_id: a.id,
               _assessment_short_id: a.short_id,
               _assessment_title: a.title,
-              /* Job Version, straight off the assessment this attempt belongs
-                 to. The fan-out is already holding that record, so the column
-                 costs no request of its own. */
+              /* Job Version of the assessment this attempt belongs to, resolved
+                 from that assessment's JD ROW — `a.jd_version` is a
+                 creation-time snapshot that reads 1 for assessments authored
+                 against later versions, so it is the fallback only. */
               _jd_id: a.jd_id,
-              _jd_version: a.jd_version,
+              _jd_version: jobVersionOfAssessment(a, jobVersionByJdId),
             }));
           } catch {
             return [];
@@ -2259,12 +2319,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     setIsLoadingInviteStatus(true);
     setInviteStatusError(null);
     try {
-      const assessmentsResp = await assessmentService.list({ page: 1, page_size: 500 });
-      const items = assessmentsResp.items || [];
+      /* Every assessment of every job version, paged to the end — see the same
+         call in `loadAllCompletedCandidates`. */
+      const items = await listAllAssessments();
       if (items.length === 0) {
         setInviteStatusRows([]);
         return;
       }
+      /* Job versions resolved from the JD rows, once for the whole set. */
+      const jobVersionByJdId = rememberJobVersions(
+        await resolveJobVersionsByJdId(items.map((a) => a.jd_id)),
+      );
       const perAssessment = await Promise.all(
         items.map(async (a: any) => {
           try {
@@ -2284,13 +2349,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                    _jd_short_id        the human-readable Job ID, e.g. JD-014.
                    _jd_title           the job's name.
                    _jd_version         the job version the assessment was
-                                       authored against.
+                                       authored against — resolved from its JD
+                                       ROW, since the `jd_version` number on the
+                                       record is a creation-time snapshot that
+                                       reads 1 for assessments authored against
+                                       later versions.
                    _assessment_version the assessment's own version, which
                                        increments on each edit/publish. */
               _jd_id: a.jd_id,
               _jd_short_id: a.jd_short_id,
               _jd_title: a.jd_title,
-              _jd_version: a.jd_version,
+              _jd_version: jobVersionOfAssessment(a, jobVersionByJdId),
               _assessment_version: a.version,
               /* Which rounds this assessment has. Only the score cells' "why
                  is this blank" tooltip reads them — the columns themselves
@@ -3104,10 +3173,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    * assessment of the job rather than one, with each row stating which job
    * version its assessment belongs to.
    *
-   * The job's assessments are resolved here, once, before the popup opens: from
-   * the lineage cache the row's version panel fills, or by the same request that
-   * fills it. The row's own assessment stands in if that comes back empty, so
-   * Track always opens on something.
+   * The job's assessments are resolved here, once, before the popup opens, by
+   * the SAME retrieval the version panel uses — the full Job Opening → Job
+   * Version → Assessment walk, one request per job version, deduped by
+   * assessment id. The row's own assessment stands in if that comes back empty,
+   * so Track always opens on something.
+   *
+   * It used to fall back to `list({ jd_id })` for the row's own JD row whenever
+   * the lineage cache was cold — which is the normal case, since Track can be
+   * clicked without ever expanding the row's version panel. That request answers
+   * for ONE job version, so every assessment authored against a sibling version
+   * was missing from the popup, and with it every candidate invited from those
+   * assessments. The cache is still consulted first, but a miss now loads the
+   * whole hierarchy rather than a slice of it.
    */
   const handleTrackJob = async (assessment: any) => {
     const jdId = assessment?.jd_id;
@@ -3115,22 +3193,32 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     /* Same reason as `handleTrackInvites`: the popup must open on its loader,
        not on a momentary "No invitations found". */
     setIsLoadingInvitations(true);
-    let rows: any[] = (assessmentLineages[jdId] as any[]) || [];
-    if (!rows.length) {
-      try {
-        const response = await assessmentService.list({ jd_id: jdId, page_size: 50 });
-        rows = response.items || [];
-        setAssessmentLineages(prev => ({ ...prev, [jdId]: rows as AssessmentVersionRow[] }));
-      } catch (error) {
-        console.error('Failed to load the job\'s assessments for tracking:', error);
-        rows = [];
-      }
+    /* The hierarchy, from the cache or freshly walked. `loadAssessmentLineage`
+       fills both caches, so reopening Track — or expanding the row's version
+       panel afterwards — is free and shows the same set. */
+    if (!jobHierarchyRef.current.has(jdId)) await loadAssessmentLineage(jdId);
+    const hierarchy = jobHierarchyRef.current.get(jdId);
+    const rows: any[] = hierarchy?.assessments ?? assessmentLineages[jdId] ?? [];
+    /* Which version each row belongs to. The hierarchy already resolved it; a
+       hierarchy that failed to load leaves the accumulated map, and one lineage
+       lookup for the rows we do have is enough to fill it — the popup must
+       never fall back to the rows' own `jd_version`, which reads 1 for every
+       assessment authored against a later version. */
+    if (!hierarchy) {
+      rememberJobVersions(
+        await resolveJobVersionsByJdId([jdId, ...rows.map((row) => row?.jd_id)]),
+      );
     }
     setTrackingJob({
       jobId: assessment.jd_short_id,
       jobTitle: assessment.job?.title || stripVersionFromTitle(assessment.title),
       jdId,
       assessments: rows.length ? rows : [assessment],
+      /* A snapshot, so a later job's lineage landing in the shared ref cannot
+         change what this popup is showing under the user. */
+      jobVersionByJdId: new Map(
+        hierarchy ? [...jobVersionByJdIdRef.current, ...hierarchy.jobVersionByJdId] : jobVersionByJdIdRef.current,
+      ),
     });
     setSelectedAssessmentForTracking(assessment);
     setTrackingFilters(EMPTY_INVITE_FILTERS);
@@ -4086,7 +4174,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!hasBeenShared) return;
-                  router.push(`/recruitment/assessments/${assessment.id}/results`);
+                  /* The JOB's results: every job version of it, combined. Named
+                     explicitly rather than left to the results page's default,
+                     because that page restores the last scope the recruiter
+                     left it on — so arriving from the job row could otherwise
+                     land on whichever single version was selected last time.
+                     The row is the job; its Result must read as the job. */
+                  router.push(`/recruitment/assessments/${assessment.id}/results?job_version_id=all`);
                 }}
                 className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
                   hasBeenShared
@@ -4756,7 +4850,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         onClick={(e) => {
           e.stopPropagation();
           if (assessment.status === 'Draft') return;
-          router.push(`/recruitment/assessments/${assessment.id}/results`);
+          /* Scoped to the JOB VERSION this row sits under.
+             These actions are the Assessment Versions table's column (its only
+             caller), so every row here belongs to one job version, and the JD
+             ROW the assessment points at names that version exactly — the same
+             identifier the rest of the flow joins on. Results opened from here
+             must therefore report that version's candidates alone; it used to
+             open unscoped, which let the page default to All Versions and show
+             every version's candidates under one version's button.
+             The job-wide reading is still one click away — the Job List row's
+             own Result button, which names `all`. */
+          const scope = assessment.jd_id ? encodeURIComponent(assessment.jd_id) : 'all';
+          router.push(`/recruitment/assessments/${assessment.id}/results?job_version_id=${scope}`);
         }}
         disabled={!hasBeenShared}
         aria-label={
@@ -6049,7 +6154,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               already scrolls sideways, so this only moves where
                               that scroll starts; leaving it at 1200 would have
                               squeezed the columns already there. */}
-                          <table className="w-full min-w-[1550px] table-auto">
+                          {/* With no rows the width floor and the header come
+                              off — see `TABLE_EMPTY_PANEL_CLASS`. A 1550px table holding
+                              one empty cell centres that cell across 1550px, so
+                              the message sat off the side of the shell behind a
+                              scrollbar that existed only to reach it. */}
+                          <table className={`w-full table-auto ${total === 0 ? '' : 'min-w-[1550px]'}`}>
+                            {total > 0 && (
                             <thead className="sticky top-0 z-10 [&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                               <tr>
                                 {/* Select All — the pinned checkbox column
@@ -6111,11 +6222,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">Action</th>
                               </tr>
                             </thead>
+                            )}
                             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                               {total === 0 ? (
                                 <tr>
-                                  <td colSpan={10} className="px-4 py-12 text-center text-sm text-gray-500 dark:text-slate-500">
-                                    No invitations match the current filters.
+                                  <td colSpan={10} className="p-0">
+                                    <div className={`${TABLE_EMPTY_PANEL_CLASS} text-sm text-gray-500 dark:text-slate-500`}>
+                                      No invitations match the current filters.
+                                    </div>
                                   </td>
                                 </tr>
                               ) : pageItems.map((inv: any) => {

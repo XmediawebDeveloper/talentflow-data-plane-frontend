@@ -19,6 +19,7 @@ import { formatISTDate, formatIST } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -798,9 +799,13 @@ export default function TeamUsageAnalytics() {
               ))
             ) : teams.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-16 text-center">
-                  <BarChart3 className="w-10 h-10 text-gray-200 dark:text-slate-500 mx-auto mb-3" />
-                  <p className="text-sm text-gray-400 dark:text-slate-500">No team usage data for the selected period.</p>
+                <td colSpan={7} className="p-0">
+                  {/* The shared empty-state panel — centred on both axes with
+                      the same height and padding every other table's uses. */}
+                  <div className={TABLE_EMPTY_PANEL_CLASS}>
+                    <BarChart3 className="w-10 h-10 text-gray-200 dark:text-slate-500 mx-auto mb-3" />
+                    <p className="text-sm text-gray-400 dark:text-slate-500">No team usage data for the selected period.</p>
+                  </div>
                 </td>
               </tr>
             ) : (

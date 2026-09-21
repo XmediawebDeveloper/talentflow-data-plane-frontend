@@ -10,6 +10,7 @@ import Pagination from '@/components/Pagination';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
+import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 
 // AS-24: localStorage key for column preferences (v2 with new columns)
 const COLUMN_PREFERENCES_KEY = 'assessment_results_jd_column_preferences_v2';
@@ -771,7 +772,12 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             empty state opt back out via whitespace-normal — they're prose/panel
             layouts, not table data. */}
         <div className="tf-table-shell">
+          {/* With no results the header comes off: its cells are `nowrap`, so
+              they are the only thing making the table wider than the shell, and
+              a wider table centres the empty cell across that width instead of
+              the visible one. See `TABLE_EMPTY_PANEL_CLASS`. */}
           <table className="w-full [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap">
+            {filteredResults.length > 0 && (
             <thead>
               <tr className="border-b border-gray-100 bg-gray-50/60">
                 <th className="text-left py-3 px-4 w-12 tf-sticky-col-left">
@@ -794,11 +800,12 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                 <th className="text-left py-3 px-4 text-xs text-gray-600 tf-sticky-col">Actions</th>
               </tr>
             </thead>
+            )}
             <tbody>
               {filteredResults.length === 0 ? (
                 <tr>
-                  <td colSpan={enabledColumns.length + 2} className="py-12 text-center whitespace-normal">
-                    <div className="text-gray-400">
+                  <td colSpan={enabledColumns.length + 2} className="p-0">
+                    <div className={`${TABLE_EMPTY_PANEL_CLASS} text-gray-400`}>
                       <BarChart3 className="w-12 h-12 mx-auto mb-3 opacity-50" />
                       <p className="text-sm">No assessment results found</p>
                       {searchTerm && (
