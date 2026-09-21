@@ -75,6 +75,12 @@ export interface JDCreate {
   education_mandatory?: boolean;
   industry_mandatory?: boolean;
   location_mandatory?: boolean;
+  /** Does the JD TEXT invite freshers ("we also welcome freshers with relevant
+   *  internship experience")? Decided by the backend - openai_service.jd_welcomes_freshers
+   *  is the only copy of the rule - and recomputed on every read rather than stored, so it
+   *  follows an edit to the text. With a stated minimum it is a contradiction: Step 2
+   *  explains why Required was left unticked, and asks before it is ticked back on. */
+  experience_welcomes_freshers?: boolean;
   experience_level?: 'entry' | 'junior' | 'mid' | 'senior' | 'architect' | 'management';
   // job_level is already declared above with the identical type; the repeat was a
   // duplicate-identifier error, not a second field.
@@ -233,6 +239,12 @@ export interface JDExtractedParams {
   education_mandatory?: boolean;
   industry_mandatory?: boolean;
   location_mandatory?: boolean;
+  /** Does the JD TEXT invite freshers ("we also welcome freshers with relevant
+   *  internship experience")? Decided by the backend - openai_service.jd_welcomes_freshers
+   *  is the only copy of the rule - and recomputed on every read rather than stored, so it
+   *  follows an edit to the text. With a stated minimum it is a contradiction: Step 2
+   *  explains why Required was left unticked, and asks before it is ticked back on. */
+  experience_welcomes_freshers?: boolean;
   // Surfaced by extraction for legacy single-field display before the structured
   // employment_type / remote_type forms were introduced.
   job_type?: string;
@@ -697,6 +709,29 @@ export const jdService = {
         // creation_method over `creation_method` above.
         jd_id: jdId ?? undefined,
       });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Remove the lines that invite people with no professional experience.
+   *
+   * Used when the recruiter answers "Make it Required" on a JD that states a minimum
+   * and also welcomes freshers (or credits internship experience towards it): once
+   * experience is Essential, a rating below 7 is an automatic No Match, so the JD must
+   * stop inviting the people it will now reject. Deterministic server-side edit - same
+   * rule that raised the warning, no LLM, nothing else reworded.
+   */
+  async stripFresherInvitation(
+    description: string,
+  ): Promise<{ description: string; removed: string[] }> {
+    try {
+      const response = await api.post<{ description: string; removed: string[] }>(
+        '/jd/strip-fresher-invitation',
+        { description },
+      );
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));
