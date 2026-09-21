@@ -141,6 +141,8 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
       return { label: 'Terminated', Icon: Ban, tone: 'text-red-600' };
     case 'assessment_complete':
       return { label: 'Completed', Icon: CheckCircle, tone: 'text-green-600' };
+    case 'assessment_invitation_expired':
+      return { label: 'Expired at', Icon: Clock, tone: 'text-brand-orange-deep' };
     default:
       return { label: action.replace(/_/g, ' '), Icon: Clock, tone: 'text-gray-500' };
   }
@@ -148,29 +150,72 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
 
 /** Merges the invitation's embedded audit trail (`inv.timeline`, attached by
  *  the list endpoint) with a same-shaped fallback synthesized from the
- *  invitation's own plain columns, for milestone types with zero audit rows
- *  at all — rows from before this trail existed. Real audit rows always
- *  win: every occurrence in the trail becomes its own entry (so a revoke
- *  followed by an edited resend shows as three separate lines, not one),
- *  and the fallback for a given type only fires when the trail has none of
- *  that type. */
+ *  invitation's own plain columns — for rows from before this trail existed,
+ *  and for the case where the trail only has a LATER occurrence of an
+ *  action (a resend's own "Invited" row, say) and would otherwise silently
+ *  hide an earlier one that predates the interview_id/invitation_id field.
+ *  Real audit rows always win: every occurrence in the trail becomes its
+ *  own entry (so a revoke followed by an edited resend shows as three
+ *  separate lines, not one), and the fallback for a given type only fires
+ *  when there's no real row of that type (or an equivalent one — resend
+ *  shares "Invited" with the initial send) AT OR BEFORE its own timestamp —
+ *  "no rows at all" would wrongly suppress the fallback for the gap case
+ *  above, since a later real row still makes that type non-empty. */
+const FALLBACK_MATCH_WINDOW_MS = 2 * 60 * 1000;
 const buildFullTimeline = (
   inv: any,
   auditLogs: Array<{ action: string; created_at: string | null }>
 ): TimelineEntry[] => {
-  const out: TimelineEntry[] = auditLogs
+  // Defensive: collapse exact duplicates — same action, same millisecond —
+  // rather than every occurrence of an action. The real fix is upstream
+  // (the write side no longer double-logs a retry/reconnect as a second
+  // "Started"), but this catches any other exact-duplicate row without
+  // touching two genuinely repeated actions at different times, e.g.
+  // Started 10:00 -> Revoked 10:05 -> Started 10:10 must all still show.
+  const seen = new Set<string>();
+  const dedupedLogs = auditLogs.filter((log) => {
+    if (!log.created_at) return true;
+    const key = `${log.action}|${new Date(log.created_at).getTime()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  const out: TimelineEntry[] = dedupedLogs
     .filter((log) => !!log.created_at)
     .map((log) => ({ ...describeTimelineAction(log.action), at: log.created_at as string }));
 
-  const loggedActions = new Set(auditLogs.map((log) => log.action));
+  // created_at (row birth, never touched again) rather than sent_at/
+  // expires_at (both overwritten by a later resend) — using a mutable
+  // column here would make the very fields a resend rewrites decide whether
+  // history from BEFORE that resend still shows.
+  const clockExpired = !inv.started_at && !inv.unit_consumed && inv.expires_at && new Date(inv.expires_at) < new Date();
+  const isLiveExpired = !inv.completed_at && (resolveInviteStatus(inv) === 'expired' || clockExpired);
   const fallback: [string, string | null | undefined][] = [
-    ['assessment_invite', inv.sent_at || inv.created_at],
+    ['assessment_invite', inv.created_at],
     ['assessment_start', inv.started_at],
     ['assessment_complete', inv.completed_at],
     ['assessment_exit', inv.terminated_at && !inv.completed_at ? inv.terminated_at : null],
+    // Live-computed only as a last resort — a real audit row (backdated to
+    // the actual deadline) always wins once one exists.
+    ['assessment_invitation_expired', isLiveExpired ? inv.expires_at : null],
   ];
   for (const [action, at] of fallback) {
-    if (at && !loggedActions.has(action) && !(action === 'assessment_invite' && loggedActions.has('assessment_invite_resend'))) {
+    if (!at) continue;
+    const candidateMs = new Date(at).getTime();
+    const wantedLabel = describeTimelineAction(action).label;
+    // The audit row is written AFTER the column is set (revoke/start rows
+    // land seconds later; the invite row after the email goes out), so a
+    // strict "at or before" test saw that later row as a different event and
+    // rendered both. The window treats a real row just after the column as
+    // the same event; anything genuinely earlier still counts as before.
+    const coveredByRealRow = dedupedLogs.some(
+      (log) =>
+        log.created_at &&
+        new Date(log.created_at).getTime() <= candidateMs + FALLBACK_MATCH_WINDOW_MS &&
+        describeTimelineAction(log.action).label === wantedLabel
+    );
+    if (!coveredByRealRow) {
       out.push({ ...describeTimelineAction(action), at });
     }
   }
@@ -182,11 +227,6 @@ const buildFullTimeline = (
   if (inv.bounced_at) out.push({ label: 'Bounced', at: inv.bounced_at, Icon: RefreshCw, tone: 'text-red-600' });
   if (inv.opened_at) out.push({ label: 'System Check', at: inv.opened_at, Icon: Monitor, tone: 'text-brand-cyan' });
 
-  const clockExpired = !inv.started_at && !inv.unit_consumed && inv.expires_at && new Date(inv.expires_at) < new Date();
-  if (!inv.completed_at && (resolveInviteStatus(inv) === 'expired' || clockExpired) && inv.expires_at) {
-    out.push({ label: 'Expired at', at: inv.expires_at, Icon: Clock, tone: 'text-brand-orange-deep' });
-  }
-
   return out.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
 };
 
@@ -197,6 +237,13 @@ const buildFullTimeline = (
 const COMPACT_TIMELINE_LIMIT = 4;
 export const timelineEvents = (inv: any): TimelineEntry[] =>
   buildFullTimeline(inv, inv.timeline || []).slice(-COMPACT_TIMELINE_LIMIT);
+
+/** "View full history" only earns its place once something is actually
+ *  hidden by the cap above — at 4 events or fewer the compact list already
+ *  shows everything, so the link would open a modal identical to what's
+ *  already on screen. */
+export const hasMoreTimelineHistory = (inv: any): boolean =>
+  buildFullTimeline(inv, inv.timeline || []).length > COMPACT_TIMELINE_LIMIT;
 
 /* ── Row-action builder ─────────────────────────────────────────────────
    One function, called by all three surfaces, so the status rules for
