@@ -161,6 +161,39 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
  *  shares "Invited" with the initial send) AT OR BEFORE its own timestamp —
  *  "no rows at all" would wrongly suppress the fallback for the gap case
  *  above, since a later real row still makes that type non-empty. */
+/** Rows that expired and were resent BEFORE expiry was audit-logged have no
+ *  "Expired at" record anywhere, so the resend made that line vanish. The
+ *  deadline is still derivable: every resend re-applies the original validity
+ *  window (span = expires_at - last-send time, both untouched by anything
+ *  else), so the earlier deadline was that Invited's time plus the span. Only
+ *  a plain Invited -> (next) Invited pair qualifies, and only when the derived
+ *  deadline really falls before the resend; if anything else (revoke, start,
+ *  a real Expired row...) sits in between, the gap isn't an expiry.
+ *  Real audit rows never reach this: it only fills a hole they left. */
+const INFERENCE_SAFE_LABELS = new Set(['System Check', 'Email Read']);
+const inferMissingExpiries = (
+  events: TimelineEntry[],
+  spanMs: number,
+  expiredAction: string
+): TimelineEntry[] => {
+  if (!(spanMs > 0)) return events;
+  const sorted = [...events].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  const inferred: TimelineEntry[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    if (sorted[i].label !== 'Invited') continue;
+    let j = i + 1;
+    while (j < sorted.length && sorted[j].label !== 'Invited') j++;
+    if (j >= sorted.length) break;
+    const between = sorted.slice(i + 1, j);
+    if (between.some((e) => !INFERENCE_SAFE_LABELS.has(e.label))) continue;
+    const deadline = new Date(sorted[i].at).getTime() + spanMs;
+    if (deadline < new Date(sorted[j].at).getTime()) {
+      inferred.push({ ...describeTimelineAction(expiredAction), at: new Date(deadline).toISOString() });
+    }
+  }
+  return [...events, ...inferred];
+};
+
 const FALLBACK_MATCH_WINDOW_MS = 2 * 60 * 1000;
 const buildFullTimeline = (
   inv: any,
@@ -227,7 +260,9 @@ const buildFullTimeline = (
   if (inv.bounced_at) out.push({ label: 'Bounced', at: inv.bounced_at, Icon: RefreshCw, tone: 'text-red-600' });
   if (inv.opened_at) out.push({ label: 'System Check', at: inv.opened_at, Icon: Monitor, tone: 'text-brand-cyan' });
 
-  return out.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  return inferMissingExpiries(out, inv.expires_at && inv.sent_at ? new Date(inv.expires_at).getTime() - new Date(inv.sent_at).getTime() : 0, 'assessment_invitation_expired').sort(
+    (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
+  );
 };
 
 /** Compact per-row timeline preview — capped at the 4 most recent events
