@@ -739,6 +739,10 @@ interface EditingJDData {
   // treats as Essential (60% block) rather than Preferred, so reopening a JD has
   // to restore them - see the hydration block below.
   experience_mandatory?: boolean;
+  /** Computed server-side from the JD TEXT: does it invite freshers? Paired with a
+   *  stated minimum that is a contradiction the recruiter has to settle - see the
+   *  Experience block in Step 2. Never stored; derived on every read. */
+  experience_welcomes_freshers?: boolean;
   education_mandatory?: boolean;
   industry_mandatory?: boolean;
   location_mandatory?: boolean;
@@ -1757,6 +1761,20 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             education_requirements: jd.education_requirements,
             experience_min: jd.experience_min,
             experience_max: jd.experience_max,
+            // The Required/Preferred ticks. Step 2 hydrates its four checkboxes from
+            // these, and NEITHER mapping forwarded them: every reopen of a JD read
+            // `undefined`, fell back to false, and un-ticked all four - silently demoting
+            // Essential criteria to Preferred on the next save. The reader was fixed once
+            // before (see the hydration block's comment, "read them"); the mappings that
+            // feed it were not, so there was nothing to read.
+            experience_mandatory: jd.experience_mandatory,
+            education_mandatory: jd.education_mandatory,
+            industry_mandatory: jd.industry_mandatory,
+            location_mandatory: jd.location_mandatory,
+            // Why the experience tick may be OFF on a JD that states a minimum: the text
+            // also invites freshers. Computed server-side on every read; Step 2 uses it to
+            // explain the box and to ask before it is ticked back on.
+            experience_welcomes_freshers: jd.experience_welcomes_freshers,
             industry_type: jd.industry_type,
             // See the note in jd-creation/page.tsx - BOTH mappings must forward this.
             role_family: jd.role_family,
@@ -2535,6 +2553,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const [showCancelDialog, setShowCancelDialog] = useState(false);
   const [isCancelling, setIsCancelling] = useState(false);
 
+  /* Does the JD text invite freshers? Decided by the backend
+     (`openai_service.jd_welcomes_freshers`), which is the only copy of the rule -
+     read here from the extraction response and from the JD on reload, never
+     re-derived in TypeScript.
+
+     Kept out of `extractedData` deliberately: that object is what Step 2 SAVES, and
+     this is a fact about the JD text, not a field the recruiter edits. */
+  const [jdWelcomesFreshers, setJdWelcomesFreshers] = useState(false);
+  /* Raised when the recruiter ticks "Required field" on a JD that both states a
+     minimum and welcomes freshers. Holds nothing but the fact that the tick is
+     pending confirmation - see the dialog at the end of this file. */
+  const [showExperienceContradictionDialog, setShowExperienceContradictionDialog] = useState(false);
+
   // Master data state - initialized with fallback data so dropdowns work immediately
   const [experienceLevels, setExperienceLevels] = useState<ExperienceLevel[]>(FALLBACK_EXPERIENCE_LEVELS);
   const [educationLevels, setEducationLevels] = useState<EducationLevel[]>(FALLBACK_EDUCATION_LEVELS);
@@ -2774,6 +2805,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       to: range.experienceMax !== undefined ? String(range.experienceMax) : '',
     };
   };
+
+  /* The contradiction itself: the JD invites freshers AND states a minimum above
+     zero. Both halves are needed - a fresher JD with "0-2 years" says the same thing
+     twice and is no contradiction at all - and the minimum is read from the box the
+     recruiter can edit, so correcting From to 0 clears the warning on the spot. */
+  const experienceContradiction = (() => {
+    if (!jdWelcomesFreshers) return false;
+    const { from } = parseExperienceYearsString(extractedData.experience);
+    const years = Number((from ?? '').replace(/[^0-9.]/g, ''));
+    return Number.isFinite(years) && years > 0;
+  })();
 
   // RS20: Job Hopping auto-default, kept in sync with the backend's
   // app/utils/job_hopping.py (same >= 3 years rule, same numeric-only
@@ -4421,6 +4463,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         niceToHaveComments: extraction.niceToHaveComments
       });
       setExtractedData(extraction);
+      // The backend's answer, not a second implementation of the rule here.
+      setJdWelcomesFreshers(Boolean(params.experience_welcomes_freshers));
       extractedDataSnapshotRef.current = extraction;
       lastExtractionSourceMode.current = mode;
       // We now hold the authoritative extracted data in state. Saving below sets
@@ -6840,6 +6884,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           return next;
         });
 
+        // Reopening a JD has to restore the WARNING as well as the tick it explains.
+        // Computed server-side on every read, so a JD extracted before this rule
+        // existed - or one whose text was edited since - still reports correctly.
+        setJdWelcomesFreshers(Boolean(effectiveEditingJD.experience_welcomes_freshers));
+
         // Sync the standalone country dropdown to the first saved location's country
         const firstCountry = effectiveEditingJD.locations?.[0]?.country;
         if (firstCountry === 'US' || firstCountry === 'IN') {
@@ -7991,13 +8040,57 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       <input
                         type="checkbox"
                         checked={Boolean(extractedData.experienceRequired)}
-                        onChange={(e) => { setExtractedData(prev => ({ ...prev, experienceRequired: e.target.checked })); markExtractedDataModified(); }}
+                        onChange={(e) => {
+                          // TICKING it on a contradictory JD is the one case that asks
+                          // first. Unticking never does - going back to Preferred cannot
+                          // reject anyone - and neither does a JD with no contradiction.
+                          if (e.target.checked && experienceContradiction) {
+                            setShowExperienceContradictionDialog(true);
+                            return;
+                          }
+                          setExtractedData(prev => ({ ...prev, experienceRequired: e.target.checked }));
+                          markExtractedDataModified();
+                        }}
                         className="w-4 h-4 text-brand-blue border-gray-300 rounded focus:ring-brand-blue/40"
                         disabled={isRegenerating}
                       />
                       <span className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">Required field</span>
                     </label>
                   </div>
+
+                  {/* The decision extraction made, said out loud.
+                      Reported 2026-09-21: a JD asking for 2-4 years that also welcomed
+                      freshers had Required left unticked - correctly - but nothing on
+                      screen said so, so it read as the system ignoring the JD. */}
+                  {experienceContradiction && !extractedData.experienceRequired && (
+                    <div className="mb-3 flex items-start gap-2 rounded-lg border border-amber-200 dark:border-amber-900/50 bg-amber-50 dark:bg-amber-950/30 px-3 py-2">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600 dark:text-amber-500" />
+                      <p className="text-xs leading-relaxed text-amber-900 dark:text-amber-200">
+                        This JD asks for experience <strong>and</strong> welcomes freshers, so experience is
+                        left <strong>Preferred</strong> - it still scores, but it will not reject the freshers
+                        the JD invited. Tick <strong>Required field</strong> only if the minimum is strict.
+                      </p>
+                    </div>
+                  )}
+
+                  {/* The tick is ALREADY on, and the contradiction is live.
+                      The dialog above only guards the moment of ticking, which does
+                      nothing for a JD that carries the tick from before this rule existed
+                      - like the reported JD-422, published with Required on and a line
+                      saying internship experience counts towards the requirement. Those
+                      are the JDs actively rejecting the people they invite, so they get
+                      the louder message, not silence. */}
+                  {experienceContradiction && extractedData.experienceRequired && (
+                    <div className="mb-3 flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-3 py-2">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-500" />
+                      <p className="text-xs leading-relaxed text-red-900 dark:text-red-200">
+                        Experience is <strong>Required</strong>, but this JD also says people without that
+                        experience may apply - so they will score <strong>No Match</strong> on the very
+                        requirement it invited them under. Untick <strong>Required field</strong>, or edit
+                        the JD text so it no longer invites them.
+                      </p>
+                    </div>
+                  )}
                   {/* NUMBERS-FIRST: recruiter enters the actual From/To years. The
                       value is stored as a canonical "From-To Years" string on
                       extractedData.experience; persistence parses it back into
@@ -10350,6 +10443,107 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         onSave={handleSaveAndNavigate}
         isSaving={isSavingDraft}
       />
+
+      {/* Experience contradiction — ticking "Required field" on a JD that invites freshers
+          ------------------------------------------------------------------------------
+          Reported 2026-09-21. The JD said "2-4 years of experience ... but we also welcome
+          freshers with relevant internship experience". Extraction correctly refused to mark
+          experience Required - Required means Essential, and an Essential rating below 7 is
+          an automatic No Match, so every fresher the JD invited would be rejected by the
+          sentence that invited them - but it did so SILENTLY, which read as the JD being
+          ignored.
+
+          The recruiter still gets the final say: this asks, it does not block. What it will
+          not do is let the tick happen without saying what it costs. */}
+      <Dialog
+        open={showExperienceContradictionDialog}
+        onOpenChange={(open) => !open && setShowExperienceContradictionDialog(false)}
+      >
+        <DialogContent className="p-4 sm:p-6 gap-3 sm:gap-4">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
+              This JD also welcomes freshers
+            </DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm space-y-2">
+              <span className="block">
+                The JD text asks for experience and, in the same breath, invites freshers with
+                internship experience to apply.
+              </span>
+              <span className="block">
+                Making experience <strong>Required</strong> turns it into an <strong>Essential</strong>{' '}
+                criterion in Resume Scoring: any candidate rated below 7 on experience is a{' '}
+                <strong>No Match</strong> outright - so the freshers this JD invites will be
+                rejected by it.
+              </span>
+              <span className="block">
+                If the minimum really is strict, continue: the line inviting them will be removed
+                from the JD text, so the posting stops promising what the scoring no longer allows.
+                Otherwise leave it Preferred - experience still scores, it just cannot reject them
+                on its own.
+              </span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <button
+              onClick={() => setShowExperienceContradictionDialog(false)}
+              className="px-4 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm"
+            >
+              Keep it Preferred
+            </button>
+            <button
+              onClick={async () => {
+                setExtractedData(prev => ({ ...prev, experienceRequired: true }));
+                markExtractedDataModified();
+                setShowExperienceContradictionDialog(false);
+
+                /* The tick alone would leave the JD contradicting itself - reported
+                   2026-09-21: Required was applied and Step 3 still read "but we also
+                   welcome freshers with relevant internship experience". Experience is
+                   now Essential, so that sentence invites people the scorer will mark
+                   No Match; it goes with the tick.
+
+                   Server-side and deterministic: the same rule that raised the warning
+                   decides what comes out, so nothing else in the recruiter's wording is
+                   touched. A failure here is not fatal - the tick still stands, and the
+                   text stays editable in the next step.
+
+                   Mode-aware read AND write - reported again same day: the fix landed in
+                   `generatedJD` unconditionally, but Step 3's preview and Save/Publish
+                   both read `mode === 'ai' ? generatedJD : manualJD` (every other call site
+                   in this file does the same split). A Manual-mode JD's real text lives in
+                   `manualJD`, so the strip call ran, returned the cleaned text, and it went
+                   into a variable nothing displays or saves - the contradiction silently
+                   came back at Save. */
+                const source = (mode === 'ai' ? generatedJD : manualJD) || effectiveEditingJD?.description || '';
+                if (!source) return;
+                try {
+                  const { description, removed } = await jdService.stripFresherInvitation(source);
+                  if (removed.length) {
+                    if (mode === 'ai') {
+                      setGeneratedJD(description);
+                    } else {
+                      setManualJD(description);
+                    }
+                    setHasUnsavedChanges(true);
+                    toast.success(
+                      removed.length === 1
+                        ? 'Removed the line inviting candidates without that experience'
+                        : `Removed ${removed.length} lines inviting candidates without that experience`,
+                    );
+                  }
+                } catch (error) {
+                  console.error('[JDCreation] Failed to update the JD wording:', error);
+                  toast.error('Experience is now Required, but the JD text could not be updated - please edit it in the next step');
+                }
+              }}
+              className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow-md shadow-amber-600/25 ring-1 ring-white/10 transition-colors text-sm"
+            >
+              Make it Required
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Cancel JD Creation Dialog */}
       <Dialog open={showCancelDialog} onOpenChange={(open) => !open && setShowCancelDialog(false)}>
