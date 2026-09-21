@@ -31,6 +31,7 @@ import {
 } from '@/lib/services/unitPoolService';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 
 const UNIT_TYPE_ICONS: Record<UnitType, IconComponent> = {
   RS: ClipboardList,
@@ -314,8 +315,11 @@ export default function MyConsumptionHistory() {
             <tbody className="divide-y divide-gray-200">
               {filteredHistory.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-6 py-8 text-center text-gray-500">
-                    No consumption history found for the selected filters.
+                  <td colSpan={5} className="p-0">
+                    {/* The shared empty-state panel — see `TABLE_EMPTY_PANEL_CLASS`. */}
+                    <div className={`${TABLE_EMPTY_PANEL_CLASS} text-gray-500`}>
+                      No consumption history found for the selected filters.
+                    </div>
                   </td>
                 </tr>
               ) : (

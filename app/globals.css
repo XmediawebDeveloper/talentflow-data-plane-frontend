@@ -2231,6 +2231,16 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
   white-space: normal;
 }
 
+/* ── Empty-state panel for a data table ───────────────────────────────
+   Lives in TypeScript, not here: `TABLE_EMPTY_PANEL_CLASS` in
+   lib/constants/tableEmptyPanel.ts. Tailwind compiles utilities from the JSX
+   that references them, so the panel arrives with its component; a rule here
+   would depend on this stylesheet being rebuilt, and an empty state that
+   renders unstyled until a dev server restarts is worse than an import.
+   That constant also documents the half neither it nor a rule here can do —
+   a table with no rows has to drop its `min-w-[…]` and its `<thead>`, or the
+   cell being centred is still wider than the screen. */
+
 /* ── Sticky Select-All / Actions columns — project-wide, reusable ──────
    Add `tf-sticky-col` to a right-pinned Actions <th>/<td>, or
    `tf-sticky-col-left` to a left-pinned Select-All <th>/<td>, on ANY table,
