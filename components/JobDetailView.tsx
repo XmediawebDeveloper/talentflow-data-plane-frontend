@@ -55,6 +55,7 @@ import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 
 // Legacy aliases — both now use the centralized IST formatter
 const formatToIST = formatIST;
@@ -2339,12 +2340,16 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           { label: viewingAssessmentResult.candidateName || 'Candidate Details' },
         ]}
         assessmentId={aId}
-        assessmentShortId={viewingAssessmentResult.assessmentShortId}
         candidateId={viewingAssessmentResult.id}
         candidateDisplayId={viewingAssessmentResult.candidateDisplayId}
         assessmentTitle={viewingAssessmentResult.assessmentName || job.title}
-        jdTitle={job.title}
         jdId={job.id}
+        /* This page IS one job version, so its own title and the version number
+           it already displays are what the result's Job Title row should name:
+           `job.versionNumber`, the same value the header's version selector
+           reads. */
+        jdTitle={job.title}
+        jdVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
         assessmentVersion={viewingAssessmentResult.assessmentVersion}
         currentIndex={_arIdx >= 0 ? _arIdx : undefined}
         totalCount={_nonPendingResults.length}
@@ -5193,7 +5198,12 @@ function AIMatchTabContent({
             header stays pinned. Header background/border live on the cells so the
             pinned row paints solid over the rows sliding underneath. */
         <div className="min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell">
-          <table className="w-full min-w-[1450px] table-auto">
+          {/* With no rows the width floor and the header come off — see
+              `TABLE_EMPTY_PANEL_CLASS`. A 1450px table centres its one empty cell across
+              1450px, which put the message off the side of the shell behind a
+              scrollbar that existed only to reach it. */}
+          <table className={`w-full table-auto ${filteredCandidates.length === 0 ? '' : 'min-w-[1450px]'}`}>
+            {filteredCandidates.length > 0 && (
             <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>
                 <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left">
@@ -5217,11 +5227,14 @@ function AIMatchTabContent({
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">Attachments</th>
               </tr>
             </thead>
+            )}
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {filteredCandidates.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-4 py-12 text-center text-gray-500 dark:text-slate-500 text-sm">
-                    No candidates match the current filters.
+                  <td colSpan={12} className="p-0">
+                    <div className={`${TABLE_EMPTY_PANEL_CLASS} text-sm text-gray-500 dark:text-slate-500`}>
+                      No candidates match the current filters.
+                    </div>
                   </td>
                 </tr>
               ) : (

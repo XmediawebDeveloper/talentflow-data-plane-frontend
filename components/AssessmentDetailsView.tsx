@@ -1,4 +1,4 @@
-import { RefreshCw, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Star, Globe, Zap, Loader2, Monitor, Ban, Sliders } from 'lucide-react';
+import { RefreshCw, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Loader2, Monitor, Ban, Sliders } from 'lucide-react';
 import { Fragment, useState, useMemo, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
@@ -17,6 +17,7 @@ import RecordPager from '@/components/RecordPager';
 import AssessmentConfigureModal from '@/components/AssessmentConfigureModal';
 import JDOverviewSections from '@/components/jobs/JDOverviewSections';
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
+import AssessmentInfoPanel from '@/components/assessments/AssessmentInfoPanel';
 import api from '@/lib/services/api';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
@@ -2522,9 +2523,9 @@ export default function AssessmentDetailsView({
               }}
               cards={[
                 { key: 'all', label: 'Total Invited', Icon: Users, value: inviteStats.total, ...INVITE_CARD_TONES.blue },
-                { key: 'expired', label: 'Expired', Icon: Clock, value: inviteStats.expired, ...INVITE_CARD_TONES.orange },
                 { key: 'started', label: 'In Progress', Icon: Play, value: inviteStats.started, ...INVITE_CARD_TONES.cyan },
                 { key: 'completed', label: 'Completed', Icon: CheckCircle, value: inviteStats.completed, ...INVITE_CARD_TONES.green },
+                { key: 'expired', label: 'Expired', Icon: Clock, value: inviteStats.expired, ...INVITE_CARD_TONES.orange },
                 {
                   key: 'completion-rate',
                   label: 'Completion Rate',

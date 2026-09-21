@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   ArrowLeft, CheckCircle2, Loader2, Shield, Star, Plus, X,
   Sparkles, GripVertical, ChevronDown, ChevronUp, Layers, Clock,
-  Trash2, AlertTriangle, CheckCheck, Info, Lock,
+  Trash2, AlertTriangle, CheckCheck, Info, Lock, ClipboardList, Search, Pencil,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
@@ -25,7 +25,12 @@ import {
   PRIORITY_LABELS as SHARED_PRIORITY_LABELS,
   normalizePriority as sharedNormalizePriority,
 } from '@/lib/constants/aiInterviewPriority';
+import type { ClusterPriority } from '@/lib/constants/aiInterviewPriority';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
+import { SectionHeader, SummaryLocation, SummaryTips } from './ConfigSummary';
+import WizardDiscardButton from './WizardDiscardButton';
+import ClusterGeneratingState, { CLUSTER_GENERATING_ID } from './ClusterGeneratingState';
+import { QuestionDistributionPopover } from './QuestionDistributionPopover';
 import { closestDuplicate } from '@/lib/skillDuplicates';
 
 /* ─────────────────────────────────────────────────────────────────────── */
@@ -231,6 +236,88 @@ function PriorityBadge({ p }: { p: number }) {
   );
 }
 
+/**
+ * The cluster's priority, as a menu of the three levels rather than a native
+ * <select>.
+ *
+ * The select showed the level as plain text while the row beside it showed the
+ * same level as a coloured badge, so the control and the value it set did not
+ * look like the same thing. This is the badge, opened.
+ */
+function PrioritySelect({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: number;
+  onChange: (p: ClusterPriority) => void;
+  disabled?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement | null>(null);
+  const info = PRIORITY_LABELS[normalizePriority(value)];
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointerDown = (e: PointerEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    };
+    const onKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('pointerdown', onPointerDown, true);
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown, true);
+      document.removeEventListener('keydown', onKeyDown);
+    };
+  }, [open]);
+
+  return (
+    <div ref={ref} className="relative mt-1">
+      <button
+        type="button"
+        disabled={disabled}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={() => setOpen(o => !o)}
+        className={`w-full flex items-center justify-between gap-2 px-3 py-2 text-sm bg-white border border-gray-200/80 rounded-lg transition-all focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue/60 ${
+          disabled ? 'bg-gray-50/70 text-gray-500 cursor-not-allowed' : 'hover:border-brand-blue/40'
+        }`}
+      >
+        <span className="flex items-center gap-1.5 min-w-0">
+          <span className={`w-2 h-2 rounded-full flex-shrink-0 ${info.dot}`} />
+          <span className="truncate">{info.label}</span>
+        </span>
+        <ChevronDown className={`w-3.5 h-3.5 text-gray-400 flex-shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+
+      {open && !disabled && (
+        <div role="listbox" className="absolute z-20 mt-1 w-full rounded-lg border border-gray-100 bg-white shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] p-1">
+          {([3, 2, 1] as ClusterPriority[]).map(p => {
+            const opt = PRIORITY_LABELS[p];
+            const selected = normalizePriority(value) === p;
+            return (
+              <button
+                key={p}
+                type="button"
+                role="option"
+                aria-selected={selected}
+                onClick={() => { onChange(p); setOpen(false); }}
+                className={`w-full flex items-center gap-2 px-2.5 py-1.5 rounded-md text-sm text-left transition-colors ${
+                  selected ? 'bg-brand-blue/5 text-brand-blue font-medium' : 'text-gray-700 hover:bg-brand-blue/5'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full flex-shrink-0 ${opt.dot}`} />
+                {opt.label}
+                {selected && <CheckCircle2 className="w-3.5 h-3.5 ml-auto text-brand-blue" />}
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 /* ── Draggable Skill Badge ── */
 function DraggableClusterSkill({
   skillName,
@@ -432,6 +519,34 @@ function ClusterRow({
         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium bg-gray-100 text-gray-600 ring-1 ring-gray-200/60">
           {visibleClusterSkills.length} skill{visibleClusterSkills.length !== 1 ? 's' : ''}
         </span>
+        {/* Rename and remove, on the row itself. Both used to live inside the
+            expanded panel, so renaming a cluster meant opening it first and
+            removing one meant opening it and scrolling past its skills. */}
+        {!isReadOnly && (
+          <>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); if (!expanded) onToggleExpand(cluster.id); }}
+              title="Rename this cluster"
+              aria-label={`Rename ${cluster.name || 'cluster'}`}
+              className="p-1 text-gray-400 hover:text-brand-blue transition-colors flex-shrink-0"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+            </button>
+            <button
+              type="button"
+              onClick={(e) => { e.stopPropagation(); if (removalLocked) return; onRemove(cluster.id); }}
+              disabled={removalLocked}
+              title={removalLocked ? 'Minimum skill count reached — removal disabled' : 'Remove this cluster'}
+              aria-label={`Remove ${cluster.name || 'cluster'}`}
+              className={`p-1 transition-colors flex-shrink-0 ${
+                removalLocked ? 'text-gray-300 cursor-not-allowed' : 'text-gray-400 hover:text-red-500'
+              }`}
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          </>
+        )}
         <div className={`flex items-center justify-center w-6 h-6 rounded-full transition-all duration-300 ${expanded ? 'bg-brand-blue/15 text-brand-blue rotate-180' : 'text-gray-400 hover:bg-gray-100'}`}>
           <ChevronDown className="w-3.5 h-3.5" />
         </div>
@@ -455,16 +570,11 @@ function ClusterRow({
             </div>
             <div>
               <label className="text-2xs font-semibold text-gray-400 uppercase tracking-wider">Priority</label>
-              <select
+              <PrioritySelect
                 value={cluster.priority}
-                onChange={(e) => onUpdate(cluster.id, { priority: Number(e.target.value) as Cluster['priority'] })}
+                onChange={(p) => onUpdate(cluster.id, { priority: p as Cluster['priority'] })}
                 disabled={isReadOnly}
-                className={`mt-1 w-full px-3 py-2 text-sm bg-white/80 backdrop-blur-sm border border-gray-200/80 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue/60 focus:bg-white transition-all ${isReadOnly ? 'text-gray-500 cursor-not-allowed' : ''}`}
-              >
-                {[3, 2, 1].map(p => (
-                  <option key={p} value={p}>{PRIORITY_LABELS[p].label}</option>
-                ))}
-              </select>
+              />
             </div>
           </div>
 
@@ -709,6 +819,12 @@ function CategorySection({
     setSkillInputError('');
   };
 
+  /* Section collapse, and the two controls over the skills pool. Local to the
+     section: each bucket is filtered and folded on its own. */
+  const [collapsed, setCollapsed] = useState(false);
+  const [skillQuery, setSkillQuery] = useState('');
+  const [skillFilter, setSkillFilter] = useState<'all' | 'skill' | 'command' | 'unassigned'>('all');
+
   // Track which skills are assigned to at least one cluster
   const assignedSkillNames = new Set(
     clusters.flatMap(c => c.skills.map(s => s.toLowerCase().trim()))
@@ -722,9 +838,9 @@ function CategorySection({
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-brand-blue/30 to-transparent" />
 
       {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100/80 bg-gradient-to-br from-slate-50/80 via-white to-brand-blue/[0.02]">
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-brand-blue/15 to-brand-blue/5 ring-1 ring-brand-blue/15 text-brand-blue shadow-sm shadow-brand-blue/10">
+      <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100/80 bg-gradient-to-br from-slate-50/80 via-white to-brand-blue/[0.02]">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-brand-blue/15 to-brand-blue/5 ring-1 ring-brand-blue/15 text-brand-blue shadow-sm shadow-brand-blue/10 flex-shrink-0">
             {icon}
           </div>
           <div className="flex flex-col">
@@ -736,8 +852,11 @@ function CategorySection({
                   {timeMin} min
                 </span>
               )}
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="text-base font-semibold text-gray-900 tracking-tight leading-tight">{title}</h2>
               {maxClusters > 0 && (
-                <span className={`inline-flex items-center px-1.5 py-0.5 rounded-md text-2xs font-medium ${
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium ${
                   atLimit
                     ? 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line'
                     : 'bg-slate-100 text-gray-600 ring-1 ring-gray-200/70'
@@ -745,14 +864,41 @@ function CategorySection({
                   {clusters.length}/{maxClusters} clusters
                 </span>
               )}
+              {timeMin > 0 && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
+                  <Clock className="w-2.5 h-2.5" />
+                  {timeMin} min
+                </span>
+              )}
             </div>
+            {/* What the bucket is for, said once in the header rather than left
+                for the recruiter to infer from the cluster names inside it. */}
+            <p className="text-xs text-gray-500 mt-0.5">
+              {category === 'mth'
+                ? 'Core skills required for the role. These are critical for candidate evaluation.'
+                : 'Additional skills that add value to the role.'}
+            </p>
           </div>
         </div>
+        {/* Collapse — a long bucket is a lot of page to scroll past when the
+            recruiter is working in the other one. */}
+        <button
+          type="button"
+          onClick={() => setCollapsed(c => !c)}
+          aria-expanded={!collapsed}
+          title={collapsed ? `Show ${title}` : `Hide ${title}`}
+          className="flex items-center justify-center w-7 h-7 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors flex-shrink-0"
+        >
+          <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${collapsed ? '' : 'rotate-180'}`} />
+        </button>
         {/* "Add Cluster" button removed per product feedback — cluster
             structure is finalized by the AI generator; manual cluster
             additions on this page are no longer offered. Use "Regenerate
             with AI" to rebuild the cluster set. */}
       </div>
+
+      {!collapsed && (
+      <>
 
       {/* ── Pool section: unified Skills (Commands color-coded inline) ── */}
       {(() => {
@@ -798,6 +944,19 @@ function CategorySection({
           );
         };
 
+        /* What the two controls above the chips actually do. A bucket can
+           carry thirty skills, and "is X still in here, and is it in a
+           cluster?" was a question the recruiter had to answer by eye. */
+        const query = skillQuery.trim().toLowerCase();
+        const matches = sorted.filter(e => {
+          if (query && !e.name.toLowerCase().includes(query)) return false;
+          if (skillFilter === 'skill') return e.type !== 'Command';
+          if (skillFilter === 'command') return e.type === 'Command';
+          if (skillFilter === 'unassigned') return !assignedSkillNames.has(e.name.toLowerCase().trim());
+          return true;
+        });
+        const filtering = query.length > 0 || skillFilter !== 'all';
+
         return (
           <div className="px-4 pt-4 pb-3 border-b border-gray-100/70">
             {totalCount === 0 ? (
@@ -807,7 +966,7 @@ function CategorySection({
               </div>
             ) : (
               <div className="mb-3">
-                <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
                   <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
                     Skills <span className="text-gray-400 font-normal">({totalCount}{commandCount > 0 ? ` · ${commandCount} command${commandCount === 1 ? '' : 's'}` : ''})</span>
                   </span>
@@ -822,9 +981,63 @@ function CategorySection({
                     </div>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {sorted.map(e => renderChip(e))}
+
+                {/* Search + filter. Both narrow the chips below; neither
+                    changes the bucket, which is finalised on Configure. */}
+                <div className="flex items-center gap-2 mb-2.5">
+                  <div className="relative flex-1 min-w-0">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none" />
+                    <input
+                      type="text"
+                      value={skillQuery}
+                      onChange={e => setSkillQuery(e.target.value)}
+                      placeholder="Search skills…"
+                      aria-label={`Search ${title}`}
+                      className="w-full pl-8 pr-8 py-1.5 text-xs bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue/60 transition-all"
+                    />
+                    {skillQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setSkillQuery('')}
+                        aria-label="Clear search"
+                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    )}
+                  </div>
+                  <div className="relative flex-shrink-0">
+                    <select
+                      value={skillFilter}
+                      onChange={e => setSkillFilter(e.target.value as typeof skillFilter)}
+                      aria-label="Filter skills"
+                      className="appearance-none pl-3 pr-7 py-1.5 text-xs font-medium bg-white border border-gray-200 rounded-lg text-gray-700 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue/60"
+                    >
+                      <option value="all">All</option>
+                      <option value="skill">Skills only</option>
+                      <option value="command">Commands only</option>
+                      <option value="unassigned">Unassigned</option>
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                  </div>
                 </div>
+
+                {matches.length === 0 ? (
+                  <p className="text-xs text-gray-400 py-3 text-center">
+                    {filtering ? 'No skills match this search.' : 'No skills in this section.'}
+                  </p>
+                ) : (
+                  <>
+                    <div className="flex flex-wrap gap-1.5">
+                      {matches.map(e => renderChip(e))}
+                    </div>
+                    {filtering && (
+                      <p className="mt-1.5 text-[10px] text-gray-400">
+                        Showing {matches.length} of {totalCount}
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
             )}
 
@@ -869,6 +1082,8 @@ function CategorySection({
           ))
         )}
       </div>
+      </>
+      )}
     </div>
   );
 }
@@ -999,6 +1214,25 @@ export default function AIInterviewClusters() {
       type: lookupType(n),
     }));
   }, []);
+
+  /* Bring the generating state into view when a run starts.
+     The card it replaces can sit well below the fold — the recruiter presses
+     "Regenerate with AI" in the header and the progress it triggers was
+     rendering off-screen, which read as nothing having happened. Scrolled on
+     the frame after the flag flips, so the element exists to scroll to. */
+  useEffect(() => {
+    if (!generating) return;
+    const frame = requestAnimationFrame(() => {
+      /* Aligned to its TOP, not centered: the block is taller than it looks —
+         rail, four cards and the Tip strip — and centering a block that tall
+         pushes its last row (the Tip) under the fold or behind the footer. */
+      document.getElementById(CLUSTER_GENERATING_ID)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [generating]);
 
   /* ── Load draft ── */
   useEffect(() => {
@@ -2765,21 +2999,11 @@ export default function AIInterviewClusters() {
                     ]
               }
             />
+          {/* Step indicator — a direct child of the card, so it can stick. */}
+          <AIInterviewStepIndicator currentStep={CURRENT_STEP} />
+
           {/* Header */}
           <div className="mb-6">
-            {/* Step indicator */}
-            <AIInterviewStepIndicator
-              currentStep={CURRENT_STEP}
-              // Steps 1–2 are behind us. Both go through saveAndNavigate so the
-              // in-progress clusters are persisted before leaving. Step 1 drops
-              // the origin param — picking a different JD ends the job context.
-              onStepClick={(step) => {
-                if (saving || generating) return;
-                if (step === 2) handleBack();
-                else if (step === 1) saveAndNavigate('/recruitment/ai-interviews/jd-selection');
-              }}
-            />
-
             {/* Header row */}
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
@@ -3151,184 +3375,25 @@ export default function AIInterviewClusters() {
                         ...nthSkills.map(s => s.name),
                         ...(((config as any)?.jd_nice_to_have_skills as string[] | undefined) ?? []),
                       ].filter((s): s is string => typeof s === 'string' && s.trim().length > 0 && !nthExclude.has(s.toLowerCase()))));
-                      // 2026-05-26 fix: this stealth-dot popover MUST mirror the
-                      // SAVED skill_distribution (what Bina actually asks at runtime
-                      // AND what the post-publish "View Skill Clusters" popover shows),
-                      // NOT a fresh local distribute() recompute. The local algorithm
-                      // produces a DIFFERENT layout than the backend AI distribution
-                      // saved to si.skill_distribution — that's the exact create-vs-
-                      // publish mismatch recruiters reported. Read saved data first;
-                      // fall back to local distribute() only when nothing has been
-                      // saved yet (fresh draft). Mirrors AIInterviewDetailsView.tsx.
-                      const savedSD = (() => {
-                        try {
-                          const raw = (config as any)?.special_instructions;
-                          if (!raw) return null;
-                          const s = typeof raw === 'string' ? JSON.parse(raw) : raw;
-                          return s?.skill_distribution || null;
-                        } catch { return null; }
-                      })();
-                      // skill→priority map so each secondary chip shows its OWN
-                      // priority (saved secondary_skills are flat strings).
-                      const skillPriorityMap = new Map<string, number>();
-                      for (const c of [...mthClusters, ...nthClusters]) {
-                        const pri = c.priority ?? 1;
-                        for (const s of (c.skills ?? [])) {
-                          if (typeof s === 'string' && s.trim()) {
-                            const k = s.toLowerCase().trim();
-                            if (!skillPriorityMap.has(k)) skillPriorityMap.set(k, pri);
-                          }
-                        }
-                      }
-                      const sdToRow = (q: any, idx: number): DistRow => {
-                        const primary = String(q?.primary_skill || '').trim();
-                        const primaryPri = Number(q?.cluster_priority)
-                          || skillPriorityMap.get(primary.toLowerCase())
-                          || 1;
-                        const secs = Array.isArray(q?.secondary_skills)
-                          ? q.secondary_skills
-                              .filter((s: any) => typeof s === 'string' && s.trim())
-                              .map((s: string) => ({
-                                name: s.trim(),
-                                priority: skillPriorityMap.get(s.trim().toLowerCase()) ?? primaryPri,
-                              }))
-                          : [];
-                        return {
-                          q: Number(q?.question_number) || (idx + 1),
-                          primary,
-                          secondaries: secs,
-                          cluster: String(q?.cluster_name || ''),
-                          priority: primaryPri,
-                        };
-                      };
-                      const mthDist: DistRow[] = (savedSD?.mth_questions?.length)
-                        ? savedSD.mth_questions.map(sdToRow)
-                        : distribute(mthClusters, timedAllocation.mthQuestions ?? 0, mthJdPool);
-                      const nthDist: DistRow[] = (savedSD?.nth_questions?.length)
-                        ? savedSD.nth_questions.map(sdToRow)
-                        : (nthEnabled ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0, nthJdPool) : []);
-                      const totalQ = mthDist.length + nthDist.length;
-                      const totalSkillsCovered = new Set([
-                        ...mthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.name.toLowerCase())]),
-                        ...nthDist.flatMap(r => [r.primary.toLowerCase(), ...r.secondaries.map(s => s.name.toLowerCase())]),
-                      ]).size;
-                      // P1/P2/P3 tier labels (replaces High/Medium/Low + the
-                      // primary-vs-secondary visual highlight). Every skill in
-                      // a Q now renders identically — same chip style, same tag
-                      // shape — so the recruiter sees a flat list per Q instead
-                      // of one "important" skill + accessory chips.
-                      const priorityLabel = (p: number) => p >= 3 ? 'P1' : p === 2 ? 'P2' : 'P3';
-                      const priorityClass = (p: number) =>
-                        p >= 3 ? 'bg-success-subtle text-success ring-success-line'
-                          : p === 2 ? 'bg-warning-subtle text-warning ring-warning-line'
-                          : 'bg-rose-50 text-rose-700 ring-rose-200';
-                      const renderRow = (row: DistRow, sectionKey: 'mth' | 'nth') => {
-                        // Treat primary + secondaries as a single flat list of
-                        // chips. Primary keeps its own priority (from the
-                        // cluster); secondaries carry their own priority too
-                        // (when borrowed from a different-priority cluster).
-                        const chips = [
-                          { name: row.primary, priority: row.priority },
-                          ...row.secondaries,
-                        ];
-                        return (
-                          <tr
-                            key={`${sectionKey}-${row.q}`}
-                            className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors"
-                          >
-                            <td className="align-top px-2 py-1.5 w-[40px]">
-                              <span className={`text-2xs font-mono font-semibold ${sectionKey === 'mth' ? 'text-brand-blue' : 'text-brand-cyan'}`}>
-                                Q{row.q}
-                              </span>
-                            </td>
-                            <td className="align-top px-2 py-1.5">
-                              <div className="flex flex-wrap items-center gap-1.5">
-                                {chips.map((s, i) => (
-                                  <span
-                                    key={`${row.q}-chip-${i}`}
-                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-medium ring-1 ${priorityClass(s.priority)}`}
-                                  >
-                                    {s.name}
-                                    <span className="text-2xs font-semibold opacity-80">{priorityLabel(s.priority)}</span>
-                                  </span>
-                                ))}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      };
+                      // The saved plan, its precedence rules and the popover
+                      // chrome live in QuestionDistributionPopover, shared with
+                      // the Preview, invite-details and results pages, so the
+                      // four cannot drift. Only the unsaved-draft PREVIEW is
+                      // local: handed over as a thunk, it runs only when nothing
+                      // has been saved yet.
+                      const hrRoundCfg = (config?.rounds_config ?? []).find(r => r.type === 'hr');
                       return (
-                        <Popover>
-                          <PopoverTrigger asChild>
-                            <button
-                              type="button"
-                              aria-label=" "
-                              title=""
-                              className="inline-flex items-center justify-center w-1.5 h-1.5 rounded-full bg-gray-300 hover:bg-brand-blue transition-colors ml-1"
-                            />
-                          </PopoverTrigger>
-                          <PopoverContent
-                            side="bottom"
-                            align="start"
-                            className="w-[480px] max-h-[70dvh] overflow-y-auto p-0"
-                          >
-                            <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-                              <div>
-                                <div className="text-sm font-semibold text-gray-900">Question Distribution</div>
-                                <div className="text-2xs text-gray-500">
-                                  {totalQ} questions · {totalSkillsCovered} skills covered
-                                </div>
-                              </div>
-                            </div>
-                            <div className="p-4 space-y-4">
-                              {mthDist.length > 0 && (
-                                <div>
-                                  <div className="text-2xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                                    Must-To-Have ({mthDist.length})
-                                  </div>
-                                  <div className="border border-gray-100 rounded-md overflow-hidden tf-table-shell">
-                                    <table className="w-full text-left">
-                                      <thead className="bg-gray-50 border-b border-gray-100">
-                                        <tr>
-                                          <th className="px-2 py-1.5 text-2xs font-semibold text-gray-500 uppercase tracking-wider w-[40px]">Q#</th>
-                                          <th className="px-2 py-1.5 text-2xs font-semibold text-gray-500 uppercase tracking-wider">Skills</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {mthDist.map(r => renderRow(r, 'mth'))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                </div>
-                              )}
-                              {nthDist.length > 0 && (
-                                <div>
-                                  <div className="text-2xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                                    Nice-To-Have ({nthDist.length})
-                                  </div>
-                                  <div className="border border-gray-100 rounded-md overflow-hidden tf-table-shell">
-                                    <table className="w-full text-left">
-                                      <thead className="bg-gray-50 border-b border-gray-100">
-                                        <tr>
-                                          <th className="px-2 py-1.5 text-2xs font-semibold text-gray-500 uppercase tracking-wider w-[40px]">Q#</th>
-                                          <th className="px-2 py-1.5 text-2xs font-semibold text-gray-500 uppercase tracking-wider">Skills</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {nthDist.map(r => renderRow(r, 'nth'))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                </div>
-                              )}
-                              {mthDist.length === 0 && nthDist.length === 0 && (
-                                <div className="text-xs text-gray-500 italic text-center py-4">
-                                  Generate clusters first.
-                                </div>
-                              )}
-                            </div>
-                          </PopoverContent>
-                        </Popover>
+                        <QuestionDistributionPopover
+                          specialInstructions={config?.special_instructions}
+                          clusters={[...mthClusters, ...nthClusters]}
+                          hrQuestions={hrEnabled ? (hrRoundCfg?.hr_questions ?? []) : []}
+                          fallback={() => ({
+                            mth: distribute(mthClusters, timedAllocation.mthQuestions ?? 0, mthJdPool),
+                            nth: nthEnabled
+                              ? distribute(nthClusters, timedAllocation.nthQuestions ?? 0, nthJdPool)
+                              : [],
+                          })}
+                        />
                       );
                     })()}
                     {/* Skill Distribution info popover removed per product feedback — user-facing
@@ -3428,7 +3493,9 @@ export default function AIInterviewClusters() {
           </div>
 
           {/* ── Two-column layout: main content + config summary sidebar ── */}
-          <div className="flex gap-6 items-start">
+          {/* Stretching columns, so the sticky summary can travel the whole
+              height of the content beside it — see the Preview step. */}
+          <div className="flex gap-6 items-stretch">
           <div className="flex-1 min-w-0 space-y-6 pb-24">
 
           {/* Flexible mode: finalized lock banner */}
@@ -3477,15 +3544,8 @@ export default function AIInterviewClusters() {
             </div>
           )}
 
-          {/* Generating overlay within content area */}
-          {generating && (
-            <div className="flex items-center justify-center py-16 tf-loader-center">
-              <div className="flex flex-col items-center gap-3">
-                <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-                <p className="text-sm text-gray-500">AI is analyzing skills and generating clusters...</p>
-              </div>
-            </div>
-          )}
+          {/* Generating state within the content area */}
+          {generating && <ClusterGeneratingState />}
 
           {!generating && (() => {
             // Pool now shows ONLY the refined cluster contents (post-Generate +
@@ -3887,8 +3947,14 @@ export default function AIInterviewClusters() {
 
           {/* ── Configuration Summary sidebar ── */}
           <div className="hidden lg:block w-64 xl:w-72 flex-shrink-0">
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sticky top-6">
-              <h3 className="font-semibold text-gray-900 text-sm mb-4 tracking-tight">Configuration Summary</h3>
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sticky top-6 max-h-[calc(100dvh-8rem)] overflow-y-auto scrollbar-auto-hide">
+              <div className="mb-4">
+                <SectionHeader
+                  icon={ClipboardList}
+                  title="Configuration Summary"
+                  subtitle="What this interview will look like once published."
+                />
+              </div>
 
               {/* Job Details */}
               {config && (
@@ -3907,10 +3973,28 @@ export default function AIInterviewClusters() {
                         <span className="text-xs font-semibold text-gray-900 text-right">{config.jd_experience_level}</span>
                       </div>
                     )}
-                    {(config as any).jd_location && (
-                      <div className="px-3 py-2 flex items-start justify-between gap-2">
+                    {config.jd_location && (
+                      <div className="px-3 py-2 flex items-center justify-between gap-2">
                         <span className="text-xs text-gray-500 flex-shrink-0">Location</span>
-                        <span className="text-xs font-semibold text-gray-900 text-right">{(config as any).jd_location}</span>
+                        <SummaryLocation value={config.jd_location} />
+                      </div>
+                    )}
+                    {config.jd_version != null && (
+                      <div className="px-3 py-2 flex items-start justify-between gap-2">
+                        <span className="text-xs text-gray-500 flex-shrink-0">JD Version</span>
+                        <span className="text-xs font-semibold text-gray-900 text-right">v{config.jd_version}</span>
+                      </div>
+                    )}
+                    <div className="px-3 py-2 flex items-center justify-between gap-2">
+                      <span className="text-xs text-gray-500 flex-shrink-0">Interview Mode</span>
+                      <span className="text-xs font-semibold text-gray-900 text-right">
+                        {isFixed ? 'Timed' : 'Conversational'}
+                      </span>
+                    </div>
+                    {config.duration_minutes != null && (
+                      <div className="px-3 py-2 flex items-center justify-between gap-2">
+                        <span className="text-xs text-gray-500 flex-shrink-0">Total Duration</span>
+                        <span className="text-xs font-semibold text-gray-900 text-right">{config.duration_minutes} min</span>
                       </div>
                     )}
                   </div>
@@ -3960,29 +4044,46 @@ export default function AIInterviewClusters() {
                       </tbody>
                     </table>
                   </div>
+                  <SummaryTips />
                 </div>
               )}
 
-              {/* Cluster progress */}
-              <div className="border border-gray-100 rounded-lg overflow-hidden">
+              {/* Cluster progress — a bar per bucket, because "2 / 3" is a
+                  fraction the eye has to read where a bar is seen. */}
+              <div className="border border-gray-100 rounded-lg overflow-hidden ring-1 ring-black/[0.02]">
                 <div className="px-3 py-2 bg-gray-50 border-b border-gray-100">
                   <span className="text-xs font-medium text-brand-blue">Cluster Progress</span>
                 </div>
-                <div className="divide-y divide-gray-50">
-                  <div className="px-3 py-2 flex items-center justify-between">
-                    <span className="text-xs text-gray-500">Must-to-Have</span>
-                    <span className={`text-xs font-semibold ${mthClusters.length > 0 ? 'text-success' : 'text-gray-400'}`}>
-                      {mthClusters.length} / {mthMaxClusters}
-                    </span>
-                  </div>
-                  {nthEnabled && (
-                    <div className="px-3 py-2 flex items-center justify-between">
-                      <span className="text-xs text-gray-500">Nice-to-Have</span>
-                      <span className={`text-xs font-semibold ${nthClusters.length > 0 ? 'text-success' : 'text-gray-400'}`}>
-                        {nthClusters.length} / {nthMaxClusters}
-                      </span>
-                    </div>
-                  )}
+                <div className="p-3 space-y-3">
+                  {[
+                    { label: 'Must-to-Have', done: mthClusters.length, total: mthMaxClusters, show: true },
+                    { label: 'Nice-to-Have', done: nthClusters.length, total: nthMaxClusters, show: nthEnabled },
+                  ]
+                    .filter(row => row.show)
+                    .map(row => {
+                      const complete = row.total > 0 && row.done >= row.total;
+                      const pct = row.total > 0 ? Math.min(100, Math.round((row.done / row.total) * 100)) : 0;
+                      return (
+                        <div key={row.label}>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-xs text-gray-600">{row.label}</span>
+                            <span className={`text-xs font-semibold ${
+                              complete ? 'text-advice-positive' : row.done > 0 ? 'text-gray-900' : 'text-gray-400'
+                            }`}>
+                              {row.done} / {row.total}
+                            </span>
+                          </div>
+                          <div className="h-1.5 rounded-full bg-slate-100 overflow-hidden">
+                            <div
+                              className={`h-full rounded-full transition-all duration-500 ${
+                                complete ? 'bg-advice-positive' : 'bg-brand-blue'
+                              }`}
+                              style={{ width: `${pct}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
                 </div>
               </div>
             </div>
@@ -4003,10 +4104,8 @@ export default function AIInterviewClusters() {
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="md" onClick={handleBack} disabled={saving} icon={<ArrowLeft className="w-4 h-4" />}>
               Back to Configure
-            </Button>
-            <Button variant="destructive" size="md" onClick={handleDiscard} disabled={saving} icon={<Trash2 className="w-4 h-4" />}>
-              Discard
-            </Button>
+            </button>
+            <WizardDiscardButton onClick={handleDiscard} disabled={saving} />
           </div>
           <div className="flex items-center gap-2">
             <Button

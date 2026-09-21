@@ -27,6 +27,7 @@ import {
   recruiterSeverity, categoryOf, labelOfViolation, groupKeyOf, confidenceOfViolation,
   describeViolation, summarizeViolations,
 } from './violationTaxonomy';
+import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 
 interface IntegrityCheckTabProps {
   violations: ViolationRecord[];
@@ -498,7 +499,11 @@ export default function IntegrityCheckTab({
         </div>
 
         <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm overflow-x-auto tf-table-shell">
-          <table className="w-full text-sm min-w-[720px]">
+          {/* No rows, no width floor and no header — see `TABLE_EMPTY_PANEL_CLASS`.
+              720px is above a phone's viewport, so the one empty cell centred
+              across it put the message off-screen behind a scrollbar. */}
+          <table className={`w-full text-sm ${shownGroups.length === 0 ? '' : 'min-w-[720px]'}`}>
+            {shownGroups.length > 0 && (
             <thead className="bg-slate-50 border-b border-gray-100">
               <tr>
                 <th className="px-4 py-2.5 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide w-8"></th>
@@ -509,6 +514,7 @@ export default function IntegrityCheckTab({
                 <th className="px-4 py-2.5 text-right text-xs font-semibold text-gray-500 uppercase tracking-wide">Times</th>
               </tr>
             </thead>
+            )}
             <tbody className="divide-y divide-gray-100">
               {shownGroups.map(g => {
                 const tone = SEV_TONE[g.severity];
@@ -592,7 +598,7 @@ export default function IntegrityCheckTab({
                 );
               })}
               {shownGroups.length === 0 && (
-                <tr><td colSpan={6} className="px-4 py-10 text-center text-sm text-gray-400">No events in this category.</td></tr>
+                <tr><td colSpan={6} className="p-0"><div className={`${TABLE_EMPTY_PANEL_CLASS} text-sm text-gray-400`}>No events in this category.</div></td></tr>
               )}
             </tbody>
           </table>

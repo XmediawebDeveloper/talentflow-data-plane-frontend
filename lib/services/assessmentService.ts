@@ -36,6 +36,12 @@ export interface AssessmentCreate {
    *  log the "Saved as Draft" checkpoint immediately instead of only on
    *  whatever edit happens to come next. */
   save_and_exit?: boolean;
+  /** Whether the recruiter actually changed a Configure control before this
+   *  save, rather than leaving the auto-generated defaults alone. Decides
+   *  which checkpoint `save_and_exit` logs — untouched is "Saved as Draft",
+   *  edited is "Draft Updated". Only the form knows this on a create: the
+   *  backend has no saved baseline to diff against yet. */
+  content_edited?: boolean;
 }
 
 export interface AssessmentUpdate {
@@ -1117,6 +1123,31 @@ export const assessmentService = {
   }): Promise<CombinedAuditTrailResponse> {
     try {
       const response = await api.get<CombinedAuditTrailResponse>('/assessments/audit-trail/combined', { params });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * 4c. Export the combined audit trail (Activity Logs tab) in the format the
+   * recruiter picked, honoring whatever filters the tab currently has applied.
+   */
+  async exportCombinedAuditTrail(params?: {
+    category?: 'assessment_lifecycle' | 'candidate_activity';
+    assessment_id?: string;
+    date_from?: string;
+    date_to?: string;
+    search?: string;
+    /** Only these two — the endpoint rejects anything else. Defaults to CSV
+     *  server-side; the tab's export dialog always sends one explicitly. */
+    format?: 'csv' | 'excel';
+  }): Promise<Blob> {
+    try {
+      const response = await api.get('/assessments/audit-trail/combined/export', {
+        params,
+        responseType: 'blob',
+      });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

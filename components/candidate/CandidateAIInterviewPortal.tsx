@@ -332,6 +332,17 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     try { if (typeof window !== 'undefined') window.sessionStorage.removeItem(_screenSegKey); } catch { /* ignore */ }
   };
   const screenStreamRef = useRef<MediaStream | null>(null);
+  // Reused across every captureScreenFrame() attempt instead of being created
+  // fresh each time. A brand-new <video> re-attached to the same live
+  // getDisplayMedia stream forces the OS/browser capture pipeline (PipeWire/
+  // xdg-desktop-portal on Linux) to re-sync its decoder from scratch, and that
+  // resync got progressively slower under repeated create/attach/destroy
+  // churn — the 1st share-bar-check attempt decoded a fresh frame almost
+  // immediately, but every retry after it ate the full ~3.5s frame-wait
+  // budget and returned null (→ "could not verify" shown even though the bar
+  // really was hidden). Keeping one persistent element attached for the life
+  // of the stream keeps the decode pipeline warm so retries stay fast.
+  const captureVideoRef = useRef<HTMLVideoElement | null>(null);
   const screenCheckpointInProgressRef = useRef(false);
   const isFinalizingScreenUploadRef = useRef(false);
   // Audio mixing for screen recording (Bina's TTS tap + candidate mic)
@@ -1146,6 +1157,21 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         width: { ideal: 1920 },
         height: { ideal: 1080 },
         displaySurface: 'monitor',
+        // Without this, Chrome/Edge burn the LIVE system mouse cursor into
+        // every captured frame — including the blanked-white frame grabbed
+        // for the share-bar vision check. On an otherwise 100% blank check
+        // frame, that cursor is exactly the kind of small dark unexplained
+        // mark _SHARE_BAR_VISION_PROMPT's GOLDEN RULE tells the model to
+        // flag on sight (confirmed from a real blocked attempt's persisted
+        // screenshot: pure white, nothing else, one visible cursor arrow) —
+        // and its screen position (so its reported corner/side) just tracks
+        // wherever the candidate's mouse happens to be, which is why the
+        // "foreign_app_detected" label kept naming a different corner each
+        // retry for the same candidate with nothing actually open. 'never'
+        // is honoured by Chrome/Edge; harmless for the interview recording
+        // itself since the candidate isn't expected to interact with their
+        // own desktop during the interview anyway.
+        cursor: 'never',
       },
       audio: true,
       preferCurrentTab: false,
@@ -1598,6 +1624,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         }
         screenRecorderRef.current = null;
         screenStreamRef.current = null;
+        // The persistent share-bar-check <video> (captureVideoRef) was bound
+        // to THIS now-dead stream — drop it so the next re-share starts a
+        // fresh element instead of reusing one attached to a stopped track.
+        try { captureVideoRef.current?.pause(); } catch { /* ignore */ }
+        try { captureVideoRef.current?.remove(); } catch { /* ignore */ }
+        captureVideoRef.current = null;
         // Only show the blocking overlay when the interview is actually running
         if (stepRef.current === 'interview') {
           setScreenShareStopped(true);
@@ -1707,6 +1739,18 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           .forEach((el) => { if (!hideEls.includes(el)) hideEls.push(el); });
       } catch { /* querySelector never throws in practice; guard anyway */ }
     }
+    // DIAGNOSTIC (temporary): the blank-to-white swap below has been
+    // confirmed, from a real candidate's raw screenshot, to sometimes never
+    // visually land even after an 8s retry budget — which is far longer than
+    // normal capture-pipeline lag, so something structural (not just slow)
+    // may be preventing it. Logs exactly what this function sees so a
+    // browser-console capture from a live failing attempt tells us the real
+    // cause instead of guessing with more timeout increases.
+    console.warn('[ShareBar-Diag] capture starting', {
+      hideElsCount: hideEls.length,
+      cardRefPresent: !!shareBarCardRef.current,
+      pageRefPresent: !!shareBarPageRef.current,
+    });
     const restores = hideEls.map((el) => {
       const prev = el.style.visibility;
       el.style.visibility = 'hidden';
@@ -1730,24 +1774,36 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     // 2x2px, fixed position) so decoding stays live, and wait for actual
     // NEW decoded frames (requestVideoFrameCallback) rather than a fixed
     // wall-clock delay. Removed from the DOM again in `finally`.
-    const video = document.createElement('video');
-    video.muted = true;
-    (video as HTMLVideoElement).playsInline = true;
-    video.style.position = 'fixed';
-    video.style.left = '-99999px';
-    video.style.top = '0';
-    video.style.width = '2px';
-    video.style.height = '2px';
-    document.body.appendChild(video);
+    // Reuse the same <video> across every attempt (see captureVideoRef
+    // declaration) — only create/attach it once. Re-attaching srcObject on an
+    // already-live-on-this-stream video is a no-op we skip entirely, so a
+    // retry costs nothing beyond the actual frame-wait below.
+    let reusedVideo = captureVideoRef.current;
+    const isFreshAttach = !reusedVideo || reusedVideo.srcObject !== stream;
+    if (!reusedVideo) {
+      reusedVideo = document.createElement('video');
+      reusedVideo.muted = true;
+      reusedVideo.playsInline = true;
+      reusedVideo.style.position = 'fixed';
+      reusedVideo.style.left = '-99999px';
+      reusedVideo.style.top = '0';
+      reusedVideo.style.width = '2px';
+      reusedVideo.style.height = '2px';
+      document.body.appendChild(reusedVideo);
+      captureVideoRef.current = reusedVideo;
+    }
+    const video = reusedVideo;
     try {
-      video.srcObject = stream;
-      try { await video.play(); } catch { /* ignore */ }
-      await new Promise<void>((resolve) => {
-        if (video.videoWidth && video.readyState >= 2) return resolve();
-        const on = () => { video.removeEventListener('loadeddata', on); resolve(); };
-        video.addEventListener('loadeddata', on);
-        window.setTimeout(resolve, 1500);
-      });
+      if (isFreshAttach) {
+        video.srcObject = stream;
+        try { await video.play(); } catch { /* ignore */ }
+        await new Promise<void>((resolve) => {
+          if (video.videoWidth && video.readyState >= 2) return resolve();
+          const on = () => { video.removeEventListener('loadeddata', on); resolve(); };
+          video.addEventListener('loadeddata', on);
+          window.setTimeout(resolve, 1500);
+        });
+      }
       const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
       // Normalize EVERY display's capture into the 1920–2048px-wide band so the
       // frame sent to the vision model is consistently large across all screens:
@@ -1794,20 +1850,50 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       };
       const grabFrame = async (): Promise<Blob | null> => {
         let canvas = grabCanvas();
-        // Up to 4 extra retries (~1.4s worst case) waiting for the blank to
-        // actually land before giving up and using whatever's latest — better
-        // than an unbounded wait, but closes the gap the fixed rVFC wait left
-        // open on slower hardware.
-        for (let attempt = 0; canvas && !looksBlank(canvas) && attempt < 4; attempt++) {
-          await new Promise<void>((r) => window.setTimeout(r, 350));
+        // Up to 20 extra retries (~8s worst case) waiting for the blank to
+        // actually land before giving up. Raised from 10 (~3.5s) after a real
+        // test on a loaded machine still failed on EVERY attempt (6/6) at that
+        // budget — the OS screen-capture pipeline (pipewire/Wayland under
+        // load) can lag several seconds behind the compositor, not just
+        // ~1.5s, so a short budget was guaranteeing failure rather than
+        // occasionally missing it. 8s is a longer spinner than ideal, but a
+        // slow-and-correct check beats a fast-and-permanently-stuck one.
+        let confirmedBlank = canvas ? looksBlank(canvas) : false;
+        for (let attempt = 0; canvas && !confirmedBlank && attempt < 20; attempt++) {
+          await new Promise<void>((r) => window.setTimeout(r, 400));
           canvas = grabCanvas();
+          confirmedBlank = canvas ? looksBlank(canvas) : false;
         }
-        if (!canvas) return null;
+        // Verified from a real blocked candidate's persisted screenshot
+        // (sharebar_original_*.jpg): on some machines the blank/white swap
+        // still hasn't visually landed after every retry, and sending that
+        // still-fully-rendered page (our own dark background, the card, the
+        // in-page sharing-bar MOCK graphic) to the vision check is worse than
+        // not checking at all — the model reads our own mock bar as the real
+        // one ("expanded sharing bar visible") and/or the pixel backstop (which
+        // assumes a flat white background) reads normal gradient shading as a
+        // foreign blob, falsely blocking a candidate who did everything right.
+        // Fail the same way an outright capture failure already does (return
+        // null → caller re-prompts via the existing hard gate) rather than
+        // ever sending a confirmed-not-blank frame.
+        if (!canvas || !confirmedBlank) return null;
         return await new Promise<Blob | null>((resolve) => canvas!.toBlob((b) => resolve(b), 'image/jpeg', 0.9));
       };
 
       // Page background WHITE for the capture.
       if (pageEl) pageEl.style.background = 'var(--raw-ffffff)';
+      // DIAGNOSTIC (temporary, see note above): read back what the DOM
+      // actually resolved to right after we set it, and what the card's
+      // real (not just React-ref) visibility computes to. If computedBg
+      // isn't white here, the CSS assignment itself failed (a real bug, not
+      // a timing issue); if it IS white but captures still aren't blank,
+      // the problem is purely in the OS/browser screen-capture pipeline.
+      try {
+        const computedBg = pageEl ? window.getComputedStyle(pageEl).backgroundColor : 'no pageEl';
+        const cardComputedVis = shareBarCardRef.current
+          ? window.getComputedStyle(shareBarCardRef.current).visibility : 'no cardRef';
+        console.warn('[ShareBar-Diag] after DOM mutation', { computedBg, cardComputedVis });
+      } catch { /* diagnostic only */ }
       if (hideEls.length || pageEl) {
         // Wait for ACTUAL new decoded frames, not a fixed wall-clock delay —
         // that's what silently failed before (see root-cause comment above).
@@ -1831,16 +1917,18 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         }
       }
       const frame = await grabFrame();
-
-      try { video.pause(); } catch { /* ignore */ }
-      video.srcObject = null;
+      // Deliberately do NOT pause/detach/remove the video here — it stays
+      // attached and playing so the NEXT captureScreenFrame() call (if this
+      // one is rejected and the candidate retries) reuses an already-warm
+      // decode pipeline instead of paying the re-sync cost again. Torn down
+      // only when the share stream itself ends (see the video track's
+      // 'ended' listener, which also clears captureVideoRef).
       return frame;
     } finally {
       // Always restore every hidden graphic and the page background, whether
       // capture succeeded, returned null, or threw.
       restores.forEach((restore) => restore());
       if (pageEl) pageEl.style.background = prevPageBg ?? '';
-      try { video.remove(); } catch { /* ignore */ }
     }
   }, []);
 
@@ -1923,7 +2011,23 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       return;
     }
     // Keep the start IN fullscreen (this click is the required user gesture).
-    if (!isFullscreen()) { try { await requestFullscreen(); } catch { /* verified in UI */ } }
+    // When fullscreen actually had to be (re)requested here, Chrome/Edge show
+    // their own transient "<site> - to exit full screen, press Esc" reminder
+    // bar near the top of the screen for a few seconds — pure browser chrome,
+    // not a foreign app. It is NOT in the vision-LLM prompt's exception list
+    // (see _SHARE_BAR_VISION_PROMPT) and IS dark-on-white enough to trip the
+    // backend's pixel-color corner backstop, so if the screen frame below is
+    // grabbed while it's still showing, the candidate gets falsely blocked
+    // with "unidentified text"/"unidentified icon/blob" even with nothing else
+    // open (confirmed from a support recording). Give it time to fade before
+    // capturing — only when we just triggered it, so an already-fullscreen
+    // retry isn't slowed down.
+    if (!isFullscreen()) {
+      try {
+        await requestFullscreen();
+        await new Promise((resolve) => window.setTimeout(resolve, 4000));
+      } catch { /* verified in UI */ }
+    }
     // Resume audio (Bina TTS) on this gesture too.
     try {
       const ctx = (window as any).__interviewAudioContext || new AudioContext({ sampleRate: 24000 });

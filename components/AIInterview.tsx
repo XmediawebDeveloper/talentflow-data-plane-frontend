@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, GitBranch, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, Sparkles, ClipboardList, Ban, Check, Info, RefreshCw, Layers, Radar } from 'lucide-react';
+import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, GitBranch, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Check, Info, RefreshCw, Layers, Radar } from 'lucide-react';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef, useCallback, useMemo, type ComponentType } from 'react';
 import { createPortal } from 'react-dom';
@@ -338,8 +338,6 @@ export default function AIInterview() {
 
   // Confirmation dialog
   const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null);
-  const [showPublishedModal, setShowPublishedModal] = useState(false);
-  const [publishedTitle, setPublishedTitle] = useState('');
 
   // Sync quota from shared QuotaContext (AIU = AI Interview Units)
   useEffect(() => {
@@ -683,21 +681,6 @@ export default function AIInterview() {
 
     return () => window.clearTimeout(clearRedirectTimer);
   }, []);
-
-  useEffect(() => {
-    const wasPublished = searchParams.get('published') === '1';
-    if (!wasPublished) return;
-
-    setPublishedTitle(searchParams.get('title') || 'AI Interview');
-    setShowPublishedModal(true);
-
-    const timer = window.setTimeout(() => {
-      setShowPublishedModal(false);
-      router.replace('/recruitment/ai-interviews');
-    }, 3000);
-
-    return () => window.clearTimeout(timer);
-  }, [searchParams, router]);
 
   useEffect(() => {
     if (activeTab === 'settings') {
@@ -3226,7 +3209,7 @@ export default function AIInterview() {
                   loadInvitationOverview, which queries unfiltered — selecting a
                   bucket narrows the table without collapsing the other cards. */}
               <InviteStatCards
-                gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-3"
+                gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1 sm:gap-2 lg:gap-3"
                 activeStatus={inviteFilters.status}
                 onSelect={(status) => {
                   setInviteFilters({ ...inviteFilters, status });
@@ -3238,7 +3221,6 @@ export default function AIInterview() {
                   { key: 'in_progress', label: 'In Progress', Icon: Play, value: invitationOverview.inProgress, ...INVITE_CARD_TONES.orange },
                   { key: 'completed', label: 'Completed', Icon: CheckCircle, value: invitationOverview.completed, ...INVITE_CARD_TONES.green },
                   { key: 'terminated', label: 'Terminated', Icon: Ban, value: invitationOverview.terminated, ...INVITE_CARD_TONES.red },
-                  { key: 'cancelled', label: 'Cancelled', Icon: X, value: invitationOverview.cancelled, ...INVITE_CARD_TONES.red },
                   { key: 'completion-rate', label: 'Completion', Icon: TrendingUp, value: `${completionRate}%`, filterable: false, ...INVITE_CARD_TONES.cyan },
                 ]}
               />

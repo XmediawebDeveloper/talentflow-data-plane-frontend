@@ -496,11 +496,27 @@ function JDCreationContent() {
       education_requirements: editingJD.education_requirements,
       experience_min: editingJD.experience_min,
       experience_max: editingJD.experience_max,
+      // The Required/Preferred ticks. Step 2 hydrates its four checkboxes from
+      // these, and NEITHER mapping forwarded them: every reopen of a JD read
+      // `undefined`, fell back to false, and un-ticked all four - silently demoting
+      // Essential criteria to Preferred on the next save. The reader was fixed once
+      // before (see the hydration block's comment, "read them"); the mappings that
+      // feed it were not, so there was nothing to read.
+      experience_mandatory: editingJD.experience_mandatory,
+      education_mandatory: editingJD.education_mandatory,
+      industry_mandatory: editingJD.industry_mandatory,
+      location_mandatory: editingJD.location_mandatory,
+      // Why the experience tick may be OFF on a JD that states a minimum: the text
+      // also invites freshers. Computed server-side on every read; Step 2 uses it to
+      // explain the box and to ask before it is ticked back on.
+      experience_welcomes_freshers: editingJD.experience_welcomes_freshers,
+
       // job_level carries a custom experience value (e.g. "20.5 months") that has
       // no numeric min/max — omitting it here silently cleared the custom
       // experience on edit. Forward it so it round-trips.
       job_level: editingJD.job_level,
       industry_type: editingJD.industry_type,
+      industry_suggested_name: editingJD.industry_suggested_name,
       // role_family is decided during EXTRACTION so publish can resolve
       // master_role_families by code instead of paying a classification LLM call.
       // If this mapping drops it, the edited JD reverts to role_family=null and

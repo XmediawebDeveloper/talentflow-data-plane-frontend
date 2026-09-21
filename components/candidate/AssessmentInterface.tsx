@@ -210,7 +210,7 @@ export function AssessmentInterface({
   };
 
   // Network status and retry queue
-  const { isOnline, isSlowConnection, connectionType } = useNetworkStatus();
+  const { isOnline, offlineReason, isSlowConnection, connectionType } = useNetworkStatus();
   const { queueSize, isProcessing, addToQueue, processQueue } = useRetryQueue();
   const [showNetworkBanner, setShowNetworkBanner] = useState(false);
   const [lastSaveError, setLastSaveError] = useState<string | null>(null);
@@ -1272,7 +1272,14 @@ export function AssessmentInterface({
         setLastSaveError('Assessment time has expired. Your progress has been saved.');
         setTimeout(() => onComplete(), 1000);
       } else if (isNetworkError) {
-        setLastSaveError('No internet connection. Your answer is saved locally and will be submitted when connection is restored.');
+        /* `navigator.onLine` is the only signal here that means the DEVICE is
+           offline; a request that simply got no response is the server being
+           unreachable, which is not the candidate's connection. */
+        setLastSaveError(
+          !navigator.onLine
+            ? 'No internet connection. Your answer is saved and will be submitted when you are back online.'
+            : "Can't reach the server right now. Your answer is saved and will be submitted automatically.",
+        );
         setAutoSaveStatus('offline');
       } else {
         setLastSaveError(errorMessage);
@@ -1719,12 +1726,19 @@ export function AssessmentInterface({
       {/* Sticky Header Container */}
       <div className="sticky top-0 z-50">
         {/* Network Status Banner */}
+        {/* Two different facts, two different messages. A backend restart used
+            to render as "No internet connection", which blames the candidate's
+            connection for something happening on our side — alarming, and
+            wrong, in the middle of a timed assessment. `offlineReason` is
+            'browser' only when the device itself reports being offline. */}
         {!isOnline && (
           <div className="bg-warning text-white px-4 py-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <WifiOff className="w-4 h-4" />
               <span className="text-sm font-medium">
-                No internet connection. Your answers are saved locally and will sync when connection is restored.
+                {offlineReason === 'browser'
+                  ? 'No internet connection. Your answers are saved and will sync automatically when you are back online.'
+                  : "Can't reach the server right now. Your answers are saved and will sync automatically — please keep this tab open."}
               </span>
             </div>
             {queueSize > 0 && (

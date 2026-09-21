@@ -21,6 +21,7 @@ import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiI
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useAuth } from '@/lib/hooks/useAuth';
+import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 
 /** The page-size ladder this screen specifies (same ladder as the Assessments
  *  equivalent, so pagination reads the same across the two products). */
@@ -39,7 +40,7 @@ const normalizeStatus = (status: string) =>
    AssessmentRow so the two flat tables read as one family. */
 interface InterviewRow {
   id: string;
-  interviewId: string;    // display_id, e.g. "AI-045" (shown, not searched separately)
+  interviewId: string;    // display_id, e.g. "AI-045" — searchable, not shown
   jobId: string;           // jd_short_id            -> column 1
   jobName: string;         // jd_title               -> column 2
   jobVersion: number;      // jd_version             -> column 3
@@ -482,6 +483,15 @@ export default function AllInterviewsTable() {
   };
 
   const columnCount = COLUMNS.length + 1; // + Actions
+  /* Whether the table has data rows to lay out — and so whether its header
+     belongs on screen at all.
+     With none, the header is the only thing left forcing a width: its cells are
+     `nowrap`, so the table stays wider than `tf-table-shell` and the single
+     empty-state cell gets centred across THAT width rather than the visible
+     one — the message drifts off the side behind a horizontal scrollbar that
+     exists only to reach it. Nothing to label means nothing to be wide for.
+     See `TABLE_EMPTY_PANEL_CLASS`. */
+  const hasBodyRows = isLoading || (!error && pageRows.length > 0);
 
   return (
     <div className="p-3 sm:p-6">
@@ -623,6 +633,7 @@ export default function AllInterviewsTable() {
       <div className="rounded-xl border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
         <div ref={scrollRef} className="tf-table-shell">
           <table className="w-full text-sm border-collapse">
+            {hasBodyRows && (
             <thead>
               <tr className="border-b border-gray-200 dark:border-slate-700">
                 {COLUMNS.map((col) => {
@@ -664,6 +675,7 @@ export default function AllInterviewsTable() {
                 </th>
               </tr>
             </thead>
+            )}
 
             <tbody>
               {isLoading &&
@@ -688,7 +700,7 @@ export default function AllInterviewsTable() {
 
               {!isLoading && error && (
                 <tr>
-                  <td colSpan={columnCount} className="px-6 py-14 text-center tf-wrap">
+                  <td colSpan={columnCount} className="p-0"><div className={TABLE_EMPTY_PANEL_CLASS}>
                     <div className="w-14 h-14 rounded-full bg-destructive-subtle ring-1 ring-destructive-line flex items-center justify-center mx-auto mb-4">
                       <AlertTriangle className="w-7 h-7 text-destructive" />
                     </div>
@@ -701,13 +713,14 @@ export default function AllInterviewsTable() {
                     <Button variant="primary" size="sm" onClick={retry} icon={<RefreshCw className="w-4 h-4" />}>
                       Retry
                     </Button>
+                    </div>
                   </td>
                 </tr>
               )}
 
               {!isLoading && !error && pageRows.length === 0 && (
                 <tr>
-                  <td colSpan={columnCount} className="px-6 py-14 text-center tf-wrap">
+                  <td colSpan={columnCount} className="p-0"><div className={TABLE_EMPTY_PANEL_CLASS}>
                     <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
                       <Video className="w-7 h-7 text-brand-blue" />
                     </div>
@@ -724,6 +737,7 @@ export default function AllInterviewsTable() {
                         Clear Filters
                       </Button>
                     )}
+                    </div>
                   </td>
                 </tr>
               )}
@@ -751,14 +765,6 @@ export default function AllInterviewsTable() {
                       >
                         {row.jobName}
                       </span>
-                      {row.interviewId && (
-                        <span
-                          className="block truncate text-xs text-gray-500 dark:text-slate-500"
-                          title={row.interviewId}
-                        >
-                          {row.interviewId}
-                        </span>
-                      )}
                     </td>
 
                     <td className="px-3 py-2.5 align-middle">

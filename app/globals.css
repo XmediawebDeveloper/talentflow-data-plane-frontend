@@ -57,6 +57,42 @@
   100% { transform: scaleY(0.05); }
 }
 
+/* ── Wizard step indicator: the pulse around the CURRENT step ────────
+   Its own keyframes rather than `animate-ping` with an inline duration
+   override, so the ring runs identically on every page of a flow no matter
+   what utility layer or plugin order that page's CSS ends up with. */
+@keyframes tf-step-pulse {
+  0%   { transform: scale(1); opacity: 0.55; }
+  70%  { transform: scale(2); opacity: 0; }
+  100% { transform: scale(2); opacity: 0; }
+}
+.tf-step-pulse {
+  animation: tf-step-pulse 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* The dot inside the current stage of the cluster-generation rail. Its own
+   keyframes rather than `animate-pulse`, so the beat matches the step
+   indicator's pulse above it. */
+@keyframes tf-step-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(0.7); }
+}
+.tf-step-pulse-dot {
+  animation: tf-step-pulse-dot 1.4s ease-in-out infinite;
+}
+
+/* ── App-shell scroll lock ──────────────────────────────────────────────
+   Set on <html> by the (dashboard) layout while it is mounted. The dashboard
+   shell is 100dvh tall with its own scroll container, so the document has
+   nothing legitimate to scroll; any document scroll there is a body-level
+   element (a portal, an overlay, a probe) reaching past the viewport, and it
+   shows up as a second scrollbar plus a blank strip under the shell. */
+html.tf-app-shell,
+html.tf-app-shell body {
+  height: 100%;
+  overflow: hidden;
+}
+
 /* Hide scrollbar for horizontal scrollable tabs */
 .scrollbar-hide {
   -ms-overflow-style: none;
@@ -295,6 +331,22 @@
   --status-expired: var(--brand-orange-deep);
   --status-progress: var(--brand-cyan);
   --status-completed: #15803d;
+
+  /* ── Advisory tokens (recommendation / note) ────────────────────────
+     The two voices a configuration form uses to talk back: "this is the one
+     we recommend" and "here is the rule behind this setting". They live here
+     so a form says WHICH of the two it means instead of each card picking a
+     green or a blue by eye — which is how one wizard ended up with three
+     different greens for the same recommendation chip.
+
+     Used through the utilities in @theme below: text-advice-positive,
+     bg-advice-positive-bg, border-advice-info/30, … Dark values are listed
+     explicitly in the .dark block, for the same reason the status tokens list
+     theirs: --brand-* keep their light values in dark mode. */
+  --advice-positive: #15803d;
+  --advice-positive-bg: #f0fdf4;
+  --advice-info: var(--brand-blue);
+  --advice-info-bg: #eff6ff;
 
   /* ── Brand palette (logo-based) ─────────────────────────────────────── */
   /* Deep blue family (primary brand) */
@@ -736,6 +788,13 @@
   --color-status-progress: var(--status-progress);
   --color-status-completed: var(--status-completed);
 
+  /* Advisory utilities — text-advice-positive, bg-advice-positive-bg,
+     border-advice-info/30, and so on. See the token definitions in :root. */
+  --color-advice-positive: var(--advice-positive);
+  --color-advice-positive-bg: var(--advice-positive-bg);
+  --color-advice-info: var(--advice-info);
+  --color-advice-info-bg: var(--advice-info-bg);
+
   /* Semantic status utilities — bg-success, text-warning-strong,
      border-info-line, bg-destructive-subtle, and so on. Alpha modifiers work
      because these resolve to plain colour values. See :root / .dark above. */
@@ -896,6 +955,13 @@
   --status-expired: #fdba74;
   --status-progress: #67e8f9;
   --status-completed: #4ade80;
+
+  /* Advisory tokens — dark mode. Spelled out rather than aliased, for the
+     same reason as the status tokens directly above. */
+  --advice-positive: #4ade80;
+  --advice-positive-bg: rgba(34, 197, 94, 0.14);
+  --advice-info: #93c5fd;
+  --advice-info-bg: rgba(59, 130, 246, 0.14);
 
   /* Marketing palette — dark side. Only the tokens that actually flip are
      listed; the fixed ones (navy band, solid buttons, cyan/amber fills) keep
@@ -2300,6 +2366,16 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
 .tf-table-shell td.tf-wrap {
   white-space: normal;
 }
+
+/* ── Empty-state panel for a data table ───────────────────────────────
+   Lives in TypeScript, not here: `TABLE_EMPTY_PANEL_CLASS` in
+   lib/constants/tableEmptyPanel.ts. Tailwind compiles utilities from the JSX
+   that references them, so the panel arrives with its component; a rule here
+   would depend on this stylesheet being rebuilt, and an empty state that
+   renders unstyled until a dev server restarts is worse than an import.
+   That constant also documents the half neither it nor a rule here can do —
+   a table with no rows has to drop its `min-w-[…]` and its `<thead>`, or the
+   cell being centred is still wider than the screen. */
 
 /* ── Sticky Select-All / Actions columns — project-wide, reusable ──────
    Add `tf-sticky-col` to a right-pinned Actions <th>/<td>, or
