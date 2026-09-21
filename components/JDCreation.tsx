@@ -1,6 +1,6 @@
 'use client';
 
-import { Wand2, FileText, Copy, Download, Save, ChevronRight, ChevronDown, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2 } from 'lucide-react';
+import { Wand2, FileText, Copy, Download, Save, ChevronRight, ChevronDown, Plus, X, Edit2, CheckCircle, CheckCircle2, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, GripVertical, Info, Eye, Pencil, AlertTriangle, AlertCircle, Cloud, CloudOff, Loader2, Sparkles } from 'lucide-react';
 import UnsavedChangesModal from '@/components/UnsavedChangesModal';
 import SuccessAnimation from '@/components/ui/success-animation';
 import ReactMarkdown, { type Components } from 'react-markdown';
@@ -18,6 +18,7 @@ import { useDrag, useDrop } from 'react-dnd';
 import { Job } from '@/lib/types/types';
 import { toast } from '@/components/ui/enhanced-toast';
 import { jdService, masterDataService, ExperienceLevel, EducationLevel, IndustryType } from '@/lib/services';
+import type { IndustryValidationResponse } from '@/lib/services/jdService';
 import type { JDMergeTrailEntry } from '@/lib/services/jdService';
 import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
@@ -688,8 +689,29 @@ interface ExtractedData {
    *  effect has run don't need to supply it. */
   jobHoppingEnabled?: boolean;
   industryType: string;
+  /** The industry proposed for this JD when nothing on the master list fitted -
+   *  either coined by extraction or typed by the recruiter after clearing it.
+   *
+   *  This is a REQUEST, not a code. While it is set, `industryType` still holds
+   *  whatever code the JD was filed under (usually 'others'); Step 3 validates the
+   *  name against the JD and only then does it become a real industry. Nothing here
+   *  may be passed anywhere a master code is expected. */
+  industrySuggestedName?: string;
+  /** One sentence from extraction saying why it proposed that industry. Shown beside
+   *  the suggestion so the recruiter is not asked to approve a bare noun. Cleared with
+   *  the suggestion - a reason outliving its name would render under nothing. */
+  industrySuggestedReason?: string;
+  /** 0-1 fit of `industryType` as extraction judged it. Drives the "check this"
+   *  hint; undefined simply means the model did not say. */
+  industryConfidence?: number;
+  /** True once the recruiter has cleared the model's suggestion and is typing their
+   *  own. Kept separate from `industrySuggestedName` being empty, because "cleared it
+   *  and typed nothing yet" and "never had a suggestion" look identical otherwise and
+   *  only the first should keep the text box open. */
+  industryIsCustom?: boolean;
   roleFamily?: string;
   roleFamilyConfidence?: number;
+  roleFamilyRaw?: string;
   industryTypeRequired: boolean;
   department: string;
   /** Required recruiter choice, not a plain default-off toggle: null means "not yet
@@ -749,6 +771,10 @@ interface EditingJDData {
   experience_min?: number;
   experience_max?: number;
   industry_type?: string;
+  /** The free-text industry saved from Step 2 when nothing on the master list fitted
+   *  (job_descriptions.raw_industry). Reopening a draft has to give it back, or the
+   *  recruiter's own words are silently replaced by the code it was filed under. */
+  industry_suggested_name?: string | null;
   role_family?: string;
   role_family_confidence?: number;
   department?: string;
@@ -1641,6 +1667,44 @@ const FALLBACK_INDUSTRY_TYPES: IndustryType[] = [
   { id: 39, code: 'others', label: 'Others', description: null, sort_order: 99, is_active: true, created_at: '', updated_at: '' },
 ];
 
+/** The industry half of every save payload, in one place.
+ *
+ *  Two fields leave together and must agree, which is exactly the kind of pairing that
+ *  drifts when it is spelled out at five call sites: the code the JD is filed under,
+ *  and the free-text name proposed for it. The sentinel never leaves the browser — a
+ *  pending industry is saved as `others` plus the name, so a JD abandoned at Step 2
+ *  reloads exactly as the recruiter left it, and nothing downstream is handed a code
+ *  that no master table contains.
+ *
+ *  Returns `undefined` for a name that was never proposed, and `null` to CLEAR one the
+ *  recruiter has withdrawn — `undefined` would be dropped by JSON.stringify and the
+ *  backend's exclude_unset PATCH would keep the stale value, the same trap the salary
+ *  bounds document below. */
+const buildIndustryPayload = (data: Pick<ExtractedData, 'industryType' | 'industrySuggestedName'>) => {
+  const suggested = data.industrySuggestedName?.trim() || '';
+  const isPending = data.industryType === PENDING_INDUSTRY_VALUE;
+  return {
+    industry_type: isPending ? 'others' : (data.industryType || undefined),
+    industry_suggested_name: suggested || null,
+  };
+};
+
+/** `industryType` while the chosen industry is a NAME awaiting Step 3, not a code.
+ *
+ *  A pending industry has no master row, so there is no code to put here. Leaving the
+ *  field empty would read as "not answered yet" and block Step 2; inventing a slug
+ *  here would put a code on the JD that no table contains. The sentinel is neither: it
+ *  satisfies every "has the recruiter chosen something?" check, and is deliberately
+ *  not a plausible code, so anything that tries to resolve it as one fails loudly
+ *  rather than silently filing the JD under a fiction. It is swapped for the real code
+ *  at Step 3 and must never reach the save payload — see buildIndustryPayload. */
+const PENDING_INDUSTRY_VALUE = '__pending_new_industry__';
+
+/** Below this, extraction is telling us its own answer is a stretch. Surfaced as a
+ *  hint next to the field rather than a block: a weak match is still an answer, and
+ *  the recruiter is the one who can tell whether it is the right one. */
+const LOW_INDUSTRY_CONFIDENCE = 0.5;
+
 export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, isJDInUse = false, jdUsageMessage, breadcrumbItems, onStepChange, editingJDId, onClose, onSuccess, isEmbedded }: JDCreationProps = {}) {
   const router = useRouter();
   const [mode, setMode] = useState<CreationMode>('ai');
@@ -1776,6 +1840,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             // explain the box and to ask before it is ticked back on.
             experience_welcomes_freshers: jd.experience_welcomes_freshers,
             industry_type: jd.industry_type,
+            // The free-text industry from Step 2. Dropping it here would reopen the
+            // draft showing only the code the JD was filed under (usually "Others"),
+            // silently discarding the industry the recruiter actually proposed.
+            industry_suggested_name: jd.industry_suggested_name,
             // See the note in jd-creation/page.tsx - BOTH mappings must forward this.
             role_family: jd.role_family,
             role_family_confidence: jd.role_family_confidence,
@@ -1872,8 +1940,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     experienceRequired: false,
     jobHoppingEnabled: false,
     industryType: '',
+    industrySuggestedName: undefined,
+    industrySuggestedReason: undefined,
+    industryConfidence: undefined,
+    industryIsCustom: false,
     roleFamily: undefined,
     roleFamilyConfidence: undefined,
+    roleFamilyRaw: undefined,
     industryTypeRequired: false,
     department: '',
     allowOverqualified: null,
@@ -2518,6 +2591,132 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     setHasFormattedForReview(false);
   };
 
+  /* ── Industry not on the master list ──────────────────────────────────────────
+     The recruiter can accept the industry extraction proposed, or clear it and type
+     their own. Either way the value is a NAME, not a code, so `industryType` holds
+     PENDING_INDUSTRY_VALUE until Step 3 validates the name and creates the real
+     master row. The sentinel exists so that everything which reads `industryType`
+     ("is a value chosen?", "which option is selected?") keeps working, while
+     anything that resolves it as a code fails loudly instead of quietly writing an
+     invented code onto the JD. */
+  const handleAddSuggestedIndustry = () => {
+    setExtractedData(prev => ({
+      ...prev,
+      industryType: prev.industrySuggestedName?.trim() ? PENDING_INDUSTRY_VALUE : prev.industryType,
+      industryIsCustom: false,
+    }));
+    markExtractedDataModified();
+    setValidationErrors(prev => ({ ...prev, industryType: undefined }));
+  };
+
+  /* Clearing drops extraction's rationale with its name — a reason that outlived the
+     name it explained would render under whatever the recruiter typed next. Also
+     resets `industryType`, because the code the JD was filed under was only ever a
+     placeholder for the industry now being replaced. */
+  const handleClearSuggestedIndustry = () => {
+    setExtractedData(prev => ({
+      ...prev,
+      industrySuggestedName: '',
+      industrySuggestedReason: undefined,
+      industryIsCustom: true,
+      industryType: prev.industryType === PENDING_INDUSTRY_VALUE ? '' : prev.industryType,
+    }));
+    markExtractedDataModified();
+  };
+
+  const handleCustomIndustryChange = (typed: string) => {
+    setExtractedData(prev => ({
+      ...prev,
+      industrySuggestedName: typed,
+      industrySuggestedReason: undefined,
+      industryType: typed.trim() ? PENDING_INDUSTRY_VALUE : '',
+    }));
+    markExtractedDataModified();
+    if (typed.trim()) {
+      setValidationErrors(prev => ({ ...prev, industryType: undefined }));
+    }
+  };
+
+  /* Back to the dropdown. The typed name goes with it: leaving it behind would save a
+     raw_industry the recruiter has just decided against, and Step 3 would then ask
+     them to confirm an industry they are no longer proposing. */
+  const handleCancelCustomIndustry = () => {
+    setExtractedData(prev => ({
+      ...prev,
+      industrySuggestedName: undefined,
+      industrySuggestedReason: undefined,
+      industryIsCustom: false,
+      industryType: prev.industryType === PENDING_INDUSTRY_VALUE ? '' : prev.industryType,
+    }));
+    markExtractedDataModified();
+  };
+
+  /* ── Step 3's verdict on a proposed industry ──────────────────────────────────
+     Once the gate has settled on a real code - created, adopted, or insisted upon -
+     the sentinel is replaced with it. A row the master list did not have a minute
+     ago also needs a local option, or the select would fall blank and
+     getIndustryLabel would print the code: the backend row exists but this page's
+     copy of the list predates it. Inactive on purpose - see activate_pending_industry. */
+  const applyResolvedIndustryCode = (code: string, label: string | null | undefined, keepName: boolean) => {
+    setIndustryTypes(prev => prev.some(t => t.code === code) ? prev : [
+      ...prev,
+      {
+        id: -Date.now(),
+        code,
+        label: label || code,
+        description: null,
+        sort_order: 98,
+        is_active: false,
+        created_at: '',
+        updated_at: '',
+      },
+    ]);
+    setExtractedData(prev => ({
+      ...prev,
+      industryType: code,
+      industrySuggestedName: keepName ? prev.industrySuggestedName : undefined,
+      industrySuggestedReason: undefined,
+      industryIsCustom: false,
+    }));
+    markExtractedDataModified();
+  };
+
+  /* "Use the one you already have." The proposal is withdrawn with it: saving the
+     name as raw_industry would keep proposing an industry the recruiter just
+     declined, on every reopen. */
+  const handleIndustryGateUseExisting = () => {
+    if (!industryGate?.industry_type) return;
+    applyResolvedIndustryCode(industryGate.industry_type, industryGate.industry_label, false);
+    setIndustryGate(null);
+    void advanceToReviewStep();
+  };
+
+  /* "Add mine anyway." The recruiter has read the warning; the gate asks, it does
+     not block. Force skips the model - it has already given its answer - and mints
+     the row, and the review step resumes exactly where it stopped. */
+  const handleIndustryGateInsist = async () => {
+    const name = extractedData.industrySuggestedName?.trim();
+    if (!editingId || !name) return;
+    setIsResolvingIndustryGate(true);
+    try {
+      const result = await jdService.validateIndustry(editingId, name, { force: true });
+      if (result.outcome === 'created' && result.industry_type) {
+        applyResolvedIndustryCode(result.industry_type, result.industry_label || name, true);
+        setIndustryGate(null);
+        void advanceToReviewStep();
+      } else {
+        setIndustryGate(result);
+      }
+    } catch (error) {
+      toast.error({
+        title: 'Could not add the industry',
+        description: error instanceof Error ? error.message : 'Please try again.',
+      });
+    } finally {
+      setIsResolvingIndustryGate(false);
+    }
+  };
+
   // Track if user has proceeded to extract stage (to disable regenerate button)
   const [hasProceededToExtract, setHasProceededToExtract] = useState(false);
 
@@ -2565,6 +2764,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
      minimum and welcomes freshers. Holds nothing but the fact that the tick is
      pending confirmation - see the dialog at the end of this file. */
   const [showExperienceContradictionDialog, setShowExperienceContradictionDialog] = useState(false);
+
+  /* Step 3's answer about an industry the master list does not carry, while the
+     recruiter decides what to do with it. Only `duplicate` and `contradiction` land
+     here - `created` needs no decision and never opens a dialog. Null = no question
+     pending. Same asks-does-not-block contract as the experience dialog above. */
+  const [industryGate, setIndustryGate] = useState<IndustryValidationResponse | null>(null);
+  const [isResolvingIndustryGate, setIsResolvingIndustryGate] = useState(false);
+  /* Always the CURRENT advanceToReviewStep. The gate resolves an industry by
+     updating state and then re-running the transition; the closure that started the
+     transition still holds the old extractedData (sentinel and all), so it must
+     re-enter through a fresh closure, not call itself. */
+  const advanceToReviewStepRef = useRef<(() => Promise<void>) | null>(null);
+  useEffect(() => {
+    advanceToReviewStepRef.current = advanceToReviewStep;
+  });
 
   // Master data state - initialized with fallback data so dropdowns work immediately
   const [experienceLevels, setExperienceLevels] = useState<ExperienceLevel[]>(FALLBACK_EXPERIENCE_LEVELS);
@@ -3504,8 +3718,17 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education: params.education_requirements?.degree?.toLowerCase().replace("'s", 's').replace(' ', '-') || (isEditMode ? prev.education : ''),
         experience: expValue || prev.experience,
         industryType: params.industry_type?.toLowerCase() || (isEditMode ? prev.industryType : ''),
+        // The generated JD reaches the SAME Step 2 screen as an uploaded one, so it
+        // needs the same three fields — without them, an AI-generated JD in an
+        // industry the list does not carry silently showed "Others" with no way out,
+        // which is the entire defect this work exists to remove.
+        industrySuggestedName: params.industry_suggested_name?.trim() || undefined,
+        industrySuggestedReason: params.industry_suggested_reason?.trim() || undefined,
+        industryConfidence: params.industry_confidence ?? undefined,
+        industryIsCustom: false,
         roleFamily: params.role_family || (isEditMode ? prev.roleFamily : undefined),
         roleFamilyConfidence: params.role_family_confidence ?? (isEditMode ? prev.roleFamilyConfidence : undefined),
+        roleFamilyRaw: params.role_family_raw || (isEditMode ? prev.roleFamilyRaw : undefined),
         // Extraction's answer WINS, exactly as on the upload/manual path below. These two
         // read `prev` unconditionally, so a generated JD saying "remote, 6-month contract"
         // was still filed as Onsite / Full-time - the two fields the model had just read
@@ -4260,11 +4483,34 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           industryValue = aliasTarget;
         } else {
           const byLabel = masterIndustryTypes.find(t => strip(t.label) === rawStripped);
+          // Falling through to "others" is the LAST resort, and it is no longer
+          // silent: a code we cannot place is reported here and, when extraction
+          // also proposed a name, the recruiter is offered that name under the
+          // field instead of being shown a shrug.
+          if (!byLabel) {
+            console.warn('[TalentFlow] Industry code not in the master list:', rawIndustry);
+          }
           industryValue = byLabel ? byLabel.code : defaultIndustryCode;
         }
         console.log('[TalentFlow] Mapped industry:', { raw: params.industry_type, normalized: rawIndustry, code: industryValue });
       } else {
         console.log('[TalentFlow] No industry extracted, leaving empty');
+      }
+
+      // The industry extraction proposed because nothing on the master list fitted.
+      // The backend has already sanitized it (dropped job titles, sentences, and
+      // names for industries we carry under other words), so anything arriving here
+      // is a genuine proposal - but it is still only a proposal: it is NOT written
+      // into industryType, which keeps the code the JD was filed under until the
+      // recruiter presses Add.
+      const suggestedIndustry = (params.industry_suggested_name || '').trim();
+      const suggestedIndustryReason = (params.industry_suggested_reason || '').trim();
+      if (suggestedIndustry) {
+        console.log('[TalentFlow] Industry suggestion offered to the recruiter:', {
+          name: suggestedIndustry,
+          reason: suggestedIndustryReason,
+          filedAs: industryValue,
+        });
       }
 
       // When in edit mode, preserve existing values if extraction returns empty arrays
@@ -4310,6 +4556,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           return Math.max(range.experienceMin ?? 0, range.experienceMax ?? 0) >= 3;
         })(),
         industryType: industryValue, // Only from extraction, no fallback - user must select if not extracted
+        // A fresh extraction REPLACES any earlier suggestion, including clearing it:
+        // the JD text has just been re-read, so a proposal it no longer makes is an
+        // answer ("this is a listed industry after all"), not a gap to paper over with
+        // the previous run's guess. Same reasoning as the salary bounds below.
+        industrySuggestedName: suggestedIndustry || undefined,
+        industrySuggestedReason: suggestedIndustryReason || undefined,
+        industryConfidence: params.industry_confidence ?? undefined,
+        industryIsCustom: false,
+        roleFamilyRaw: params.role_family_raw || undefined,
         // Use API's mandatory flag for industry
         industryTypeRequired: params.industry_mandatory || false,
         // Extraction's answer, not a blank. The prompt carries a nine-sector section
@@ -4531,7 +4786,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education_requirements: extraction.education ? { degree: extraction.education } : undefined,
         experience_min: extractionExperiencePayload.experienceMin,
         experience_max: extractionExperiencePayload.experienceMax,
-        industry_type: extraction.industryType || undefined,
+        ...buildIndustryPayload(extraction),
         role_family: extraction.roleFamily || undefined,
         role_family_confidence: extraction.roleFamilyConfidence ?? undefined,
         // `?? null`, never bare undefined - same rule as the experience payload below.
@@ -5535,6 +5790,48 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       return;
     }
 
+    // ── An industry the master list does not carry ────────────────────────────
+    // Checked against the JD HERE, before the reformat, and only when the recruiter
+    // accepted or typed one: a JD on a listed industry never makes this call, so the
+    // no-edit / no-LLM invariant below is untouched. `created` carries on with the
+    // real code; anything else is a question for the recruiter (the dialog at the
+    // end of this file), and this function stops until they answer - the dialog's
+    // buttons call advanceToReviewStep() again with the sentinel already replaced.
+    if (extractedData.industryType === PENDING_INDUSTRY_VALUE) {
+      const proposedIndustry = extractedData.industrySuggestedName?.trim() || '';
+      if (!editingId || !proposedIndustry) {
+        toast.error({
+          title: 'Industry needs a name',
+          description: 'Type the industry this job belongs to, or pick one from the list.',
+        });
+        return;
+      }
+      setIsRegenerating(true);
+      try {
+        const gate = await jdService.validateIndustry(editingId, proposedIndustry);
+        if (gate.outcome === 'created' && gate.industry_type) {
+          applyResolvedIndustryCode(gate.industry_type, gate.industry_label || proposedIndustry, true);
+          // Do NOT carry on in this closure: its extractedData still holds the
+          // sentinel, and the reformat / save payloads below would file the JD under
+          // 'others'. Let the state land, then re-enter through a fresh closure - the
+          // gate is skipped on that pass because industryType is now a real code.
+          setTimeout(() => { void advanceToReviewStepRef.current?.(); }, 0);
+          return;
+        } else {
+          setIndustryGate(gate);
+          return;
+        }
+      } catch (error) {
+        toast.error({
+          title: 'Could not check the industry',
+          description: error instanceof Error ? error.message : 'Please try again.',
+        });
+        return;
+      } finally {
+        setIsRegenerating(false);
+      }
+    }
+
     // BEFORE going to review, reformat the JD description using AI
     // Only reformat if user actually modified extracted data (skills/comments/fields) in Step 2
     // If no edits were made, skip AI formatting and go directly to review
@@ -5753,7 +6050,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education_requirements: extractedData.education ? { degree: extractedData.education } : undefined,
         experience_min: experienceMin,
         experience_max: experienceMax,
-        industry_type: extractedData.industryType || undefined,
+        ...buildIndustryPayload(extractedData),
         role_family: extractedData.roleFamily || undefined,
         role_family_confidence: extractedData.roleFamilyConfidence ?? undefined,
         salary_min: parseSalaryInput(extractedData.salaryFrom) ?? null,
@@ -5861,6 +6158,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   // Helper function to get industry label from master data
   const getIndustryLabel = (code: string): string => {
     if (!code) return 'Not specified';
+    // A pending industry has no master row to look up, and the sentinel is not a code
+    // to be prettified either — "Pending New Industry" is what the fallback below
+    // would print. Show the name the recruiter is actually proposing.
+    if (code === PENDING_INDUSTRY_VALUE) {
+      const proposed = extractedData.industrySuggestedName?.trim();
+      return proposed ? `${proposed} (new)` : 'Not specified';
+    }
     const industry = industryTypes.find(i => i.code === code);
     return industry?.label || code.charAt(0).toUpperCase() + code.slice(1).replace(/_/g, ' ');
   };
@@ -6115,7 +6419,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education_requirements: extractedData.education ? { degree: extractedData.education } : undefined,
         experience_min: experienceMin,
         experience_max: experienceMax,
-        industry_type: extractedData.industryType || undefined,
+        ...buildIndustryPayload(extractedData),
         role_family: extractedData.roleFamily || undefined,
         role_family_confidence: extractedData.roleFamilyConfidence ?? undefined,
         salary_min: parseSalaryInput(extractedData.salaryFrom) ?? null,
@@ -6410,7 +6714,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       education_requirements: data.education ? { degree: data.education } : undefined,
       experience_min: experiencePayload.experienceMin,
       experience_max: experiencePayload.experienceMax,
-      industry_type: data.industryType || undefined,
+      ...buildIndustryPayload(data),
       role_family: data.roleFamily || undefined,
       role_family_confidence: data.roleFamilyConfidence ?? undefined,
       salary_min: parseSalaryInput(data.salaryFrom) ?? null,
@@ -6526,7 +6830,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         education_requirements: extractedData.education ? { degree: extractedData.education } : undefined,
         experience_min: experienceMin,
         experience_max: experienceMax,
-        industry_type: extractedData.industryType || undefined,
+        ...buildIndustryPayload(extractedData),
         role_family: extractedData.roleFamily || undefined,
         role_family_confidence: extractedData.roleFamilyConfidence ?? undefined,
         salary_min: parseSalaryInput(extractedData.salaryFrom) ?? null,
@@ -6845,6 +7149,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           experience: experienceValue,
           experienceRequired: effectiveEditingJD.experience_mandatory ?? false,
           industryType: industryValue,
+          // Give the recruiter back the industry they typed or accepted. Saved into
+          // raw_industry, so it survives a reload even though it is not a code yet.
+          industrySuggestedName: effectiveEditingJD.industry_suggested_name || undefined,
+          industrySuggestedReason: undefined,
+          industryIsCustom: Boolean(effectiveEditingJD.industry_suggested_name),
           industryTypeRequired: effectiveEditingJD.industry_mandatory ?? false,
           department: effectiveEditingJD.department || '',
           salaryFrom: sanitizeExtractedSalary(effectiveEditingJD.salary_min),
@@ -8270,12 +8579,125 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     {industryTypes.map((type) => (
                       <option key={type.id} value={type.code}>{type.label}</option>
                     ))}
+                    {/* A proposed industry has no master row yet, so the list cannot
+                        offer it. Without this option the select would fall blank the
+                        moment the recruiter presses Add. */}
+                    {extractedData.industryType === PENDING_INDUSTRY_VALUE && (
+                      <option value={PENDING_INDUSTRY_VALUE}>
+                        {extractedData.industrySuggestedName} (new)
+                      </option>
+                    )}
                   </select>
                   {validationErrors.industryType && (
                     <p className="text-red-500 text-sm mb-2 flex items-center gap-1">
                       <AlertCircle className="w-4 h-4" />
                       {validationErrors.industryType}
                     </p>
+                  )}
+
+                  {/* ── An industry the list does not carry yet ─────────────────────
+                      Offered UNDER the field rather than written into it: adopting a
+                      new industry is the recruiter's call, and Step 3 still checks the
+                      name against the JD before it becomes real. Three states —
+                      extraction's proposal (Add / Clear), the recruiter's own text box
+                      (after Clear), and neither. */}
+                  {extractedData.industrySuggestedName && !extractedData.industryIsCustom && (
+                    <div className="mt-1 rounded-lg border border-brand-blue/30 bg-brand-blue/5 p-3">
+                      <div className="flex items-start gap-2">
+                        <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-brand-blue" />
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm text-gray-900 dark:text-slate-50">
+                            This JD looks like{' '}
+                            <strong>{extractedData.industrySuggestedName}</strong>, which is
+                            not on your list yet.
+                          </p>
+                          {extractedData.industrySuggestedReason && (
+                            <p className="mt-1 text-xs text-gray-600 dark:text-slate-400">
+                              {extractedData.industrySuggestedReason}
+                            </p>
+                          )}
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={handleAddSuggestedIndustry}
+                              disabled={isRegenerating}
+                              className="rounded-lg bg-brand-blue px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-brand-blue/90 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              Add this industry
+                            </button>
+                            <button
+                              type="button"
+                              onClick={handleClearSuggestedIndustry}
+                              disabled={isRegenerating}
+                              className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs text-gray-700 transition-colors hover:border-brand-blue/30 hover:text-brand-blue disabled:cursor-not-allowed disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300"
+                            >
+                              Clear and enter my own
+                            </button>
+                          </div>
+                          <p className="mt-2 text-xs text-gray-500 dark:text-slate-500">
+                            It is checked against the JD at the next step before it is added.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {extractedData.industryIsCustom && (
+                    <div className="mt-1">
+                      <label className="mb-1 block text-xs text-gray-600 dark:text-slate-400">
+                        Industry not on the list — type it here
+                      </label>
+                      <input
+                        type="text"
+                        value={extractedData.industrySuggestedName || ''}
+                        onChange={(e) => handleCustomIndustryChange(e.target.value)}
+                        placeholder="e.g. Marine Logistics"
+                        maxLength={60}
+                        disabled={isRegenerating}
+                        className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2.5 text-sm text-black focus:border-brand-blue focus:outline-none focus:ring-2 focus:ring-brand-blue/40 disabled:cursor-not-allowed disabled:bg-gray-100"
+                      />
+                      <div className="mt-1.5 flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          onClick={handleCancelCustomIndustry}
+                          disabled={isRegenerating}
+                          className="text-xs text-gray-500 underline-offset-2 hover:text-brand-blue hover:underline disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-400"
+                        >
+                          Pick from the list instead
+                        </button>
+                        <span className="text-xs text-gray-500 dark:text-slate-500">
+                          Checked against the JD at the next step.
+                        </span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* No proposal, and extraction was not confident about the code it
+                      did pick. Say so, rather than letting a weak guess look decided. */}
+                  {!extractedData.industrySuggestedName
+                    && !extractedData.industryIsCustom
+                    && extractedData.industryType
+                    && typeof extractedData.industryConfidence === 'number'
+                    && extractedData.industryConfidence < LOW_INDUSTRY_CONFIDENCE && (
+                    <p className="mt-1 flex items-start gap-1.5 text-xs text-amber-600 dark:text-amber-500">
+                      <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        This was a weak match for the JD — worth a look before you continue.
+                      </span>
+                    </p>
+                  )}
+
+                  {/* The list is finite and the JD may simply not be in it. Without this
+                      the only way out was to pick a near-miss or leave the field empty. */}
+                  {!extractedData.industryIsCustom && !extractedData.industrySuggestedName && (
+                    <button
+                      type="button"
+                      onClick={handleClearSuggestedIndustry}
+                      disabled={isRegenerating}
+                      className="mt-1 text-xs text-gray-500 underline-offset-2 hover:text-brand-blue hover:underline disabled:cursor-not-allowed disabled:opacity-60 dark:text-slate-400"
+                    >
+                      My industry is not on this list
+                    </button>
                   )}
                 </div>
               </div>
@@ -10450,6 +10872,81 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         onSave={handleSaveAndNavigate}
         isSaving={isSavingDraft}
       />
+
+      {/* Industry gate — Step 3's answer about an industry the master list does not
+          carry. Two questions can come back: "you already have this" (duplicate) and
+          "this does not match the JD, or is not an industry" (contradiction). Both are
+          put to the recruiter, who decides; neither blocks. Same contract as the
+          experience dialog below it. */}
+      <Dialog
+        open={industryGate !== null}
+        onOpenChange={(open) => !open && !isResolvingIndustryGate && setIndustryGate(null)}
+      >
+        <DialogContent className="p-4 sm:p-6 gap-3 sm:gap-4">
+          <DialogHeader>
+            <DialogTitle className="text-base sm:text-lg flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-500 shrink-0" />
+              {industryGate?.outcome === 'duplicate'
+                ? 'You already have this industry'
+                : 'This industry may not fit the JD'}
+            </DialogTitle>
+            <DialogDescription className="text-xs sm:text-sm space-y-2">
+              <span className="block">
+                You proposed <strong>{extractedData.industrySuggestedName}</strong>.
+              </span>
+              {industryGate?.message && (
+                <span className="block">{industryGate.message}</span>
+              )}
+              {industryGate?.outcome === 'duplicate' && industryGate.industry_label && (
+                <span className="block">
+                  Using <strong>{industryGate.industry_label}</strong> keeps this JD alongside
+                  the others already filed there; adding a second name for the same
+                  industry splits them.
+                </span>
+              )}
+              {industryGate?.outcome === 'contradiction' && industryGate.industry_label && (
+                <span className="block">
+                  From the JD text, <strong>{industryGate.industry_label}</strong> looks like
+                  the closer fit.
+                </span>
+              )}
+              {industryGate?.outcome === 'contradiction' && !industryGate.industry_label && (
+                <span className="block">
+                  You can go back and change it, or add it anyway if you are sure.
+                </span>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => setIndustryGate(null)}
+              disabled={isResolvingIndustryGate}
+              className="px-4 py-2 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Go back and change it
+            </button>
+            {industryGate?.industry_type && industryGate.industry_label && (
+              <button
+                type="button"
+                onClick={handleIndustryGateUseExisting}
+                disabled={isResolvingIndustryGate}
+                className="px-4 py-2 bg-brand-blue text-white rounded-lg hover:bg-brand-blue/90 transition-colors text-sm disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Use {industryGate.industry_label}
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => { void handleIndustryGateInsist(); }}
+              disabled={isResolvingIndustryGate}
+              className="px-4 py-2 bg-white dark:bg-slate-900 border border-amber-300 text-amber-700 dark:text-amber-400 hover:bg-amber-50 dark:hover:bg-amber-950/30 rounded-lg transition-colors text-sm disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {isResolvingIndustryGate ? 'Adding…' : 'Add mine anyway'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Experience contradiction — ticking "Required field" on a JD that invites freshers
           ------------------------------------------------------------------------------

@@ -31,6 +31,11 @@ export interface JDCreate {
   domain_keywords?: string[];
   job_level?: string;
   industry_type?: string;
+  /** The industry the recruiter accepted or typed at Step 2 because nothing on the
+   *  master list fitted. NOT a code and never usable as one - it is a REQUEST to add a
+   *  new industry, stored in job_descriptions.raw_industry, validated at Step 3, and
+   *  only then promoted to master_industry_types. */
+  industry_suggested_name?: string | null;
   republished_at?: string | null;
   republish_count?: number;
   role_family?: string;
@@ -193,6 +198,18 @@ export interface JDExtractedParams {
   domain_keywords: string[];
   job_level?: string;
   industry_type?: string;
+  /** Set by extraction ONLY when no industry on the master list genuinely fits: the
+   *  name the model would have used ("Marine Logistics"). Offered to the recruiter
+   *  under the Industry field, to Add or Clear. Null whenever a listed industry fits. */
+  industry_suggested_name?: string | null;
+  /** One sentence the recruiter can check, saying what in the JD puts the role in the
+   *  suggested industry and why no listed one covers it. Present with the name. */
+  industry_suggested_reason?: string | null;
+  /** 0-1: how well the JD actually matches `industry_type`. Low means look at it. */
+  industry_confidence?: number | null;
+  /** The free-form role-family label the model would have used. Asked for on every
+   *  extraction since the taxonomy work landed; only now does it reach the client. */
+  role_family_raw?: string | null;
   role_family?: string;
   role_family_confidence?: number;
   coding_required: boolean;
@@ -249,6 +266,19 @@ export interface JDExtractedParams {
   // employment_type / remote_type forms were introduced.
   job_type?: string;
   work_mode?: string;
+}
+
+/** What Step 3's industry gate decided. The frontend picks a dialog on `outcome`
+ *  alone, so every field is declared here (the backend drops undeclared ones). */
+export interface IndustryValidationResponse {
+  /** created — a master row now exists (inactive until publish), use industry_type.
+   *  duplicate — this industry already exists as industry_type / industry_label.
+   *  contradiction — the name does not match the JD or is not an industry;
+   *  industry_type is the listed industry that DOES fit, when there is one. */
+  outcome: 'created' | 'duplicate' | 'contradiction';
+  industry_type?: string | null;
+  industry_label?: string | null;
+  message: string;
 }
 
 export interface JDGenerateResponse {
@@ -310,6 +340,8 @@ export interface JDVersion {
   domain_keywords: string[];
   job_level?: string;
   industry_type?: string;
+  /** Free-text industry proposed at Step 2; never a code. See JDCreate. */
+  industry_suggested_name?: string | null;
   role_family?: string;
   role_family_confidence?: number;
   /** `null` means "this bound is not stated" and CLEARS the stored column; `undefined`
@@ -793,6 +825,28 @@ export const jdService = {
    * Reformat JD with current parameters (Odoo-style regeneration)
    * Regenerates JD description including all must-have and nice-to-have comments
    */
+  /** Step 3's gate for an industry the master list does not carry. Called ONLY when
+   *  the recruiter accepted or typed one, so a JD on a listed industry makes no LLM
+   *  call here. Never blocks: every non-`created` outcome is a question put back to
+   *  the recruiter. */
+  async validateIndustry(
+    id: string,
+    industrySuggestedName: string,
+    options: { force?: boolean } = {},
+  ): Promise<IndustryValidationResponse> {
+    try {
+      const response = await api.post<IndustryValidationResponse>(`/jd/${id}/validate-industry`, {
+        industry_suggested_name: industrySuggestedName,
+        // The recruiter has seen the warning and insists - the gate asks, it does
+        // not block, and this is how their answer gets back through it.
+        force: Boolean(options.force),
+      });
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
   async reformatWithParams(id: string, params: Partial<JDCreate>): Promise<JDResponse> {
     try {
       const response = await api.post<JDResponse>(`/jd/${id}/reformat-with-params`, params);
