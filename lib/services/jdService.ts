@@ -75,6 +75,12 @@ export interface JDCreate {
   education_mandatory?: boolean;
   industry_mandatory?: boolean;
   location_mandatory?: boolean;
+  /** Does the JD TEXT invite freshers ("we also welcome freshers with relevant
+   *  internship experience")? Decided by the backend - openai_service.jd_welcomes_freshers
+   *  is the only copy of the rule - and recomputed on every read rather than stored, so it
+   *  follows an edit to the text. With a stated minimum it is a contradiction: Step 2
+   *  explains why Required was left unticked, and asks before it is ticked back on. */
+  experience_welcomes_freshers?: boolean;
   experience_level?: 'entry' | 'junior' | 'mid' | 'senior' | 'architect' | 'management';
   // job_level is already declared above with the identical type; the repeat was a
   // duplicate-identifier error, not a second field.
@@ -233,6 +239,12 @@ export interface JDExtractedParams {
   education_mandatory?: boolean;
   industry_mandatory?: boolean;
   location_mandatory?: boolean;
+  /** Does the JD TEXT invite freshers ("we also welcome freshers with relevant
+   *  internship experience")? Decided by the backend - openai_service.jd_welcomes_freshers
+   *  is the only copy of the rule - and recomputed on every read rather than stored, so it
+   *  follows an edit to the text. With a stated minimum it is a contradiction: Step 2
+   *  explains why Required was left unticked, and asks before it is ticked back on. */
+  experience_welcomes_freshers?: boolean;
   // Surfaced by extraction for legacy single-field display before the structured
   // employment_type / remote_type forms were introduced.
   job_type?: string;
