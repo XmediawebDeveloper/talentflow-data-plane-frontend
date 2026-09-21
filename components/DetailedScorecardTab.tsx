@@ -461,11 +461,11 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
   };
 
   const getRatingBgColor = (rating: number): string => {
-    if (rating === 10) return 'bg-green-100 border-green-300 text-green-700';
-    if (rating === 9) return 'bg-green-100 border-green-300 text-green-700';
+    if (rating === 10) return 'bg-success-subtle border-success-line text-success';
+    if (rating === 9) return 'bg-success-subtle border-success-line text-success';
     if (rating === 8) return 'bg-gray-100 border-gray-300 text-gray-900';
-    if (rating === 7) return 'bg-yellow-100 border-yellow-300 text-yellow-700';
-    return 'bg-red-100 border-red-300 text-red-700';
+    if (rating === 7) return 'bg-warning-subtle border-warning-line text-warning';
+    return 'bg-destructive-subtle border-destructive-line text-destructive';
   };
 
   // React 19 moved the JSX namespace under React (@types/react 19 no longer declares a
@@ -474,14 +474,14 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     if (rating >= 7) {
       return {
         status: 'Eligible',
-        icon: <CheckCircle className="w-5 h-5 text-green-600" />,
-        color: 'text-green-700'
+        icon: <CheckCircle className="w-5 h-5 text-success" />,
+        color: 'text-success'
       };
     }
     return {
       status: 'Not Eligible',
-      icon: <XCircle className="w-5 h-5 text-red-600" />,
-      color: 'text-red-700'
+      icon: <XCircle className="w-5 h-5 text-destructive" />,
+      color: 'text-destructive'
     };
   };
 
@@ -517,9 +517,9 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
 
   const getOverallScoreColor = (matchStatus?: string): string => {
     const normalized = matchStatus?.toLowerCase().replace(/[_\s]/g, '');
-    if (normalized === 'exactmatch' || normalized === 'excellentmatch') return 'text-green-600';
+    if (normalized === 'exactmatch' || normalized === 'excellentmatch') return 'text-success';
     if (normalized === 'partialmatch') return 'text-brand-orange-deep';
-    return 'text-red-600';
+    return 'text-destructive';
   };
 
   // Combined Average, formatted to the same one-decimal style as Must-Have /
@@ -598,11 +598,11 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
   }
 
   const getRatingRangeColor = (rating: number): string => {
-    if (rating === 10) return 'text-green-700 font-semibold';
-    if (rating === 9) return 'text-green-700 font-semibold';
+    if (rating === 10) return 'text-success font-semibold';
+    if (rating === 9) return 'text-success font-semibold';
     if (rating === 8) return 'text-gray-900 font-semibold';
-    if (rating === 7) return 'text-yellow-700 font-semibold';
-    return 'text-red-700 font-semibold';
+    if (rating === 7) return 'text-warning font-semibold';
+    return 'text-destructive font-semibold';
   };
 
   return (
@@ -771,7 +771,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                       <td className="px-3 py-3">
                         <span className={`inline-flex px-2.5 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
                           criteria.criteriaType === 'Required'
-                            ? 'bg-red-100 text-red-700 border border-red-300'
+                            ? 'bg-destructive-subtle text-destructive border border-destructive-line'
                             : 'bg-gray-100 text-gray-900 border border-gray-300'
                         }`}>
                           {criteria.criteriaType}
@@ -795,7 +795,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                             title="Copy full text"
                           >
                             {copiedReasoningIndex === index
-                              ? <Check className="w-3.5 h-3.5 text-green-600" />
+                              ? <Check className="w-3.5 h-3.5 text-success" />
                               : <Copy className="w-3.5 h-3.5" />}
                           </button>
                         </div>
@@ -812,14 +812,14 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
       {/* Summary Stats - Only show if real API data exists */}
       {criteriaScores.length > 0 && (
         <div className="grid grid-cols-4 gap-4">
-          <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-            <div className="text-2xl font-bold text-green-700">
+          <div className="bg-success-subtle border border-success-line rounded-lg p-4">
+            <div className="text-2xl font-bold text-success">
               {criteriaScores.filter(c => c.rating >= 7).length}
             </div>
             <div className="text-sm font-medium text-gray-800 mt-1">Eligible Criteria</div>
           </div>
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="text-2xl font-bold text-red-700">
+          <div className="bg-destructive-subtle border border-destructive-line rounded-lg p-4">
+            <div className="text-2xl font-bold text-destructive">
               {criteriaScores.filter(c => c.rating < 7).length}
             </div>
             <div className="text-sm font-medium text-gray-800 mt-1">Not Eligible Criteria</div>

@@ -2,6 +2,7 @@
 
 import { AlertTriangle, Briefcase, Info, Loader2, X } from 'lucide-react';
 import { getJDDisableImpactModules } from '@/lib/utils/jdUsageModules';
+import { Button } from '@/components/ui/button';
 
 export interface DisableJobModalProps {
   isOpen: boolean;
@@ -42,20 +43,22 @@ export default function DisableJobModal({
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6">
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-2xl w-full animate-scale-in max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
-        <button
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={onCancel}
           disabled={isLoading}
           aria-label="Close"
-          className="absolute top-4 right-4 p-1.5 text-gray-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-600 dark:hover:text-slate-300 rounded-lg transition-colors disabled:opacity-50"
+          className="absolute top-4 right-4 px-2"
         >
           <X className="w-5 h-5" />
-        </button>
+        </Button>
 
         <div className="px-5 sm:px-8 pt-7 sm:pt-8 pb-5 overflow-y-auto">
           {/* Header: red disc + title + the JD this is about */}
           <div className="flex items-start gap-4 pr-8">
-            <div className="w-12 h-12 shrink-0 rounded-full bg-red-100 dark:bg-red-500/15 flex items-center justify-center">
-              <AlertTriangle className="w-6 h-6 text-red-600 dark:text-red-400" />
+            <div className="w-12 h-12 shrink-0 rounded-full bg-destructive-subtle flex items-center justify-center">
+              <AlertTriangle className="w-6 h-6 text-destructive" />
             </div>
             <div className="min-w-0 flex-1">
               <h2 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-slate-50 leading-snug">
@@ -75,11 +78,11 @@ export default function DisableJobModal({
           </div>
 
           {/* What stops */}
-          <div className="mt-5 flex items-start gap-3 rounded-xl border border-red-100 dark:border-red-500/25 bg-red-50/70 dark:bg-red-500/10 px-4 py-3">
-            <Info className="w-5 h-5 shrink-0 text-red-600 dark:text-red-400 mt-0.5" />
+          <div className="mt-5 flex items-start gap-3 rounded-xl border border-destructive-line bg-destructive-subtle/70 px-4 py-3">
+            <Info className="w-5 h-5 shrink-0 text-destructive mt-0.5" />
             <p className="text-sm text-gray-700 dark:text-slate-300">
               If you disable this JD, it will{' '}
-              <span className="font-semibold text-red-600 dark:text-red-400">not</span>{' '}
+              <span className="font-semibold text-destructive">not</span>{' '}
               be available to use in the following features:
             </p>
           </div>
@@ -87,7 +90,7 @@ export default function DisableJobModal({
           <ul className="mt-4 space-y-2.5">
             {modules.map(module => (
               <li key={module.key} className="flex items-start gap-2.5 text-sm text-gray-700 dark:text-slate-300">
-                <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-red-500 shrink-0" aria-hidden="true" />
+                <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-destructive shrink-0" aria-hidden="true" />
                 <span>
                   <span className="font-semibold text-gray-900 dark:text-slate-100">{module.name}</span>
                   {' – '}
@@ -110,17 +113,19 @@ export default function DisableJobModal({
         </div>
 
         <div className="px-5 sm:px-8 py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col-reverse sm:flex-row sm:justify-end gap-3 shrink-0">
-          <button
+          <Button
+            variant="secondary"
             onClick={onCancel}
             disabled={isLoading}
-            className="px-6 py-2.5 text-sm font-semibold bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="destructive"
             onClick={onConfirm}
             disabled={isLoading}
-            className="px-6 py-2.5 text-sm font-semibold text-white bg-red-600 hover:bg-red-700 rounded-lg shadow-md shadow-red-500/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6"
           >
             {isLoading ? (
               <span className="flex items-center justify-center gap-2">
@@ -130,7 +135,7 @@ export default function DisableJobModal({
             ) : (
               'Yes, Disable'
             )}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

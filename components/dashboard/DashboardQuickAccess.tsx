@@ -179,7 +179,7 @@ export default function DashboardQuickAccess() {
           <Rocket className="h-5 w-5 text-slate-900 dark:text-slate-50" />
           <h2 className="text-base font-semibold tracking-tight text-slate-900 dark:text-slate-50 sm:text-lg">Quick access</h2>
         </div>
-        <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-[10px] font-medium text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800/70 dark:text-slate-300 dark:ring-slate-700 sm:px-3 sm:py-1.5 sm:text-[11px]">
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-white px-2.5 py-1 text-2xs font-medium text-slate-600 ring-1 ring-slate-200 dark:bg-slate-800/70 dark:text-slate-300 dark:ring-slate-700 sm:px-3 sm:py-1.5 sm:text-2xs">
           <LayoutGrid className="h-3 w-3 text-slate-500 dark:text-slate-400" />
           {sections.length} {sections.length === 1 ? 'category' : 'categories'} · {totalItems} tools
         </span>

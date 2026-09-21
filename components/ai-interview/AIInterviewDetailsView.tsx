@@ -13,6 +13,7 @@ import {
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { jdService } from '@/lib/services/jdService';
+import { Button } from '@/components/ui/button';
 import type {
   AIInterviewResponse,
   AIInterviewVersionHistoryItem,
@@ -78,10 +79,10 @@ function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
 function HRQuestionStageBadge({ stage }: { stage?: string }) {
   const normalized = stage === 'opening' ? 'opening' : 'closing';
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold uppercase tracking-wide ${
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold uppercase tracking-wide ${
       normalized === 'opening'
         ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
-        : 'bg-green-100 text-green-700 ring-1 ring-green-200'
+        : 'bg-success-subtle text-success ring-1 ring-success-line'
     }`}>
       {normalized}
     </span>
@@ -93,7 +94,7 @@ function HRQuestionStageBadge({ stage }: { stage?: string }) {
 function PriorityBadge({ p }: { p: number }) {
   const { label, color } = getPriorityLabel(p);
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full border ${color}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 text-2xs font-medium rounded-full border ${color}`}>
       {label}
     </span>
   );
@@ -422,12 +423,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case 'published': return 'bg-green-100 text-green-700 ring-1 ring-green-200';
+      case 'published': return 'bg-success-subtle text-success ring-1 ring-success-line';
       case 'draft': return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
       case 'completed': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
-      case 'cancelled': return 'bg-red-100 text-red-700 ring-1 ring-red-200';
+      case 'cancelled': return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
       case 'archived': return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
-      case 'in_progress': return 'bg-yellow-100 text-yellow-700 ring-1 ring-yellow-200';
+      case 'in_progress': return 'bg-warning-subtle text-warning ring-1 ring-warning-line';
       case 'invited': return 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20';
       default: return 'bg-gray-100 text-gray-600 ring-1 ring-gray-200';
     }
@@ -548,7 +549,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 {/* Line 1: AI-002  Title  v1  Status */}
                 <div className="flex items-center gap-1.5 sm:gap-2 mb-1 sm:mb-1.5 flex-wrap">
                   {config.display_id && (
-                    <span className="px-1.5 sm:px-2 py-0.5 bg-white/95 text-brand-blue rounded text-[10px] sm:text-xs font-bold ring-1 ring-white/40 shadow-sm">
+                    <span className="px-1.5 sm:px-2 py-0.5 bg-white/95 text-brand-blue rounded text-2xs sm:text-xs font-bold ring-1 ring-white/40 shadow-sm">
                       {config.display_id}
                     </span>
                   )}
@@ -556,18 +557,18 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     {config.jd_title || config.position || 'Untitled'}
                   </h1>
                   {config.jd_version && (
-                    <span className="px-1.5 py-0.5 text-[10px] bg-white/15 text-white rounded ring-1 ring-white/25">
+                    <span className="px-1.5 py-0.5 text-2xs bg-white/15 text-white rounded ring-1 ring-white/25">
                       v{config.jd_version}
                     </span>
                   )}
-                  <span className="px-2 py-0.5 rounded-full text-[10px] sm:text-[11px] font-medium bg-white/15 text-white ring-1 ring-white/25 backdrop-blur-sm">
+                  <span className="px-2 py-0.5 rounded-full text-2xs sm:text-2xs font-medium bg-white/15 text-white ring-1 ring-white/25 backdrop-blur-sm">
                     {getStatusLabel(config.status)}
                   </span>
                 </div>
 
                 {/* Line 2: Linked to JD */}
                 {config.jd_short_id && (
-                  <div className="text-[11px] sm:text-xs text-white/85 mb-1.5">
+                  <div className="text-2xs sm:text-xs text-white/85 mb-1.5">
                     <span className="font-medium">Linked to: {config.jd_short_id}</span>
                     {config.jd_title && (
                       <span> · {config.jd_title}</span>
@@ -579,13 +580,13 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 )}
 
                 {/* Line 3: Stats */}
-                <div className="text-[11px] sm:text-xs text-white/90 flex items-center gap-x-2 gap-y-1 sm:gap-x-3 flex-wrap">
+                <div className="text-2xs sm:text-xs text-white/90 flex items-center gap-x-2 gap-y-1 sm:gap-x-3 flex-wrap">
                   {config.jd_experience_level && <span>{config.jd_experience_level}</span>}
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     {formattedDuration}
                   </span>
-                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] sm:text-[11px] font-medium rounded-full ring-1 ${
+                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-2xs sm:text-2xs font-medium rounded-full ring-1 ${
                     interviewMode === 'flexible'
                       ? 'bg-white/15 text-white ring-white/25 backdrop-blur-sm'
                       : 'bg-brand-orange/25 text-white ring-brand-orange/40 backdrop-blur-sm'
@@ -600,7 +601,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     <span className="flex items-center gap-1 flex-wrap">
                       <Layers className="w-3 h-3 shrink-0" />
                       {enabledRounds.map((r, i) => (
-                        <span key={i} className="px-1.5 py-0.5 text-[10px] sm:text-[11px] bg-white/15 text-white rounded-full ring-1 ring-white/25 backdrop-blur-sm">
+                        <span key={i} className="px-1.5 py-0.5 text-2xs sm:text-2xs bg-white/15 text-white rounded-full ring-1 ring-white/25 backdrop-blur-sm">
                           {ROUND_LABELS[r.type] || r.type}
                         </span>
                       ))}
@@ -623,34 +624,43 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             {/* Action buttons */}
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 self-start sm:self-auto flex-wrap">
               {config.status === 'draft' && config.jd_id && canUpdateAIInterviews && (
-                <button
+                <Button
+                  tone="onColor"
+                  variant="primary"
+                  size="sm"
                   onClick={() => {
                     const url = `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`;
                     router.push(url);
                   }}
-                  className="inline-flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 min-h-[40px] text-xs sm:text-sm bg-white text-brand-blue hover:bg-white/90 rounded-lg transition-colors font-medium shadow-sm ring-1 ring-white/40"
+                  icon={<Pencil className="w-3.5 h-3.5 flex-shrink-0" />}
+                  className="gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm"
                 >
-                  <Pencil className="w-3.5 h-3.5 flex-shrink-0" />
                   <span className="hidden sm:inline">Continue Editing</span>
                   <span className="sm:hidden">Edit</span>
-                </button>
+                </Button>
               )}
-              <button
+              <Button
+                tone="onColor"
+                variant="secondary"
+                size="sm"
                 onClick={handleExportCSV}
                 title="Export clusters & HR questions to CSV"
                 aria-label="Export to CSV"
-                className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-white bg-white/15 backdrop-blur-sm hover:bg-white/25 ring-1 ring-white/25 rounded-lg transition-colors"
+                className="px-2 min-w-[40px] min-h-[40px]"
               >
                 <Download className="w-4 h-4" />
-              </button>
+              </Button>
               {onRefresh && (
-                <button
+                <Button
+                  tone="onColor"
+                  variant="secondary"
+                  size="sm"
                   onClick={onRefresh}
                   aria-label="Refresh"
-                  className="p-2 min-w-[40px] min-h-[40px] inline-flex items-center justify-center text-white bg-white/15 backdrop-blur-sm hover:bg-white/25 ring-1 ring-white/25 rounded-lg transition-colors"
+                  className="px-2 min-w-[40px] min-h-[40px]"
                 >
                   <RefreshCw className="w-4 h-4" />
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -705,16 +715,16 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           {config.jd_stale && (
             <div
               role="alert"
-              className="flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3"
+              className="flex items-start gap-3 rounded-xl border border-warning-line bg-warning-subtle px-4 py-3"
             >
-              <div className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-amber-500 text-white text-[11px] font-bold">
+              <div className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-warning text-white text-2xs font-bold">
                 !
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-amber-900">
+                <p className="text-sm font-semibold text-warning-strong">
                   Linked JD has changed since this interview was configured
                 </p>
-                <p className="mt-0.5 text-xs text-amber-800">
+                <p className="mt-0.5 text-xs text-warning-strong">
                   {config.jd_stale_reason ?? 'The underlying Job Description was updated after this config was created.'}
                   {config.jd_current_version != null && config.jd_version != null && (
                     <> Snapshot: v{config.jd_version} &middot; Current: v{config.jd_current_version}.</>
@@ -728,7 +738,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       const url = `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`;
                       router.push(url);
                     }}
-                    className="mt-2 inline-flex items-center gap-1 rounded-md border border-amber-400 bg-white px-2.5 py-1 text-xs font-medium text-amber-800 hover:bg-amber-100"
+                    className="mt-2 inline-flex items-center gap-1 rounded-md border border-warning-line bg-white px-2.5 py-1 text-xs font-medium text-warning-strong hover:bg-warning-subtle"
                   >
                     Re-sync with latest JD
                   </button>
@@ -818,7 +828,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       </p>
                     </div>
                   </div>
-                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 whitespace-nowrap ${config.environment_verification_enabled ? 'bg-green-100 text-green-700 ring-green-200' : 'bg-gray-100 text-gray-600 ring-gray-200'}`}>
+                  <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 whitespace-nowrap ${config.environment_verification_enabled ? 'bg-success-subtle text-success ring-success-line' : 'bg-gray-100 text-gray-600 ring-gray-200'}`}>
                     {config.environment_verification_enabled ? 'Enabled' : 'Disabled'}
                   </span>
                 </div>
@@ -1164,11 +1174,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       <ol className="space-y-2">
                         {(hrRound.hr_questions as AIInterviewHRQuestion[]).map((q, idx) => (
                           <li key={q.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-gradient-to-br from-brand-cyan/5 to-brand-teal/5 border border-gray-100 ring-1 ring-brand-cyan/10">
-                            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-cyan text-white text-[10px] font-bold flex items-center justify-center mt-0.5 shadow-sm">{idx + 1}</span>
+                            <span className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-cyan text-white text-2xs font-bold flex items-center justify-center mt-0.5 shadow-sm">{idx + 1}</span>
                             <div className="flex-1 min-w-0">
                               <p className="text-sm text-gray-800">{q.question_text}</p>
                               <div className="mt-1 flex flex-wrap items-center gap-2">
-                                <span className="text-[10px] text-gray-500">{q.answer_type === 'yes_no' ? 'Yes / No' : 'Text answer'}</span>
+                                <span className="text-2xs text-gray-500">{q.answer_type === 'yes_no' ? 'Yes / No' : 'Text answer'}</span>
                                 <HRQuestionStageBadge stage={q.stage} />
                               </div>
                             </div>
@@ -1187,7 +1197,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     label="Recording"
                     value={
                       config.recording_enabled ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700 ring-1 ring-green-200">
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-success-subtle text-success ring-1 ring-success-line">
                           <Video className="w-3 h-3" /> Enabled
                         </span>
                       ) : (
@@ -1227,8 +1237,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     <div className="text-2xl font-semibold text-brand-blue tracking-tight">{invitationStats.total}</div>
                     <div className="text-xs text-gray-500 mt-1">Total Invited</div>
                   </div>
-                  <div className="bg-gradient-to-br from-green-50 to-green-50 ring-1 ring-green-200 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-semibold text-green-600 tracking-tight">{invitationStats.completed}</div>
+                  <div className="bg-gradient-to-br from-green-50 to-green-50 ring-1 ring-success-line rounded-lg p-4 text-center">
+                    <div className="text-2xl font-semibold text-success tracking-tight">{invitationStats.completed}</div>
                     <div className="text-xs text-gray-500 mt-1">Completed</div>
                   </div>
                   <div className="bg-gradient-to-br from-brand-orange/5 to-brand-orange-deep/5 ring-1 ring-brand-orange/20 rounded-lg p-4 text-center">
@@ -1277,10 +1287,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   {recentActivity.map((activity) => {
                     const statusIcon = () => {
                       switch (activity.status) {
-                        case 'completed': return <CheckCircle className="w-5 h-5 text-green-500" />;
+                        case 'completed': return <CheckCircle className="w-5 h-5 text-success" />;
                         case 'in_progress': return <Play className="w-5 h-5 text-brand-orange-deep" />;
                         case 'invited': return <Mail className="w-5 h-5 text-brand-blue" />;
-                        case 'cancelled': return <XCircle className="w-5 h-5 text-red-500" />;
+                        case 'cancelled': return <XCircle className="w-5 h-5 text-destructive" />;
                         default: return <Mail className="w-5 h-5 text-gray-400" />;
                       }
                     };
@@ -1442,7 +1452,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 mid: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20',
                 senior: 'bg-brand-blue/10 text-brand-blue-2 ring-1 ring-brand-blue/20',
                 lead: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
-                expert: 'bg-red-100 text-red-700 ring-1 ring-red-200',
+                expert: 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line',
               };
               return val ? (map[val] || 'bg-gray-100 text-gray-700 ring-1 ring-gray-200') : 'bg-gray-100 text-gray-700 ring-1 ring-gray-200';
             };
@@ -1484,12 +1494,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             <FileText className="w-4 h-4 text-white/90 flex-shrink-0" />
                             <span className="text-xs font-medium text-white/90 uppercase tracking-wide">Job Description</span>
                             {config.jd_short_id && (
-                              <span className="px-2 py-0.5 rounded-full bg-white/15 text-white text-[11px] font-medium ring-1 ring-white/20">
+                              <span className="px-2 py-0.5 rounded-full bg-white/15 text-white text-2xs font-medium ring-1 ring-white/20">
                                 {config.jd_short_id}
                               </span>
                             )}
                             {config.jd_version != null && (
-                              <span className="px-2 py-0.5 rounded-full bg-white/10 text-white/90 text-[11px] font-medium ring-1 ring-white/15">
+                              <span className="px-2 py-0.5 rounded-full bg-white/10 text-white/90 text-2xs font-medium ring-1 ring-white/15">
                                 v{config.jd_version}
                               </span>
                             )}
@@ -1502,17 +1512,17 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                       <div className="px-4 sm:px-5 py-3 sm:py-4 space-y-3">
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
                           <div>
-                            <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-0.5">Experience</p>
+                            <p className="text-2xs text-gray-500 uppercase tracking-wide mb-0.5">Experience</p>
                             <p className="text-sm font-medium text-gray-900">
                               {expLabel(config.jd_experience_level) || config.jd_experience_level || '—'}
                             </p>
                           </div>
                           <div>
-                            <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-0.5">Industry</p>
+                            <p className="text-2xs text-gray-500 uppercase tracking-wide mb-0.5">Industry</p>
                             <p className="text-sm font-medium text-gray-900">{(config as any).jd_industry_type ?? '—'}</p>
                           </div>
                           <div>
-                            <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-0.5">Skills</p>
+                            <p className="text-2xs text-gray-500 uppercase tracking-wide mb-0.5">Skills</p>
                             <p className="text-sm font-medium text-gray-900">
                               {mthSkills.length + nthSkills.length}
                               <span className="text-xs text-gray-500 ml-1">({mthSkills.length} must / {nthSkills.length} nice)</span>
@@ -1521,7 +1531,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                         </div>
                         {jdDesc ? (
                           <div className="border-t border-gray-100 pt-3">
-                            <p className="text-[11px] text-gray-500 uppercase tracking-wide mb-1.5">Description</p>
+                            <p className="text-2xs text-gray-500 uppercase tracking-wide mb-1.5">Description</p>
                             <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
                               {descTruncated && !jdDescExpanded
                                 ? `${jdDesc.slice(0, DESC_PREVIEW_CHARS).trimEnd()}…`
@@ -1606,7 +1616,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                         </div>
                         <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Recording</span>
                       </div>
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 ${config.recording_enabled ? 'bg-green-100 text-green-700 ring-green-200' : 'bg-gray-100 text-gray-600 ring-gray-200'}`}>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 ${config.recording_enabled ? 'bg-success-subtle text-success ring-success-line' : 'bg-gray-100 text-gray-600 ring-gray-200'}`}>
                         {config.recording_enabled ? 'Enabled' : 'Disabled'}
                       </span>
                     </div>
@@ -1619,7 +1629,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                         </div>
                         <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Mobile Environment Verification</span>
                       </div>
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 ${config.environment_verification_enabled ? 'bg-green-100 text-green-700 ring-green-200' : 'bg-gray-100 text-gray-600 ring-gray-200'}`}>
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 ${config.environment_verification_enabled ? 'bg-success-subtle text-success ring-success-line' : 'bg-gray-100 text-gray-600 ring-gray-200'}`}>
                         {config.environment_verification_enabled ? 'Enabled' : 'Disabled'}
                       </span>
                     </div>
@@ -1718,9 +1728,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               { label: 'Total', value: total, icon: Users, tone: 'text-gray-500', num: 'text-gray-900' },
               { label: 'Invited', value: invited, icon: Mail, tone: 'text-brand-blue', num: 'text-brand-blue' },
               { label: 'In Progress', value: inProgress, icon: Play, tone: 'text-brand-orange-deep', num: 'text-brand-orange-deep' },
-              { label: 'Completed', value: completed, icon: CheckCircle, tone: 'text-green-600', num: 'text-green-600' },
-              { label: 'Terminated', value: terminated, icon: Ban, tone: 'text-red-600', num: 'text-red-600' },
-              { label: 'Cancelled', value: cancelled, icon: X, tone: 'text-red-600', num: 'text-red-600' },
+              { label: 'Completed', value: completed, icon: CheckCircle, tone: 'text-success', num: 'text-success' },
+              { label: 'Terminated', value: terminated, icon: Ban, tone: 'text-destructive', num: 'text-destructive' },
+              { label: 'Cancelled', value: cancelled, icon: X, tone: 'text-destructive', num: 'text-destructive' },
               { label: 'Completion', value: `${completionRate}%`, icon: TrendingUp, tone: 'text-brand-cyan', num: 'text-brand-cyan' },
             ];
 
@@ -1753,11 +1763,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             // Status pill with icon — matches the reference modal.
             const statusPill = (status: string) => {
               switch (status) {
-                case 'completed': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 ring-1 ring-green-200 rounded-full text-xs font-medium"><CheckCircle className="w-3 h-3" /> Completed</span>;
+                case 'completed': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-success-subtle text-success ring-1 ring-success-line rounded-full text-xs font-medium"><CheckCircle className="w-3 h-3" /> Completed</span>;
                 case 'in_progress': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs font-medium"><Play className="w-3 h-3" /> In Progress</span>;
                 case 'invited': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-xs font-medium"><Mail className="w-3 h-3" /> Invited</span>;
-                case 'terminated': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-700 ring-1 ring-red-200 rounded-full text-xs font-medium"><Ban className="w-3 h-3" /> Terminated</span>;
-                case 'cancelled': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-100 text-red-600 ring-1 ring-red-200 rounded-full text-xs font-medium"><X className="w-3 h-3" /> Cancelled</span>;
+                case 'terminated': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-destructive-subtle text-destructive ring-1 ring-destructive-line rounded-full text-xs font-medium"><Ban className="w-3 h-3" /> Terminated</span>;
+                case 'cancelled': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-destructive-subtle text-destructive ring-1 ring-destructive-line rounded-full text-xs font-medium"><X className="w-3 h-3" /> Cancelled</span>;
                 case 'expired': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs font-medium"><Clock className="w-3 h-3" /> Expired</span>;
                 default: return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(status)}`}>{getStatusLabel(status)}</span>;
               }
@@ -1781,12 +1791,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     </div>
                   </div>
                   {config.status === 'published' && canShareAIInterviews && (
-                    <button
-                      onClick={() => setActiveTab('share')}
-                      className="inline-flex items-center gap-2 px-4 py-2 text-sm font-medium bg-brand-blue text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 transition-colors self-start sm:self-auto"
-                    >
-                      <Send className="w-4 h-4" /> Invite More
-                    </button>
+                    <Button variant="primary" size="md" onClick={() => setActiveTab('share')} icon={<Send className="w-4 h-4" />} className="self-start sm:self-auto">
+                      Invite More
+                    </Button>
                   )}
                 </div>
 
@@ -1796,7 +1803,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     const Icon = s.icon;
                     return (
                       <div key={s.label} className="bg-white rounded-xl p-3 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-                        <div className={`flex items-center gap-1.5 text-[10px] sm:text-xs mb-1 ${s.tone}`}>
+                        <div className={`flex items-center gap-1.5 text-2xs sm:text-xs mb-1 ${s.tone}`}>
                           <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                           <span className="truncate">{s.label}</span>
                         </div>
@@ -1918,16 +1925,16 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                               // Round to whole number so this matches the detail
                               // page (17.5 → 18). Pass ≥ 60% → green, else red.
                               const rounded = Math.round(Number(displayScore));
-                              const scoreColor = rounded >= 60 ? 'text-green-600' : 'text-red-600';
+                              const scoreColor = rounded >= 60 ? 'text-success' : 'text-destructive';
                               return (
                                 <div className="text-right">
-                                  <div className="text-[10px] text-gray-500">Score</div>
+                                  <div className="text-2xs text-gray-500">Score</div>
                                   <div className={`text-sm font-semibold ${scoreColor}`}>{rounded}%</div>
                                 </div>
                               );
                             })()}
 
-                            <div className="hidden sm:flex items-center gap-3 text-[10px] text-gray-400">
+                            <div className="hidden sm:flex items-center gap-3 text-2xs text-gray-400">
                               {(a.invitation_sent_at || a.created_at) && (
                                 <span className="flex items-center gap-1" title="Invited">
                                   <Mail className="w-3 h-3 text-brand-blue" />
@@ -1942,20 +1949,21 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                               )}
                               {a.completed_at && (
                                 <span className="flex items-center gap-1" title="Completed">
-                                  <CheckCircle className="w-3 h-3 text-green-500" />
+                                  <CheckCircle className="w-3 h-3 text-success" />
                                   {formatIST(a.completed_at)}
                                 </span>
                               )}
                             </div>
 
                             {(a.status === 'completed' || a.status === 'in_progress' || a.status === 'terminated') && (
-                              <button
+                              <Button
+                                variant="secondary"
+                                size="sm"
                                 onClick={(e) => { e.stopPropagation(); handleCandidateClick(a.id, filtered.map(f => f.id)); }}
-                                className="flex items-center gap-1 px-2.5 py-1 text-xs font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                                icon={<Eye className="w-3 h-3" />}
                               >
-                                <Eye className="w-3 h-3" />
                                 View Details
-                              </button>
+                              </Button>
                             )}
                           </div>
                         </div>
@@ -1988,21 +1996,17 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             <h3 className="text-lg font-semibold text-gray-900 mb-2 tracking-tight">{confirmAction.title}</h3>
             <p className="text-sm text-gray-600 mb-6">{confirmAction.message}</p>
             <div className="flex items-center justify-end gap-3">
-              <button
-                onClick={() => setConfirmAction(null)}
-                className="px-4 py-2 text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
-              >
+              <Button variant="secondary" size="md" onClick={() => setConfirmAction(null)}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant={confirmAction.type === 'delete' ? 'danger' : 'primary'}
+                size="md"
                 onClick={confirmAction.onConfirm}
                 disabled={actionLoading}
-                className={`px-4 py-2 text-sm text-white rounded-lg transition-colors disabled:opacity-50 ring-1 ring-white/10 ${
-                  confirmAction.type === 'delete' ? 'bg-red-600 hover:bg-red-700 shadow-md shadow-red-600/25' : 'bg-brand-blue hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25'
-                }`}
               >
                 {actionLoading ? 'Processing...' : 'Confirm'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { Button } from '@/components/ui/button';
 
 /**
  * The candidate list for an ASSESSMENT invite tracker.
@@ -95,7 +96,7 @@ export const isValidInviteEmail = (email: string) =>
  *  status with a chip beside it. */
 export const InviteStatusBadge = ({ inv }: { inv: any }) => {
   const s = inv.status;
-  const base = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1";
+  const base = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs sm:text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1";
   if (isInviteExpired(inv)) {
     return <span className={`${base} bg-status-expired/10 text-status-expired ring-status-expired/20`}><Clock className="w-3 h-3" /> Expired</span>;
   }
@@ -113,16 +114,16 @@ export const InviteStatusBadge = ({ inv }: { inv: any }) => {
     );
   }
   if (s === 'failed') {
-    return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`}><X className="w-3 h-3" /> Invite Failed</span>;
+    return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}><X className="w-3 h-3" /> Invite Failed</span>;
   }
   if (s === 'bounced' || inv.bounced_at) {
-    return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`}><RefreshCw className="w-3 h-3" /> Bounced</span>;
+    return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}><RefreshCw className="w-3 h-3" /> Bounced</span>;
   }
   if (s === 'expired') {
     return <span className={`${base} bg-status-expired/10 text-status-expired ring-status-expired/20`}><Clock className="w-3 h-3" /> Expired</span>;
   }
   if (s === 'abandoned') {
-    return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`} title="Ended before completion — the candidate left the assessment"><Ban className="w-3 h-3" /> Terminated</span>;
+    return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`} title="Ended before completion — the candidate left the assessment"><Ban className="w-3 h-3" /> Terminated</span>;
   }
   if (s === 'started' || inv.started_at) {
     return <span className={`${base} bg-status-progress/10 text-status-progress ring-status-progress/20`}><Play className="w-3 h-3" /> In Progress</span>;
@@ -386,8 +387,8 @@ export default function AssessmentInviteTable({
                         )}
                         {invitation.bounced_at && (
                           <div className="flex items-center gap-2">
-                            <RefreshCw className="w-3 h-3 text-red-600 flex-shrink-0" />
-                            <span className="text-red-600">Bounced: {formatIST(invitation.bounced_at)}</span>
+                            <RefreshCw className="w-3 h-3 text-destructive flex-shrink-0" />
+                            <span className="text-destructive">Bounced: {formatIST(invitation.bounced_at)}</span>
                           </div>
                         )}
                         {invitation.opened_at && (
@@ -410,8 +411,8 @@ export default function AssessmentInviteTable({
                         )}
                         {invitation.terminated_at && !invitation.completed_at && (
                           <div className="flex items-center gap-2">
-                            <Ban className="w-3 h-3 text-red-600 flex-shrink-0" />
-                            <span className="text-red-600">Terminated: {formatIST(invitation.terminated_at)}</span>
+                            <Ban className="w-3 h-3 text-destructive flex-shrink-0" />
+                            <span className="text-destructive">Terminated: {formatIST(invitation.terminated_at)}</span>
                           </div>
                         )}
                         {/* Expired-at timestamp — shown when the link
@@ -472,10 +473,10 @@ export default function AssessmentInviteTable({
                         <td className="py-3 px-4 align-top text-sm text-center">
                           {techReady ? (
                             <div className="flex flex-col items-center gap-0.5">
-                              <span className={`font-medium ${invitation.technical_score >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
+                              <span className={`font-medium ${invitation.technical_score >= 70 ? 'text-brand-blue' : 'text-destructive'}`}>
                                 {Math.round(invitation.technical_score)}%
                               </span>
-                              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.technical_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+                              <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.technical_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
                                 {invitation.technical_score >= 70 ? 'Pass' : 'Fail'}
                               </span>
                             </div>
@@ -494,10 +495,10 @@ export default function AssessmentInviteTable({
                         <td className="py-3 px-4 align-top text-sm text-center">
                           {codingReady ? (
                             <div className="flex flex-col items-center gap-0.5">
-                              <span className={`font-medium ${invitation.coding_score >= 70 ? 'text-brand-blue' : 'text-red-600'}`}>
+                              <span className={`font-medium ${invitation.coding_score >= 70 ? 'text-brand-blue' : 'text-destructive'}`}>
                                 {Math.round(invitation.coding_score)}%
                               </span>
-                              <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.coding_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+                              <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.coding_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
                                 {invitation.coding_score >= 70 ? 'Pass' : 'Fail'}
                               </span>
                             </div>
@@ -531,20 +532,18 @@ export default function AssessmentInviteTable({
                             autoFocus
                           />
                           <div className="flex gap-1">
-                            <button
+                            <Button
+                              variant="primary"
+                              size="sm"
                               onClick={() => onSubmitEmail(invitation)}
                               disabled={!isValidInviteEmail(newEmailValue) || isSendingChangeEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
-                              className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white rounded transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+                              icon={<Send className="w-3 h-3" />}
                             >
-                              <Send className="w-3 h-3" />
                               {isSendingChangeEmail ? 'Sending…' : 'Send'}
-                            </button>
-                            <button
-                              onClick={onCancelEditEmail}
-                              className="px-2 py-1 text-xs text-gray-600 dark:text-slate-400 hover:bg-slate-100 rounded transition-colors"
-                            >
+                            </Button>
+                            <Button variant="secondary" size="sm" onClick={onCancelEditEmail}>
                               Cancel
-                            </button>
+                            </Button>
                           </div>
                         </div>
                       ) : (() => {

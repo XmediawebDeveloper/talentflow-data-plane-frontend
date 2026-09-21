@@ -199,7 +199,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
           <div key={section.id} className="mb-5 px-3">
             {/* Section Header */}
             <div className="px-3 pb-2">
-              <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-[0.1em]">
+              <span className="text-2xs font-semibold text-gray-400 uppercase tracking-[0.1em]">
                 {section.label}
               </span>
             </div>
@@ -278,7 +278,7 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
 
       {/* Footer */}
       <div className="px-4 py-3 border-t border-gray-100 shrink-0">
-        <p className="text-[11px] text-gray-400 text-center font-medium tracking-wide">
+        <p className="text-2xs text-gray-400 text-center font-medium tracking-wide">
           {tenant?.name || 'TalentFlow'} <span className="opacity-60">·</span> v1.0
         </p>
       </div>

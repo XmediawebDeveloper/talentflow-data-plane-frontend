@@ -12,28 +12,28 @@ interface ErrorScreenProps {
 export function ErrorScreen({ message, onRetry, variant = 'error' }: ErrorScreenProps) {
   const config = {
     error: {
-      iconBg: 'bg-red-100',
-      icon: <AlertCircle className="w-8 h-8 text-red-600" />,
+      iconBg: 'bg-destructive-subtle',
+      icon: <AlertCircle className="w-8 h-8 text-destructive" />,
       title: 'Something went wrong',
     },
     expired: {
-      iconBg: 'bg-amber-100',
-      icon: <Clock className="w-8 h-8 text-amber-600" />,
+      iconBg: 'bg-warning-subtle',
+      icon: <Clock className="w-8 h-8 text-warning" />,
       title: 'Link Expired',
     },
     completed: {
-      iconBg: 'bg-green-100',
-      icon: <CheckCircle className="w-8 h-8 text-green-600" />,
+      iconBg: 'bg-success-subtle',
+      icon: <CheckCircle className="w-8 h-8 text-success" />,
       title: 'Already Completed',
     },
     revoked: {
-      iconBg: 'bg-red-100',
-      icon: <Ban className="w-8 h-8 text-red-600" />,
+      iconBg: 'bg-destructive-subtle',
+      icon: <Ban className="w-8 h-8 text-destructive" />,
       title: 'Invitation Revoked',
     },
     cancelled: {
-      iconBg: 'bg-amber-100',
-      icon: <Ban className="w-8 h-8 text-amber-600" />,
+      iconBg: 'bg-warning-subtle',
+      icon: <Ban className="w-8 h-8 text-warning" />,
       title: 'Link Cancelled',
     },
   }[variant];

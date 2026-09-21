@@ -1,6 +1,7 @@
 import { Sparkles, CheckCircle2, Loader2, AlertCircle, Lightbulb } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { aiMatchService, MatchedCandidate } from '@/lib/services/aiMatchService';
+import { Button } from '@/components/ui/button';
 
 interface AITalentMatchProgressPanelProps {
   jobTitle: string;
@@ -88,17 +89,17 @@ export default function AITalentMatchProgressPanel({
       <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
         <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] max-w-[95vw] sm:max-w-md w-full p-5 sm:p-6 max-h-[calc(100dvh-2rem)] overflow-y-auto">
           <div className="text-center">
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-red-50 ring-1 ring-red-200 rounded-full flex items-center justify-center mx-auto mb-3">
-              <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600" />
+            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-destructive-subtle ring-1 ring-destructive-line rounded-full flex items-center justify-center mx-auto mb-3">
+              <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-destructive" />
             </div>
             <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-2">Matching Failed</h2>
             <p className="text-xs sm:text-sm text-gray-600 mb-4">{error}</p>
-            <button
+            <Button
+              variant="primary"
               onClick={() => window.location.reload()}
-              className="px-5 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors font-medium text-sm"
             >
               Try Again
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -151,13 +152,13 @@ export default function AITalentMatchProgressPanel({
                 key={index}
                 className={`flex items-center gap-3 p-2 sm:p-2.5 rounded-xl transition-all ${
                   isCurrent ? 'bg-brand-blue/5 ring-1 ring-brand-blue/30' :
-                  isComplete ? 'bg-green-50 ring-1 ring-green-200' :
+                  isComplete ? 'bg-success-subtle ring-1 ring-success-line' :
                   'bg-gray-50 ring-1 ring-gray-200'
                 }`}
               >
                 <div className={`w-7 h-7 sm:w-8 sm:h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                   isCurrent ? 'bg-brand-blue text-white shadow shadow-brand-blue/25 ring-1 ring-white/10' :
-                  isComplete ? 'bg-green-600 text-white' :
+                  isComplete ? 'bg-success text-white' :
                   'bg-gray-300 text-gray-600'
                 }`}>
                   {isComplete ? (
@@ -171,16 +172,16 @@ export default function AITalentMatchProgressPanel({
                 <div className="flex-1 min-w-0">
                   <p className={`text-sm font-semibold truncate ${
                     isCurrent ? 'text-brand-blue' :
-                    isComplete ? 'text-green-700' :
+                    isComplete ? 'text-success' :
                     'text-gray-700'
                   }`}>
                     {step.title}
                   </p>
                   <p className="text-xs text-gray-500 truncate">{step.description}</p>
                 </div>
-                <span className={`flex-shrink-0 text-[11px] sm:text-xs font-semibold px-2.5 py-1 rounded-full ${
+                <span className={`flex-shrink-0 text-2xs sm:text-xs font-semibold px-2.5 py-1 rounded-full ${
                   isCurrent ? 'bg-brand-blue/10 text-brand-blue' :
-                  isComplete ? 'bg-green-100 text-green-700' :
+                  isComplete ? 'bg-success-subtle text-success' :
                   'bg-gray-200 text-gray-600'
                 }`}>
                   {statusLabel}

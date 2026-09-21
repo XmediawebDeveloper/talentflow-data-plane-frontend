@@ -84,7 +84,7 @@ export default function TeamFormModal({
                 <Users className="h-5 w-5 text-white" />
               </div>
               <div>
-                <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-[11px] font-medium text-white/90 ring-1 ring-white/15">
+                <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-2xs font-medium text-white/90 ring-1 ring-white/15">
                   <Layers3 className="h-3 w-3 text-brand-orange" />
                   {mode === 'create' ? 'New team setup' : 'Team configuration'}
                 </div>

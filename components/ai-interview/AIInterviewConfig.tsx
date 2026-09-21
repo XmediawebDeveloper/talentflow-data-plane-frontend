@@ -13,6 +13,7 @@ import React, { useState, useEffect, useCallback, useRef } from 'react';
 import UnsavedChangesModal from '@/components/UnsavedChangesModal';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { Button } from '@/components/ui/button';
 import type {
   PublishedJD,
   AIInterviewRoundConfig,
@@ -366,7 +367,7 @@ const SUPPORTED_LANGUAGES = [
 function PriorityBadge({ p }: { p: number }) {
   const { label, color } = getPriorityLabel(p);
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full border ${color}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 text-2xs font-medium rounded-full border ${color}`}>
       {label}
     </span>
   );
@@ -632,12 +633,12 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
             fromJd ? color.tag : 'bg-advice-positive-bg text-advice-positive border-advice-positive/25'
           }`}>
             {skill.name}
-            {fromJd && <span className="text-[10px] opacity-60">JD</span>}
+            {fromJd && <span className="text-2xs opacity-60">JD</span>}
           </span>
           <select
             value={skillType}
             onChange={e => updateSkillType(skill.name, e.target.value as SkillType)}
-            className={`text-[10px] font-medium px-1.5 py-0.5 rounded border cursor-pointer focus:outline-none ${SKILL_TYPE_COLORS[skillType]}`}
+            className={`text-2xs font-medium px-1.5 py-0.5 rounded border cursor-pointer focus:outline-none ${SKILL_TYPE_COLORS[skillType]}`}
           >
             <option value="Skill">Skill</option>
             <option value="Command">Command</option>
@@ -659,7 +660,7 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
           {!(mode === 'flexible' && isLocked) && (
             <button
               onClick={() => setSkillToDelete(skill.name)}
-              className="p-1 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
+              className="p-1 text-gray-400 hover:text-destructive transition-colors flex-shrink-0"
               title={`Remove ${skill.name}`}
               aria-label={`Remove ${skill.name}`}
             >
@@ -679,7 +680,7 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
             <button
               onClick={() => { updateComment(skill.name, ''); setCommentOpen(null); }}
               aria-label="Clear & close" title="Clear & close"
-              className="p-1 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
+              className="p-1 text-gray-400 hover:text-destructive transition-colors flex-shrink-0"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -741,14 +742,14 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
                 }}
                 onBlur={() => { if (config.percentage < 10) setWeightError(true); }}
                 className={`w-14 text-center text-sm font-semibold border rounded-l-md px-1 py-0.5 focus:outline-none focus:ring-2 ${
-                  weightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
+                  weightError ? 'border-destructive focus:ring-destructive-line' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
                 }`}
               />
               <span className={`px-2 py-0.5 text-sm border border-l-0 rounded-r-md bg-slate-50 ${
-                weightError ? 'border-red-400 text-red-600' : 'border-gray-200 text-gray-600'
+                weightError ? 'border-destructive text-destructive' : 'border-gray-200 text-gray-600'
               }`}>%</span>
             </div>
-            {weightError && <span className="text-[11px] text-red-500 ml-1">Min 10%</span>}
+            {weightError && <span className="text-2xs text-destructive ml-1">Min 10%</span>}
           </div>
         )}
       </div>
@@ -758,9 +759,9 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
         {/* Inline warning when all entries are Command — the
             interview needs at least one type "Skill" to assess as a competency. */}
         {config.skills.length > 0 && !config.skills.some(s => (s.type ?? 'Skill') === 'Skill') && (
-          <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-            <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-red-700">
+          <div className="flex items-start gap-2 px-3 py-2 bg-destructive-subtle border border-destructive-line rounded-lg">
+            <AlertCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-destructive">
               Add at least one entry of type <strong>Skill</strong> here.
               All current entries are Commands, which can&apos;t be assessed as a standalone competency.
             </p>
@@ -811,15 +812,15 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
                 className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 ${
                   addSkillError
                     ? (pendingOverride
-                        ? 'border-amber-300 focus:ring-amber-400'
-                        : 'border-red-300 focus:ring-red-400')
+                        ? 'border-warning-line focus:ring-warning-line'
+                        : 'border-destructive-line focus:ring-destructive-line')
                     : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
                 }`}
               />
               {addSkillError && (
                 // Amber + an explicit instruction while an override is pending —
                 // the toast vanishes, so the actionable hint has to live here.
-                <p className={`mt-1 text-[11px] ${pendingOverride ? 'text-amber-600' : 'text-red-500'}`}>
+                <p className={`mt-1 text-2xs ${pendingOverride ? 'text-warning' : 'text-destructive'}`}>
                   {addSkillError}
                   {pendingOverride && (
                     <span className="font-medium"> — press Add again to keep both.</span>
@@ -827,15 +828,15 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
                 </p>
               )}
             </div>
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="md"
               onClick={addSkill}
               disabled={checkingDuplicate}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-60 disabled:cursor-wait"
+              icon={<Plus className="w-4 h-4" />}
             >
-              <Plus className="w-4 h-4" />
               {checkingDuplicate ? 'Checking…' : 'Add'}
-            </button>
+            </Button>
           </div>
         </div>
         )}
@@ -876,14 +877,14 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
                         }
                         <span className="flex-1 text-sm font-medium text-gray-800">{cluster.name || 'Unnamed Topic'}</span>
                         <PriorityBadge p={cluster.priority} />
-                        <span className="text-[11px] text-gray-400">{clusterSkills.length} skill{clusterSkills.length !== 1 ? 's' : ''}</span>
+                        <span className="text-2xs text-gray-400">{clusterSkills.length} skill{clusterSkills.length !== 1 ? 's' : ''}</span>
                       </button>
 
                       {/* Cluster body */}
                       {!isCollapsed && (
                         <div className="px-3 py-2.5 space-y-1.5 border-t border-gray-100">
                           {cluster.reason && (
-                            <p className="text-[11px] text-gray-500 italic mb-1">{cluster.reason}</p>
+                            <p className="text-2xs text-gray-500 italic mb-1">{cluster.reason}</p>
                           )}
                           {clusterSkills.length === 0 && (
                             <p className="text-xs text-gray-400 italic">No matching skills</p>
@@ -901,7 +902,7 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
                   <div className="flex items-center gap-2 px-3 py-2.5 bg-brand-orange/5">
                     <AlertCircle className="w-3.5 h-3.5 text-brand-orange flex-shrink-0" />
                     <span className="flex-1 text-sm font-medium text-brand-orange-deep">Unassigned Skills</span>
-                    <span className="text-[11px] text-brand-orange">{unclusteredSkills.length} skill{unclusteredSkills.length !== 1 ? 's' : ''}</span>
+                    <span className="text-2xs text-brand-orange">{unclusteredSkills.length} skill{unclusteredSkills.length !== 1 ? 's' : ''}</span>
                   </div>
                   <div className="px-3 py-2.5 space-y-1.5 border-t border-brand-orange/20">
                     {unclusteredSkills.map(skill => renderSkillTag(skill))}
@@ -1076,7 +1077,7 @@ function HRSection({
           }
           trailing={
             <>
-              <span className="px-2 py-0.5 text-[11px] rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 font-medium">
+              <span className="px-2 py-0.5 text-2xs rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 font-medium">
                 Qualitative Only — Non-Scoring
               </span>
               {enabled && mode === 'fixed' && (
@@ -1117,14 +1118,14 @@ function HRSection({
                 }}
                 onBlur={() => { setHrWeightError(enabled && mode === 'flexible' && percentage < 10); }}
                 className={`w-14 text-center text-sm font-semibold border rounded-l-md px-1 py-0.5 focus:outline-none focus:ring-2 ${
-                  hrWeightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
+                  hrWeightError ? 'border-destructive focus:ring-destructive-line' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
                 }`}
               />
               <span className={`px-2 py-0.5 text-sm border border-l-0 rounded-r-md bg-slate-50 ${
-                hrWeightError ? 'border-red-400 text-red-600' : 'border-gray-200 text-gray-600'
+                hrWeightError ? 'border-destructive text-destructive' : 'border-gray-200 text-gray-600'
               }`}>%</span>
             </div>
-            {hrWeightError && <span className="text-[11px] text-red-500 ml-1">HR round must be at least 10%</span>}
+            {hrWeightError && <span className="text-2xs text-destructive ml-1">HR round must be at least 10%</span>}
           </div>
         )}
       </div>
@@ -1141,7 +1142,7 @@ function HRSection({
                     ? `Select exactly ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Bina to ask`
                     : `Select at least ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Bina to ask`}
                 </span>
-                <span className="block text-[11px] text-gray-400">
+                <span className="block text-2xs text-gray-400">
                   Closing is the default tag. Mark any question as Opening to ask it before the technical rounds; Closing questions are asked at the end.
                 </span>
               </div>
@@ -1190,7 +1191,7 @@ function HRSection({
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-gray-800 leading-relaxed">{q.question_text}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Ask As</span>
+                        <span className="text-2xs font-semibold uppercase tracking-wide text-gray-400">Ask As</span>
                         <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white p-1">
                           <button
                             type="button"
@@ -1200,7 +1201,7 @@ function HRSection({
                               e.stopPropagation();
                               setQuestionStage(q.id, 'opening');
                             }}
-                            className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                            className={`px-2.5 py-1 rounded-full text-2xs font-medium transition-colors ${
                               selectedStage === 'opening'
                                 /* Dark mode flips --advice-positive to a light
                                    green, where white text would wash out — the
@@ -1219,7 +1220,7 @@ function HRSection({
                               e.stopPropagation();
                               setQuestionStage(q.id, 'closing');
                             }}
-                            className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                            className={`px-2.5 py-1 rounded-full text-2xs font-medium transition-colors ${
                               selectedStage === 'closing'
                                 /* Dark mode flips --advice-positive to a light
                                    green, where white text would wash out — the
@@ -1232,7 +1233,7 @@ function HRSection({
                           </button>
                         </div>
                         {!isSelected && (
-                          <span className="text-[10px] text-gray-400">Select the question to include it in the interview.</span>
+                          <span className="text-2xs text-gray-400">Select the question to include it in the interview.</span>
                         )}
                       </div>
                     </div>
@@ -1247,7 +1248,7 @@ function HRSection({
             <div className="border border-gray-100 rounded-lg p-3 space-y-2 bg-slate-50 ring-1 ring-black/[0.02]">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-gray-700">Add Question To HR Question Bank</span>
-                <span className="text-[11px] text-gray-400">Saved to database</span>
+                <span className="text-2xs text-gray-400">Saved to database</span>
               </div>
               <textarea
                 autoFocus
@@ -1259,33 +1260,35 @@ function HRSection({
                 }}
                 placeholder="Enter question text…"
                 className={`w-full text-xs border rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-2 resize-none bg-white ${
-                  questionError ? 'border-red-300 focus:ring-red-400' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
+                  questionError ? 'border-destructive-line focus:ring-destructive-line' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
                 }`}
               />
               {questionError && (
-                <p className="text-[11px] text-red-500">{questionError}</p>
+                <p className="text-2xs text-destructive">{questionError}</p>
               )}
               <div className="flex items-center gap-2">
                 <div className="flex-1" />
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => {
                     setAddingQuestion(false);
                     setNewQText('');
                     setNewQType('text');
                     setQuestionError('');
                   }}
-                  className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={saveNewQuestion}
                   disabled={savingQ || !newQText.trim()}
-                  className="flex items-center gap-1 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white px-3 py-1.5 rounded-md shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  icon={savingQ ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                 >
-                  {savingQ ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                   Save
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
@@ -1301,7 +1304,7 @@ function HRSection({
           {/* Info */}
           <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-brand-orange/5 via-white to-brand-orange/5 border border-brand-orange/20 ring-1 ring-brand-orange/10 shadow-sm shadow-brand-orange/5">
             <Info className="w-3.5 h-3.5 text-brand-orange flex-shrink-0 mt-0.5" />
-            <p className="text-[11px] text-brand-orange-deep">
+            <p className="text-2xs text-brand-orange-deep">
               HR responses are stored separately for recruiter review only.
               They do <strong>not</strong> impact the technical evaluation score.
             </p>
@@ -3361,7 +3364,7 @@ export default function AIInterviewConfig() {
                         >
                           <Play className="w-4 h-4" />
                         </button>
-                        <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors" aria-label="Remove video" title="Remove video">
+                        <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-destructive hover:bg-destructive-subtle rounded transition-colors" aria-label="Remove video" title="Remove video">
                           <X className="w-4 h-4" />
                         </button>
                       </div>
@@ -3441,7 +3444,7 @@ export default function AIInterviewConfig() {
                           />
                         </label>
                         {videoDurationError && (
-                          <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1">
+                          <p className="text-2xs text-destructive mt-1 flex items-center gap-1">
                             <AlertCircle className="w-3 h-3" />
                             {videoDurationError}
                           </p>
@@ -3470,7 +3473,7 @@ export default function AIInterviewConfig() {
                           {/* Timer overlay */}
                           {isRecording && (
                             <div className="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm">
-                              <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                              <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
                               <span className="text-xs font-mono text-white">
                                 {String(Math.floor(recordingSeconds / 60)).padStart(2, '0')}:{String(recordingSeconds % 60).padStart(2, '0')} / 01:00
                               </span>
@@ -3481,7 +3484,7 @@ export default function AIInterviewConfig() {
                           {isRecording && (
                             <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700">
                               <div
-                                className="h-full bg-red-500 transition-all duration-1000 ease-linear"
+                                className="h-full bg-destructive transition-all duration-1000 ease-linear"
                                 style={{ width: `${(recordingSeconds / 60) * 100}%` }}
                               />
                             </div>
@@ -3498,8 +3501,8 @@ export default function AIInterviewConfig() {
                           {/* Camera error */}
                           {cameraError && (
                             <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900">
-                              <AlertCircle className="w-6 h-6 text-red-400 mb-1" />
-                              <p className="text-xs text-red-400 text-center px-4">{cameraError}</p>
+                              <AlertCircle className="w-6 h-6 text-destructive mb-1" />
+                              <p className="text-xs text-destructive text-center px-4">{cameraError}</p>
                             </div>
                           )}
                         </div>
@@ -3518,7 +3521,7 @@ export default function AIInterviewConfig() {
                           {cameraReady && !isRecording && (
                             <button
                               onClick={startRecording}
-                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-destructive text-white rounded-lg hover:bg-destructive transition-colors"
                             >
                               <span className="w-2.5 h-2.5 rounded-full bg-white" />
                               Start Recording
@@ -3555,7 +3558,7 @@ export default function AIInterviewConfig() {
                             </button>
                           )}
                         </div>
-                        <p className="text-[11px] text-gray-400 text-center">Recording auto-stops at 1 minute</p>
+                        <p className="text-2xs text-gray-400 text-center">Recording auto-stops at 1 minute</p>
                       </div>
                     )}
                     </>
@@ -3674,10 +3677,10 @@ export default function AIInterviewConfig() {
                       <span className="text-xs text-gray-500 block mb-1.5">Domain Context</span>
                       <div className="flex flex-wrap gap-1">
                         {selectedJd.domain_keywords.slice(0, 6).map(kw => (
-                          <span key={kw} className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{kw}</span>
+                          <span key={kw} className="inline-block px-1.5 py-0.5 rounded text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{kw}</span>
                         ))}
                         {selectedJd.domain_keywords.length > 6 && (
-                          <span className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-slate-100 text-gray-500 ring-1 ring-gray-200">+{selectedJd.domain_keywords.length - 6}</span>
+                          <span className="inline-block px-1.5 py-0.5 rounded text-2xs bg-slate-100 text-gray-500 ring-1 ring-gray-200">+{selectedJd.domain_keywords.length - 6}</span>
                         )}
                       </div>
                     </div>
@@ -3783,9 +3786,9 @@ export default function AIInterviewConfig() {
                     ))}
                   </div>
                   {!pctValid && (
-                    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-100">
-                      <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
-                      <p className="text-[11px] text-red-600">Weights must total 100%. Adjust the percentages above.</p>
+                    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-destructive-subtle border border-destructive-line">
+                      <AlertCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0 mt-0.5" />
+                      <p className="text-2xs text-destructive">Weights must total 100%. Adjust the percentages above.</p>
                     </div>
                   )}
                   {pctValid && (

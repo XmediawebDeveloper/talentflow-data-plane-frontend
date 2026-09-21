@@ -96,7 +96,7 @@ type LucideIcon = React.FC<React.SVGProps<SVGSVGElement>>;
 const UNIT_TYPE_CONFIG: Record<UnitType, { label: string; icon: LucideIcon; color: string; bg: string; bar: string }> = {
   RS: { label: 'Resume Scoring', icon: ClipboardList, color: 'text-brand-blue', bg: 'bg-brand-blue/10', bar: 'bg-brand-blue' },
   AS: { label: 'Assessment', icon: ClipboardCheck, color: 'text-purple-700', bg: 'bg-purple-50', bar: 'bg-purple-500' },
-  AIU: { label: 'AI Interview', icon: Video, color: 'text-emerald-700', bg: 'bg-emerald-50', bar: 'bg-emerald-500' },
+  AIU: { label: 'AI Interview', icon: Video, color: 'text-success', bg: 'bg-success-subtle', bar: 'bg-success' },
 };
 
 const CONSUMPTION_COLUMNS: Array<{
@@ -107,18 +107,18 @@ const CONSUMPTION_COLUMNS: Array<{
 }> = [
   { key: 'RS', label: 'Resume Scoring', icon: ClipboardList, iconClass: 'text-brand-blue' },
   { key: 'AS', label: 'Assessment', icon: ClipboardCheck, iconClass: 'text-purple-500' },
-  { key: 'AIU', label: 'AI Interview', icon: Video, iconClass: 'text-emerald-500' },
+  { key: 'AIU', label: 'AI Interview', icon: Video, iconClass: 'text-success' },
   { key: 'RU', label: 'Resume Storage', icon: Upload, iconClass: 'text-brand-orange' },
 ];
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  SUCCESS: { label: 'Success', color: 'text-emerald-700', bg: 'bg-emerald-50' },
-  FAILED: { label: 'Failed', color: 'text-red-700', bg: 'bg-red-50' },
+  SUCCESS: { label: 'Success', color: 'text-success', bg: 'bg-success-subtle' },
+  FAILED: { label: 'Failed', color: 'text-destructive', bg: 'bg-destructive-subtle' },
   INSUFFICIENT_UNITS: { label: 'Insufficient', color: 'text-brand-orange-deep', bg: 'bg-brand-orange/10' },
   ABANDONED: { label: 'Abandoned', color: 'text-gray-600', bg: 'bg-gray-100' },
-  INTERRUPTED: { label: 'Interrupted', color: 'text-yellow-700', bg: 'bg-yellow-50' },
-  TENANT_SUSPENDED: { label: 'Suspended', color: 'text-red-700', bg: 'bg-red-50' },
-  TENANT_EXPIRED: { label: 'Expired', color: 'text-red-700', bg: 'bg-red-50' },
+  INTERRUPTED: { label: 'Interrupted', color: 'text-warning', bg: 'bg-warning-subtle' },
+  TENANT_SUSPENDED: { label: 'Suspended', color: 'text-destructive', bg: 'bg-destructive-subtle' },
+  TENANT_EXPIRED: { label: 'Expired', color: 'text-destructive', bg: 'bg-destructive-subtle' },
   BLOCKED: { label: 'Blocked', color: 'text-gray-700', bg: 'bg-gray-100' },
 };
 
@@ -148,13 +148,13 @@ function getBarColor(pct: number): string {
 function StatusBadge({ status }: { status: string }) {
   const cfg = STATUS_CONFIG[status] ?? { label: status, color: 'text-gray-600', bg: 'bg-gray-100' };
   const ringMap: Record<string, string> = {
-    SUCCESS: 'ring-emerald-200',
-    FAILED: 'ring-red-200',
+    SUCCESS: 'ring-success-line',
+    FAILED: 'ring-destructive-line',
     INSUFFICIENT_UNITS: 'ring-orange-200',
     ABANDONED: 'ring-gray-200',
-    INTERRUPTED: 'ring-yellow-200',
-    TENANT_SUSPENDED: 'ring-red-200',
-    TENANT_EXPIRED: 'ring-red-200',
+    INTERRUPTED: 'ring-warning-line',
+    TENANT_SUSPENDED: 'ring-destructive-line',
+    TENANT_EXPIRED: 'ring-destructive-line',
     BLOCKED: 'ring-gray-200',
   };
   const ring = ringMap[status] ?? 'ring-gray-200';
@@ -178,7 +178,7 @@ function UnitTypeBadge({ type }: { type: string }) {
   const ringMap: Record<string, string> = {
     RS: 'ring-brand-blue/20',
     AS: 'ring-purple-200',
-    AIU: 'ring-emerald-200',
+    AIU: 'ring-success-line',
   };
   return (
     <span className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ring-1 ${ringMap[type] ?? 'ring-gray-200'} ${cfg.bg} ${cfg.color}`}>
@@ -405,7 +405,7 @@ function AnalyticsCards({
               </div>
               <div>
                 <p className="text-xs text-gray-400">Remaining</p>
-                <p className={`text-lg font-bold ${pct >= 90 ? 'text-red-600' : pct >= 70 ? 'text-brand-orange-deep' : 'text-emerald-600'}`}>
+                <p className={`text-lg font-bold ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
                   {isUnlimited ? '∞' : (remaining?.toLocaleString() ?? '—')}
                 </p>
               </div>
@@ -413,7 +413,7 @@ function AnalyticsCards({
             <div className="space-y-1">
               <div className="flex justify-between text-xs text-gray-400">
                 <span>Usage</span>
-                <span className={pct >= 90 ? 'text-red-600 font-medium' : ''}>{isUnlimited ? 'Unlimited' : `${pct}%`}</span>
+                <span className={pct >= 90 ? 'text-destructive font-medium' : ''}>{isUnlimited ? 'Unlimited' : `${pct}%`}</span>
               </div>
               <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                 <div className={`h-1.5 rounded-full transition-all ${barColor}`} style={{ width: isUnlimited ? '0%' : `${pct}%` }} />
@@ -450,7 +450,7 @@ function AnalyticsCards({
               </div>
               <div>
                 <p className="text-xs text-gray-400">Available</p>
-                <p className={`text-lg font-bold ${pct >= 90 ? 'text-red-600' : pct >= 70 ? 'text-brand-orange-deep' : 'text-emerald-600'}`}>
+                <p className={`text-lg font-bold ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
                   {ru ? (ru.is_unlimited ? '∞' : ru.available.toLocaleString()) : '—'}
                 </p>
               </div>
@@ -458,7 +458,7 @@ function AnalyticsCards({
             <div className="space-y-1">
               <div className="flex justify-between text-xs text-gray-400">
                 <span>Usage</span>
-                <span className={pct >= 90 ? 'text-red-600 font-medium' : ''}>
+                <span className={pct >= 90 ? 'text-destructive font-medium' : ''}>
                   {ru?.is_unlimited ? 'Unlimited' : `${pct}%`}
                 </span>
               </div>
@@ -497,7 +497,7 @@ function AnalyticsCards({
               </div>
               <div>
                 <p className="text-xs text-gray-400">Available</p>
-                <p className={`text-lg font-bold ${pct >= 90 ? 'text-red-600' : pct >= 70 ? 'text-brand-orange-deep' : 'text-emerald-600'}`}>
+                <p className={`text-lg font-bold ${pct >= 90 ? 'text-destructive' : pct >= 70 ? 'text-brand-orange-deep' : 'text-success'}`}>
                   {userLimits ? (isUnlimited ? '∞' : userLimits.available_slots.toLocaleString()) : '—'}
                 </p>
               </div>
@@ -505,7 +505,7 @@ function AnalyticsCards({
             <div className="space-y-1">
               <div className="flex justify-between text-xs text-gray-400">
                 <span>Usage</span>
-                <span className={pct >= 90 ? 'text-red-600 font-medium' : ''}>
+                <span className={pct >= 90 ? 'text-destructive font-medium' : ''}>
                   {isUnlimited ? 'Unlimited' : `${pct}%`}
                 </span>
               </div>
@@ -772,10 +772,10 @@ function UserWiseTab({
                 </td>
                 <td className="px-4 py-3">
                   <div className="flex items-center justify-center gap-2">
-                    <span className="inline-flex items-center gap-1 text-xs text-emerald-700 font-medium px-2 py-0.5 rounded-full bg-emerald-50 ring-1 ring-emerald-200">
+                    <span className="inline-flex items-center gap-1 text-xs text-success font-medium px-2 py-0.5 rounded-full bg-success-subtle ring-1 ring-success-line">
                       <CheckCircle2 className="w-3 h-3" />{u.successCount}
                     </span>
-                    <span className="inline-flex items-center gap-1 text-xs text-red-600 font-medium px-2 py-0.5 rounded-full bg-red-50 ring-1 ring-red-200">
+                    <span className="inline-flex items-center gap-1 text-xs text-destructive font-medium px-2 py-0.5 rounded-full bg-destructive-subtle ring-1 ring-destructive-line">
                       <XCircle className="w-3 h-3" />{u.failedCount}
                     </span>
                   </div>
@@ -923,7 +923,7 @@ function TeamWiseTab({
               <td className="px-4 py-3 text-right text-xs font-bold text-purple-700">
                 {teamsData.teams.reduce((s, t) => s + (t.by_type?.AS?.total_consumed ?? 0), 0).toLocaleString()}
               </td>
-              <td className="px-4 py-3 text-right text-xs font-bold text-emerald-700">
+              <td className="px-4 py-3 text-right text-xs font-bold text-success">
                 {teamsData.teams.reduce((s, t) => s + (t.by_type?.AIU?.total_consumed ?? 0), 0).toLocaleString()}
               </td>
               <td className="px-4 py-3 text-right text-xs font-bold text-brand-orange-deep">
@@ -996,7 +996,7 @@ function InlineTeamMembersUsage({
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 ring-1 ring-red-100">
+      <div className="rounded-xl border border-destructive-line bg-destructive-subtle px-4 py-3 text-sm text-destructive ring-1 ring-destructive-line">
         {error}
       </div>
     );
@@ -1096,8 +1096,8 @@ function RefundsTab({
 
   const ACTION_CONFIG: Record<string, { label: string; color: string; bg: string; ring: string }> = {
     REFUND: { label: 'Refund', color: 'text-brand-cyan', bg: 'bg-brand-cyan/10', ring: 'ring-brand-cyan/20' },
-    ADJUST_ADD: { label: 'Credit', color: 'text-emerald-700', bg: 'bg-emerald-50', ring: 'ring-emerald-200' },
-    ADJUST_DEDUCT: { label: 'Deduct', color: 'text-red-700', bg: 'bg-red-50', ring: 'ring-red-200' },
+    ADJUST_ADD: { label: 'Credit', color: 'text-success', bg: 'bg-success-subtle', ring: 'ring-success-line' },
+    ADJUST_DEDUCT: { label: 'Deduct', color: 'text-destructive', bg: 'bg-destructive-subtle', ring: 'ring-destructive-line' },
     REPLENISH: { label: 'Replenish', color: 'text-brand-blue', bg: 'bg-brand-blue/10', ring: 'ring-brand-blue/20' },
     UPGRADE: { label: 'Upgrade', color: 'text-indigo-700', bg: 'bg-indigo-50', ring: 'ring-indigo-200' },
     EXPIRE: { label: 'Expired', color: 'text-gray-600', bg: 'bg-gray-100', ring: 'ring-gray-200' },
@@ -1168,7 +1168,7 @@ function RefundsTab({
                     <UnitTypeBadge type={entry.unit_type} />
                   </td>
                   <td className="px-4 py-3 text-right">
-                    <span className={`font-bold ${isPositive ? 'text-emerald-600' : 'text-red-600'}`}>
+                    <span className={`font-bold ${isPositive ? 'text-success' : 'text-destructive'}`}>
                       {isPositive ? '+' : '-'}{Math.abs(entry.units_amount).toLocaleString()}
                     </span>
                   </td>
@@ -1485,7 +1485,7 @@ export default function UsageHistory() {
               <TrendingDown className="w-6 h-6 text-white" />
             </div>
             <div>
-              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+              <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-2xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
                 <Sparkles className="h-3 w-3 text-brand-orange" />
                 Usage analytics
               </div>

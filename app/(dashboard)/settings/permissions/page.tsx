@@ -6,6 +6,7 @@ import { useState, useEffect } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 
 // Neutral-gray skeleton mirroring the Permissions & Roles layout:
@@ -325,7 +326,7 @@ export default function PermissionsPage() {
                 <Shield className="h-5 w-5 text-brand-blue" />
               </div>
               <div>
-                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-brand-orange/5 ring-1 ring-brand-orange/20 px-2.5 py-0.5 text-[11px] font-semibold text-brand-orange-deep">
+                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-brand-orange/5 ring-1 ring-brand-orange/20 px-2.5 py-0.5 text-2xs font-semibold text-brand-orange-deep">
                   <Sparkles className="h-3 w-3 text-brand-orange-deep" />
                   Access control
                 </div>
@@ -333,24 +334,21 @@ export default function PermissionsPage() {
                 <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-slate-400 sm:text-base">Configure what each role can see and do across the platform.</p>
               </div>
             </div>
-            <button
-              onClick={fetchData}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-semibold transition-all"
-            >
+            <Button variant="secondary" onClick={fetchData}>
               <RefreshCw className="w-4 h-4" />
               Refresh
-            </button>
+            </Button>
           </div>
         </section>
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 flex items-center gap-3 rounded-xl border border-red-200 bg-red-50 p-4 ring-1 ring-red-100">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-red-100 text-red-600">
+          <div className="mb-6 flex items-center gap-3 rounded-xl border border-destructive-line bg-destructive-subtle p-4 ring-1 ring-destructive-line">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-destructive-subtle text-destructive">
               <AlertCircle className="h-5 w-5" />
             </span>
-            <span className="text-sm font-semibold text-red-700 flex-1 min-w-0 break-words">{error}</span>
-            <button onClick={() => setError(null)} className="ml-auto text-red-500 hover:text-red-700 flex-shrink-0" aria-label="Close">
+            <span className="text-sm font-semibold text-destructive flex-1 min-w-0 break-words">{error}</span>
+            <button onClick={() => setError(null)} className="ml-auto text-destructive hover:text-destructive flex-shrink-0" aria-label="Close">
               <X className="w-4 h-4" />
             </button>
           </div>
@@ -374,11 +372,11 @@ export default function PermissionsPage() {
                   <div className="flex items-center justify-between gap-2">
                     <p className="font-semibold text-gray-900 dark:text-slate-50 text-sm sm:text-base truncate">{role.name}</p>
                     {(role.is_system || role.code === 'recruiter') && (
-                      <span className="text-[10px] sm:text-xs bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15 px-1.5 sm:px-2 py-0.5 rounded-full font-semibold flex-shrink-0">System</span>
+                      <span className="text-2xs sm:text-xs bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/15 px-1.5 sm:px-2 py-0.5 rounded-full font-semibold flex-shrink-0">System</span>
                     )}
                   </div>
                   <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 sm:mt-1 line-clamp-2">{role.description || 'No description'}</p>
-                  <div className="flex gap-2 sm:gap-3 mt-1.5 sm:mt-2 text-[10px] sm:text-xs text-gray-500 dark:text-slate-500">
+                  <div className="flex gap-2 sm:gap-3 mt-1.5 sm:mt-2 text-2xs sm:text-xs text-gray-500 dark:text-slate-500">
                     <span className="inline-flex items-center gap-1"><Shield className="w-3 h-3 text-brand-blue/70" />{role.permission_count || role.permissions?.length || 0} perms</span>
                     <span className="inline-flex items-center gap-1"><Users className="w-3 h-3 text-brand-cyan/70" />{role.user_count} users</span>
                   </div>
@@ -398,35 +396,24 @@ export default function PermissionsPage() {
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
                     {canManage && !selectedRole.is_system && !isEditing && selectedRole.code !== 'recruiter' && (
-                      <button
-                        onClick={startEditing}
-                        className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg ring-1 ring-white/10 shadow-md shadow-brand-blue/25 font-semibold transition-all"
-                      >
+                      <Button variant="primary" onClick={startEditing}>
                         <Edit2 className="w-4 h-4 flex-shrink-0" />
                         Edit
-                      </button>
+                      </Button>
                     )}
                     {isEditing && (
                       <>
-                        <button
-                          onClick={() => setIsEditing(false)}
-                          disabled={saving}
-                          className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg font-semibold disabled:opacity-50 transition"
-                        >
+                        <Button variant="secondary" onClick={() => setIsEditing(false)} disabled={saving}>
                           Cancel
-                        </button>
-                        <button
-                          onClick={saveChanges}
-                          disabled={saving}
-                          className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg ring-1 ring-white/10 shadow-md shadow-brand-blue/25 font-semibold transition-all disabled:opacity-50"
-                        >
+                        </Button>
+                        <Button variant="primary" onClick={saveChanges} disabled={saving}>
                           {saving ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
                           ) : (
                             <Save className="w-4 h-4" />
                           )}
                           {saving ? 'Saving...' : 'Save'}
-                        </button>
+                        </Button>
                       </>
                     )}
                     {saveSuccess && (

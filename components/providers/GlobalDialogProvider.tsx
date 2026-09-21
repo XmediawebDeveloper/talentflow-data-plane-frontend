@@ -341,13 +341,13 @@ export function GlobalDialogProvider({ children }: { children: ReactNode }) {
                       </div>
                       <div className="min-w-0 flex-1">
                         {dialog.item.label && (
-                          <p className="text-[11px] font-semibold tracking-wide text-gray-500 dark:text-slate-400 uppercase">
+                          <p className="text-2xs font-semibold tracking-wide text-gray-500 dark:text-slate-400 uppercase">
                             {dialog.item.label}
                           </p>
                         )}
                         <p className="text-sm font-bold text-gray-900 dark:text-slate-100 truncate">{dialog.item.name}</p>
                         {dialog.item.badge && (
-                          <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
+                          <span className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-2xs font-semibold bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300">
                             {dialog.item.badge}
                           </span>
                         )}

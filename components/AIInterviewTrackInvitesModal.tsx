@@ -5,6 +5,7 @@ import { X, Users, Mail, Play, Check, CheckCircle, Ban, TrendingUp, Loader2 } fr
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
+import { Button } from '@/components/ui/button';
 import InviteFilterBar, {
   EMPTY_INVITE_FILTERS,
   AI_INTERVIEW_INVITE_STATUS_OPTIONS,
@@ -257,17 +258,19 @@ export default function AIInterviewTrackInvitesModal({
                   <span className="hidden sm:inline">AI Interview - Invite Status Tracking</span>
                   <span className="sm:hidden">Invite Status</span>
                 </h2>
-                <p className="text-[10px] sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">{jdTitle}</p>
+                <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">{jdTitle}</p>
               </div>
             </div>
           </div>
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={onClose}
-            className="p-2 text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors"
+            className="px-2"
             aria-label="Close"
           >
             <X className="w-4 h-4 sm:w-5 sm:h-5" />
-          </button>
+          </Button>
         </div>
 
         {/* Stat row doubles as the status filter — same buckets and wording as the
@@ -325,17 +328,19 @@ export default function AIInterviewTrackInvitesModal({
             </button>
             {/* Bulk Resend — appears once something is ticked. */}
             {selectedIds.size > 0 && (
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 type="button"
                 onClick={() => setShowBulkResendConfirm(true)}
                 disabled={isBulkResending}
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs sm:text-sm font-semibold bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 disabled:opacity-60 disabled:cursor-not-allowed shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-nowrap"
+                className="whitespace-nowrap"
               >
                 {isBulkResending
                   ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   : <Mail className="w-3.5 h-3.5" />}
                 {isBulkResending ? 'Sending…' : `Resend (${selectedIds.size})`}
-              </button>
+              </Button>
             )}
           </div>
         )}
@@ -416,7 +421,7 @@ export default function AIInterviewTrackInvitesModal({
 
         {/* Footer — stacks on phones; First/Last drop out below sm. */}
         <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
-          <p className="text-[11px] sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
+          <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
             {resultsLabel}
           </p>
           <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
@@ -452,12 +457,13 @@ export default function AIInterviewTrackInvitesModal({
                 </button>
               </>
             )}
-            <button
+            <Button
+              variant="primary"
+              size="sm"
               onClick={onClose}
-              className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
             >
               Close
-            </button>
+            </Button>
           </div>
         </div>
       </div>

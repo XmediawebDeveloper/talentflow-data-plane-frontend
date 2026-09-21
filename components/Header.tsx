@@ -779,17 +779,17 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
               {/* Name + units hide on the smallest screens — the pill collapses
                   to icon + chevron so the header row still fits. */}
               <div className="hidden sm:flex flex-col min-w-0 text-left">
-                <span className="text-[11px] lg:text-xs font-semibold text-slate-950 dark:text-slate-50 truncate max-w-[90px] md:max-w-[130px] lg:max-w-[170px] leading-tight" title={loadingQuota ? 'Loading...' : planName}>
+                <span className="text-2xs lg:text-xs font-semibold text-slate-950 dark:text-slate-50 truncate max-w-[90px] md:max-w-[130px] lg:max-w-[170px] leading-tight" title={loadingQuota ? 'Loading...' : planName}>
                   {loadingQuota ? 'Loading...' : planName}
                 </span>
                 {!loadingQuota && !quotaError && !isPendingStatus && !isExpiredSubscription && (
                   <div className="flex items-center gap-1 leading-tight">
-                    <span className="text-[11px] lg:text-xs font-bold text-brand-blue tabular-nums">{totalUnits.remaining.toLocaleString()}</span>
-                    <span className="text-[9px] lg:text-[10px] text-gray-500 dark:text-slate-400">units left</span>
+                    <span className="text-2xs lg:text-xs font-bold text-brand-blue tabular-nums">{totalUnits.remaining.toLocaleString()}</span>
+                    <span className="text-2xs lg:text-2xs text-gray-500 dark:text-slate-400">units left</span>
                   </div>
                 )}
                 {isPendingStatus && (
-                  <span className="text-[9px] lg:text-[10px] text-orange-600 font-medium">
+                  <span className="text-2xs lg:text-2xs text-orange-600 font-medium">
                     {tenantStatus}
                   </span>
                 )}
@@ -836,8 +836,8 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                         <Coins className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                       </div>
                       <div className="min-w-0">
-                        <h3 className="text-xs sm:text-[13px] font-bold text-gray-900 truncate">{planName}</h3>
-                        <div className="flex items-center gap-1 flex-wrap text-[10px] text-gray-500 mt-0.5">
+                        <h3 className="text-xs sm:text-sm font-bold text-gray-900 truncate">{planName}</h3>
+                        <div className="flex items-center gap-1 flex-wrap text-2xs text-gray-500 mt-0.5">
                           {planPeriodLabel && (
                             <span className="flex items-center gap-1">
                               <Calendar className="w-3 h-3 text-gray-400" />
@@ -867,7 +867,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                         setShowPlanMenu(false);
                         router.push('/subscription/current-plan');
                       }}
-                      className="w-full sm:w-auto flex items-center justify-center gap-1 px-2 py-1 text-[10px] sm:text-[11px] font-semibold text-brand-blue bg-white border border-brand-blue/40 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/60 transition-colors flex-shrink-0 whitespace-nowrap"
+                      className="w-full sm:w-auto flex items-center justify-center gap-1 px-2 py-1 text-2xs sm:text-2xs font-semibold text-brand-blue bg-white border border-brand-blue/40 rounded-md hover:bg-brand-blue/5 hover:border-brand-blue/60 transition-colors flex-shrink-0 whitespace-nowrap"
                     >
                       Upgrade plan
                       <ArrowUpRight className="w-3 h-3" />
@@ -875,7 +875,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                   </div>
 
                   {/* Unit balance breakdown */}
-                  <div className="px-3 pt-2 text-[10px] font-semibold tracking-wider text-gray-500 uppercase">
+                  <div className="px-3 pt-2 text-2xs font-semibold tracking-wider text-gray-500 uppercase">
                     Unit Balance Breakdown
                   </div>
                   <div className="px-3 divide-y divide-gray-100">
@@ -898,7 +898,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                             <RowIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-xs sm:text-[13px] font-semibold text-gray-900 truncate">{meta.label}</div>
+                            <div className="text-xs sm:text-sm font-semibold text-gray-900 truncate">{meta.label}</div>
                             {!isUnlimited && limit != null && limit > 0 && (
                               <div className="mt-1 h-1.5 max-w-[140px] bg-gray-100 rounded-full overflow-hidden">
                                 <div
@@ -909,14 +909,14 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                             )}
                           </div>
                           {isUnlimited ? (
-                            <span className="text-[11px] sm:text-xs font-semibold text-green-600">Unlimited</span>
+                            <span className="text-2xs sm:text-xs font-semibold text-green-600">Unlimited</span>
                           ) : (
                             <>
-                              <span className="text-[11px] sm:text-xs text-gray-600 tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
+                              <span className="text-2xs sm:text-xs text-gray-600 tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
                                 {used.toLocaleString()} used
                               </span>
                               <span className="w-px h-4 bg-gray-200 flex-shrink-0" />
-                              <span className={`text-[11px] sm:text-xs font-bold tabular-nums whitespace-nowrap min-w-[56px] sm:min-w-[64px] text-right ${meta.left}`}>
+                              <span className={`text-2xs sm:text-xs font-bold tabular-nums whitespace-nowrap min-w-[56px] sm:min-w-[64px] text-right ${meta.left}`}>
                                 Left {(remaining ?? 0).toLocaleString()}
                               </span>
                             </>
@@ -941,17 +941,17 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                             <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           </div>
                           <div className="flex-1 min-w-0">
-                            <div className="text-xs sm:text-[13px] font-semibold text-gray-900">Users</div>
+                            <div className="text-xs sm:text-sm font-semibold text-gray-900">Users</div>
                           </div>
                           {isUnlimited ? (
-                            <span className="text-[11px] sm:text-xs font-semibold text-green-600">Unlimited</span>
+                            <span className="text-2xs sm:text-xs font-semibold text-green-600">Unlimited</span>
                           ) : (
                             <>
-                              <span className="text-[11px] sm:text-xs text-gray-600 tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
+                              <span className="text-2xs sm:text-xs text-gray-600 tabular-nums whitespace-nowrap min-w-[50px] sm:min-w-[56px] text-right">
                                 {used.toLocaleString()} used
                               </span>
                               <span className="w-px h-4 bg-gray-300 flex-shrink-0" />
-                              <span className="text-[11px] sm:text-xs font-bold text-gray-900 tabular-nums whitespace-nowrap min-w-[56px] sm:min-w-[64px] text-right">
+                              <span className="text-2xs sm:text-xs font-bold text-gray-900 tabular-nums whitespace-nowrap min-w-[56px] sm:min-w-[64px] text-right">
                                 Left {(remaining ?? 0).toLocaleString()}
                               </span>
                             </>
@@ -967,13 +967,13 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                     <div className="w-7 h-7 rounded-full bg-brand-blue/10 text-brand-blue flex items-center justify-center flex-shrink-0">
                       <Info className="w-3.5 h-3.5" />
                     </div>
-                    <span className="flex-1 min-w-0 text-xs sm:text-[13px] font-medium text-gray-900">Need extra units right away?</span>
+                    <span className="flex-1 min-w-0 text-xs sm:text-sm font-medium text-gray-900">Need extra units right away?</span>
                     <button
                       onClick={() => {
                         setShowPlanMenu(false);
                         router.push('/subscription/current-plan?section=usage-quotas');
                       }}
-                      className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-[11px] sm:text-xs font-semibold bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex-shrink-0"
+                      className="w-full sm:w-auto flex items-center justify-center gap-1.5 px-2.5 py-1.5 text-2xs sm:text-xs font-semibold bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex-shrink-0"
                     >
                       Purchase Add-ons
                       <ShoppingCart className="w-3.5 h-3.5" />
@@ -1015,7 +1015,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                     aria-hidden="true"
                   />
                   <span
-                    className="relative flex items-center justify-center min-w-[0.875rem] sm:min-w-[1rem] h-3.5 sm:h-4 px-[3px] sm:px-1 bg-red-500 text-white rounded-full ring-1 ring-white font-semibold text-[9px] sm:text-[10px] leading-none tabular-nums"
+                    className="relative flex items-center justify-center min-w-[0.875rem] sm:min-w-[1rem] h-3.5 sm:h-4 px-0.5 sm:px-1 bg-red-500 text-white rounded-full ring-1 ring-white font-semibold text-2xs sm:text-2xs leading-none tabular-nums"
                     aria-hidden="true"
                   >
                     {unreadCount > MAX_BADGE_COUNT ? `${MAX_BADGE_COUNT}+` : unreadCount}
@@ -1187,7 +1187,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
             </div>
             <div className="hidden md:block text-left">
               <div className="text-xs lg:text-sm text-gray-900 truncate max-w-[80px] lg:max-w-none">{user.name || user.email || 'User'}</div>
-              <div className="text-[10px] lg:text-xs text-gray-500">{prettyRole(user.role)}</div>
+              <div className="text-2xs lg:text-xs text-gray-500">{prettyRole(user.role)}</div>
             </div>
             <ChevronDown className="hidden md:block w-3 h-3 lg:w-4 lg:h-4 text-gray-400" />
           </button>
@@ -1281,7 +1281,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                         <Building2 className="w-4 h-4" />
                       </span>
                       <div className="min-w-0">
-                        <p className="text-[11px] leading-tight text-gray-500">Organization</p>
+                        <p className="text-2xs leading-tight text-gray-500">Organization</p>
                         <p className="text-sm font-semibold text-gray-900 truncate">{tenant.name || 'N/A'}</p>
                       </div>
                     </div>
@@ -1338,7 +1338,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                     </span>
                     <span className="min-w-0">
                       <span className="block text-sm font-medium text-red-600">Sign Out</span>
-                      <span className="block text-[11px] leading-tight text-red-500/80">You will be signed out of your account</span>
+                      <span className="block text-2xs leading-tight text-red-500/80">You will be signed out of your account</span>
                     </span>
                   </button>
                 </div>

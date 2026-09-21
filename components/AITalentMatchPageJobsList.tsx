@@ -23,6 +23,7 @@ import { useListSearch } from '@/lib/hooks/useListSearch';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
+import { Button } from '@/components/ui/button';
 
 interface Job {
   id: string;
@@ -229,13 +230,15 @@ export default function AITalentMatchPageJobsList({
       <div className="mb-4 sm:mb-6">
         <div className="flex items-center gap-3 sm:gap-4 mb-3 sm:mb-4">
           {onBack && (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={onBack}
-              className="p-1.5 sm:p-2 bg-white hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors flex items-center justify-center shadow-sm border border-gray-200"
+              className="px-2"
               aria-label="Back to Dashboard" title="Back to Dashboard"
             >
-              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-700 rotate-180" />
-            </button>
+              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5 rotate-180" />
+            </Button>
           )}
           <div className="w-9 h-9 sm:w-12 sm:h-12 bg-brand-blue rounded-lg sm:rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
             <Sparkles className="w-5 h-5 sm:w-7 sm:h-7 text-white" />
@@ -328,13 +331,14 @@ export default function AITalentMatchPageJobsList({
                 toolbar Clear — same flow as job-openings. Clearing lives on the
                 toolbar so there is exactly one clear control. */}
             <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 // The selects above commit as they change, so Done just closes.
                 onClick={() => setShowFilters(false)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
               >
                 Done
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -512,7 +516,7 @@ export default function AITalentMatchPageJobsList({
                             {job.applicants} scored
                           </span>
                           {latestMatch && (
-                            <span className="flex items-center gap-1.5 px-2 py-0.5 bg-green-50 text-green-700 rounded-lg">
+                            <span className="flex items-center gap-1.5 px-2 py-0.5 bg-success-subtle text-success rounded-lg">
                               <Award className="w-4 h-4" />
                               {latestMatch.totalMatches} matched
                             </span>
@@ -527,14 +531,15 @@ export default function AITalentMatchPageJobsList({
                           until it's unchecked again. */}
                       {isSelected && (
                         <div className="flex flex-col gap-2 flex-shrink-0 w-full sm:w-auto">
-                          <button
+                          <Button
+                            variant="primary"
+                            size="sm"
                             type="button"
                             onClick={(event) => { event.stopPropagation(); onSelectJob(selectedTargetId); }}
-                            className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-blue px-3 py-2 text-sm font-medium text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-all hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30"
                           >
                             <Sparkles className="h-4 w-4" />
                             Run AI Match
-                          </button>
+                          </Button>
                         </div>
                       )}
                     </div>

@@ -3,6 +3,7 @@
 import React from 'react';
 import Image from 'next/image';
 import { CheckCircle, ChevronLeft, ChevronRight, HelpCircle } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 const STEP_LABELS = [
   'Job Details & Consent',
@@ -110,7 +111,7 @@ export default function PreInterviewLayout({
                       )}
                       {!isCompleted && !isCurrent && (
                         <div className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-gray-200 bg-white sm:h-8 sm:w-8">
-                          <span className="text-[10px] font-medium text-gray-400 sm:text-xs">
+                          <span className="text-2xs font-medium text-gray-400 sm:text-xs">
                             {stepNumber}
                           </span>
                         </div>
@@ -118,7 +119,7 @@ export default function PreInterviewLayout({
                     </div>
                     {/* Label (hidden on mobile) */}
                     <span
-                      className={`hidden text-center text-[11px] leading-tight sm:block ${
+                      className={`hidden text-center text-2xs leading-tight sm:block ${
                         isCurrent
                           ? 'font-semibold text-gray-900'
                           : isCompleted
@@ -160,27 +161,27 @@ export default function PreInterviewLayout({
           <div className="w-full max-w-6xl mx-auto flex items-center justify-between">
             <div>
               {shouldShowBack && (
-                <button
+                <Button
+                  variant="secondary"
                   type="button"
                   onClick={onBack}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:bg-gray-50 hover:border-gray-400 sm:px-5 sm:text-base"
                 >
                   <ChevronLeft className="h-4 w-4" />
                   {backLabel}
-                </button>
+                </Button>
               )}
             </div>
             <div>
               {showNext && (
-                <button
+                <Button
+                  variant="primary"
                   type="button"
                   onClick={onNext}
                   disabled={nextDisabled}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-all hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-40 disabled:shadow-none sm:px-6 sm:text-base"
                 >
                   {nextLabel}
                   <ChevronRight className="h-4 w-4" />
-                </button>
+                </Button>
               )}
             </div>
           </div>

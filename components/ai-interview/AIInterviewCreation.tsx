@@ -7,6 +7,7 @@ import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { PublishedJD, AIInterviewRoundConfig } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { findInvalidSkillPunctuation } from '@/lib/skillDuplicates';
 
 interface RoundConfig {
@@ -26,12 +27,12 @@ interface AIInterviewCreationProps {
 }
 
 const ROUND_TYPES = [
-  { value: 'must_have_skills', label: 'Must-To-Have', icon: Shield, color: 'bg-red-100 text-red-700' },
-  { value: 'nice_to_have_skills', label: 'Nice-To-Have', icon: Lightbulb, color: 'bg-amber-100 text-amber-700' },
+  { value: 'must_have_skills', label: 'Must-To-Have', icon: Shield, color: 'bg-destructive-subtle text-destructive' },
+  { value: 'nice_to_have_skills', label: 'Nice-To-Have', icon: Lightbulb, color: 'bg-warning-subtle text-warning' },
   { value: 'hr', label: 'HR', icon: Users, color: 'bg-blue-100 text-blue-700' },
   { value: 'technical', label: 'Technical', icon: Brain, color: 'bg-purple-100 text-purple-700' },
-  { value: 'behavioral', label: 'Behavioral', icon: MessageSquare, color: 'bg-green-100 text-green-700' },
-  { value: 'culture_fit', label: 'Culture Fit', icon: TrendingUp, color: 'bg-yellow-100 text-yellow-700' },
+  { value: 'behavioral', label: 'Behavioral', icon: MessageSquare, color: 'bg-success-subtle text-success' },
+  { value: 'culture_fit', label: 'Culture Fit', icon: TrendingUp, color: 'bg-warning-subtle text-warning' },
   { value: 'leadership', label: 'Leadership', icon: TrendingUp, color: 'bg-indigo-100 text-indigo-700' },
   { value: 'problem_solving', label: 'Problem Solving', icon: Brain, color: 'bg-orange-100 text-orange-700' },
 ];
@@ -334,9 +335,9 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
       <div className="max-w-5xl mx-auto">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
-          <button onClick={onBack} className="p-2 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors">
-            <ArrowLeft className="w-5 h-5 text-gray-600" />
-          </button>
+          <Button variant="secondary" size="sm" onClick={onBack} aria-label="Back" className="px-2">
+            <ArrowLeft className="w-5 h-5" />
+          </Button>
           <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
             <Brain className="w-5 h-5 text-brand-blue" />
           </div>
@@ -355,7 +356,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
             <div key={s} className="flex items-center gap-2">
               <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
                 step === s ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10' :
-                ['select-jd', 'configure'].indexOf(step) > i ? 'bg-green-100 text-green-700' :
+                ['select-jd', 'configure'].indexOf(step) > i ? 'bg-success-subtle text-success' :
                 'bg-slate-100 text-gray-400'
               }`}>
                 {['select-jd', 'configure'].indexOf(step) > i ? (
@@ -383,13 +384,15 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                 onChange={e => setJdSearch(e.target.value)}
                 className="flex-1 px-4 py-2.5 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
               />
-              <button
+              <Button
+                variant="primary"
+                size="md"
                 onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
-                className="flex items-center gap-2 px-4 py-2.5 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors whitespace-nowrap"
+                icon={<Plus className="w-4 h-4" />}
+                className="whitespace-nowrap"
               >
-                <Plus className="w-4 h-4" />
                 Create New JD
-              </button>
+              </Button>
             </div>
 
             {loadingJds ? (
@@ -427,13 +430,9 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                 <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300" />
                 <p className="text-gray-500 mb-2">No published job descriptions found</p>
                 <p className="text-sm text-gray-400 mb-4">Create and publish a JD first to configure an AI interview</p>
-                <button
-                  onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
-                  className="inline-flex items-center gap-2 px-5 py-2.5 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
+                <Button variant="primary" size="md" onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')} icon={<Plus className="w-4 h-4" />}>
                   Create Job Description
-                </button>
+                </Button>
               </div>
             ) : (
               <div className="grid grid-cols-1 gap-3">
@@ -447,7 +446,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                       <div className="flex-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <h3 className="font-semibold tracking-tight text-gray-900 truncate min-w-0" title={jd.title}>{jd.title}</h3>
-                          <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded-full">Published</span>
+                          <span className="px-2 py-0.5 text-xs bg-success-subtle text-success rounded-full">Published</span>
                         </div>
                         <div className="flex items-center gap-4 mt-1.5 text-sm text-gray-500">
                           {jd.department && <span>{jd.department}</span>}
@@ -539,7 +538,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                             {rounds.length > 1 && (
                               <button
                                 onClick={() => handleRemoveRound(index)}
-                                className="p-1 text-gray-400 hover:text-red-500 transition-colors"
+                                className="p-1 text-gray-400 hover:text-destructive transition-colors"
                               >
                                 <Trash2 className="w-4 h-4" />
                               </button>
@@ -564,10 +563,10 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                     onChange={e => handleRoundPercentage(index, parseInt(e.target.value))}
                                     className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer accent-brand-blue"
                                   />
-                                  <span className={`text-sm font-medium w-10 text-right ${roundWeightErrors[index] ? 'text-red-500' : 'text-gray-900'}`}>{round.percentage}%</span>
+                                  <span className={`text-sm font-medium w-10 text-right ${roundWeightErrors[index] ? 'text-destructive' : 'text-gray-900'}`}>{round.percentage}%</span>
                                 </div>
                                 {roundWeightErrors[index] && (
-                                  <p className="text-[11px] text-red-500 mt-0.5">Minimum weight is 10%</p>
+                                  <p className="text-2xs text-destructive mt-0.5">Minimum weight is 10%</p>
                                 )}
                               </div>
 
@@ -584,7 +583,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                     {round.topics.length > 0 && (() => {
                                       const totalSkillWeight = round.topics.reduce((s, t) => s + (round.topicWeights[t] || 0), 0);
                                       return (
-                                        <span className={`text-xs font-medium ${totalSkillWeight === 100 ? 'text-green-600' : 'text-amber-600'}`}>
+                                        <span className={`text-xs font-medium ${totalSkillWeight === 100 ? 'text-success' : 'text-warning'}`}>
                                           Skill weights: {totalSkillWeight}%
                                         </span>
                                       );
@@ -628,10 +627,10 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                                 value={skillWeight}
                                                 onChange={e => handleTopicWeight(index, topic, parseInt(e.target.value) || 0)}
                                                 className={`w-12 px-1.5 py-0.5 text-xs text-center border rounded focus:outline-none focus:ring-1 ${
-                                                  hasTopicWeightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
+                                                  hasTopicWeightError ? 'border-destructive focus:ring-destructive-line' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
                                                 }`}
                                               />
-                                              <span className={`text-xs w-4 ${hasTopicWeightError ? 'text-red-500' : 'text-gray-400'}`}>%</span>
+                                              <span className={`text-xs w-4 ${hasTopicWeightError ? 'text-destructive' : 'text-gray-400'}`}>%</span>
                                               <span className="text-xs text-gray-400 w-14 text-right">{skillTime} min</span>
                                               <button
                                                 onClick={() => toggleComment(round.type, topic)}
@@ -644,14 +643,14 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                               </button>
                                               <button
                                                 onClick={() => handleRemoveTopic(index, topic)}
-                                                className="p-0.5 text-gray-300 hover:text-red-500 transition-colors"
+                                                className="p-0.5 text-gray-300 hover:text-destructive transition-colors"
                                                aria-label="Close">
                                                 <X className="w-3.5 h-3.5" />
                                               </button>
                                             </div>
                                           </div>
                                           {hasTopicWeightError && (
-                                            <p className="text-[11px] text-red-500 mt-0.5 text-right">Minimum weight is 10%</p>
+                                            <p className="text-2xs text-destructive mt-0.5 text-right">Minimum weight is 10%</p>
                                           )}
                                           {isCommentOpen && (
                                             <div className="mt-1.5">
@@ -696,7 +695,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                   placeholder="Type a skill name and press Enter to add..."
                                   className={`w-full px-3 py-1.5 text-xs border rounded-lg focus:outline-none focus:ring-2 ${
                                     topicInputErrors[index]
-                                      ? 'border-red-300 focus:ring-red-400'
+                                      ? 'border-destructive-line focus:ring-destructive-line'
                                       : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
                                   }`}
                                   onChange={() => {
@@ -718,7 +717,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                   }}
                                 />
                                 {topicInputErrors[index] && (
-                                  <p className="text-[11px] text-red-500 mt-0.5">{topicInputErrors[index]}</p>
+                                  <p className="text-2xs text-destructive mt-0.5">{topicInputErrors[index]}</p>
                                 )}
                               </div>
                             </>
@@ -797,7 +796,7 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                     {uploadingVideo ? (
                       <Loader2 className="w-4 h-4 animate-spin text-brand-blue" />
                     ) : (
-                      <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-red-500 transition-colors" aria-label="Close">
+                      <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-destructive transition-colors" aria-label="Close">
                         <X className="w-4 h-4" />
                       </button>
                     )}
@@ -879,13 +878,13 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-500">Total Weight</span>
-                    <span className={`font-medium ${percentageValid ? 'text-green-600' : 'text-red-500'}`}>
+                    <span className={`font-medium ${percentageValid ? 'text-success' : 'text-destructive'}`}>
                       {totalPercentage}%
                     </span>
                   </div>
 
                   {!percentageValid && (
-                    <div className="bg-red-50 border border-red-200 rounded-md p-2 text-xs text-red-600">
+                    <div className="bg-destructive-subtle border border-destructive-line rounded-md p-2 text-xs text-destructive">
                       Enabled round percentages must total 100%. Currently: {totalPercentage}%
                     </div>
                   )}
@@ -907,14 +906,14 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
                                 const w = r.topicWeights[t] || 0;
                                 const tMin = ((w / 100) * roundMin).toFixed(1);
                                 return (
-                                  <div key={t} className="flex items-center justify-between text-[10px] text-gray-400">
+                                  <div key={t} className="flex items-center justify-between text-2xs text-gray-400">
                                     <span className="truncate max-w-[120px]">{t}</span>
                                     <span>{w}% / {tMin}m</span>
                                   </div>
                                 );
                               })}
                               {r.topics.length > 3 && (
-                                <div className="text-[10px] text-gray-400">+{r.topics.length - 3} more skills</div>
+                                <div className="text-2xs text-gray-400">+{r.topics.length - 3} more skills</div>
                               )}
                             </div>
                           )}
@@ -926,38 +925,24 @@ export default function AIInterviewCreation({ onBack, onCreated }: AIInterviewCr
 
                 {/* Action buttons */}
                 <div className="mt-4 space-y-2">
-                  <button
+                  <Button
+                    variant="primary"
                     onClick={handlePublish}
                     disabled={!percentageValid || enabledRounds.length === 0 || publishing}
-                    className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors ${
-                      percentageValid && enabledRounds.length > 0 && !publishing
-                        ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
-                        : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    }`}
+                    icon={publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Globe className="w-4 h-4" />}
+                    className="w-full"
                   >
-                    {publishing ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Globe className="w-4 h-4" />
-                    )}
                     {publishing ? 'Publishing...' : 'Publish Configuration'}
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="secondary"
                     onClick={handleSaveAsDraft}
                     disabled={!percentageValid || enabledRounds.length === 0 || savingDraft}
-                    className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors border bg-white ${
-                      percentageValid && enabledRounds.length > 0 && !savingDraft
-                        ? 'border-gray-200 text-gray-700 hover:bg-slate-100'
-                        : 'border-gray-200 text-gray-400 cursor-not-allowed'
-                    }`}
+                    icon={savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                    className="w-full"
                   >
-                    {savingDraft ? (
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                    ) : (
-                      <Save className="w-4 h-4" />
-                    )}
                     {savingDraft ? 'Saving...' : 'Save as Draft'}
-                  </button>
+                  </Button>
                 </div>
               </div>
             </div>

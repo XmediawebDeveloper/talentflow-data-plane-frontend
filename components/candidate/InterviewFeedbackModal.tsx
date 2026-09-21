@@ -20,6 +20,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Star, X, CheckCircle, Loader2, AlertCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { candidateAIInterviewService } from "@/lib/services/candidateAIInterviewService";
 
 const COMMENT_MAX = 500;
@@ -231,8 +232,8 @@ export default function InterviewFeedbackModal({
         {submitted ? (
           // ── Confirmation state (AC5) ──
           <div className="p-8 text-center">
-            <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle className="w-7 h-7 text-green-600" />
+            <div className="w-14 h-14 rounded-full bg-success-subtle flex items-center justify-center mx-auto mb-4">
+              <CheckCircle className="w-7 h-7 text-success" />
             </div>
             <h2 className="text-lg font-bold text-gray-900 mb-1">Thank you for your feedback!</h2>
             <p className="text-sm text-gray-500">We appreciate you taking the time.</p>
@@ -286,7 +287,7 @@ export default function InterviewFeedbackModal({
                   placeholder="Tell us anything that would make this better…"
                   className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-50"
                 />
-                <p className="text-[11px] text-gray-400 mt-1 text-right tabular-nums">
+                <p className="text-2xs text-gray-400 mt-1 text-right tabular-nums">
                   {comment.length}/{COMMENT_MAX}
                 </p>
               </div>
@@ -294,32 +295,33 @@ export default function InterviewFeedbackModal({
               {error && (
                 <div
                   role="alert"
-                  className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-red-50 border border-red-200"
+                  className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-destructive-subtle border border-destructive-line"
                 >
-                  <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
-                  <p className="text-sm text-red-700 leading-snug">{error}</p>
+                  <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+                  <p className="text-sm text-destructive leading-snug">{error}</p>
                 </div>
               )}
             </div>
 
             <div className="px-6 pb-6 pt-1 flex items-center gap-3">
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={handleSubmit}
                 disabled={!canSubmit}
-                className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm font-semibold bg-gray-900 text-white rounded-lg hover:bg-gray-800 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                className="flex-1"
               >
                 {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
                 {submitting ? "Submitting…" : "Submit Feedback"}
-              </button>
-              <button
+              </Button>
+              <Button
                 type="button"
+                variant="secondary"
                 onClick={handleClose}
                 disabled={submitting}
-                className="px-4 py-2.5 text-sm font-medium text-gray-500 hover:text-gray-700 disabled:opacity-50 transition-colors"
               >
                 Skip
-              </button>
+              </Button>
             </div>
           </>
         )}

@@ -6,6 +6,7 @@ import dynamic from 'next/dynamic';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from '@/components/ui/enhanced-toast';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 // Dynamic import to avoid SSR issues with docx-preview dependency
 const DuplicateResolutionModal = dynamic(() => import('./DuplicateResolutionModal'), {
@@ -146,15 +147,15 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle className="w-5 h-5 text-green-600" />;
+        return <CheckCircle className="w-5 h-5 text-success" />;
       case 'updated':
         return <RefreshCw className="w-5 h-5 text-blue-600" />;
       case 'duplicated':
-        return <Copy className="w-5 h-5 text-yellow-600" />;
+        return <Copy className="w-5 h-5 text-warning" />;
       case 'version':
         return <GitBranch className="w-5 h-5 text-purple-600" />;
       case 'error':
-        return <AlertCircle className="w-5 h-5 text-red-600" />;
+        return <AlertCircle className="w-5 h-5 text-destructive" />;
       case 'pending':
         return <Clock className="w-5 h-5 text-gray-600" />;
       default:
@@ -165,15 +166,15 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
   const getStatusBg = (status: string) => {
     switch (status) {
       case 'completed':
-        return 'bg-gradient-to-br from-green-50 to-green-100/50 border-green-200';
+        return 'bg-gradient-to-br from-green-50 to-green-100/50 border-success-line';
       case 'updated':
         return 'bg-gradient-to-br from-blue-50 to-blue-100/50 border-blue-200';
       case 'duplicated':
-        return 'bg-gradient-to-br from-yellow-50 to-yellow-100/50 border-yellow-200';
+        return 'bg-gradient-to-br from-yellow-50 to-yellow-100/50 border-warning-line';
       case 'version':
         return 'bg-gradient-to-br from-purple-50 to-purple-100/50 border-purple-200';
       case 'error':
-        return 'bg-gradient-to-br from-red-50 to-red-100/50 border-red-200';
+        return 'bg-gradient-to-br from-red-50 to-red-100/50 border-destructive-line';
       case 'pending':
         return 'bg-gradient-to-br from-gray-50 to-gray-100/50 border-gray-200';
       default:
@@ -248,12 +249,15 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
         <div className="bg-gradient-to-r from-blue-50 to-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
           <div className="flex items-start justify-between mb-3 sm:mb-4">
             <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={onBack}
-                className="p-1.5 sm:p-2 hover:bg-white rounded-lg transition-colors flex-shrink-0"
+                aria-label="Back"
+                className="px-2 flex-shrink-0"
               >
-                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
-              </button>
+                <ArrowLeft className="w-4 h-4 sm:w-5 sm:h-5" />
+              </Button>
               <div className="min-w-0">
                 <h2 className="text-lg sm:text-xl lg:text-2xl text-gray-900 mb-0.5 sm:mb-1">Upload Details</h2>
                 <p className="text-xs sm:text-sm text-gray-600 truncate">
@@ -261,12 +265,15 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 </p>
               </div>
             </div>
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={onClose}
-              className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
-             aria-label="Close">
+              aria-label="Close"
+              className="px-2 flex-shrink-0"
+            >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
+            </Button>
           </div>
 
           {/* Summary Cards (Clickable Filters) */}
@@ -274,31 +281,31 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
             <div
               onClick={() => setActiveFilter(activeFilter === 'completed' ? null : 'completed')}
               className={`bg-gradient-to-br from-green-50 to-green-100/50 border rounded-lg p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
-                activeFilter === 'completed' ? 'border-green-500 ring-2 ring-green-300 shadow-md' : 'border-green-200'
+                activeFilter === 'completed' ? 'border-success-line ring-2 ring-success-line shadow-md' : 'border-success-line'
               }`}
             >
               <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
-                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-success rounded-lg flex items-center justify-center flex-shrink-0">
                   <CheckCircle className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-[10px] sm:text-xs lg:text-sm text-gray-700 truncate">Completed</span>
+                <span className="text-2xs sm:text-xs lg:text-sm text-gray-700 truncate">Completed</span>
               </div>
-              <div className="text-lg sm:text-xl lg:text-3xl text-green-700">{completed.length}</div>
+              <div className="text-lg sm:text-xl lg:text-3xl text-success">{completed.length}</div>
             </div>
 
             <div
               onClick={() => setActiveFilter(activeFilter === 'duplicated' ? null : 'duplicated')}
               className={`bg-gradient-to-br from-yellow-50 to-yellow-100/50 border rounded-lg p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
-                activeFilter === 'duplicated' ? 'border-yellow-500 ring-2 ring-yellow-300 shadow-md' : 'border-yellow-200'
+                activeFilter === 'duplicated' ? 'border-warning-line ring-2 ring-warning-line shadow-md' : 'border-warning-line'
               }`}
             >
               <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
-                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-yellow-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-warning rounded-lg flex items-center justify-center flex-shrink-0">
                   <Copy className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-[10px] sm:text-xs lg:text-sm text-gray-700 truncate">Duplicates</span>
+                <span className="text-2xs sm:text-xs lg:text-sm text-gray-700 truncate">Duplicates</span>
               </div>
-              <div className="text-lg sm:text-xl lg:text-3xl text-yellow-700">{duplicated.length}</div>
+              <div className="text-lg sm:text-xl lg:text-3xl text-warning">{duplicated.length}</div>
             </div>
 
             <div
@@ -311,7 +318,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-purple-500 rounded-lg flex items-center justify-center flex-shrink-0">
                   <GitBranch className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-[10px] sm:text-xs lg:text-sm text-gray-700 truncate">Versioned</span>
+                <span className="text-2xs sm:text-xs lg:text-sm text-gray-700 truncate">Versioned</span>
               </div>
               <div className="text-lg sm:text-xl lg:text-3xl text-purple-700">{versioned.length}</div>
             </div>
@@ -319,16 +326,16 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
             <div
               onClick={() => setActiveFilter(activeFilter === 'error' ? null : 'error')}
               className={`bg-gradient-to-br from-red-50 to-red-100/50 border rounded-lg p-2.5 sm:p-3 lg:p-4 cursor-pointer transition-all hover:shadow-md ${
-                activeFilter === 'error' ? 'border-red-500 ring-2 ring-red-300 shadow-md' : 'border-red-200'
+                activeFilter === 'error' ? 'border-destructive ring-2 ring-destructive-line shadow-md' : 'border-destructive-line'
               }`}
             >
               <div className="flex items-center gap-1.5 sm:gap-2 lg:gap-3 mb-1.5 sm:mb-2">
-                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-red-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                <div className="w-6 h-6 sm:w-8 sm:h-8 bg-destructive rounded-lg flex items-center justify-center flex-shrink-0">
                   <AlertCircle className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-[10px] sm:text-xs lg:text-sm text-gray-700 truncate">Errors</span>
+                <span className="text-2xs sm:text-xs lg:text-sm text-gray-700 truncate">Errors</span>
               </div>
-              <div className="text-lg sm:text-xl lg:text-3xl text-red-700">{errors.length}</div>
+              <div className="text-lg sm:text-xl lg:text-3xl text-destructive">{errors.length}</div>
             </div>
 
             <div
@@ -341,7 +348,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-500 rounded-lg flex items-center justify-center flex-shrink-0">
                   <Clock className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-[10px] sm:text-xs lg:text-sm text-gray-700 truncate">Pending</span>
+                <span className="text-2xs sm:text-xs lg:text-sm text-gray-700 truncate">Pending</span>
               </div>
               <div className="text-lg sm:text-xl lg:text-3xl text-gray-700">{pending.length}</div>
             </div>
@@ -351,7 +358,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-blue-500 rounded-lg flex items-center justify-center flex-shrink-0">
                   <FileText className="w-3.5 h-3.5 sm:w-5 sm:h-5 text-white" />
                 </div>
-                <span className="text-[10px] sm:text-xs lg:text-sm text-gray-700 truncate">Success Rate</span>
+                <span className="text-2xs sm:text-xs lg:text-sm text-gray-700 truncate">Success Rate</span>
               </div>
               <div className="text-lg sm:text-xl lg:text-3xl text-blue-700">{successRate}%</div>
             </div>
@@ -362,10 +369,10 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
             <div className="flex items-center gap-2 mt-3 px-3 py-2 bg-white border border-gray-200 rounded-lg">
               <span className="text-xs text-gray-500">Filtering by:</span>
               <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
-                activeFilter === 'completed' ? 'bg-green-100 text-green-700' :
-                activeFilter === 'duplicated' ? 'bg-yellow-100 text-yellow-700' :
+                activeFilter === 'completed' ? 'bg-success-subtle text-success' :
+                activeFilter === 'duplicated' ? 'bg-warning-subtle text-warning' :
                 activeFilter === 'versioned' ? 'bg-purple-100 text-purple-700' :
-                activeFilter === 'error' ? 'bg-red-100 text-red-700' :
+                activeFilter === 'error' ? 'bg-destructive-subtle text-destructive' :
                 'bg-gray-100 text-gray-700'
               }`}>
                 {activeFilter === 'completed' ? 'Completed' :
@@ -397,7 +404,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                     <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500 flex-shrink-0" />
                     <span className="text-xs sm:text-sm text-blue-700">Estimating time remaining...</span>
                   </div>
-                  <span className="text-[10px] sm:text-xs text-blue-400 sm:ml-auto">{pending.length} file{pending.length !== 1 ? 's' : ''} pending</span>
+                  <span className="text-2xs sm:text-xs text-blue-400 sm:ml-auto">{pending.length} file{pending.length !== 1 ? 's' : ''} pending</span>
                 </div>
               );
             }
@@ -414,21 +421,22 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                   <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-blue-500 flex-shrink-0" />
                   <span className="text-xs sm:text-sm font-medium text-blue-700">{etaText}</span>
                 </div>
-                <span className="text-[10px] sm:text-xs text-blue-400 sm:ml-auto">{pending.length} file{pending.length !== 1 ? 's' : ''} pending</span>
+                <span className="text-2xs sm:text-xs text-blue-400 sm:ml-auto">{pending.length} file{pending.length !== 1 ? 's' : ''} pending</span>
               </div>
             );
           })()}
 
           <div className="flex items-center justify-between mb-4 sm:mb-6">
             <h3 className="text-sm sm:text-base lg:text-lg text-gray-900">File-by-File Status</h3>
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={exportReport}
-              className="flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-300 rounded-lg hover:bg-white transition-colors shadow-sm"
+              icon={<Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
             >
-              <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="hidden sm:inline">Export Report</span>
               <span className="sm:hidden">Export</span>
-            </button>
+            </Button>
           </div>
 
           <div className="space-y-6">
@@ -436,10 +444,10 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
             {completed.length > 0 && (!activeFilter || activeFilter === 'completed') && (
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="w-6 h-6 bg-green-500 rounded-md flex items-center justify-center">
+                  <div className="w-6 h-6 bg-success rounded-md flex items-center justify-center">
                     <CheckCircle className="w-4 h-4 text-white" />
                   </div>
-                  <h4 className="text-sm sm:text-base text-green-700">
+                  <h4 className="text-sm sm:text-base text-success">
                     Successfully Uploaded ({completed.length})
                   </h4>
                 </div>
@@ -448,7 +456,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                     <div
                       key={index}
                       className={`flex flex-col sm:flex-row sm:items-center sm:justify-between p-2.5 sm:p-3 lg:p-4 border rounded-lg ${getStatusBg(item.status)} hover:shadow-md transition-shadow ${
-                        selectedCompleted.includes(item.fileName) ? 'ring-2 ring-green-500' : ''
+                        selectedCompleted.includes(item.fileName) ? 'ring-2 ring-success-line' : ''
                       }`}
                     >
                       <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
@@ -456,23 +464,23 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                           type="checkbox"
                           checked={selectedCompleted.includes(item.fileName)}
                           onChange={() => handleCompletedSelect(item.fileName)}
-                          className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500 cursor-pointer flex-shrink-0"
+                          className="w-4 h-4 text-success border-gray-300 rounded focus:ring-success-line cursor-pointer flex-shrink-0"
                         />
                         {getStatusIcon(item.status)}
                         <div className="flex-1 min-w-0">
                           <div className="text-xs sm:text-sm text-gray-900 truncate">{item.fileName}</div>
                           {item.candidateName && (
-                            <div className="text-[10px] sm:text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
+                            <div className="text-2xs sm:text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
                           )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 mt-1.5 sm:mt-0 ml-6 sm:ml-0">
-                        <span className="text-[10px] sm:text-xs text-green-700 px-2 sm:px-3 py-0.5 sm:py-1 bg-green-100 rounded-full">
+                        <span className="text-2xs sm:text-xs text-success px-2 sm:px-3 py-0.5 sm:py-1 bg-success-subtle rounded-full">
                           {getStatusText(item.status)}
                         </span>
-                        <button className="p-1.5 sm:p-2 text-gray-500 hover:text-gray-700 hover:bg-white rounded-lg transition-colors">
+                        <Button variant="secondary" size="sm" aria-label="View" className="px-2">
                           <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -485,20 +493,21 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <div className="w-6 h-6 bg-yellow-500 rounded-md flex items-center justify-center">
+                    <div className="w-6 h-6 bg-warning rounded-md flex items-center justify-center">
                       <Copy className="w-4 h-4 text-white" />
                     </div>
-                    <h4 className="text-sm sm:text-base text-yellow-700">
+                    <h4 className="text-sm sm:text-base text-warning">
                       Duplicate Resumes Detected ({duplicated.length})
                     </h4>
                   </div>
                   {selectedDuplicated.length > 0 && (
-                    <button
+                    <Button
+                      variant="primary"
+                      size="sm"
                       onClick={handleResolveDuplicated}
-                      className="px-3 sm:px-4 py-1.5 sm:py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors shadow-sm text-xs sm:text-sm"
                     >
                       Resolve Selected ({selectedDuplicated.length})
-                    </button>
+                    </Button>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -506,7 +515,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                     <div
                       key={index}
                       className={`flex flex-col sm:flex-row sm:items-center sm:justify-between p-2.5 sm:p-3 lg:p-4 border rounded-lg ${getStatusBg(item.status)} hover:shadow-md transition-shadow ${
-                        selectedDuplicated.includes(item.fileName) ? 'ring-2 ring-yellow-500' : ''
+                        selectedDuplicated.includes(item.fileName) ? 'ring-2 ring-warning-line' : ''
                       }`}
                     >
                       <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
@@ -514,28 +523,28 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                           type="checkbox"
                           checked={selectedDuplicated.includes(item.fileName)}
                           onChange={() => handleDuplicatedSelect(item.fileName)}
-                          className="w-4 h-4 text-yellow-600 border-gray-300 rounded focus:ring-yellow-500 cursor-pointer flex-shrink-0"
+                          className="w-4 h-4 text-warning border-gray-300 rounded focus:ring-warning-line cursor-pointer flex-shrink-0"
                         />
                         {getStatusIcon(item.status)}
                         <div className="flex-1 min-w-0">
                           <div className="text-xs sm:text-sm text-gray-900 truncate">{item.fileName}</div>
                           {item.candidateName && (
-                            <div className="text-[10px] sm:text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
+                            <div className="text-2xs sm:text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
                           )}
                           {item.existingLocation && (
-                            <div className="text-[10px] sm:text-xs text-yellow-700 mt-1 truncate">
+                            <div className="text-2xs sm:text-xs text-warning mt-1 truncate">
                               Existing location: {item.existingLocation}
                             </div>
                           )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 mt-1.5 sm:mt-0 ml-6 sm:ml-0">
-                        <span className="text-[10px] sm:text-xs text-yellow-700 px-2 sm:px-3 py-0.5 sm:py-1 bg-yellow-100 rounded-full">
+                        <span className="text-2xs sm:text-xs text-warning px-2 sm:px-3 py-0.5 sm:py-1 bg-warning-subtle rounded-full">
                           {getStatusText(item.status)}
                         </span>
-                        <button className="p-1.5 sm:p-2 text-gray-500 hover:text-gray-700 hover:bg-white rounded-lg transition-colors">
+                        <Button variant="secondary" size="sm" aria-label="View" className="px-2">
                           <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -556,12 +565,13 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                     </h4>
                   </div>
                   {selectedVersioned.length > 0 && (
-                    <button
+                    <Button
+                      variant="primary"
+                      size="sm"
                       onClick={handleResolveVersioned}
-                      className="px-3 sm:px-4 py-1.5 sm:py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors shadow-sm text-xs sm:text-sm"
                     >
                       Resolve Selected ({selectedVersioned.length})
-                    </button>
+                    </Button>
                   )}
                 </div>
                 <div className="space-y-2">
@@ -583,27 +593,27 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         <div className="flex-1 min-w-0">
                           <div className="text-xs sm:text-sm text-gray-900 truncate">{item.fileName}</div>
                           {item.candidateName && (
-                            <div className="text-[10px] sm:text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
+                            <div className="text-2xs sm:text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
                           )}
                           {item.existingLocation && (
-                            <div className="text-[10px] sm:text-xs text-purple-700 mt-1 truncate">
+                            <div className="text-2xs sm:text-xs text-purple-700 mt-1 truncate">
                               Existing location: {item.existingLocation}
                             </div>
                           )}
                           {item.versionInfo && (
-                            <div className="text-[10px] sm:text-xs text-purple-700 mt-1 truncate">
+                            <div className="text-2xs sm:text-xs text-purple-700 mt-1 truncate">
                               {item.versionInfo}
                             </div>
                           )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2 mt-1.5 sm:mt-0 ml-6 sm:ml-0">
-                        <span className="text-[10px] sm:text-xs text-purple-700 px-2 sm:px-3 py-0.5 sm:py-1 bg-purple-100 rounded-full">
+                        <span className="text-2xs sm:text-xs text-purple-700 px-2 sm:px-3 py-0.5 sm:py-1 bg-purple-100 rounded-full">
                           {getStatusText(item.status)}
                         </span>
-                        <button className="p-1.5 sm:p-2 text-gray-500 hover:text-gray-700 hover:bg-white rounded-lg transition-colors">
+                        <Button variant="secondary" size="sm" aria-label="View" className="px-2">
                           <Eye className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   ))}
@@ -615,10 +625,10 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
             {errors.length > 0 && (!activeFilter || activeFilter === 'error') && (
               <div>
                 <div className="flex items-center gap-2 mb-3">
-                  <div className="w-6 h-6 bg-red-500 rounded-md flex items-center justify-center">
+                  <div className="w-6 h-6 bg-destructive rounded-md flex items-center justify-center">
                     <AlertCircle className="w-4 h-4 text-white" />
                   </div>
-                  <h4 className="text-sm sm:text-base text-red-700">
+                  <h4 className="text-sm sm:text-base text-destructive">
                     Upload Errors ({errors.length})
                   </h4>
                 </div>
@@ -627,7 +637,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                     <div
                       key={index}
                       className={`flex flex-col sm:flex-row sm:items-center sm:justify-between p-2.5 sm:p-3 lg:p-4 border rounded-lg ${getStatusBg(item.status)} hover:shadow-md transition-shadow ${
-                        selectedErrors.includes(item.fileName) ? 'ring-2 ring-red-500' : ''
+                        selectedErrors.includes(item.fileName) ? 'ring-2 ring-destructive-line' : ''
                       }`}
                     >
                       <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
@@ -635,17 +645,17 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                           type="checkbox"
                           checked={selectedErrors.includes(item.fileName)}
                           onChange={() => handleErrorSelect(item.fileName)}
-                          className="w-4 h-4 text-red-600 border-gray-300 rounded focus:ring-red-500 cursor-pointer flex-shrink-0"
+                          className="w-4 h-4 text-destructive border-gray-300 rounded focus:ring-destructive-line cursor-pointer flex-shrink-0"
                         />
                         {getStatusIcon(item.status)}
                         <div className="flex-1 min-w-0">
                           <div className="text-xs sm:text-sm text-gray-900 truncate">{item.fileName}</div>
                           {item.errorMessage && (
-                            <div className="text-[10px] sm:text-xs text-red-600 mt-1">{item.errorMessage}</div>
+                            <div className="text-2xs sm:text-xs text-destructive mt-1">{item.errorMessage}</div>
                           )}
                         </div>
                       </div>
-                      <span className="text-[10px] sm:text-xs text-red-700 px-2 sm:px-3 py-0.5 sm:py-1 bg-red-100 rounded-full mt-1.5 sm:mt-0 ml-6 sm:ml-0 self-start sm:self-auto">
+                      <span className="text-2xs sm:text-xs text-destructive px-2 sm:px-3 py-0.5 sm:py-1 bg-destructive-subtle rounded-full mt-1.5 sm:mt-0 ml-6 sm:ml-0 self-start sm:self-auto">
                         {getStatusText(item.status)}
                       </span>
                     </div>
@@ -684,11 +694,11 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         <div className="flex-1 min-w-0">
                           <div className="text-xs sm:text-sm text-gray-900 truncate">{item.fileName}</div>
                           {item.candidateName && (
-                            <div className="text-[10px] sm:text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
+                            <div className="text-2xs sm:text-xs text-gray-600 mt-0.5 truncate">{item.candidateName}</div>
                           )}
                         </div>
                       </div>
-                      <span className="text-[10px] sm:text-xs text-gray-700 px-2 sm:px-3 py-0.5 sm:py-1 bg-gray-100 rounded-full mt-1.5 sm:mt-0 ml-6 sm:ml-0 self-start sm:self-auto">
+                      <span className="text-2xs sm:text-xs text-gray-700 px-2 sm:px-3 py-0.5 sm:py-1 bg-gray-100 rounded-full mt-1.5 sm:mt-0 ml-6 sm:ml-0 self-start sm:self-auto">
                         {getStatusText(item.status)}
                       </span>
                     </div>
@@ -699,10 +709,10 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
 
             {/* Retry Failed/Pending Uploads Section */}
             {(errors.length > 0 || pending.length > 0) && onRetryUpload && (!activeFilter || activeFilter === 'error' || activeFilter === 'pending') && (
-              <div className="mt-4 sm:mt-6 p-3 sm:p-4 lg:p-5 bg-gradient-to-br from-red-50 to-orange-50 border-2 border-red-200 rounded-xl">
+              <div className="mt-4 sm:mt-6 p-3 sm:p-4 lg:p-5 bg-gradient-to-br from-red-50 to-orange-50 border-2 border-destructive-line rounded-xl">
                 <div className="flex items-start justify-between mb-3 sm:mb-4">
                   <div className="flex items-center gap-2 sm:gap-3">
-                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-red-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-destructive rounded-lg flex items-center justify-center flex-shrink-0">
                       <AlertCircle className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
                     </div>
                     <div className="min-w-0">
@@ -721,29 +731,30 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                   {/* Select All Failed */}
                   {errors.length > 0 && (
-                    <button
+                    <Button
+                      variant="secondary"
                       onClick={() => setSelectedErrors(errors.map(e => e.fileName))}
                       disabled={selectedErrors.length === errors.length}
-                      className="px-4 py-2.5 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       Select All Failed ({errors.length})
-                    </button>
+                    </Button>
                   )}
 
                   {/* Select All Pending */}
                   {pending.length > 0 && (
-                    <button
+                    <Button
+                      variant="secondary"
                       onClick={() => setSelectedPending(pending.map(p => p.fileName))}
                       disabled={selectedPending.length === pending.length}
-                      className="px-4 py-2.5 text-sm text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
                       Select All Pending ({pending.length})
-                    </button>
+                    </Button>
                   )}
 
                   {/* Retry Selected Errors */}
                   {selectedErrors.length > 0 && (
-                    <button
+                    <Button
+                      variant="primary"
                       onClick={async () => {
                         setIsRetrying(true);
                         setRetryingFiles(new Set(selectedErrors));
@@ -759,7 +770,6 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         }
                       }}
                       disabled={isRetrying}
-                      className="px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2"
                     >
                       {isRetrying ? (
                         <>
@@ -772,12 +782,13 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                           Retry Selected Errors ({selectedErrors.length})
                         </>
                       )}
-                    </button>
+                    </Button>
                   )}
 
                   {/* Retry Selected Pending */}
                   {selectedPending.length > 0 && (
-                    <button
+                    <Button
+                      variant="primary"
                       onClick={async () => {
                         setIsRetrying(true);
                         setRetryingFiles(new Set(selectedPending));
@@ -793,7 +804,6 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         }
                       }}
                       disabled={isRetrying}
-                      className="px-4 py-2.5 bg-gray-600 text-white rounded-lg hover:bg-gray-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-sm hover:shadow-md flex items-center justify-center gap-2"
                     >
                       {isRetrying ? (
                         <>
@@ -806,13 +816,15 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                           Retry Selected Pending ({selectedPending.length})
                         </>
                       )}
-                    </button>
+                    </Button>
                   )}
                 </div>
 
                 {/* Retry All Button */}
                 {(errors.length > 0 || pending.length > 0) && (
-                  <button
+                  <Button
+                    variant="primary"
+                    size="lg"
                     onClick={async () => {
                       const allFailed = [...errors.map(e => e.fileName), ...pending.map(p => p.fileName)];
                       setIsRetrying(true);
@@ -830,7 +842,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                       }
                     }}
                     disabled={isRetrying}
-                    className="w-full mt-3 px-4 py-3 bg-gradient-to-r from-red-600 to-orange-600 text-white rounded-lg hover:from-red-700 hover:to-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-md hover:shadow-lg flex items-center justify-center gap-2 font-medium"
+                    className="w-full mt-3"
                   >
                     {isRetrying ? (
                       <>
@@ -843,7 +855,7 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
                         Retry All Failed & Pending ({errors.length + pending.length})
                       </>
                     )}
-                  </button>
+                  </Button>
                 )}
               </div>
             )}
@@ -856,12 +868,9 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
             <p className="text-xs sm:text-sm text-gray-600 text-center sm:text-left">
               Showing detailed status for <span className="text-gray-900">{totalProcessed}</span> file{totalProcessed !== 1 ? 's' : ''}
             </p>
-            <button
-              onClick={onClose}
-              className="px-4 sm:px-6 py-2 sm:py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm text-sm sm:text-base"
-            >
+            <Button variant="primary" onClick={onClose}>
               Close
-            </button>
+            </Button>
           </div>
         </div>
       </div>

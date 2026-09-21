@@ -74,7 +74,7 @@ export function DetailedSkillsTable({ mustHaveClusters, niceToHaveClusters, expo
               return (
                 <tr key={idx} className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900/20 transition-colors">
                   <td className="p-4">
-                    <span className={`inline-block px-2.5 py-1 text-[11px] font-semibold rounded-full border ${ts.bg} ${ts.text} ${ts.border}`}>
+                    <span className={`inline-block px-2.5 py-1 text-2xs font-semibold rounded-full border ${ts.bg} ${ts.text} ${ts.border}`}>
                       {skill.skillType}
                     </span>
                   </td>

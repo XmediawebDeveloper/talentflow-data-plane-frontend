@@ -65,9 +65,9 @@ const EVENT_NAMES: Record<ProctoringEventType, string> = {
 };
 
 const SEVERITY_COLORS: Record<'low' | 'medium' | 'high', { bg: string; border: string; text: string; icon: string }> = {
-  low: { bg: 'bg-yellow-50', border: 'border-yellow-400', text: 'text-yellow-800', icon: 'text-yellow-500' },
+  low: { bg: 'bg-warning-subtle', border: 'border-warning', text: 'text-warning-strong', icon: 'text-warning' },
   medium: { bg: 'bg-orange-50', border: 'border-orange-400', text: 'text-orange-800', icon: 'text-orange-500' },
-  high: { bg: 'bg-red-50', border: 'border-red-400', text: 'text-red-800', icon: 'text-red-500' },
+  high: { bg: 'bg-destructive-subtle', border: 'border-destructive', text: 'text-destructive-strong', icon: 'text-destructive' },
 };
 
 // Individual warning card — memoized to prevent re-renders of siblings
@@ -124,9 +124,9 @@ const WarningCard = memo(function WarningCard({
       </div>
       <div className="absolute top-2 right-10">
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-          warning.severity === 'high' ? 'bg-red-200 text-red-800' :
+          warning.severity === 'high' ? 'bg-destructive-subtle text-destructive-strong' :
           warning.severity === 'medium' ? 'bg-orange-200 text-orange-800' :
-          'bg-yellow-200 text-yellow-800'
+          'bg-warning-subtle text-warning-strong'
         }`}>
           {warning.severity.toUpperCase()}
         </span>

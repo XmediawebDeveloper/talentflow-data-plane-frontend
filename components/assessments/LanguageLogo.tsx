@@ -32,8 +32,8 @@ export const LANGUAGE_LOGOS: Record<string, string> = {
  *  a text-xs pill without stretching it out of shape. Two named steps rather
  *  than a free className, so every mark in the app is one of two sizes. */
 const SIZES = {
-  sm: { box: 'w-4 h-4', tile: 'rounded text-[8px]', letters: 1 },
-  md: { box: 'w-7 h-7', tile: 'rounded-lg text-[11px]', letters: 2 },
+  sm: { box: 'w-4 h-4', tile: 'rounded text-2xs', letters: 1 },
+  md: { box: 'w-7 h-7', tile: 'rounded-lg text-2xs', letters: 2 },
 } as const;
 
 export default function LanguageLogo({

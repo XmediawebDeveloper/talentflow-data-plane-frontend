@@ -139,7 +139,7 @@ export function EnvironmentVerificationOverlay({
           )}
 
           {verificationUrl && (
-            <p className="text-[11px] text-[var(--raw-94a3b8)] break-all text-center max-w-full">{verificationUrl}</p>
+            <p className="text-2xs text-[var(--raw-94a3b8)] break-all text-center max-w-full">{verificationUrl}</p>
           )}
 
           <div className="w-full text-center text-sm font-mono text-brand-blue border border-brand-blue/20 rounded-lg bg-brand-blue/5 px-3 py-2">

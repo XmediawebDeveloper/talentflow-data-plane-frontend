@@ -2,6 +2,7 @@
 
 import { CheckCircle, Clock, FileText, X } from 'lucide-react';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 
 interface CompletedScreenProps {
   assessmentTitle?: string;
@@ -46,8 +47,8 @@ export function CompletedScreen({ assessmentTitle, candidateName }: CompletedScr
         {/* Success Card */}
         <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
           {/* Success Icon */}
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle className="w-12 h-12 text-green-600" />
+          <div className="w-20 h-20 bg-success-subtle rounded-full flex items-center justify-center mx-auto mb-6">
+            <CheckCircle className="w-12 h-12 text-success" />
           </div>
 
           {/* Title */}
@@ -96,26 +97,27 @@ export function CompletedScreen({ assessmentTitle, candidateName }: CompletedScr
 
           {/* Close Button */}
           {closeBlocked ? (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-left">
-              <p className="text-sm font-medium text-amber-900 mb-1">
+            <div className="rounded-xl border border-warning-line bg-warning-subtle px-4 py-3 text-left">
+              <p className="text-sm font-medium text-warning-strong mb-1">
                 Your browser blocked the auto-close.
               </p>
-              <p className="text-xs text-amber-800">
+              <p className="text-xs text-warning-strong">
                 Please close this tab manually — press{' '}
-                <kbd className="px-1.5 py-0.5 bg-white border border-amber-300 rounded text-[11px] font-mono">
+                <kbd className="px-1.5 py-0.5 bg-white border border-warning-line rounded text-2xs font-mono">
                   {shortcut}
                 </kbd>{' '}
                 or click the ✕ on the tab. Your assessment has been submitted and your responses are saved.
               </p>
             </div>
           ) : (
-            <button
+            <Button
+              variant="primary"
               onClick={handleClose}
-              className="w-full flex items-center justify-center gap-2 px-6 py-3 bg-gray-800 hover:bg-gray-900 text-white font-medium rounded-xl transition-colors"
+              className="w-full"
             >
               <X className="w-4 h-4" />
               Close Window
-            </button>
+            </Button>
           )}
 
           {/* Footer */}

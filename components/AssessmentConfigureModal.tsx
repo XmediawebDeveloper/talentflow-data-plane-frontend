@@ -3,6 +3,7 @@
 import { Eye, Sliders, X } from 'lucide-react';
 import { useRef } from 'react';
 import AssessmentCreation, { type AssessmentCreationHandle } from './AssessmentCreation';
+import { Button } from '@/components/ui/button';
 
 interface AssessmentConfigureModalProps {
   isOpen: boolean;
@@ -95,7 +96,7 @@ export default function AssessmentConfigureModal({
                   Configure Assessment
                 </h2>
                 {readOnly && (
-                  <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-[10px] sm:text-xs flex items-center gap-1 flex-shrink-0">
+                  <span className="px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-2xs sm:text-xs flex items-center gap-1 flex-shrink-0">
                     <Eye className="w-3 h-3" />
                     View only
                   </span>
@@ -109,15 +110,17 @@ export default function AssessmentConfigureModal({
               </p>
             </div>
           </div>
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             type="button"
             onClick={() => assessmentCreationRef.current?.requestClose()}
             aria-label={readOnly ? 'Close assessment preview' : 'Close assessment configuration'}
             title="Close"
-            className="p-2 rounded-lg text-gray-400 hover:text-gray-600 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors flex-shrink-0"
+            className="px-2 flex-shrink-0"
           >
             <X className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
 
         {/* Content — the Configure step itself. The panel is the white card

@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { jdService } from '@/lib/services/jdService';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import type { ScoredResume } from './ScoredResumesTable';
 
 interface ScoreTableModalProps {
@@ -93,22 +94,22 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobTitle, onCl
   );
 
   const getScoreColor = (score: number) => {
-    if (score >= 85) return 'text-green-600';
+    if (score >= 85) return 'text-success';
     if (score >= 70) return 'text-gray-800';
-    if (score >= 60) return 'text-yellow-600';
-    return 'text-red-600';
+    if (score >= 60) return 'text-warning';
+    return 'text-destructive';
   };
   const getScoreBgColor = (score: number) => {
-    if (score >= 85) return 'bg-green-100 border-green-300 text-green-700';
+    if (score >= 85) return 'bg-success-subtle border-success-line text-success';
     if (score >= 70) return 'bg-gray-100 border-gray-300 text-gray-700';
-    if (score >= 60) return 'bg-yellow-100 border-yellow-300 text-yellow-700';
-    return 'bg-red-100 border-red-300 text-red-700';
+    if (score >= 60) return 'bg-warning-subtle border-warning-line text-warning';
+    return 'bg-destructive-subtle border-destructive-line text-destructive';
   };
   const getProgressBarColor = (score: number) => {
-    if (score >= 85) return 'bg-green-600';
+    if (score >= 85) return 'bg-success';
     if (score >= 70) return 'bg-gray-600';
-    if (score >= 60) return 'bg-yellow-600';
-    return 'bg-red-600';
+    if (score >= 60) return 'bg-warning';
+    return 'bg-destructive';
   };
 
   return (
@@ -131,13 +132,15 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobTitle, onCl
               </p>
             </div>
           </div>
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={onClose}
-            className="p-2 hover:bg-gray-100 rounded-lg transition-colors flex-shrink-0"
+            className="px-2 flex-shrink-0"
             aria-label="Close"
           >
             <X className="w-5 h-5 text-gray-500" />
-          </button>
+          </Button>
         </div>
         {/* score-table-modal-body: the only vertical scroller in this modal.
             DetailedScorecardTab's rubric table grows to its content (it does not

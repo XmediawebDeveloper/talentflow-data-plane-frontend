@@ -264,7 +264,7 @@ export default function AdminDashboard({
               {/* JD02A & JD02B: Show published, draft, and my JDs counts - All clickable */}
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span
-                  className="text-xs text-green-600 font-medium cursor-pointer hover:underline hover:text-green-700 transition-colors"
+                  className="text-xs text-success font-medium cursor-pointer hover:underline hover:text-success transition-colors"
                   onClick={(e) => { e.stopPropagation(); router.push('/recruitment/job-openings?status=published'); }}
                 >
                   {stats?.active_jds || 0} Published
@@ -297,7 +297,7 @@ export default function AdminDashboard({
             <div>
               <p className="text-sm text-gray-600">Total Users</p>
               <p className="text-3xl font-bold text-gray-900 mt-1 tracking-tight">{stats?.total_users || 0}</p>
-              <p className="text-xs text-green-600 font-medium mt-1">{stats?.active_users || 0} Active</p>
+              <p className="text-xs text-success font-medium mt-1">{stats?.active_users || 0} Active</p>
             </div>
             <div className="w-12 h-12 bg-brand-teal/10 ring-1 ring-brand-teal/15 rounded-xl flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-teal/10">
               <Users className="w-6 h-6 text-brand-teal" />
@@ -317,7 +317,7 @@ export default function AdminDashboard({
                 <p className="text-sm text-gray-600">Assessments</p>
                 <p className="text-3xl font-bold text-gray-900 mt-1 tracking-tight">{stats?.total_assessments || 0}</p>
                 <div className="flex items-center gap-2 mt-1 flex-wrap">
-                  <span className="text-xs text-green-600 font-medium">{stats?.assessment_completed_count || 0} Completed</span>
+                  <span className="text-xs text-success font-medium">{stats?.assessment_completed_count || 0} Completed</span>
                   {stats?.assessment_average_score !== null && stats?.assessment_average_score !== undefined && (
                     <>
                       <span className="text-xs text-gray-300">|</span>
@@ -367,7 +367,7 @@ export default function AdminDashboard({
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                       <div
-                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.RU.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.RU.percentage_used > 50 ? 'bg-brand-orange' : 'bg-brand-blue'}`}
+                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.RU.percentage_used > 80 ? 'bg-destructive' : subscriptionUnits.RU.percentage_used > 50 ? 'bg-brand-orange' : 'bg-brand-blue'}`}
                         style={{ width: `${Math.min(subscriptionUnits.RU.percentage_used, 100)}%` }}
                       />
                     </div>
@@ -398,7 +398,7 @@ export default function AdminDashboard({
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                       <div
-                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.RS.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.RS.percentage_used > 50 ? 'bg-brand-orange' : 'bg-brand-cyan'}`}
+                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.RS.percentage_used > 80 ? 'bg-destructive' : subscriptionUnits.RS.percentage_used > 50 ? 'bg-brand-orange' : 'bg-brand-cyan'}`}
                         style={{ width: `${Math.min(subscriptionUnits.RS.percentage_used, 100)}%` }}
                       />
                     </div>
@@ -429,7 +429,7 @@ export default function AdminDashboard({
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                       <div
-                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.AS.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.AS.percentage_used > 50 ? 'bg-yellow-500' : 'bg-brand-orange'}`}
+                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.AS.percentage_used > 80 ? 'bg-destructive' : subscriptionUnits.AS.percentage_used > 50 ? 'bg-warning' : 'bg-brand-orange'}`}
                         style={{ width: `${Math.min(subscriptionUnits.AS.percentage_used, 100)}%` }}
                       />
                     </div>
@@ -460,7 +460,7 @@ export default function AdminDashboard({
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                       <div
-                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.AIU.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.AIU.percentage_used > 50 ? 'bg-brand-orange' : 'bg-brand-blue'}`}
+                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.AIU.percentage_used > 80 ? 'bg-destructive' : subscriptionUnits.AIU.percentage_used > 50 ? 'bg-brand-orange' : 'bg-brand-blue'}`}
                         style={{ width: `${Math.min(subscriptionUnits.AIU.percentage_used, 100)}%` }}
                       />
                     </div>
@@ -491,7 +491,7 @@ export default function AdminDashboard({
                     </div>
                     <div className="w-full bg-gray-100 rounded-full h-1.5 overflow-hidden">
                       <div
-                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.max_seats.percentage_used > 80 ? 'bg-red-500' : subscriptionUnits.max_seats.percentage_used > 50 ? 'bg-brand-orange' : 'bg-brand-teal'}`}
+                        className={`h-1.5 rounded-full transition-all ${subscriptionUnits.max_seats.percentage_used > 80 ? 'bg-destructive' : subscriptionUnits.max_seats.percentage_used > 50 ? 'bg-brand-orange' : 'bg-brand-teal'}`}
                         style={{ width: `${Math.min(subscriptionUnits.max_seats.percentage_used, 100)}%` }}
                       />
                     </div>
@@ -668,8 +668,8 @@ export default function AdminDashboard({
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
               <span className="relative flex h-2 w-2" aria-hidden="true">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-success opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-success"></span>
               </span>
               <span className="inline-flex items-center rounded-full border border-brand-cyan/20 bg-white px-2.5 py-1 text-xs font-medium text-brand-blue shadow-sm">
                 Last 24 hours
@@ -784,8 +784,8 @@ export default function AdminDashboard({
                             </p>
                           )}
                           <div className="mt-1.5 flex items-center gap-2">
-                            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 pl-0.5 pr-2 py-0.5 text-[11px] font-medium text-brand-blue">
-                              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-brand-blue text-[9px] font-semibold text-white shadow-sm">
+                            <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 pl-0.5 pr-2 py-0.5 text-2xs font-medium text-brand-blue">
+                              <span className="inline-flex h-4 w-4 items-center justify-center rounded-full bg-brand-blue text-2xs font-semibold text-white shadow-sm">
                                 {initials}
                               </span>
                               {userLabel}

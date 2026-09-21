@@ -204,11 +204,11 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
               <table className="w-full">
                 <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60">
                   <tr>
-                    <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">#</th>
-                    <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Job description</th>
-                    <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Department</th>
-                    <th className="px-6 py-3 text-right text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Applicants</th>
-                    <th className="px-6 py-3 text-right text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Avg score</th>
+                    <th className="px-6 py-3 text-left text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">#</th>
+                    <th className="px-6 py-3 text-left text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Job description</th>
+                    <th className="px-6 py-3 text-left text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Department</th>
+                    <th className="px-6 py-3 text-right text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Applicants</th>
+                    <th className="px-6 py-3 text-right text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Avg score</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
@@ -222,7 +222,7 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
                         <span
                           className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
                             j.score >= 85
-                              ? 'bg-green-50 text-green-700 ring-1 ring-green-100'
+                              ? 'bg-success-subtle text-success ring-1 ring-success-line'
                               : j.score >= 75
                               ? 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/15'
                               : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200'
@@ -281,10 +281,10 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
             <table className="w-full">
               <thead className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60">
                 <tr>
-                  <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Candidate</th>
-                  <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">JD</th>
-                  <th className="px-6 py-3 text-right text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Score</th>
-                  <th className="px-6 py-3 text-left text-[11px] font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Date</th>
+                  <th className="px-6 py-3 text-left text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Candidate</th>
+                  <th className="px-6 py-3 text-left text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">JD</th>
+                  <th className="px-6 py-3 text-right text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Score</th>
+                  <th className="px-6 py-3 text-left text-2xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider">Date</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100 dark:divide-slate-700">
@@ -296,7 +296,7 @@ export default function ViewerDashboard({ user, tenant }: ViewerDashboardProps) 
                       <span
                         className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${
                           a.score >= 85
-                            ? 'bg-green-50 text-green-700 ring-1 ring-green-100'
+                            ? 'bg-success-subtle text-success ring-1 ring-success-line'
                             : a.score >= 75
                             ? 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/15'
                             : 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200'
@@ -339,7 +339,7 @@ function KpiTile({
       <div className="flex items-start justify-between mb-3">
         <div className={`w-12 h-12 rounded-xl ${accent} ring-1 flex items-center justify-center`}>{icon}</div>
         {trend && (
-          <span className={`inline-flex items-center gap-1 text-xs font-medium ${positive ? 'text-green-600' : 'text-red-600'}`}>
+          <span className={`inline-flex items-center gap-1 text-xs font-medium ${positive ? 'text-success' : 'text-destructive'}`}>
             {trendUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
             {trend.value}
           </span>
@@ -347,7 +347,7 @@ function KpiTile({
       </div>
       <div className="text-3xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">{value}</div>
       <div className="text-sm text-gray-600 dark:text-slate-400 mt-0.5">{label}</div>
-      {sub && <div className="text-[11px] text-gray-500 dark:text-slate-500 mt-1">{sub}</div>}
+      {sub && <div className="text-2xs text-gray-500 dark:text-slate-500 mt-1">{sub}</div>}
     </div>
   );
 }

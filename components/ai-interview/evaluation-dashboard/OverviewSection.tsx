@@ -159,7 +159,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
                     <span className="text-base text-gray-500 font-normal">/10</span>
                   </div>
                   <div
-                    className={`text-[11px] mt-1 ${
+                    className={`text-2xs mt-1 ${
                       isPass ? 'text-emerald-700' : 'text-red-700'
                     }`}
                   >
@@ -182,7 +182,7 @@ export function OverviewSection({ data, livenessVerified = false, candidateImage
                     {scores.niceToHave.toFixed(2)}
                     <span className="text-base text-gray-500 font-normal">/10</span>
                   </div>
-                  <div className="text-[11px] mt-1 text-amber-700">informational only</div>
+                  <div className="text-2xs mt-1 text-amber-700">informational only</div>
                 </div>
               )}
             </div>

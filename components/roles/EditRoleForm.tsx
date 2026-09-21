@@ -96,7 +96,7 @@ const fieldClassName =
 // appended to `fieldClassName`, so the red border/ring can't lose a Tailwind
 // specificity tie against the gray/blue ones it replaces.
 const fieldErrorClassName =
-  'w-full rounded-xl border border-red-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-red-400 focus:ring-4 focus:ring-red-100 disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500';
+  'w-full rounded-xl border border-destructive-line bg-white px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-destructive-line focus:ring-4 focus:ring-destructive-line disabled:cursor-not-allowed disabled:bg-gray-50 disabled:text-gray-500';
 
 const getErrorStatus = (error: unknown): number | undefined => {
   if (typeof error !== 'object' || error === null || !('response' in error)) {
@@ -328,7 +328,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
     >
       <span>{label}</span>
       {hasDependencies && (
-        <span className={`text-[11px] ${isSelected ? 'text-white/80' : 'text-gray-400'}`} title="Auto-enables dependencies">
+        <span className={`text-2xs ${isSelected ? 'text-white/80' : 'text-gray-400'}`} title="Auto-enables dependencies">
           *
         </span>
       )}
@@ -379,7 +379,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-sm font-semibold text-gray-900">{category.name}</h3>
                   {category.isMenuToggle && (
-                    <span className="inline-flex items-center rounded-full bg-brand-orange/10 px-2.5 py-1 text-[11px] font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
+                    <span className="inline-flex items-center rounded-full bg-brand-orange/10 px-2.5 py-1 text-2xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
                       Menu toggle
                     </span>
                   )}
@@ -394,7 +394,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
               {category.actions && (
                 <div className="flex flex-wrap gap-2">
                   {category.viewCode && selectedPermissionCodes.has(category.viewCode) && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-brand-teal/10 px-2.5 py-1 text-[11px] font-medium text-brand-teal ring-1 ring-brand-teal/15">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-brand-teal/10 px-2.5 py-1 text-2xs font-medium text-brand-teal ring-1 ring-brand-teal/15">
                       <Check className="h-3 w-3" />
                       View enabled
                     </span>
@@ -420,7 +420,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                           {subCategory.name}
                         </span>
                         {subCategory.viewCode && selectedPermissionCodes.has(subCategory.viewCode) && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-brand-teal/10 px-2.5 py-1 text-[11px] font-medium text-brand-teal ring-1 ring-brand-teal/15">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-brand-teal/10 px-2.5 py-1 text-2xs font-medium text-brand-teal ring-1 ring-brand-teal/15">
                             <Check className="h-3 w-3" />
                             View enabled
                           </span>
@@ -560,7 +560,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                   <div className="flex flex-wrap items-center gap-2">
                     <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Edit Role</h1>
                     {role.is_system && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-[11px] font-medium text-white ring-1 ring-white/15">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-1 text-2xs font-medium text-white ring-1 ring-white/15">
                         <Lock className="h-3 w-3" />
                         System role
                       </span>
@@ -607,7 +607,7 @@ export default function EditRoleForm({ roleId, embedded = false, onSuccess, onCa
                     disabled={role.is_system}
                   />
                   {showNameError && (
-                    <span className="mt-1.5 block text-xs font-medium text-red-600">{nameError}</span>
+                    <span className="mt-1.5 block text-xs font-medium text-destructive">{nameError}</span>
                   )}
                 </label>
 

@@ -8,6 +8,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import Pagination from '@/components/Pagination';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
+import { Button } from '@/components/ui/button';
 import { formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
@@ -204,7 +205,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   // Helper: status badge colors
   const getStatusBadgeColor = (status: string) => {
     switch (status) {
-      case 'Completed': return 'bg-green-50 text-green-700 ring-1 ring-green-200';
+      case 'Completed': return 'bg-success-subtle text-success ring-1 ring-success-line';
       case 'In Progress': return 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20';
       case 'Pending': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
       default: return 'bg-gray-100 text-gray-800 ring-1 ring-gray-200';
@@ -532,14 +533,14 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   const getPassFailBadge = (status: 'Pass' | 'Fail') => {
     if (status === 'Pass') {
       return (
-        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 ring-1 ring-green-200 rounded-full text-xs">
+        <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-success-subtle text-success ring-1 ring-success-line rounded-full text-xs">
           <CheckCircle className="w-3 h-3" />
           Pass
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-red-50 text-red-700 ring-1 ring-red-200 rounded-full text-xs">
+      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-destructive-subtle text-destructive ring-1 ring-destructive-line rounded-full text-xs">
         <XCircle className="w-3 h-3" />
         Fail
       </span>
@@ -547,10 +548,10 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   };
 
   const getScoreColor = (percentage: number) => {
-    if (percentage >= 80) return 'text-green-600';
+    if (percentage >= 80) return 'text-success';
     if (percentage >= 60) return 'text-brand-blue';
     if (percentage >= 40) return 'text-brand-orange-deep';
-    return 'text-red-600';
+    return 'text-destructive';
   };
   // Nothing has been recorded for this job yet — not even an invitation. The
   // header, filters, column picker, export controls and table headings would
@@ -630,39 +631,42 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
             {/* Export Excel */}
             {selectedResults.length === 0 && (
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={handleExportExcel}
-                className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-md transition-colors flex items-center gap-1.5 sm:gap-2"
+                icon={<FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
               >
-                <FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 Export
-              </button>
+              </Button>
             )}
 
             {/* Bulk Actions - When items are selected */}
             {selectedResults.length > 0 && (
               <>
                 {canBatchDownload && (
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={handleDownloadBulkPDFs}
                     disabled={downloadingBulkPDF}
-                    className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-brand-orange hover:bg-brand-orange-deep text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors flex items-center gap-1.5 sm:gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    {downloadingBulkPDF ? (
+                    icon={downloadingBulkPDF ? (
                       <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
                     ) : (
                       <Archive className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                     )}
+                  >
                     {downloadingBulkPDF ? 'Downloading...' : `PDFs (${selectedResults.length})`}
-                  </button>
+                  </Button>
                 )}
-                <button
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={handleExportExcel}
-                  className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-1.5 sm:gap-2"
+                  icon={<FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
                 >
-                  <FileDown className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   Export
-                </button>
+                </Button>
               </>
             )}
           </div>
@@ -752,13 +756,14 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
           {/* Clear Filters */}
           {activeFiltersCount > 0 && (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={clearFilters}
-              className="flex items-center gap-2 px-4 py-2 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-sm"
+              icon={<X className="w-4 h-4" />}
             >
-              <X className="w-4 h-4" />
               Clear
-            </button>
+            </Button>
           )}
 
           <ListViewToggle value={displayMode} onChange={setDisplayMode} className="ml-auto" />
@@ -928,11 +933,11 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           return (
                             <td key={col.id} className="py-3 px-4 text-center">
                               <div className="flex flex-col items-center gap-1">
-                                <span className={`text-lg font-semibold ${scoringDone && techPct !== null ? (techPct >= 70 ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}`}>
+                                <span className={`text-lg font-semibold ${scoringDone && techPct !== null ? (techPct >= 70 ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
                                   {scoringDone && techPct !== null ? `${Math.round(techPct)}%` : '—'}
                                 </span>
                                 {scoringDone && techPct !== null && (
-                                  <span className={`text-xs font-medium ${techPct >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                                  <span className={`text-xs font-medium ${techPct >= 70 ? 'text-success' : 'text-destructive'}`}>
                                     {techPct >= 70 ? 'Pass' : 'Fail'}
                                   </span>
                                 )}
@@ -947,11 +952,11 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           return (
                             <td key={col.id} className="py-3 px-4 text-center">
                               <div className="flex flex-col items-center gap-1">
-                                <span className={`text-lg font-semibold ${scoringDone && codingPct !== null ? (codingPct >= 70 ? 'text-green-600' : 'text-red-600') : 'text-gray-400'}`}>
+                                <span className={`text-lg font-semibold ${scoringDone && codingPct !== null ? (codingPct >= 70 ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
                                   {scoringDone && codingPct !== null ? `${Math.round(codingPct)}%` : '—'}
                                 </span>
                                 {scoringDone && codingPct !== null && (
-                                  <span className={`text-xs font-medium ${codingPct >= 70 ? 'text-green-600' : 'text-red-600'}`}>
+                                  <span className={`text-xs font-medium ${codingPct >= 70 ? 'text-success' : 'text-destructive'}`}>
                                     {codingPct >= 70 ? 'Pass' : 'Fail'}
                                   </span>
                                 )}
@@ -987,7 +992,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                                 )}
                                 {result.completed_at && (
                                   <div className="flex items-center gap-2">
-                                    <CheckCircle className="w-3 h-3 text-green-600" />
+                                    <CheckCircle className="w-3 h-3 text-success" />
                                     <span>Completed: {formatTimelineDate(result.completed_at)}</span>
                                   </div>
                                 )}
@@ -1050,7 +1055,9 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           empty for Pending rows or users without download perms. */}
                       <td className="px-2 sm:px-4 py-4 tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                         <div className="flex items-center justify-center gap-1.5 sm:gap-2 flex-nowrap">
-                          <button
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={() => {
                               // Prefer the inline callback (keeps the origin
                               // breadcrumb, e.g. Job Descriptions) when provided;
@@ -1060,16 +1067,18 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                                 router.push(`/recruitment/assessments/${result.assessmentId}/results/details?candidate_id=${result.id}${result.candidateDisplayId ? `&cid=${encodeURIComponent(result.candidateDisplayId)}` : ''}`);
                               }
                             }}
-                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                            className="w-9 h-9 px-0"
                             title="View Details"
                             aria-label={`View details for ${result.candidateName || 'candidate'}`}
                           >
                             <Eye className="w-3.5 h-3.5 shrink-0" />
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={() => handleDownloadPDF(result.id)}
                             disabled={downloadingPDF === result.id}
-                            className="inline-flex items-center justify-center w-9 h-9 bg-brand-orange hover:bg-brand-orange-deep text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="w-9 h-9 px-0"
                             title="Download PDF Report"
                             aria-label={`Download PDF report for ${result.candidateName || 'candidate'}`}
                           >
@@ -1078,7 +1087,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                             ) : (
                               <Download className="w-3 h-3 flex-shrink-0" />
                             )}
-                          </button>
+                          </Button>
                         </div>
                       </td>
                     </tr>
@@ -1098,19 +1107,19 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                                       <div className="flex items-center justify-between mb-2">
                                         <span className="text-sm text-gray-900">{round.roundName}</span>
                                         <div className="flex items-center gap-2">
-                                          <span className={`text-sm ${round.passFail === 'Pass' ? 'text-green-600' : 'text-red-600'}`}>
+                                          <span className={`text-sm ${round.passFail === 'Pass' ? 'text-success' : 'text-destructive'}`}>
                                             {round.score}/{round.maxScore}
                                           </span>
                                           {round.passFail === 'Pass' ? (
-                                            <CheckCircle className="w-4 h-4 text-green-600" />
+                                            <CheckCircle className="w-4 h-4 text-success" />
                                           ) : (
-                                            <XCircle className="w-4 h-4 text-red-600" />
+                                            <XCircle className="w-4 h-4 text-destructive" />
                                           )}
                                         </div>
                                       </div>
                                       <div className="bg-gray-200 rounded-full h-1.5">
                                         <div
-                                          className={`h-1.5 rounded-full ${round.passFail === 'Pass' ? 'bg-green-600' : 'bg-red-600'}`}
+                                          className={`h-1.5 rounded-full ${round.passFail === 'Pass' ? 'bg-success' : 'bg-destructive'}`}
                                           style={{ width: `${(round.score / round.maxScore) * 100}%` }}
                                         ></div>
                                       </div>
@@ -1205,7 +1214,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       <p className="text-xs text-gray-500 truncate">{result.email}</p>
                     </div>
                     {result.candidateDisplayId && (
-                      <span className="text-[10px] font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-1.5 py-0.5 rounded shrink-0">
+                      <span className="text-2xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-1.5 py-0.5 rounded shrink-0">
                         {result.candidateDisplayId}
                       </span>
                     )}
@@ -1221,7 +1230,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     </span>
                     {scoringDone && (
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                        result.passFail === 'Pass' ? 'bg-green-50 text-green-700 ring-1 ring-green-200' : 'bg-red-50 text-red-700 ring-1 ring-red-200'
+                        result.passFail === 'Pass' ? 'bg-success-subtle text-success ring-1 ring-success-line' : 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line'
                       }`}>
                         {result.passFail}
                       </span>
@@ -1232,7 +1241,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     <div className="flex items-center gap-2">
                       <div className="flex-1 bg-gray-200 rounded-full h-1.5">
                         <div
-                          className={`h-1.5 rounded-full ${result.passFail === 'Pass' ? 'bg-green-500' : 'bg-red-500'}`}
+                          className={`h-1.5 rounded-full ${result.passFail === 'Pass' ? 'bg-success' : 'bg-destructive'}`}
                           style={{ width: `${Math.min(100, result.scorePercentage)}%` }}
                         />
                       </div>
@@ -1333,7 +1342,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       return (
                         <div className="flex items-center gap-1.5 text-xs text-gray-600">
                           <BarChart3 className="w-3 h-3" />
-                          Tech: <span className={techPct >= 70 ? 'text-green-600' : 'text-red-600'}>{Math.round(techPct)}%</span>
+                          Tech: <span className={techPct >= 70 ? 'text-success' : 'text-destructive'}>{Math.round(techPct)}%</span>
                         </div>
                       );
                     })()}
@@ -1345,7 +1354,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       return (
                         <div className="flex items-center gap-1.5 text-xs text-gray-600">
                           <BarChart3 className="w-3 h-3" />
-                          Coding: <span className={codingPct >= 70 ? 'text-green-600' : 'text-red-600'}>{Math.round(codingPct)}%</span>
+                          Coding: <span className={codingPct >= 70 ? 'text-success' : 'text-destructive'}>{Math.round(codingPct)}%</span>
                         </div>
                       );
                     })()}
@@ -1365,7 +1374,9 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
 
                   {/* Actions — always-visible (old-code behavior). */}
                   <div className="flex items-center gap-2">
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => {
                         // Prefer the inline callback (keeps the origin
                         // breadcrumb) when provided; else standalone route.
@@ -1374,23 +1385,25 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           router.push(`/recruitment/assessments/${result.assessmentId}/results/details?candidate_id=${result.id}${result.candidateDisplayId ? `&cid=${encodeURIComponent(result.candidateDisplayId)}` : ''}`);
                         }
                       }}
-                      className="flex-1 px-3 py-1.5 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white rounded-md shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-1.5"
+                      className="flex-1"
+                      icon={<Award className="w-3.5 h-3.5" />}
                     >
-                      <Award className="w-3.5 h-3.5" />
                       View Details
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => handleDownloadPDF(result.id)}
                       disabled={downloadingPDF === result.id}
-                      className="flex-1 px-3 py-1.5 text-xs bg-brand-orange hover:bg-brand-orange-deep text-white rounded-md shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {downloadingPDF === result.id ? (
+                      className="flex-1"
+                      icon={downloadingPDF === result.id ? (
                         <Loader2 className="w-3.5 h-3.5 animate-spin" />
                       ) : (
                         <Download className="w-3.5 h-3.5" />
                       )}
+                    >
                       {downloadingPDF === result.id ? 'Downloading...' : 'PDF'}
-                    </button>
+                    </Button>
                   </div>
 
                   {/* Expanded Details */}
@@ -1404,13 +1417,13 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                             <div key={idx} className="bg-gray-50/60 rounded-lg p-2 border border-gray-100">
                               <div className="flex items-center justify-between mb-1">
                                 <span className="text-xs text-gray-900">{round.roundName}</span>
-                                <span className={`text-xs ${round.passFail === 'Pass' ? 'text-green-600' : 'text-red-600'}`}>
+                                <span className={`text-xs ${round.passFail === 'Pass' ? 'text-success' : 'text-destructive'}`}>
                                   {round.score}/{round.maxScore}
                                 </span>
                               </div>
                               <div className="bg-gray-200 rounded-full h-1">
                                 <div
-                                  className={`h-1 rounded-full ${round.passFail === 'Pass' ? 'bg-green-600' : 'bg-red-600'}`}
+                                  className={`h-1 rounded-full ${round.passFail === 'Pass' ? 'bg-success' : 'bg-destructive'}`}
                                   style={{ width: `${(round.score / round.maxScore) * 100}%` }}
                                 ></div>
                               </div>
@@ -1496,8 +1509,8 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       onClick={() => handleFormatSelect('csv')}
                       className="w-full flex items-center gap-4 p-4 border border-gray-200 rounded-lg hover:bg-gray-50 hover:border-gray-300 transition-all group"
                     >
-                      <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center group-hover:bg-green-200 transition-colors">
-                        <FileDown className="w-6 h-6 text-green-700" />
+                      <div className="w-12 h-12 bg-success-subtle rounded-lg flex items-center justify-center group-hover:bg-success-subtle transition-colors">
+                        <FileDown className="w-6 h-6 text-success" />
                       </div>
                       <div className="text-left flex-1">
                         <div className="font-medium text-gray-900">CSV Format</div>
@@ -1521,15 +1534,16 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                 </div>
 
                 <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200">
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => {
                       setShowExportModal(false);
                       setExportStep('format');
                     }}
-                    className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                   >
                     Cancel
-                  </button>
+                  </Button>
                 </div>
               </>
             )}
@@ -1623,22 +1637,24 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                 </div>
 
                 <div className="flex items-center justify-between gap-3 p-5 border-t border-gray-200">
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => setExportStep('format')}
-                    className="flex items-center gap-2 px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+                    icon={<ArrowLeft className="w-4 h-4" />}
                   >
-                    <ArrowLeft className="w-4 h-4" />
                     Back
-                  </button>
-                  <button
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => {
                       setShowExportModal(false);
                       setExportStep('format');
                     }}
-                    className="px-4 py-2 text-sm text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
                   >
                     Cancel
-                  </button>
+                  </Button>
                 </div>
               </>
             )}

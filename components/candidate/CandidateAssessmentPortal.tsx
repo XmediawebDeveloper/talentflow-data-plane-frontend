@@ -1712,11 +1712,11 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                   { label: 'Assessment', completed: false },
                 ].map((s, i) => (
                   <div key={i} className="flex items-center gap-1 sm:gap-2">
-                    {i > 0 && <div className={`w-6 sm:w-12 h-0.5 ${s.completed || (s as any).active ? 'bg-green-500' : 'bg-gray-200'}`} />}
+                    {i > 0 && <div className={`w-6 sm:w-12 h-0.5 ${s.completed || (s as any).active ? 'bg-success' : 'bg-gray-200'}`} />}
                     <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-                      s.completed ? 'bg-green-500 text-white' : (s as any).active ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500'
+                      s.completed ? 'bg-success text-white' : (s as any).active ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500'
                     }`}>{s.completed ? '✓' : i + 1}</div>
-                    <span className={`hidden sm:block text-xs ${(s as any).active ? 'text-blue-700 font-medium' : s.completed ? 'text-green-700' : 'text-gray-400'}`}>{s.label}</span>
+                    <span className={`hidden sm:block text-xs ${(s as any).active ? 'text-blue-700 font-medium' : s.completed ? 'text-success' : 'text-gray-400'}`}>{s.label}</span>
                   </div>
                 ))}
               </div>
@@ -1746,7 +1746,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                       <div className="flex-1">
                         <div className="flex items-center justify-between mb-2">
                           <p className="text-sm font-medium text-gray-900">{q.text}</p>
-                          <span className="px-2 py-0.5 rounded text-[10px] font-medium flex-shrink-0 ml-2 bg-gray-100 text-gray-500">
+                          <span className="px-2 py-0.5 rounded text-2xs font-medium flex-shrink-0 ml-2 bg-gray-100 text-gray-500">
                             {isYesNo ? 'Yes/No' : 'Text'}
                           </span>
                         </div>
@@ -1795,14 +1795,15 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
             {/* Action Buttons */}
             <div className="flex justify-end gap-3">
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={handleContinueFromHRQuestions}
                 disabled={isSavingHRAnswers}
-                className="px-6 py-2.5 bg-gray-900 text-white rounded-lg text-sm font-medium hover:bg-gray-800 disabled:opacity-70 disabled:cursor-not-allowed"
+                className="px-6"
               >
                 {isSavingHRAnswers ? 'Saving Answers...' : 'Continue to Assessment'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1935,15 +1936,15 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       {/* Fullscreen exit overlay — mirrors AI Interview enforcement */}
       {step === 'assessment' && !useAdaptiveAssessmentMode && !isFullscreenActive && (
         <div className="fixed inset-0 z-[99] bg-black/90 flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-white border-2 border-yellow-500 rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
-            <Maximize2 className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+          <div className="bg-white border-2 border-warning rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
+            <Maximize2 className="w-12 h-12 text-warning mx-auto mb-4" />
             <h2 className="text-xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>
             <p className="text-gray-600 mb-4">
               Please return to fullscreen mode to continue your assessment.
             </p>
             {overlayTimeRemaining !== null && (
               <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg mb-6 font-mono font-bold text-lg ${
-                overlayTimeRemaining <= 300 ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-800'
+                overlayTimeRemaining <= 300 ? 'bg-destructive-subtle text-destructive' : 'bg-gray-100 text-gray-800'
               }`}>
                 <Monitor className="w-4 h-4" />
                 {String(Math.floor(overlayTimeRemaining / 60)).padStart(2, '0')}:{String(overlayTimeRemaining % 60).padStart(2, '0')} remaining
@@ -1955,11 +1956,11 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                   .then(() => lockKeyboardShortcuts(['F11']))
                   .catch(() => {});
               }}
-              className="px-6 py-3 bg-yellow-500 hover:bg-yellow-600 rounded-xl font-bold text-white transition-colors w-full"
+              className="px-6 py-3 bg-warning hover:bg-warning rounded-xl font-bold text-white transition-colors w-full"
             >
               Return to Fullscreen
             </button>
-            <p className="text-sm text-red-500 font-medium animate-pulse mt-4">
+            <p className="text-sm text-destructive font-medium animate-pulse mt-4">
               This event has been recorded
             </p>
           </div>

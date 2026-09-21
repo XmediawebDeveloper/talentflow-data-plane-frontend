@@ -5,6 +5,7 @@ import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
+import { Button } from '@/components/ui/button';
 import { ArrowLeft,
   Eye, Download, X, BarChart3,
   CheckCircle2, XCircle, AlertCircle, Clock,
@@ -322,28 +323,28 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <button
+              <Button
+                variant="secondary"
                 onClick={fetchData}
-                className="px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2"
               >
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                 Refresh
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
                 onClick={handleExport}
-                className="px-4 py-2 border-2 border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors font-medium flex items-center gap-2"
+                icon={<Download className="w-4 h-4" />}
               >
-                <Download className="w-4 h-4" />
                 Export CSV
-              </button>
+              </Button>
               {onBack && (
-                <button
+                <Button
+                  variant="secondary"
                   onClick={onBack}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                  icon={<ArrowLeft className="w-4 h-4" />}
                 >
-                  <ArrowLeft className="w-4 h-4" />
                   Back
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -353,11 +354,11 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
       <div className="max-w-7xl mx-auto px-6 py-8">
         {/* Error Alert */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-center gap-3">
-            <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />
-            <p className="text-sm text-red-700">{error}</p>
+          <div className="mb-6 p-4 bg-destructive-subtle border border-destructive-line rounded-xl flex items-center gap-3">
+            <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0" />
+            <p className="text-sm text-destructive">{error}</p>
             <button onClick={() => setError(null)} className="ml-auto" aria-label="Close">
-              <X className="w-4 h-4 text-red-500 hover:text-red-700" />
+              <X className="w-4 h-4 text-destructive hover:text-destructive" />
             </button>
           </div>
         )}
@@ -373,31 +374,31 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
             {/* Category Summary Cards */}
             <div className="grid grid-cols-3 gap-4 mb-6">
               {/* Full Deductions */}
-              <div className="bg-white border-2 border-green-200 rounded-xl p-5">
+              <div className="bg-white border-2 border-success-line rounded-xl p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-green-700">Full Deductions</span>
-                  <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                  <span className="text-sm font-medium text-success">Full Deductions</span>
+                  <div className="w-8 h-8 bg-success-subtle rounded-lg flex items-center justify-center">
+                    <CheckCircle2 className="w-4 h-4 text-success" />
                   </div>
                 </div>
-                <div className="text-3xl font-bold text-green-800">
+                <div className="text-3xl font-bold text-success-strong">
                   {summary.summary.by_category?.FULL || 0}
                 </div>
-                <p className="text-xs text-green-600 mt-1">1.0 unit per action</p>
+                <p className="text-xs text-success mt-1">1.0 unit per action</p>
               </div>
 
               {/* Partial Deductions */}
-              <div className="bg-white border-2 border-amber-200 rounded-xl p-5">
+              <div className="bg-white border-2 border-warning-line rounded-xl p-5">
                 <div className="flex items-center justify-between mb-3">
-                  <span className="text-sm font-medium text-amber-700">Partial Deductions</span>
-                  <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center">
-                    <Minus className="w-4 h-4 text-amber-600" />
+                  <span className="text-sm font-medium text-warning">Partial Deductions</span>
+                  <div className="w-8 h-8 bg-warning-subtle rounded-lg flex items-center justify-center">
+                    <Minus className="w-4 h-4 text-warning" />
                   </div>
                 </div>
-                <div className="text-3xl font-bold text-amber-800">
+                <div className="text-3xl font-bold text-warning-strong">
                   {summary.summary.by_category?.PARTIAL || 0}
                 </div>
-                <p className="text-xs text-amber-600 mt-1">0.5 unit per action</p>
+                <p className="text-xs text-warning mt-1">0.5 unit per action</p>
               </div>
 
               {/* Non-Deductions */}
@@ -436,11 +437,11 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                         <span className="text-gray-500">Total Units</span>
                         <span className="font-semibold">{typeData?.total_units?.toFixed(1) || '0.0'}</span>
                       </div>
-                      <div className="flex justify-between text-green-600">
+                      <div className="flex justify-between text-success">
                         <span>Full</span>
                         <span>{typeData?.full_deductions || 0}</span>
                       </div>
-                      <div className="flex justify-between text-amber-600">
+                      <div className="flex justify-between text-warning">
                         <span>Partial</span>
                         <span>{typeData?.partial_deductions || 0}</span>
                       </div>
@@ -556,13 +557,14 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
             {/* Panel footer: "Done" applies the selection and reveals the
                 toolbar Clear - same flow as job-openings. */}
             <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
-              <button
-                // The controls above commit as they change, so Done just closes.
+              {/* The controls above commit as they change, so Done just closes. */}
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={() => setShowFilters(false)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
               >
                 Done
-              </button>
+              </Button>
             </div>
             </div>
           )}
@@ -624,8 +626,8 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                         entry.units_consumed === 0
                           ? 'bg-gray-100 text-gray-500'
                           : entry.units_consumed < 1
-                            ? 'bg-amber-100 text-amber-700'
-                            : 'bg-green-100 text-green-700'
+                            ? 'bg-warning-subtle text-warning'
+                            : 'bg-success-subtle text-success'
                       }`}>
                         {formatUnitsConsumed(entry.units_consumed)}
                       </span>
@@ -661,10 +663,10 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
                       {entry.overall_score !== null ? (
                         <span className={`inline-flex items-center px-2 py-1 rounded-lg text-sm font-semibold ${
                           entry.overall_score >= 70
-                            ? 'bg-green-100 text-green-700'
+                            ? 'bg-success-subtle text-success'
                             : entry.overall_score >= 40
-                              ? 'bg-amber-100 text-amber-700'
-                              : 'bg-red-100 text-red-700'
+                              ? 'bg-warning-subtle text-warning'
+                              : 'bg-destructive-subtle text-destructive'
                         }`}>
                           {entry.overall_score}
                         </span>
@@ -745,8 +747,8 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
           <h4 className="text-sm font-semibold text-gray-900 mb-4">Deduction Categories Explained</h4>
           <div className="grid grid-cols-3 gap-4">
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <CheckCircle2 className="w-4 h-4 text-green-600" />
+              <div className="w-8 h-8 bg-success-subtle rounded-lg flex items-center justify-center flex-shrink-0">
+                <CheckCircle2 className="w-4 h-4 text-success" />
               </div>
               <div>
                 <p className="font-medium text-gray-900">Full Deduction (1.0)</p>
@@ -756,8 +758,8 @@ export default function UsageTransparencyDashboard({ onBack }: UsageTransparency
               </div>
             </div>
             <div className="flex items-start gap-3">
-              <div className="w-8 h-8 bg-amber-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Minus className="w-4 h-4 text-amber-600" />
+              <div className="w-8 h-8 bg-warning-subtle rounded-lg flex items-center justify-center flex-shrink-0">
+                <Minus className="w-4 h-4 text-warning" />
               </div>
               <div>
                 <p className="font-medium text-gray-900">Partial Deduction (0.5)</p>

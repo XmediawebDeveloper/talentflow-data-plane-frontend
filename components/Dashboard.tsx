@@ -43,6 +43,7 @@ import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import { PLAN_FEATURE_METADATA, PlanFeatureKey } from '@/lib/types/planFeatures';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
@@ -274,9 +275,9 @@ export default function Dashboard({
     const actionLower = (action || '').toLowerCase();
     if (actionLower.includes('login')) return { bg: 'bg-gray-100', text: 'text-gray-800' };
     if (actionLower.includes('logout')) return { bg: 'bg-gray-100', text: 'text-gray-500' };
-    if (actionLower.includes('create') || actionLower.includes('upload')) return { bg: 'bg-green-100', text: 'text-green-600' };
+    if (actionLower.includes('create') || actionLower.includes('upload')) return { bg: 'bg-success-subtle', text: 'text-success' };
     if (actionLower.includes('update') || actionLower.includes('change')) return { bg: 'bg-gray-100', text: 'text-gray-800' };
-    if (actionLower.includes('delete') || actionLower.includes('remove')) return { bg: 'bg-red-100', text: 'text-red-600' };
+    if (actionLower.includes('delete') || actionLower.includes('remove')) return { bg: 'bg-destructive-subtle', text: 'text-destructive' };
     return { bg: 'bg-gray-100', text: 'text-gray-800' };
   };
 
@@ -375,7 +376,7 @@ export default function Dashboard({
               <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
                 <Users className="w-6 h-6 text-gray-800" />
               </div>
-              <span className="flex items-center gap-1 text-sm text-green-600">
+              <span className="flex items-center gap-1 text-sm text-success">
                 <TrendingUp className="w-4 h-4" />
                 +12%
               </span>
@@ -386,10 +387,10 @@ export default function Dashboard({
 
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 rounded-xl bg-green-100 flex items-center justify-center flex-shrink-0">
-                <Briefcase className="w-6 h-6 text-green-600" />
+              <div className="w-12 h-12 rounded-xl bg-success-subtle flex items-center justify-center flex-shrink-0">
+                <Briefcase className="w-6 h-6 text-success" />
               </div>
-              <span className="flex items-center gap-1 text-sm text-green-600">
+              <span className="flex items-center gap-1 text-sm text-success">
                 <TrendingUp className="w-4 h-4" />
                 +8%
               </span>
@@ -403,7 +404,7 @@ export default function Dashboard({
               <div className="w-12 h-12 rounded-xl bg-gray-100 flex items-center justify-center flex-shrink-0">
                 <Video className="w-6 h-6 text-gray-800" />
               </div>
-              <span className="flex items-center gap-1 text-sm text-red-600">
+              <span className="flex items-center gap-1 text-sm text-destructive">
                 <TrendingDown className="w-4 h-4" />
                 -3%
               </span>
@@ -414,8 +415,8 @@ export default function Dashboard({
 
           <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 hover:shadow-md transition-shadow">
             <div className="flex items-center justify-between mb-4">
-              <div className="w-12 h-12 rounded-xl bg-yellow-100 flex items-center justify-center flex-shrink-0">
-                <FileText className="w-6 h-6 text-yellow-600" />
+              <div className="w-12 h-12 rounded-xl bg-warning-subtle flex items-center justify-center flex-shrink-0">
+                <FileText className="w-6 h-6 text-warning" />
               </div>
             </div>
             <div className="text-3xl text-gray-900 mb-1">{assessmentStats.active_assessments}</div>
@@ -469,7 +470,7 @@ export default function Dashboard({
                 </div>
               </div>
               <div className="text-xl sm:text-2xl text-gray-900 mb-1">{limits?.resumeUploads?.toLocaleString() || '2,450'}</div>
-              <div className="text-[10px] sm:text-xs text-gray-600 mb-2 sm:mb-3">Resume Storage</div>
+              <div className="text-2xs sm:text-xs text-gray-600 mb-2 sm:mb-3">Resume Storage</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div
@@ -477,11 +478,11 @@ export default function Dashboard({
                     style={{ width: `${limits?.resumeUploads ? Math.round((usage?.resumeUploads || 0) / limits.resumeUploads * 100) : 65}%` }}
                   ></div>
                 </div>
-                <span className="text-[10px] sm:text-xs text-gray-600 w-8 sm:w-10 text-right">
+                <span className="text-2xs sm:text-xs text-gray-600 w-8 sm:w-10 text-right">
                   {limits?.resumeUploads ? Math.round((usage?.resumeUploads || 0) / limits.resumeUploads * 100) : 65}%
                 </span>
               </div>
-              <div className="text-[10px] sm:text-xs text-gray-500">
+              <div className="text-2xs sm:text-xs text-gray-500">
                 {usage?.resumeUploads?.toLocaleString() || '1,593'} used of {limits?.resumeUploads?.toLocaleString() || '2,450'}
               </div>
             </div>}
@@ -489,24 +490,24 @@ export default function Dashboard({
             {/* Job Posting Units */}
             <div className="bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-gray-300 transition-all">
               <div className="flex items-center justify-between mb-2 sm:mb-3">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
-                  <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-success-subtle flex items-center justify-center flex-shrink-0">
+                  <Briefcase className="w-4 h-4 sm:w-5 sm:h-5 text-success" />
                 </div>
               </div>
               <div className="text-xl sm:text-2xl text-gray-900 mb-1">{limits?.jobPostings || '100'}</div>
-              <div className="text-[10px] sm:text-xs text-gray-600 mb-2 sm:mb-3">Job Postings</div>
+              <div className="text-2xs sm:text-xs text-gray-600 mb-2 sm:mb-3">Job Postings</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div
-                    className="bg-green-600 h-2 rounded-full"
+                    className="bg-success h-2 rounded-full"
                     style={{ width: `${limits?.jobPostings ? Math.round((usage?.jobPostings || 0) / limits.jobPostings * 100) : 42}%` }}
                   ></div>
                 </div>
-                <span className="text-[10px] sm:text-xs text-gray-600 w-8 sm:w-10 text-right">
+                <span className="text-2xs sm:text-xs text-gray-600 w-8 sm:w-10 text-right">
                   {limits?.jobPostings ? Math.round((usage?.jobPostings || 0) / limits.jobPostings * 100) : 42}%
                 </span>
               </div>
-              <div className="text-[10px] sm:text-xs text-gray-500">
+              <div className="text-2xs sm:text-xs text-gray-500">
                 {usage?.jobPostings || '42'} used of {limits?.jobPostings || '100'}
               </div>
             </div>
@@ -514,24 +515,24 @@ export default function Dashboard({
             {/* Assessment Units */}
             {hasPlanFeature('assessment') && <div className="bg-gray-50 rounded-lg p-3 sm:p-4 border border-gray-200 hover:border-gray-300 transition-all">
               <div className="flex items-center justify-between mb-2 sm:mb-3">
-                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-yellow-100 flex items-center justify-center flex-shrink-0">
-                  <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600" />
+                <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg bg-warning-subtle flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-warning" />
                 </div>
               </div>
               <div className="text-xl sm:text-2xl text-gray-900 mb-1">{limits?.assessments || '500'}</div>
-              <div className="text-[10px] sm:text-xs text-gray-600 mb-2 sm:mb-3">Assessment Units</div>
+              <div className="text-2xs sm:text-xs text-gray-600 mb-2 sm:mb-3">Assessment Units</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div
-                    className="bg-yellow-600 h-2 rounded-full"
+                    className="bg-warning h-2 rounded-full"
                     style={{ width: `${limits?.assessments ? Math.round(assessmentStats.units_consumed / (limits.assessments || 1) * 100) : 0}%` }}
                   ></div>
                 </div>
-                <span className="text-[10px] sm:text-xs text-gray-600 w-8 sm:w-10 text-right">
+                <span className="text-2xs sm:text-xs text-gray-600 w-8 sm:w-10 text-right">
                   {limits?.assessments ? Math.round(assessmentStats.units_consumed / (limits.assessments || 1) * 100) : 0}%
                 </span>
               </div>
-              <div className="text-[10px] sm:text-xs text-gray-500">
+              <div className="text-2xs sm:text-xs text-gray-500">
                 {assessmentStats.units_consumed} used of {limits?.assessments || '500'}
               </div>
             </div>}
@@ -546,7 +547,7 @@ export default function Dashboard({
               <div className="text-xl sm:text-2xl text-gray-900 mb-1">
                 {limits?.aiInterviews === 'unlimited' ? 'Unlimited' : limits?.aiInterviews || 'Unlimited'}
               </div>
-              <div className="text-[10px] sm:text-xs text-gray-600 mb-2 sm:mb-3">AI Interviews</div>
+              <div className="text-2xs sm:text-xs text-gray-600 mb-2 sm:mb-3">AI Interviews</div>
               <div className="flex items-center gap-2 mb-1">
                 <div className="flex-1 bg-gray-200 rounded-full h-2">
                   <div
@@ -558,12 +559,12 @@ export default function Dashboard({
                     }}
                   ></div>
                 </div>
-                <span className="text-[10px] sm:text-xs text-gray-600 w-8 sm:w-10 text-right">
+                <span className="text-2xs sm:text-xs text-gray-600 w-8 sm:w-10 text-right">
                   {limits?.aiInterviews === 'unlimited' ? '∞' :
                     typeof limits?.aiInterviews === 'number' ? `${Math.round((usage?.aiInterviews || 0) / limits.aiInterviews * 100)}%` : '∞'}
                 </span>
               </div>
-              <div className="text-[10px] sm:text-xs text-gray-500">
+              <div className="text-2xs sm:text-xs text-gray-500">
                 {limits?.aiInterviews === 'unlimited'
                   ? `${usage?.aiInterviews || '87'} conducted this month`
                   : `${usage?.aiInterviews || '87'} used of ${limits?.aiInterviews || 'Unlimited'}`}
@@ -582,7 +583,7 @@ export default function Dashboard({
                   return (
                     <div key={key} className="flex items-center gap-2">
                       {included ? (
-                        <CheckCircle className="w-4 h-4 text-green-600 flex-shrink-0" />
+                        <CheckCircle className="w-4 h-4 text-success flex-shrink-0" />
                       ) : (
                         <XCircle className="w-4 h-4 text-gray-300 flex-shrink-0" />
                       )}
@@ -603,13 +604,13 @@ export default function Dashboard({
                 <p className="text-sm text-gray-600">Active job postings accepting applications</p>
               </div>
               {canCreateJD && (
-                <button
+                <Button
+                  variant="primary"
                   onClick={() => onNavigateToJDCreation?.()}
-                  className="px-5 py-2.5 bg-gray-800 text-white rounded-xl hover:bg-gray-900 transition-colors flex items-center gap-2 shadow-sm"
+                  icon={<Briefcase className="w-4 h-4" />}
                 >
-                  <Briefcase className="w-4 h-4" />
                   Create New JD
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -647,13 +648,13 @@ export default function Dashboard({
                 <h3 className="text-lg font-medium text-gray-900 mb-2">No published jobs yet</h3>
                 <p className="text-sm text-gray-600 mb-4">Create your first job description to start recruiting!</p>
                 {canCreateJD && (
-                  <button
+                  <Button
+                    variant="primary"
                     onClick={() => onNavigateToJDCreation?.()}
-                    className="px-5 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors inline-flex items-center gap-2"
+                    icon={<Briefcase className="w-4 h-4" />}
                   >
-                    <Briefcase className="w-4 h-4" />
                     Create New JD
-                  </button>
+                  </Button>
                 )}
               </div>
             ) : (
@@ -668,7 +669,7 @@ export default function Dashboard({
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
                           <h3 className="text-lg font-medium text-gray-900">{jd.title || 'Untitled'}</h3>
-                          <span className="px-3 py-1 rounded-full text-xs bg-green-100 text-green-700">
+                          <span className="px-3 py-1 rounded-full text-xs bg-success-subtle text-success">
                             Published
                           </span>
                         </div>
@@ -705,16 +706,17 @@ export default function Dashboard({
                       </div>
                       <div className="flex items-center gap-2 ml-4">
                         {onAIMatch && hasPlanFeature('ai_talent_match') && (
-                          <button
+                          <Button
+                            variant="primary"
+                            size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
                               onAIMatch(jd);
                             }}
-                            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm flex items-center gap-2"
+                            icon={<Sparkles className="w-4 h-4" />}
                           >
-                            <Sparkles className="w-4 h-4" />
                             AI Match
-                          </button>
+                          </Button>
                         )}
                       </div>
                     </div>
@@ -791,7 +793,7 @@ export default function Dashboard({
                       <div className="flex-1">
                         <div className="flex items-center gap-3 mb-2">
                           <h3 className="text-lg font-medium text-gray-900">{jd.title || 'Untitled Draft'}</h3>
-                          <span className="px-3 py-1 rounded-full text-xs bg-yellow-100 text-yellow-700">
+                          <span className="px-3 py-1 rounded-full text-xs bg-warning-subtle text-warning">
                             Draft
                           </span>
                           {jd.creation_stage && (
@@ -823,13 +825,14 @@ export default function Dashboard({
                       </div>
                       {canUpdateJD && (
                         <div className="flex items-center gap-2 ml-4">
-                          <button
+                          <Button
+                            variant="primary"
+                            size="sm"
                             onClick={() => onViewJobDetails?.(jd)}
-                            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm flex items-center gap-2"
+                            icon={<Edit2 className="w-4 h-4" />}
                           >
-                            <Edit2 className="w-4 h-4" />
                             Continue Editing
-                          </button>
+                          </Button>
                         </div>
                       )}
                     </div>
@@ -969,8 +972,8 @@ export default function Dashboard({
                   onClick={() => onNavigateToJDCreation?.()}
                   className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center">
-                    <Briefcase className="w-4 h-4 text-green-600" />
+                  <div className="w-8 h-8 rounded-lg bg-success-subtle flex items-center justify-center">
+                    <Briefcase className="w-4 h-4 text-success" />
                   </div>
                   <span className="text-sm text-gray-900">Post New Job</span>
                 </button>
@@ -990,8 +993,8 @@ export default function Dashboard({
                   onClick={() => onNavigateToAssessments?.()}
                   className="w-full flex items-center gap-3 p-3 border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all text-left"
                 >
-                  <div className="w-8 h-8 rounded-lg bg-yellow-100 flex items-center justify-center">
-                    <FileText className="w-4 h-4 text-yellow-600" />
+                  <div className="w-8 h-8 rounded-lg bg-warning-subtle flex items-center justify-center">
+                    <FileText className="w-4 h-4 text-warning" />
                   </div>
                   <span className="text-sm text-gray-900">Create Assessment</span>
                 </button>
@@ -1027,8 +1030,8 @@ export default function Dashboard({
                     <div className="text-xs text-gray-600">{job.applicants} applicants</div>
                   </div>
                   <span className={`px-3 py-1 rounded-full text-xs ${
-                    job.color === 'red' ? 'bg-red-100 text-red-700' :
-                    job.color === 'green' ? 'bg-green-100 text-green-700' :
+                    job.color === 'red' ? 'bg-destructive-subtle text-destructive' :
+                    job.color === 'green' ? 'bg-success-subtle text-success' :
                     'bg-gray-100 text-gray-900'
                   }`}>
                     {job.status}
@@ -1073,15 +1076,15 @@ export default function Dashboard({
         </div>
 
         {/* Alerts */}
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+        <div className="bg-warning-subtle border border-warning-line rounded-lg p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
           <div>
-            <div className="text-sm text-yellow-900 mb-1">Action Required</div>
-            <div className="text-sm text-yellow-800">
+            <div className="text-sm text-warning-strong mb-1">Action Required</div>
+            <div className="text-sm text-warning-strong">
               You have 8 pending candidate reviews and 3 interview feedback forms to complete.
             </div>
           </div>
-          <button className="ml-auto text-sm text-yellow-600 hover:text-yellow-700 whitespace-nowrap">
+          <button className="ml-auto text-sm text-warning hover:text-warning whitespace-nowrap">
             View all
           </button>
         </div>

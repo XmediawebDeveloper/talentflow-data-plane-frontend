@@ -287,7 +287,7 @@ export default function NotificationsPage() {
                             <span className="w-2 h-2 bg-brand-blue rounded-full flex-shrink-0"></span>
                           )}
                         </div>
-                        <span className="text-[10px] sm:text-xs text-gray-500 whitespace-nowrap flex-shrink-0">{notification.time_ago}</span>
+                        <span className="text-2xs sm:text-xs text-gray-500 whitespace-nowrap flex-shrink-0">{notification.time_ago}</span>
                       </div>
                       <p className="text-xs sm:text-sm text-gray-600 mb-2 line-clamp-2">{notification.message}</p>
                       <div className="flex items-center gap-3">

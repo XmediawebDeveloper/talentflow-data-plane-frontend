@@ -9,6 +9,7 @@ import {
   Circle, Briefcase, MapPin, Building2, Award, ExternalLink, X,
   FileText, Timer, HelpCircle, ChevronRight, Smartphone,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface StepConsentProps {
   onAccept: (consents: {
@@ -355,12 +356,12 @@ export default function StepConsent({
       )}
 
       {/* ── What's required ── */}
-      <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+      <div className="bg-warning-subtle border border-warning-line rounded-xl p-4">
         <div className="flex items-start gap-3">
-          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+          <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
           <div>
-            <p className="font-semibold text-amber-800 mb-1">Before You Begin</p>
-            <ul className="text-amber-700 text-sm space-y-1">
+            <p className="font-semibold text-warning-strong mb-1">Before You Begin</p>
+            <ul className="text-warning text-sm space-y-1">
               <li>• Camera and microphone access are required</li>
               <li>• If a genuine network or client failure occurs, the assessment can recover from the saved server state</li>
               <li>• Ensure you are in a quiet, well-lit environment</li>
@@ -403,7 +404,7 @@ export default function StepConsent({
       )}
 
       {/* ── Consent acceptance row ── */}
-      <div className={`bg-white border rounded-xl p-5 transition-colors ${consentAccepted ? 'border-green-300 bg-green-50/30' : 'border-gray-200'}`}>
+      <div className={`bg-white border rounded-xl p-5 transition-colors ${consentAccepted ? 'border-success-line bg-success-subtle/30' : 'border-gray-200'}`}>
         <div className="flex items-start gap-3">
           <div
             className={`mt-0.5 w-5 h-5 rounded flex items-center justify-center flex-shrink-0 border-2 cursor-pointer transition-all ${
@@ -430,7 +431,7 @@ export default function StepConsent({
         </div>
 
         {consentAccepted && (
-          <div className="mt-3 flex items-center gap-2 text-green-700 text-sm font-medium">
+          <div className="mt-3 flex items-center gap-2 text-success text-sm font-medium">
             <CheckCircle className="w-4 h-4" />
             All consents accepted
           </div>
@@ -438,11 +439,12 @@ export default function StepConsent({
       </div>
 
       {/* ── Proceed button ── */}
-      <button
+      <Button
         type="button"
+        variant="primary"
         onClick={handleProceed}
         disabled={!consentAccepted || submitting || (environmentVerificationEnabled && !mobileVerificationAcknowledged)}
-        className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3.5 px-4 rounded-xl hover:bg-gray-800 transition-all shadow-sm disabled:opacity-40 disabled:cursor-not-allowed"
+        className="w-full"
       >
         {submitting ? 'Submitting…' : (
           <>
@@ -450,7 +452,7 @@ export default function StepConsent({
             <ChevronRight className="w-4 h-4" />
           </>
         )}
-      </button>
+      </Button>
 
       {/* ── Help ── */}
       <div className="flex items-center gap-2 text-sm text-gray-400 justify-center pb-2">
@@ -487,9 +489,9 @@ export default function StepConsent({
             <div className="overflow-y-auto flex-1 px-6 py-5 space-y-5">
 
               {/* GDPR notice */}
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-                <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-amber-800">
+              <div className="bg-warning-subtle border border-warning-line rounded-xl p-4 flex items-start gap-3">
+                <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-warning-strong">
                   This interview collects video, audio, and facial expression data (special category data under <strong>GDPR Art. 9</strong>). Your explicit consent is required.
                 </p>
               </div>
@@ -573,22 +575,23 @@ export default function StepConsent({
               </details>
 
               {/* Recording notice */}
-              <div className="bg-red-50 border border-red-100 rounded-xl p-3 flex items-center gap-2">
-                <Circle className="w-3.5 h-3.5 text-red-500 flex-shrink-0" />
-                <p className="text-xs text-gray-700">A <span className="font-medium text-red-600">recording indicator</span> will be visible throughout the interview.</p>
+              <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-3 flex items-center gap-2">
+                <Circle className="w-3.5 h-3.5 text-destructive flex-shrink-0" />
+                <p className="text-xs text-gray-700">A <span className="font-medium text-destructive">recording indicator</span> will be visible throughout the interview.</p>
               </div>
             </div>
 
             {/* Modal footer */}
             <div className="px-6 py-4 border-t border-gray-200 flex-shrink-0 space-y-2">
-              <button
+              <Button
                 type="button"
+                variant="primary"
                 onClick={handleModalAccept}
                 disabled={!allChecked}
-                className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 px-4 rounded-xl hover:bg-gray-800 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                className="w-full"
               >
                 Accept All &amp; Close
-              </button>
+              </Button>
               {!allChecked && (
                 <p className="text-xs text-gray-400 text-center">Please check all consent boxes above to confirm.</p>
               )}

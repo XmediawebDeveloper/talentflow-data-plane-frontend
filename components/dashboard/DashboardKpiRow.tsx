@@ -101,7 +101,7 @@ export default function DashboardKpiRow({
               <Icon className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-[11px] font-medium uppercase tracking-wider text-gray-500">{k.label}</p>
+              <p className="text-2xs font-medium uppercase tracking-wider text-gray-500">{k.label}</p>
               <p className="mt-0.5 text-2xl font-semibold tracking-tight text-gray-900 tabular-nums sm:text-[1.875rem]">
                 {loading ? (
                   <span className="inline-block h-7 w-14 animate-pulse rounded bg-slate-100" />
@@ -112,7 +112,7 @@ export default function DashboardKpiRow({
                 )}
               </p>
               {!loading && k.subtitle && (
-                <p className="mt-0.5 truncate text-[11px] text-gray-500">{k.subtitle}</p>
+                <p className="mt-0.5 truncate text-2xs text-gray-500">{k.subtitle}</p>
               )}
             </div>
           </Link>

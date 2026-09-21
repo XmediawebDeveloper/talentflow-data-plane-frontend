@@ -108,15 +108,15 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
     if (action === 'ACCEPT' || status === 'ACCEPTED') {
       return (
         <div className="flex items-center gap-1.5">
-          <CheckCircle className="w-4 h-4 text-green-500" />
-          <span className="text-sm text-green-700">Accepted</span>
+          <CheckCircle className="w-4 h-4 text-success" />
+          <span className="text-sm text-success">Accepted</span>
         </div>
       );
     } else if (action === 'DECLINE' || status === 'DECLINED') {
       return (
         <div className="flex items-center gap-1.5">
-          <XCircle className="w-4 h-4 text-red-500" />
-          <span className="text-sm text-red-700">Declined</span>
+          <XCircle className="w-4 h-4 text-destructive" />
+          <span className="text-sm text-destructive">Declined</span>
         </div>
       );
     } else if (action === 'REVOKE' || status === 'REVOKED') {
@@ -137,9 +137,9 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
       TERMS_OF_SERVICE: 'bg-blue-100 text-blue-700',
       PRIVACY_POLICY: 'bg-purple-100 text-purple-700',
       DATA_PROCESSING: 'bg-indigo-100 text-indigo-700',
-      SUBSCRIPTION_AGREEMENT: 'bg-green-100 text-green-700',
+      SUBSCRIPTION_AGREEMENT: 'bg-success-subtle text-success',
       SLA: 'bg-cyan-100 text-cyan-700',
-      ACCEPTABLE_USE: 'bg-yellow-100 text-yellow-700',
+      ACCEPTABLE_USE: 'bg-warning-subtle text-warning',
       GDPR_CONSENT: 'bg-pink-100 text-pink-700',
       BILLING_TERMS: 'bg-orange-100 text-orange-700',
     };
@@ -460,8 +460,8 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
                   <div>
                     <p className="text-sm text-gray-500">Status</p>
                     <p className={`font-medium ${
-                      selectedLog.agreement_action === 'ACCEPT' ? 'text-green-600' :
-                      selectedLog.agreement_action === 'DECLINE' ? 'text-red-600' :
+                      selectedLog.agreement_action === 'ACCEPT' ? 'text-success' :
+                      selectedLog.agreement_action === 'DECLINE' ? 'text-destructive' :
                       'text-orange-600'
                     }`}>
                       {selectedLog.agreement_action === 'ACCEPT' ? 'Accepted' :

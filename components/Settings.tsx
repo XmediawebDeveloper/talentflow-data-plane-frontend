@@ -338,7 +338,7 @@ export default function Settings() {
             <User className="h-5 w-5 text-brand-blue" />
           </div>
           <div>
-            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-brand-orange/5 ring-1 ring-brand-orange/20 px-2.5 py-0.5 text-[11px] font-semibold text-brand-orange-deep">
+            <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-brand-orange/5 ring-1 ring-brand-orange/20 px-2.5 py-0.5 text-2xs font-semibold text-brand-orange-deep">
               <Sparkles className="h-3 w-3 text-brand-orange-deep" />
               Personal preferences
             </div>
@@ -376,7 +376,7 @@ export default function Settings() {
               {visibleAdminSettingsLinks.length > 0 && (
                 <>
                   <div className="hidden lg:block my-1.5 border-t border-gray-100 dark:border-slate-700/60" />
-                  <span className="hidden lg:block px-4 pb-1 text-[10px] font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-[0.1em]">
+                  <span className="hidden lg:block px-4 pb-1 text-2xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-[0.1em]">
                     Workspace &amp; Admin
                   </span>
                   {visibleAdminSettingsLinks.map((link) => {
@@ -399,7 +399,7 @@ export default function Settings() {
 
             {/* Role Info */}
             <div className="hidden lg:block mt-4 p-3 rounded-lg bg-brand-blue/5 border border-brand-blue/15 ring-1 ring-brand-blue/5">
-              <div className="text-[10px] font-semibold text-brand-blue uppercase tracking-wider mb-1">Role</div>
+              <div className="text-2xs font-semibold text-brand-blue uppercase tracking-wider mb-1">Role</div>
               <div className="text-sm text-gray-900 dark:text-slate-50 font-semibold">{user?.role || 'Recruiter'}</div>
               <div className="text-xs text-gray-600 dark:text-slate-400 mt-1">Access Level: {(user?.role as string) === 'admin' || user?.role === 'tenant_admin' ? 'Admin' : 'Standard'}</div>
             </div>

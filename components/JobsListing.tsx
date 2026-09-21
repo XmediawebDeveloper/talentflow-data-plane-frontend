@@ -19,6 +19,7 @@ import {
   groupByLineage,
   sortJobs,
 } from '@/lib/utils/jobOpeningDisplay';
+import { Button } from '@/components/ui/button';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
@@ -41,8 +42,8 @@ import {
 
 const viewVersionsMenuItemClass = 'group text-gray-700 hover:bg-gray-50 hover:text-gray-700 focus:!bg-gray-50 focus:!text-gray-700 data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-slate-100 dark:focus:!bg-slate-800 dark:focus:!text-slate-100 dark:data-[highlighted]:!bg-slate-800 dark:data-[highlighted]:!text-slate-100';
 const viewVersionsMenuItemOrangeClass = 'group text-orange-700 hover:bg-orange-50 hover:text-orange-700 focus:!bg-orange-50 focus:!text-orange-700 data-[highlighted]:!bg-orange-50 data-[highlighted]:!text-orange-700 dark:text-orange-300 dark:hover:bg-orange-950/30 dark:hover:text-orange-200 dark:focus:!bg-orange-950/30 dark:focus:!text-orange-200 dark:data-[highlighted]:!bg-orange-950/30 dark:data-[highlighted]:!text-orange-200 [&_svg]:!text-current';
-const viewVersionsMenuItemGreenClass = 'group text-green-700 hover:bg-green-50 hover:text-green-700 focus:!bg-green-50 focus:!text-green-700 data-[highlighted]:!bg-green-50 data-[highlighted]:!text-green-700 dark:text-green-300 dark:hover:bg-green-950/30 dark:hover:text-green-200 dark:focus:!bg-green-950/30 dark:focus:!text-green-200 dark:data-[highlighted]:!bg-green-950/30 dark:data-[highlighted]:!text-green-200 [&_svg]:!text-current';
-const viewVersionsMenuItemRedClass = 'group text-red-600 hover:bg-red-50 hover:text-red-600 focus:!bg-red-50 focus:!text-red-600 data-[highlighted]:!bg-red-50 data-[highlighted]:!text-red-600 dark:text-red-300 dark:hover:bg-red-950/30 dark:hover:text-red-200 dark:focus:!bg-red-950/30 dark:focus:!text-red-200 dark:data-[highlighted]:!bg-red-950/30 dark:data-[highlighted]:!text-red-200 [&_svg]:!text-current';
+const viewVersionsMenuItemGreenClass = 'group text-success hover:bg-success-subtle hover:text-success focus:!bg-success-subtle focus:!text-success data-[highlighted]:!bg-success-subtle data-[highlighted]:!text-success dark:focus:!bg-success-subtle/30 dark:focus:!text-success dark:data-[highlighted]:!bg-success-subtle/30 dark:data-[highlighted]:!text-success [&_svg]:!text-current';
+const viewVersionsMenuItemRedClass = 'group text-destructive hover:bg-destructive-subtle hover:text-destructive focus:!bg-destructive-subtle focus:!text-destructive data-[highlighted]:!bg-destructive-subtle data-[highlighted]:!text-destructive dark:focus:!bg-destructive-subtle/30 dark:focus:!text-destructive dark:data-[highlighted]:!bg-destructive-subtle/30 dark:data-[highlighted]:!text-destructive [&_svg]:!text-current';
 /* Formatting, badge tokens, lineage grouping and the list sort all live in
    lib/utils/jobOpeningDisplay — this page is the reference listing, and the
    Apply to Job dialog renders the same jobs from the same helpers. */
@@ -745,7 +746,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
             <div className="flex flex-col sm:items-end gap-2">
               {/* Quota limit warning */}
               {quotaInfo && quotaInfo.remaining <= 0 && (
-                <div className="flex items-start gap-2 px-3 py-1.5 bg-red-50 border border-red-200 rounded-lg text-red-700 text-xs">
+                <div className="flex items-start gap-2 px-3 py-1.5 bg-destructive-subtle border border-destructive-line rounded-lg text-destructive text-xs">
                   <AlertCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
                   <span>Job publishing limit reached ({quotaInfo.used}/{quotaInfo.limit}). <a href="/subscription/current-plan" className="underline font-medium">Upgrade your plan</a></span>
                 </div>
@@ -763,13 +764,15 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     </Link>
                   )}
                   {onCreateNew && (
-                    <button
+                    <Button
+                      variant="primary"
+                      size="md"
                       onClick={handleCreateNewJob}
-                      className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all flex items-center justify-center gap-2 text-sm font-medium"
+                      icon={<Plus className="w-4 h-4" />}
+                      className="w-full sm:w-auto"
                     >
-                      <Plus className="w-4 h-4" />
-                      <span>Create New Job</span>
-                    </button>
+                      Create New Job
+                    </Button>
                   )}
                 </div>
               )}
@@ -971,13 +974,14 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
               {/* Panel footer: "Done" applies the selected filters and reveals
                   the Clear button next to the More Filters button. */}
               <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
-                <button
+                <Button
                   // The controls above commit as they change, so Done just closes.
+                  variant="secondary"
+                  size="sm"
                   onClick={() => setShowAdvancedFilters(false)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
                 >
                   Done
-                </button>
+                </Button>
               </div>
             </div>
           )}
@@ -1015,13 +1019,15 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 {/* Bulk Actions Dropdown */}
                 {selectedJobs.size > 0 && (
                   <div className="relative">
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={() => setShowBulkActions(!showBulkActions)}
-                      className="h-9 px-3.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-full shadow-sm shadow-brand-blue/25 transition-all flex items-center gap-1.5 text-sm font-medium"
+                      className="rounded-full"
                     >
-                      <span>Bulk Actions</span>
+                      Bulk Actions
                       <ChevronDown className="w-4 h-4" />
-                    </button>
+                    </Button>
 
                     {showBulkActions && (
                       <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
@@ -1030,7 +1036,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                             onClick={handleBulkPublish}
                             className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                           >
-                            <Send className="w-4 h-4 text-green-600" />
+                            <Send className="w-4 h-4 text-success" />
                             Publish Selected (Drafts)
                           </button>
                         )}
@@ -1039,7 +1045,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                             onClick={handleBulkDisable}
                             className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
                           >
-                            <Ban className="w-4 h-4 text-red-600" />
+                            <Ban className="w-4 h-4 text-destructive" />
                             Disable Selected (Published)
                           </button>
                         )}
@@ -1065,7 +1071,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                         {canDeleteJd && onBulkDelete && (
                           <button
                             onClick={handleBulkDelete}
-                            className="w-full px-3 py-2 text-left text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                            className="w-full px-3 py-2 text-left text-sm text-destructive hover:bg-destructive-subtle flex items-center gap-2"
                           >
                             <Trash2 className="w-4 h-4" />
                             Delete Selected
@@ -1178,24 +1184,26 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                       <div className="flex flex-wrap gap-2 items-start justify-end">
                         {/* Edit Button - icon only (hidden for Disabled JDs) */}
                         {onEditJob && !['disabled', 'archived'].includes(job.status.toLowerCase()) && (
-                          <button
+                          <Button
+                            variant="secondary"
                             onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
-                            className="h-9 w-9 flex items-center justify-center bg-white text-brand-orange border border-brand-orange/40 rounded-md hover:bg-brand-orange/10 hover:border-brand-orange transition-all"
+                            className="h-9 w-9 p-0 rounded-md"
                             aria-label="Edit" title="Edit"
                           >
                             <Edit className="w-4 h-4" />
-                          </button>
+                          </Button>
                         )}
 
                         {/* View Button - icon only, hide for Draft */}
                         {job.status.toLowerCase() !== 'draft' && (
-                          <button
+                          <Button
+                            variant="secondary"
                             onClick={(e) => { e.stopPropagation(); onViewJob(job); }}
-                            className="h-9 w-9 flex items-center justify-center bg-white text-brand-blue border border-brand-blue/40 rounded-md hover:bg-brand-blue/10 hover:border-brand-blue transition-all"
+                            className="h-9 w-9 p-0 rounded-md"
                             aria-label="View" title="View"
                           >
                             <Eye className="w-4 h-4" />
-                          </button>
+                          </Button>
                         )}
 
                         {/* Three-dot Menu */}
@@ -1273,7 +1281,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                     onRepublishJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-success hover:bg-success-subtle"
                                 >
                                   <CheckCircle2 className="w-4 h-4" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
@@ -1301,7 +1309,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                     onUnarchiveJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-success hover:bg-success-subtle"
                                 >
                                   <RefreshCw className="w-4 h-4" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Unarchive Job</span>
@@ -1315,7 +1323,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                                     onDeleteJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive-subtle"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Delete Job</span>
@@ -1487,21 +1495,13 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                 }
               </p>
               {searchQuery || activeFiltersCount > 0 ? (
-                <button
-                  onClick={clearAllFilters}
-                  className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-lg bg-white text-gray-700 border border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2"
-                >
-                  <XCircle className="w-4 h-4" />
+                <Button variant="secondary" size="md" onClick={clearAllFilters} icon={<XCircle className="w-4 h-4" />}>
                   Clear Filters
-                </button>
+                </Button>
               ) : (
-                <button
-                  onClick={handleCreateNewJob}
-                  className="inline-flex items-center justify-center gap-2 h-10 px-5 rounded-lg bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 hover:shadow-md hover:shadow-brand-blue/30 transition-all text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 focus-visible:ring-offset-2"
-                >
-                  <Plus className="w-4 h-4" />
+                <Button variant="primary" size="md" onClick={handleCreateNewJob} icon={<Plus className="w-4 h-4" />}>
                   Create Job
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -1634,8 +1634,8 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
             {/* Body */}
             <div className="px-5 py-4 overflow-y-auto flex-1">
               <div className="text-center">
-                <div className="w-12 h-12 bg-red-100 ring-1 ring-red-200 rounded-full flex items-center justify-center mx-auto mb-3">
-                  <Briefcase className="w-5 h-5 text-red-600" />
+                <div className="w-12 h-12 bg-destructive-subtle ring-1 ring-destructive-line rounded-full flex items-center justify-center mx-auto mb-3">
+                  <Briefcase className="w-5 h-5 text-destructive" />
                 </div>
                 <p className="text-sm text-gray-600">
                   You've used {quotaInfo?.used}/{quotaInfo?.limit} job slots. Upgrade your plan to create more jobs.
@@ -1645,21 +1645,19 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
 
             {/* Footer */}
             <div className="px-5 py-4 border-t border-gray-100 flex flex-col sm:flex-row gap-2 justify-center shrink-0">
-              <button
-                onClick={() => setShowQuotaModal(false)}
-                className="px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue font-medium transition-all"
-              >
+              <Button variant="secondary" size="md" onClick={() => setShowQuotaModal(false)}>
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
                 onClick={() => {
                   setShowQuotaModal(false);
                   window.location.href = '/subscription/current-plan';
                 }}
-                className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 text-sm font-medium transition-all"
               >
                 Upgrade Plan
-              </button>
+              </Button>
             </div>
           </div>
         </div>

@@ -43,6 +43,7 @@ import {
   BarChart3
 } from 'lucide-react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
 import ReactMarkdown from 'react-markdown';
@@ -80,7 +81,7 @@ function QuickActionButton({
   const variantStyles = {
     primary: 'bg-blue-600 text-white hover:bg-blue-700',
     secondary: 'bg-gray-100 text-gray-700 hover:bg-gray-200',
-    success: 'bg-green-600 text-white hover:bg-green-700',
+    success: 'bg-success text-white hover:bg-success',
   };
 
   return (
@@ -248,10 +249,10 @@ ${job.certifications?.join(', ') || 'N/A'}
 
   const getStatusBadge = (status: string) => {
     const configs: Record<string, { bg: string; text: string; label: string }> = {
-      published: { bg: 'bg-green-100', text: 'text-green-700', label: 'Published' },
-      draft: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Draft' },
+      published: { bg: 'bg-success-subtle', text: 'text-success', label: 'Published' },
+      draft: { bg: 'bg-warning-subtle', text: 'text-warning', label: 'Draft' },
       closed: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Closed' },
-      disabled: { bg: 'bg-red-100', text: 'text-red-700', label: 'Disabled' },
+      disabled: { bg: 'bg-destructive-subtle', text: 'text-destructive', label: 'Disabled' },
       archived: { bg: 'bg-gray-100', text: 'text-gray-500', label: 'Archived' },
     };
     const config = configs[status] || configs.draft;
@@ -466,27 +467,31 @@ ${job.certifications?.join(', ') || 'N/A'}
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={handleCopy}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-2"
                 aria-label="Copy" title="Copy"
               >
                 <Copy className="w-5 h-5" />
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={handleDownload}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="px-2"
                 aria-label="Download" title="Download"
               >
                 <Download className="w-5 h-5" />
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="secondary"
                 onClick={() => router.push(`/recruitment/jd-creation?id=${job.id}&edit=true`)}
-                className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                icon={<Edit2 className="w-4 h-4" />}
               >
-                <Edit2 className="w-4 h-4" />
                 Edit
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -552,12 +557,12 @@ ${job.certifications?.join(', ') || 'N/A'}
                   {job.must_have_skills && job.must_have_skills.length > 0 && (
                     <div className="mb-6">
                       <h3 className="text-sm font-medium text-gray-700 mb-2 flex items-center gap-2">
-                        <CheckCircle className="w-4 h-4 text-green-500" />
+                        <CheckCircle className="w-4 h-4 text-success" />
                         Must Have Skills
                       </h3>
                       <div className="flex flex-wrap gap-2">
                         {job.must_have_skills.map((skill, index) => (
-                          <span key={index} className="px-3 py-1 bg-green-50 text-green-700 rounded-full text-sm">
+                          <span key={index} className="px-3 py-1 bg-success-subtle text-success rounded-full text-sm">
                             {skill}
                           </span>
                         ))}
@@ -657,13 +662,13 @@ ${job.certifications?.join(', ') || 'N/A'}
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <div className="flex items-center justify-between mb-6">
                   <h2 className="text-lg font-semibold text-gray-900">Scored Resumes</h2>
-                  <button
+                  <Button
+                    variant="primary"
                     onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${job.id}`)}
-                    className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 text-sm"
+                    icon={<ClipboardList className="w-4 h-4" />}
                   >
-                    <ClipboardList className="w-4 h-4" />
                     Score New Resumes
-                  </button>
+                  </Button>
                 </div>
                 {job.scored_resumes_count === 0 ? (
                   <div className="text-center py-12">
@@ -671,13 +676,13 @@ ${job.certifications?.join(', ') || 'N/A'}
                     <h3 className="text-lg font-medium text-gray-900 mb-2">No scored resumes yet</h3>
                     <p className="text-gray-500 mb-4">Start scoring resumes against this job description</p>
                     {permissions.canRunScoring && (
-                      <button
+                      <Button
+                        variant="primary"
                         onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${job.id}`)}
-                        className="inline-flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
+                        icon={<ClipboardList className="w-4 h-4" />}
                       >
-                        <ClipboardList className="w-4 h-4" />
                         Score Resumes
-                      </button>
+                      </Button>
                     )}
                   </div>
                 ) : (
@@ -801,8 +806,8 @@ ${job.certifications?.join(', ') || 'N/A'}
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center">
-                      <UserCheck className="w-4 h-4 text-green-600" />
+                    <div className="w-8 h-8 bg-success-subtle rounded-lg flex items-center justify-center">
+                      <UserCheck className="w-4 h-4 text-success" />
                     </div>
                     <span className="text-sm text-gray-600">Shortlisted</span>
                   </div>
@@ -819,8 +824,8 @@ ${job.certifications?.join(', ') || 'N/A'}
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
-                    <div className="w-8 h-8 bg-yellow-50 rounded-lg flex items-center justify-center">
-                      <BarChart3 className="w-4 h-4 text-yellow-600" />
+                    <div className="w-8 h-8 bg-warning-subtle rounded-lg flex items-center justify-center">
+                      <BarChart3 className="w-4 h-4 text-warning" />
                     </div>
                     <span className="text-sm text-gray-600">Assessments</span>
                   </div>
@@ -837,10 +842,10 @@ ${job.certifications?.join(', ') || 'N/A'}
                   <div key={activity.id} className="flex items-start gap-3">
                     <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
                       activity.type === 'application' ? 'bg-gray-50' :
-                      activity.type === 'score' ? 'bg-green-50' : 'bg-gray-50'
+                      activity.type === 'score' ? 'bg-success-subtle' : 'bg-gray-50'
                     }`}>
                       {activity.type === 'application' && <Users className="w-4 h-4 text-gray-800" />}
-                      {activity.type === 'score' && <ClipboardList className="w-4 h-4 text-green-600" />}
+                      {activity.type === 'score' && <ClipboardList className="w-4 h-4 text-success" />}
                       {activity.type === 'assessment' && <BarChart3 className="w-4 h-4 text-gray-800" />}
                     </div>
                     <div className="flex-1 min-w-0">

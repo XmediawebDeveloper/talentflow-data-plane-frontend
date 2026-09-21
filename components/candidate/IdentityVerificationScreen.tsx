@@ -92,11 +92,11 @@ export function IdentityVerificationScreen({ onVerified, token }: IdentityVerifi
 
         {/* Error Message */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg flex items-start gap-3">
-            <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <div className="mb-6 p-4 bg-destructive-subtle border border-destructive-line rounded-lg flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
             <div>
-              <p className="text-sm font-medium text-red-900">Verification Failed</p>
-              <p className="text-sm text-red-700 mt-1">{error}</p>
+              <p className="text-sm font-medium text-destructive-strong">Verification Failed</p>
+              <p className="text-sm text-destructive mt-1">{error}</p>
             </div>
           </div>
         )}
@@ -106,7 +106,7 @@ export function IdentityVerificationScreen({ onVerified, token }: IdentityVerifi
           {/* Email Address */}
           <div>
             <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-2">
-              Email Address <span className="text-red-500">*</span>
+              Email Address <span className="text-destructive">*</span>
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">

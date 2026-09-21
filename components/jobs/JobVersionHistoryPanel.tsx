@@ -485,7 +485,7 @@ export default function JobVersionHistoryPanel({
                             bottom of the chain is never read as just another
                             superseded one. */}
                         {isLatest && (
-                          <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold uppercase tracking-wide text-white bg-brand-blue ring-1 ring-white/10">
+                          <span className="px-1.5 py-0.5 rounded-md text-2xs font-semibold uppercase tracking-wide text-white bg-brand-blue ring-1 ring-white/10">
                             Latest
                           </span>
                         )}

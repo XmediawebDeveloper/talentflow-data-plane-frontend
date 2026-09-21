@@ -314,7 +314,7 @@ export default function FeaturePermissionManager({
               </h2>
               <p className="text-sm text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
                 <span className="truncate">{userName}</span>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 ring-brand-blue/20 bg-brand-blue/10 text-brand-blue uppercase tracking-wider">
+                <span className="px-2 py-0.5 rounded-full text-2xs font-medium ring-1 ring-brand-blue/20 bg-brand-blue/10 text-brand-blue uppercase tracking-wider">
                   {userRole}
                 </span>
               </p>
@@ -436,14 +436,14 @@ export default function FeaturePermissionManager({
                                     {feature.locked && (
                                       <span
                                         title={feature.lockedReason}
-                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 ring-brand-orange/30 bg-brand-orange/10 text-brand-orange-deep"
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium ring-1 ring-brand-orange/30 bg-brand-orange/10 text-brand-orange-deep"
                                       >
                                         <Lock className="w-3 h-3" /> Locked
                                       </span>
                                     )}
                                     {feature.dependencies.length > 0 && (
                                       <span
-                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 ring-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan"
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium ring-1 ring-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan"
                                         title={`Requires: ${feature.dependencies.join(', ')}`}
                                       >
                                         <Link2 className="w-3 h-3" /> {feature.dependencies.length}

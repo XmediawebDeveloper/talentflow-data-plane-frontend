@@ -26,22 +26,22 @@ import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 const UNIT_COLORS: Record<string, string> = {
   RS:  'text-blue-600   bg-blue-50   border-blue-200',
   AS:  'text-purple-600 bg-purple-50 border-purple-200',
-  AIU: 'text-green-600  bg-green-50  border-green-200',
+  AIU: 'text-success  bg-success-subtle  border-success-line',
   RU:  'text-orange-600 bg-orange-50 border-orange-200',
 };
 
 const UNIT_DOT: Record<string, string> = {
-  RS: 'bg-blue-500', AS: 'bg-purple-500', AIU: 'bg-green-500', RU: 'bg-orange-500',
+  RS: 'bg-blue-500', AS: 'bg-purple-500', AIU: 'bg-success', RU: 'bg-orange-500',
 };
 
 const STATUS_STYLES: Record<string, string> = {
-  SUCCESS:            'bg-green-100 text-green-700',
-  FAILED:             'bg-red-100 text-red-700',
+  SUCCESS:            'bg-success-subtle text-success',
+  FAILED:             'bg-destructive-subtle text-destructive',
   INSUFFICIENT_UNITS: 'bg-orange-100 text-orange-700',
-  ABANDONED:          'bg-yellow-100 text-yellow-700',
+  ABANDONED:          'bg-warning-subtle text-warning',
   INTERRUPTED:        'bg-orange-100 text-orange-700',
-  TENANT_SUSPENDED:   'bg-red-100 text-red-700',
-  TENANT_EXPIRED:     'bg-red-100 text-red-700',
+  TENANT_SUSPENDED:   'bg-destructive-subtle text-destructive',
+  TENANT_EXPIRED:     'bg-destructive-subtle text-destructive',
   BLOCKED:            'bg-gray-100 text-gray-700',
 };
 
@@ -80,7 +80,7 @@ const UNIT_TYPE_LABEL: Record<string, string> = {
 const ENTRY_UNIT_BADGE_EXTENDED: Record<string, string> = {
   RS:        'bg-blue-100 text-blue-700',
   AS:        'bg-purple-100 text-purple-700',
-  AIU:       'bg-green-100 text-green-700',
+  AIU:       'bg-success-subtle text-success',
   RU:        'bg-orange-100 text-orange-700',
   max_seats: 'bg-slate-100 text-slate-600',
 };
@@ -120,7 +120,7 @@ function MemberLogEntries({ entries }: { entries: ConsumptionLogEntry[] }) {
                   </p>
                 )}
                 {e.failure_reason && (
-                  <p className="text-xs text-red-500 mt-0.5">Reason: {e.failure_reason}</p>
+                  <p className="text-xs text-destructive mt-0.5">Reason: {e.failure_reason}</p>
                 )}
               </div>
               <div className="shrink-0 text-right">
@@ -230,7 +230,7 @@ function MemberRow({ member, fromDate }: { member: TeamMemberUsage; fromDate: st
         <td className="px-3 py-3 whitespace-nowrap">
           <div className="flex flex-col items-center gap-1">
             <span className={`inline-flex items-center justify-center min-w-[2.25rem] px-2 py-0.5 rounded-md text-sm font-bold
-              ${aiu > 0 ? 'bg-green-100 text-green-700 ring-1 ring-green-200' : 'bg-gray-100 text-gray-400'}`}>
+              ${aiu > 0 ? 'bg-success-subtle text-success ring-1 ring-success-line' : 'bg-gray-100 text-gray-400'}`}>
               {aiu}
             </span>
             <p className="text-xs text-gray-400 dark:text-slate-500">{getMCount(member, 'AIU')} actions</p>
@@ -739,7 +739,7 @@ export default function TeamUsageAnalytics() {
       <div className="grid grid-cols-5 gap-3 mb-6">
         <StatCard label="Resume Scoring"  value={totals.rs}  dot="bg-blue-500"   loading={loading} onClick={() => openList('rs')}  active={pageView === 'list' && activeCard === 'rs'} />
         <StatCard label="Assessments"     value={totals.as_} dot="bg-purple-500" loading={loading} onClick={() => openList('as')}  active={pageView === 'list' && activeCard === 'as'} />
-        <StatCard label="AI Interviews"   value={totals.aiu} dot="bg-green-500"  loading={loading} onClick={() => openList('aiu')} active={pageView === 'list' && activeCard === 'aiu'} />
+        <StatCard label="AI Interviews"   value={totals.aiu} dot="bg-success"  loading={loading} onClick={() => openList('aiu')} active={pageView === 'list' && activeCard === 'aiu'} />
         <StatCard label="Resume Storage"  value={totals.ru}  dot="bg-orange-500" loading={loading} onClick={() => openList('ru')}  active={pageView === 'list' && activeCard === 'ru'} />
         <StatCard label="Total Actions"   value={totals.all} dot="bg-gray-400"   loading={loading} onClick={() => openList('all')} active={pageView === 'list' && activeCard === 'all'} />
       </div>

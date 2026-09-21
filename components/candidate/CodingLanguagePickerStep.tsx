@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Code, Loader2, Lock } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { candidateService } from '@/lib/services/candidateService';
 import {
   LanguageConfig,
@@ -102,7 +103,7 @@ export default function CodingLanguagePickerStep({
         </p>
 
         {loadError && (
-          <p className="text-sm text-red-600 dark:text-red-400 mb-4">{loadError}</p>
+          <p className="text-sm text-destructive mb-4">{loadError}</p>
         )}
 
         <div className="flex-1 min-h-0 overflow-y-auto space-y-2 mb-5">
@@ -158,7 +159,7 @@ export default function CodingLanguagePickerStep({
         </div>
 
         {pickError && (
-          <p className="text-sm text-red-600 dark:text-red-400 mb-3">{pickError}</p>
+          <p className="text-sm text-destructive mb-3">{pickError}</p>
         )}
 
         <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-4">
@@ -166,11 +167,12 @@ export default function CodingLanguagePickerStep({
           <span>Your choice cannot be changed once confirmed.</span>
         </div>
 
-        <button
+        <Button
           type="button"
+          variant="primary"
           onClick={handleConfirm}
           disabled={isPicking || compilable.length === 0}
-          className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white font-medium py-2.5 rounded-lg flex items-center justify-center gap-2 transition-colors"
+          className="w-full"
         >
           {isPicking ? (
             <>
@@ -180,7 +182,7 @@ export default function CodingLanguagePickerStep({
           ) : (
             'Confirm language'
           )}
-        </button>
+        </Button>
       </div>
     </div>
   );

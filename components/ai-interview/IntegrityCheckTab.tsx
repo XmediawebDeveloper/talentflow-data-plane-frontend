@@ -110,15 +110,15 @@ const SEV_LABEL: Record<RecruiterSeverity, string> = {
   serious: 'Serious', moderate: 'Moderate', minor: 'Minor', advisory: 'Advisory',
 };
 const SEV_PILL: Record<Tone, string> = {
-  critical: 'bg-red-100 text-red-700 ring-1 ring-red-200',
+  critical: 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line',
   warning: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
   info: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20',
   neutral: 'bg-slate-100 text-slate-500 ring-1 ring-slate-200',
-  clean: 'bg-green-100 text-green-700 ring-1 ring-green-200',
+  clean: 'bg-success-subtle text-success ring-1 ring-success-line',
 };
 const TONE_DOT: Record<Tone, string> = {
-  critical: 'bg-red-500', warning: 'bg-brand-orange', info: 'bg-brand-blue',
-  neutral: 'bg-slate-300', clean: 'bg-green-500',
+  critical: 'bg-destructive', warning: 'bg-brand-orange', info: 'bg-brand-blue',
+  neutral: 'bg-slate-300', clean: 'bg-success',
 };
 
 const CATEGORY_ICON: Record<CategoryKey, ReactNode> = {
@@ -154,9 +154,9 @@ function ConfidenceTag({ record }: { record: ViolationRecord }) {
   const c = confidenceOfViolation(record);
   if (!c) return null;
   return c === 'high' ? (
-    <span className="text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 ring-1 ring-red-200">HIGH CONFIDENCE</span>
+    <span className="text-2xs font-bold tracking-wide px-1.5 py-0.5 rounded-full bg-destructive-subtle text-destructive ring-1 ring-destructive-line">HIGH CONFIDENCE</span>
   ) : (
-    <span className="text-[9px] font-bold tracking-wide px-1.5 py-0.5 rounded-full text-brand-orange-deep ring-1 ring-brand-orange/40">POSSIBLE</span>
+    <span className="text-2xs font-bold tracking-wide px-1.5 py-0.5 rounded-full text-brand-orange-deep ring-1 ring-brand-orange/40">POSSIBLE</span>
   );
 }
 
@@ -205,18 +205,18 @@ function EnvironmentVerificationDetail({ record }: { record: ViolationRecord }) 
           type="button"
           onClick={handleWatchVideo}
           disabled={loadingVideo}
-          className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-[11px] font-medium disabled:opacity-50 disabled:no-underline"
+          className="inline-flex items-center gap-1 text-brand-blue hover:underline underline-offset-2 text-2xs font-medium disabled:opacity-50 disabled:no-underline"
         >
           <Play className="w-3 h-3" />{loadingVideo ? 'Loading…' : 'Watch verification video'}
         </button>
       )}
       {colorMatch !== null && (
-        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ring-1 ${colorMatch ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+        <span className={`text-2xs font-medium px-1.5 py-0.5 rounded-full ring-1 ${colorMatch ? 'bg-success-subtle text-success ring-success-line' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
           Color {colorMatch ? 'matched' : 'mismatch'}
         </span>
       )}
       {idMatch !== null && (
-        <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded-full ring-1 ${idMatch ? 'bg-green-50 text-green-700 ring-green-200' : 'bg-red-50 text-red-600 ring-red-200'}`}>
+        <span className={`text-2xs font-medium px-1.5 py-0.5 rounded-full ring-1 ${idMatch ? 'bg-success-subtle text-success ring-success-line' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
           ID {idMatch ? 'matched' : 'mismatch'}
         </span>
       )}
@@ -359,10 +359,10 @@ export default function IntegrityCheckTab({
   // so this early return is skipped whenever shareBarCheck is present.
   if (summary.raw === 0 && !shareBarCheck) {
     return (
-      <div className="text-center py-16 bg-green-50 rounded-xl border border-green-200 ring-1 ring-green-100">
-        <ShieldCheck className="w-9 h-9 text-green-500 mx-auto mb-3" />
-        <p className="text-base font-semibold text-green-700">No integrity concerns detected</p>
-        <p className="text-sm text-green-600/80 mt-1">This interview completed with a clean integrity status.</p>
+      <div className="text-center py-16 bg-success-subtle rounded-xl border border-success-line ring-1 ring-success-line">
+        <ShieldCheck className="w-9 h-9 text-success mx-auto mb-3" />
+        <p className="text-base font-semibold text-success">No integrity concerns detected</p>
+        <p className="text-sm text-success/80 mt-1">This interview completed with a clean integrity status.</p>
       </div>
     );
   }
@@ -420,12 +420,12 @@ export default function IntegrityCheckTab({
                     {CATEGORY_ICON[key]}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-[15px] font-semibold text-gray-900 tracking-tight">{def.title}</p>
+                    <p className="text-sm font-semibold text-gray-900 tracking-tight">{def.title}</p>
                     <p className="text-xs text-gray-500 mt-0.5">{def.description}</p>
                   </div>
                   <div className="text-right flex-none">
-                    <div className={`text-xl font-bold leading-none ${tone === 'critical' ? 'text-red-600' : tone === 'warning' ? 'text-brand-orange-deep' : tone === 'info' ? 'text-brand-blue' : 'text-slate-400'}`}>{count}</div>
-                    <div className="text-[10px] uppercase tracking-wide text-gray-400 mt-1">{key === 'advisory' ? 'hints' : 'flags'}</div>
+                    <div className={`text-xl font-bold leading-none ${tone === 'critical' ? 'text-destructive' : tone === 'warning' ? 'text-brand-orange-deep' : tone === 'info' ? 'text-brand-blue' : 'text-slate-400'}`}>{count}</div>
+                    <div className="text-2xs uppercase tracking-wide text-gray-400 mt-1">{key === 'advisory' ? 'hints' : 'flags'}</div>
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 px-4 pb-3.5 pl-16">
@@ -438,7 +438,7 @@ export default function IntegrityCheckTab({
                   ))}
                 </div>
                 {key === 'advisory' && (
-                  <p className="px-4 pb-3.5 pl-16 text-[11px] text-gray-400 italic">
+                  <p className="px-4 pb-3.5 pl-16 text-2xs text-gray-400 italic">
                     Kept separate from the violation count so the number reflects real integrity flags.
                   </p>
                 )}
@@ -456,7 +456,7 @@ export default function IntegrityCheckTab({
             <div className="relative h-14 mx-1.5">
               <div className="absolute left-0 right-0 top-9 h-0.5 bg-gray-200 rounded" />
               {firstSeriousMark && (
-                <div className="absolute -top-0.5 -translate-x-1/2 text-[10px] font-semibold text-red-600 bg-red-50 ring-1 ring-red-200 px-2 py-0.5 rounded whitespace-nowrap"
+                <div className="absolute -top-0.5 -translate-x-1/2 text-2xs font-semibold text-destructive bg-destructive-subtle ring-1 ring-destructive-line px-2 py-0.5 rounded whitespace-nowrap"
                   style={{ left: `${firstSeriousMark.pct}%` }}>
                   First serious flag
                 </div>
@@ -469,7 +469,7 @@ export default function IntegrityCheckTab({
                 />
               ))}
             </div>
-            <div className="flex justify-between text-[11px] text-gray-400 tabular-nums mx-1.5">
+            <div className="flex justify-between text-2xs text-gray-400 tabular-nums mx-1.5">
               <span>0:00</span>
               <span>{formatOffset(durationSec)} · end</span>
             </div>
@@ -556,7 +556,7 @@ export default function IntegrityCheckTab({
                         ) : (
                           <span className="text-xs font-mono text-gray-500">{formatOffset(firstOff)}</span>
                         )}
-                        <div className="text-[11px] text-gray-400 font-mono mt-0.5">{formatClock(g.firstTs)}</div>
+                        <div className="text-2xs text-gray-400 font-mono mt-0.5">{formatClock(g.firstTs)}</div>
                       </td>
                       <td className="px-4 py-3 align-top">
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${SEV_PILL[tone]}`}>{SEV_LABEL[g.severity]}</span>
@@ -587,7 +587,7 @@ export default function IntegrityCheckTab({
                               ) : (
                                 <span className="text-xs font-mono text-gray-400">{formatOffset(off)}</span>
                               )}
-                              <div className="text-[11px] text-gray-400 font-mono mt-0.5">{formatClock(r.timestamp)}</div>
+                              <div className="text-2xs text-gray-400 font-mono mt-0.5">{formatClock(r.timestamp)}</div>
                             </td>
                             <td className="px-4 py-2"></td>
                             <td className="px-4 py-2"></td>
@@ -603,7 +603,7 @@ export default function IntegrityCheckTab({
             </tbody>
           </table>
         </div>
-        <p className="text-[11px] text-gray-400 mt-2.5">
+        <p className="text-2xs text-gray-400 mt-2.5">
           Grouped by type. {hasRecording
             ? 'Each time links to that moment in the recording; expand a row to see every occurrence.'
             : 'Expand a row to see every occurrence.'}
@@ -614,7 +614,7 @@ export default function IntegrityCheckTab({
       {shareBarAttempts.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">Screen-share verification</h3>
-          <p className="text-[11px] text-gray-400 mb-3">
+          <p className="text-2xs text-gray-400 mb-3">
             {shareBarAttempts.length > 1
               ? `The candidate needed ${shareBarAttempts.length} attempts on the "hide the sharing bar" step before the interview was allowed to start. Each attempt below shows the original screen capture and a locally sharpened/contrast-boosted copy sent to the AI at that moment. Click a thumbnail to enlarge.`
               : 'The two images sent to the AI before this interview was allowed to start — the original screen capture and a locally sharpened/contrast-boosted copy of the same capture, used to catch small or collapsed icons. Click a thumbnail to enlarge.'}
@@ -643,28 +643,28 @@ export default function IntegrityCheckTab({
                   </div>
                   <div className="flex flex-wrap gap-2 mt-3">
                     {attempt.hidden === false && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Sharing bar was still visible</span>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-destructive-subtle text-destructive ring-1 ring-destructive-line">Sharing bar was still visible</span>
                     )}
                     {attempt.pip_detected && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Picture-in-Picture detected</span>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-destructive-subtle text-destructive ring-1 ring-destructive-line">Picture-in-Picture detected</span>
                     )}
                     {attempt.recorder_overlay_detected && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Screen-recorder overlay detected</span>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-destructive-subtle text-destructive ring-1 ring-destructive-line">Screen-recorder overlay detected</span>
                     )}
                     {attempt.foreign_app_detected && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-destructive-subtle text-destructive ring-1 ring-destructive-line">
                         Foreign app/window detected{attempt.foreign_app_label ? `: ${attempt.foreign_app_label}` : ''}
                       </span>
                     )}
                     {attempt.interview_screen_present === false && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-50 text-red-700 ring-1 ring-red-200">Interview screen not detected</span>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-destructive-subtle text-destructive ring-1 ring-destructive-line">Interview screen not detected</span>
                     )}
                     {clean && (
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200">Clean — no issues found</span>
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-success-subtle text-success ring-1 ring-success-line">Clean — no issues found</span>
                     )}
                   </div>
                   {attempt.checked_at && (
-                    <p className="text-[11px] text-gray-400 mt-2">Checked at {formatClock(attempt.checked_at)}</p>
+                    <p className="text-2xs text-gray-400 mt-2">Checked at {formatClock(attempt.checked_at)}</p>
                   )}
                 </div>
               );
@@ -677,7 +677,7 @@ export default function IntegrityCheckTab({
       {evidenceGroups.length > 0 && (
         <div>
           <h3 className="text-sm font-semibold text-gray-700 mb-3 tracking-tight">Violation evidence</h3>
-          <p className="text-[11px] text-gray-400 mb-3">
+          <p className="text-2xs text-gray-400 mb-3">
             One captured frame per flagged item, with a short AI-generated description. Click a thumbnail to enlarge.
           </p>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -791,7 +791,7 @@ function EvidenceCard({ interviewId, record, label }: {
         </button>
         <div className="px-3 py-2.5">
           <div className="text-xs font-semibold text-gray-700">{label}</div>
-          {summary && <p className="text-[11px] text-gray-500 mt-1 leading-relaxed">{summary}</p>}
+          {summary && <p className="text-2xs text-gray-500 mt-1 leading-relaxed">{summary}</p>}
         </div>
       </div>
       {enlarged && url && (
@@ -869,15 +869,15 @@ function ShareBarScreenshotCard({ interviewId, which, label, attemptIndex }: {
 function GlanceTile({ label, value, tone, sub, dot }: {
   label: string; value: number; tone: Tone; sub: string; dot?: boolean;
 }) {
-  const valColor = tone === 'critical' ? 'text-red-600' : tone === 'warning' ? 'text-brand-orange-deep'
+  const valColor = tone === 'critical' ? 'text-destructive' : tone === 'warning' ? 'text-brand-orange-deep'
     : tone === 'info' ? 'text-brand-blue' : 'text-gray-900';
   return (
     <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm px-4 py-3.5">
-      <div className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold flex items-center gap-1.5">
+      <div className="text-2xs uppercase tracking-wide text-gray-400 font-semibold flex items-center gap-1.5">
         {dot && <span className={`w-2 h-2 rounded-full ${TONE_DOT[tone]}`} />}{label}
       </div>
-      <div className={`text-3xl font-extrabold tracking-tight mt-1.5 tabular-nums ${valColor}`}>{value}</div>
-      <div className="text-[11px] text-gray-500 mt-1">{sub}</div>
+      <div className={`text-3xl font-bold tracking-tight mt-1.5 tabular-nums ${valColor}`}>{value}</div>
+      <div className="text-2xs text-gray-500 mt-1">{sub}</div>
     </div>
   );
 }
@@ -911,9 +911,9 @@ interface Verdict {
 
 function toneChrome(tone: Tone): Pick<Verdict, 'box' | 'iconWrap' | 'title'> {
   switch (tone) {
-    case 'critical': return { box: 'bg-red-50 border-red-200', iconWrap: 'bg-red-100 text-red-600', title: 'text-red-700' };
+    case 'critical': return { box: 'bg-destructive-subtle border-destructive-line', iconWrap: 'bg-destructive-subtle text-destructive', title: 'text-destructive' };
     case 'warning': return { box: 'bg-brand-orange/5 border-brand-orange/20', iconWrap: 'bg-brand-orange/10 text-brand-orange-deep', title: 'text-brand-orange-deep' };
-    case 'clean': return { box: 'bg-green-50 border-green-200', iconWrap: 'bg-green-100 text-green-600', title: 'text-green-700' };
+    case 'clean': return { box: 'bg-success-subtle border-success-line', iconWrap: 'bg-success-subtle text-success', title: 'text-success' };
     default: return { box: 'bg-brand-blue/5 border-brand-blue/20', iconWrap: 'bg-brand-blue/10 text-brand-blue', title: 'text-brand-blue' };
   }
 }

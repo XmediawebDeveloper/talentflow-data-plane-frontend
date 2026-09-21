@@ -2491,7 +2491,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     return (
       <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
         <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8 text-center">
-          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-5 text-3xl">🔒</div>
+          <div className="w-16 h-16 bg-warning-subtle rounded-full flex items-center justify-center mx-auto mb-5 text-3xl">🔒</div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Already open on another device</h1>
           <p className="text-gray-600 text-sm leading-relaxed mb-5">
             This interview link is already in use in another window or device.
@@ -2503,8 +2503,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               rather than "wait a few seconds", and make clear this page unblocks
               itself — the 5s heartbeat clears it, so no reload is needed. */}
           {blockedRetrySeconds !== null && (
-            <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 mb-5 text-left">
-              <p className="text-sm font-semibold text-amber-900 mb-1">
+            <div className="rounded-xl border border-warning-line bg-warning-subtle px-4 py-3 mb-5 text-left">
+              <p className="text-sm font-semibold text-warning-strong mb-1">
                 {blockedRetrySeconds > 0
                   ? <>Closed it already? This page unlocks in{' '}
                       <span className="tabular-nums">
@@ -2513,7 +2513,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                     </>
                   : 'Checking again now…'}
               </p>
-              <p className="text-xs text-amber-800/90 leading-snug">
+              <p className="text-xs text-warning-strong/90 leading-snug">
                 You don&apos;t need to do anything — this happens automatically.
                 If the other window is still open, the timer keeps resetting until
                 you close it.
@@ -2549,8 +2549,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center bg-gray-50 px-4" style={{ colorScheme: 'light' }}>
         <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 text-center">
-          <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-6">
-            <CheckCircle className="w-8 h-8 text-green-600" />
+          <div className="w-16 h-16 rounded-full bg-success-subtle flex items-center justify-center mx-auto mb-6">
+            <CheckCircle className="w-8 h-8 text-success" />
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-3">Interview Completed</h1>
           <p className="text-gray-600 mb-2">
@@ -2574,12 +2574,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     return (
       <div className="min-h-[100dvh] flex items-center justify-center bg-gray-50 px-4" style={{ colorScheme: 'light' }}>
         <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-8 text-center">
-          <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${(isExpiredError || isRevokedError) ? 'bg-amber-100' : 'bg-red-100'}`}>
+          <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6 ${(isExpiredError || isRevokedError) ? 'bg-warning-subtle' : 'bg-destructive-subtle'}`}>
             {isExpiredError
-              ? <Clock className="w-8 h-8 text-amber-600" />
+              ? <Clock className="w-8 h-8 text-warning" />
               : isRevokedError
-              ? <Ban className="w-8 h-8 text-amber-600" />
-              : <AlertTriangle className="w-8 h-8 text-red-600" />
+              ? <Ban className="w-8 h-8 text-warning" />
+              : <AlertTriangle className="w-8 h-8 text-destructive" />
             }
           </div>
           <h1 className="text-2xl font-bold text-gray-900 mb-3">
@@ -2760,7 +2760,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                 />
               </div>
               {reauthOtpError && (
-                <p className="text-sm text-red-600 flex items-center gap-1">
+                <p className="text-sm text-destructive flex items-center gap-1">
                   <AlertTriangle className="w-4 h-4 shrink-0" />{reauthOtpError}
                 </p>
               )}
@@ -2802,8 +2802,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           {screenShareDeclined ? (
             /* ── Screen share declined — block the interview ── */
             <>
-              <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
-                <AlertTriangle className="w-10 h-10 text-red-600" />
+              <div className="w-20 h-20 bg-destructive-subtle rounded-full flex items-center justify-center mx-auto mb-6">
+                <AlertTriangle className="w-10 h-10 text-destructive" />
               </div>
               <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-3 text-center">
                 Entire Screen Required
@@ -2811,9 +2811,9 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               <p className="text-gray-600 mb-5 text-center text-sm">
                 {screenShareDeclinedReason || SCREEN_SHARE_REQUIRED_MESSAGE}
               </p>
-              <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6">
-                <p className="font-semibold text-red-800 mb-2 text-sm">Why is this required?</p>
-                <ul className="space-y-1.5 text-sm text-red-700">
+              <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4 mb-6">
+                <p className="font-semibold text-destructive-strong mb-2 text-sm">Why is this required?</p>
+                <ul className="space-y-1.5 text-sm text-destructive">
                   <li className="flex items-start gap-2"><span className="mt-0.5">•</span><span>Screen recording prevents proxy interviews and malpractice</span></li>
                   <li className="flex items-start gap-2"><span className="mt-0.5">•</span><span>The recording is reviewed only if a violation is flagged</span></li>
                   <li className="flex items-start gap-2"><span className="mt-0.5">•</span><span>You must select Entire Screen. Window and Current Tab are not allowed</span></li>
@@ -2826,7 +2826,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                   handleFullscreenReady();
                 }}
                 disabled={startSubmitting}
-                className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg"
+                className="w-full flex items-center justify-center gap-2 bg-destructive hover:bg-destructive text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg"
               >
                 {startSubmitting ? (
                   <><Loader2 className="w-5 h-5 animate-spin" />Requesting Permission...</>
@@ -2861,12 +2861,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                   </ul>
                 </div>
                 {/* RIGHT — orange: what is monitored / not allowed */}
-                <div className="bg-amber-50 border border-amber-200 rounded-xl p-5">
-                  <p className="font-semibold text-amber-900 mb-3 text-sm flex items-center gap-2">
+                <div className="bg-warning-subtle border border-warning-line rounded-xl p-5">
+                  <p className="font-semibold text-warning-strong mb-3 text-sm flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     Not allowed during the interview
                   </p>
-                  <ul className="space-y-2 text-sm text-amber-800">
+                  <ul className="space-y-2 text-sm text-warning-strong">
                     <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Switching to another browser tab</span></li>
                     <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Minimizing the browser window</span></li>
                     <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Using shortcut keys such as <b>Alt+Tab</b> or the <b>Windows / ⌘</b> key</span></li>
@@ -2876,7 +2876,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                       <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Being connected to any video meeting (Teams / Zoom / Meet). Leave and close all meeting apps before you begin — the interview will not start while another app is using your camera or microphone</span></li>
                     )}
                   </ul>
-                  <p className="text-xs text-amber-700 mt-3 leading-relaxed">
+                  <p className="text-xs text-warning mt-3 leading-relaxed">
                     These actions are monitored. Depending on the proctoring policy configured for this interview, they may be flagged and can result in the interview being automatically terminated.
                   </p>
                 </div>
@@ -2885,12 +2885,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               {/* Active-meeting block banner — shown after a start attempt found
                   the camera/mic already in use by another app (Teams/Zoom/Meet). */}
               {meetingBlockActive && (
-                <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 mb-5 text-left">
-                  <p className="font-semibold text-red-800 mb-1 text-sm flex items-center gap-2">
+                <div className="bg-destructive-subtle border-2 border-destructive-line rounded-xl p-4 mb-5 text-left">
+                  <p className="font-semibold text-destructive-strong mb-1 text-sm flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     You cannot be in a meeting during the interview
                   </p>
-                  <p className="text-sm text-red-700 leading-relaxed">
+                  <p className="text-sm text-destructive leading-relaxed">
                     Your camera or microphone is already in use by another app — it looks like
                     you're in a Teams / Zoom / Meet call. Please <b>leave the meeting and close all
                     other video-call apps</b>, then click the button again to start.
@@ -2941,8 +2941,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     return (
       <div className="min-h-[100dvh] bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4 overflow-y-auto">
         <div className="bg-white rounded-2xl shadow-2xl max-w-3xl w-full my-auto p-6 md:p-8">
-          <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <AlertTriangle className="w-8 h-8 text-amber-600" />
+          <div className="w-16 h-16 bg-warning-subtle rounded-full flex items-center justify-center mx-auto mb-3">
+            <AlertTriangle className="w-8 h-8 text-warning" />
           </div>
           <h1 className="text-2xl md:text-3xl font-bold text-gray-900 mb-2 text-center">
             Before we begin
@@ -2952,23 +2952,23 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           </p>
           {/* Do-not-refresh warning, inline: reloading here drops fullscreen +
               screen sharing and sends the candidate back to re-share. */}
-          <p className="text-xs font-semibold text-red-600 mb-4 text-center flex items-center justify-center gap-1.5">
+          <p className="text-xs font-semibold text-destructive mb-4 text-center flex items-center justify-center gap-1.5">
             <AlertTriangle data-capture-decor className="w-3.5 h-3.5 shrink-0" />
             Do not refresh this page — it drops screen sharing and restarts setup.
           </p>
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 mb-4 text-left">
-            <p className="font-semibold text-amber-900 mb-3 text-sm flex items-center gap-2">
+          <div className="bg-warning-subtle border border-warning-line rounded-xl p-4 mb-4 text-left">
+            <p className="font-semibold text-warning-strong mb-3 text-sm flex items-center gap-2">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               Not allowed during the interview
             </p>
-            <ul className="space-y-2 text-sm text-amber-800">
+            <ul className="space-y-2 text-sm text-warning-strong">
               <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Switching to another browser tab</span></li>
               <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Minimizing the browser window</span></li>
               <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Using shortcut keys such as <b>Alt+Tab</b> or the <b>Windows / ⌘</b> key</span></li>
               <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Clicking away or taking the interview window out of focus</span></li>
               <li className="flex items-start gap-2"><span className="mt-0.5">✕</span><span>Switching your internet connection or network. Make sure your connection is stable before you begin — changing it during the interview is treated as a violation and can terminate the interview</span></li>
             </ul>
-            <p className="text-xs text-amber-700 mt-3 leading-relaxed">
+            <p className="text-xs text-warning mt-3 leading-relaxed">
               These actions are monitored. Depending on the proctoring policy configured for this interview, they may be flagged and can result in the interview being automatically terminated.
             </p>
           </div>
@@ -2976,7 +2976,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             onClick={() => { handleFinalConsentAccept(); }}
             disabled={startSubmitting || finalConsentFsExited}
             title={finalConsentFsExited ? 'Return to fullscreen to continue' : undefined}
-            className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+            className="w-full flex items-center justify-center gap-2 bg-success hover:bg-success text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
           >
             {startSubmitting ? (
               <><Loader2 className="w-5 h-5 animate-spin" />Starting Interview...</>
@@ -2992,8 +2992,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         {finalConsentFsExited && (
           <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm p-4">
             <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
-              <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-5">
-                <Maximize2 className="w-8 h-8 text-amber-600" />
+              <div className="w-16 h-16 bg-warning-subtle rounded-full flex items-center justify-center mx-auto mb-5">
+                <Maximize2 className="w-8 h-8 text-warning" />
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">Return to Fullscreen</h2>
               <p className="text-gray-600 mb-6 text-sm">
@@ -3004,7 +3004,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
                   try { await requestFullscreen(); } catch { /* ignore */ }
                   setFinalConsentFsExited(!isFullscreen());
                 }}
-                className="w-full flex items-center justify-center gap-2 bg-amber-600 hover:bg-amber-700 text-white font-semibold py-3 rounded-xl transition-all"
+                className="w-full flex items-center justify-center gap-2 bg-warning hover:bg-warning text-white font-semibold py-3 rounded-xl transition-all"
               >
                 <Maximize2 className="w-4 h-4" />Return to Fullscreen
               </button>
@@ -3042,7 +3042,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             interview cannot start while another application is running.
           </p>
           {/* Do-not-refresh warning, inline (replaces the old red top bar). */}
-          <p className="text-xs font-semibold text-red-600 mb-4 text-center flex items-center justify-center gap-1.5">
+          <p className="text-xs font-semibold text-destructive mb-4 text-center flex items-center justify-center gap-1.5">
             <AlertTriangle data-capture-decor className="w-3.5 h-3.5 shrink-0" />
             Do not refresh this page — it drops screen sharing and restarts setup.
           </p>
@@ -3051,25 +3051,25 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               Hidden during the vision-check frame capture (shareBarMockRef) so it
               is never mistaken for the real bar. */}
           <div ref={shareBarMockRef} className="bg-gray-100 border border-gray-200 rounded-xl p-3 mb-4">
-            <p className="text-[11px] font-semibold uppercase tracking-wide text-gray-400 mb-2 text-center">Look for this bar and click &ldquo;Hide&rdquo;</p>
+            <p className="text-2xs font-semibold uppercase tracking-wide text-gray-400 mb-2 text-center">Look for this bar and click &ldquo;Hide&rdquo;</p>
             <div className="mx-auto max-w-md flex items-center gap-3 bg-white rounded-lg shadow-md border border-gray-200 px-3 py-2.5">
               <span className="w-4 h-4 rounded-sm bg-blue-500 shrink-0" />
               <span className="text-sm text-gray-700 flex-1 truncate">This site is sharing your screen.</span>
               <span className="text-xs font-semibold text-white bg-blue-600 rounded-full px-3 py-1 shrink-0">Stop sharing</span>
               <span className="relative shrink-0">
-                <span className="text-sm font-bold text-blue-700 underline underline-offset-2 px-1.5 py-1 rounded ring-2 ring-amber-400 ring-offset-1 bg-amber-50">Hide</span>
-                <span className="absolute -top-2 -right-2 text-amber-500 text-lg animate-bounce">👆</span>
+                <span className="text-sm font-bold text-blue-700 underline underline-offset-2 px-1.5 py-1 rounded ring-2 ring-warning-line ring-offset-1 bg-warning-subtle">Hide</span>
+                <span className="absolute -top-2 -right-2 text-warning text-lg animate-bounce">👆</span>
               </span>
             </div>
           </div>
 
           {shareBarError && (
-            <div className="bg-red-50 border border-red-200 rounded-xl p-4 mb-5 flex items-start gap-2">
-              <XCircle data-capture-decor className="w-5 h-5 text-red-600 shrink-0 mt-0.5" />
+            <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4 mb-5 flex items-start gap-2">
+              <XCircle data-capture-decor className="w-5 h-5 text-destructive shrink-0 mt-0.5" />
               <div>
-                <p className="text-sm font-medium text-red-700">{shareBarError}</p>
+                <p className="text-sm font-medium text-destructive">{shareBarError}</p>
                 {shareBarAttempts >= 2 && (
-                  <p className="text-xs text-red-500 mt-1">Still stuck? Make sure you clicked <b>Hide</b> (not Stop sharing), then try again.</p>
+                  <p className="text-xs text-destructive mt-1">Still stuck? Make sure you clicked <b>Hide</b> (not Stop sharing), then try again.</p>
                 )}
               </div>
             </div>
@@ -3078,7 +3078,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           <button
             onClick={() => { handleVerifyShareBarAndStart(); }}
             disabled={shareBarChecking || startSubmitting}
-            className="w-full flex items-center justify-center gap-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+            className="w-full flex items-center justify-center gap-2 bg-success hover:bg-success text-white font-semibold py-4 rounded-xl transition-all text-base disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
           >
             {startSubmitting ? (
               <><Loader2 data-capture-decor className="w-5 h-5 animate-spin" />Starting Interview...</>
@@ -3088,7 +3088,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               <><CheckCircle data-capture-decor className="w-5 h-5" />I&apos;ve hidden it — Continue</>
             )}
           </button>
-          <p className="text-[11px] text-gray-400 mt-3 text-center">
+          <p className="text-2xs text-gray-400 mt-3 text-center">
             Your screen is being recorded — this step is part of the interview session.
           </p>
         </div>
@@ -3224,20 +3224,20 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         {screenShareStopped && (
           <div className="fixed inset-0 z-[9999] bg-black/95 flex items-center justify-center backdrop-blur-sm">
             <div className="bg-white rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
-              <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-5">
-                <AlertTriangle className="w-8 h-8 text-red-600" />
+              <div className="w-16 h-16 bg-destructive-subtle rounded-full flex items-center justify-center mx-auto mb-5">
+                <AlertTriangle className="w-8 h-8 text-destructive" />
               </div>
               <h2 className="text-xl font-bold text-gray-900 mb-2">Screen Sharing Stopped</h2>
               <p className="text-gray-600 mb-2 text-sm">
                 Screen sharing is mandatory throughout the interview. This incident has been recorded as a violation.
               </p>
-              <p className="text-sm text-red-600 font-medium mb-6">
+              <p className="text-sm text-destructive font-medium mb-6">
                 You must re-enable Entire Screen sharing to continue. Window and Current Tab are not allowed.
               </p>
               <button
                 onClick={handleReshareScreen}
                 disabled={resharing}
-                className="w-full flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all"
+                className="w-full flex items-center justify-center gap-2 bg-destructive hover:bg-destructive disabled:opacity-60 text-white font-semibold py-3 rounded-xl transition-all"
               >
                 {resharing ? (
                   <><Loader2 className="w-4 h-4 animate-spin" />Requesting Permission...</>
@@ -3255,25 +3255,25 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             before the hard-pause overlay kicks in. Silent otherwise. */}
         {!IS_PRODUCTION_ENV && !screenShareStopped && fullscreenGraceRemaining !== null && isFullscreenActive && (
           <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm">
-            <div className="bg-white border-2 border-amber-400 rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
-              <Maximize2 className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+            <div className="bg-white border-2 border-warning rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
+              <Maximize2 className="w-12 h-12 text-warning mx-auto mb-4" />
               <h2 className="text-xl font-bold text-gray-900 mb-2">Return to Fullscreen</h2>
               <p className="text-gray-600 mb-4 text-sm">
                 Your interview is still running.
               </p>
-              <div className="mb-5 rounded-xl border-2 border-amber-400 bg-amber-50 px-4 py-3">
-                <span className="block text-[11px] font-semibold text-amber-700 uppercase tracking-widest mb-1">
+              <div className="mb-5 rounded-xl border-2 border-warning bg-warning-subtle px-4 py-3">
+                <span className="block text-2xs font-semibold text-warning uppercase tracking-widest mb-1">
                   Auto-pause in
                 </span>
                 <span className={`font-mono font-bold text-4xl tabular-nums ${
-                  fullscreenGraceRemaining <= 3 ? 'text-red-500' : 'text-amber-600'
+                  fullscreenGraceRemaining <= 3 ? 'text-destructive' : 'text-warning'
                 }`}>
                   {fullscreenGraceRemaining}s
                 </span>
               </div>
               <button
                 onClick={() => requestFullscreen().catch(() => {})}
-                className="w-full px-6 py-3 bg-amber-500 hover:bg-amber-600 rounded-xl font-bold text-white transition-colors"
+                className="w-full px-6 py-3 bg-warning hover:bg-warning rounded-xl font-bold text-white transition-colors"
               >
                 Return Now
               </button>
@@ -3284,8 +3284,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             Production uses the unified "return to the interview" pause below. */}
         {!IS_PRODUCTION_ENV && !screenShareStopped && !isFullscreenActive && (
           <div className="fixed inset-0 z-[999] bg-black/90 flex items-center justify-center backdrop-blur-sm">
-            <div className="bg-white border-2 border-yellow-400 rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
-              <Maximize2 className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+            <div className="bg-white border-2 border-warning rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
+              <Maximize2 className="w-12 h-12 text-warning mx-auto mb-4" />
               <h2 className="text-xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>
               <p className="text-gray-600 mb-4 text-sm">
                 Please return to fullscreen mode to continue your AI interview.
@@ -3295,22 +3295,22 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
               {timerSnapshot && (
                 <div className="mb-6">
                   <div className="flex flex-col items-center gap-1 rounded-xl bg-gray-50 border border-gray-200 px-3 py-3">
-                    <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">Interview Time</span>
-                    <span className={`font-mono font-bold text-xl tabular-nums ${timerSnapshot.remainingSeconds <= 60 ? 'text-red-500' : 'text-gray-900'}`}>
+                    <span className="text-2xs font-semibold text-gray-400 uppercase tracking-widest">Interview Time</span>
+                    <span className={`font-mono font-bold text-xl tabular-nums ${timerSnapshot.remainingSeconds <= 60 ? 'text-destructive' : 'text-gray-900'}`}>
                       {formatTime(timerSnapshot.remainingSeconds)}
                     </span>
-                    <span className="text-[9px] text-gray-400 font-medium">remaining</span>
+                    <span className="text-2xs text-gray-400 font-medium">remaining</span>
                   </div>
                 </div>
               )}
 
               <button
                 onClick={() => requestFullscreen().catch(() => {})}
-                className="w-full px-6 py-3 bg-yellow-500 hover:bg-yellow-600 rounded-xl font-bold text-white transition-colors"
+                className="w-full px-6 py-3 bg-warning hover:bg-warning rounded-xl font-bold text-white transition-colors"
               >
                 Return to Fullscreen
               </button>
-              <p className="text-xs text-red-500 font-medium animate-pulse mt-4">
+              <p className="text-xs text-destructive font-medium animate-pulse mt-4">
                 This event has been recorded
               </p>
             </div>
@@ -3326,20 +3326,20 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // reopening the link keeps showing this — the candidate cannot restart.
   if (step === 'terminated') {
     return (
-      <div className="min-h-[100dvh] flex items-center justify-center bg-red-50 px-4" style={{ colorScheme: 'light' }}>
-        <div className="bg-white rounded-2xl shadow-2xl border-2 border-red-300 max-w-md w-full p-8 text-center">
-          <div className="w-20 h-20 rounded-full bg-red-100 flex items-center justify-center mx-auto mb-6">
-            <AlertTriangle className="w-10 h-10 text-red-600" />
+      <div className="min-h-[100dvh] flex items-center justify-center bg-destructive-subtle px-4" style={{ colorScheme: 'light' }}>
+        <div className="bg-white rounded-2xl shadow-2xl border-2 border-destructive-line max-w-md w-full p-8 text-center">
+          <div className="w-20 h-20 rounded-full bg-destructive-subtle flex items-center justify-center mx-auto mb-6">
+            <AlertTriangle className="w-10 h-10 text-destructive" />
           </div>
-          <h1 className="text-2xl font-bold text-red-700 mb-3">Interview Terminated</h1>
+          <h1 className="text-2xl font-bold text-destructive mb-3">Interview Terminated</h1>
           <p className="text-gray-700 mb-3">
-            Your interview has been <span className="font-semibold text-red-600">ended</span> because you left
+            Your interview has been <span className="font-semibold text-destructive">ended</span> because you left
             the interview screen (switching tabs, minimizing, pressing a shortcut key,
             or exiting fullscreen is not allowed).
           </p>
           {interviewTerminatedReason && (
-            <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-2.5 mb-3">
-              <p className="text-sm text-red-700">
+            <div className="rounded-xl bg-destructive-subtle border border-destructive-line px-4 py-2.5 mb-3">
+              <p className="text-sm text-destructive">
                 Detected action: <span className="font-semibold">{terminationMessage(interviewTerminatedReason)}</span>
               </p>
             </div>
@@ -3348,8 +3348,8 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
             As required by the proctoring policy, you must remain on the interview page in
             fullscreen for the entire session. This session has been recorded and flagged for review.
           </p>
-          <div className="rounded-xl bg-red-50 border border-red-200 px-4 py-3">
-            <p className="text-sm font-semibold text-red-700">
+          <div className="rounded-xl bg-destructive-subtle border border-destructive-line px-4 py-3">
+            <p className="text-sm font-semibold text-destructive">
               The interview cannot be resumed or restarted.
             </p>
           </div>

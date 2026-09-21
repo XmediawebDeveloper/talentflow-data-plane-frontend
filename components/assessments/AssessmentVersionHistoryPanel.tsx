@@ -2,6 +2,7 @@
 
 import { Fragment, useState } from 'react';
 import { ChevronDown, Eye, Plus, RefreshCw } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import type { ReactNode } from 'react';
 import type { JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
@@ -272,7 +273,7 @@ export const assessmentStatusLabel = (status?: string): string =>
   ASSESSMENT_STATUS_LABELS[String(status || '').toLowerCase()] || 'Draft';
 
 const STATUS_STYLES: Record<string, { chip: string; dot: string }> = {
-  Active: { chip: 'bg-green-100 text-green-700 ring-green-200', dot: 'bg-green-500' },
+  Active: { chip: 'bg-success-subtle text-success ring-success-line', dot: 'bg-success' },
   Draft: { chip: 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20', dot: 'bg-brand-orange' },
   Completed: { chip: 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20', dot: 'bg-brand-blue' },
   Archived: { chip: 'bg-slate-100 text-gray-600 ring-gray-200', dot: 'bg-gray-400' },
@@ -563,7 +564,7 @@ export function VersionChip({ kind, version }: { kind: 'job' | 'assessment'; ver
 
 export function LatestBadge() {
   return (
-    <span className="px-1.5 py-0.5 rounded-md text-[10px] font-semibold tracking-wide text-white bg-brand-blue ring-1 ring-white/10">
+    <span className="px-1.5 py-0.5 rounded-md text-2xs font-semibold tracking-wide text-white bg-brand-blue ring-1 ring-white/10">
       Latest
     </span>
   );
@@ -1068,15 +1069,17 @@ export default function AssessmentVersionHistoryPanel({
                                 eye on the Create Assessment picker's own
                                 version rows. */}
                             {onViewJobVersion && group.jobVersionId && (
-                              <button
+                              <Button
                                 type="button"
+                                variant="secondary"
+                                size="sm"
                                 onClick={() => onViewJobVersion(group.jobVersionId!, group.jobVersion)}
                                 aria-label={`View job V${group.jobVersion} details`}
                                 title={`View job V${group.jobVersion} details`}
-                                className="h-8 w-8 flex items-center justify-center rounded-lg border border-brand-blue/40 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
+                                className="px-2 flex-shrink-0"
                               >
                                 <Eye className="w-3.5 h-3.5" />
-                              </button>
+                              </Button>
                             )}
                             {/* Create Assessment and View Assessment are the
                                 SAME slot, decided per job version by one
@@ -1141,8 +1144,9 @@ export default function AssessmentVersionHistoryPanel({
                                   ? `Create ${vocabulary.childSingular === 'Assessment' ? 'an' : 'a'} ${vocabulary.childSingular.toLowerCase()} for job V${group.jobVersion}`
                                   : createAssessmentBlockedReason(group.jobStatus, group.jobCurrentVersion);
                                 return (
-                                  <button
-                                    type="button"
+                                  <Button
+                                    variant="primary"
+                                    size="sm"
                                     disabled={!canCreate}
                                     onClick={() => {
                                       if (!canCreate) return;
@@ -1150,15 +1154,10 @@ export default function AssessmentVersionHistoryPanel({
                                     }}
                                     title={reason}
                                     aria-label={reason}
-                                    className={`h-8 px-3 inline-flex items-center gap-1.5 rounded-lg text-xs font-medium whitespace-nowrap transition-all ${
-                                      canCreate
-                                        ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
-                                        : 'bg-gray-300 text-gray-500 cursor-not-allowed opacity-60 shadow-none'
-                                    }`}
+                                    icon={<Plus className="w-3.5 h-3.5" />}
                                   >
-                                    <Plus className="w-3.5 h-3.5" />
                                     Create {vocabulary.childSingular}
-                                  </button>
+                                  </Button>
                                 );
                               })()
                             ) : (
@@ -1381,15 +1380,17 @@ export default function AssessmentVersionHistoryPanel({
                                                           the host's own quick
                                                           actions and menu. */}
                                                       {onViewAssessment && (
-                                                        <button
+                                                        <Button
                                                           type="button"
+                                                          variant="secondary"
+                                                          size="sm"
                                                           onClick={() => onViewAssessment(assessment)}
                                                           aria-label={`View assessment V${assessment.version ?? 1} details`}
                                                           title={`View assessment V${assessment.version ?? 1} details`}
-                                                          className="h-7 w-7 flex items-center justify-center rounded-md border border-brand-blue/40 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/10 hover:border-brand-blue transition-all flex-shrink-0"
+                                                          className="px-2 flex-shrink-0"
                                                         >
                                                           <Eye className="w-3.5 h-3.5" />
-                                                        </button>
+                                                        </Button>
                                                       )}
                                                       {/* The host's own menu and
                                                           quick actions, where a

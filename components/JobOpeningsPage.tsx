@@ -31,6 +31,7 @@ import api from '@/lib/services/api';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
 
@@ -213,16 +214,16 @@ export default function JobOpeningsPage() {
   const getStatusBadge = (status: string, republishedAt?: string | null) => {
     if (status === 'published' && republishedAt) {
       return (
-        <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-emerald-100 text-emerald-700">
+        <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-success-subtle text-success">
           Republished
         </span>
       );
     }
     const configs: Record<string, { bg: string; text: string; label: string }> = {
-      published: { bg: 'bg-green-100', text: 'text-green-700', label: 'Published' },
-      draft: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Draft' },
+      published: { bg: 'bg-success-subtle', text: 'text-success', label: 'Published' },
+      draft: { bg: 'bg-warning-subtle', text: 'text-warning', label: 'Draft' },
       closed: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Closed' },
-      disabled: { bg: 'bg-red-100', text: 'text-red-700', label: 'Disabled' },
+      disabled: { bg: 'bg-destructive-subtle', text: 'text-destructive', label: 'Disabled' },
       archived: { bg: 'bg-gray-100', text: 'text-gray-500', label: 'Archived' },
     };
     const config = configs[status] || configs.draft;
@@ -251,7 +252,8 @@ export default function JobOpeningsPage() {
             <p className="text-sm text-gray-500 mt-1">Manage and track all your job postings</p>
           </div>
           <div className="flex flex-col items-stretch md:items-end gap-1 w-full md:w-auto">
-            <button
+            <Button
+              variant="primary"
               onClick={() => {
                 if (!canCreateJd) {
                   toast.error('You do not have permission to create job descriptions');
@@ -268,21 +270,16 @@ export default function JobOpeningsPage() {
                 router.push('/recruitment/jd-creation');
               }}
               disabled={!canCreateJd || hasInsufficientUnits}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-colors font-medium shadow-sm ${
-                !canCreateJd || hasInsufficientUnits
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-gray-800 text-white hover:bg-gray-900'
-              }`}
+              icon={<Plus className="w-4 h-4" />}
               title={!canCreateJd ? 'You do not have permission to create job descriptions' : ''}
             >
-              <Plus className="w-4 h-4" />
               Create New Job
-            </button>
+            </Button>
             {!canCreateJd && (
-              <span className="text-xs text-red-600 font-medium">No create permission</span>
+              <span className="text-xs text-destructive font-medium">No create permission</span>
             )}
             {canCreateJd && hasInsufficientUnits && (
-              <span className="text-xs text-red-600 font-medium">Insufficient units</span>
+              <span className="text-xs text-destructive font-medium">Insufficient units</span>
             )}
           </div>
         </div>
@@ -292,7 +289,7 @@ export default function JobOpeningsPage() {
           <div className="bg-white rounded-md sm:rounded-lg md:rounded-xl border border-gray-200 p-1.5 sm:p-3 md:p-5">
             <div className="flex flex-col gap-1 sm:gap-2">
               <div className="flex items-center justify-between">
-                <p className="text-[9px] sm:text-xs md:text-sm text-gray-500 leading-tight">Total Jobs</p>
+                <p className="text-2xs sm:text-xs md:text-sm text-gray-500 leading-tight">Total Jobs</p>
                 <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-gray-50 rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
                   <Briefcase className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-800" />
                 </div>
@@ -304,31 +301,31 @@ export default function JobOpeningsPage() {
           <div className="bg-white rounded-md sm:rounded-lg md:rounded-xl border border-gray-200 p-1.5 sm:p-3 md:p-5">
             <div className="flex flex-col gap-1 sm:gap-2">
               <div className="flex items-center justify-between">
-                <p className="text-[9px] sm:text-xs md:text-sm text-gray-500 leading-tight">Active</p>
-                <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-green-50 rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
-                  <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-green-600" />
+                <p className="text-2xs sm:text-xs md:text-sm text-gray-500 leading-tight">Active</p>
+                <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-success-subtle rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
+                  <CheckCircle className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-success" />
                 </div>
               </div>
-              <p className="text-sm sm:text-xl md:text-2xl font-semibold text-green-600 whitespace-nowrap">{stats.activeJobs}</p>
+              <p className="text-sm sm:text-xl md:text-2xl font-semibold text-success whitespace-nowrap">{stats.activeJobs}</p>
             </div>
           </div>
 
           <div className="bg-white rounded-md sm:rounded-lg md:rounded-xl border border-gray-200 p-1.5 sm:p-3 md:p-5">
             <div className="flex flex-col gap-1 sm:gap-2">
               <div className="flex items-center justify-between">
-                <p className="text-[9px] sm:text-xs md:text-sm text-gray-500 leading-tight">Drafts</p>
-                <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-yellow-50 rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
-                  <FileText className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-yellow-600" />
+                <p className="text-2xs sm:text-xs md:text-sm text-gray-500 leading-tight">Drafts</p>
+                <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-warning-subtle rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
+                  <FileText className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-warning" />
                 </div>
               </div>
-              <p className="text-sm sm:text-xl md:text-2xl font-semibold text-yellow-600 whitespace-nowrap">{stats.draftJobs}</p>
+              <p className="text-sm sm:text-xl md:text-2xl font-semibold text-warning whitespace-nowrap">{stats.draftJobs}</p>
             </div>
           </div>
 
           <div className="bg-white rounded-md sm:rounded-lg md:rounded-xl border border-gray-200 p-1.5 sm:p-3 md:p-5">
             <div className="flex flex-col gap-1 sm:gap-2">
               <div className="flex items-center justify-between">
-                <p className="text-[9px] sm:text-xs md:text-sm text-gray-500 leading-tight">Applicants</p>
+                <p className="text-2xs sm:text-xs md:text-sm text-gray-500 leading-tight">Applicants</p>
                 <div className="w-6 h-6 sm:w-8 sm:h-8 md:w-10 md:h-10 bg-gray-50 rounded-md sm:rounded-lg flex items-center justify-center flex-shrink-0">
                   <Users className="w-3 h-3 sm:w-4 sm:h-4 md:w-5 md:h-5 text-gray-800" />
                 </div>
@@ -426,7 +423,8 @@ export default function JobOpeningsPage() {
             </p>
             {!searchQuery && activeFilter === 'all' && (
               <div className="flex flex-col items-center gap-1">
-                <button
+                <Button
+                  variant="primary"
                   onClick={() => {
                     if (!canCreateJd) {
                       toast.error('You do not have permission to create job descriptions');
@@ -443,21 +441,16 @@ export default function JobOpeningsPage() {
                     router.push('/recruitment/jd-creation');
                   }}
                   disabled={!canCreateJd || hasInsufficientUnits}
-                  className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg ${
-                    !canCreateJd || hasInsufficientUnits
-                      ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                      : 'bg-gray-800 text-white hover:bg-gray-900'
-                  }`}
+                  icon={<Plus className="w-4 h-4" />}
                   title={!canCreateJd ? 'You do not have permission to create job descriptions' : ''}
                 >
-                  <Plus className="w-4 h-4" />
                   Create New Job
-                </button>
+                </Button>
                 {!canCreateJd && (
-                  <span className="text-xs text-red-600 font-medium">No create permission</span>
+                  <span className="text-xs text-destructive font-medium">No create permission</span>
                 )}
                 {canCreateJd && hasInsufficientUnits && (
-                  <span className="text-xs text-red-600 font-medium">Insufficient units</span>
+                  <span className="text-xs text-destructive font-medium">Insufficient units</span>
                 )}
               </div>
             )}
@@ -566,7 +559,7 @@ export default function JobOpeningsPage() {
                               {job.status === 'draft' && (
                                 <button
                                   onClick={() => handleStatusChange(job.id, 'published')}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-success hover:bg-success-subtle"
                                 >
                                   <CheckCircle className="w-4 h-4" />
                                   Publish
@@ -598,7 +591,7 @@ export default function JobOpeningsPage() {
                                     }
                                     handleStatusChange(job.id, 'published');
                                   }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-green-700 hover:bg-green-50"
+                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-success hover:bg-success-subtle"
                                 >
                                   <Power className="w-4 h-4" />
                                   Re-enable JD
@@ -702,8 +695,8 @@ export default function JobOpeningsPage() {
             {/* Body */}
             <div className="px-5 sm:px-6 py-5 overflow-y-auto flex-1">
               <div className="text-center">
-                <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Briefcase className="w-8 h-8 text-red-600" />
+                <div className="w-16 h-16 bg-destructive-subtle rounded-full flex items-center justify-center mx-auto mb-4">
+                  <Briefcase className="w-8 h-8 text-destructive" />
                 </div>
                 <p className="text-gray-600">
                   You've used {quotaInfo?.used}/{quotaInfo?.limit} job slots. Upgrade your plan to create more jobs.
@@ -713,21 +706,21 @@ export default function JobOpeningsPage() {
 
             {/* Footer */}
             <div className="px-5 sm:px-6 py-4 border-t border-gray-200 flex gap-3 justify-center shrink-0">
-              <button
+              <Button
+                variant="secondary"
                 onClick={() => setShowQuotaModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
                 onClick={() => {
                   setShowQuotaModal(false);
                   router.push('/subscription/current-plan');
                 }}
-                className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 font-medium"
               >
                 Upgrade Plan
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -765,19 +758,19 @@ export default function JobOpeningsPage() {
                   <div className="space-y-1.5 text-sm">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Resume Storage (RU)</span>
-                      <span className={`font-medium ${unitQuotas?.RU === 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      <span className={`font-medium ${unitQuotas?.RU === 0 ? 'text-destructive' : 'text-success'}`}>
                         {unitQuotas?.RU || 0} units
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Resume Scoring (RS)</span>
-                      <span className={`font-medium ${unitQuotas?.RS === 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      <span className={`font-medium ${unitQuotas?.RS === 0 ? 'text-destructive' : 'text-success'}`}>
                         {unitQuotas?.RS || 0} units
                       </span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Assessment (AS)</span>
-                      <span className={`font-medium ${unitQuotas?.AS === 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      <span className={`font-medium ${unitQuotas?.AS === 0 ? 'text-destructive' : 'text-success'}`}>
                         {unitQuotas?.AS || 0} units
                       </span>
                     </div>
@@ -791,21 +784,21 @@ export default function JobOpeningsPage() {
 
             {/* Footer */}
             <div className="px-5 sm:px-6 py-4 border-t border-gray-200 flex gap-3 justify-center shrink-0">
-              <button
+              <Button
+                variant="secondary"
                 onClick={() => setShowInsufficientUnitsModal(false)}
-                className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 font-medium"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
                 onClick={() => {
                   setShowInsufficientUnitsModal(false);
                   router.push('/subscription/usage-quotas');
                 }}
-                className="px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 font-medium"
               >
                 Buy Units
-              </button>
+              </Button>
             </div>
           </div>
         </div>

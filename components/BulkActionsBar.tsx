@@ -323,7 +323,7 @@ export default function BulkActionsBar({
                       <div className="flex-initial min-h-0 max-h-[338px] overflow-y-auto overscroll-contain">
                         {systemFolders.length > 0 && (
                           <>
-                            <div className="px-3 pt-1 pb-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                            <div className="px-3 pt-1 pb-1 text-2xs font-semibold text-muted-foreground uppercase tracking-wide">
                               System Folders
                             </div>
                             {systemFolders.map(folder => (
@@ -354,7 +354,7 @@ export default function BulkActionsBar({
                         )}
                         {myFolders.length > 0 && (
                           <>
-                            <div className="px-3 pt-1 pb-1 text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">
+                            <div className="px-3 pt-1 pb-1 text-2xs font-semibold text-muted-foreground uppercase tracking-wide">
                               My Folders
                             </div>
                             {myFolders.map(folder => renderFolderRow(folder, 0, []))}

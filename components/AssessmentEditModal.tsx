@@ -4,6 +4,7 @@ import { assessmentService } from '@/lib/services';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import UnsavedChangesModal from '@/components/UnsavedChangesModal';
+import { Button } from '@/components/ui/button';
 
 interface AssessmentEditModalProps {
   isOpen: boolean;
@@ -184,12 +185,14 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
               </p>
             </div>
           </div>
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={handleCloseAttempt}
-            className="text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg p-1.5 sm:p-2 transition-colors flex-shrink-0"
-           aria-label="Close">
+            className="px-2 flex-shrink-0"
+            aria-label="Close">
             <X className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
 
         {/* Content */}
@@ -205,7 +208,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
               {/* Title */}
               <div>
                 <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">
-                  Assessment Title <span className="text-red-500">*</span>
+                  Assessment Title <span className="text-destructive">*</span>
                 </label>
                 <input
                   type="text"
@@ -215,12 +218,12 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                     setErrors({ ...errors, title: null });
                   }}
                   className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue ${
-                    errors.title ? 'border-red-500' : 'border-gray-200 dark:border-slate-700'
+                    errors.title ? 'border-destructive' : 'border-gray-200 dark:border-slate-700'
                   }`}
                   placeholder="e.g., Senior Software Engineer Technical Assessment"
                 />
                 {errors.title && (
-                  <p className="text-sm text-red-500 mt-1 flex items-center gap-1">
+                  <p className="text-sm text-destructive mt-1 flex items-center gap-1">
                     <AlertCircle className="w-4 h-4" />
                     {errors.title}
                   </p>
@@ -231,7 +234,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm text-gray-700 dark:text-slate-300 mb-2">
-                    Duration <span className="text-red-500">*</span>
+                    Duration <span className="text-destructive">*</span>
                   </label>
                   <div className="relative">
                     <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400 dark:text-slate-500" />
@@ -243,13 +246,13 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                         setErrors({ ...errors, duration: null });
                       }}
                       className={`w-full pl-10 pr-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue ${
-                        errors.duration ? 'border-red-500' : 'border-gray-200 dark:border-slate-700'
+                        errors.duration ? 'border-destructive' : 'border-gray-200 dark:border-slate-700'
                       }`}
                       placeholder="e.g., 60 min"
                     />
                   </div>
                   {errors.duration && (
-                    <p className="text-sm text-red-500 mt-1">{errors.duration}</p>
+                    <p className="text-sm text-destructive mt-1">{errors.duration}</p>
                   )}
                 </div>
 
@@ -308,13 +311,13 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
                 <Award className="w-5 h-5 text-brand-blue" />
                 Assessment Sections
               </h3>
-              <button
+              <Button
+                variant="primary"
                 onClick={addSection}
-                className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors text-sm"
+                icon={<Plus className="w-4 h-4" />}
               >
-                <Plus className="w-4 h-4" />
                 Add Section
-              </button>
+              </Button>
             </div>
 
             {editedAssessment.sections.length > 0 ? (
@@ -367,7 +370,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
 
                       <button
                         onClick={() => deleteSection(index)}
-                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                        className="p-2 text-destructive hover:bg-destructive-subtle rounded-lg transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -379,13 +382,13 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
               <div className="border-2 border-dashed border-gray-200 dark:border-slate-700 rounded-lg p-8 text-center bg-slate-50 dark:bg-slate-950">
                 <Award className="w-12 h-12 text-gray-400 dark:text-slate-500 mx-auto mb-3" />
                 <p className="text-gray-600 dark:text-slate-400 mb-3">No sections added yet</p>
-                <button
+                <Button
+                  variant="primary"
                   onClick={addSection}
-                  className="inline-flex items-center gap-2 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors text-sm"
+                  icon={<Plus className="w-4 h-4" />}
                 >
-                  <Plus className="w-4 h-4" />
                   Add First Section
-                </button>
+                </Button>
               </div>
             )}
           </div>
@@ -405,29 +408,29 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
 
         {/* Footer */}
         <div className="border-t border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 bg-slate-50 dark:bg-slate-950 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 flex-shrink-0">
-          <button
+          <Button
+            variant="secondary"
             onClick={handleCloseAttempt}
             disabled={isSaving}
-            className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50"
           >
             Cancel
-          </button>
+          </Button>
           <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-            <button
+            <Button
+              variant="secondary"
               onClick={() => handleSave(true)}
               disabled={isSaving}
-              className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50"
             >
               {isSaving ? 'Saving...' : 'Save as Draft'}
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
               onClick={() => handleSave(false)}
               disabled={isSaving}
-              className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors flex items-center justify-center gap-2 disabled:opacity-50"
+              icon={<Save className="w-4 h-4" />}
             >
-              <Save className="w-4 h-4" />
               {isSaving ? 'Saving...' : 'Save Changes'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>

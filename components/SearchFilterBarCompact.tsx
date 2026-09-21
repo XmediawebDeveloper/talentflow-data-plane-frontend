@@ -340,7 +340,7 @@ export default function SearchFilterBarCompact({
                     <div className="px-3 sm:px-5 pb-3 sm:pb-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
                         <div>
-                          <label className="block text-[10px] sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Location</label>
+                          <label className="block text-2xs sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Location</label>
                           <input
                             type="text"
                             placeholder="e.g., San Francisco"
@@ -350,7 +350,7 @@ export default function SearchFilterBarCompact({
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Education</label>
+                          <label className="block text-2xs sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Education</label>
                           <select
                             value={mapBackendCodeToDisplay(tempFilters.education)}
                             onChange={(e) => {
@@ -388,7 +388,7 @@ export default function SearchFilterBarCompact({
                     <div className="px-3 sm:px-5 pb-3 sm:pb-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
                         <div>
-                          <label className="block text-[10px] sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Current Company</label>
+                          <label className="block text-2xs sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Current Company</label>
                           <input
                             type="text"
                             placeholder="e.g., Google"
@@ -398,7 +398,7 @@ export default function SearchFilterBarCompact({
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Notice Period</label>
+                          <label className="block text-2xs sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Notice Period</label>
                           <select
                             value={tempFilters.noticePeriod || 'Any'}
                             onChange={(e) => setTempFilters({ ...tempFilters, noticePeriod: e.target.value === 'Any' ? null : e.target.value })}
@@ -431,7 +431,7 @@ export default function SearchFilterBarCompact({
                   </button>
                   {expandedSections.includes('dates') && (
                     <div className="px-3 sm:px-5 pb-3 sm:pb-4">
-                      <label className="block text-[10px] sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Upload Date Range</label>
+                      <label className="block text-2xs sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Upload Date Range</label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
                         <input
                           type="date"
@@ -477,7 +477,7 @@ export default function SearchFilterBarCompact({
                     <div className="px-3 sm:px-5 pb-3 sm:pb-4">
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-4">
                         <div>
-                          <label className="block text-[10px] sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Uploaded By</label>
+                          <label className="block text-2xs sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Uploaded By</label>
                           <input
                             type="text"
                             placeholder="Enter name..."
@@ -487,7 +487,7 @@ export default function SearchFilterBarCompact({
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Source Type</label>
+                          <label className="block text-2xs sm:text-xs text-gray-600 mb-1 sm:mb-1.5">Source Type</label>
                           <select
                             value={tempFilters.sourceType || ''}
                             onChange={(e) => setTempFilters({ ...tempFilters, sourceType: e.target.value || null })}

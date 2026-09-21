@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 export default function BrandingPage() {
   const { hasPermission } = useAuth();
@@ -206,7 +207,7 @@ export default function BrandingPage() {
                 <Palette className="h-6 w-6 text-white" />
               </div>
               <div>
-                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-2xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
                   <Sparkles className="h-3 w-3 text-brand-orange" />
                   White-label studio
                 </div>
@@ -215,14 +216,16 @@ export default function BrandingPage() {
               </div>
             </div>
             {canManage && (
-              <button
+              <Button
+                tone="onColor"
+                variant="primary"
                 onClick={handleSave}
                 disabled={isSaving}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-60"
+                icon={saved ? <Check className="w-4 h-4" /> : isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+                className="rounded-xl px-4 py-2.5 shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0"
               >
-                {saved ? <Check className="w-4 h-4" /> : isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
                 {saved ? 'Saved!' : isSaving ? 'Saving...' : 'Save Changes'}
-              </button>
+              </Button>
             )}
           </div>
         </section>
@@ -257,21 +260,23 @@ export default function BrandingPage() {
                 className="hidden"
               />
               <div className="flex items-center gap-2">
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => logoInputRef.current?.click()}
                   disabled={isUploadingLogo || !canManage}
-                  className="px-3 sm:px-4 py-2 text-xs sm:text-sm bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
+                  className="text-xs sm:text-sm"
                 >
                   {isUploadingLogo ? (
                     <><Loader2 className="w-3.5 h-3.5 animate-spin" />Uploading...</>
                   ) : (
                     <><Upload className="w-3.5 h-3.5" />Upload Logo</>
                   )}
-                </button>
+                </Button>
                 {branding.logo_url && canManage && (
                   <button
                     onClick={() => setBranding(prev => ({ ...prev, logo_url: '' }))}
-                    className="p-2 text-gray-400 dark:text-slate-500 hover:text-red-500 rounded-lg hover:bg-red-50 transition-colors"
+                    className="p-2 text-gray-400 dark:text-slate-500 hover:text-destructive rounded-lg hover:bg-destructive-subtle transition-colors"
                     aria-label="Remove logo" title="Remove logo"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -365,7 +370,7 @@ export default function BrandingPage() {
               </span>
             )}
             {!domainVerified && branding.custom_domain && (
-              <span className="flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-50 ring-1 ring-amber-200 px-2.5 py-1 rounded-full">
+              <span className="flex items-center gap-1.5 text-xs font-medium text-warning bg-warning-subtle ring-1 ring-warning-line px-2.5 py-1 rounded-full">
                 <ShieldAlert className="w-3.5 h-3.5" /> Not verified
               </span>
             )}
@@ -385,10 +390,12 @@ export default function BrandingPage() {
                 placeholder="careers.yourcompany.com"
                 className="flex-1 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 py-2 text-xs sm:text-sm text-gray-900 dark:text-slate-50 transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue placeholder-gray-400"
               />
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={handleVerifyDomain}
                 disabled={isVerifyingDomain || !branding.custom_domain?.trim() || !canManage}
-                className="inline-flex items-center gap-1.5 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 hover:bg-brand-blue/15 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="text-xs sm:text-sm"
               >
                 {isVerifyingDomain ? (
                   <><Loader2 className="w-3.5 h-3.5 animate-spin" />Checking...</>
@@ -397,7 +404,7 @@ export default function BrandingPage() {
                 ) : (
                   <><ShieldCheck className="w-3.5 h-3.5" />Verify DNS</>
                 )}
-              </button>
+              </Button>
             </div>
 
             {/* DNS Instructions */}
@@ -438,7 +445,7 @@ export default function BrandingPage() {
               </div>
             )}
             {!cloudflareProxied && domainError && (
-              <p className="mt-2 text-xs text-red-600 flex items-center gap-1">
+              <p className="mt-2 text-xs text-destructive flex items-center gap-1">
                 <ShieldAlert className="w-3.5 h-3.5 flex-shrink-0" />
                 {domainError}
               </p>
@@ -498,12 +505,14 @@ export default function BrandingPage() {
                 <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50">Branded Career Portal Preview</h3>
                 <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">How candidates will see your portal</p>
               </div>
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => setShowPreviewModal(false)}
-                className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                className="px-2"
                aria-label="Close">
                 <X className="w-4 h-4 text-gray-500 dark:text-slate-500" />
-              </button>
+              </Button>
             </div>
 
             {/* Simulated browser chrome */}

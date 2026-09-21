@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { DndProvider, useDrag, useDrop } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { Button } from '@/components/ui/button';
 import type {
   AIInterviewResponse,
   AIInterviewRoundConfig,
@@ -228,7 +229,7 @@ function allocateClusterMinutes(clusters: Cluster[], totalMinutes: number): Reco
 function PriorityBadge({ p }: { p: number }) {
   const info = PRIORITY_LABELS[p] ?? PRIORITY_LABELS[3];
   return (
-    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold border ${info.color}`}>
+    <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-2xs font-semibold border ${info.color}`}>
       <span className={`w-1.5 h-1.5 rounded-full ${info.dot}`} />
       {info.short}
     </span>
@@ -367,7 +368,7 @@ function DraggableClusterSkill({
           onClick={(e) => { e.stopPropagation(); if (removalLocked) return; onRemove(skillName, clusterId); }}
           disabled={removalLocked}
           title={removalLocked ? 'Minimum skill count reached — removal disabled' : undefined}
-          className={`ml-0.5 transition-all ${removalLocked ? 'opacity-20 cursor-not-allowed' : 'opacity-50 hover:opacity-100 hover:text-red-500 hover:scale-110'}`}
+          className={`ml-0.5 transition-all ${removalLocked ? 'opacity-20 cursor-not-allowed' : 'opacity-50 hover:opacity-100 hover:text-destructive hover:scale-110'}`}
          aria-label="Close">
           <X className="w-3 h-3" />
         </button>
@@ -495,7 +496,7 @@ function ClusterRow({
         )}
         <PriorityBadge p={cluster.priority} />
         {visibleClusterSkills.length === 0 && (
-          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-[9px] font-semibold bg-red-50 text-red-600 border border-red-200/70 flex-shrink-0">
+          <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded-md text-2xs font-semibold bg-destructive-subtle text-destructive border border-destructive-line/70 flex-shrink-0">
             <AlertTriangle className="w-2.5 h-2.5" /> Empty
           </span>
         )}
@@ -508,14 +509,14 @@ function ClusterRow({
           return (
             <span
               title={`${aiCount} skill${aiCount !== 1 ? 's' : ''} merged or added by AI from your inputs`}
-              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-semibold bg-gradient-to-r from-brand-blue/10 to-brand-blue/5 text-brand-blue border border-brand-blue/20 flex-shrink-0 shadow-sm shadow-brand-blue/5"
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-semibold bg-gradient-to-r from-brand-blue/10 to-brand-blue/5 text-brand-blue border border-brand-blue/20 flex-shrink-0 shadow-sm shadow-brand-blue/5"
             >
               <Sparkles className="w-2.5 h-2.5" />
               {aiCount} AI
             </span>
           );
         })()}
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-gray-100 text-gray-600 ring-1 ring-gray-200/60">
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium bg-gray-100 text-gray-600 ring-1 ring-gray-200/60">
           {visibleClusterSkills.length} skill{visibleClusterSkills.length !== 1 ? 's' : ''}
         </span>
         {/* Rename and remove, on the row itself. Both used to live inside the
@@ -557,7 +558,7 @@ function ClusterRow({
           {/* Cluster name + Priority side-by-side for compactness */}
           <div className="grid grid-cols-3 gap-2.5">
             <div className="col-span-2">
-              <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Cluster Name</label>
+              <label className="text-2xs font-semibold text-gray-400 uppercase tracking-wider">Cluster Name</label>
               <input
                 type="text"
                 value={cluster.name}
@@ -568,7 +569,7 @@ function ClusterRow({
               />
             </div>
             <div>
-              <label className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">Priority</label>
+              <label className="text-2xs font-semibold text-gray-400 uppercase tracking-wider">Priority</label>
               <PrioritySelect
                 value={cluster.priority}
                 onChange={(p) => onUpdate(cluster.id, { priority: p as Cluster['priority'] })}
@@ -602,11 +603,11 @@ function ClusterRow({
                 return (
                   <div className="mt-1.5">
                     <div className="flex items-center justify-between mb-1.5">
-                      <div className="text-[9px] font-semibold uppercase tracking-wide text-gray-400">
+                      <div className="text-2xs font-semibold uppercase tracking-wide text-gray-400">
                         Skills ({totalCount}{commandCount > 0 ? ` · ${commandCount} command${commandCount === 1 ? '' : 's'}` : ''})
                       </div>
                       {commandCount > 0 && (
-                        <div className="flex items-center gap-2 text-[9px] text-gray-400">
+                        <div className="flex items-center gap-2 text-2xs text-gray-400">
                           <span className="flex items-center gap-1">
                             <span className="w-1.5 h-1.5 rounded-full bg-violet-400" /> Skill
                           </span>
@@ -643,10 +644,23 @@ function ClusterRow({
             ) : (
               <p className="text-xs text-gray-400 mt-1">No skills assigned. Drag skills here from other clusters.</p>
             )}
-            {!isReadOnly && <p className="text-[9px] text-gray-300 mt-1.5">Drag skills to move between clusters</p>}
+            {!isReadOnly && <p className="text-2xs text-gray-300 mt-1.5">Drag skills to move between clusters</p>}
           </div>
 
-          {/* Remove lives on the row's header now — see the trash there. */}
+          {/* Remove cluster button — hidden when read-only, disabled at floor */}
+          {!isReadOnly && (
+            <div className="flex justify-end pt-1">
+              <button
+                onClick={() => { if (removalLocked) return; onRemove(cluster.id); }}
+                disabled={removalLocked}
+                title={removalLocked ? 'Minimum skill count reached — removal disabled' : undefined}
+                className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors ${removalLocked ? 'text-gray-300 cursor-not-allowed' : 'text-destructive hover:bg-destructive-subtle'}`}
+              >
+                <Trash2 className="w-3 h-3" />
+                Remove Cluster
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -829,13 +843,22 @@ function CategorySection({
           <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-brand-blue/15 to-brand-blue/5 ring-1 ring-brand-blue/15 text-brand-blue shadow-sm shadow-brand-blue/10 flex-shrink-0">
             {icon}
           </div>
+          <div className="flex flex-col">
+            <h2 className="text-base font-semibold text-gray-900 tracking-tight leading-tight">{title}</h2>
+            <div className="flex items-center gap-2 mt-0.5">
+              {timeMin > 0 && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-2xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
+                  <Clock className="w-2.5 h-2.5" />
+                  {timeMin} min
+                </span>
+              )}
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-base font-semibold text-gray-900 tracking-tight leading-tight">{title}</h2>
               {maxClusters > 0 && (
-                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium ${
+                <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium ${
                   atLimit
-                    ? 'bg-red-50 text-red-700 ring-1 ring-red-200'
+                    ? 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line'
                     : 'bg-slate-100 text-gray-600 ring-1 ring-gray-200/70'
                 }`}>
                   {clusters.length}/{maxClusters} clusters
@@ -911,7 +934,7 @@ function CategorySection({
                   type="button"
                   onClick={() => { if (removalLocked) return; onRemoveSkillFromPool?.(entry.name); }}
                   disabled={removalLocked}
-                  className={`ml-0.5 transition-all ${removalLocked ? 'opacity-20 cursor-not-allowed' : 'opacity-50 hover:opacity-100 hover:text-red-500 hover:scale-110'}`}
+                  className={`ml-0.5 transition-all ${removalLocked ? 'opacity-20 cursor-not-allowed' : 'opacity-50 hover:opacity-100 hover:text-destructive hover:scale-110'}`}
                   aria-label="Remove" title={removalLocked ? 'Minimum skill count reached — removal disabled' : 'Remove'}
                 >
                   <X className="w-3 h-3" />
@@ -948,7 +971,7 @@ function CategorySection({
                     Skills <span className="text-gray-400 font-normal">({totalCount}{commandCount > 0 ? ` · ${commandCount} command${commandCount === 1 ? '' : 's'}` : ''})</span>
                   </span>
                   {commandCount > 0 && (
-                    <div className="flex items-center gap-2.5 text-[10px] text-gray-400">
+                    <div className="flex items-center gap-2.5 text-2xs text-gray-400">
                       <span className="flex items-center gap-1">
                         <span className="w-1.5 h-1.5 rounded-full bg-violet-400" /> Skill
                       </span>
@@ -3420,7 +3443,7 @@ export default function AIInterviewClusters() {
                             <div className="text-gray-700 mb-2">
                               <span className="font-medium">Refined MHS:</span> Java (High), Spring Boot (High), Microservices (Medium), REST API (Medium), Docker (Low). <span className="font-medium">Allocated:</span> 3 questions.
                             </div>
-                            <div className="space-y-0.5 font-mono text-[11px] text-gray-800">
+                            <div className="space-y-0.5 font-mono text-2xs text-gray-800">
                               <div>Q1 → Java (High) · Spring Boot (Medium)</div>
                               <div>Q2 → Microservices (Medium) · REST API (High)</div>
                               <div>Q3 → Docker (Low) + integration with backend</div>
@@ -3449,13 +3472,13 @@ export default function AIInterviewClusters() {
                     selection is no longer surfaced on the cluster page. */}
                 {/* Hide regenerate when flexible mode clusters are finalized */}
                 {!(isFlexible && isFinalized) && (
-                  <button
+                  <Button
+                    variant="primary"
                     /* Wrapped: as a bare handler React passes the MouseEvent as `opts`,
                        and destructuring forceExpand off it yields undefined -> false, the
                        same result as calling with no argument. */
                     onClick={() => handleGenerateClusters()}
                     disabled={generating || saving}
-                    className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
                   >
                     {generating ? (
                       <Loader2 className="w-4 h-4 animate-spin" />
@@ -3463,7 +3486,7 @@ export default function AIInterviewClusters() {
                       <Sparkles className="w-4 h-4" />
                     )}
                     {generating ? 'Generating...' : 'Regenerate with AI'}
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -3797,8 +3820,8 @@ export default function AIInterviewClusters() {
             ]).size;
             const priorityLabel = (p: number) => p >= 3 ? 'High' : p === 2 ? 'Medium' : 'Low';
             const priorityClass = (p: number) =>
-              p >= 3 ? 'bg-emerald-100 text-emerald-700 ring-emerald-200'
-                : p === 2 ? 'bg-amber-100 text-amber-700 ring-amber-200'
+              p >= 3 ? 'bg-success-subtle text-success ring-success-line'
+                : p === 2 ? 'bg-warning-subtle text-warning ring-warning-line'
                 : 'bg-rose-100 text-rose-700 ring-rose-200';
 
             const renderRow = (row: DistRow, sectionKey: 'mth' | 'nth') => (
@@ -3815,15 +3838,15 @@ export default function AIInterviewClusters() {
                     <>
                       <span className="text-gray-300">+</span>
                       {row.secondaries.map((s, i) => (
-                        <span key={`${row.q}-sec-${i}`} className="px-1.5 py-0.5 rounded text-[11px] font-medium bg-gray-100 text-gray-700 ring-1 ring-gray-200">
+                        <span key={`${row.q}-sec-${i}`} className="px-1.5 py-0.5 rounded text-2xs font-medium bg-gray-100 text-gray-700 ring-1 ring-gray-200">
                           {s}
                         </span>
                       ))}
                     </>
                   )}
-                  <span className="text-[11px] text-gray-400 ml-1 truncate max-w-[180px]">· {row.cluster}</span>
+                  <span className="text-2xs text-gray-400 ml-1 truncate max-w-[180px]">· {row.cluster}</span>
                 </div>
-                <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ring-1 mt-0.5 whitespace-nowrap ${priorityClass(row.priority)}`}>
+                <span className={`text-2xs font-semibold px-2 py-0.5 rounded-full ring-1 mt-0.5 whitespace-nowrap ${priorityClass(row.priority)}`}>
                   {priorityLabel(row.priority)}
                 </span>
               </div>
@@ -3844,7 +3867,7 @@ export default function AIInterviewClusters() {
                       </div>
                       <div className="text-left">
                         <div className="text-sm font-semibold text-gray-900">Question Distribution</div>
-                        <div className="text-[11px] text-gray-500">
+                        <div className="text-2xs text-gray-500">
                           {totalQ} question{totalQ !== 1 ? 's' : ''} · {totalSkillsCovered} skill{totalSkillsCovered !== 1 ? 's' : ''} covered
                         </div>
                       </div>
@@ -3908,7 +3931,7 @@ export default function AIInterviewClusters() {
                         </div>
                       )}
 
-                      <div className="text-[11px] text-gray-400 italic">
+                      <div className="text-2xs text-gray-400 italic">
                         Each question evaluates a primary skill plus up to 2 secondary skills from the same cluster.
                       </div>
                     </div>
@@ -4079,38 +4102,35 @@ export default function AIInterviewClusters() {
       <div className="fixed bottom-0 left-0 right-0 z-10">
         <div className="mx-auto w-full max-w-[1400px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 ring-1 ring-black/[0.02] shadow-lg shadow-brand-blue/5 rounded-t-2xl px-4 md:px-8 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <button
-              onClick={handleBack}
-              disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50"
-            >
-              <ArrowLeft className="w-4 h-4" />
+            <Button variant="secondary" size="md" onClick={handleBack} disabled={saving} icon={<ArrowLeft className="w-4 h-4" />}>
               Back to Configure
             </button>
             <WizardDiscardButton onClick={handleDiscard} disabled={saving} />
           </div>
           <div className="flex items-center gap-2">
-            <button
+            <Button
+              variant="secondary"
+              size="md"
               onClick={handleSaveAsDraft}
               disabled={saving || generating}
-              className="flex items-center gap-2 px-4 py-2 text-sm font-medium border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50"
+              icon={saving ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
             >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               Save as Draft
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
               onClick={handleContinue}
               disabled={saving || generating}
-              className="flex items-center gap-2 px-5 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
+              icon={saving ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
             >
-              {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
               {saving ? 'Saving...' : 'Continue to Preview'}
               {!saving && (
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
               )}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
