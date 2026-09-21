@@ -5613,6 +5613,13 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
             skill_merge_trail: extractedData.mergeTrail || [],
             experience_min: experienceMin,
             experience_max: experienceMax,
+            // The Required tick AS IT IS ON SCREEN. This rewrite runs BEFORE the Step 2
+            // save, so the stored column is a version behind, and the server needs the
+            // live answer to know whether the JD may still invite freshers: with
+            // experience Essential, that sentence promises what the scorer will refuse.
+            // Without this the rewrite reinstated the line the confirm dialog had just
+            // removed (reported 2026-09-21, JD-245).
+            experience_mandatory: extractedData.experienceRequired,
             job_level: persistedExperiencePayload.jobLevel,
             education_requirements: educationRequirements,
             certifications: extractedData.certifications,
