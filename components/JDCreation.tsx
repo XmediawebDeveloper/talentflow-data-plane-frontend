@@ -10506,13 +10506,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                    Server-side and deterministic: the same rule that raised the warning
                    decides what comes out, so nothing else in the recruiter's wording is
                    touched. A failure here is not fatal - the tick still stands, and the
-                   text stays editable in the next step. */
-                const source = generatedJD || effectiveEditingJD?.description || '';
+                   text stays editable in the next step.
+
+                   Mode-aware read AND write - reported again same day: the fix landed in
+                   `generatedJD` unconditionally, but Step 3's preview and Save/Publish
+                   both read `mode === 'ai' ? generatedJD : manualJD` (every other call site
+                   in this file does the same split). A Manual-mode JD's real text lives in
+                   `manualJD`, so the strip call ran, returned the cleaned text, and it went
+                   into a variable nothing displays or saves - the contradiction silently
+                   came back at Save. */
+                const source = (mode === 'ai' ? generatedJD : manualJD) || effectiveEditingJD?.description || '';
                 if (!source) return;
                 try {
                   const { description, removed } = await jdService.stripFresherInvitation(source);
                   if (removed.length) {
-                    setGeneratedJD(description);
+                    if (mode === 'ai') {
+                      setGeneratedJD(description);
+                    } else {
+                      setManualJD(description);
+                    }
                     setHasUnsavedChanges(true);
                     toast.success(
                       removed.length === 1
