@@ -170,6 +170,13 @@ const COMPACT_TIMELINE_LIMIT = 4;
 const timelineEvents = (inv: any): TimelineEntry[] =>
   buildFullTimeline(inv, inv.timeline || []).slice(-COMPACT_TIMELINE_LIMIT);
 
+/** "View full history" only earns its place once something is actually
+ *  hidden by the cap above — at 4 events or fewer the compact list already
+ *  shows everything, so the link would open a modal identical to what's
+ *  already on screen. */
+const hasMoreTimelineHistory = (inv: any): boolean =>
+  buildFullTimeline(inv, inv.timeline || []).length > COMPACT_TIMELINE_LIMIT;
+
 /** Every occurrence of an invitation-management action (not just the latest)
  *  reads the same audit trail the Activity Log is built from — see
  *  aiInterviewService.getSessionTimeline. Multiple sends, edits or revokes
@@ -193,47 +200,124 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
       return { label: 'Completed', Icon: CheckCircle, tone: 'text-green-600' };
     case 'ai_interview_terminated':
       return { label: 'Terminated', Icon: Ban, tone: 'text-red-600' };
+    case 'ai_interview_invite_expired':
+      return { label: 'Expired at', Icon: Clock, tone: 'text-brand-orange-deep' };
     default:
       return { label: action, Icon: Clock, tone: 'text-gray-500' };
   }
 };
 
 /** Merges the fetched audit trail with a same-shaped fallback synthesized from
- *  the invitation row's own single-value columns, for milestone types the
- *  audit trail has no row for at all — sessions from before this trail
- *  existed, and Expired, which is a deadline lapsing rather than a discrete
- *  logged action. Real audit rows always win: the fallback for a given type
- *  only fires when zero audit rows of that type are present. */
+ *  the invitation row's own single-value columns — for rows from before this
+ *  trail existed, and for the case where the trail only has a LATER
+ *  occurrence of an action (a resend's own "Invited" row, say) and would
+ *  otherwise silently hide an earlier one that predates the interview_id
+ *  field. Real audit rows always win: the fallback for a given type only
+ *  fires when there's no real row of that type AT OR BEFORE its own
+ *  timestamp — "no rows at all" would wrongly suppress the fallback for the
+ *  gap case above, since a later real row still makes loggedActions.has(...)
+ *  true. */
+/** Rows that expired and were resent BEFORE expiry was audit-logged have no
+ *  "Expired at" record anywhere, so the resend made that line vanish. The
+ *  deadline is still derivable: every resend re-applies the original validity
+ *  window (span = expires_at - last-send time, both untouched by anything
+ *  else), so the earlier deadline was that Invited's time plus the span. Only
+ *  a plain Invited -> (next) Invited pair qualifies, and only when the derived
+ *  deadline really falls before the resend; if anything else (revoke, start,
+ *  a real Expired row...) sits in between, the gap isn't an expiry.
+ *  Real audit rows never reach this: it only fills a hole they left. */
+const INFERENCE_SAFE_LABELS = new Set(['System Check', 'Email Read']);
+const inferMissingExpiries = (
+  events: TimelineEntry[],
+  spanMs: number,
+  expiredAction: string
+): TimelineEntry[] => {
+  if (!(spanMs > 0)) return events;
+  const sorted = [...events].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  const inferred: TimelineEntry[] = [];
+  for (let i = 0; i < sorted.length; i++) {
+    if (sorted[i].label !== 'Invited') continue;
+    let j = i + 1;
+    while (j < sorted.length && sorted[j].label !== 'Invited') j++;
+    if (j >= sorted.length) break;
+    const between = sorted.slice(i + 1, j);
+    if (between.some((e) => !INFERENCE_SAFE_LABELS.has(e.label))) continue;
+    const deadline = new Date(sorted[i].at).getTime() + spanMs;
+    if (deadline < new Date(sorted[j].at).getTime()) {
+      inferred.push({ ...describeTimelineAction(expiredAction), at: new Date(deadline).toISOString() });
+    }
+  }
+  return [...events, ...inferred];
+};
+
+const FALLBACK_MATCH_WINDOW_MS = 2 * 60 * 1000;
 const buildFullTimeline = (
   inv: any,
   auditLogs: Array<{ action: string; created_at: string | null }>
 ): TimelineEntry[] => {
-  const out: TimelineEntry[] = auditLogs
+  // Defensive: collapse exact duplicates — same action, same millisecond —
+  // rather than every occurrence of an action. The real fix is upstream
+  // (the write side no longer double-logs a retry/reconnect as a second
+  // "Started"), but this catches any other exact-duplicate row without
+  // touching two genuinely repeated actions at different times, e.g.
+  // Started 10:00 -> Revoked 10:05 -> Started 10:10 must all still show.
+  const seen = new Set<string>();
+  const dedupedLogs = auditLogs.filter((log) => {
+    if (!log.created_at) return true;
+    const key = `${log.action}|${new Date(log.created_at).getTime()}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  const out: TimelineEntry[] = dedupedLogs
     .filter((log) => !!log.created_at)
     .map((log) => ({ ...describeTimelineAction(log.action), at: log.created_at as string }));
 
-  const loggedActions = new Set(auditLogs.map((log) => log.action));
-  const fallback: [string, string | null | undefined, string][] = [
-    ['ai_interview_invite', inv.invitation_sent_at || inv.created_at, 'Invited'],
-    ['ai_interview_consent', inv.consent_accepted_at, 'System Check'],
-    ['ai_interview_start', inv.started_at, 'Started'],
-    ['ai_interview_complete', inv.completed_at, 'Completed'],
-    ['ai_interview_invite_revoke', inv.revoked_at, 'Revoked'],
+  // created_at (row birth, never touched again) rather than
+  // invitation_sent_at/expires_at (both overwritten by a later resend) —
+  // using a mutable column here would make the very fields a resend rewrites
+  // decide whether history from BEFORE that resend still shows.
+  const clockExpired =
+    !inv.started_at && !inv.unit_consumed && inv.expires_at && new Date(inv.expires_at) < new Date();
+  const isLiveExpired = !inv.completed_at && ((inv.status || '').toLowerCase() === 'expired' || clockExpired);
+  const fallback: [string, string | null | undefined][] = [
+    // created_at specifically, not invitation_sent_at — the latter is
+    // overwritten to the LATEST send time by every resend, so using it here
+    // would make a resend's own real "Invited" row appear to "cover" the
+    // original send too (same rewritten timestamp), erasing it from history.
+    ['ai_interview_invite', inv.created_at],
+    ['ai_interview_consent', inv.consent_accepted_at],
+    ['ai_interview_start', inv.started_at],
+    ['ai_interview_complete', inv.completed_at],
+    ['ai_interview_invite_revoke', inv.revoked_at],
+    // Live-computed only as a last resort — a real audit row (backdated to
+    // the actual deadline) always wins once one exists.
+    ['ai_interview_invite_expired', isLiveExpired ? inv.expires_at : null],
   ];
   for (const [action, at] of fallback) {
-    if (at && !loggedActions.has(action)) {
+    if (!at) continue;
+    const candidateMs = new Date(at).getTime();
+    // The audit row is written AFTER the column is set (the revoke row lands
+    // ~1s after revoked_at, the invite row seconds after invitation_sent_at
+    // because the email goes out first). A strict "at or before" test saw
+    // that later row as a different event and rendered both, i.e. a
+    // duplicate. The window treats a real row just after the column as the
+    // same event; anything genuinely earlier still counts as before.
+    const coveredByRealRow = dedupedLogs.some(
+      (log) =>
+        log.action === action &&
+        log.created_at &&
+        new Date(log.created_at).getTime() <= candidateMs + FALLBACK_MATCH_WINDOW_MS
+    );
+    if (!coveredByRealRow) {
       out.push({ ...describeTimelineAction(action), at });
     }
   }
 
-  const status = (inv.status || '').toLowerCase();
-  const clockExpired =
-    !inv.started_at && !inv.unit_consumed && inv.expires_at && new Date(inv.expires_at) < new Date();
-  if (!inv.completed_at && (status === 'expired' || clockExpired) && inv.expires_at) {
-    out.push({ label: 'Expired at', at: inv.expires_at, Icon: Clock, tone: 'text-brand-orange-deep' });
-  }
-
-  return out.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  return inferMissingExpiries(out, inv.expires_at && inv.invitation_sent_at ? new Date(inv.expires_at).getTime() - new Date(inv.invitation_sent_at).getTime() : 0, 'ai_interview_invite_expired').sort(
+    (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
+  );
 };
 
 /** Badge wording and colours kept in one place so a recruiter reads the same
@@ -562,13 +646,15 @@ export default function AIInterviewInviteTable({
                   </div>
                 ))}
               </div>
-              <button
-                type="button"
-                onClick={(e) => { e.stopPropagation(); openTimeline(inv); }}
-                className="flex items-center gap-1 text-[10px] font-medium text-brand-blue hover:underline mb-1.5"
-              >
-                <History className="w-2.5 h-2.5" /> View full history
-              </button>
+              {hasMoreTimelineHistory(inv) && (
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); openTimeline(inv); }}
+                  className="flex items-center gap-1 text-[10px] font-medium text-brand-blue hover:underline mb-1.5"
+                >
+                  <History className="w-2.5 h-2.5" /> View full history
+                </button>
+              )}
 
               <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-gray-100 dark:border-slate-700/60">
                 <div className="flex items-center gap-x-2 gap-y-0.5 flex-wrap min-w-0">
@@ -723,13 +809,15 @@ export default function AIInterviewInviteTable({
                     ) : (
                       <span className="text-gray-400 dark:text-slate-500">—</span>
                     )}
-                    <button
-                      type="button"
-                      onClick={(e) => { e.stopPropagation(); openTimeline(inv); }}
-                      className="flex items-center gap-1 text-[11px] font-medium text-brand-blue hover:underline mt-1"
-                    >
-                      <History className="w-3 h-3" /> View full history
-                    </button>
+                    {hasMoreTimelineHistory(inv) && (
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); openTimeline(inv); }}
+                        className="flex items-center gap-1 text-[11px] font-medium text-brand-blue hover:underline mt-1"
+                      >
+                        <History className="w-3 h-3" /> View full history
+                      </button>
+                    )}
                   </td>
 
                   <td className="py-3 px-4 align-middle tf-sticky-col" onClick={(e) => e.stopPropagation()}>

@@ -60,6 +60,7 @@ import {
   InvitationActionsMenu,
   InvitationActionButtons,
   ViewFullHistoryLink,
+  hasMoreTimelineHistory,
   EditInvitationModal,
   RevokeInvitationDialog,
   InvitationHistoryDialog,
@@ -3189,16 +3190,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         `/assessments/${assessmentId}/invitations/${invitation.id}/resend`
       );
       toast.success('New invitation link generated and emailed!');
-      /* Refresh whichever list the row came from — the row's own
-         `_assessment_id` is what marks it as the tab's. */
-      if (invitation._assessment_id) {
-        await loadAllInviteStatuses();
-      } else if (selectedAssessmentForTracking) {
-        await Promise.all([
-          loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters),
-          loadTrackingInvitationSummary(selectedAssessmentForTracking),
-        ]);
-      }
+      await refreshInviteSurfaces();
     } catch (error: any) {
       console.error('Failed to resend invitation:', error);
       const detail = error?.response?.data?.detail;
@@ -3273,10 +3265,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     setTrackingSelectedIds(new Set());
     setShowBulkResendConfirm(false);
     setIsBulkResending(false);
-    await Promise.all([
-      loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters),
-      loadTrackingInvitationSummary(selectedAssessmentForTracking),
-    ]);
+    await refreshInviteSurfaces();
   };
 
   // Change email and resend for bounced invitations
@@ -3295,10 +3284,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       setEditingEmailId(null);
       setNewEmailValue('');
       toast.success('Email updated and invitation resent!');
-      await Promise.all([
-        loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters),
-        loadTrackingInvitationSummary(selectedAssessmentForTracking),
-      ]);
+      await refreshInviteSurfaces();
     } catch (error: any) {
       console.error('Failed to update email:', error);
       const msg =
@@ -3312,21 +3298,33 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
   };
 
-  /** Which invitation an invite-management action targets, and which list to
-   *  refetch afterwards — same rule handleResendInvitation and
-   *  handleUpdateEmail already follow, shared here for Revoke and Edit. */
+  /** Which invitation an invite-management action targets — the row's own
+   *  assessment where it carries one, else the popup's pinned one. */
   const getInviteAssessmentId = (invitation: any): string | undefined =>
     invitation?._assessment_id || invitation?.assessment_id || selectedAssessmentForTracking?.id;
 
-  const refreshInviteLists = async (invitation: any) => {
-    if (invitation?._assessment_id) {
-      await loadAllInviteStatuses();
-    } else if (selectedAssessmentForTracking) {
-      await Promise.all([
+  /** Refetch whatever invitation surface is on screen after ANY invite action
+   *  (resend, revoke, edit, change email, bulk resend).
+   *
+   *  It keys off which surface is open, never off the row. The old check was
+   *  `if (row._assessment_id) reload the Invitation Status tab`, but the
+   *  job-wide Track Invites popup stamps `_assessment_id` on its rows too
+   *  (stampJobScopedInvite) — so an action taken in that popup reloaded the
+   *  hidden tab and left the popup's own rows (and stat cards) frozen on the
+   *  pre-action data until a full page reload. The tab needs no refetch while
+   *  hidden: it reloads on activation. */
+  const refreshInviteSurfaces = async () => {
+    const pending: Promise<unknown>[] = [];
+    if (showTrackInvitesModal && selectedAssessmentForTracking) {
+      pending.push(
         loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters),
         loadTrackingInvitationSummary(selectedAssessmentForTracking),
-      ]);
+      );
     }
+    if (activeTab === 'invitation-status') {
+      pending.push(loadAllInviteStatuses());
+    }
+    await Promise.all(pending);
   };
 
   if (showCreation) {
@@ -6220,7 +6218,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                           ))
                                         )}
                                       </div>
-                                      <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(inv)} />
+                                      {hasMoreTimelineHistory(inv) && (
+                                        <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(inv)} />
+                                      )}
                                     </td>
                                     {renderInviteScoreCell(inv, 'technical')}
                                     {renderInviteScoreCell(inv, 'coding')}
@@ -8013,7 +8013,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       ))
                                     )}
                                   </div>
-                                  <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(invitation)} />
+                                  {hasMoreTimelineHistory(invitation) && (
+                                    <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(invitation)} />
+                                  )}
                                 </td>
                             {/* Tech Score / Coding Score columns. Same pattern
                                 as the Results page: percent number on top, small
@@ -8224,18 +8226,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
       {/* Revoke / Edit ("Save & Send") / full-history — shared by the Track
           Invites popup and the Invitation Status tab (see
-          getInviteAssessmentId / refreshInviteLists above). */}
+          getInviteAssessmentId / refreshInviteSurfaces above). */}
       <RevokeInvitationDialog
         target={revokeInviteTarget}
         onClose={() => setRevokeInviteTarget(null)}
         getAssessmentId={getInviteAssessmentId}
-        onRevoked={() => refreshInviteLists(revokeInviteTarget)}
+        onRevoked={refreshInviteSurfaces}
       />
       <EditInvitationModal
         target={editInviteTarget}
         onClose={() => setEditInviteTarget(null)}
         getAssessmentId={getInviteAssessmentId}
-        onSaved={() => refreshInviteLists(editInviteTarget)}
+        onSaved={refreshInviteSurfaces}
       />
       <InvitationHistoryDialog
         target={historyInviteTarget}
