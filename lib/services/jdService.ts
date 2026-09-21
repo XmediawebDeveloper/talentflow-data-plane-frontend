@@ -716,6 +716,29 @@ export const jdService = {
   },
 
   /**
+   * Remove the lines that invite people with no professional experience.
+   *
+   * Used when the recruiter answers "Make it Required" on a JD that states a minimum
+   * and also welcomes freshers (or credits internship experience towards it): once
+   * experience is Essential, a rating below 7 is an automatic No Match, so the JD must
+   * stop inviting the people it will now reject. Deterministic server-side edit - same
+   * rule that raised the warning, no LLM, nothing else reworded.
+   */
+  async stripFresherInvitation(
+    description: string,
+  ): Promise<{ description: string; removed: string[] }> {
+    try {
+      const response = await api.post<{ description: string; removed: string[] }>(
+        '/jd/strip-fresher-invitation',
+        { description },
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * Update JD
    */
   async update(id: string, data: Partial<JDCreate>): Promise<JDResponse> {

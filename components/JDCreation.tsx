@@ -8072,6 +8072,25 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       </p>
                     </div>
                   )}
+
+                  {/* The tick is ALREADY on, and the contradiction is live.
+                      The dialog above only guards the moment of ticking, which does
+                      nothing for a JD that carries the tick from before this rule existed
+                      - like the reported JD-422, published with Required on and a line
+                      saying internship experience counts towards the requirement. Those
+                      are the JDs actively rejecting the people they invite, so they get
+                      the louder message, not silence. */}
+                  {experienceContradiction && extractedData.experienceRequired && (
+                    <div className="mb-3 flex items-start gap-2 rounded-lg border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-950/30 px-3 py-2">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-red-600 dark:text-red-500" />
+                      <p className="text-xs leading-relaxed text-red-900 dark:text-red-200">
+                        Experience is <strong>Required</strong>, but this JD also says people without that
+                        experience may apply - so they will score <strong>No Match</strong> on the very
+                        requirement it invited them under. Untick <strong>Required field</strong>, or edit
+                        the JD text so it no longer invites them.
+                      </p>
+                    </div>
+                  )}
                   {/* NUMBERS-FIRST: recruiter enters the actual From/To years. The
                       value is stored as a canonical "From-To Years" string on
                       extractedData.experience; persistence parses it back into
@@ -10458,9 +10477,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                 rejected by it.
               </span>
               <span className="block">
-                If the minimum really is strict, continue - and edit the JD text in the next step
-                so it no longer invites freshers. Otherwise leave it Preferred: experience still
-                scores, it just cannot reject them on its own.
+                If the minimum really is strict, continue: the line inviting them will be removed
+                from the JD text, so the posting stops promising what the scoring no longer allows.
+                Otherwise leave it Preferred - experience still scores, it just cannot reject them
+                on its own.
               </span>
             </DialogDescription>
           </DialogHeader>
@@ -10472,10 +10492,38 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               Keep it Preferred
             </button>
             <button
-              onClick={() => {
+              onClick={async () => {
                 setExtractedData(prev => ({ ...prev, experienceRequired: true }));
                 markExtractedDataModified();
                 setShowExperienceContradictionDialog(false);
+
+                /* The tick alone would leave the JD contradicting itself - reported
+                   2026-09-21: Required was applied and Step 3 still read "but we also
+                   welcome freshers with relevant internship experience". Experience is
+                   now Essential, so that sentence invites people the scorer will mark
+                   No Match; it goes with the tick.
+
+                   Server-side and deterministic: the same rule that raised the warning
+                   decides what comes out, so nothing else in the recruiter's wording is
+                   touched. A failure here is not fatal - the tick still stands, and the
+                   text stays editable in the next step. */
+                const source = generatedJD || effectiveEditingJD?.description || '';
+                if (!source) return;
+                try {
+                  const { description, removed } = await jdService.stripFresherInvitation(source);
+                  if (removed.length) {
+                    setGeneratedJD(description);
+                    setHasUnsavedChanges(true);
+                    toast.success(
+                      removed.length === 1
+                        ? 'Removed the line inviting candidates without that experience'
+                        : `Removed ${removed.length} lines inviting candidates without that experience`,
+                    );
+                  }
+                } catch (error) {
+                  console.error('[JDCreation] Failed to update the JD wording:', error);
+                  toast.error('Experience is now Required, but the JD text could not be updated - please edit it in the next step');
+                }
               }}
               className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow-md shadow-amber-600/25 ring-1 ring-white/10 transition-colors text-sm"
             >

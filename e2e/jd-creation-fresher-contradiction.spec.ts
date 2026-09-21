@@ -61,9 +61,38 @@ function draftJd(overrides: Record<string, unknown> = {}) {
 }
 
 const saved: Record<string, unknown>[] = [];
+/** Bodies posted to /jd/strip-fresher-invitation, so a test can assert what was sent. */
+const stripCalls: Record<string, unknown>[] = [];
+/** Set per-test to make the strip endpoint fail. */
+let stripFails = false;
+
+const STRIPPED = JD_TEXT.replace(
+  ", but we also welcome freshers with relevant internship experience in Software " +
+  "Testing or Test Automation.",
+  ".",
+);
 
 async function open(page: Page, jd = draftJd()) {
   saved.length = 0;
+  stripCalls.length = 0;
+  await page.route("**/jd/strip-fresher-invitation", (route) => {
+    try {
+      stripCalls.push(route.request().postDataJSON());
+    } catch {
+      /* not JSON */
+    }
+    if (stripFails) return route.fulfill({ status: 500, json: { detail: "boom" } });
+    return route.fulfill({
+      status: 200,
+      json: {
+        description: STRIPPED,
+        removed: [
+          "but we also welcome freshers with relevant internship experience in " +
+          "Software Testing or Test Automation.",
+        ],
+      },
+    });
+  });
   await page.route("**/jd/access-check", (route) =>
     route.fulfill({
       status: 200,
@@ -92,10 +121,13 @@ const requiredBox = (page: Page) =>
     .getByRole("checkbox");
 
 const notice = (page: Page) => page.getByText(/welcomes freshers, so experience is/);
+/** The louder one: the tick is already on and the contradiction is live. */
+const liveWarning = (page: Page) => page.getByText(/they will score .*No Match.* on the very/);
 const dialog = (page: Page) => page.getByRole("dialog");
 
 test.describe("Step 2 — the fresher contradiction is visible", () => {
   test.beforeEach(async ({ page }) => {
+    stripFails = false;
     await mockApiFallback(page);
     await mockLoginApi(page);
     await mockDashboardApis(page);
@@ -154,6 +186,68 @@ test.describe("Step 2 — the fresher contradiction is visible", () => {
     await requiredBox(page).click();
     await expect(dialog(page)).toHaveCount(0);
     await expect(requiredBox(page)).not.toBeChecked();
+  });
+
+  test("confirming also takes the inviting line out of the JD text", async ({ page }) => {
+    /* Reported right after the dialog shipped: "when i click tick all worked perfectly
+       but why JD wordings were not updated?" - Required was applied and the JD still
+       read "but we also welcome freshers...". A posting cannot promise what the scoring
+       will not honour, so the line goes with the tick. */
+    await open(page);
+    await requiredBox(page).click();
+    await dialog(page).getByRole("button", { name: "Make it Required" }).click();
+
+    await expect.poll(() => stripCalls.length).toBe(1);
+    // The JD's own text is what is sent - the server decides what comes out of it,
+    // using the same rule that raised the warning.
+    expect(String(stripCalls[0].description)).toContain("we also welcome freshers");
+    await expect(page.getByText(/Removed the line inviting candidates/)).toBeVisible();
+  });
+
+  test("if the text cannot be updated, the tick still stands and says so", async ({ page }) => {
+    // The scoring decision is the recruiter's answer; a failed text edit must not undo it.
+    stripFails = true;
+    await open(page);
+    await requiredBox(page).click();
+    await dialog(page).getByRole("button", { name: "Make it Required" }).click();
+
+    await expect(requiredBox(page)).toBeChecked();
+    await expect(page.getByText(/could not be updated/)).toBeVisible();
+  });
+
+  test("declining leaves the JD text alone too", async ({ page }) => {
+    await open(page);
+    await requiredBox(page).click();
+    await dialog(page).getByRole("button", { name: "Keep it Preferred" }).click();
+
+    await expect(dialog(page)).toHaveCount(0);
+    expect(stripCalls).toHaveLength(0);
+  });
+
+  test("a JD that ALREADY carries the tick is told the contradiction is live", async ({ page }) => {
+    /* The reported JD-422 shape: published with Required on, and a Required Skills line
+       reading "internship experience will also be considered as part of the required
+       experience". The confirm dialog cannot help here - nobody is about to tick
+       anything - so this JD would have gone on silently rejecting the people it invited. */
+    await open(page, draftJd({ experience_mandatory: true }));
+
+    await expect(liveWarning(page)).toBeVisible();
+    // Not the softer "left as Preferred" wording - that one describes a box that is off.
+    await expect(notice(page)).toHaveCount(0);
+
+    // Untick, and it becomes the ordinary explanation again.
+    await requiredBox(page).click();
+    await expect(liveWarning(page)).toHaveCount(0);
+    await expect(notice(page)).toBeVisible();
+  });
+
+  test("no warning of either kind on a JD without the contradiction", async ({ page }) => {
+    await open(page, draftJd({
+      experience_mandatory: true,
+      experience_welcomes_freshers: false,
+    }));
+    await expect(liveWarning(page)).toHaveCount(0);
+    await expect(notice(page)).toHaveCount(0);
   });
 
   test("an ordinary JD ticks straight through, with no warning anywhere", async ({ page }) => {
