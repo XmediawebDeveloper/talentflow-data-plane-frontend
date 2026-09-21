@@ -1219,29 +1219,8 @@ export default function CandidateResultDetails({
                     );
                   })}
                 </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
-                <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-brand-teal" />
-              </div>
-              <div>
-                <div className="text-xs sm:text-sm text-gray-600">Start Time</div>
-                <div className="text-sm sm:text-base text-gray-900">
-                  {detailedResult?.started_at ? formatISTWithSeconds(detailedResult.started_at) : 'N/A'}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 ring-1 ring-success-line flex items-center justify-center flex-shrink-0">
-                <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-success" />
-              </div>
-              <div>
-                <div className="text-xs sm:text-sm text-gray-600">Submission Time</div>
-                <div className="text-sm sm:text-base text-gray-900">
-                  {detailedResult?.completed_at ? formatISTWithSeconds(detailedResult.completed_at) : 'N/A'}
-                </div>
-              </div>
+                );
+              })()}
             </div>
           </div>
         </div>
@@ -1296,53 +1275,64 @@ export default function CandidateResultDetails({
 
           <div ref={detailContentRef} className="min-w-0 overflow-x-auto scroll-mt-24">
 
-        {/* JD Summary — Must-Have & Nice-to-Have skills snapshotted from the
-            JD when the assessment was generated. Both sections always render
-            (with an empty-state placeholder) so the layout is consistent
-            even when the JD didn't capture preferred skills. Same shape as
-            the AI-Interview detail page's Overview tab. */}
-        {currentDetailTab === 'jd-summary' && (() => {
-          const skillDepth: any[] = (assessmentMeta?.jd_skill_depth as any[]) || [];
-          const niceToHaveSkills: any[] = (assessmentMeta?.jd_nice_to_have_skills as any[]) || [];
-          if (!assessmentMeta) return null;
-          const skillName = (s: any): string =>
-            typeof s === 'string' ? s : (s?.skill || s?.name || s?.label || '');
-          return (
-            <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
-              <div className="flex items-center gap-2 mb-3 sm:mb-4">
-                <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-700" />
-                <h3 className="text-sm sm:text-base font-semibold text-gray-900">Job Description Summary</h3>
-              </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                <div>
-                  <div className="text-xs sm:text-sm font-medium text-gray-700 mb-2">
-                    Must-Have Skills <span className="text-gray-400 font-normal">({skillDepth.length})</span>
+        {/* The job and the assessment — the same two views the assessment's
+            own page offers, from the same components, so a recruiter reading a
+            result is not shown a second rendering of either. They are now the
+            whole of this tab: the skills summary that used to sit above them
+            said less than View JD does, in a second style.
+            Nothing here is fetched twice: Assessment Info reads the record this
+            page already loaded, and View JD pulls the linked JD once, when it
+            is first opened. */}
+        {currentDetailTab === 'jd-summary' && assessmentMeta && (
+          <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
+            <div
+              role="tablist"
+              aria-label="Job and assessment views"
+              className="flex flex-wrap items-center gap-1.5"
+            >
+              {([
+                { id: 'viewjd' as const, label: 'View JD', icon: Briefcase },
+                { id: 'info' as const, label: 'Assessment Info', icon: Info },
+              ]).map((tab) => {
+                const isActive = jdSummaryTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => setJdSummaryTab(tab.id)}
+                    className={`rounded-lg px-3 py-2 text-xs sm:text-sm transition-colors flex items-center gap-2 ${
+                      isActive
+                        ? 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
+                        : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
+                    }`}
+                  >
+                    <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                    <span className="leading-snug">{tab.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+
+            {jdSummaryTab === 'info' ? (
+              <AssessmentInfoPanel assessment={assessmentMeta} />
+            ) : (
+              <div className="space-y-4 sm:space-y-5">
+                {/* "No linked job description" is a property of the ASSESSMENT
+                    — it has no job behind it — so it is asked first, off
+                    `jd_id`, exactly as the assessment page asks it. Reading it
+                    off the record instead would make the gap before the fetch
+                    lands announce that the job has no description at all. */}
+                {!assessmentMeta.jd_id ? (
+                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 lg:px-6 py-8 text-center">
+                    <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500 dark:text-slate-400">No linked job description found</p>
                   </div>
-                  {skillDepth.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                      {skillDepth.map((skill: any, idx: number) => {
-                        const name = skillName(skill);
-                        if (!name) return null;
-                        return (
-                          <span
-                            key={`mhs-${idx}`}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-success-subtle text-success rounded-full text-xs border border-success-line"
-                          >
-                            <CheckCircle className="w-3 h-3" />
-                            {name}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs text-gray-400 bg-gray-50 border border-gray-200">
-                      None configured for this JD
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <div className="text-xs sm:text-sm font-medium text-gray-700 mb-2">
-                    Nice-to-Have Skills <span className="text-gray-400 font-normal">({niceToHaveSkills.length})</span>
+                ) : jdError ? (
+                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 lg:px-6 py-8 text-center">
+                    <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
+                    <p className="text-sm text-red-600 dark:text-red-400">{jdError}</p>
                   </div>
                 ) : jdLoading || !jdData ? (
                   <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 lg:px-6 py-12 flex items-center justify-center tf-loader-center">

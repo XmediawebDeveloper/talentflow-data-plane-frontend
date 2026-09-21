@@ -647,20 +647,7 @@ function ClusterRow({
             {!isReadOnly && <p className="text-2xs text-gray-300 mt-1.5">Drag skills to move between clusters</p>}
           </div>
 
-          {/* Remove cluster button — hidden when read-only, disabled at floor */}
-          {!isReadOnly && (
-            <div className="flex justify-end pt-1">
-              <button
-                onClick={() => { if (removalLocked) return; onRemove(cluster.id); }}
-                disabled={removalLocked}
-                title={removalLocked ? 'Minimum skill count reached — removal disabled' : undefined}
-                className={`flex items-center gap-1 px-2 py-1 text-xs rounded-md transition-colors ${removalLocked ? 'text-gray-300 cursor-not-allowed' : 'text-destructive hover:bg-destructive-subtle'}`}
-              >
-                <Trash2 className="w-3 h-3" />
-                Remove Cluster
-              </button>
-            </div>
-          )}
+          {/* Remove lives on the row's header now — see the trash there. */}
         </div>
       )}
     </div>
@@ -843,15 +830,6 @@ function CategorySection({
           <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-brand-blue/15 to-brand-blue/5 ring-1 ring-brand-blue/15 text-brand-blue shadow-sm shadow-brand-blue/10 flex-shrink-0">
             {icon}
           </div>
-          <div className="flex flex-col">
-            <h2 className="text-base font-semibold text-gray-900 tracking-tight leading-tight">{title}</h2>
-            <div className="flex items-center gap-2 mt-0.5">
-              {timeMin > 0 && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-2xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
-                  <Clock className="w-2.5 h-2.5" />
-                  {timeMin} min
-                </span>
-              )}
           <div className="min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <h2 className="text-base font-semibold text-gray-900 tracking-tight leading-tight">{title}</h2>
@@ -4104,7 +4082,7 @@ export default function AIInterviewClusters() {
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="md" onClick={handleBack} disabled={saving} icon={<ArrowLeft className="w-4 h-4" />}>
               Back to Configure
-            </button>
+            </Button>
             <WizardDiscardButton onClick={handleDiscard} disabled={saving} />
           </div>
           <div className="flex items-center gap-2">

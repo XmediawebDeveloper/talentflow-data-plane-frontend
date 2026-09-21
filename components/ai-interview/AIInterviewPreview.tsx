@@ -1111,7 +1111,7 @@ export default function AIInterviewPreview() {
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="md" onClick={goBack} icon={<ArrowLeft className="w-4 h-4" />}>
               Back to Clusters
-            </button>
+            </Button>
             <WizardDiscardButton onClick={handleDiscard} />
           </div>
           <div className="flex items-center gap-2">

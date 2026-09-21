@@ -382,14 +382,15 @@ export default function AssessmentAuditTrail() {
             <Button
               variant="secondary"
               size="sm"
-              onClick={handleExportAuditLogs}
+              onClick={() => setShowExportModal(true)}
+              disabled={isExporting}
               className="self-start sm:self-auto"
-              icon={<Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-            >
-              {isExporting ? (
+              icon={isExporting ? (
                 <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
               ) : (
-                )}
+                <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              )}
+            >
               {isExporting ? 'Exporting…' : 'Export Logs'}
             </Button>
           </div>
