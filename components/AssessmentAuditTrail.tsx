@@ -3,7 +3,7 @@ import {
   Download, CheckCircle, XCircle, Clock, AlertTriangle,
   FileText, RefreshCw, Eye, Calendar, Mail, User, Building2, Hash, Activity,
   Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff, Loader2,
-  ChevronLeft, ChevronRight, MailWarning, LogOut, Ban, Save
+  ChevronLeft, ChevronRight, MailWarning, LogOut, Ban, Save, Copy, X
 } from 'lucide-react';
 import { assessmentService, CombinedAuditActivity, CombinedAuditTrailResponse } from '@/lib/services';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -19,8 +19,10 @@ type CategoryFilter = 'all' | 'assessment_lifecycle' | 'candidate_activity';
 const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   assessment_created: <Plus className="w-4 h-4" />,
   assessment_updated: <Edit className="w-4 h-4" />,
+  assessment_version_created: <Copy className="w-4 h-4" />,
   assessment_deleted: <Trash2 className="w-4 h-4" />,
   assessment_published: <Send className="w-4 h-4" />,
+  assessment_activated: <RefreshCw className="w-4 h-4" />,
   assessment_archived: <FileText className="w-4 h-4" />,
   assessment_saved_as_draft: <Save className="w-4 h-4" />,
   assessment_draft_updated: <Save className="w-4 h-4" />,
@@ -40,8 +42,10 @@ const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
 const ACTIVITY_COLORS: Record<string, { bg: string; text: string; icon: string; border: string }> = {
   assessment_created: { bg: 'bg-brand-blue/5', text: 'text-brand-blue', icon: 'text-brand-blue', border: 'border-brand-blue/20' },
   assessment_updated: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
+  assessment_version_created: { bg: 'bg-brand-blue/5', text: 'text-brand-blue', icon: 'text-brand-blue', border: 'border-brand-blue/20' },
   assessment_deleted: { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500', border: 'border-red-200' },
   assessment_published: { bg: 'bg-green-50', text: 'text-green-700', icon: 'text-green-500', border: 'border-green-200' },
+  assessment_activated: { bg: 'bg-green-50', text: 'text-green-700', icon: 'text-green-500', border: 'border-green-200' },
   assessment_archived: { bg: 'bg-slate-50', text: 'text-gray-700', icon: 'text-gray-500', border: 'border-gray-200' },
   assessment_saved_as_draft: { bg: 'bg-brand-blue/5', text: 'text-brand-blue', icon: 'text-brand-blue', border: 'border-brand-blue/20' },
   assessment_draft_updated: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
@@ -156,9 +160,44 @@ export default function AssessmentAuditTrail() {
     if (page === 1) loadAuditTrail();
   }, [searchTerm, filterDateFrom, filterDateTo]);
 
-  const handleExportAuditLogs = () => {
-    console.log('Exporting audit logs:', activities);
-    toast.info(`Exporting ${activities.length} audit log entries to CSV`);
+  const [isExporting, setIsExporting] = useState(false);
+  // "Export Logs" opens the format dialog rather than downloading straight
+  // away — the same choice the Assessment Results export offers, and the
+  // format the recruiter picks is what the audit trail then names
+  // ("Activity Logs Exported – CSV" / "– Excel").
+  const [showExportModal, setShowExportModal] = useState(false);
+
+  // Honors whatever the tab is currently filtered to — not just the
+  // current page — so the export matches what the recruiter is looking at.
+  // The backend logs this call itself.
+  const handleExportAuditLogs = async (exportFormat: 'csv' | 'excel') => {
+    if (isExporting) return;
+    setIsExporting(true);
+    setShowExportModal(false);
+    try {
+      const blob = await assessmentService.exportCombinedAuditTrail({
+        category: categoryFilter === 'all' ? undefined : categoryFilter,
+        search: searchTerm || undefined,
+        date_from: filterDateFrom || undefined,
+        date_to: filterDateTo || undefined,
+        format: exportFormat,
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      link.download = `assessment_activity_logs_${stamp}.${exportFormat === 'excel' ? 'xlsx' : 'csv'}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success(`Activity logs exported as ${exportFormat === 'excel' ? 'Excel' : 'CSV'}`);
+    } catch (error) {
+      console.error('Failed to export audit logs:', error);
+      toast.error('Failed to export activity logs. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -340,11 +379,16 @@ export default function AssessmentAuditTrail() {
             </div>
 
             <button
-              onClick={handleExportAuditLogs}
-              className="self-start sm:self-auto px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 rounded-md hover:bg-slate-100 transition-colors flex items-center gap-1.5 sm:gap-2"
+              onClick={() => setShowExportModal(true)}
+              disabled={isExporting}
+              className="self-start sm:self-auto px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 rounded-md hover:bg-slate-100 transition-colors flex items-center gap-1.5 sm:gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              Export Logs
+              {isExporting ? (
+                <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              )}
+              {isExporting ? 'Exporting…' : 'Export Logs'}
             </button>
           </div>
 
@@ -623,6 +667,76 @@ export default function AssessmentAuditTrail() {
           )}
         </div>
       </div>
+
+      {/* Export format dialog — the same choice, wording and layout the
+          Assessment Results export opens with. One step, not two: the tab's
+          own filters already decide what goes in the file, so there is no
+          scope question to ask after the format. */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+          <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100 bg-gray-50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-medium text-gray-900 tracking-tight">Export Activity Logs</h3>
+                  <p className="text-xs sm:text-sm text-gray-500 mt-1">Choose format</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="p-1 text-gray-400 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5">
+              <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">Choose export format:</p>
+
+              <div className="space-y-2.5 sm:space-y-3">
+                <button
+                  onClick={() => handleExportAuditLogs('csv')}
+                  className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border border-gray-200 rounded-xl hover:bg-brand-blue/5 hover:border-brand-blue/30 transition-all group"
+                >
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 flex items-center justify-center transition-colors flex-shrink-0">
+                    <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-green-700" />
+                  </div>
+                  <div className="text-left flex-1 min-w-0">
+                    <div className="text-sm sm:text-base font-medium text-gray-900">CSV Format</div>
+                    <div className="text-xs sm:text-sm text-gray-500">Compatible with Excel, Google Sheets</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => handleExportAuditLogs('excel')}
+                  className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border border-gray-200 rounded-xl hover:bg-brand-blue/5 hover:border-brand-blue/30 transition-all group"
+                >
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center transition-colors flex-shrink-0">
+                    <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
+                  </div>
+                  <div className="text-left flex-1 min-w-0">
+                    <div className="text-sm sm:text-base font-medium text-gray-900">Excel Format (XLSX)</div>
+                    <div className="text-xs sm:text-sm text-gray-500">Native Excel format with better formatting</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 p-4 sm:p-5 border-t border-gray-100">
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

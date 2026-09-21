@@ -1468,6 +1468,12 @@ export default function AIInterviewConfig() {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const isNavigatingRef = useRef(false);
+  // True once THIS visit has already written its exit checkpoint (the audit
+  // row that records the recruiter leaving the wizard — "AI Interview Saved
+  // as Draft" / "Draft Updated", chosen server-side). Every exit path sets
+  // it, and the unmount safety net below checks it, so a visit can never
+  // produce two checkpoint rows.
+  const exitCheckpointedRef = useRef(false);
 
   /* ── Load JD + restore draft if one exists ── */
   useEffect(() => {
@@ -2471,6 +2477,9 @@ export default function AIInterviewConfig() {
         const { id, mine } = await ensureDraftId(payload);
         if (!mine) await aiInterviewService.update(id, payload);
       }
+      // This save carried the exit flag, so the server has just written the
+      // visit's checkpoint row — the unmount net must not write a second one.
+      if (isExiting) exitCheckpointedRef.current = true;
       if (!silent) toast.success('Draft saved!');
       return true;
     } catch (err: any) {
@@ -2711,6 +2720,54 @@ export default function AIInterviewConfig() {
     router.push(needsRegeneration ? `${base}&autogen=1` : base);
   };
 
+  /**
+   * Record that the recruiter left this config, WITHOUT sending any of the
+   * page's current state.
+   *
+   * The audit trail is meant to show every visit to a config that ends in
+   * the recruiter walking away — "AI Interview Saved as Draft" when they
+   * changed nothing, "AI Interview Draft Updated" when they did. Only the
+   * dialog's Save button used to produce one, so leaving any other way
+   * (Discard, or an exit that never reaches the unsaved-changes guard at
+   * all — the header's account/notification menus are <button>s driving
+   * router.push, which the capture-phase link guard below cannot see) left
+   * no trace of the visit.
+   *
+   * An empty payload is the point: `save_and_exit` is an audit hint the
+   * server strips before the update, so nothing here overwrites the stored
+   * config. The server snapshots what is already in the database and picks
+   * the label by diffing it against the config's last checkpoint — the one
+   * place that decision is made, for every module.
+   */
+  const checkpointExit = async () => {
+    if (!existingDraftIdRef.current || exitCheckpointedRef.current) return;
+    exitCheckpointedRef.current = true;
+    try {
+      await aiInterviewService.update(existingDraftIdRef.current, { save_and_exit: true });
+    } catch {
+      // Best-effort: an audit checkpoint must never block the recruiter from
+      // leaving the page, and it has no visible result to report.
+      exitCheckpointedRef.current = false;
+    }
+  };
+
+  // The unmount net for exits the guards never see. Kept in a ref because a
+  // cleanup registered once (on mount) would otherwise close over the very
+  // first render's state and ids.
+  const checkpointExitRef = useRef(checkpointExit);
+  checkpointExitRef.current = checkpointExit;
+
+  useEffect(() => {
+    return () => {
+      // `isNavigatingRef` marks a departure some handler is already driving:
+      // Continue → Clusters (staying inside the wizard, where the checkpoint
+      // belongs to the exit from THAT page), or a Save/Discard that has
+      // already settled this visit's checkpoint.
+      if (isNavigatingRef.current) return;
+      void checkpointExitRef.current();
+    };
+  }, []);
+
   const handleSaveAndNavigate = async () => {
     setShowUnsavedDialog(false);
     isNavigatingRef.current = true;
@@ -2740,6 +2797,15 @@ export default function AIInterviewConfig() {
       } catch {
         // Silent — don't block navigation on delete failure
       }
+    } else {
+      // The draft stays. Record the visit's checkpoint before leaving, so
+      // reopening a config and walking away still appears in its activity
+      // log. Nothing of this page's state is sent — Discard must not push
+      // back anything the recruiter chose not to keep — so the server
+      // snapshots the config exactly as it stands and labels the row
+      // itself: untouched reads "Saved as Draft", edited (the 2s autosave
+      // has already persisted any edit by now) reads "Draft Updated".
+      await checkpointExit();
     }
     if (pendingNavigation === '__back__') router.back();
     else if (pendingNavigation) router.push(pendingNavigation);
