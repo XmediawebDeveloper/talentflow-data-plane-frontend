@@ -18,6 +18,7 @@ import {
   resolveInviteStatus,
   isInviteExpired,
   timelineEvents,
+  hasMoreTimelineHistory,
   buildInvitationRowActions,
   InvitationActionsMenu,
   InvitationActionButtons,
@@ -466,7 +467,9 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                           </div>
                         ))}
                       </div>
-                      <ViewFullHistoryLink compact onClick={() => setHistoryTarget(invitation)} />
+                      {hasMoreTimelineHistory(invitation) && (
+                        <ViewFullHistoryLink compact onClick={() => setHistoryTarget(invitation)} />
+                      )}
 
                       {/* Progress + Actions */}
                       <div className="pt-1.5 border-t border-gray-100 dark:border-slate-700/60">
@@ -619,7 +622,9 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                                       ))}
                                     </div>
                                   )}
-                                  <ViewFullHistoryLink onClick={() => setHistoryTarget(invitation)} />
+                                  {hasMoreTimelineHistory(invitation) && (
+                                    <ViewFullHistoryLink onClick={() => setHistoryTarget(invitation)} />
+                                  )}
                                 </>
                               );
                             })()}
