@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, GitBranch, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, Sparkles, ClipboardList, Ban, Check, Info, RefreshCw, Layers, Radar } from 'lucide-react';
+import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, GitBranch, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Check, Info, RefreshCw, Layers, Radar } from 'lucide-react';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef, useCallback, useMemo, type ComponentType } from 'react';
 import { createPortal } from 'react-dom';
@@ -337,8 +337,6 @@ export default function AIInterview() {
 
   // Confirmation dialog
   const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null);
-  const [showPublishedModal, setShowPublishedModal] = useState(false);
-  const [publishedTitle, setPublishedTitle] = useState('');
 
   // Sync quota from shared QuotaContext (AIU = AI Interview Units)
   useEffect(() => {
@@ -682,21 +680,6 @@ export default function AIInterview() {
 
     return () => window.clearTimeout(clearRedirectTimer);
   }, []);
-
-  useEffect(() => {
-    const wasPublished = searchParams.get('published') === '1';
-    if (!wasPublished) return;
-
-    setPublishedTitle(searchParams.get('title') || 'AI Interview');
-    setShowPublishedModal(true);
-
-    const timer = window.setTimeout(() => {
-      setShowPublishedModal(false);
-      router.replace('/recruitment/ai-interviews');
-    }, 3000);
-
-    return () => window.clearTimeout(timer);
-  }, [searchParams, router]);
 
   useEffect(() => {
     if (activeTab === 'settings') {
@@ -1707,13 +1690,6 @@ export default function AIInterview() {
               <Video className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-brand-blue text-white text-[10px] font-medium tracking-wide shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                  <Sparkles className="w-3 h-3" />
-                  AI Interview
-                </span>
-                <span className="text-[10px] text-gray-400 dark:text-slate-500 font-medium uppercase tracking-wider">Platform</span>
-              </div>
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight break-words">
                 AI Interview Management
               </h1>
@@ -3252,7 +3228,7 @@ export default function AIInterview() {
                   loadInvitationOverview, which queries unfiltered — selecting a
                   bucket narrows the table without collapsing the other cards. */}
               <InviteStatCards
-                gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-3"
+                gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1 sm:gap-2 lg:gap-3"
                 activeStatus={inviteFilters.status}
                 onSelect={(status) => {
                   setInviteFilters({ ...inviteFilters, status });
@@ -3264,7 +3240,6 @@ export default function AIInterview() {
                   { key: 'in_progress', label: 'In Progress', Icon: Play, value: invitationOverview.inProgress, ...INVITE_CARD_TONES.orange },
                   { key: 'completed', label: 'Completed', Icon: CheckCircle, value: invitationOverview.completed, ...INVITE_CARD_TONES.green },
                   { key: 'terminated', label: 'Terminated', Icon: Ban, value: invitationOverview.terminated, ...INVITE_CARD_TONES.red },
-                  { key: 'cancelled', label: 'Cancelled', Icon: X, value: invitationOverview.cancelled, ...INVITE_CARD_TONES.red },
                   { key: 'completion-rate', label: 'Completion', Icon: TrendingUp, value: `${completionRate}%`, filterable: false, ...INVITE_CARD_TONES.cyan },
                 ]}
               />
@@ -3492,49 +3467,6 @@ export default function AIInterview() {
         </div>
       )}
 
-      {showPublishedModal && (
-        <div className="fixed inset-0 z-[60] bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
-          <div className="w-full max-w-[95vw] sm:max-w-md rounded-2xl bg-white dark:bg-slate-900 shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
-            <div className="px-6 pt-5 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-slate-50 tracking-tight">AI Interview Published</h2>
-              <button
-                onClick={() => setShowPublishedModal(false)}
-                className="p-1.5 text-gray-500 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-gray-700 rounded-lg transition-colors flex-shrink-0"
-                aria-label="Close"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            <div className="px-6 py-5 text-center flex-1 overflow-y-auto">
-              <div className="relative inline-flex items-center justify-center mb-4">
-                <span className="absolute w-2 h-2 rounded-full bg-green-400 animate-ping" style={{ top: -4, left: 10 }} />
-                <span className="absolute w-1.5 h-1.5 rounded-full bg-brand-blue/60 animate-ping" style={{ top: 8, right: -2, animationDelay: '0.2s' }} />
-                <span className="absolute w-2 h-2 rounded-full bg-brand-cyan/60 animate-ping" style={{ bottom: 0, left: -2, animationDelay: '0.4s' }} />
-                <div className="w-16 h-16 bg-green-100 dark:bg-green-500/15 ring-1 ring-green-200 dark:ring-green-500/25 rounded-full flex items-center justify-center">
-                  <CheckCircle className="w-8 h-8 text-green-600 dark:text-green-300" />
-                </div>
-              </div>
-              <p className="text-sm text-gray-500 dark:text-slate-500 mb-4">
-                Redirected successfully. This message will close in 3 seconds.
-              </p>
-              <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 dark:bg-none dark:bg-white/[0.04] rounded-xl border border-brand-blue/15 dark:border-brand-blue/25 ring-1 ring-brand-blue/10 dark:ring-brand-blue/15 px-4 py-3 text-left">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-gray-500 dark:text-slate-500">Position</span>
-                  <span className="text-sm font-medium text-brand-blue text-right">{publishedTitle}</span>
-                </div>
-              </div>
-            </div>
-            <div className="px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/50 flex items-center justify-end shrink-0">
-              <button
-                onClick={() => setShowPublishedModal(false)}
-                className="px-4 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Resend confirmation — regenerates interview_token, invalidates old link */}
       <ConfirmationDialog

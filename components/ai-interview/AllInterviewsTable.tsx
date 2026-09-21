@@ -39,7 +39,7 @@ const normalizeStatus = (status: string) =>
    AssessmentRow so the two flat tables read as one family. */
 interface InterviewRow {
   id: string;
-  interviewId: string;    // display_id, e.g. "AI-045" (shown, not searched separately)
+  interviewId: string;    // display_id, e.g. "AI-045" — searchable, not shown
   jobId: string;           // jd_short_id            -> column 1
   jobName: string;         // jd_title               -> column 2
   jobVersion: number;      // jd_version             -> column 3
@@ -783,14 +783,6 @@ export default function AllInterviewsTable() {
                       >
                         {row.jobName}
                       </span>
-                      {row.interviewId && (
-                        <span
-                          className="block truncate text-xs text-gray-500 dark:text-slate-500"
-                          title={row.interviewId}
-                        >
-                          {row.interviewId}
-                        </span>
-                      )}
                     </td>
 
                     <td className="px-3 py-2.5 align-middle">

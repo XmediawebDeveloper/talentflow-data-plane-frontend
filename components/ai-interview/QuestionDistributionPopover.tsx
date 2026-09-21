@@ -1,5 +1,6 @@
 'use client';
 
+import React from 'react';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 /** One chip in a question row — every skill carries its OWN priority, because a
@@ -16,6 +17,23 @@ export type DistRow = {
 
 type SavedCluster = { priority?: number; skills?: string[] };
 
+/** Panel width and grid for one, two or three columns. Each column wants
+ *  roughly 360px; the viewport cap keeps a narrow screen from scrolling
+ *  sideways. */
+const POPOVER_WIDTH: Record<number, string> = {
+  1: 'w-[min(420px,calc(100vw-2rem))]',
+  2: 'w-[min(780px,calc(100vw-2rem))]',
+  3: 'w-[min(1120px,calc(100vw-2rem))]',
+};
+const GRID_COLS: Record<number, string> = {
+  1: 'md:grid-cols-1',
+  2: 'md:grid-cols-2',
+  3: 'md:grid-cols-3',
+};
+
+/** An HR question as the rounds config stores it — what the third column lists. */
+export type DistHRQuestion = { id: string; question_text: string; stage?: string | null };
+
 interface QuestionDistributionPopoverProps {
   /** The invite's `special_instructions` — string or already-parsed object. */
   specialInstructions?: string | Record<string, any> | null;
@@ -31,6 +49,8 @@ interface QuestionDistributionPopoverProps {
    * saved plan is genuinely absent.
    */
   fallback?: () => { mth: DistRow[]; nth: DistRow[] };
+  /** The HR round's selected questions, for the third column. */
+  hrQuestions?: DistHRQuestion[];
   className?: string;
 }
 
@@ -58,6 +78,7 @@ export function QuestionDistributionPopover({
   specialInstructions,
   clusters,
   fallback,
+  hrQuestions = [],
   className = '',
 }: QuestionDistributionPopoverProps) {
   const parsed: Record<string, any> | null = (() => {
@@ -127,7 +148,7 @@ export function QuestionDistributionPopover({
   const mthDist: DistRow[] = hasSaved ? (saved?.mth_questions ?? []).map(toRow) : local?.mth ?? [];
   const nthDist: DistRow[] = hasSaved ? (saved?.nth_questions ?? []).map(toRow) : local?.nth ?? [];
 
-  if (mthDist.length === 0 && nthDist.length === 0) return null;
+  if (mthDist.length === 0 && nthDist.length === 0 && hrQuestions.length === 0) return null;
 
   const totalQ = mthDist.length + nthDist.length;
   const totalSkillsCovered = new Set([
@@ -176,28 +197,75 @@ export function QuestionDistributionPopover({
     );
   };
 
-  const renderSection = (rows: DistRow[], label: string, sectionKey: 'mth' | 'nth') => (
-    <div>
-      <div className="text-[10px] font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-        {label} ({rows.length})
+  /* Each bucket is a column with its own sticky head. The head sticks to the
+     popover body, which is the ONLY scroller: the tables used to sit inside
+     `.tf-table-shell` scroll boxes of their own, so a long bucket showed a
+     second scrollbar inside the popover's — and a sticky head inside a
+     nested scroller sticks to that box, not to the popover the reader is
+     scrolling. */
+  const columnHead = (label: string, count: number, tone: string, right = 'Skills') => (
+    <div className="sticky top-0 z-10 bg-white">
+      <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 ${tone}`}>
+        {label} ({count})
       </div>
-      <div className="border border-gray-100 rounded-md overflow-hidden tf-table-shell">
+      <div className="grid grid-cols-[40px_1fr] bg-gray-50 border border-gray-100 rounded-t-md">
+        <span className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Q#</span>
+        <span className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{right}</span>
+      </div>
+    </div>
+  );
+
+  const renderSection = (rows: DistRow[], label: string, sectionKey: 'mth' | 'nth') => (
+    <div className="min-w-0">
+      {columnHead(label, rows.length, sectionKey === 'mth' ? 'text-brand-blue' : 'text-brand-cyan')}
+      <div className="border border-t-0 border-gray-100 rounded-b-md">
         <table className="w-full text-left">
-          <thead className="bg-gray-50 border-b border-gray-100">
-            <tr>
-              <th className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider w-[40px]">
-                Q#
-              </th>
-              <th className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">
-                Skills
-              </th>
-            </tr>
-          </thead>
-          <tbody>{rows.map(r => renderRow(r, sectionKey))}</tbody>
+          <tbody>
+            {rows.map(r => renderRow(r, sectionKey))}
+          </tbody>
         </table>
       </div>
     </div>
   );
+
+  const renderHR = () => (
+    <div className="min-w-0">
+      {columnHead('HR Round', hrQuestions.length, 'text-brand-orange-deep', 'Question')}
+      <div className="border border-t-0 border-gray-100 rounded-b-md">
+        <table className="w-full text-left">
+          <tbody>
+            {hrQuestions.map((q, i) => (
+                <tr key={q.id} className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors">
+                  <td className="align-top px-2 py-1.5 w-[40px]">
+                    <span className="text-[11px] font-mono font-semibold text-brand-orange-deep">Q{i + 1}</span>
+                  </td>
+                  <td className="align-top px-2 py-1.5">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] text-gray-800">{q.question_text}</span>
+                      <span
+                        className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide ring-1 ${
+                          q.stage === 'opening'
+                            ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
+                            : 'bg-advice-positive-bg text-advice-positive ring-advice-positive/25'
+                        }`}
+                      >
+                        {q.stage === 'opening' ? 'opening' : 'closing'}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
+  const columns = [
+    { key: 'mth', show: mthDist.length > 0, render: () => renderSection(mthDist, 'Must-To-Have', 'mth') },
+    { key: 'nth', show: nthDist.length > 0, render: () => renderSection(nthDist, 'Nice-To-Have', 'nth') },
+    { key: 'hr', show: hrQuestions.length > 0, render: renderHR },
+  ].filter(c => c.show);
 
   return (
     <Popover>
@@ -209,18 +277,26 @@ export function QuestionDistributionPopover({
           className={`inline-flex items-center justify-center w-1.5 h-1.5 rounded-full bg-gray-300 hover:bg-brand-blue transition-colors ml-1 ${className}`}
         />
       </PopoverTrigger>
-      <PopoverContent side="bottom" align="start" className="w-[480px] max-h-[70dvh] overflow-y-auto p-0">
-        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
-          <div>
-            <div className="text-sm font-semibold text-gray-900">Question Distribution</div>
-            <div className="text-[11px] text-gray-500">
-              {totalQ} questions · {totalSkillsCovered} skills covered
-            </div>
+      {/* Only the rounds that have anything to show get a column, and the
+          popover is sized to that count — one column does not need a
+          three-column-wide panel with two empty thirds. Capped to the
+          viewport so it never grows a horizontal scrollbar of its own. */}
+      <PopoverContent
+        side="bottom"
+        align="start"
+        collisionPadding={16}
+        className={`${POPOVER_WIDTH[columns.length] ?? POPOVER_WIDTH[3]} max-h-[75dvh] overflow-y-auto p-0`}
+      >
+        <div className="px-4 py-3 border-b border-gray-100 bg-gray-50">
+          <div className="text-sm font-semibold text-gray-900">Question Distribution</div>
+          <div className="text-[11px] text-gray-500">
+            {totalQ + hrQuestions.length} questions · {totalSkillsCovered} skills covered
           </div>
         </div>
-        <div className="p-4 space-y-4">
-          {mthDist.length > 0 && renderSection(mthDist, 'Must-To-Have', 'mth')}
-          {nthDist.length > 0 && renderSection(nthDist, 'Nice-To-Have', 'nth')}
+        <div className={`p-4 grid grid-cols-1 gap-4 items-start ${GRID_COLS[columns.length] ?? GRID_COLS[3]}`}>
+          {columns.map(column => (
+            <React.Fragment key={column.key}>{column.render()}</React.Fragment>
+          ))}
         </div>
       </PopoverContent>
     </Popover>
