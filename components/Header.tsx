@@ -244,9 +244,14 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
     enabled: !!user && !!wsToken,
   });
 
-  // Log WebSocket connection status changes
+  // Log WebSocket connection status changes. Routine connect/reconnect flips
+  // are dev-only noise; a real error is worth seeing everywhere.
   useEffect(() => {
-    console.log('[Header] WebSocket status — connected:', wsConnected, '| error:', wsError ?? 'none');
+    if (wsError) {
+      console.warn('[Header] WebSocket error:', wsError);
+    } else if (process.env.NODE_ENV !== 'production') {
+      console.log('[Header] WebSocket status — connected:', wsConnected);
+    }
   }, [wsConnected, wsError]);
 
   // Fetch notifications on mount and when dropdown opens

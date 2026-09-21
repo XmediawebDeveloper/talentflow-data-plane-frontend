@@ -30,7 +30,7 @@ import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import QuotaBadge from '@/components/ui/quota-badge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
-import { PageSkeleton, TableSkeleton } from '@/components/ui/skeleton';
+import { PageSkeleton, TableSkeleton, Skeleton } from '@/components/ui/skeleton';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
@@ -3396,7 +3396,46 @@ export default function ResumeScoringPage({
           />
           </>
         ) : historyLoading && scoredHistory.length === 0 ? (
-          <TableSkeleton />
+          <div className="space-y-3">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4"
+              >
+                <div className="flex flex-col sm:flex-row items-start gap-3">
+                  {/* Scoring icon */}
+                  <Skeleton className="h-9 w-9 rounded-xl flex-shrink-0" />
+                  <div className="flex-1 min-w-0 w-full">
+                    {/* Title row */}
+                    <div className="flex flex-wrap items-center gap-2 mb-2">
+                      <Skeleton className="h-7 w-16 rounded-md" />
+                      <Skeleton className="h-5 w-56" />
+                      <Skeleton className="h-7 w-24 rounded-full" />
+                      <Skeleton className="h-7 w-12 rounded-full" />
+                    </div>
+                    {/* Info row */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mb-2">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-4 w-28" />
+                      <Skeleton className="h-4 w-20" />
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-6 w-32 rounded-lg" />
+                    </div>
+                  </div>
+                  {/* Action buttons - right side */}
+                  <div className="flex flex-col gap-2 flex-shrink-0 w-full sm:w-auto">
+                    <div className="flex items-center gap-1.5 self-end">
+                      <Skeleton className="h-9 w-9 rounded-lg" />
+                      <Skeleton className="h-9 w-9 rounded-lg" />
+                      <Skeleton className="h-9 w-9 rounded-lg" />
+                    </div>
+                    <Skeleton className="h-9 w-full sm:w-32 rounded-lg" />
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         ) : scoredHistory.length === 0 ? (
           <div className="bg-white dark:bg-slate-900 rounded-xl border-2 border-dashed border-brand-blue/20 p-8 sm:p-10 text-center">
             <div className="max-w-md mx-auto">

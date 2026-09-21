@@ -11,7 +11,7 @@ import { toast } from 'sonner';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import { ListSkeleton } from '@/components/ui/skeleton-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 type CategoryFilter = 'all' | 'config_lifecycle' | 'candidate_activity';
 
@@ -293,7 +293,44 @@ export default function AIInterviewAuditTrail() {
         {/* Timeline View */}
         <div className="p-6">
           {isLoading ? (
-            <ListSkeleton rows={5} />
+            <div className="space-y-4">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div
+                  key={i}
+                  className="relative flex items-start gap-4 p-4 rounded-lg border border-gray-100 bg-white"
+                >
+                  {i < 5 && (
+                    <div className="absolute left-[26px] top-[52px] w-0.5 h-[calc(100%+16px)] bg-gray-200" />
+                  )}
+                  {/* Icon bubble */}
+                  <Skeleton className="flex-shrink-0 w-10 h-10 rounded-full relative z-10" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-4">
+                      <div className="min-w-0 flex-1">
+                        {/* Title + category chip */}
+                        <div className="flex items-center gap-2 mb-1">
+                          <Skeleton className="h-4 w-40" />
+                          <Skeleton className="h-4 w-24 rounded-full" />
+                        </div>
+                        {/* Description */}
+                        <Skeleton className="h-3.5 w-3/4 mb-2" />
+                        {/* Metadata row */}
+                        <div className="flex items-center gap-4 mt-2">
+                          <Skeleton className="h-3 w-24" />
+                          <Skeleton className="h-3 w-28" />
+                          <Skeleton className="h-3 w-20" />
+                        </div>
+                      </div>
+                      {/* Timestamp + Details */}
+                      <div className="text-right flex-shrink-0">
+                        <Skeleton className="h-3.5 w-24 ml-auto" />
+                        <Skeleton className="h-3 w-14 mt-1 ml-auto" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           ) : activities.length === 0 ? (
             <ListEmptyState
               icon={Activity}

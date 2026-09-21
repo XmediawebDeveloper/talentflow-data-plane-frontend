@@ -893,6 +893,87 @@ export const assessmentService = {
   },
 
   /**
+   * Revoke the current link and send a fresh invitation — same endpoint
+   * whether the invitation is plain SENT or reactivating a REVOKED one.
+   */
+  async resendInvitation(assessmentId: string, invitationId: string): Promise<any> {
+    try {
+      const response = await api.post(`/assessments/${assessmentId}/invitations/${invitationId}/resend`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Revoke a single sent invitation — distinct from revokePendingInvitations,
+   * which revokes every pending/sent invitation on the assessment at once.
+   */
+  async revokeInvitation(assessmentId: string, invitationId: string): Promise<any> {
+    try {
+      const response = await api.post(`/assessments/${assessmentId}/invitations/${invitationId}/revoke`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Change the candidate email on a failed/bounced invitation and resend —
+   * the pre-existing "fix a bad address" flow, unrelated to Edit below.
+   */
+  async updateInvitationEmail(assessmentId: string, invitationId: string, newEmail: string): Promise<any> {
+    try {
+      const response = await api.patch(
+        `/assessments/${assessmentId}/invitations/${invitationId}/update-email`,
+        { new_email: newEmail }
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Edit a REVOKED invitation's candidate name/email. Only allowed while the
+   * invitation is revoked — does not change status or resend by itself; the
+   * caller follows this with resendInvitation() for "Save & Send".
+   */
+  async updateInvitationDetails(
+    assessmentId: string,
+    invitationId: string,
+    data: { candidate_name?: string; candidate_email?: string }
+  ): Promise<any> {
+    try {
+      const response = await api.patch(
+        `/assessments/${assessmentId}/invitations/${invitationId}/update-details`,
+        data
+      );
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
+   * Full action history for one invitation — every send, resend, revoke,
+   * edit and candidate-lifecycle milestone as its own row, oldest first.
+   */
+  async getInvitationTimeline(assessmentId: string, invitationId: string): Promise<Array<{
+    action: string;
+    action_label: string;
+    details: Record<string, any>;
+    created_at: string | null;
+  }>> {
+    try {
+      const response = await api.get(`/assessments/${assessmentId}/invitations/${invitationId}/timeline`);
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * 3. Export assessment results
    * Returns blob for file download
    * ✅ UPDATED: Now accepts enabled columns, filters, and sorting

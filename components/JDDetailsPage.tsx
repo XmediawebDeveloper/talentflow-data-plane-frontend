@@ -12,7 +12,7 @@ import { toast } from 'sonner';
 import { useModulePermissions } from '@/lib/hooks/usePermissions';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { DetailPageSkeleton, TableSkeleton } from '@/components/ui/skeleton-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -144,7 +144,61 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
   };
 
   if (loading && !results) {
-    return <TableSkeleton />;
+    // Structure-matched skeleton for the Assessment Results tab: the 5 stat
+    // cards, the filter bar, then the results table with this tab's own columns.
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-5 gap-4">
+          {Array.from({ length: 5 }).map((_, i) => (
+            <div key={i} className="bg-white rounded-xl border border-gray-200 p-4 space-y-2">
+              <Skeleton className="h-7 w-12" />
+              <Skeleton className="h-4 w-24" />
+            </div>
+          ))}
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-10 flex-1 rounded-lg" />
+            <Skeleton className="h-10 w-36 rounded-lg" />
+            <Skeleton className="h-10 w-36 rounded-lg" />
+            <Skeleton className="h-10 w-24 rounded-lg" />
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="tf-table-shell">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  {['Candidate', 'Assessment', 'Status', 'HR', 'Technical', 'Coding', 'Overall', 'Duration', 'Completed'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left"><Skeleton className="h-3 w-20" /></th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {Array.from({ length: 8 }).map((_, r) => (
+                  <tr key={r}>
+                    <td className="px-4 py-4">
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-4 w-28" />
+                        <Skeleton className="h-3 w-36" />
+                      </div>
+                    </td>
+                    <td className="px-4 py-4"><Skeleton className="h-4 w-28" /></td>
+                    <td className="px-4 py-4"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="px-4 py-4"><Skeleton className="h-4 w-14" /></td>
+                    <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!results || results.assessments_count === 0) {
@@ -253,7 +307,37 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
       {/* Results Table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {loading ? (
-          <TableSkeleton />
+          <div className="tf-table-shell">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  {['Candidate', 'Assessment', 'Status', 'HR', 'Technical', 'Coding', 'Overall', 'Duration', 'Completed'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left"><Skeleton className="h-3 w-20" /></th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {Array.from({ length: 8 }).map((_, r) => (
+                  <tr key={r}>
+                    <td className="px-4 py-4">
+                      <div className="space-y-1.5">
+                        <Skeleton className="h-4 w-28" />
+                        <Skeleton className="h-3 w-36" />
+                      </div>
+                    </td>
+                    <td className="px-4 py-4"><Skeleton className="h-4 w-28" /></td>
+                    <td className="px-4 py-4"><Skeleton className="h-5 w-16 rounded-full" /></td>
+                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="px-4 py-4"><Skeleton className="h-4 w-14" /></td>
+                    <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : results.items.length === 0 ? (
           <div className="p-12 text-center">
             <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -465,7 +549,41 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
   };
 
   if (loading && !resumes) {
-    return <TableSkeleton />;
+    // Structure-matched skeleton for the Scored Resumes tab: the search bar,
+    // then the results table with this tab's own columns.
+    return (
+      <div className="space-y-6">
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-10 flex-1 rounded-lg" />
+            <Skeleton className="h-10 w-24 rounded-lg" />
+          </div>
+        </div>
+        <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+          <div className="tf-table-shell">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  {['Candidate', 'Match Status', 'Score', 'Scored At'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left"><Skeleton className="h-3 w-20" /></th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {Array.from({ length: 8 }).map((_, r) => (
+                  <tr key={r}>
+                    <td className="px-4 py-4"><Skeleton className="h-4 w-32" /></td>
+                    <td className="px-4 py-4"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (!resumes || resumes.total === 0) {
@@ -517,7 +635,27 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
       {/* Results Table */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
         {loading ? (
-          <TableSkeleton />
+          <div className="tf-table-shell">
+            <table className="w-full">
+              <thead className="bg-gray-50 border-b border-gray-200">
+                <tr>
+                  {['Candidate', 'Match Status', 'Score', 'Scored At'].map((h) => (
+                    <th key={h} className="px-4 py-3 text-left"><Skeleton className="h-3 w-20" /></th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-200">
+                {Array.from({ length: 8 }).map((_, r) => (
+                  <tr key={r}>
+                    <td className="px-4 py-4"><Skeleton className="h-4 w-32" /></td>
+                    <td className="px-4 py-4"><Skeleton className="h-5 w-20 rounded-full" /></td>
+                    <td className="px-4 py-4 text-center"><Skeleton className="h-4 w-10 mx-auto" /></td>
+                    <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         ) : resumes.items.length === 0 ? (
           <div className="p-12 text-center">
             <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -728,7 +866,86 @@ export default function JDDetailsPage() {
 
 
   if (loading) {
-    return <DetailPageSkeleton />;
+    // Structure-matched skeleton — mirrors this page's real overview layout:
+    // the card wrapper + breadcrumb, header (back nav, job-id badge, title,
+    // status, meta row, action buttons), the tabs bar, and the grid-cols-3
+    // body (Description card + the sidebar's Statistics/Job Details/Metadata).
+    return (
+      <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+            {/* Breadcrumb */}
+            <div className="mb-4 md:mb-6 flex items-center gap-2">
+              <Skeleton className="h-3 w-16" />
+              <Skeleton className="h-3 w-3" />
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-3 w-3" />
+              <Skeleton className="h-3 w-20" />
+            </div>
+
+            {/* Header */}
+            <div className="mb-6">
+              <Skeleton className="h-4 w-44 mb-4" />
+              <div className="flex items-start justify-between">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <Skeleton className="h-8 w-20 rounded-lg" />
+                    <Skeleton className="h-7 w-64" />
+                    <Skeleton className="h-7 w-24 rounded-full" />
+                  </div>
+                  <div className="flex items-center gap-4">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-4 w-32" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-3">
+                  <Skeleton className="h-10 w-28 rounded-lg" />
+                  <Skeleton className="h-10 w-20 rounded-lg" />
+                </div>
+              </div>
+            </div>
+
+            {/* Tabs */}
+            <div className="mb-6 border-b border-gray-200 flex gap-6 pb-3">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <Skeleton key={i} className="h-5 w-28" />
+              ))}
+            </div>
+
+            {/* Overview body */}
+            <div className="grid grid-cols-3 gap-6">
+              {/* Description */}
+              <div className="col-span-2 space-y-6">
+                <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+                  <Skeleton className="h-6 w-40 mb-2" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-5/6" />
+                  <Skeleton className="h-4 w-2/3" />
+                </div>
+              </div>
+
+              {/* Sidebar — Statistics, Job Details, Metadata */}
+              <div className="space-y-6">
+                {Array.from({ length: 3 }).map((_, card) => (
+                  <div key={card} className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+                    <Skeleton className="h-6 w-28 mb-2" />
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <div key={i} className="flex items-center justify-between">
+                        <Skeleton className="h-4 w-28" />
+                        <Skeleton className="h-4 w-12" />
+                      </div>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   if (!jd) {

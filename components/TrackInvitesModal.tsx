@@ -1,10 +1,9 @@
 'use client';
 
-import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Pencil, Send, Loader2, Monitor, Ban } from 'lucide-react';
+import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Loader2, Monitor, Ban } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/services/api';
-import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
 import InviteFilterBar, {
   EMPTY_INVITE_FILTERS,
@@ -14,6 +13,23 @@ import InviteFilterBar, {
 } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
 import { TRACKER_DIALOG_PANEL_CLASS, TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
+import { assessmentService } from '@/lib/services/assessmentService';
+import {
+  resolveInviteStatus,
+  isInviteExpired,
+  timelineEvents,
+  buildInvitationRowActions,
+  InvitationActionsMenu,
+  InvitationActionButtons,
+  ViewFullHistoryLink,
+  InvitationHistoryDialog,
+} from '@/components/AssessmentInviteActions';
+
+/* This popup is deliberately READ-ONLY beyond Resend/Copy Link, matching the
+   AI Interview module's Job-Details tracker: Edit (name+email, revoked-only)
+   and Revoke live only on the main Assessments page's Track Invites popup.
+   Fixing a bad address (Edit Email / Change Email) moved there too — this
+   surface is for tracking, not correcting invitations. */
 
 interface TrackInvitesModalProps {
   isOpen: boolean;
@@ -29,23 +45,10 @@ interface TrackInvitesModalProps {
 
 const INVITES_PAGE_SIZE = 10;
 
-const isValidEmail = (email: string) =>
-  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-
-// Derive effective status using both the status field and timestamp signals as fallback.
-// This guards against stale/null status fields in the API response.
-const getEffectiveStatus = (inv: any): string => {
-  const s = inv.status?.toLowerCase();
-  if (s === 'completed' || inv.completed_at) return 'completed';
-  if (s === 'failed') return 'failed';
-  if (s === 'expired') return 'expired';
-  if (s === 'abandoned') return 'abandoned';
-  if (s === 'bounced' || inv.bounced_at) return 'bounced';
-  if (s === 'started' || inv.started_at) return 'started';
-  if (s === 'opened' || inv.opened_at) return 'opened';
-  if (s === 'sent' || inv.sent_at) return 'sent';
-  return 'pending';
-};
+// Effective status + expiry + timeline milestones now live in
+// AssessmentInviteActions (resolveInviteStatus / isInviteExpired /
+// timelineEvents) so this surface can't drift from the other two.
+const getEffectiveStatus = resolveInviteStatus;
 
 export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onViewResult }: TrackInvitesModalProps) {
   const router = useRouter();
@@ -82,10 +85,8 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
      narrow the totals too. */
   const [filters, setFilters] = useState<InviteFilterState>(EMPTY_INVITE_FILTERS);
   const [page, setPage] = useState(1);
-  const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
-  const [newEmailValue, setNewEmailValue] = useState('');
-  const [isSendingEmail, setIsSendingEmail] = useState(false);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  const [historyTarget, setHistoryTarget] = useState<any | null>(null);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -181,38 +182,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
   const handleResendInvitation = async (invitation: any) => {
     setResendingId(invitation.id);
     try {
-      await api.post(`/assessments/${invitation.assessment_id}/invitations/${invitation.id}/resend`);
+      await assessmentService.resendInvitation(invitation.assessment_id, invitation.id);
       await loadInvitations(true);
     } catch (error) {
       console.error('Failed to resend invitation:', error);
     } finally {
       setResendingId(null);
-    }
-  };
-
-  const handleUpdateEmail = async (invitation: any) => {
-    if (!isValidEmail(newEmailValue)) return;
-    setIsSendingEmail(true);
-    try {
-      await api.patch(
-        `/assessments/${invitation.assessment_id}/invitations/${invitation.id}/update-email`,
-        { new_email: newEmailValue.trim() }
-      );
-      setEditingEmailId(null);
-      setNewEmailValue('');
-      toast.success('Email updated — previous link deactivated and a new invitation sent.');
-      await loadInvitations(true);
-    } catch (error: any) {
-      console.error('Failed to update email:', error);
-      // Surface the backend validation (e.g. "already invited to this assessment").
-      const msg =
-        error?.response?.data?.detail?.message ||
-        error?.response?.data?.message ||
-        (typeof error?.response?.data?.detail === 'string' ? error.response.data.detail : null) ||
-        'Failed to update email. Please try again.';
-      toast.error(msg);
-    } finally {
-      setIsSendingEmail(false);
     }
   };
 
@@ -308,6 +283,9 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
     if (effective === 'bounced') {
       return <span className={`${base} bg-red-50 text-red-600 ring-red-200`}><RefreshCw className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Bounced</span>;
     }
+    if (effective === 'revoked') {
+      return <span className={`${base} bg-red-50 text-red-600 ring-red-200`}><Ban className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Revoked</span>;
+    }
     if (effective === 'expired') {
       return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Expired</span>;
     }
@@ -329,42 +307,8 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
     return <span className={`${base} bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-gray-200 dark:ring-slate-700`}><Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Pending</span>;
   };
 
-  // Timeline milestones, oldest first. The table shows only the latest one so
-  // every row stays a single line — the rest ride along in the hover title,
-  // with a "+N" hint that there's more. Without this the column stretched some
-  // rows to five lines while their neighbours had one, and nothing lined up.
-  const timelineEvents = (inv: any) => {
-    const out: { label: string; at: string; Icon: typeof Mail; tone: string }[] = [];
-    if (inv.sent_at) out.push({ label: 'Invited', at: inv.sent_at, Icon: Mail, tone: 'text-brand-blue' });
-    if (inv.email_read_at) out.push({ label: 'Email Read', at: inv.email_read_at, Icon: Eye, tone: 'text-brand-cyan' });
-    if (inv.bounced_at) out.push({ label: 'Bounced', at: inv.bounced_at, Icon: RefreshCw, tone: 'text-red-600' });
-    if (inv.opened_at) out.push({ label: 'System Check', at: inv.opened_at, Icon: Monitor, tone: 'text-brand-cyan' });
-    if (inv.started_at) out.push({ label: 'Started', at: inv.started_at, Icon: Play, tone: 'text-brand-orange-deep' });
-    if (inv.completed_at) out.push({ label: 'Completed', at: inv.completed_at, Icon: CheckCircle, tone: 'text-brand-blue' });
-    if (inv.terminated_at && !inv.completed_at) out.push({ label: 'Terminated', at: inv.terminated_at, Icon: Ban, tone: 'text-red-600' });
-
-    const s = (inv.status || '').toLowerCase();
-    const clockExpired = !inv.started_at
-      && !inv.unit_consumed
-      && inv.expires_at
-      && new Date(inv.expires_at) < new Date();
-    if (!inv.completed_at && (s === 'expired' || clockExpired) && inv.expires_at) {
-      out.push({ label: 'Expired at', at: inv.expires_at, Icon: Clock, tone: 'text-brand-orange-deep' });
-    }
-
-    return out.sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
-  };
-
-  // Secondary "Expired" badge — shown alongside the base status when the
-  // invitation has passed its expiry but hasn't reached a terminal state.
-  // Mirrors isInvExpired() in the assessment-level popup so both surfaces
-  // flag the same expired-but-not-yet-marked invitations.
-  const isInvExpired = (inv: any): boolean => {
-    const s = (inv.status || '').toLowerCase();
-    if (['completed', 'failed', 'bounced', 'abandoned', 'expired'].includes(s) || inv.completed_at || inv.bounced_at) return false;
-    if (inv.unit_consumed) return false;
-    return !!(inv.expires_at && new Date(inv.expires_at) < new Date());
-  };
+  // timelineEvents / isInviteExpired now come from AssessmentInviteActions.
+  const isInvExpired = isInviteExpired;
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4 md:p-6">
@@ -514,14 +458,15 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                       {/* Timeline — a two-column grid rather than a free wrap,
                           so the entries line up instead of staggering by the
                           width of whichever label came before them. */}
-                      <div className="text-[10px] text-gray-500 dark:text-slate-500 grid grid-cols-2 gap-x-3 gap-y-0.5 mb-1.5">
-                        {timelineEvents(invitation).map(({ label, at, Icon, tone }) => (
-                          <div key={label} className="flex items-center gap-1 min-w-0">
+                      <div className="text-[10px] text-gray-500 dark:text-slate-500 grid grid-cols-2 gap-x-3 gap-y-0.5 mb-1">
+                        {timelineEvents(invitation).map(({ label, at, Icon, tone }, i) => (
+                          <div key={`${label}-${i}`} className="flex items-center gap-1 min-w-0">
                             <Icon className={`w-2.5 h-2.5 flex-shrink-0 ${tone}`} />
                             <span className="truncate">{label}: {formatIST(at)}</span>
                           </div>
                         ))}
                       </div>
+                      <ViewFullHistoryLink compact onClick={() => setHistoryTarget(invitation)} />
 
                       {/* Progress + Actions */}
                       <div className="pt-1.5 border-t border-gray-100 dark:border-slate-700/60">
@@ -561,67 +506,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                             </button>
                           )}
                         </div>
-                        {/* Same action rules as the desktop table: Invited and
-                            Expired get Resend only; failed/bounced also keep the
-                            fix-the-address path; System Check ('opened') and
-                            In Progress rows get no action at all. */}
-                        {((['failed', 'bounced'].includes(invitation.status)
-                          || ['sent', 'expired'].includes(getEffectiveStatus(invitation)))
-                          && !invitation.started_at
-                          && !invitation.completed_at) && (
-                          editingEmailId === invitation.id ? (
-                            <div className="flex flex-col gap-1.5">
-                              <input
-                                type="email"
-                                value={newEmailValue}
-                                onChange={e => setNewEmailValue(e.target.value)}
-                                placeholder="new@email.com"
-                                className="text-xs text-black placeholder-gray-400 border border-gray-300 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 w-full"
-                                autoFocus
-                              />
-                              <div className="flex gap-1">
-                                <button
-                                  onClick={() => handleUpdateEmail(invitation)}
-                                  disabled={!isValidEmail(newEmailValue) || isSendingEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
-                                  className="flex items-center gap-1 px-2 py-1 text-[10px] bg-brand-blue text-white rounded hover:bg-brand-blue-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                >
-                                  <Send className="w-3 h-3" />
-                                  {isSendingEmail ? 'Sending…' : 'Send'}
-                                </button>
-                                <button
-                                  onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}
-                                  className="px-2 py-1 text-[10px] text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div className="flex items-center gap-1">
-                              <button
-                                onClick={() => handleResendInvitation(invitation)}
-                                disabled={resendingId === invitation.id}
-                                className="flex items-center gap-1 px-2 py-1 text-[10px] bg-red-600 text-white hover:bg-red-700 rounded transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                              >
-                                {resendingId === invitation.id
-                                  ? <Loader2 className="w-3 h-3 animate-spin" />
-                                  : <Mail className="w-3 h-3" />}
-                                {resendingId === invitation.id ? 'Sending…' : 'Resend'}
-                              </button>
-                              {/* Edit Email only where fixing the address is the
-                                  point — never for plain Invited/Expired rows. */}
-                              {['failed', 'bounced'].includes(invitation.status) && (
-                                <button
-                                  onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
-                                  className="flex items-center gap-1 px-2 py-1 text-[10px] border border-gray-400 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded transition-colors"
-                                >
-                                  <Pencil className="w-3 h-3" />
-                                  Edit
-                                </button>
-                              )}
-                            </div>
-                          )
-                        )}
+                        <InvitationActionButtons
+                          actions={buildInvitationRowActions(invitation, {
+                            onResend: handleResendInvitation,
+                            resendingId,
+                          })}
+                        />
                       </div>
                     </div>
                   );
@@ -713,20 +603,24 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                           <td className="py-3 px-3 lg:px-4 align-top text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">
                             {(() => {
                               const events = timelineEvents(invitation);
-                              if (events.length === 0) {
-                                return <span className="text-gray-400 dark:text-slate-500">—</span>;
-                              }
                               return (
-                                <div className="space-y-1">
-                                  {events.map(({ label, at, Icon, tone }) => (
-                                    <div key={label} className="flex items-center gap-2 whitespace-nowrap">
-                                      <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
-                                      <span className={tone}>
-                                        {label}: {formatIST(at)}
-                                      </span>
+                                <>
+                                  {events.length === 0 ? (
+                                    <span className="text-gray-400 dark:text-slate-500">—</span>
+                                  ) : (
+                                    <div className="space-y-1">
+                                      {events.map(({ label, at, Icon, tone }, i) => (
+                                        <div key={`${label}-${i}`} className="flex items-center gap-2 whitespace-nowrap">
+                                          <Icon className={`w-3 h-3 flex-shrink-0 ${tone}`} />
+                                          <span className={tone}>
+                                            {label}: {formatIST(at)}
+                                          </span>
+                                        </div>
+                                      ))}
                                     </div>
-                                  ))}
-                                </div>
+                                  )}
+                                  <ViewFullHistoryLink onClick={() => setHistoryTarget(invitation)} />
+                                </>
                               );
                             })()}
                           </td>
@@ -781,146 +675,13 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                             </td>
                           )}
                           <td className="py-3 px-3 lg:px-4 align-middle whitespace-nowrap tf-sticky-col">
-                            {/* Action rules mirror the assessment-level
-                                popup so a recruiter sees the same controls
-                                from either entry point: View Results when
-                                completed, Change Email on bounce, and a
-                                Resend button on sent/opened/failed invites
-                                that haven't been started yet. */}
-                            {getEffectiveStatus(invitation) === 'completed' ? (
-                              invitation.attempt_id ? (
-                                <button
-                                  onClick={() => openResult(invitation)}
-                                  className="flex items-center gap-1 px-3 py-1.5 text-xs text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors whitespace-nowrap"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                  View Results
-                                </button>
-                              ) : (
-                                // Completed-but-no-attempt — extremely rare orphaned invitation. Render
-                                // a disabled button rather than silently dumping the user on the aggregate
-                                // results page (the very bug this fix is for).
-                                <button
-                                  disabled
-                                  title="Result detail unavailable for this invitation"
-                                  className="flex items-center gap-1 px-3 py-1.5 text-xs text-gray-400 dark:text-slate-500 rounded-lg whitespace-nowrap cursor-not-allowed"
-                                >
-                                  <Eye className="w-3.5 h-3.5" />
-                                  View Results
-                                </button>
-                              )
-                            ) : invitation.status === 'bounced' ? (
-                              editingEmailId === invitation.id ? (
-                                <div className="flex items-center gap-1.5">
-                                  <input
-                                    type="email"
-                                    value={newEmailValue}
-                                    onChange={e => setNewEmailValue(e.target.value)}
-                                    placeholder="new@email.com"
-                                    className="text-xs text-black placeholder-gray-400 border border-gray-300 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 w-[170px] flex-shrink-0"
-                                    autoFocus
-                                  />
-                                  <div className="flex items-center gap-1 flex-shrink-0">
-                                    <button
-                                      onClick={() => handleUpdateEmail(invitation)}
-                                      disabled={!isValidEmail(newEmailValue) || isSendingEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
-                                      className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue text-white rounded hover:bg-brand-blue-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                      <Send className="w-3 h-3" />
-                                      {isSendingEmail ? 'Sending…' : 'Send'}
-                                    </button>
-                                    <button
-                                      onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}
-                                      className="px-2 py-1 text-xs text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <button
-                                  onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
-                                  className="flex items-center gap-1 px-3 py-1.5 text-xs border border-gray-400 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg transition-colors whitespace-nowrap"
-                                >
-                                  <Pencil className="w-3.5 h-3.5" />
-                                  Change Email
-                                </button>
-                              )
-                            ) : (invitation.status === 'failed' && !invitation.started_at && !invitation.completed_at) ? (
-                              // Failed invites keep BOTH paths: Resend retries the SAME
-                              // address (transient network failure); Edit Email fixes a
-                              // mistyped one (the common cause of a "failed"/"Incorrect
-                              // Email" invite). Mirrors mobile.
-                              editingEmailId === invitation.id ? (
-                                <div className="flex items-center gap-1.5">
-                                  <input
-                                    type="email"
-                                    value={newEmailValue}
-                                    onChange={e => setNewEmailValue(e.target.value)}
-                                    placeholder="new@email.com"
-                                    className="text-xs text-black placeholder-gray-400 border border-gray-300 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-1 focus:ring-blue-400 w-[170px] flex-shrink-0"
-                                    autoFocus
-                                  />
-                                  <div className="flex items-center gap-1 flex-shrink-0">
-                                    <button
-                                      onClick={() => handleUpdateEmail(invitation)}
-                                      disabled={!isValidEmail(newEmailValue) || isSendingEmail || newEmailValue.trim().toLowerCase() === (invitation.candidate_email || '').trim().toLowerCase()}
-                                      className="flex items-center gap-1 px-2 py-1 text-xs bg-brand-blue text-white rounded hover:bg-brand-blue-2 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                                    >
-                                      <Send className="w-3 h-3" />
-                                      {isSendingEmail ? 'Sending…' : 'Send'}
-                                    </button>
-                                    <button
-                                      onClick={() => { setEditingEmailId(null); setNewEmailValue(''); }}
-                                      className="px-2 py-1 text-xs text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded transition-colors"
-                                    >
-                                      Cancel
-                                    </button>
-                                  </div>
-                                </div>
-                              ) : (
-                                /* Stacked one per line. items-stretch rather than items-start so both
-                                    buttons take the width of the wider label, instead of each sizing to
-                                    its own text and leaving a ragged right edge. */
-                                <div className="flex flex-col items-stretch gap-1.5">
-                                  <button
-                                    onClick={() => handleResendInvitation(invitation)}
-                                    disabled={resendingId === invitation.id}
-                                    aria-label="Revoke old link and send a new invitation" title="Revoke old link and send a new invitation"
-                                    className={`flex items-center justify-center gap-1 px-3 py-1.5 text-xs rounded-lg transition-colors whitespace-nowrap ${
-                                      invitation.status === 'failed'
-                                        ? 'bg-red-600 text-white hover:bg-red-700 disabled:opacity-60'
-                                        : 'border border-gray-400 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-60'
-                                    }`}
-                                  >
-                                    <Mail className="w-3.5 h-3.5" />
-                                    {resendingId === invitation.id ? 'Sending…' : 'Resend'}
-                                  </button>
-                                  <button
-                                    onClick={() => { setEditingEmailId(invitation.id); setNewEmailValue(invitation.candidate_email); }}
-                                    aria-label="Edit email address and resend" title="Edit email address and resend"
-                                    className="flex items-center justify-center gap-1 px-3 py-1.5 text-xs border border-gray-400 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg transition-colors whitespace-nowrap"
-                                  >
-                                    <Pencil className="w-3.5 h-3.5" />
-                                    Edit Email
-                                  </button>
-                                </div>
-                              )
-                            ) : (['sent', 'expired'].includes(getEffectiveStatus(invitation)) && !invitation.started_at && !invitation.completed_at) ? (
-                              // Invited / Expired — Resend only, no Edit Email. System
-                              // Check ('opened') and In Progress rows fall through to
-                              // null: no action is allowed once the candidate is in the
-                              // assessment flow.
-                              <button
-                                onClick={() => handleResendInvitation(invitation)}
-                                disabled={resendingId === invitation.id}
-                                aria-label="Revoke old link and send a new invitation" title="Revoke old link and send a new invitation"
-                                className="flex items-center justify-center gap-1 px-3 py-1.5 text-xs rounded-lg border border-gray-400 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-60 transition-colors whitespace-nowrap"
-                              >
-                                <Mail className="w-3.5 h-3.5" />
-                                {resendingId === invitation.id ? 'Sending…' : 'Resend'}
-                              </button>
-                            ) : null}
+                            <InvitationActionsMenu
+                              actions={buildInvitationRowActions(invitation, {
+                                onResend: handleResendInvitation,
+                                resendingId,
+                                onViewResult: openResult,
+                              })}
+                            />
                           </td>
                         </tr>
                       );
@@ -983,6 +744,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
           </div>
         </div>
       </div>
+
+      <InvitationHistoryDialog
+        target={historyTarget}
+        onClose={() => setHistoryTarget(null)}
+        getAssessmentId={(inv) => inv.assessment_id}
+      />
     </div>
   );
 }

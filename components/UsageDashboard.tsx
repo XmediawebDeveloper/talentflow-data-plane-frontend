@@ -14,7 +14,7 @@ import { PlanFeatureKey } from '@/lib/types/planFeatures';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import api from '@/lib/services/api';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
-import { DashboardSkeleton } from '@/components/ui/skeleton-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Addon interface
 interface Addon {
@@ -586,7 +586,110 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
   }
 
   if (loading) {
-    return <DashboardSkeleton />;
+    return (
+      <main className="flex-1 bg-white dark:bg-slate-950">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            {/* Breadcrumb */}
+            <div className="mb-4 md:mb-6 flex items-center gap-2">
+              <Skeleton className="h-3 w-20" />
+              <Skeleton className="h-3 w-3" />
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-3 w-3" />
+              <Skeleton className="h-3 w-28" />
+            </div>
+
+            <div className="space-y-6">
+              {/* Subscription Summary Card */}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+                <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
+                  <Skeleton className="h-4 w-40" />
+                </div>
+                <div className="p-4 sm:p-6">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 sm:gap-6">
+                    <div className="flex items-start gap-3 sm:gap-5">
+                      <Skeleton className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex-shrink-0" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-6 sm:h-7 w-40" />
+                        <Skeleton className="h-5 w-24 rounded-full" />
+                        <Skeleton className="h-4 w-56" />
+                      </div>
+                    </div>
+                    <div className="bg-gray-50 dark:bg-slate-800/50 rounded-xl p-3 sm:p-4 sm:min-w-[200px] w-full sm:w-auto space-y-2">
+                      <Skeleton className="h-7 w-28" />
+                      <Skeleton className="h-3 w-40" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Quota Overview */}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+                <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
+                  <div className="flex items-center gap-2.5">
+                    <Skeleton className="w-8 h-8 rounded-lg" />
+                    <div className="space-y-1.5">
+                      <Skeleton className="h-4 w-32" />
+                      <Skeleton className="h-3 w-44" />
+                    </div>
+                  </div>
+                </div>
+                <div className="p-4 sm:p-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="flex flex-col rounded-xl border border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3 shadow-sm">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
+                          <Skeleton className="h-3.5 w-20 flex-1" />
+                          <Skeleton className="h-4 w-12 rounded-full" />
+                        </div>
+                        <div className="flex items-baseline justify-between gap-2 mb-2">
+                          <Skeleton className="h-5 w-16" />
+                          <Skeleton className="h-3 w-10" />
+                        </div>
+                        <Skeleton className="h-1.5 w-full rounded-full mb-2" />
+                        <Skeleton className="h-3 w-24 mb-2" />
+                        <div className="mt-auto pt-2 border-t border-gray-100 dark:border-slate-700/60 grid grid-cols-2 gap-2">
+                          <Skeleton className="h-3 w-full" />
+                          <Skeleton className="h-3 w-full" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              {/* Add-ons */}
+              <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+                <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
+                  <div className="flex items-center gap-2.5">
+                    <Skeleton className="w-8 h-8 rounded-lg" />
+                    <Skeleton className="h-4 w-28" />
+                  </div>
+                </div>
+                <div className="p-3 sm:p-4 md:p-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                    {Array.from({ length: 4 }).map((_, i) => (
+                      <div key={i} className="flex flex-col rounded-xl border border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3 shadow-sm">
+                        <div className="flex items-center gap-2 mb-2">
+                          <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
+                          <Skeleton className="h-3.5 w-24 flex-1" />
+                        </div>
+                        <div className="flex items-baseline justify-between gap-2 mb-3">
+                          <Skeleton className="h-4 w-16" />
+                          <Skeleton className="h-4 w-14" />
+                        </div>
+                        <Skeleton className="mt-auto h-8 w-full rounded-lg" />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </main>
+    );
   }
 
   const handleUpgradeClick = () => {
@@ -1219,11 +1322,26 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
           <div className="p-3 sm:p-4 md:p-6">
             {addonsLoading && (
-              <div className="flex flex-col items-center justify-center py-12 tf-loader-center">
-                <div className="w-16 h-16 bg-gray-100 dark:bg-slate-800 rounded-2xl flex items-center justify-center mb-4">
-                  <Loader2 className="w-8 h-8 text-gray-400 dark:text-slate-500 animate-spin" />
-                </div>
-                <p className="text-gray-500 dark:text-slate-500 font-medium">Loading add-ons...</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                {Array.from({ length: 4 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="flex flex-col rounded-xl border border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3 shadow-sm"
+                  >
+                    {/* Header: icon + name */}
+                    <div className="flex items-center gap-2 mb-2">
+                      <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
+                      <Skeleton className="h-3.5 w-24 flex-1 min-w-0" />
+                    </div>
+                    {/* Units + Price row */}
+                    <div className="flex items-baseline justify-between gap-2 mb-3">
+                      <Skeleton className="h-4 w-16" />
+                      <Skeleton className="h-4 w-14" />
+                    </div>
+                    {/* Purchase button */}
+                    <Skeleton className="mt-auto h-8 w-full rounded-lg" />
+                  </div>
+                ))}
               </div>
             )}
 

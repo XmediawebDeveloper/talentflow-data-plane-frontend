@@ -7,6 +7,7 @@ import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
    published JD with a publish counter above 1 into "Republished", and
    `getStatusConfig` gives that label the same colours every other list uses. */
 import { getDisplayStatus, getStatusConfig, getCreationMethodConfig, formatEmploymentType, formatIndustryType } from '@/lib/utils/jobOpeningDisplay';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -139,10 +140,27 @@ export default function AIMatchVersionHistoryTable({
   onRunMatch,
 }: AIMatchVersionHistoryTableProps) {
   if (loading && !versions) {
+    // Skeleton mirroring this table's own 10 columns instead of a text spinner.
     return (
-      <div className="flex items-center gap-2 py-3 px-1 text-xs text-gray-500 dark:text-slate-500">
-        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-        Loading version history...
+      <div className="hidden md:block overflow-x-auto rounded-lg border border-gray-200 dark:border-slate-700">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="text-left">
+              {['Version', 'Status', 'Experience / Industry', 'Location', 'Work Mode / Type', 'Posted On / By', 'Last Match Date', 'Number of Runs', 'Total Matches', 'Actions'].map((h) => (
+                <th key={h} className="py-2.5 px-3 bg-gray-50 dark:bg-slate-800"><Skeleton className="h-3 w-16" /></th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {Array.from({ length: 3 }).map((_, r) => (
+              <tr key={r}>
+                {Array.from({ length: 10 }).map((__, c) => (
+                  <td key={c} className="py-2.5 px-3"><Skeleton className={`h-3.5 ${c === 9 ? 'w-7' : 'w-16'}`} /></td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     );
   }

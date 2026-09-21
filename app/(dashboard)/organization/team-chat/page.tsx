@@ -36,7 +36,7 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useSearchParams } from 'next/navigation';
 import { formatISTTime, formatISTDate } from '@/lib/utils/dateUtils';
-import { PageSkeleton } from '@/components/ui/skeleton';
+import { PageSkeleton, Skeleton } from '@/components/ui/skeleton';
 
 const quickEmojis = ['👍', '❤️', '😄', '🎉', '👀', '✅'];
 
@@ -891,8 +891,22 @@ export default function TeamChatPage() {
 
               <div className="flex-1 overflow-y-auto px-4 py-4 sm:px-6">
                 {isLoadingMessages ? (
-                  <div className="flex h-full items-center justify-center">
-                    <Loader2 className="h-8 w-8 animate-spin text-brand-blue" />
+                  <div className="flex flex-col gap-4">
+                    {/* Mirrors the message list: avatar + bubble rows, some
+                        received (left) and some sent (right). */}
+                    {[false, false, true, false, true, true, false].map((isSender, i) => (
+                      <div
+                        key={i}
+                        className={`flex gap-2.5 ${isSender ? 'flex-row-reverse' : 'flex-row'}`}
+                      >
+                        <Skeleton className="h-9 w-9 shrink-0 rounded-xl" />
+                        <div className={`flex max-w-[70%] flex-col gap-1.5 ${isSender ? 'items-end' : 'items-start'}`}>
+                          {!isSender && <Skeleton className="h-3 w-24" />}
+                          <Skeleton className={`h-10 rounded-2xl ${i % 2 === 0 ? 'w-56' : 'w-40'}`} />
+                          <Skeleton className="h-2.5 w-12" />
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : messages.length === 0 ? (
                   <div className="flex h-full flex-col items-center justify-center text-gray-500">
@@ -1479,9 +1493,17 @@ export default function TeamChatPage() {
               <div className="flex-1 min-h-0 overflow-y-auto p-5">
                 <div className="overflow-hidden rounded-xl border border-gray-200 bg-white">
                   {isLoadingUsers ? (
-                    <div className="px-4 py-10 text-center">
-                      <Loader2 className="mx-auto mb-2 h-6 w-6 animate-spin text-brand-blue" />
-                      <p className="text-sm text-gray-500">Loading team members...</p>
+                    <div className="max-h-80 overflow-y-auto">
+                      {Array.from({ length: 6 }).map((_, i) => (
+                        <div key={i} className="flex w-full items-center gap-3 px-3 py-3">
+                          <Skeleton className="h-10 w-10 shrink-0 rounded-xl" />
+                          <div className="min-w-0 flex-1 space-y-1.5">
+                            <Skeleton className="h-3.5 w-32" />
+                            <Skeleton className="h-3 w-44" />
+                          </div>
+                          <Skeleton className="hidden sm:block h-6 w-16 rounded-full" />
+                        </div>
+                      ))}
                     </div>
                   ) : availableUsers.filter((u) => u.id !== currentUser?.id).length === 0 ? (
                     <div className="px-4 py-10 text-center text-gray-500">

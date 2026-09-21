@@ -1,5 +1,5 @@
-import { PageSkeleton } from '@/components/ui/skeleton';
+import { CurrentPlanLoadingSkeleton } from './page';
 
 export default function Loading() {
-  return <PageSkeleton variant="cards" showStats />;
+  return <CurrentPlanLoadingSkeleton />;
 }

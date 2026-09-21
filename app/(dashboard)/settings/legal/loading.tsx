@@ -1,5 +1,61 @@
-import { PageSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 
+// Neutral-gray skeleton mirroring the Legal & Compliance page: hero + the
+// Acceptance History table (Version, Title, Accepted By, Accepted On, Status,
+// Document).
 export default function Loading() {
-  return <PageSkeleton variant="cards" showStats={false} />;
+  return (
+    <main className="flex-1 overflow-x-clip bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl space-y-6">
+          <Skeleton className="h-4 w-64 mb-4 md:mb-6" />
+
+          {/* Hero */}
+          <section className="rounded-2xl border border-gray-100 bg-gray-50 p-5 sm:p-6 lg:p-7">
+            <div className="flex items-start gap-3">
+              <Skeleton className="h-9 w-9 shrink-0 rounded-lg" />
+              <div className="flex-1 space-y-2">
+                <Skeleton className="h-5 w-28 rounded-full" />
+                <Skeleton className="h-6 w-52" />
+                <Skeleton className="h-4 w-full max-w-md" />
+              </div>
+            </div>
+          </section>
+
+          {/* Table */}
+          <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
+            <div className="flex items-center gap-3 border-b border-gray-100 bg-gray-50 px-5 py-4 sm:px-6">
+              <Skeleton className="h-10 w-10 rounded-xl" />
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3 w-64" />
+              </div>
+            </div>
+            <div className="overflow-x-auto tf-table-shell">
+              <div className="grid grid-cols-6 gap-4 border-b border-gray-100 bg-gray-50 px-6 py-3">
+                {['w-16', 'w-20', 'w-24', 'w-24', 'w-16', 'w-20'].map((w, i) => (
+                  <Skeleton key={i} className={`h-3 ${w}`} />
+                ))}
+              </div>
+              <div className="divide-y divide-gray-100">
+                {Array.from({ length: 6 }).map((_, r) => (
+                  <div key={r} className="grid grid-cols-6 items-center gap-4 px-6 py-4">
+                    <Skeleton className="h-5 w-14 rounded-full" />
+                    <Skeleton className="h-4 w-28" />
+                    <div className="space-y-1.5">
+                      <Skeleton className="h-4 w-24" />
+                      <Skeleton className="h-3 w-32" />
+                    </div>
+                    <Skeleton className="h-4 w-28" />
+                    <Skeleton className="h-6 w-20 rounded-full" />
+                    <Skeleton className="h-7 w-16 rounded-lg" />
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
 }

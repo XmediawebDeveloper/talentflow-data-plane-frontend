@@ -550,9 +550,14 @@ export const jdService = {
     sort_by?: string; // JD04: 'latest', 'oldest', 'a-z', 'z-a', 'created_latest', 'created_oldest'
     page?: number;
     page_size?: number;
+    /** Only these JD ids — sent as repeated `ids=` (FastAPI's list form), not axios' default `ids[]=`. */
+    ids?: string[];
   }): Promise<JDListResponse> {
     try {
-      const response = await api.get<JDListResponse>('/jd', { params });
+      const response = await api.get<JDListResponse>('/jd', {
+        params,
+        paramsSerializer: { indexes: null },
+      });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

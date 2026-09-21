@@ -10,7 +10,7 @@ import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import JDVersionHistory from '@/components/JDVersionHistory';
-import { ListSkeleton } from '@/components/ui/skeleton-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function ResumeScoringJDSelection() {
   const router = useRouter();
@@ -105,7 +105,36 @@ export default function ResumeScoringJDSelection() {
 
         {/* JD List */}
         {loadingJds ? (
-          <ListSkeleton />
+          <div className="space-y-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 sm:p-5 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5"
+              >
+                <div className="flex items-start gap-4 flex-1 min-w-0">
+                  <Skeleton className="w-10 h-10 rounded-xl flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <Skeleton className="h-5 w-16 rounded-md" />
+                      <Skeleton className="h-5 w-48" />
+                      <Skeleton className="h-5 w-20 rounded-full" />
+                      <Skeleton className="h-5 w-16 rounded-full" />
+                    </div>
+                    <div className="flex items-center gap-3 mt-2 flex-wrap">
+                      <Skeleton className="h-3.5 w-24" />
+                      <Skeleton className="h-3.5 w-20" />
+                      <Skeleton className="h-3.5 w-24" />
+                      <Skeleton className="h-3.5 w-28" />
+                    </div>
+                    <Skeleton className="h-4 w-32 mt-2" />
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0 sm:ml-4">
+                  <Skeleton className="h-9 w-32 rounded-lg" />
+                </div>
+              </div>
+            ))}
+          </div>
         ) : filteredJds.length === 0 ? (
           <div className="text-center py-10 sm:py-16 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-4">
             <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 mx-auto mb-4 flex items-center justify-center">

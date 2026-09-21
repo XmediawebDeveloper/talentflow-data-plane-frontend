@@ -20,6 +20,77 @@ import ResumeVersionsModal from './ResumeVersionsModal';
 import ShareResumeModal from './ShareResumeModal';
 import { toast } from 'sonner';
 import { resumeService } from '@/lib/services/resumeService';
+import { Skeleton } from '@/components/ui/skeleton';
+
+/* Loading placeholder that mirrors THIS table's real structure — the same
+   columns in the same order (checkbox, Candidate Name, Role, Email, Phone,
+   Skills, Experience, Source, Upload Date, Uploaded By, Files, Actions) and the
+   same desktop-table / mobile-card split — so the skeleton lines up exactly
+   with the rows that replace it instead of being a generic block. */
+export function ResumeTableSkeleton({ rows = 8 }: { rows?: number }) {
+  const headers = ['Candidate Name', 'Role', 'Email', 'Phone', 'Skills', 'Experience', 'Source', 'Upload Date', 'Uploaded By', 'Files', 'Actions'];
+  const cellWidths = ['w-28', 'w-24', 'w-40', 'w-28', 'skills', 'w-14', 'chip', 'w-24', 'w-20', 'w-10', 'action'];
+  return (
+    <div>
+      {/* Desktop table — matches the real thead/tbody */}
+      <div className="hidden md:block overflow-hidden">
+        <table className="w-full min-w-[1200px] table-auto">
+          <thead className="[&_th]:bg-slate-50 [&_th]:border-b [&_th]:border-gray-200">
+            <tr>
+              <th className="w-10 px-4 py-3 align-middle"><Skeleton className="h-4 w-4 rounded" /></th>
+              {headers.map((h) => (
+                <th key={h} className="px-4 py-3 text-left align-middle"><Skeleton className="h-3 w-20" /></th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="bg-white divide-y divide-gray-200">
+            {Array.from({ length: rows }).map((_, r) => (
+              <tr key={r}>
+                <td className="px-4 py-3 align-middle"><Skeleton className="h-4 w-4 rounded" /></td>
+                {cellWidths.map((w, c) => (
+                  <td key={c} className="px-4 py-3 align-middle">
+                    {w === 'skills' ? (
+                      <div className="flex gap-1">
+                        <Skeleton className="h-5 w-12 rounded-full" />
+                        <Skeleton className="h-5 w-12 rounded-full" />
+                        <Skeleton className="h-5 w-10 rounded-full" />
+                      </div>
+                    ) : w === 'chip' ? (
+                      <Skeleton className="h-5 w-16 rounded-full" />
+                    ) : w === 'action' ? (
+                      <Skeleton className="h-7 w-7 rounded-md" />
+                    ) : (
+                      <Skeleton className={`h-4 ${w}`} />
+                    )}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Mobile cards — matches the real card layout */}
+      <div className="md:hidden space-y-3 px-2">
+        {Array.from({ length: Math.min(rows, 4) }).map((_, i) => (
+          <div key={i} className="bg-white border border-gray-100 rounded-xl p-4 space-y-2">
+            <div className="flex items-center gap-3">
+              <Skeleton className="h-4 w-4 rounded" />
+              <div className="flex-1 space-y-1.5">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-3 w-24" />
+              </div>
+            </div>
+            <div className="flex gap-1 pt-1">
+              <Skeleton className="h-5 w-14 rounded-full" />
+              <Skeleton className="h-5 w-14 rounded-full" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 /* Action menu item styling — copied verbatim from the Job Openings page's
    three-dot menu (JobsListing.tsx) so both menus read as one component:

@@ -5,7 +5,7 @@ import { X, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import { jdService } from '@/lib/services/jdService';
-import { TableSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import type { ScoredResume } from './ScoredResumesTable';
 
 interface ScoreTableModalProps {
@@ -147,7 +147,36 @@ export default function ScoreTableModal({ resume, jobId, jobCode, jobTitle, onCl
             as the hook the globals.css note refers to. */}
         <div className="score-table-modal-body flex-1 overflow-y-auto p-4 sm:p-6">
           {loading ? (
-            <TableSkeleton />
+            <div className="space-y-4">
+              {/* Overall score summary row */}
+              <div className="flex items-center gap-4">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-8 w-16" />
+                <Skeleton className="h-4 w-32" />
+              </div>
+              {/* Rubric table: header + criterion rows */}
+              <div className="rounded-lg border border-gray-200 overflow-hidden">
+                <div className="flex items-center gap-4 border-b border-gray-200 bg-gray-50 px-4 py-3">
+                  <Skeleton className="h-3.5 flex-[2]" />
+                  <Skeleton className="h-3.5 flex-1" />
+                  <Skeleton className="h-3.5 flex-1" />
+                </div>
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-4 border-b border-gray-100 px-4 py-3.5 last:border-b-0">
+                    <Skeleton className="h-4 flex-[2]" />
+                    <Skeleton className="h-2.5 flex-1 rounded-full" />
+                    <Skeleton className="h-4 w-10" />
+                  </div>
+                ))}
+              </div>
+              {/* AI reasoning block */}
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-40" />
+                <Skeleton className="h-3.5 w-full" />
+                <Skeleton className="h-3.5 w-full" />
+                <Skeleton className="h-3.5 w-3/4" />
+              </div>
+            </div>
           ) : (
             <DetailedScorecardTab
               resume={{
