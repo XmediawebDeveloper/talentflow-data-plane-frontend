@@ -31,6 +31,7 @@ import api from '@/lib/services/api';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 type FilterStatus = 'all' | 'published' | 'draft' | 'closed' | 'disabled' | 'archived';
@@ -213,25 +214,17 @@ export default function JobOpeningsPage() {
   // edited and published IN PLACE carries republished_at.
   const getStatusBadge = (status: string, republishedAt?: string | null) => {
     if (status === 'published' && republishedAt) {
-      return (
-        <span className="px-2.5 py-1 rounded-full text-xs font-medium bg-success-subtle text-success">
-          Republished
-        </span>
-      );
+      return <Badge variant="success">Republished</Badge>;
     }
-    const configs: Record<string, { bg: string; text: string; label: string }> = {
-      published: { bg: 'bg-success-subtle', text: 'text-success', label: 'Published' },
-      draft: { bg: 'bg-warning-subtle', text: 'text-warning', label: 'Draft' },
-      closed: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Closed' },
-      disabled: { bg: 'bg-destructive-subtle', text: 'text-destructive', label: 'Disabled' },
-      archived: { bg: 'bg-gray-100', text: 'text-gray-500', label: 'Archived' },
+    const map: Record<string, { variant: 'success' | 'info' | 'destructive' | 'muted'; label: string }> = {
+      published: { variant: 'success', label: 'Published' },
+      draft: { variant: 'info', label: 'Draft' },
+      closed: { variant: 'muted', label: 'Closed' },
+      disabled: { variant: 'destructive', label: 'Disabled' },
+      archived: { variant: 'muted', label: 'Archived' },
     };
-    const config = configs[status] || configs.draft;
-    return (
-      <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
-        {config.label}
-      </span>
-    );
+    const config = map[status] || map.draft;
+    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
 

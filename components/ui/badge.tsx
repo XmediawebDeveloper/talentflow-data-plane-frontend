@@ -13,15 +13,17 @@ const badgeVariants = cva(
           "ring-brand-blue/15 bg-brand-blue/10 text-brand-blue [a&]:hover:bg-brand-blue/15",
         secondary:
           "ring-brand-cyan/15 bg-brand-cyan/10 text-brand-blue [a&]:hover:bg-brand-cyan/15",
+        // Destructive / success / warning use the semantic color tokens
+        // (globals.css) so a status badge matches success/warning/destructive
+        // text everywhere else — no more teal "success" or raw red/amber.
         destructive:
-          "ring-red-200 bg-red-50 text-red-700 [a&]:hover:bg-red-100",
+          "ring-destructive-line bg-destructive-subtle text-destructive-strong [a&]:hover:bg-destructive-subtle/70",
         outline:
           "text-gray-700 ring-gray-200 bg-white [a&]:hover:bg-brand-cyan/[0.04] [a&]:hover:text-brand-blue [a&]:hover:ring-brand-blue/30",
-        // Brand-aligned semantic variants
         success:
-          "ring-brand-teal/15 bg-brand-teal/10 text-brand-teal [a&]:hover:bg-brand-teal/15",
+          "ring-success-line bg-success-subtle text-success-strong [a&]:hover:bg-success-subtle/70",
         warning:
-          "ring-amber-200 bg-amber-50 text-amber-700 [a&]:hover:bg-amber-100",
+          "ring-warning-line bg-warning-subtle text-warning-strong [a&]:hover:bg-warning-subtle/70",
         info:
           "ring-brand-blue/15 bg-brand-blue/10 text-brand-blue [a&]:hover:bg-brand-blue/15",
         muted:

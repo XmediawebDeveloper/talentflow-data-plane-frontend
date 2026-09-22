@@ -11,6 +11,7 @@ import {
   Search, Ban, TrendingUp, X, QrCode,
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { Badge } from '@/components/ui/badge';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { jdService } from '@/lib/services/jdService';
 import { Button } from '@/components/ui/button';
@@ -421,16 +422,17 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     void aiInterviewService.logConfigExport(config.id);
   };
 
-  const getStatusBadge = (status: string) => {
+  // Canonical status → shared Badge variant (same colour for a status everywhere).
+  const getStatusVariant = (status: string): 'success' | 'warning' | 'info' | 'destructive' | 'muted' => {
     switch (status) {
-      case 'published': return 'bg-success-subtle text-success ring-1 ring-success-line';
-      case 'draft': return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
-      case 'completed': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
-      case 'cancelled': return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
-      case 'archived': return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
-      case 'in_progress': return 'bg-warning-subtle text-warning ring-1 ring-warning-line';
-      case 'invited': return 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20';
-      default: return 'bg-gray-100 text-gray-600 ring-1 ring-gray-200';
+      case 'published': return 'success';   // "Active"
+      case 'completed': return 'success';
+      case 'in_progress': return 'info';
+      case 'draft': return 'info';
+      case 'invited': return 'info';
+      case 'cancelled': return 'destructive';
+      case 'archived': return 'muted';
+      default: return 'muted';
     }
   };
 
@@ -1197,9 +1199,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                     label="Recording"
                     value={
                       config.recording_enabled ? (
-                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium bg-success-subtle text-success ring-1 ring-success-line">
-                          <Video className="w-3 h-3" /> Enabled
-                        </span>
+                        <Badge variant="success"><Video className="w-3 h-3" /> Enabled</Badge>
                       ) : (
                         <span className="text-sm text-gray-400">Disabled</span>
                       )
@@ -1307,9 +1307,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             <span className="font-medium text-gray-900 truncate">
                               {activity.candidate_name || 'Unknown'}
                             </span>
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(activity.status)}`}>
+                            <Badge variant={getStatusVariant(activity.status)}>
                               {getStatusLabel(activity.status)}
-                            </span>
+                            </Badge>
                           </div>
                           <div className="text-sm text-gray-500 truncate">{activity.candidate_email}</div>
                         </div>
@@ -1762,15 +1762,18 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
             // Status pill with icon — matches the reference modal.
             const statusPill = (status: string) => {
-              switch (status) {
-                case 'completed': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-success-subtle text-success ring-1 ring-success-line rounded-full text-xs font-medium"><CheckCircle className="w-3 h-3" /> Completed</span>;
-                case 'in_progress': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs font-medium"><Play className="w-3 h-3" /> In Progress</span>;
-                case 'invited': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 rounded-full text-xs font-medium"><Mail className="w-3 h-3" /> Invited</span>;
-                case 'terminated': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-destructive-subtle text-destructive ring-1 ring-destructive-line rounded-full text-xs font-medium"><Ban className="w-3 h-3" /> Terminated</span>;
-                case 'cancelled': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-destructive-subtle text-destructive ring-1 ring-destructive-line rounded-full text-xs font-medium"><X className="w-3 h-3" /> Cancelled</span>;
-                case 'expired': return <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20 rounded-full text-xs font-medium"><Clock className="w-3 h-3" /> Expired</span>;
-                default: return <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(status)}`}>{getStatusLabel(status)}</span>;
-              }
+              const meta: Record<string, { icon: React.ReactNode; label: string }> = {
+                completed: { icon: <CheckCircle className="w-3 h-3" />, label: 'Completed' },
+                in_progress: { icon: <Play className="w-3 h-3" />, label: 'In Progress' },
+                invited: { icon: <Mail className="w-3 h-3" />, label: 'Invited' },
+                terminated: { icon: <Ban className="w-3 h-3" />, label: 'Terminated' },
+                cancelled: { icon: <X className="w-3 h-3" />, label: 'Cancelled' },
+                expired: { icon: <Clock className="w-3 h-3" />, label: 'Expired' },
+              };
+              const m = meta[status];
+              return m
+                ? <Badge variant={getStatusVariant(status)}>{m.icon}{m.label}</Badge>
+                : <Badge variant={getStatusVariant(status)}>{getStatusLabel(status)}</Badge>;
             };
 
             const resultsLabel = hasActiveFilters

@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import {
   FileCheck,
@@ -106,30 +107,13 @@ export default function AgreementLogs({ compact = false }: AgreementLogsProps) {
 
   const getStatusBadge = (status: string, action: string) => {
     if (action === 'ACCEPT' || status === 'ACCEPTED') {
-      return (
-        <div className="flex items-center gap-1.5">
-          <CheckCircle className="w-4 h-4 text-success" />
-          <span className="text-sm text-success">Accepted</span>
-        </div>
-      );
+      return <Badge variant="success" className="gap-1.5"><CheckCircle className="w-3.5 h-3.5" />Accepted</Badge>;
     } else if (action === 'DECLINE' || status === 'DECLINED') {
-      return (
-        <div className="flex items-center gap-1.5">
-          <XCircle className="w-4 h-4 text-destructive" />
-          <span className="text-sm text-destructive">Declined</span>
-        </div>
-      );
+      return <Badge variant="destructive" className="gap-1.5"><XCircle className="w-3.5 h-3.5" />Declined</Badge>;
     } else if (action === 'REVOKE' || status === 'REVOKED') {
-      return (
-        <div className="flex items-center gap-1.5">
-          <AlertCircle className="w-4 h-4 text-orange-500" />
-          <span className="text-sm text-orange-700">Revoked</span>
-        </div>
-      );
+      return <Badge variant="warning" className="gap-1.5"><AlertCircle className="w-3.5 h-3.5" />Revoked</Badge>;
     }
-    return (
-      <span className="text-sm text-gray-500">{status || action}</span>
-    );
+    return <Badge variant="muted">{status || action}</Badge>;
   };
 
   const getAgreementTypeBadge = (type: string) => {

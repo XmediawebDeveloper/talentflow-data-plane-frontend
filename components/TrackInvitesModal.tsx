@@ -3,6 +3,7 @@
 import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Loader2, Monitor, Ban } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { Badge } from '@/components/ui/badge';
 import api from '@/lib/services/api';
 import { formatIST } from '@/lib/utils/dateUtils';
 import InviteFilterBar, {
@@ -274,38 +275,17 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
   // -> Completed / Terminated); the underlying status values are unchanged.
   const getStatusBadge = (inv: any) => {
     const effective = getEffectiveStatus(inv);
-    const base = "inline-flex items-center gap-1 px-2 py-0.5 sm:py-1 rounded-full text-2xs sm:text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1";
-    if (effective === 'completed') {
-      return <span className={`${base} bg-brand-blue/10 text-brand-blue ring-brand-blue/20`}><CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Completed</span>;
-    }
-    if (effective === 'failed') {
-      return <span className={`${base} bg-red-50 text-red-600 ring-red-200`}><X className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Invite Failed</span>;
-    }
-    if (effective === 'bounced') {
-      return <span className={`${base} bg-red-50 text-red-600 ring-red-200`}><RefreshCw className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Bounced</span>;
-    }
-    if (effective === 'revoked') {
-      return <span className={`${base} bg-red-50 text-red-600 ring-red-200`}><Ban className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Revoked</span>;
-    }
-    if (effective === 'expired') {
-      return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Expired</span>;
-    }
-    if (effective === 'abandoned') {
-      return <span className={`${base} bg-red-50 text-red-600 ring-red-200`} title="Ended before completion — the candidate left the assessment"><Ban className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Terminated</span>;
-    }
-    if (effective === 'started') {
-      return <span className={`${base} bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20`}><Play className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> In Progress</span>;
-    }
-    if (effective === 'opened') {
-      return <span className={`${base} bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20`} title="Consent accepted — the candidate is on the system check step"><Monitor className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> System Check</span>;
-    }
-    if (inv.email_read_at) {
-      return <span className={`${base} bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20`}><Eye className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Read</span>;
-    }
-    if (effective === 'sent') {
-      return <span className={`${base} bg-brand-blue/10 text-brand-blue ring-brand-blue/20`}><Mail className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Invited</span>;
-    }
-    return <span className={`${base} bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-gray-200 dark:ring-slate-700`}><Clock className="w-2.5 h-2.5 sm:w-3 sm:h-3" /> Pending</span>;
+    if (effective === 'completed') return <Badge variant="success"><CheckCircle /> Completed</Badge>;
+    if (effective === 'failed') return <Badge variant="destructive"><X /> Invite Failed</Badge>;
+    if (effective === 'bounced') return <Badge variant="destructive"><RefreshCw /> Bounced</Badge>;
+    if (effective === 'revoked') return <Badge variant="destructive"><Ban /> Revoked</Badge>;
+    if (effective === 'expired') return <Badge variant="destructive"><Clock /> Expired</Badge>;
+    if (effective === 'abandoned') return <Badge variant="destructive" title="Ended before completion — the candidate left the assessment"><Ban /> Terminated</Badge>;
+    if (effective === 'started') return <Badge variant="info"><Play /> In Progress</Badge>;
+    if (effective === 'opened') return <Badge variant="info" title="Consent accepted — the candidate is on the system check step"><Monitor /> System Check</Badge>;
+    if (inv.email_read_at) return <Badge variant="info"><Eye /> Read</Badge>;
+    if (effective === 'sent') return <Badge variant="info"><Mail /> Invited</Badge>;
+    return <Badge variant="warning"><Clock /> Pending</Badge>;
   };
 
   // timelineEvents / isInviteExpired now come from AssessmentInviteActions.

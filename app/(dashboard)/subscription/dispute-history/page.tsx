@@ -9,6 +9,7 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ListPagination from '@/components/ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 // Use backend proxy instead of direct Admin API calls
@@ -237,33 +238,30 @@ export default function DisputeHistoryPage() {
     switch (status.toLowerCase()) {
       case 'won':
       case 'resolved':
-        return <CheckCircle2 className="h-3.5 w-3.5 text-brand-teal" />;
+        return <CheckCircle2 className="h-3.5 w-3.5" />;
       case 'open':
       case 'pending':
       case 'under_review':
-        return <Clock className="h-3.5 w-3.5 text-warning" />;
+        return <Clock className="h-3.5 w-3.5" />;
       case 'lost':
       case 'rejected':
-        return <XCircle className="h-3.5 w-3.5 text-destructive" />;
+        return <XCircle className="h-3.5 w-3.5" />;
       default:
-        return <AlertTriangle className="h-3.5 w-3.5 text-brand-orange-deep" />;
+        return <AlertTriangle className="h-3.5 w-3.5" />;
     }
   };
 
-  const getStatusStyles = (status: string) => {
+  // Canonical status → shared Badge variant (same status looks the same everywhere).
+  const getStatusVariant = (status: string): 'success' | 'warning' | 'destructive' => {
     switch (status.toLowerCase()) {
       case 'won':
       case 'resolved':
-        return 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20';
-      case 'open':
-      case 'pending':
-      case 'under_review':
-        return 'bg-warning-subtle text-warning ring-1 ring-warning-line';
+        return 'success';
       case 'lost':
       case 'rejected':
-        return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
+        return 'destructive';
       default:
-        return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
+        return 'warning';
     }
   };
 
@@ -633,10 +631,10 @@ export default function DisputeHistoryPage() {
                         </span>
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-medium ${getStatusStyles(dispute.metadata?.dispute_status || dispute.dispute_status || dispute.status || 'unknown')}`}>
+                        <Badge variant={getStatusVariant(dispute.metadata?.dispute_status || dispute.dispute_status || dispute.status || 'unknown')} className="capitalize">
                           {getStatusIcon(dispute.metadata?.dispute_status || dispute.dispute_status || dispute.status || 'unknown')}
                           {dispute.metadata?.dispute_status || dispute.dispute_status || dispute.status || '-'}
-                        </span>
+                        </Badge>
                       </td>
                       <td className="px-4 py-4 text-right tf-sticky-col">
                         <div className="flex items-center justify-end gap-1.5">
@@ -717,10 +715,10 @@ export default function DisputeHistoryPage() {
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Dispute Status</p>
-                    <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-medium ${getStatusStyles(selectedDispute.metadata?.dispute_status || selectedDispute.dispute_status || selectedDispute.status)}`}>
+                    <Badge variant={getStatusVariant(selectedDispute.metadata?.dispute_status || selectedDispute.dispute_status || selectedDispute.status)} className="mt-1 capitalize">
                       {getStatusIcon(selectedDispute.metadata?.dispute_status || selectedDispute.dispute_status || selectedDispute.status)}
                       {selectedDispute.metadata?.dispute_status || selectedDispute.dispute_status || selectedDispute.status}
-                    </span>
+                    </Badge>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Original Invoice</p>

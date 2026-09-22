@@ -4,7 +4,9 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import TabEmptyState from '@/components/ui/tab-empty-state';
+import { TableSkeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useRouter } from 'next/navigation';
@@ -66,12 +68,26 @@ const STATUS_OPTIONS = [
 export function getStatusBadge(status: string) {
   switch (status) {
     case 'completed': return 'bg-success-subtle text-success ring-1 ring-success-line';
-    case 'in_progress': return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
+    case 'in_progress': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
     case 'invited': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
     case 'expired': return 'bg-gray-100 text-gray-600 ring-1 ring-gray-200';
     case 'terminated': return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
     case 'cancelled': return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
     default: return 'bg-gray-100 text-gray-600 ring-1 ring-gray-200';
+  }
+}
+
+// Canonical status → shared Badge variant (single source of truth so a status
+// reads the same colour everywhere it is shown).
+export function getStatusVariant(status: string): 'success' | 'warning' | 'info' | 'destructive' | 'muted' {
+  switch (status) {
+    case 'completed': return 'success';
+    case 'in_progress': return 'info';
+    case 'invited': return 'info';
+    case 'terminated':
+    case 'cancelled': return 'destructive';
+    case 'expired':
+    default: return 'muted';
   }
 }
 
@@ -426,9 +442,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
           Talent Match tab's does. */}
       <div className={isUnstarted ? '' : 'bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden'}>
         {isLoading ? (
-          <div className="flex items-center justify-center py-16 tf-loader-center">
-            <Loader2 className="w-7 h-7 animate-spin text-brand-blue" />
-          </div>
+          /* Skeleton matches the results table structure (no double border — the
+             parent card already provides it) instead of a bare spinner. */
+          <TableSkeleton toolbar={false} columns={6} rows={6} className="border-0 shadow-none rounded-none" />
         ) : isUnstarted ? (
           /* Nothing here yet — the shared tab empty state, carrying the actions
              since the toolbar they normally sit in is gone. */
@@ -486,9 +502,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                     <div>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {getStatusIcon(session.status)}
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(session.status)}`}>
+                        <Badge variant={getStatusVariant(session.status)}>
                           {getStatusLabel(session.status)}
-                        </span>
+                        </Badge>
                         {session.status === 'in_progress' && (
                           <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
                             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
@@ -655,9 +671,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                         <td className="px-4 py-3 whitespace-nowrap">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {getStatusIcon(session.status)}
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(session.status)}`}>
+                            <Badge variant={getStatusVariant(session.status)}>
                               {getStatusLabel(session.status)}
-                            </span>
+                            </Badge>
                             {session.status === 'in_progress' && (
                               <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
                                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />

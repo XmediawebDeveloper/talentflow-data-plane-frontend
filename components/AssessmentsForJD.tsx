@@ -35,6 +35,7 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import VersionBadge from './VersionBadge';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 interface AssessmentsForJDProps {
@@ -159,18 +160,14 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
   };
 
   const getStatusBadge = (status: string) => {
-    const configs: Record<string, { bg: string; text: string; label: string; ring: string }> = {
-      published: { bg: 'bg-success-subtle', text: 'text-success', label: 'Published', ring: 'ring-success-line' },
-      draft: { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', label: 'Draft', ring: 'ring-brand-orange/20' },
-      closed: { bg: 'bg-brand-blue/10', text: 'text-brand-blue', label: 'Closed', ring: 'ring-brand-blue/20' },
-      archived: { bg: 'bg-slate-100', text: 'text-gray-500', label: 'Archived', ring: 'ring-gray-200' },
+    const map: Record<string, { variant: 'success' | 'info' | 'destructive' | 'muted'; label: string }> = {
+      published: { variant: 'success', label: 'Published' },
+      draft: { variant: 'info', label: 'Draft' },
+      closed: { variant: 'muted', label: 'Closed' },
+      archived: { variant: 'muted', label: 'Archived' },
     };
-    const config = configs[status] || configs.draft;
-    return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ring-1 ${config.bg} ${config.text} ${config.ring}`}>
-        {config.label}
-      </span>
-    );
+    const config = map[status] || map.draft;
+    return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
   const filteredAssessments = assessments.filter((a) => {

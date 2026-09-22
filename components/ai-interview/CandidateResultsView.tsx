@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
+import { Badge } from '@/components/ui/badge';
 import {
   ArrowLeft, Clock, MessageSquare, ThumbsUp, ThumbsDown,
   AlertTriangle, VideoOff, ChevronDown, ChevronUp, Video,
@@ -347,7 +348,7 @@ function RecordingInfoPanel({
   return (
     <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
       <h3 className="text-sm font-semibold text-gray-900 mb-2 tracking-tight">Recording Information</h3>
-      <Row label="Status" value={<span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-success-subtle text-success ring-1 ring-success-line text-xs font-medium">{status}</span>} />
+      <Row label="Status" value={<Badge variant="success">{status}</Badge>} />
       <Row label="File Size" value={formatBytes(size)} />
       <Row label="Duration" value={duration != null ? formatDuration(duration) : '—'} />
       <Row label="Interview Date" value={formatInterviewDate(interviewDate)} />
@@ -1188,15 +1189,16 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const summary = eval_.interview_summary || {};
   const sentimentSummary = eval_.sentiment_summary || {};
 
-  const getStatusBadge = (status: string) => {
-    const map: Record<string, string> = {
-      completed: 'bg-success-subtle text-success ring-1 ring-success-line',
-      in_progress: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20',
-      invited: 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20',
-      cancelled: 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line',
-      draft: 'bg-slate-100 text-slate-600 ring-1 ring-slate-200',
+  // Canonical status → shared Badge variant (same colour for a status everywhere).
+  const getStatusVariant = (status: string): 'success' | 'warning' | 'info' | 'destructive' | 'muted' => {
+    const map: Record<string, 'success' | 'warning' | 'info' | 'destructive' | 'muted'> = {
+      completed: 'success',
+      in_progress: 'info',
+      invited: 'info',
+      cancelled: 'destructive',
+      draft: 'info',
     };
-    return map[status] || 'bg-slate-100 text-slate-600 ring-1 ring-slate-200';
+    return map[status] || 'muted';
   };
 
   const getStatusLabel = (status: string) => {
@@ -1607,9 +1609,9 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                           {interview.candidate_cid}
                         </span>
                       )}
-                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(interview.status)}`}>
+                      <Badge variant={getStatusVariant(interview.status)}>
                         {getStatusLabel(interview.status)}
-                      </span>
+                      </Badge>
                       {/* Interview mode badge — reads from config (special_instructions.interview_mode) */}
                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ring-1 ${
                         isFlexibleMode

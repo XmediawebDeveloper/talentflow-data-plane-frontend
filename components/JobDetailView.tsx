@@ -1903,7 +1903,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
       case 'Published':
         return 'bg-success-subtle text-success border-success-line';
       case 'Republished':
-        return 'bg-blue-100 text-blue-700 border-blue-200';
+        return 'bg-success-subtle text-success border-success-line';
       case 'Draft':
         return 'bg-warning-subtle text-warning border-warning-line';
       case 'Closed':

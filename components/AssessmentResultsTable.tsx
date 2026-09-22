@@ -8,6 +8,7 @@ import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import Pagination from '@/components/Pagination';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
@@ -203,12 +204,15 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   };
 
   // Helper: status badge colors
-  const getStatusBadgeColor = (status: string) => {
+  // Canonical status → Badge variant (shared mapping so statuses don't drift).
+  const getStatusVariant = (status: string): 'success' | 'info' | 'warning' | 'muted' | 'destructive' => {
     switch (status) {
-      case 'Completed': return 'bg-success-subtle text-success ring-1 ring-success-line';
-      case 'In Progress': return 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20';
-      case 'Pending': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
-      default: return 'bg-gray-100 text-gray-800 ring-1 ring-gray-200';
+      case 'Completed': return 'success';
+      case 'In Progress': return 'info';
+      case 'Pending': return 'warning';
+      case 'Failed':
+      case 'Abandoned': return 'destructive';
+      default: return 'muted';
     }
   };
 
@@ -968,9 +972,9 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                           const displayStatus = getResultStatus(result);
                           return (
                             <td key={col.id} className="py-3 px-4 text-center">
-                              <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs ${getStatusBadgeColor(displayStatus)}`}>
+                              <Badge variant={getStatusVariant(displayStatus)} className="px-3 py-1">
                                 {displayStatus}
-                              </span>
+                              </Badge>
                             </td>
                           );
                         }
@@ -1225,9 +1229,9 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                   </p>
 
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${getStatusBadgeColor(status)}`}>
+                    <Badge variant={getStatusVariant(status)}>
                       {status}
-                    </span>
+                    </Badge>
                     {scoringDone && (
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
                         result.passFail === 'Pass' ? 'bg-success-subtle text-success ring-1 ring-success-line' : 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line'
@@ -1313,9 +1317,9 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                       </div>
                       <p className="text-xs text-gray-600 mt-0.5">{result.assessmentName}</p>
                     </div>
-                    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${getStatusBadgeColor(getResultStatus(result))}`}>
+                    <Badge variant={getStatusVariant(getResultStatus(result))}>
                       {getResultStatus(result)}
-                    </span>
+                    </Badge>
                   </div>
 
                   {/* Details */}

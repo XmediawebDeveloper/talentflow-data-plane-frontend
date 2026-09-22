@@ -44,6 +44,7 @@ import {
 } from 'lucide-react';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
 import ReactMarkdown from 'react-markdown';
@@ -248,19 +249,15 @@ ${job.certifications?.join(', ') || 'N/A'}
 
 
   const getStatusBadge = (status: string) => {
-    const configs: Record<string, { bg: string; text: string; label: string }> = {
-      published: { bg: 'bg-success-subtle', text: 'text-success', label: 'Published' },
-      draft: { bg: 'bg-warning-subtle', text: 'text-warning', label: 'Draft' },
-      closed: { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Closed' },
-      disabled: { bg: 'bg-destructive-subtle', text: 'text-destructive', label: 'Disabled' },
-      archived: { bg: 'bg-gray-100', text: 'text-gray-500', label: 'Archived' },
+    const map: Record<string, { variant: 'success' | 'info' | 'destructive' | 'muted'; label: string }> = {
+      published: { variant: 'success', label: 'Published' },
+      draft: { variant: 'info', label: 'Draft' },
+      closed: { variant: 'muted', label: 'Closed' },
+      disabled: { variant: 'destructive', label: 'Disabled' },
+      archived: { variant: 'muted', label: 'Archived' },
     };
-    const config = configs[status] || configs.draft;
-    return (
-      <span className={`px-3 py-1 rounded-full text-sm font-medium ${config.bg} ${config.text}`}>
-        {config.label}
-      </span>
-    );
+    const config = map[status] || map.draft;
+    return <Badge variant={config.variant} className="px-3 py-1 text-sm">{config.label}</Badge>;
   };
 
   const tabs = [

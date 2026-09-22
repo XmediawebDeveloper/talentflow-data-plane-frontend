@@ -1,6 +1,7 @@
 'use client';
 
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { Badge } from '@/components/ui/badge';
 import { useState, useEffect, useRef } from 'react';
 import {
   HelpCircle, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle,
@@ -666,21 +667,18 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   };
 
   const getStatusBadge = (status: SupportTicket['status']) => {
-    const styles = {
-      'open': { bg: 'bg-gray-100', text: 'text-gray-900', border: 'border-gray-300', icon: Circle },
-      'in-progress': { bg: 'bg-warning-subtle', text: 'text-warning', border: 'border-warning-line', icon: Clock3 },
-      'resolved': { bg: 'bg-success-subtle', text: 'text-success', border: 'border-success-line', icon: CheckCircle2 },
-      'closed': { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-300', icon: XCircle }
+    const map = {
+      'open': { variant: 'warning' as const, icon: Circle },
+      'in-progress': { variant: 'info' as const, icon: Clock3 },
+      'resolved': { variant: 'success' as const, icon: CheckCircle2 },
+      'closed': { variant: 'muted' as const, icon: XCircle },
     };
-
-    const style = styles[status];
-    const Icon = style.icon;
-
+    const { variant, icon: Icon } = map[status];
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border ${style.bg} ${style.text} ${style.border}`}>
+      <Badge variant={variant} className="gap-1.5 px-3 py-1.5">
         <Icon className="w-3.5 h-3.5" />
         {status.charAt(0).toUpperCase() + status.slice(1).replace('-', ' ')}
-      </span>
+      </Badge>
     );
   };
 

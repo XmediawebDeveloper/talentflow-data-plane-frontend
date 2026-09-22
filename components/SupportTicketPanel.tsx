@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, X, HelpCircle, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle, FileText, Upload, Trash2, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatISTDate } from '@/lib/utils/dateUtils';
@@ -197,25 +198,18 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
   };
 
   const getStatusBadge = (status: SupportTicket['status']) => {
-    const styles = {
-      'open': 'bg-gray-100 text-gray-900 border-gray-300',
-      'in-progress': 'bg-yellow-100 text-yellow-700 border-yellow-300',
-      'resolved': 'bg-green-100 text-green-700 border-green-300',
-      'closed': 'bg-gray-100 text-gray-700 border-gray-300'
+    const map = {
+      'open': { variant: 'warning' as const, icon: <Ticket className="w-3 h-3" /> },
+      'in-progress': { variant: 'info' as const, icon: <Clock className="w-3 h-3" /> },
+      'resolved': { variant: 'success' as const, icon: <CheckCircle className="w-3 h-3" /> },
+      'closed': { variant: 'muted' as const, icon: <CheckCircle className="w-3 h-3" /> },
     };
-
-    const icons = {
-      'open': <Ticket className="w-3 h-3" />,
-      'in-progress': <Clock className="w-3 h-3" />,
-      'resolved': <CheckCircle className="w-3 h-3" />,
-      'closed': <CheckCircle className="w-3 h-3" />
-    };
-
+    const { variant, icon } = map[status];
     return (
-      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs border ${styles[status]}`}>
-        {icons[status]}
+      <Badge variant={variant} className="gap-1">
+        {icon}
         {status.charAt(0).toUpperCase() + status.slice(1).replace('-', ' ')}
-      </span>
+      </Badge>
     );
   };
 

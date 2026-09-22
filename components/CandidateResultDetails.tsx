@@ -11,6 +11,7 @@ import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import ResumeDetailView from '@/components/ResumeDetailView';
 import ViewResumeButton from '@/components/ui/view-resume-button';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
 import JDOverviewSections from '@/components/jobs/JDOverviewSections';
 import AssessmentInfoPanel from '@/components/assessments/AssessmentInfoPanel';
@@ -209,11 +210,11 @@ function ResultInfoRow({
       <div className="min-w-0">
         <div className="text-xs text-gray-500 dark:text-slate-400">{label}</div>
         <div className="flex flex-wrap items-center gap-2">
-          <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50 sm:text-[15px]">
+          <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50 sm:text-sm">
             {value}
           </span>
           {badge && (
-            <span className="inline-flex shrink-0 items-center rounded-md bg-brand-blue/10 px-1.5 py-0.5 text-[11px] font-bold text-brand-blue">
+            <span className="inline-flex shrink-0 items-center rounded-md bg-brand-blue/10 px-1.5 py-0.5 text-2xs font-bold text-brand-blue">
               {badge}
             </span>
           )}
@@ -743,16 +744,15 @@ export default function CandidateResultDetails({
     return 'text-destructive';
   };
 
-  const getStatusColor = (status: string) => {
+  // Canonical status → Badge variant (shared mapping so statuses don't drift).
+  const getStatusVariant = (status: string): 'success' | 'info' | 'warning' | 'muted' | 'destructive' => {
     switch (status) {
-      case 'Completed':
-        return 'bg-success-subtle text-success ring-1 ring-success-line';
-      case 'In Progress':
-        return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
-      case 'Pending':
-        return 'bg-slate-100 text-slate-700 ring-1 ring-slate-200';
-      default:
-        return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
+      case 'Completed': return 'success';
+      case 'In Progress': return 'info';
+      case 'Pending': return 'warning';
+      case 'Failed':
+      case 'Abandoned': return 'destructive';
+      default: return 'muted';
     }
   };
 
@@ -1067,9 +1067,9 @@ export default function CandidateResultDetails({
                   displayStatus = 'Pending';
                 }
                 return (
-                  <span className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ${getStatusColor(displayStatus)}`}>
+                  <Badge variant={getStatusVariant(displayStatus)} className="px-4 py-2 rounded-lg text-sm font-medium">
                     {displayStatus}
-                  </span>
+                  </Badge>
                 );
               })()}
             </div>
@@ -1182,7 +1182,7 @@ export default function CandidateResultDetails({
                                 the bar is coloured by, so the chip and the fill
                                 can never tell different stories. */}
                             <span
-                              className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${
+                              className={`rounded-md px-1.5 py-0.5 text-2xs font-semibold ${
                                 passed
                                   ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300'
                                   : 'bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-300'
