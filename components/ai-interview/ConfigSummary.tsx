@@ -67,15 +67,15 @@ export function SummaryTips() {
       <div className="p-2.5 space-y-2">
         <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-advice-info-bg ring-1 ring-advice-info/20">
           <Info className="w-4 h-4 text-advice-info flex-shrink-0 mt-0.5" />
-          <p className="text-[11px] text-gray-700 leading-relaxed">
+          <p className="text-2xs text-gray-700 leading-relaxed">
             Weights are used for technical evaluation scoring. The HR round is qualitative only.
           </p>
         </div>
         <div className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-advice-positive-bg ring-1 ring-advice-positive/20">
           <Lightbulb className="w-4 h-4 text-advice-positive flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-[11px] font-semibold text-advice-positive">Tip</p>
-            <p className="text-[11px] text-gray-700 leading-relaxed">
+            <p className="text-2xs font-semibold text-advice-positive">Tip</p>
+            <p className="text-2xs text-gray-700 leading-relaxed">
               Review this summary before proceeding — the next step builds question clusters from it.
             </p>
           </div>

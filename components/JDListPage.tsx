@@ -11,6 +11,7 @@ import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 // FIX-003: Import Sheet for inline JD creation
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import JDCreation from '@/components/JDCreation';
 import ConfirmationDialog from '@/components/ConfirmationDialog';
@@ -468,19 +469,13 @@ export default function JDListPage() {
     const isRepublished = status === 'published' && currentVersion && currentVersion > 1;
     const displayStatus = isRepublished ? 'republished' : status;
 
-    const configs: Record<string, { bg: string; text: string; dot: string }> = {
-      draft: { bg: 'bg-warning-subtle', text: 'text-warning', dot: 'bg-warning' },
-      published: { bg: 'bg-success-subtle', text: 'text-success', dot: 'bg-success' },
-      republished: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
-      archived: { bg: 'bg-gray-50', text: 'text-gray-600', dot: 'bg-gray-400' },
-      disabled: { bg: 'bg-destructive-subtle', text: 'text-destructive', dot: 'bg-destructive' },
+    const variants: Record<string, 'success' | 'info' | 'destructive' | 'muted'> = {
+      draft: 'info', published: 'success', republished: 'success', archived: 'muted', disabled: 'destructive',
     };
-    const config = configs[displayStatus] || configs.draft;
     return (
-      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${config.bg} ${config.text}`}>
-        <span className={`w-1.5 h-1.5 rounded-full ${config.dot}`}></span>
+      <Badge variant={variants[displayStatus] || 'info'}>
         {displayStatus.charAt(0).toUpperCase() + displayStatus.slice(1)}
-      </span>
+      </Badge>
     );
   };
 

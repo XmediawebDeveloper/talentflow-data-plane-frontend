@@ -27,7 +27,7 @@ import { formatSalaryRange, getSalaryCurrencySymbol, normalizeSalaryCurrency, pa
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
-import { FormSkeleton } from '@/components/ui/skeleton';
+import { PageSkeleton } from '@/components/ui/skeleton';
 
 type CreationMode = 'ai' | 'manual';
 type Step = 'create' | 'extract' | 'review';
@@ -7249,11 +7249,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
   // FIX-003: Show loading state when fetching JD in embedded mode
   if (loadingJD) {
-    return (
-      <div className="h-full bg-white dark:bg-slate-950 p-4 sm:p-6 lg:p-8">
-        <FormSkeleton />
-      </div>
-    );
+    // Same skeleton the route page shows, so only ONE consistent skeleton
+    // appears (no flash between a bare form and the full page skeleton).
+    return <PageSkeleton variant="form" showStats={false} />;
   }
 
   const jobTitleValidationError = getResolvedJobTitleValidationError(jobTitle);

@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ListPagination from '@/components/ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 // Use backend proxy instead of direct Admin API calls
@@ -230,33 +231,34 @@ export default function RefundHistoryPage() {
       case 'completed':
       case 'success':
       case 'paid':
-        return <CheckCircle2 className="h-3.5 w-3.5 text-brand-teal" />;
+        return <CheckCircle2 className="h-3.5 w-3.5" />;
       case 'pending':
       case 'processing':
-        return <Clock className="h-3.5 w-3.5 text-warning" />;
+        return <Clock className="h-3.5 w-3.5" />;
       case 'failed':
       case 'rejected':
-        return <XCircle className="h-3.5 w-3.5 text-destructive" />;
+        return <XCircle className="h-3.5 w-3.5" />;
       default:
-        return <Clock className="h-3.5 w-3.5 text-gray-500" />;
+        return <Clock className="h-3.5 w-3.5" />;
     }
   };
 
-  const getStatusStyles = (status: string) => {
+  // Canonical status → shared Badge variant (same status looks the same everywhere).
+  const getStatusVariant = (status: string): 'success' | 'warning' | 'destructive' | 'muted' => {
     switch (status.toLowerCase()) {
       case 'refunded':
       case 'completed':
       case 'success':
       case 'paid':
-        return 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20';
+        return 'success';
       case 'pending':
       case 'processing':
-        return 'bg-warning-subtle text-warning ring-1 ring-warning-line';
+        return 'warning';
       case 'failed':
       case 'rejected':
-        return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
+        return 'destructive';
       default:
-        return 'bg-gray-100 text-gray-700 ring-1 ring-gray-200';
+        return 'muted';
     }
   };
 
@@ -610,10 +612,10 @@ export default function RefundHistoryPage() {
                         </span>
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-medium ${getStatusStyles(refund.status || 'unknown')}`}>
+                        <Badge variant={getStatusVariant(refund.status || 'unknown')} className="capitalize">
                           {getStatusIcon(refund.status || 'unknown')}
                           {refund.status || '-'}
-                        </span>
+                        </Badge>
                       </td>
                       <td className="px-4 py-4 text-right tf-sticky-col">
                         <div className="flex items-center justify-end gap-1.5">
@@ -694,10 +696,10 @@ export default function RefundHistoryPage() {
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Status</p>
-                    <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-medium ${getStatusStyles(selectedRefund.status)}`}>
+                    <Badge variant={getStatusVariant(selectedRefund.status)} className="mt-1 capitalize">
                       {getStatusIcon(selectedRefund.status)}
                       {selectedRefund.status}
-                    </span>
+                    </Badge>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Refund Method</p>

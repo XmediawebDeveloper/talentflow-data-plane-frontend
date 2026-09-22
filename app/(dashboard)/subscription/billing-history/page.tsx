@@ -9,6 +9,7 @@ import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ListPagination from '@/components/ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 interface LineItem {
@@ -247,20 +248,21 @@ export default function BillingHistoryPage() {
 
   const getStatusIcon = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'paid': case 'success': return <CheckCircle2 className="h-3.5 w-3.5 text-brand-teal" />;
-      case 'pending': return <Clock className="h-3.5 w-3.5 text-warning" />;
-      case 'failed': case 'refunded': return <XCircle className="h-3.5 w-3.5 text-destructive" />;
-      default: return <CheckCircle2 className="h-3.5 w-3.5 text-gray-500" />;
+      case 'paid': case 'success': return <CheckCircle2 className="h-3.5 w-3.5" />;
+      case 'pending': return <Clock className="h-3.5 w-3.5" />;
+      case 'failed': case 'refunded': return <XCircle className="h-3.5 w-3.5" />;
+      default: return <CheckCircle2 className="h-3.5 w-3.5" />;
     }
   };
 
-  const getStatusStyles = (status: string) => {
+  // Canonical status → shared Badge variant (same status looks the same everywhere).
+  const getStatusVariant = (status: string): 'success' | 'warning' | 'destructive' | 'info' | 'muted' => {
     switch (status.toLowerCase()) {
-      case 'paid': case 'success': return 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20';
-      case 'pending': return 'bg-warning-subtle text-warning ring-1 ring-warning-line';
-      case 'failed': case 'refunded': return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
-      case 'open': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
-      default: return 'bg-gray-100 text-gray-700 ring-1 ring-gray-200';
+      case 'paid': case 'success': return 'success';
+      case 'pending': return 'warning';
+      case 'failed': case 'refunded': return 'destructive';
+      case 'open': return 'info';
+      default: return 'muted';
     }
   };
 
@@ -542,10 +544,10 @@ export default function BillingHistoryPage() {
                         )}
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-medium ${getStatusStyles(inv.status)}`}>
+                        <Badge variant={getStatusVariant(inv.status)} className="capitalize">
                           {getStatusIcon(inv.status)}
                           {inv.status}
-                        </span>
+                        </Badge>
                       </td>
                       <td className="px-4 py-4 text-right tf-sticky-col">
                         <div className="flex items-center justify-end gap-1.5">
@@ -735,10 +737,10 @@ export default function BillingHistoryPage() {
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Status</p>
-                    <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-medium ${getStatusStyles(selectedInvoice.status)}`}>
+                    <Badge variant={getStatusVariant(selectedInvoice.status)} className="mt-1 capitalize">
                       {getStatusIcon(selectedInvoice.status)}
                       {selectedInvoice.status}
-                    </span>
+                    </Badge>
                   </div>
                   {selectedInvoice.paid_at && (
                     <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">

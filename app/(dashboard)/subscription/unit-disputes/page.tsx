@@ -9,6 +9,7 @@ import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ListPagination from '@/components/ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -364,19 +365,20 @@ export default function UnitDisputesPage() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'APPROVED': return <CheckCircle2 className="h-3.5 w-3.5 text-brand-teal" />;
-      case 'PENDING_REVIEW': return <Clock className="h-3.5 w-3.5 text-warning" />;
-      case 'REJECTED': return <XCircle className="h-3.5 w-3.5 text-destructive" />;
-      default: return <AlertCircle className="h-3.5 w-3.5 text-gray-500" />;
+      case 'APPROVED': return <CheckCircle2 className="h-3.5 w-3.5" />;
+      case 'PENDING_REVIEW': return <Clock className="h-3.5 w-3.5" />;
+      case 'REJECTED': return <XCircle className="h-3.5 w-3.5" />;
+      default: return <AlertCircle className="h-3.5 w-3.5" />;
     }
   };
 
-  const getStatusStyles = (status: string) => {
+  // Canonical status → shared Badge variant (same status looks the same everywhere).
+  const getStatusVariant = (status: string): 'success' | 'warning' | 'destructive' | 'muted' => {
     switch (status) {
-      case 'APPROVED': return 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20';
-      case 'PENDING_REVIEW': return 'bg-warning-subtle text-warning ring-1 ring-warning-line';
-      case 'REJECTED': return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
-      default: return 'bg-gray-100 text-gray-700 ring-1 ring-gray-200';
+      case 'APPROVED': return 'success';
+      case 'PENDING_REVIEW': return 'warning';
+      case 'REJECTED': return 'destructive';
+      default: return 'muted';
     }
   };
 
@@ -755,10 +757,10 @@ export default function UnitDisputesPage() {
                         </span>
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-medium ${getStatusStyles(dispute.status)}`}>
+                        <Badge variant={getStatusVariant(dispute.status)}>
                           {getStatusIcon(dispute.status)}
                           {getStatusLabel(dispute.status)}
-                        </span>
+                        </Badge>
                       </td>
                       <td className="px-4 py-4 text-right tf-sticky-col">
                         <button
@@ -830,10 +832,10 @@ export default function UnitDisputesPage() {
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Status</p>
-                    <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-medium ${getStatusStyles(selectedDispute.status)}`}>
+                    <Badge variant={getStatusVariant(selectedDispute.status)} className="mt-1">
                       {getStatusIcon(selectedDispute.status)}
                       {getStatusLabel(selectedDispute.status)}
-                    </span>
+                    </Badge>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
                     <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Consumption Log ID</p>

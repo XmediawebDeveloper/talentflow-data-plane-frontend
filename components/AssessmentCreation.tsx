@@ -5,6 +5,7 @@ import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Spar
 import type { AssessmentResponse, HRTopic } from '@/lib/services/assessmentService';
 import { Button } from '@/components/ui/button';
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
 import { formatISTDate } from '@/lib/utils/dateUtils';
@@ -36,7 +37,7 @@ import {
   mapJDToJob,
   sortJobs,
 } from '@/lib/utils/jobOpeningDisplay';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Skeleton, PageSkeleton } from '@/components/ui/skeleton';
 
 // Languages that have an executable runtime in the candidate's coding round.
 // Mirrors LANGUAGE_VERSIONS in backend app/routers/candidate.py — anything not
@@ -3218,6 +3219,11 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   // Not scoped to `step === 'select-jd'`: with ?step=configure the Configure
   // form would otherwise render against a null selectedJob until the effect lands.
   if (resolvingPreselectedJd || loadingEditedAssessment) {
+    // Same skeleton the route page (assessments/create) shows, so only ONE
+    // consistent skeleton appears instead of two different ones in sequence.
+    return <PageSkeleton variant="form" showStats={false} />;
+  }
+  if (false) {
     return (
       <div className={stepShellClass}>
         <div className={stepColumnClass}>

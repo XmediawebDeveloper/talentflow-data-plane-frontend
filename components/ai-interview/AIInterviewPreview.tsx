@@ -672,11 +672,11 @@ export default function AIInterviewPreview() {
                 <Timer className="w-4 h-4 text-brand-cyan" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] text-gray-500">Interview Mode</p>
+                <p className="text-2xs text-gray-500">Interview Mode</p>
                 <p className="text-sm font-semibold text-gray-900">
                   {mode === 'fixed' ? 'Timed Interview' : 'Conversational'}
                 </p>
-                <p className="text-[11px] text-gray-500">
+                <p className="text-2xs text-gray-500">
                   {mode === 'fixed'
                     ? `${duration} minutes`
                     : `${bufferEnabled ? 35 : 30} minutes${bufferEnabled ? ' · +5 min buffer' : ''}`}
@@ -689,10 +689,10 @@ export default function AIInterviewPreview() {
                 <Mic className="w-4 h-4 text-brand-blue" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] text-gray-500">AI Model</p>
+                <p className="text-2xs text-gray-500">AI Model</p>
                 <p className="text-sm font-semibold text-gray-900 truncate">{sttOption.label}</p>
                 {sttOption.recommended && (
-                  <span className="inline-flex items-center mt-0.5 px-1.5 py-0.5 text-[10px] font-medium rounded-full bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25">
+                  <span className="inline-flex items-center mt-0.5 px-1.5 py-0.5 text-2xs font-medium rounded-full bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25">
                     Recommended
                   </span>
                 )}
@@ -704,9 +704,9 @@ export default function AIInterviewPreview() {
                 <Layers className="w-4 h-4 text-brand-orange-deep" />
               </div>
               <div className="min-w-0">
-                <p className="text-[11px] text-gray-500">Interview Type</p>
+                <p className="text-2xs text-gray-500">Interview Type</p>
                 <p className="text-sm font-semibold text-gray-900">{interviewTypeLabel}</p>
-                <p className="text-[11px] text-gray-500">
+                <p className="text-2xs text-gray-500">
                   {enabledRounds.length} round{enabledRounds.length === 1 ? '' : 's'}
                 </p>
               </div>
@@ -774,7 +774,7 @@ export default function AIInterviewPreview() {
             title="Skill Clusters"
             icon={Layers}
             badge={
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-slate-100 text-gray-600 ring-1 ring-gray-200/70">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium bg-slate-100 text-gray-600 ring-1 ring-gray-200/70">
                 {mthClusters.length + nthClusters.length} cluster{mthClusters.length + nthClusters.length === 1 ? '' : 's'}
               </span>
             }
@@ -859,7 +859,7 @@ export default function AIInterviewPreview() {
           icon={Users}
           badge={
             hrRound?.enabled && hrRound.hr_questions?.length ? (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                 {hrRound.hr_questions.length} question{hrRound.hr_questions.length === 1 ? '' : 's'}
               </span>
             ) : undefined

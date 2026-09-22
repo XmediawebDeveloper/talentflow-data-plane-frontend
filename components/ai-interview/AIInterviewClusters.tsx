@@ -843,7 +843,7 @@ function CategorySection({
                 </span>
               )}
               {timeMin > 0 && (
-                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15">
                   <Clock className="w-2.5 h-2.5" />
                   {timeMin} min
                 </span>
@@ -1010,7 +1010,7 @@ function CategorySection({
                       {matches.map(e => renderChip(e))}
                     </div>
                     {filtering && (
-                      <p className="mt-1.5 text-[10px] text-gray-400">
+                      <p className="mt-1.5 text-2xs text-gray-400">
                         Showing {matches.length} of {totalCount}
                       </p>
                     )}

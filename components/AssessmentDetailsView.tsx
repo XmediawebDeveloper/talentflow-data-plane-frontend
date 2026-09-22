@@ -1,4 +1,4 @@
-import { RefreshCw, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Loader2, Monitor, Ban, Sliders } from 'lucide-react';
+import { RefreshCw, Check, ChevronDown, ChevronLeft, ChevronRight, Clock, Users, FileText, Award, Calendar, TrendingUp, Edit2, Eye, Mail, BarChart, Share2, Download, Copy, Archive, Trash2, Play, PauseCircle, CheckCircle, XCircle, AlertCircle, Briefcase, Link2, Code, MessageSquare, Cpu, User, ExternalLink, Info, Layers, Loader2, Monitor, Ban, Sliders, Globe, Zap, Star } from 'lucide-react';
 import { Fragment, useState, useMemo, useEffect, useRef, type KeyboardEvent as ReactKeyboardEvent } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import ReactMarkdown from 'react-markdown';
@@ -31,6 +31,7 @@ import AssessmentInviteTable, {
   isTrackedInviteCompleted,
 } from '@/components/assessments/AssessmentInviteTable';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 interface AssessmentDetailsViewProps {
@@ -442,14 +443,15 @@ export default function AssessmentDetailsView({
 
   /** The house JD status palette (`JobDetailView.getStatusBadgeClass`), on the
    *  lowercase status the lineage endpoint returns. */
-  const jobVersionStatusChipClass = (status?: string) => {
+  // Canonical JD-version status → Badge variant (shared mapping, no drift).
+  const jobVersionStatusVariant = (status?: string): 'success' | 'info' | 'warning' | 'destructive' | 'muted' => {
     switch ((status || '').toLowerCase()) {
-      case 'published': return 'bg-success-subtle text-success ring-1 ring-success-line';
-      case 'republished': return 'bg-blue-100 text-blue-700 ring-1 ring-blue-200';
-      case 'draft': return 'bg-warning-subtle text-warning ring-1 ring-warning-line';
-      case 'disabled': return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
-      case 'archived': return 'bg-purple-100 text-purple-700 ring-1 ring-purple-200';
-      default: return 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700';
+      case 'published': return 'success';
+      case 'republished': return 'info';
+      case 'draft': return 'warning';
+      case 'disabled': return 'destructive';
+      case 'archived': return 'muted';
+      default: return 'muted';
     }
   };
 
@@ -1565,9 +1567,9 @@ export default function AssessmentDetailsView({
                                       </span>
                                     )}
                                     {version.status && (
-                                      <span className={`flex-shrink-0 text-2xs px-1.5 py-0.5 rounded-full font-medium capitalize ${jobVersionStatusChipClass(version.status)}`}>
+                                      <Badge variant={jobVersionStatusVariant(version.status)} className="flex-shrink-0 text-2xs px-1.5 py-0.5 capitalize">
                                         {version.status}
-                                      </span>
+                                      </Badge>
                                     )}
                                     {/* VIEW, right-aligned, on every row -
                                         including the one you are on. It is a

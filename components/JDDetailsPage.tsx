@@ -13,6 +13,7 @@ import { useModulePermissions } from '@/lib/hooks/usePermissions';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 
 // Utility function to format employment type for display
@@ -98,42 +99,13 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
 
   const getStatusBadge = (status: AssessmentResultItem['status'], passed: boolean | null) => {
     if (status === 'completed') {
-      if (passed === true) {
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-success-subtle text-success">
-            <CheckCircle className="w-3 h-3" />
-            Passed
-          </span>
-        );
-      } else if (passed === false) {
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-destructive-subtle text-destructive">
-            <XCircle className="w-3 h-3" />
-            Failed
-          </span>
-        );
-      } else {
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-            <CheckCircle className="w-3 h-3" />
-            Completed
-          </span>
-        );
-      }
+      if (passed === true) return <Badge variant="success"><CheckCircle className="w-3 h-3" />Passed</Badge>;
+      if (passed === false) return <Badge variant="destructive"><XCircle className="w-3 h-3" />Failed</Badge>;
+      return <Badge variant="info"><CheckCircle className="w-3 h-3" />Completed</Badge>;
     } else if (status === 'in_progress') {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-warning-subtle text-warning">
-          <AlertCircle className="w-3 h-3" />
-          In Progress
-        </span>
-      );
+      return <Badge variant="info"><AlertCircle className="w-3 h-3" />In Progress</Badge>;
     } else {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-          <Clock className="w-3 h-3" />
-          Pending
-        </span>
-      );
+      return <Badge variant="warning"><Clock className="w-3 h-3" />Pending</Badge>;
     }
   };
 
@@ -850,18 +822,13 @@ export default function JDDetailsPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    const configs: Record<string, { bg: string; text: string; dot: string }> = {
-      draft: { bg: 'bg-warning-subtle', text: 'text-warning', dot: 'bg-warning' },
-      published: { bg: 'bg-success-subtle', text: 'text-success', dot: 'bg-success' },
-      archived: { bg: 'bg-gray-50', text: 'text-gray-600', dot: 'bg-gray-400' },
-      disabled: { bg: 'bg-destructive-subtle', text: 'text-destructive', dot: 'bg-destructive' },
+    const variants: Record<string, 'success' | 'info' | 'destructive' | 'muted'> = {
+      draft: 'info', published: 'success', archived: 'muted', disabled: 'destructive',
     };
-    const config = configs[status] || configs.draft;
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${config.bg} ${config.text}`}>
-        <span className={`w-2 h-2 rounded-full ${config.dot}`}></span>
+      <Badge variant={variants[status] || 'info'} className="px-3 py-1.5 text-sm">
         {status.charAt(0).toUpperCase() + status.slice(1)}
-      </span>
+      </Badge>
     );
   };
 

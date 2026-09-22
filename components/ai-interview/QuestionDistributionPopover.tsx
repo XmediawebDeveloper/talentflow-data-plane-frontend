@@ -205,12 +205,12 @@ export function QuestionDistributionPopover({
      scrolling. */
   const columnHead = (label: string, count: number, tone: string, right = 'Skills') => (
     <div className="sticky top-0 z-10 bg-white">
-      <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1.5 ${tone}`}>
+      <div className={`text-2xs font-semibold uppercase tracking-wider mb-1.5 ${tone}`}>
         {label} ({count})
       </div>
       <div className="grid grid-cols-[40px_1fr] bg-gray-50 border border-gray-100 rounded-t-md">
-        <span className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">Q#</span>
-        <span className="px-2 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wider">{right}</span>
+        <span className="px-2 py-1.5 text-2xs font-semibold text-gray-500 uppercase tracking-wider">Q#</span>
+        <span className="px-2 py-1.5 text-2xs font-semibold text-gray-500 uppercase tracking-wider">{right}</span>
       </div>
     </div>
   );
@@ -237,13 +237,13 @@ export function QuestionDistributionPopover({
             {hrQuestions.map((q, i) => (
                 <tr key={q.id} className="border-b border-gray-100 last:border-b-0 hover:bg-gray-50 transition-colors">
                   <td className="align-top px-2 py-1.5 w-[40px]">
-                    <span className="text-[11px] font-mono font-semibold text-brand-orange-deep">Q{i + 1}</span>
+                    <span className="text-2xs font-mono font-semibold text-brand-orange-deep">Q{i + 1}</span>
                   </td>
                   <td className="align-top px-2 py-1.5">
                     <div className="flex flex-wrap items-center gap-1.5">
-                      <span className="text-[11px] text-gray-800">{q.question_text}</span>
+                      <span className="text-2xs text-gray-800">{q.question_text}</span>
                       <span
-                        className={`inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide ring-1 ${
+                        className={`inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-semibold uppercase tracking-wide ring-1 ${
                           q.stage === 'opening'
                             ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
                             : 'bg-advice-positive-bg text-advice-positive ring-advice-positive/25'
