@@ -41,18 +41,51 @@ interface AssessmentResultsProps {
    * Which job version the page opens on, as the link that sent the recruiter
    * here named it (`?job_version_id=`).
    *
-   * A JD ROW ID scopes the results to that one job version — the Job Version
-   * row's own Results button passes the row it sits under, so it reports that
-   * version's candidates and no other. The literal `'all'` asks for the whole
-   * job, which is what the Job List row's Results button passes. `null` is an
-   * arrival that named nothing (a deep link, the details view's Results
-   * button): the page keeps the scope it restores, else All Versions.
+   * A JD ROW ID selects that one job version — the Assessment Versions table's
+   * Results icon passes the row it sits under, so the page opens reporting that
+   * version's candidates. The literal `'all'` asks for the whole job, which is
+   * what the Job List row's Results button passes. `null` is an arrival that
+   * named nothing (a deep link, the details view's Results button): the page
+   * keeps the scope it restores, else All Versions.
+   *
+   * It is the page's OPENING SELECTION, not a pin: the same view is rendered
+   * either way — both version selectors are there, showing what the link asked
+   * for — and the recruiter can widen or change it from the controls. The two
+   * entry points differ in what they preselect, never in what they show.
    *
    * An id the JD's lineage does not return resolves to nothing and reads as
    * All Versions, the same way a stale restored selection does — a scope the
    * job cannot honour must not render as an empty table.
    */
   jobVersionScope?: string | null;
+  /**
+   * Which assessment version the page opens on (`?assessment_version=`), the
+   * companion to `jobVersionScope` — the Results icon names the row's own
+   * revision alongside the row's job version, so the page opens on exactly the
+   * job-version × assessment-version pair the recruiter clicked.
+   *
+   * A version NUMBER as a string, or the literal `'all'` (the Job List row's
+   * Result button, which asks for every revision). `null` names nothing and
+   * leaves the page on what it restores, else All Assessment Versions.
+   *
+   * A version the current job-version scope does not hold reads as All
+   * Assessment Versions — see `effectiveAssessmentVersion`.
+   */
+  assessmentVersionScope?: string | null;
+  /**
+   * Rendered INSIDE a host page that already draws the chrome, rather than as
+   * the results route's own page.
+   *
+   * The assessment details page's Results tab is that host: its card, its
+   * breadcrumb and its record pager are already on screen, so this view drops
+   * its own (they would be a second breadcrumb inside a second card) and keeps
+   * everything that is the results themselves — the stat cards, the two version
+   * scopes, the filters, the table, the exports.
+   *
+   * One component either way. The tab is not a summary of the results page: it
+   * IS the results page, minus the frame the host has already drawn.
+   */
+  embedded?: boolean;
   canDownloadPDF?: boolean;
   canBatchDownload?: boolean;
   prevId?: string | null;
@@ -211,7 +244,7 @@ interface QuestionResult {
   type: 'multiple-choice' | 'text' | 'coding';
 }
 
-export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount }: AssessmentResultsProps) {
+export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount }: AssessmentResultsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
@@ -423,17 +456,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
    * against, this is which version of the ASSESSMENT the candidate sat.
    */
   const [assessmentVersionByAssessmentId, setAssessmentVersionByAssessmentId] = useState<Map<string, number>>(new Map());
-  /**
-   * The assessments of each JD ROW — the job version's own id.
-   *
-   * What a page opened FOR one job version is pinned by. Every job version is
-   * its own JD row, so this is the exact set of assessments that version holds,
-   * and pinning by it needs no version NUMBER to have resolved: a lineage that
-   * failed to load would leave the number unknown, and a pin that fell back to
-   * "all" there would put another version's candidates on a page that promises
-   * only this one's.
-   */
-  const [assessmentIdsByJdId, setAssessmentIdsByJdId] = useState<Map<string, string[]>>(new Map());
   const [selectedJobVersion, setSelectedJobVersion] = useState<'all' | number>('all');
   /**
    * The Assessment Version scope, beside the Job Version one.
@@ -445,8 +467,18 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
    * versions the current job-version selection actually contains, so the pair
    * reads as one path down the hierarchy (job → job version → assessment
    * version) and can never select a combination the job does not have.
+   *
+   * Opens on what the link named (`?assessment_version=`) when it named one.
+   * Unlike the job version beside it this needs no lineage to resolve — the
+   * parameter IS the version number — so it is read straight into the initial
+   * state rather than applied from the effect below. A value the scope turns
+   * out not to hold still reads as All (`effectiveAssessmentVersion`).
    */
-  const [selectedAssessmentVersion, setSelectedAssessmentVersion] = useState<'all' | number>('all');
+  const [selectedAssessmentVersion, setSelectedAssessmentVersion] = useState<'all' | number>(() => {
+    if (!assessmentVersionScope || assessmentVersionScope === 'all') return 'all';
+    const named = Number(assessmentVersionScope);
+    return Number.isFinite(named) && named > 0 ? named : 'all';
+  });
   /* Results wait for the scope, so the first fetch is already the full set —
      otherwise the page would render this assessment's rows and then replace
      them, which is the flicker the version selector must not introduce. */
@@ -459,6 +491,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
      question from the one they asked. Applied once, so changing the selector
      afterwards is not undone by a re-render. */
   const namesJobVersionScope = !!jobVersionScope;
+  const namesAssessmentVersionScope = !!assessmentVersionScope;
   const jobVersionScopeApplied = useRef(false);
 
   useEffect(() => {
@@ -502,18 +535,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       assessmentVersion != null
         ? new Map<string, number>([[assessmentId, assessmentVersion]])
         : new Map<string, number>();
-    /* The one JD row → assessment pairing the page knows without any lineage:
-       its own assessment, under its own job version. A pinned view still has
-       something correct to scope to if everything below fails. */
-    const ownJdAssessments = () =>
-      jdId ? new Map<string, string[]>([[jdId, [assessmentId]]]) : new Map<string, string[]>();
-
     const loadJobVersions = async () => {
       if (!jdId) {
         if (!cancelled) {
           setJobVersionScopes(ownScope);
           setAssessmentVersionByAssessmentId(ownAssessmentVersions());
-          setAssessmentIdsByJdId(ownJdAssessments());
           applyJobVersionScope(new Map());
           setJobVersionsLoaded(true);
         }
@@ -558,11 +584,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
            `assessmentVersionByAssessmentId`. Only set where the record carries
            one: a missing version is reported as a dash rather than as v1. */
         const assessmentVersionById = new Map<string, number>();
-        /* Which assessments each JOB VERSION holds, keyed by that version's own
-           JD row — what a pinned view scopes to. Keyed on the row the assessment
-           itself points at, falling back to the row that was asked, so a widened
-           reply cannot file an assessment under a version it does not belong to. */
-        const idsByJdId = new Map<string, string[]>();
         responses.forEach((response, index) => {
           for (const row of (response.items || [])) {
             if (!row?.id) continue;
@@ -574,18 +595,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 ?? 1,
             );
             if (typeof row.version === 'number') assessmentVersionById.set(row.id, row.version);
-            const ownJdId = row.jd_id ?? versionIds[index];
-            const siblings = idsByJdId.get(ownJdId) ?? [];
-            if (!siblings.includes(row.id)) siblings.push(row.id);
-            idsByJdId.set(ownJdId, siblings);
           }
         });
-        /* The assessment the page was opened on belongs to its own job version
-           whether or not the reply listed it. */
-        const ownJdSiblings = idsByJdId.get(jdId) ?? [];
-        if (!ownJdSiblings.includes(assessmentId)) ownJdSiblings.push(assessmentId);
-        idsByJdId.set(jdId, ownJdSiblings);
-        setAssessmentIdsByJdId(idsByJdId);
         // The assessment the page was opened on is always in scope.
         if (!versionByAssessmentId.has(assessmentId)) {
           versionByAssessmentId.set(assessmentId, versionNumberByJdId.get(jdId) ?? jdVersion ?? 1);
@@ -623,7 +634,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         if (!cancelled) {
           setJobVersionScopes(ownScope);
           setAssessmentVersionByAssessmentId(ownAssessmentVersions());
-          setAssessmentIdsByJdId(ownJdAssessments());
           applyJobVersionScope(new Map());
         }
       } finally {
@@ -658,59 +668,42 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       : selectedJobVersion;
 
   /**
-   * Whether this page was opened FOR one job version rather than for the job.
-   *
-   * The two entry points differ only in what their link named: the Job List
-   * row's Results passes `all` (the job, every version of it), a Job Version
-   * row's Results passes that version's own JD row id. A page opened the second
-   * way reports that version and nothing else, so the scope is fixed rather than
-   * chosen — the selectors below stop being filters and the version cannot be
-   * widened from here. An arrival that named nothing is not pinned; it keeps the
-   * selectable behaviour it has always had.
-   */
-  const isPinnedToJobVersion = !!jobVersionScope && jobVersionScope !== 'all';
-
-  /**
    * Whether the version scopes are offered at all.
    *
    * A dropdown earns its place only where there is something to choose between.
-   * Two cases have none, and both used to render one anyway:
+   * A page opened for ONE assessment — the in-page view reached from an
+   * assessment's details, which is given no JD to walk — has none: its job has
+   * exactly one scope entry, so "All Versions" and "Job Version V1" selected the
+   * same rows, a control that looked like a filter and filtered nothing.
    *
-   *   - A page opened for ONE job version. Pinned: the rows are fixed to that
-   *     version, so every option the control could offer is either the version
-   *     it already reports or a scope it must refuse.
-   *   - A page opened for ONE assessment — the in-page view reached from an
-   *     assessment's details, which is given no JD to walk. Its job has exactly
-   *     one scope entry, so "All Versions" and "Job Version V1" selected the
-   *     same rows: a control that looked like a filter and filtered nothing.
+   * `> 1`, not `> 0`, is what covers that without a flag for it. The count comes
+   * from the scope itself, so a job that genuinely has one version hides the
+   * control too — there is nothing there to choose either.
    *
-   * `> 1`, not `> 0`, is what covers the second case without a flag for it. The
-   * counts come from the scope itself, so a job that genuinely has one version
-   * hides the control too — there is nothing there to choose either.
+   * It does NOT depend on which version the link named. Both entry points — the
+   * Job List row's Result and the Assessment Versions table's Results icon —
+   * land on the same view with the same controls; they differ only in what those
+   * controls open on, so a recruiter who arrived from one assessment version can
+   * read the selection that produced their rows and widen it in place.
    *
-   * Neither count moves with the selection (both are read from the job-version
+   * The count does not move with the selection (it is read from the job-version
    * scope, not from the narrowed set), so a dropdown cannot vanish under the
    * recruiter the moment they use it.
    */
-  const showsJobVersionSelect = !isPinnedToJobVersion && jobVersionScopes.length > 1;
+  const showsJobVersionSelect = jobVersionScopes.length > 1;
 
   /** The assessments the JOB VERSION selection covers, before the assessment
    *  version narrows it. */
   const jobScopedAssessmentIds = useMemo(() => {
-    if (isPinnedToJobVersion && jobVersionScope) {
-      /* Pinned by JD ROW ID, not by the version number the id resolves to: the
-         id is what the link named and is exact, while the number depends on a
-         lineage lookup that can fail. Falling back to the page's own assessment
-         keeps a failed lookup showing too little rather than another version's
-         candidates. */
-      const pinned = assessmentIdsByJdId.get(jobVersionScope);
-      return pinned?.length ? pinned : [assessmentId];
-    }
     if (effectiveJobVersion === 'all') {
       return [...new Set(jobVersionScopes.flatMap(scope => scope.assessmentIds))];
     }
+    /* By the version NUMBER, which is what the selector holds — a link that
+       named a JD row id was resolved to this number on arrival, so a selection
+       made here and one arrived with are the same thing and cannot read
+       differently. */
     return jobVersionScopes.find(scope => scope.versionNumber === effectiveJobVersion)?.assessmentIds ?? [];
-  }, [jobVersionScopes, effectiveJobVersion, isPinnedToJobVersion, jobVersionScope, assessmentIdsByJdId, assessmentId]);
+  }, [jobVersionScopes, effectiveJobVersion]);
 
   /**
    * The assessment versions the Assessment Version selector offers: the
@@ -730,27 +723,21 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   }, [jobScopedAssessmentIds, assessmentVersionByAssessmentId]);
 
   /* Same rule as `effectiveJobVersion`: a selection the current scope cannot
-     honour — one left from before the job version changed, or restored from a
-     previous visit — reads as All rather than as an empty table.
-
-     A pinned page ignores it outright. Its control is not rendered, so a value
-     restored from a previous visit would narrow the rows with nothing on screen
-     to say so or to undo it — an invisible filter on a page whose whole promise
-     is "this job version's candidates". */
+     honour — one left from before the job version changed, restored from a
+     previous visit, or named by a link whose job version holds no such revision
+     — reads as All rather than as an empty table. */
   const effectiveAssessmentVersion: 'all' | number =
-    isPinnedToJobVersion
+    selectedAssessmentVersion !== 'all'
+    && jobVersionsLoaded
+    && !assessmentVersionOptions.includes(selectedAssessmentVersion)
       ? 'all'
-      : selectedAssessmentVersion !== 'all'
-        && jobVersionsLoaded
-        && !assessmentVersionOptions.includes(selectedAssessmentVersion)
-        ? 'all'
-        : selectedAssessmentVersion;
+      : selectedAssessmentVersion;
 
   /** The Assessment Version scope, on the same rule as the job version's: a
    *  choice only where the scope holds more than one revision. A single
    *  revision made "All Assessment Versions" and "Assessment V1" the same set.
    *  See `showsJobVersionSelect`. */
-  const showsAssessmentVersionSelect = !isPinnedToJobVersion && assessmentVersionOptions.length > 1;
+  const showsAssessmentVersionSelect = assessmentVersionOptions.length > 1;
 
   /** The assessments whose results the current selection covers. */
   const scopedAssessmentIds = useMemo(() => {
@@ -778,7 +765,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // Persist the list's view state + scroll so returning from a candidate's
   // details lands the recruiter exactly where they left off. Keyed per
   // assessment so different assessments keep independent filters/scroll.
-  const persistKey = `assessment-results:${assessmentId}`;
+  /* Its own snapshot when embedded: the tab and the full route are two places
+     the same assessment's results are read, each inside a different scroll
+     container, so sharing one key would have the tab restore the route's scroll
+     offset into a page that is nothing like it. */
+  const persistKey = `assessment-results:${assessmentId}${embedded ? ':embedded' : ''}`;
   const rootRef = useScrollRestoration<HTMLDivElement>(persistKey, !isLoading, [pageView]);
   useListStatePersistence(
     persistKey,
@@ -793,9 +784,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       if (!namesJobVersionScope && (s.selectedJobVersion === 'all' || typeof s.selectedJobVersion === 'number')) {
         setSelectedJobVersion(s.selectedJobVersion);
       }
-      /* Restored unconditionally: no link names an assessment version, and a
-         restored one the scope cannot honour already reads as All. */
-      if (s.selectedAssessmentVersion === 'all' || typeof s.selectedAssessmentVersion === 'number') {
+      /* And not when the link named an assessment version either, for exactly
+         the same reason: the Results icon has just asked for one revision — or
+         the Job List row for all of them — and the last visit's selection would
+         answer a different question. */
+      if (!namesAssessmentVersionScope && (s.selectedAssessmentVersion === 'all' || typeof s.selectedAssessmentVersion === 'number')) {
         setSelectedAssessmentVersion(s.selectedAssessmentVersion);
       }
       if (typeof s.statusFilter === 'string') setStatusFilter(s.statusFilter as typeof statusFilter);
@@ -1593,13 +1586,22 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const stickyHeaderClass = 'bg-slate-50';
 
   return (
-    <div ref={rootRef} className="flex-1 overflow-x-clip bg-slate-50">
-      <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+    /* The page frame — the app's standard padded white card on the results
+       ROUTE, and nothing at all when embedded, where the host has already drawn
+       one around this view. The nesting is kept either way so the content tree
+       below is the one tree, never a second copy written for the tab. */
+    <div ref={rootRef} className={embedded ? undefined : 'flex-1 overflow-x-clip bg-slate-50'}>
+      <div className={embedded ? undefined : 'mx-auto w-full max-w-[1400px]'}>
+        <div className={embedded ? undefined : 'p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl'}>
           {/* Previous / Next assessment navigation rides inside the breadcrumb
               bar, as on job-details, so users can step through assessments
               without going back to the list — and without it scrolling away
-              from the pinned crumb. */}
+              from the pinned crumb.
+
+              Both are the HOST's when embedded: the details page has its own
+              breadcrumb and its own pager over the same records, and a second
+              pair inside its card would step two different ways at once. */}
+          {!embedded && (
           <PageBreadcrumb
             className="mb-4 md:mb-6"
             items={[
@@ -1617,6 +1619,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               />
             }
           />
+          )}
       {/* Header */}
       <div className="mb-4 sm:mb-6">
         <div>
@@ -1627,7 +1630,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   so the job — not the assessment the recruiter arrived through —
                   is what names it. The assessment itself stays on the
                   breadcrumb, and the two version scopes live with the search
-                  field below, beside the filters they belong with. */}
+                  field below, beside the filters they belong with.
+
+                  Dropped when embedded: the host page's own header already
+                  names this job, with the same badge, directly above the tab. */}
+              {!embedded && (
               <div className="flex items-center gap-2 mb-1 sm:mb-2 flex-wrap">
                 {jdShortId && (
                   /* The app's one Job ID badge — see JobIdBadge. */
@@ -1637,6 +1644,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   {jdTitle || assessmentTitle}
                 </h1>
               </div>
+              )}
               <p className="text-xs sm:text-sm text-gray-600 flex items-center gap-1.5 flex-wrap">
                 {/* The assessment the page was opened on, with its own version
                     — named only while the selection is that one assessment,
@@ -1810,12 +1818,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             </div>
 
             {/* The two version scopes — each rendered only where it is a choice
-                the recruiter actually has. See `showsJobVersionSelect`: a page
-                pinned to one job version, and the individual-assessment view,
-                both have nothing to choose, so neither control appears and the
-                search field takes the whole row.
+                the recruiter actually has. See `showsJobVersionSelect`: the
+                individual-assessment view has nothing to choose, so neither
+                control appears and the search field takes the whole row.
 
-                A page opened for the JOB keeps both, fully selectable. */}
+                Every other arrival keeps both, fully selectable, whichever
+                Results button was clicked — the link decides what they open on,
+                not whether they are there. */}
             {(showsJobVersionSelect || showsAssessmentVersionSelect) && (
               <div className="flex items-center gap-2 sm:gap-3 w-full md:w-auto md:flex-shrink-0">
                 {/* Job Version scope.

@@ -4,7 +4,7 @@ import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Plus, Clock, Calendar, Users, CheckCircle, FileText, ArrowDown, ArrowRight, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, type Dispatch, type SetStateAction } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { TRACKER_DIALOG_PANEL_CLASS, TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
 import { createPortal } from 'react-dom';
@@ -38,6 +38,7 @@ import AssessmentInviteTable, {
   inviteStatusBucket,
 } from '@/components/assessments/AssessmentInviteTable';
 import ListToolbar from '@/components/ui/list-toolbar';
+import ListFilterPanel from '@/components/ui/list-filter-panel';
 import { Skeleton } from '@/components/ui/skeleton';
 import ListCountBadge from '@/components/ui/list-count-badge';
 /* The two shared empty states. ListEmptyState covers a LIST in its two
@@ -198,9 +199,115 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
 const jobLineageKey = (a: { jd_short_id?: string; jd_id?: string; id: string }) =>
   a.jd_short_id || a.jd_id || `__unlinked__:${a.id}`;
 
+/**
+ * Counts the completed candidates of the assessments it is handed, and reports
+ * them back — one request per assessment, from the endpoint that reports on the
+ * candidate records themselves (`/assessments/{id}/results` with `page_size: 1`:
+ * the summary is what is wanted, not the rows).
+ *
+ * A component rather than an effect inside the page, because the page returns
+ * early (Creation, Results, Details) above every derivation these ids come
+ * from, so an effect there would be a hook after a conditional return. It
+ * renders nothing; it is mounted by the Job List, which is the one surface
+ * these figures are drawn on, so no other tab pays for them.
+ *
+ * `ids` arrives already narrowed to what the page does not know yet. The
+ * in-flight set is this mount's own: an id is released again when its request
+ * fails, so a failure retries rather than caching itself as "no completed
+ * candidates", and the page remounts this loader (by `key`) when it wants
+ * everything recounted.
+ */
+function JobCompletedCandidateCounts({
+  ids,
+  onCounted,
+}: {
+  ids: string[];
+  /* The page's own setter, passed as-is because React keeps it stable — an
+     inline callback would be a new dependency on every render. */
+  onCounted: Dispatch<SetStateAction<Record<string, number>>>;
+}) {
+  const requestedRef = useRef<Set<string>>(new Set());
+  /* One dependency that changes exactly when there is new work, rather than on
+     every render that mints a new array. */
+  const idsKey = ids.join(',');
+
+  useEffect(() => {
+    const pending = (idsKey ? idsKey.split(',') : []).filter((id) => !requestedRef.current.has(id));
+    if (pending.length === 0) return;
+    for (const id of pending) requestedRef.current.add(id);
+    /* In small batches rather than all at once: a page of jobs can hold a few
+       dozen assessments and the list is already fetching beside this. */
+    const CONCURRENCY = 6;
+    void (async () => {
+      for (let start = 0; start < pending.length; start += CONCURRENCY) {
+        const batch = pending.slice(start, start + CONCURRENCY);
+        const counted = await Promise.all(
+          batch.map(async (id) => {
+            try {
+              const response = await assessmentService.listResults(id, { page: 1, page_size: 1 });
+              return [id, response.completed_count ?? 0] as const;
+            } catch (error) {
+              /* One assessment failing must not stop the others, and must not
+                 be remembered as a zero — the row keeps the listed figure and
+                 the id is released, so paging to another set of jobs and back,
+                 or a refresh, asks again rather than being told no. */
+              console.log('[TalentFlow] Failed to count completed candidates for an assessment:', error);
+              requestedRef.current.delete(id);
+              return null;
+            }
+          }),
+        );
+        const landed = counted.filter(Boolean) as (readonly [string, number])[];
+        if (landed.length > 0) {
+          onCounted((previous) => ({ ...previous, ...Object.fromEntries(landed) }));
+        }
+      }
+    })();
+  }, [idsKey, onCounted]);
+
+  return null;
+}
+
 const INVITATIONS_PAGE_SIZE = 10;
 /** Batch size when pulling every assessment for a browser-side filter. */
 const FULL_SET_BATCH_SIZE = 100;
+/**
+ * Page size for the cross-job fan-outs (the Candidate Results and Invitation
+ * Status tabs). Unchanged from the single fixed page they used to ask for, so
+ * an assessment under this size still costs exactly one request — what is new
+ * is that a bigger one is now followed to the end rather than truncated.
+ */
+const CROSS_JOB_FETCH_SIZE = 1000;
+
+/**
+ * Every page of a paged assessment endpoint, merged.
+ *
+ * `listAllAssessments` does this for the assessment LIST; this is the same rule
+ * for the per-assessment fan-outs beneath it, which asked for one fixed page
+ * and dropped whatever did not fit — the candidates of a heavily-invited
+ * assessment, silently, with the tab's counts short by the same number.
+ *
+ * Stops on a short page, on reaching the reported total, and at a hard cap so a
+ * server that ignores `page` cannot loop forever — the three guards
+ * `listAllAssessments` already uses.
+ */
+async function collectAllPages<T>(
+  fetchPage: (page: number, pageSize: number) => Promise<{ items?: T[]; total?: number }>,
+  pageSize: number = CROSS_JOB_FETCH_SIZE,
+): Promise<T[]> {
+  const collected: T[] = [];
+  let page = 1;
+  for (;;) {
+    const response = await fetchPage(page, pageSize);
+    const items = response.items || [];
+    collected.push(...items);
+    const total = response.total ?? collected.length;
+    if (items.length < pageSize || collected.length >= total) break;
+    page++;
+    if (page > 50) break;
+  }
+  return collected;
+}
 /** How many versions one assessment lineage may hold. Duplicate mints the
  *  next sequential version until the lineage sits at this many, then the
  *  action reports the cap rather than creating another. */
@@ -395,6 +502,25 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    * property of the state here, not only of the radio group in the markup. */
   const [selectedAssessmentVersionByJob, setSelectedAssessmentVersionByJob] =
     useState<Record<string, string>>({});
+  /**
+   * Which JOB VERSIONS have their assessment table open inside that panel,
+   * per JOB.
+   *
+   * Held here rather than inside `AssessmentVersionHistoryPanel` because the
+   * panel does not outlive the reading: opening an assessment version from it
+   * navigates to that assessment's own page, and the panel is unmounted with
+   * the whole list. Owning the set here is what lets it be persisted beside
+   * `openVersionsFor` and restored on the way back, so Back returns the
+   * recruiter to Job → V2 expanded rather than to a collapsed table they have
+   * to walk down again.
+   *
+   * Keyed by `jd_id` for the same reason as `selectedAssessmentVersionByJob`
+   * beside it: one job's reading position is not another's, and the answer has
+   * to survive closing the panel and opening it again. Version NUMBERS, which
+   * is what the panel groups by.
+   */
+  const [expandedJobVersionsByJob, setExpandedJobVersionsByJob] =
+    useState<Record<string, number[]>>({});
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   // The open ⋮ dropdown. Only one exists at a time (grid and list views never
   // render together), so a single ref covers both.
@@ -607,6 +733,30 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const jdLineage = useJobVersionLineage();
   const [assessmentLineages, setAssessmentLineages] = useState<Record<string, AssessmentVersionRow[]>>({});
   const [loadingLineages, setLoadingLineages] = useState<Record<string, boolean>>({});
+
+  /**
+   * Completed candidates per ASSESSMENT, counted from the candidate records
+   * themselves — `completed_count` off `/assessments/{id}/results`, which is
+   * the tally that endpoint takes over the attempts it is reporting on, and
+   * the same figure the Results page's own Completed card shows.
+   *
+   * Read INSTEAD OF the counter carried on the assessment list row, which is
+   * what the Job List's Completed metric used to be summed from. Two different
+   * numbers were being called the same thing: a recruiter who opened a job's
+   * results and counted the completed candidates there did not get the number
+   * the list printed beside that job.
+   *
+   * Keyed by assessment id — never by job or by version — so the job-wide
+   * total is a sum over the job's assessments and a value is reusable by every
+   * surface that asks about the same assessment. Filled in by
+   * `JobCompletedCandidateCounts`, which the Job List mounts and which only
+   * ever asks about the jobs on screen.
+   */
+  const [completedCandidatesByAssessment, setCompletedCandidatesByAssessment] = useState<Record<string, number>>({});
+  /* Bumped to recount from scratch. It is the loader's `key`, so a bump
+     remounts it and every count is asked for again — see `reloadAssessments`,
+     where a refresh is exactly the moment a candidate may have finished. */
+  const [completedCandidatesGeneration, setCompletedCandidatesGeneration] = useState(0);
 
   /**
    * Which JD VERSIONS already have an assessment, straight from the backend
@@ -1240,6 +1390,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   // container when the two-step view flips (cards overview vs. full list —
   // its height changes drastically).
   const rootRef = useScrollRestoration('assessments', !isLoading, [pageView]);
+  /**
+   * The JOB whose card the recruiter is to be put back in front of, set by the
+   * restore below and consumed once by the effect further down.
+   *
+   * A ref, not state: it is a one-shot instruction for this mount, and nothing
+   * renders from it. Null the rest of the time, which is also how the effect
+   * knows a fresh visit from a return — a fresh visit scrolls nowhere.
+   */
+  const restoreScrollTargetRef = useRef<string | null>(null);
   useListStatePersistence(
     'assessments',
     {
@@ -1262,6 +1421,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
          leaves the page and comes back, and the point of returning is to see
          that row now carrying the assessment - which a collapsed panel hides. */
       openVersionsFor,
+      /* And how far INTO that panel the recruiter had read: which job versions
+         they had expanded, and which assessment version they were on. Opening
+         an assessment version leaves this page, so without these three saved
+         together Back reopened the job row onto a collapsed table — the
+         recruiter's Job → V2 → Assessment V3 position gone, to be walked down
+         again. Keyed per job, so several jobs keep their own place. */
+      expandedJobVersionsByJob,
+      selectedAssessmentVersionByJob,
     },
     (s) => {
       /* An arrival that NAMED its tab (`initialListTab`, from `?tab=`) beats
@@ -1275,7 +1442,36 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       if (!initialListTab) {
         if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
         if (typeof s.activeTab === 'string') setActiveTab(s.activeTab as typeof activeTab);
-        if (typeof s.openVersionsFor === 'string') setOpenVersionsFor(s.openVersionsFor);
+        if (typeof s.openVersionsFor === 'string') {
+          setOpenVersionsFor(s.openVersionsFor);
+          /* Restoring the open card is only half of putting the recruiter
+             back: the card may be anywhere down a long list. Note it here,
+             where we know this mount is a RETURN rather than a fresh visit,
+             and let the effect below scroll to it once it has actually
+             rendered and expanded. */
+          restoreScrollTargetRef.current = s.openVersionsFor;
+        }
+        /* The reading position inside that panel, restored with it. Both are
+           read defensively down to their element types: a snapshot is
+           whatever was in sessionStorage, and a malformed one must not put a
+           string into a set of version numbers the panel compares with
+           `has`. */
+        if (s.expandedJobVersionsByJob && typeof s.expandedJobVersionsByJob === 'object') {
+          const restored: Record<string, number[]> = {};
+          for (const [jdId, versions] of Object.entries(s.expandedJobVersionsByJob)) {
+            if (Array.isArray(versions)) {
+              restored[jdId] = versions.filter((version): version is number => typeof version === 'number');
+            }
+          }
+          setExpandedJobVersionsByJob(restored);
+        }
+        if (s.selectedAssessmentVersionByJob && typeof s.selectedAssessmentVersionByJob === 'object') {
+          const restored: Record<string, string> = {};
+          for (const [jdId, assessmentId] of Object.entries(s.selectedAssessmentVersionByJob)) {
+            if (typeof assessmentId === 'string') restored[jdId] = assessmentId;
+          }
+          setSelectedAssessmentVersionByJob(restored);
+        }
         if (typeof s.assessmentCurrentPage === 'number') setAssessmentCurrentPage(s.assessmentCurrentPage);
         if (typeof s.assessmentSearch === 'string') assessmentListSearch.setQuery(s.assessmentSearch);
         assessmentListSearch.setFilters({
@@ -1331,6 +1527,107 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     jdLineage.ensureLoaded(row.jd_id, row.jd_id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openVersionsFor, apiAssessments]);
+
+  /**
+   * Put the recruiter back in front of the card they left from.
+   *
+   * The snapshot already restores WHICH job row is open, which job versions
+   * are expanded inside it and which assessment version was being read - but
+   * that card can be the ninth of ten on the page, so the restored state was
+   * landing off-screen and the recruiter had to go looking for it. This is the
+   * other half: once the card is really on screen, scroll to it.
+   *
+   * AFTER the restore, never racing it. The panel's rows arrive from two
+   * fetches (`loadAssessmentLineage` and the JD lineage), so the element to
+   * scroll to does not exist on the first paint - and a scroll aimed at a card
+   * that is still a spinner lands on the wrong offset and stays there. So this
+   * polls for the target and scrolls only when it finds one, which is also
+   * what makes it safe: no target, no scroll, and the page behaves exactly as
+   * it did before.
+   *
+   * Three targets, finest first, because "where I was" gets more specific the
+   * further in the reader had got:
+   *   1. the picked ASSESSMENT version's row,
+   *   2. the expanded JOB VERSION's row,
+   *   3. the job card itself.
+   * Each is found through a marker the panel sets from the same value it
+   * renders the highlight from, so the row scrolled to is the row that looks
+   * selected. The lookup is scoped INSIDE the card, so a job's markers can
+   * never be answered by another job's rows.
+   *
+   * Starts after `useScrollRestoration`'s own saved-offset restore has had its
+   * last go (300ms), rather than fighting it: that restore usually lands close
+   * already, so this refines the position instead of replacing it - and if the
+   * target never appears, the offset it left in place is still the right
+   * fallback.
+   */
+  useEffect(() => {
+    if (!restoreScrollTargetRef.current || pageView !== 'list' || isLoading) return;
+    const jobId = restoreScrollTargetRef.current;
+
+    /* Long enough for the panel's two fetches on a cold cache, short enough
+       that a job whose lineage never loads is not still lurching under a
+       recruiter who has started reading something else. */
+    const DEADLINE_MS = 3000;
+    const RETRY_MS = 120;
+    const startedAt = Date.now();
+    let timer = 0;
+
+    /* `center` for a row, which is small enough to sit in the middle of the
+       viewport with its neighbours around it for context; `start` for the job
+       card, which is taller than the viewport once its panel is open and would
+       be centred by its middle, pushing its heading off the top. */
+    const scrollTo = (element: Element, block: ScrollLogicalPosition) => {
+      element.scrollIntoView({ behavior: 'smooth', block });
+      /* One shot per mount. Cleared before the scroll settles on purpose: the
+         recruiter may scroll away mid-animation, and a second attempt would
+         drag them back. */
+      restoreScrollTargetRef.current = null;
+    };
+
+    const attempt = () => {
+      /* `CSS.escape` because the id goes into a selector; ids here are UUIDs,
+         but a selector built from data is a selector that has to be escaped. */
+      const card = document.querySelector(
+        `[data-tf-job-row="${typeof CSS !== 'undefined' && CSS.escape ? CSS.escape(jobId) : jobId}"]`,
+      );
+      const precise =
+        card?.querySelector('[data-tf-assessment-selected="true"]')
+        ?? card?.querySelector('[data-tf-job-version-open="true"]');
+      if (precise) {
+        scrollTo(precise, 'center');
+        return;
+      }
+      /* Nothing finer to wait for. A recruiter who opened the job's panel but
+         never expanded a version inside it has the CARD as their position, so
+         waiting out the deadline for a row that is never coming would just
+         leave them looking at the wrong part of the list for three seconds. */
+      const jdId = card?.getAttribute('data-tf-job-jd');
+      const awaitsExpandedVersion = !!jdId && (expandedJobVersionsByJob[jdId]?.length ?? 0) > 0;
+      if (card && !awaitsExpandedVersion) {
+        scrollTo(card, 'start');
+        return;
+      }
+      if (Date.now() - startedAt >= DEADLINE_MS) {
+        /* Out of time. The card alone is still better than leaving the
+           recruiter wherever the saved offset put them; nothing at all, and we
+           simply stop. */
+        if (card) scrollTo(card, 'start');
+        else restoreScrollTargetRef.current = null;
+        return;
+      }
+      timer = window.setTimeout(attempt, RETRY_MS);
+    };
+
+    timer = window.setTimeout(attempt, 350);
+    return () => window.clearTimeout(timer);
+    /* `openVersionsFor` and `activeTab` are listed although the body does not
+       read them: they are what a restore CHANGES, so re-running on them is how
+       a snapshot that lands after this effect's first pass gets one. The ref
+       guard at the top makes every re-run after the scroll free. Deliberately
+       NOT listed: anything that changes as the panel's fetches land, which
+       would restart the wait each time the thing being waited for got closer. */
+  }, [pageView, isLoading, openVersionsFor, activeTab, expandedJobVersionsByJob]);
 
   useEffect(() => {
     if (listScrollRequest === 0 || pageView !== 'list') return;
@@ -2211,8 +2508,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       const results = await Promise.all(
         items.map(async (a: any) => {
           try {
-            const r = await assessmentService.listResults(a.id, { status_filter: 'completed', page_size: 1000 });
-            const attempts = r.items || [];
+            const attempts = await collectAllPages((page, page_size) =>
+              assessmentService.listResults(a.id, { status_filter: 'completed', page, page_size }),
+            );
             return attempts.map((attempt): CandidateResultRow => ({
               ...attempt,
               _assessment_id: a.id,
@@ -2335,8 +2633,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       const perAssessment = await Promise.all(
         items.map(async (a: any) => {
           try {
-            const resp = await assessmentService.listInvitations(a.id, { page_size: 1000 });
-            return (resp.items || []).map((inv: any) => ({
+            const invitations = await collectAllPages((page, page_size) =>
+              assessmentService.listInvitations(a.id, { page, page_size }),
+            );
+            return invitations.map((inv: any) => ({
               ...inv,
               _assessment_id: a.id,
               _assessment_short_id: a.short_id,
@@ -2881,6 +3181,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   const reloadAssessments = async () => {
     try {
+      /* The Completed metric is counted from candidate records, so a reload has
+         to recount rather than redraw what it counted last time: a candidate
+         finishing an assessment is exactly the change this refresh is for, and
+         it moves no field on the assessment rows themselves. Dropping the cache
+         and remounting the loader is what makes it ask again. */
+      setCompletedCandidatesByAssessment({});
+      setCompletedCandidatesGeneration((generation) => generation + 1);
       await loadAssessmentsPage(assessmentCurrentPage);
       // Also reload stats and quota
       await Promise.all([reloadStats(), reloadQuota()]);
@@ -3759,6 +4066,95 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const jobRowTotals = buildJobRowTotals(filteredAssessments);
 
   /**
+   * JD ROW id -> the lineage key of the job that row belongs to.
+   *
+   * Every job version is its own JD row, and only the assessments carry both
+   * ends of that join (`jd_id` names the version, `jd_short_id` names the
+   * job), so this is where a bare version id is turned back into its job.
+   */
+  const lineageKeyByJdId = new Map<string, string>();
+  for (const assessment of assessments) {
+    if (assessment.jd_id) lineageKeyByJdId.set(assessment.jd_id, lineageKeyOf(assessment));
+  }
+
+  /**
+   * EVERY assessment of a job, whichever job version and whichever assessment
+   * version it is - keyed by job, holding each assessment's id and the row's
+   * own completed counter as the fallback figure.
+   *
+   * Built over `assessments` (the page's WHOLE loaded set, before the tab and
+   * the browser-side filters narrow it) rather than over `filteredAssessments`,
+   * because "how many candidates finished this job's assessments" is a fact
+   * about the job and not about what the list is currently showing. Summed
+   * from the filtered set instead, the Completed metric fell to the selected
+   * slice: the Draft tab counted the drafts' candidates, a Created-by filter
+   * counted one author's, and a job whose three job versions each hold their
+   * own assessment versions reported whichever of them survived the filter.
+   *
+   * Unioned with the fetched lineages, which are the one source that also
+   * covers assessments the list never returned - the same second reading
+   * `getJobInvitationsSent` takes for the invitations beside this figure. Those
+   * rows are raw and carry no `jd_short_id`, so they are attributed through the
+   * JD row id they were fetched under, then through any row that resolves;
+   * rows belonging to a job this page has not listed are left out rather than
+   * guessed into a bucket.
+   */
+  const jobAssessmentIndex = (() => {
+    const index = new Map<string, Map<string, number>>();
+    const add = (key: string | undefined, id: string | undefined, completed: number) => {
+      if (!key || !id) return;
+      const entry = index.get(key) ?? new Map<string, number>();
+      /* The larger of the two readings of one assessment: the list row and the
+         lineage row are the same record fetched twice, and a reply that came
+         back before a candidate finished must not lower the other. */
+      entry.set(id, Math.max(entry.get(id) ?? 0, completed));
+      index.set(key, entry);
+    };
+    for (const assessment of assessments) {
+      add(lineageKeyOf(assessment), assessment.id, assessment.completed_count ?? 0);
+    }
+    for (const [fetchedUnderJdId, rows] of Object.entries(assessmentLineages)) {
+      const lineageRows = rows ?? [];
+      const key =
+        lineageKeyByJdId.get(fetchedUnderJdId)
+        ?? lineageRows.map((row) => (row.jd_id ? lineageKeyByJdId.get(row.jd_id) : undefined)).find(Boolean);
+      for (const row of lineageRows) add(key, row.id, row.completed_count ?? 0);
+    }
+    return index;
+  })();
+
+  /** Every assessment id of this job, across all of its versions. */
+  const getJobAssessmentIds = (assessment: { id: string; jd_id?: string; jd_short_id?: string }) =>
+    [...(jobAssessmentIndex.get(lineageKeyOf(assessment))?.keys() ?? [])];
+
+  /**
+   * THE JOB'S COMPLETED CANDIDATES: JD -> every job version -> every
+   * assessment version -> the candidates who finished.
+   *
+   * Summed over the job's whole assessment set (see `jobAssessmentIndex`), one
+   * term per assessment, each term counted from that assessment's own
+   * candidate records (`completedCandidatesByAssessment`) and falling back to
+   * the row's `completed_count` until its count has landed. So the figure is
+   * never blank while it resolves, and never narrower than the job.
+   *
+   * Summing per assessment - rather than asking one endpoint for a job-wide
+   * number - is what makes it correct across the hierarchy: there is no
+   * job-scoped results endpoint, every other job-wide reading on this page
+   * (Track, the Invitation Status tab, the Candidate Results tab) is built the
+   * same way, and a candidate is counted under the assessment they actually
+   * sat, so no version can count another's.
+   */
+  const getJobCompletedCandidates = (assessment: { id: string; jd_id?: string; jd_short_id?: string }) => {
+    const entries = jobAssessmentIndex.get(lineageKeyOf(assessment));
+    if (!entries) return 0;
+    let total = 0;
+    for (const [assessmentId, listedCount] of entries) {
+      total += completedCandidatesByAssessment[assessmentId] ?? listedCount;
+    }
+    return total;
+  };
+
+  /**
    * How many versions this job has.
    *
    * The fetched lineage is the authority and is what the version panel lists,
@@ -3842,7 +4238,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       { key: 'job-versions', icon: Layers, iconClass: 'text-brand-blue', value: getJobVersionCount(assessment), label: 'Job Versions' },
       { key: 'assessments', icon: ClipboardList, iconClass: 'text-brand-cyan', value: totals.assessments, label: 'Assessments' },
       { key: 'invitations', icon: Send, iconClass: 'text-brand-orange', value: totals.invitations, label: 'Invitations Sent' },
-      { key: 'completed', icon: ClipboardCheck, iconClass: 'text-menu-icon-activate', value: totals.completed, label: 'Completed' },
+      /* Completed is the one metric here that is NOT read from `totals`. The
+         other three describe the assessments this surface is listing, which is
+         what the bucketing is for; Completed describes the job's candidates,
+         across every job version and every assessment version of it, so it is
+         counted over the whole hierarchy instead - see
+         `getJobCompletedCandidates`. */
+      { key: 'completed', icon: ClipboardCheck, iconClass: 'text-menu-icon-activate', value: getJobCompletedCandidates(assessment), label: 'Completed' },
     ];
   };
 
@@ -3943,6 +4345,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   ) => (
     <div
       key={assessment.id}
+      /* The anchor the return-from-a-detail-page scroll aims at — see
+         `restoreScrollTargetRef`. Only on the Job List: the Send Invite picker
+         renders these same jobs inside a dialog, and an attribute on both
+         would let a document-wide lookup find the dialog's copy instead of the
+         list's. No attribute there, nothing to find. */
+      data-tf-job-row={selectMode ? undefined : assessment.id}
+      /* The job behind it, so that scroll can ask whether this job HAS an
+         expanded version worth waiting for without reaching back into the
+         page's state and re-running on every fetch that lands. */
+      data-tf-job-jd={selectMode ? undefined : assessment.jd_id}
       /* The row is one JOB. On the Job List, clicking it opens
          that job's version history in place - the same thing the
          View Versions button beside it does, through the same
@@ -4186,13 +4598,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 onClick={(e) => {
                   e.stopPropagation();
                   if (!hasBeenShared) return;
-                  /* The JOB's results: every job version of it, combined. Named
-                     explicitly rather than left to the results page's default,
-                     because that page restores the last scope the recruiter
-                     left it on — so arriving from the job row could otherwise
-                     land on whichever single version was selected last time.
-                     The row is the job; its Result must read as the job. */
-                  router.push(`/recruitment/assessments/${assessment.id}/results?job_version_id=all`);
+                  /* The JOB's results: every job version of it and every
+                     assessment revision within them, combined. BOTH scopes are
+                     named explicitly rather than left to the results page's
+                     default, because that page restores the last scope the
+                     recruiter left it on — so arriving from the job row could
+                     otherwise land on whichever single version was selected
+                     last time. The row is the job; its Result must read as the
+                     job. */
+                  router.push(`/recruitment/assessments/${assessment.id}/results?job_version_id=all&assessment_version=all`);
                 }}
                 icon={<BarChart className="w-3.5 h-3.5" />}
                 aria-label={reason}
@@ -4253,6 +4667,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                panel still LISTS the versions, which is what
                View Versions is reached for. */
             onRowClick={selectMode ? undefined : (versionId) => {
+              /* Opening a version is also a reading position, so record it as
+                 the job's pick before leaving. The click navigates away and
+                 takes this whole list with it; on the way back the panel is
+                 rebuilt from what was saved, and without this the table would
+                 reopen highlighting the row's own representative assessment
+                 rather than the version the recruiter actually went into.
+                 The radio and this agree deliberately — they are two ways of
+                 saying "this is the one I am on". */
+              setSelectedAssessmentVersionByJob((current) => ({ ...current, [jdId]: versionId }));
               const raw = displayedRows.find((v) => v.id === versionId);
               openAssessment(raw ? mapAssessmentFromApi(raw, 0) : { id: versionId });
             }}
@@ -4278,6 +4701,37 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               selectMode ? 'send-invite-assessment-version' : 'job-list-assessment-version'
             }
             activeSelection={activeSelection}
+            /* Expansion, held by this page rather than by the panel, so the
+               open job version survives leaving for an assessment page and
+               coming back — see `expandedJobVersionsByJob`.
+
+               Only on the Job List. The Send Invite picker passes neither half
+               and keeps the panel's own set: it lives in a dialog, the dialog
+               closing IS the end of that reading, and a version opened while
+               choosing whom to invite has no business reopening on the list
+               behind it. */
+            /* The job version's eye sits AFTER View Assessment here, not
+               before it. On this surface the row's point is the assessment
+               built against the version, so the version's own eye reads as the
+               aside it is rather than as the column's first action.
+               Only here: the Send Invite picker below keeps the default order,
+               and so do the AI Interview panels. */
+            viewJobVersionPlacement={selectMode ? 'leading' : 'trailing'}
+            expandedJobVersions={selectMode ? undefined : expandedJobVersionsByJob[jdId] ?? []}
+            onToggleJobVersion={
+              selectMode
+                ? undefined
+                : (jobVersion) =>
+                    setExpandedJobVersionsByJob((current) => {
+                      const open = current[jdId] ?? [];
+                      return {
+                        ...current,
+                        [jdId]: open.includes(jobVersion)
+                          ? open.filter((version) => version !== jobVersion)
+                          : [...open, jobVersion],
+                      };
+                    })
+            }
             /* The eye on an assessment row - the page's own preview modal,
                against the assessment that row IS. Same component the list's
                Preview action opens, so there is one assessment-details view
@@ -4411,6 +4865,26 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     (assessmentCurrentPage - 1) * assessmentItemsPerPage,
     assessmentCurrentPage * assessmentItemsPerPage
   );
+
+  /**
+   * The assessments whose completed-candidate count the Job List still needs,
+   * for the jobs ON SCREEN.
+   *
+   * Handed to `JobCompletedCandidateCounts` below, which is where the requests
+   * are made: this component returns early (Creation, Results, Details) above
+   * every one of the derivations these ids come from, so the fetch cannot be
+   * an effect of its own here - it would be a hook after a conditional return.
+   *
+   * Scoped to the visible page of the list, which is the only place these
+   * figures are drawn, and already filtered to what is not known yet, so a job
+   * paged back to costs nothing. A job's assessments are few - the create flow
+   * caps versions per lineage in single digits - so a page of ten jobs is a
+   * couple of dozen small requests, fewer than the Candidate Results tab
+   * beside it already makes.
+   */
+  const jobCompletedCountsToFetch = [
+    ...new Set(visibleAssessments.flatMap(getJobAssessmentIds)),
+  ].filter((id) => completedCandidatesByAssessment[id] === undefined);
   const activeTabOwnsListContent =
     isFlatAssessmentTab(activeTab) ||
     ['completed-candidates', 'audit', 'consent', 'invitation-status', 'settings'].includes(activeTab);
@@ -4855,18 +5329,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         onClick={(e) => {
           e.stopPropagation();
           if (assessment.status === 'Draft') return;
-          /* Scoped to the JOB VERSION this row sits under.
+          /* Opened on the row's own coordinates: the JOB VERSION it sits under
+             AND the ASSESSMENT VERSION it is.
              These actions are the Assessment Versions table's column (its only
-             caller), so every row here belongs to one job version, and the JD
-             ROW the assessment points at names that version exactly — the same
-             identifier the rest of the flow joins on. Results opened from here
-             must therefore report that version's candidates alone; it used to
-             open unscoped, which let the page default to All Versions and show
-             every version's candidates under one version's button.
-             The job-wide reading is still one click away — the Job List row's
-             own Result button, which names `all`. */
-          const scope = assessment.jd_id ? encodeURIComponent(assessment.jd_id) : 'all';
-          router.push(`/recruitment/assessments/${assessment.id}/results?job_version_id=${scope}`);
+             caller), so every row here is one revision of one assessment under
+             one job version. The JD ROW the assessment points at names that job
+             version exactly — the same identifier the rest of the flow joins on
+             — and `version` is the revision the row's own badge prints. Naming
+             only the first let a job version holding several revisions report
+             all of them under one revision's button.
+             The page it lands on is the SAME page the Job List row's Result
+             opens, with the same two selectors: this names where they start,
+             and the job-wide reading stays one widening away. */
+          const jobScope = assessment.jd_id ? encodeURIComponent(assessment.jd_id) : 'all';
+          const versionScope = typeof assessment.version === 'number' ? assessment.version : 'all';
+          router.push(`/recruitment/assessments/${assessment.id}/results?job_version_id=${jobScope}&assessment_version=${versionScope}`);
         }}
         disabled={!hasBeenShared}
         aria-label={
@@ -5213,8 +5690,23 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               />
 
               {showAssessmentFilters && (
-                <div className="mt-3 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/30 p-3 sm:p-4">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                /* The shared panel — see `ListFilterPanel`. This tab is where
+                   its shell came from, so the markup below is unchanged; what
+                   moved out is the wrapper, the grid and the footer rule, so
+                   the assessment tabs can open the same object rather than a
+                   copy of it. */
+                <ListFilterPanel
+                  footer={
+                    <Button
+                      // The controls above commit as they change, so Done just closes.
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => setShowAssessmentFilters(false)}
+                    >
+                      Done
+                    </Button>
+                  }
+                >
                     {/* Position — first, because it is the widest cut of the
                         list and the one a recruiter reaches for before
                         narrowing by type or author. Commits on change like
@@ -5292,21 +5784,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
                       />
                     </div>
-                  </div>
-
-                  {/* Panel footer: "Done" applies the selection and reveals the
-                      toolbar Clear — same flow as job-openings. */}
-                  <div className="mt-4 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex items-center justify-end gap-2">
-                    <Button
-                      // The controls above commit as they change, so Done just closes.
-                      variant="secondary"
-                      size="sm"
-                      onClick={() => setShowAssessmentFilters(false)}
-                    >
-                      Done
-                    </Button>
-                  </div>
-                </div>
+                </ListFilterPanel>
               )}
 
               {assessmentListNarrowed && !isLoading && (
@@ -7260,6 +7738,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             : (
               /* List View */
               <div className="space-y-3">
+                {/* Renders nothing — it counts each visible job's completed
+                    candidates from their own records and hands the numbers
+                    back, so the rows' Completed metric reads the whole JD
+                    hierarchy rather than the assessment rows' own counters.
+                    Mounted here because this list is where that metric is
+                    drawn; `key` remounts it when the page wants a recount. */}
+                <JobCompletedCandidateCounts
+                  key={completedCandidatesGeneration}
+                  ids={jobCompletedCountsToFetch}
+                  onCounted={setCompletedCandidatesByAssessment}
+                />
                 {visibleAssessments.map((assessment) => renderJobListRow(assessment))}
               </div>
             )}

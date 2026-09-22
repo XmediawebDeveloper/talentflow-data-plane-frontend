@@ -23,7 +23,7 @@ export default function AssessmentResultsPage() {
   const fromJdId = searchParams.get('jd_id');
   /* Which job version the results open on, named by the link that sent the
      recruiter here.
-     A JD row id scopes the page to that one job version — every job version is
+     A JD row id opens the page on that one job version — every job version is
      its own JD row, so the id names one version exactly. The literal `all` asks
      for the whole job, every version combined. Absent (a deep link, or the
      assessment details view's own Results button) leaves the page on what it
@@ -32,6 +32,12 @@ export default function AssessmentResultsPage() {
      has to be one the JD's own lineage returns, or the page falls back to All
      Versions. */
   const jobVersionScopeParam = searchParams.get('job_version_id');
+  /* And which assessment version, the companion to it: the Assessment Versions
+     table's Results icon names the row's own revision beside the row's job
+     version, so the page opens on that exact pair; the Job List row's Result
+     names `all` for both, which is the job read whole. The page renders the
+     same view for either — these choose where its two selectors start. */
+  const assessmentVersionScopeParam = searchParams.get('assessment_version');
   const canDownloadPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
   const canBatchDownload = isTenantAdmin || hasPermissionCode('assessments:batch_download') || (user?.permissions?.canExport ?? false);
 
@@ -161,6 +167,7 @@ export default function AssessmentResultsPage() {
         jdShortId={jdShortId}
         jdVersion={jdVersion}
         jobVersionScope={jobVersionScopeParam}
+        assessmentVersionScope={assessmentVersionScopeParam}
         canDownloadPDF={canDownloadPDF}
         canBatchDownload={canBatchDownload}
         prevId={prevId}
