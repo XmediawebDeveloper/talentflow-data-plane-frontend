@@ -1182,8 +1182,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                           content row. */}
                       <div className="flex flex-col items-end justify-between gap-2 self-stretch flex-shrink-0">
                       <div className="flex flex-wrap gap-2 items-start justify-end">
-                        {/* Edit Button - icon only (hidden for Disabled JDs) */}
-                        {onEditJob && !['disabled', 'archived'].includes(job.status.toLowerCase()) && (
+                        {/* Edit Button - icon only. Shown on every row for a
+                            consistent action set; the handler governs behavior. */}
+                        {onEditJob && (
                           <Button
                             variant="secondary"
                             onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
@@ -1194,17 +1195,16 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                           </Button>
                         )}
 
-                        {/* View Button - icon only, hide for Draft */}
-                        {job.status.toLowerCase() !== 'draft' && (
-                          <Button
-                            variant="secondary"
-                            onClick={(e) => { e.stopPropagation(); onViewJob(job); }}
-                            className="h-9 w-9 p-0 rounded-md"
-                            aria-label="View" title="View"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </Button>
-                        )}
+                        {/* View Button - icon only. Shown on every row for a
+                            consistent action set. */}
+                        <Button
+                          variant="secondary"
+                          onClick={(e) => { e.stopPropagation(); onViewJob(job); }}
+                          className="h-9 w-9 p-0 rounded-md"
+                          aria-label="View" title="View"
+                        >
+                          <Eye className="w-4 h-4" />
+                        </Button>
 
                         {/* Three-dot Menu */}
                         <div className="relative">
