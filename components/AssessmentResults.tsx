@@ -1722,11 +1722,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           >
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-gray-600 text-xs sm:text-sm mb-1">Completed</div>
-                <div className="text-xl sm:text-2xl text-success tracking-tight">{completedCount}</div>
+                <div className="text-gray-600 text-xs sm:text-sm mb-1">In Progress</div>
+                <div className="text-xl sm:text-2xl text-brand-cyan tracking-tight">{inProgressCount}</div>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-success-line flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-success" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
+                <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 text-brand-cyan" />
               </div>
             </div>
           </button>
@@ -2567,29 +2567,31 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       )}
                       {isColumnEnabled('timeline') && (
                         <td className="px-4 py-4 overflow-hidden text-xs text-gray-500">
-                          <div className="flex min-w-0 items-center gap-3 overflow-hidden" title={getTimelineSummary(candidate)}>
+                          {/* One event per line, in chronological order — the events
+                              read as a timeline rather than a single run-on row. */}
+                          <div className="flex min-w-0 flex-col gap-1 overflow-hidden" title={getTimelineSummary(candidate)}>
                             {candidate.sent_at && (
-                              <div className="inline-flex shrink-0 items-center gap-2">
+                              <div className="flex min-w-0 items-center gap-2">
                                 <Mail className="w-3 h-3 shrink-0 text-brand-blue" />
-                                <span>Sent: {formatTimelineDate(candidate.sent_at)}</span>
+                                <span className="truncate">Sent: {formatTimelineDate(candidate.sent_at)}</span>
                               </div>
                             )}
                             {candidate.started_at && (
-                              <div className="inline-flex shrink-0 items-center gap-2">
+                              <div className="flex min-w-0 items-center gap-2">
                                 <Play className="w-3 h-3 shrink-0 text-brand-orange-deep" />
-                                <span>Started: {formatTimelineDate(candidate.started_at)}</span>
+                                <span className="truncate">Started: {formatTimelineDate(candidate.started_at)}</span>
                               </div>
                             )}
                             {candidate.completed_at && (
-                              <div className="inline-flex shrink-0 items-center gap-2">
+                              <div className="flex min-w-0 items-center gap-2">
                                 <CheckCircle className="w-3 h-3 shrink-0 text-success" />
-                                <span>Completed: {formatTimelineDate(candidate.completed_at)}</span>
+                                <span className="truncate">Completed: {formatTimelineDate(candidate.completed_at)}</span>
                               </div>
                             )}
                             {!candidate.sent_at && !candidate.started_at && !candidate.completed_at && (
-                              <div className="inline-flex shrink-0 items-center gap-2">
+                              <div className="flex min-w-0 items-center gap-2">
                                 <Clock className="w-3 h-3 shrink-0 text-gray-400" />
-                                <span>{candidate.created_at ? `Created: ${formatTimelineDate(candidate.created_at)}` : '-'}</span>
+                                <span className="truncate">{candidate.created_at ? `Created: ${formatTimelineDate(candidate.created_at)}` : '-'}</span>
                               </div>
                             )}
                           </div>
