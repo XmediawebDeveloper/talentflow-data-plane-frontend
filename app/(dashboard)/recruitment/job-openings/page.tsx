@@ -241,10 +241,20 @@ export default function JobOpeningsPage() {
   };
 
   const handleViewJob = (job: Job) => {
-    // Draft JDs go directly to jd-creation with current stage
+    // Draft JDs go directly to jd-creation. No `&stage=` here — `job.creation_stage`
+    // is whatever this LIST last fetched, which goes stale the moment the recruiter
+    // advances the draft's stage in a jd-creation tab/session without this page
+    // re-fetching (its own effect only re-runs on `user?.id` changing, not on every
+    // return visit). jd-creation always does its own fresh `jdService.get(id)` on
+    // load and resumes at THAT record's `creation_stage` when the URL carries none —
+    // see `memoizedEditingJD` in jd-creation/page.tsx, and the confirmed mechanic in
+    // JDCreation.tsx's own comments: "a JD opened with ?stage=create in the link
+    // lands on Step 1" regardless of what extraction the record actually has. Passing
+    // a stale stage here reopened an already-extracted draft back on Step 1, with the
+    // entered data invisible (not lost — just on a step this URL insisted on showing
+    // instead of the one the record was on).
     if (job.status === 'Draft') {
-      const stage = (job as any).creation_stage || 'create';
-      router.push(`/recruitment/jd-creation?id=${job.id}&stage=${stage}`);
+      router.push(`/recruitment/jd-creation?id=${job.id}`);
     } else {
       router.push(`/recruitment/job-details?id=${job.id}`);
     }
@@ -281,10 +291,11 @@ export default function JobOpeningsPage() {
   };
 
   const handleEditJob = async (job: Job) => {
-    // For Draft JDs, open at the stage where they left off
+    // For Draft JDs, open at the stage where they left off. No `&stage=` — see
+    // the same note on handleViewJob above; this list's `job.creation_stage`
+    // can be stale, and jd-creation's own fresh fetch is the source of truth.
     if (job.status === 'Draft') {
-      const stage = job.creation_stage || 'create';
-      router.push(`/recruitment/jd-creation?id=${job.id}&stage=${stage}`);
+      router.push(`/recruitment/jd-creation?id=${job.id}`);
       return;
     }
 
