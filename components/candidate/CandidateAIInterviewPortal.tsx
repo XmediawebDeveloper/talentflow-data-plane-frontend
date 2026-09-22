@@ -332,17 +332,6 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     try { if (typeof window !== 'undefined') window.sessionStorage.removeItem(_screenSegKey); } catch { /* ignore */ }
   };
   const screenStreamRef = useRef<MediaStream | null>(null);
-  // Reused across every captureScreenFrame() attempt instead of being created
-  // fresh each time. A brand-new <video> re-attached to the same live
-  // getDisplayMedia stream forces the OS/browser capture pipeline (PipeWire/
-  // xdg-desktop-portal on Linux) to re-sync its decoder from scratch, and that
-  // resync got progressively slower under repeated create/attach/destroy
-  // churn — the 1st share-bar-check attempt decoded a fresh frame almost
-  // immediately, but every retry after it ate the full ~3.5s frame-wait
-  // budget and returned null (→ "could not verify" shown even though the bar
-  // really was hidden). Keeping one persistent element attached for the life
-  // of the stream keeps the decode pipeline warm so retries stay fast.
-  const captureVideoRef = useRef<HTMLVideoElement | null>(null);
   const screenCheckpointInProgressRef = useRef(false);
   const isFinalizingScreenUploadRef = useRef(false);
   // Audio mixing for screen recording (Bina's TTS tap + candidate mic)
@@ -1624,12 +1613,6 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         }
         screenRecorderRef.current = null;
         screenStreamRef.current = null;
-        // The persistent share-bar-check <video> (captureVideoRef) was bound
-        // to THIS now-dead stream — drop it so the next re-share starts a
-        // fresh element instead of reusing one attached to a stopped track.
-        try { captureVideoRef.current?.pause(); } catch { /* ignore */ }
-        try { captureVideoRef.current?.remove(); } catch { /* ignore */ }
-        captureVideoRef.current = null;
         // Only show the blocking overlay when the interview is actually running
         if (stepRef.current === 'interview') {
           setScreenShareStopped(true);
@@ -1762,36 +1745,24 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     // 2x2px, fixed position) so decoding stays live, and wait for actual
     // NEW decoded frames (requestVideoFrameCallback) rather than a fixed
     // wall-clock delay. Removed from the DOM again in `finally`.
-    // Reuse the same <video> across every attempt (see captureVideoRef
-    // declaration) — only create/attach it once. Re-attaching srcObject on an
-    // already-live-on-this-stream video is a no-op we skip entirely, so a
-    // retry costs nothing beyond the actual frame-wait below.
-    let reusedVideo = captureVideoRef.current;
-    const isFreshAttach = !reusedVideo || reusedVideo.srcObject !== stream;
-    if (!reusedVideo) {
-      reusedVideo = document.createElement('video');
-      reusedVideo.muted = true;
-      reusedVideo.playsInline = true;
-      reusedVideo.style.position = 'fixed';
-      reusedVideo.style.left = '-99999px';
-      reusedVideo.style.top = '0';
-      reusedVideo.style.width = '2px';
-      reusedVideo.style.height = '2px';
-      document.body.appendChild(reusedVideo);
-      captureVideoRef.current = reusedVideo;
-    }
-    const video = reusedVideo;
+    const video = document.createElement('video');
+    video.muted = true;
+    (video as HTMLVideoElement).playsInline = true;
+    video.style.position = 'fixed';
+    video.style.left = '-99999px';
+    video.style.top = '0';
+    video.style.width = '2px';
+    video.style.height = '2px';
+    document.body.appendChild(video);
     try {
-      if (isFreshAttach) {
-        video.srcObject = stream;
-        try { await video.play(); } catch { /* ignore */ }
-        await new Promise<void>((resolve) => {
-          if (video.videoWidth && video.readyState >= 2) return resolve();
-          const on = () => { video.removeEventListener('loadeddata', on); resolve(); };
-          video.addEventListener('loadeddata', on);
-          window.setTimeout(resolve, 1500);
-        });
-      }
+      video.srcObject = stream;
+      try { await video.play(); } catch { /* ignore */ }
+      await new Promise<void>((resolve) => {
+        if (video.videoWidth && video.readyState >= 2) return resolve();
+        const on = () => { video.removeEventListener('loadeddata', on); resolve(); };
+        video.addEventListener('loadeddata', on);
+        window.setTimeout(resolve, 1500);
+      });
       const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
       // Normalize EVERY display's capture into the 1920–2048px-wide band so the
       // frame sent to the vision model is consistently large across all screens:
@@ -1890,18 +1861,16 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         }
       }
       const frame = await grabFrame();
-      // Deliberately do NOT pause/detach/remove the video here — it stays
-      // attached and playing so the NEXT captureScreenFrame() call (if this
-      // one is rejected and the candidate retries) reuses an already-warm
-      // decode pipeline instead of paying the re-sync cost again. Torn down
-      // only when the share stream itself ends (see the video track's
-      // 'ended' listener, which also clears captureVideoRef).
+
+      try { video.pause(); } catch { /* ignore */ }
+      video.srcObject = null;
       return frame;
     } finally {
       // Always restore every hidden graphic and the page background, whether
       // capture succeeded, returned null, or threw.
       restores.forEach((restore) => restore());
       if (pageEl) pageEl.style.background = prevPageBg ?? '';
+      try { video.remove(); } catch { /* ignore */ }
     }
   }, []);
 
