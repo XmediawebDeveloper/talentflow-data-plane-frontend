@@ -23,7 +23,7 @@ import { modeFromDuration } from '@/lib/constants/aiInterviewMode';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
 import WizardDiscardButton from './WizardDiscardButton';
 import AIInterviewFlowLoader from './AIInterviewFlowLoader';
-import { SectionHeader, SummaryLocation, SummaryTips } from './ConfigSummary';
+import { SectionHeader, SummaryLocation } from './ConfigSummary';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
 import { distributeSkillsLocally } from '@/lib/utils/questionDistribution';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
@@ -380,6 +380,12 @@ export default function AIInterviewPreview() {
     fromJobDetails && interview?.jd_id
       ? `/recruitment/job-details?id=${encodeURIComponent(interview.jd_id)}`
       : null;
+  /* Where "Go to AI Interviews" (and Back, once published — see below) land:
+     the list, on the All Interviews tab, with this config flagged so that
+     screen can scroll to and highlight the row it just created. */
+  const listHref = exitHref
+    ? `${exitHref}&tab=ai-interview-results`
+    : `/recruitment/ai-interviews?tab=all-interviews&highlight=${encodeURIComponent(id)}`;
 
   /* Publish handler */
   const handlePublish = async () => {
@@ -405,6 +411,29 @@ export default function AIInterviewPreview() {
   const goBack = () => {
     router.push('/recruitment/ai-interviews/jd-selection/ai-interview-config/clusters?id=' + id + originParam);
   };
+
+  /* Browser Back from the published screen must not step back into the
+     wizard — the config is already submitted, so the Clusters/Configure
+     steps a normal Back would land on are a dead end for a review that's
+     over. The moment the published screen appears, push a throwaway history
+     entry so Back triggers this listener instead of leaving the page, and
+     send the user to the same place "Go to AI Interviews" does. */
+  useEffect(() => {
+    if (!published) return;
+    window.history.pushState(null, '', window.location.href);
+    const handlePopState = () => {
+      router.replace(listHref);
+      /* `router.replace` maps to `history.replaceState`, which only mutates
+         the CURRENT entry — the throwaway one pushed above stays sitting
+         ahead as a forward entry, so the browser's Forward button would
+         still resurrect the finished wizard. A same-URL `pushState` right
+         after truncates everything ahead of the now-replaced entry, taking
+         Forward off the table too. */
+      window.history.pushState(null, '', listHref);
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [published, listHref, router]);
 
   const handleSaveAsDraft = async () => {
     toast.success('Draft saved!');
@@ -447,7 +476,6 @@ export default function AIInterviewPreview() {
 
   /* ───────────── Published ───────────── */
   if (published) {
-    const listHref = exitHref ? `${exitHref}&tab=ai-interview-results` : '/recruitment/ai-interviews';
     return (
       <>
         <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
@@ -487,25 +515,21 @@ export default function AIInterviewPreview() {
                     <Bot className="w-7 h-7 text-brand-blue" />
                   </div>
                   <div className="min-w-0">
-                    <p className="text-xs text-gray-500">AI Interview</p>
                     <p className="text-base sm:text-lg font-semibold text-gray-900 truncate">
-                      {position} - AI Interview
+                      {[
+                        interview.jd_short_id,
+                        position,
+                        'AI Interview',
+                        interview.jd_version != null ? `v${interview.jd_version}` : null,
+                      ].filter(Boolean).join(' · ')}
                     </p>
                     <div className="mt-2 flex flex-wrap items-center gap-2">
-                      <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-brand-blue text-white shadow-sm shadow-brand-blue/25">
-                        AI Interview
-                      </span>
                       <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-white text-gray-700 ring-1 ring-gray-200">
                         {mode === 'fixed' ? duration : bufferEnabled ? 35 : 30} mins
                       </span>
                       {mode === 'fixed' && (
                         <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-white text-gray-700 ring-1 ring-gray-200">
                           {totalPreviewQuestions} Questions
-                        </span>
-                      )}
-                      {interview.jd_short_id && (
-                        <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
-                          {interview.jd_short_id}
                         </span>
                       )}
                     </div>
@@ -664,109 +688,115 @@ export default function AIInterviewPreview() {
 
         {/* ── Interview Overview ── */}
         <SectionCard title="Interview Overview" icon={Brain}>
-          {/* The three facts that decide what the candidate meets: how long and
-              under what pacing, what transcribes them, and which rounds run. */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-            <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-3 flex items-start gap-3">
-              <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center flex-shrink-0">
-                <Timer className="w-4 h-4 text-brand-cyan" />
+          <div className="flex flex-col lg:flex-row gap-4 items-start">
+            {/* The three facts that decide what the candidate meets: how long and
+                under what pacing, what transcribes them, and which rounds run. */}
+            <div className="flex flex-col gap-3 lg:w-72 lg:flex-shrink-0">
+              <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-3 flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center flex-shrink-0">
+                  <Timer className="w-4 h-4 text-brand-cyan" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-2xs text-gray-500">Interview Mode</p>
+                  <p className="text-sm font-semibold text-gray-900">
+                    {mode === 'fixed' ? 'Timed Interview' : 'Conversational'}
+                  </p>
+                  <p className="text-2xs text-gray-500">
+                    {mode === 'fixed'
+                      ? `${duration} minutes`
+                      : `${bufferEnabled ? 35 : 30} minutes${bufferEnabled ? ' · +5 min buffer' : ''}`}
+                  </p>
+                </div>
               </div>
-              <div className="min-w-0">
-                <p className="text-2xs text-gray-500">Interview Mode</p>
-                <p className="text-sm font-semibold text-gray-900">
-                  {mode === 'fixed' ? 'Timed Interview' : 'Conversational'}
-                </p>
-                <p className="text-2xs text-gray-500">
-                  {mode === 'fixed'
-                    ? `${duration} minutes`
-                    : `${bufferEnabled ? 35 : 30} minutes${bufferEnabled ? ' · +5 min buffer' : ''}`}
-                </p>
+
+              <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-3 flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                  <Mic className="w-4 h-4 text-brand-blue" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-2xs text-gray-500">AI Model</p>
+                  <p className="text-sm font-semibold text-gray-900 truncate">{sttOption.label}</p>
+                  {sttOption.recommended && (
+                    <span className="inline-flex items-center mt-0.5 px-1.5 py-0.5 text-2xs font-medium rounded-full bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25">
+                      Recommended
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-3 flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
+                  <Layers className="w-4 h-4 text-brand-orange-deep" />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-2xs text-gray-500">Interview Type</p>
+                  <p className="text-sm font-semibold text-gray-900">{interviewTypeLabel}</p>
+                  <p className="text-2xs text-gray-500">
+                    {enabledRounds.length} round{enabledRounds.length === 1 ? '' : 's'}
+                  </p>
+                </div>
               </div>
             </div>
 
-            <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-3 flex items-start gap-3">
-              <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                <Mic className="w-4 h-4 text-brand-blue" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-2xs text-gray-500">AI Model</p>
-                <p className="text-sm font-semibold text-gray-900 truncate">{sttOption.label}</p>
-                {sttOption.recommended && (
-                  <span className="inline-flex items-center mt-0.5 px-1.5 py-0.5 text-2xs font-medium rounded-full bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25">
-                    Recommended
-                  </span>
-                )}
-              </div>
-            </div>
-
-            <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] p-3 flex items-start gap-3">
-              <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
-                <Layers className="w-4 h-4 text-brand-orange-deep" />
-              </div>
-              <div className="min-w-0">
-                <p className="text-2xs text-gray-500">Interview Type</p>
-                <p className="text-sm font-semibold text-gray-900">{interviewTypeLabel}</p>
-                <p className="text-2xs text-gray-500">
-                  {enabledRounds.length} round{enabledRounds.length === 1 ? '' : 's'}
-                </p>
-              </div>
-            </div>
-          </div>
-        </SectionCard>
-
-        {/* ── Time Allocation Table (fixed mode only) ── */}
-        {mode === 'fixed' && enabledRounds.length > 0 && (
-          <SectionCard title="Time Allocation" icon={Clock}>
-            <div className="overflow-hidden rounded-lg border border-gray-100 ring-1 ring-black/[0.02] tf-table-shell">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-slate-50 text-left">
-                    <th className="px-4 py-2.5 font-medium text-gray-600">Round</th>
-                    <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Questions</th>
-                    <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Clusters</th>
-                    <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Time</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100">
-                  {enabledRounds.map(r => {
-                    const isMth = r.type === 'must_have_skills' || r.type === 'must_to_have' || r.type === 'technical';
-                    const isNth = r.type === 'nice_to_have_skills' || r.type === 'nice_to_have';
-                    const roundLabel = isMth ? 'Must-To-Have' : isNth ? 'Nice-To-Have' : r.type === 'hr' ? 'HR Round' : r.type;
-                    const previewMin = timedPreviewDurations[r.type] ?? r.duration_minutes;
-                    const previewQuestions = timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0;
-                    const clusterCount = isMth ? mthClusters.length : isNth ? nthClusters.length : null;
-                    return (
-                      <tr key={r.type}>
-                        <td className="px-4 py-2.5 text-gray-900">{roundLabel}</td>
-                        <td className="px-4 py-2.5 text-gray-700 text-right">
-                          <span className="inline-flex items-center justify-center min-w-[24px] px-2 py-0.5 rounded-md text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{previewQuestions}</span>
+            {/* Time Allocation table (fixed mode only), to the right of the overview cards */}
+            {mode === 'fixed' && enabledRounds.length > 0 && (
+              <div className="flex-1 min-w-0 w-full">
+                <div className="flex items-center gap-2 mb-3">
+                  <Clock className="w-4 h-4 text-brand-blue" />
+                  <h4 className="text-sm font-semibold text-gray-800 tracking-tight">Time Allocation</h4>
+                </div>
+                <div className="overflow-hidden rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-slate-50 text-left">
+                        <th className="px-4 py-2.5 font-medium text-gray-600">Round</th>
+                        <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Questions</th>
+                        <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Clusters</th>
+                        <th className="px-4 py-2.5 font-medium text-gray-600 text-right">Time</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {enabledRounds.map(r => {
+                        const isMth = r.type === 'must_have_skills' || r.type === 'must_to_have' || r.type === 'technical';
+                        const isNth = r.type === 'nice_to_have_skills' || r.type === 'nice_to_have';
+                        const roundLabel = isMth ? 'Must-To-Have' : isNth ? 'Nice-To-Have' : r.type === 'hr' ? 'HR Round' : r.type;
+                        const previewMin = timedPreviewDurations[r.type] ?? r.duration_minutes;
+                        const previewQuestions = timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0;
+                        const clusterCount = isMth ? mthClusters.length : isNth ? nthClusters.length : null;
+                        return (
+                          <tr key={r.type}>
+                            <td className="px-4 py-2.5 text-gray-900">{roundLabel}</td>
+                            <td className="px-4 py-2.5 text-gray-700 text-right">
+                              <span className="inline-flex items-center justify-center min-w-[24px] px-2 py-0.5 rounded-md text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{previewQuestions}</span>
+                            </td>
+                            <td className="px-4 py-2.5 text-gray-700 text-right">{clusterCount !== null ? clusterCount : '—'}</td>
+                            <td className="px-4 py-2.5 text-gray-700 text-right">
+                              <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">{previewMin} min</span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-slate-50 font-semibold">
+                        <td className="px-4 py-2.5 text-gray-900">Total</td>
+                        <td className="px-4 py-2.5 text-gray-900 text-right">
+                          {enabledRounds.reduce((s, r) => s + (timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0), 0)}
                         </td>
-                        <td className="px-4 py-2.5 text-gray-700 text-right">{clusterCount !== null ? clusterCount : '—'}</td>
-                        <td className="px-4 py-2.5 text-gray-700 text-right">
-                          <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">{previewMin} min</span>
+                        <td className="px-4 py-2.5 text-gray-900 text-right">
+                          {mthClusters.length + nthClusters.length}
+                        </td>
+                        <td className="px-4 py-2.5 text-gray-900 text-right">
+                          {enabledRounds.reduce((s, r) => s + (timedPreviewDurations[r.type] ?? r.duration_minutes), 0)} min
                         </td>
                       </tr>
-                    );
-                  })}
-                </tbody>
-                <tfoot>
-                  <tr className="bg-slate-50 font-semibold">
-                    <td className="px-4 py-2.5 text-gray-900">Total</td>
-                    <td className="px-4 py-2.5 text-gray-900 text-right">
-                      {enabledRounds.reduce((s, r) => s + (timedPreviewQuestions[r.type] ?? r.planned_questions ?? 0), 0)}
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-900 text-right">
-                      {mthClusters.length + nthClusters.length}
-                    </td>
-                    <td className="px-4 py-2.5 text-gray-900 text-right">
-                      {enabledRounds.reduce((s, r) => s + (timedPreviewDurations[r.type] ?? r.duration_minutes), 0)} min
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
-          </SectionCard>
-        )}
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
+          </div>
+        </SectionCard>
 
         {/* ── Skill Clusters Card ── */}
         {(mthClusters.length > 0 || nthClusters.length > 0) && (
@@ -854,44 +884,46 @@ export default function AIInterviewPreview() {
         )}
 
         {/* ── HR Round Card ── */}
-        <SectionCard
-          title="HR Round"
-          icon={Users}
-          badge={
-            hrRound?.enabled && hrRound.hr_questions?.length ? (
-              <span className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
-                {hrRound.hr_questions.length} question{hrRound.hr_questions.length === 1 ? '' : 's'}
-              </span>
-            ) : undefined
-          }
-          action={<EditInConfigureButton onClick={editInConfigure} />}
-        >
-          {mode === 'fixed' && hrRound?.enabled && (
-            <div className="mt-4 space-y-0 divide-y divide-gray-100">
-              <InfoRow label="Questions" value={`${timedAllocation.hrQuestions}`} />
-              <InfoRow label="Time" value={`${timedAllocation.hrMinutes} min`} />
-            </div>
-          )}
-          {hrRound?.enabled && hrRound.hr_questions?.length > 0 && (
-            <div className="mt-4">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Selected HR Questions</p>
-              <ol className="space-y-2">
-                {(hrRound.hr_questions as AIInterviewHRQuestion[]).map((q, idx) => (
-                  <li key={q.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-slate-50 border border-gray-100">
-                    <span className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-2xs font-bold flex items-center justify-center mt-0.5">{idx + 1}</span>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-800">{q.question_text}</p>
-                      <div className="mt-1 flex flex-wrap items-center gap-2">
-                        <span className="text-2xs text-gray-400">{q.answer_type === 'yes_no' ? 'Yes / No' : 'Text answer'}</span>
-                        <HRQuestionStageBadge stage={q.stage} />
+        {hrRound?.enabled && (
+          <SectionCard
+            title="HR Round"
+            icon={Users}
+            badge={
+              hrRound.hr_questions?.length ? (
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                  {hrRound.hr_questions.length} question{hrRound.hr_questions.length === 1 ? '' : 's'}
+                </span>
+              ) : undefined
+            }
+            action={<EditInConfigureButton onClick={editInConfigure} />}
+          >
+            {mode === 'fixed' && (
+              <div className="mt-4 space-y-0 divide-y divide-gray-100">
+                <InfoRow label="Questions" value={`${timedAllocation.hrQuestions}`} />
+                <InfoRow label="Time" value={`${timedAllocation.hrMinutes} min`} />
+              </div>
+            )}
+            {hrRound.hr_questions?.length > 0 && (
+              <div className="mt-4">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Selected HR Questions</p>
+                <ol className="space-y-2">
+                  {(hrRound.hr_questions as AIInterviewHRQuestion[]).map((q, idx) => (
+                    <li key={q.id} className="flex items-start gap-2.5 p-2.5 rounded-lg bg-slate-50 border border-gray-100">
+                      <span className="flex-shrink-0 w-5 h-5 rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 text-2xs font-bold flex items-center justify-center mt-0.5">{idx + 1}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-gray-800">{q.question_text}</p>
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <span className="text-2xs text-gray-400">{q.answer_type === 'yes_no' ? 'Yes / No' : 'Text answer'}</span>
+                          <HRQuestionStageBadge stage={q.stage} />
+                        </div>
                       </div>
-                    </div>
-                  </li>
-                ))}
-              </ol>
-            </div>
-          )}
-        </SectionCard>
+                    </li>
+                  ))}
+                </ol>
+              </div>
+            )}
+          </SectionCard>
+        )}
 
         {/* ── Settings Card ──────────────────────────────────────────────
             Three settings, one compact row each: name on the left, its value
@@ -1033,7 +1065,7 @@ export default function AIInterviewPreview() {
                 </span>
                 <span className="text-xs text-gray-400">{totalPreviewMinutes} min</span>
               </div>
-              <div className="tf-table-shell">
+              <div>
                 <table className="w-full text-xs">
                   <thead>
                     <tr className="border-b border-gray-100">
@@ -1067,7 +1099,6 @@ export default function AIInterviewPreview() {
                   </tbody>
                 </table>
               </div>
-              <SummaryTips />
             </div>
           )}
 

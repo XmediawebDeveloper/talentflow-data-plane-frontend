@@ -1,19 +1,19 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import {
   ArrowLeft, ChevronLeft, Video, Clock, Users, Calendar, CheckCircle, Play, Mail,
-  XCircle, Copy, Trash2, Archive, ArchiveRestore, GitBranch, Eye,
-  Loader2, RefreshCw, Briefcase, Globe, ChevronRight, Brain, Sparkles,
-  Layers, Pencil, Zap, Timer, FileText, Settings, CheckCircle2, Download, Send,
-  Search, Ban, TrendingUp, X, QrCode,
+  XCircle, Copy, Trash2, Archive, ArchiveRestore, GitBranch,
+  Loader2, RefreshCw, Briefcase, Globe, ChevronRight, ChevronDown, Check, Brain, Sparkles,
+  Layers, Pencil, Zap, Timer, FileText, Settings, CheckCircle2, Download,
+  TrendingUp, QrCode,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
-import { jdService } from '@/lib/services/jdService';
+import { jdService, type JDLineageVersion } from '@/lib/services/jdService';
 import { Button } from '@/components/ui/button';
 import type {
   AIInterviewResponse,
@@ -23,6 +23,7 @@ import type {
 import CandidateResultsView from './CandidateResultsView';
 import AIInterviewResults from './AIInterviewResults';
 import ShareAIInterviewModal from './ShareAIInterviewModal';
+import AIInterviewTrackInvitesModal from '../AIInterviewTrackInvitesModal';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
 import { PROXY_INTEGRITY_VERIFICATION_ENABLED } from '@/lib/constants/featureFlags';
 import { formatIST, formatISTDate, parseIST } from '@/lib/utils/dateUtils';
@@ -138,8 +139,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   const canArchiveAIInterviews = isTenantAdmin || !!user?.permissions?.canArchiveAIInterviews;
   const canDeleteAIInterviews = isTenantAdmin || !!user?.permissions?.canDeleteAIInterviews;
   const canShareAIInterviews = isTenantAdmin || !!user?.permissions?.canShareAIInterviews;
-  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'versions' | 'info' | 'results' | 'invites' | 'share'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'versions' | 'info' | 'results' | 'invites'>('overview');
   const [actionLoading, setActionLoading] = useState(false);
+  // Share — a dialog off the header's Share button (Assessment Details'
+  // pattern) rather than a tab of its own; ShareAIInterviewModal already
+  // supports this as its non-embedded (default) mode.
+  const [showShareModal, setShowShareModal] = useState(false);
 
   // Activity
   const [recentActivity, setRecentActivity] = useState<AIInterviewResponse[]>([]);
@@ -149,6 +154,33 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   const [versionHistory, setVersionHistory] = useState<AIInterviewVersionHistoryItem[]>([]);
   const [versionsLoading, setVersionsLoading] = useState(false);
 
+  /* Header's Job Version dropdown — the Assessment Details header's "Manage
+     Jobs · V{n}" pill: the linked JD's own version lineage. A row is only
+     clickable when that job version actually has an AI interview config
+     (`siblingConfigsByJdId` below) — otherwise there is nothing to open, the
+     same rule the Total Jobs tab's View Versions panel applies. */
+  const [showJobVersionMenu, setShowJobVersionMenu] = useState(false);
+  const jobVersionMenuRef = useRef<HTMLDivElement | null>(null);
+  const [jobVersions, setJobVersions] = useState<JDLineageVersion[]>([]);
+  const [jobVersionsLoading, setJobVersionsLoading] = useState(false);
+  const jobVersionsRequestedFor = useRef<string | null>(null);
+
+  /* Every AI interview config across the tenant, bucketed by the job version
+     (`jd_id`) it was authored against — same shape and same two requests
+     (paged live + a separate archived fetch) as AllInterviewsTable.tsx's own
+     `fetchAll`, because this is the same question that table answers ("every
+     interview, regardless of status") asked per job version instead of as a
+     flat list. Powers two things: which Job Version rows are clickable, and
+     the Interview Version badge's ordinal below (the Nth config authored
+     against THIS config's own job version, oldest first — the same rule
+     AllInterviewsTable's "Interview Version" column and the Total Jobs
+     panel's per-version numbering both use, so this page's number never
+     disagrees with those). Loaded once, eagerly, since the badge is static
+     and has to be right the moment the page renders — not deferred behind a
+     click the way the Job Version list itself can be. */
+  const [siblingConfigsByJdId, setSiblingConfigsByJdId] = useState<Map<string, AIInterviewResponse[]>>(new Map());
+  const siblingConfigsRequested = useRef(false);
+
   // Candidate detail
   const [candidateDetail, setCandidateDetail] = useState<AIInterviewResponse | null>(null);
   const [candidateLoading, setCandidateLoading] = useState(false);
@@ -156,12 +188,6 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   // Results tab), so the inline Candidate Results view can offer Prev/Next
   // between candidates without returning to the list.
   const [candidateNavIds, setCandidateNavIds] = useState<string[]>([]);
-
-  // Invites tab filters (mirrors the Candidate Invitations modal on the list page)
-  const [inviteSearch, setInviteSearch] = useState('');
-  const [inviteStatusFilter, setInviteStatusFilter] = useState('all');
-  const [inviteDateFrom, setInviteDateFrom] = useState('');
-  const [inviteDateTo, setInviteDateTo] = useState('');
 
   // Confirmation dialog
   const [confirmAction, setConfirmAction] = useState<{ type: string; title: string; message: string; onConfirm: () => void } | null>(null);
@@ -266,6 +292,96 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   useEffect(() => {
     if (activeTab === 'versions') loadVersionHistory();
   }, [activeTab, loadVersionHistory]);
+
+  // Job Version dropdown's list — fetched once, the first time it's opened.
+  const ensureJobVersionsLoaded = useCallback(() => {
+    if (!config.jd_id) return;
+    if (jobVersionsRequestedFor.current === config.jd_id) return;
+    jobVersionsRequestedFor.current = config.jd_id;
+    setJobVersionsLoading(true);
+    jdService.getLineageVersions(config.jd_id)
+      .then((versions) => setJobVersions(versions || []))
+      .catch(() => setJobVersions([]))
+      .finally(() => setJobVersionsLoading(false));
+  }, [config.jd_id]);
+
+  // Close the Job Version dropdown on an outside click.
+  useEffect(() => {
+    if (!showJobVersionMenu) return;
+    const handleClick = (e: MouseEvent) => {
+      if (jobVersionMenuRef.current && !jobVersionMenuRef.current.contains(e.target as Node)) {
+        setShowJobVersionMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showJobVersionMenu]);
+
+  // Every config across the tenant, bucketed by job version — see the state
+  // declaration above for why this loads eagerly rather than on demand. Same
+  // paged-live + separate-archived fetch AllInterviewsTable.tsx's `fetchAll`
+  // uses, deduped the same way.
+  useEffect(() => {
+    if (siblingConfigsRequested.current) return;
+    siblingConfigsRequested.current = true;
+    (async () => {
+      try {
+        const live: AIInterviewResponse[] = [];
+        let apiPage = 1;
+        for (;;) {
+          const batch = await aiInterviewService.listConfigs({ page: apiPage, page_size: 100, compact: true });
+          const items = batch.items || [];
+          live.push(...items);
+          const total = batch.total ?? live.length;
+          if (items.length < 100 || live.length >= total) break;
+          apiPage += 1;
+        }
+        const archivedProbe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
+        const archived = archivedProbe.total > archivedProbe.items.length
+          ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
+          : archivedProbe.items;
+
+        const seen = new Set<string>();
+        const byJd = new Map<string, AIInterviewResponse[]>();
+        for (const c of [...live, ...archived]) {
+          if (seen.has(c.id) || !c.jd_id) continue;
+          seen.add(c.id);
+          const bucket = byJd.get(c.jd_id);
+          if (bucket) bucket.push(c);
+          else byJd.set(c.jd_id, [c]);
+        }
+        setSiblingConfigsByJdId(byJd);
+      } catch (error) {
+        console.error('Failed to load sibling interview configs:', error);
+      }
+    })();
+  }, []);
+
+  /** The linked interview for a job version row, if one exists — preferring
+   *  published, then draft, then any non-archived config, then whatever's
+   *  left. Same fallback order the Job Details quick-action handler above
+   *  uses to pick "the" config for a job. */
+  const linkedConfigForJobVersion = useCallback((jobVersionId: string): AIInterviewResponse | undefined => {
+    const bucket = siblingConfigsByJdId.get(jobVersionId);
+    if (!bucket || bucket.length === 0) return undefined;
+    return bucket.find((c) => c.status === 'published')
+      || bucket.find((c) => c.status === 'draft')
+      || bucket.find((c) => c.status !== 'archived')
+      || bucket[0];
+  }, [siblingConfigsByJdId]);
+
+  /** This config's own position among every interview authored against its
+   *  job version, oldest first — the "Interview Version" badge's number. */
+  const interviewVersionOrdinal = useMemo(() => {
+    if (!config.jd_id) return 1;
+    const bucket = siblingConfigsByJdId.get(config.jd_id);
+    if (!bucket || bucket.length === 0) return 1;
+    const sorted = [...bucket].sort(
+      (a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime(),
+    );
+    const idx = sorted.findIndex((c) => c.id === config.id);
+    return idx >= 0 ? idx + 1 : 1;
+  }, [siblingConfigsByJdId, config.jd_id, config.id]);
 
   // Preload the live JD description on mount when the config's snapshot is
   // empty (fixed-mode case). Firing on mount instead of on Info-tab activation
@@ -539,95 +655,208 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
         </div>
       )}
-      {/* Header */}
-      <div className="bg-brand-blue rounded-xl shadow-sm shadow-brand-blue/20 ring-1 ring-white/10 mb-4">
-        <div className="py-2.5 sm:py-3 lg:py-3.5 px-3 sm:px-4 lg:px-5">
-          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2.5 sm:gap-3">
-            <div className="flex items-start gap-2 sm:gap-2.5 lg:gap-3 min-w-0 flex-1">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 lg:w-11 lg:h-11 bg-white/15 backdrop-blur-sm ring-1 ring-white/25 rounded-lg flex items-center justify-center flex-shrink-0">
-                <Video className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
-              </div>
-              <div className="min-w-0 flex-1">
-                {/* Line 1: AI-002  Title  v1  Status */}
-                <div className="flex items-center gap-1.5 sm:gap-2 mb-1 sm:mb-1.5 flex-wrap">
-                  {config.display_id && (
-                    <span className="px-1.5 sm:px-2 py-0.5 bg-white/95 text-brand-blue rounded text-2xs sm:text-xs font-bold ring-1 ring-white/40 shadow-sm">
-                      {config.display_id}
-                    </span>
-                  )}
-                  <h1 className="text-sm sm:text-base lg:text-lg text-white font-semibold break-words min-w-0 flex-1 sm:flex-initial tracking-tight">
-                    {config.jd_title || config.position || 'Untitled'}
-                  </h1>
-                  {config.jd_version && (
-                    <span className="px-1.5 py-0.5 text-2xs bg-white/15 text-white rounded ring-1 ring-white/25">
-                      v{config.jd_version}
-                    </span>
-                  )}
-                  <span className="px-2 py-0.5 rounded-full text-2xs sm:text-2xs font-medium bg-white/15 text-white ring-1 ring-white/25 backdrop-blur-sm">
-                    {getStatusLabel(config.status)}
+      {/* Header — the Assessment Details summary card
+          (`AssessmentDetailsView.tsx`), copied rather than reinvented: white
+          card, brand-blue border/ring, a solid ID pill + plain-weight title
+          + status on row 1, and a quiet bulleted fact line ending on the
+          mode/round/version chips on row 2. */}
+      <div className="mb-4">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-brand-blue/30 dark:border-brand-blue/40 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
+          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              {/* Row 1: AI-002  Title  Status */}
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                {config.display_id && (
+                  <span className="inline-flex items-center px-2 py-0.5 bg-blue-600 text-white rounded-md text-xs font-semibold font-mono tracking-wide">
+                    {config.display_id}
                   </span>
-                </div>
+                )}
+                <h1 className="font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate">
+                  {config.jd_title || config.position || 'Untitled'}
+                </h1>
+                <Badge variant={getStatusVariant(config.status)}>{getStatusLabel(config.status)}</Badge>
+              </div>
 
-                {/* Line 2: Linked to JD */}
-                {config.jd_short_id && (
-                  <div className="text-2xs sm:text-xs text-white/85 mb-1.5">
-                    <span className="font-medium">Linked to: {config.jd_short_id}</span>
-                    {config.jd_title && (
-                      <span> · {config.jd_title}</span>
-                    )}
-                    {config.jd_version && (
-                      <span className="ml-1 text-white/70">v{config.jd_version}</span>
+              {/* Row 2: quiet bulleted facts */}
+              <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
+                {([
+                  { key: 'linked-jd', icon: Briefcase, label: config.jd_short_id ? `Linked to ${config.jd_short_id}` : null },
+                  { key: 'level', icon: null, label: config.jd_experience_level || null },
+                  { key: 'duration', icon: Clock, label: formattedDuration },
+                  { key: 'invites', icon: Users, label: `${invitationStats.total} invite${invitationStats.total !== 1 ? 's' : ''}` },
+                  { key: 'created-at', icon: Calendar, label: config.created_at ? `Created ${formatIST(config.created_at)}` : null },
+                  { key: 'updated-at', icon: Calendar, label: config.updated_at ? `Updated ${formatIST(config.updated_at)}` : null },
+                ] as { key: string; icon: typeof Clock | null; label: string | null }[])
+                  .filter((fact) => !!fact.label)
+                  .map((fact, i) => (
+                    <React.Fragment key={fact.key}>
+                      {i > 0 && <span aria-hidden className="text-gray-300">&bull;</span>}
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {fact.icon && <fact.icon className="w-4 h-4 flex-shrink-0" />}
+                        <span className="truncate" title={fact.label ?? undefined}>{fact.label}</span>
+                      </div>
+                    </React.Fragment>
+                  ))}
+              </div>
+
+              {/* Row 3: mode/round/version badges, on their own line so they
+                  read as tags rather than crowding the plain-text facts
+                  above. */}
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ring-1 ${
+                  interviewMode === 'flexible'
+                    ? 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20'
+                    : 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
+                }`}>
+                  {interviewMode === 'flexible' ? (
+                    <><Zap className="w-3 h-3" /> Flexible</>
+                  ) : (
+                    <><Timer className="w-3 h-3" /> Timed</>
+                  )}
+                </span>
+                {enabledRounds.map((r, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-brand-blue/10 text-brand-blue rounded-full ring-1 ring-brand-blue/20">
+                    <Layers className="w-3 h-3" /> {ROUND_LABELS[r.type] || r.type}
+                  </span>
+                ))}
+                {/* Job Version — the Assessment Details header's "Manage
+                    Jobs · V{n}" pill. Each row opens the AI interview
+                    authored against that job version (same destination the
+                    Total Jobs tab's View Versions panel opens), never the
+                    Job Description page — so a row with no interview has
+                    nowhere to go and is disabled rather than clickable. */}
+                {config.jd_id && (
+                  <div className="relative" ref={jobVersionMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const opening = !showJobVersionMenu;
+                        setShowJobVersionMenu(opening);
+                        if (opening) ensureJobVersionsLoaded();
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-600 text-white rounded-full text-xs font-medium hover:bg-purple-700 transition-colors whitespace-nowrap"
+                      aria-label={`Job version, currently V${config.jd_version ?? 1}`}
+                      aria-haspopup="menu"
+                      aria-expanded={showJobVersionMenu}
+                      title="View job version history"
+                    >
+                      Job Version
+                      <span aria-hidden className="text-white/50">&middot;</span>
+                      V{config.jd_version ?? 1}
+                      <ChevronDown className={`w-3 h-3 transition-transform ${showJobVersionMenu ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showJobVersionMenu && (
+                      <div
+                        role="menu"
+                        aria-label="Job versions"
+                        className="absolute left-0 top-full mt-2 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-xl shadow-lg shadow-brand-blue/10 border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 overflow-hidden">
+                        <div className="flex items-baseline justify-between gap-2 px-3 py-2">
+                          <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 tracking-tight">Job Versions</span>
+                          <span className="text-2xs text-gray-500 dark:text-slate-400">
+                            {jobVersions.length} version{jobVersions.length === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                        <div className="border-t border-gray-100 dark:border-slate-700/60" />
+                        <div className="max-h-72 overflow-y-auto py-1">
+                          {jobVersionsLoading ? (
+                            <div className="px-3 py-3 flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400">
+                              <Loader2 className="w-3 h-3 animate-spin text-brand-blue" /> Loading job versions…
+                            </div>
+                          ) : jobVersions.length === 0 ? (
+                            <div className="px-3 py-3 text-xs text-gray-500 dark:text-slate-400">No versions available</div>
+                          ) : (
+                            jobVersions.map((version) => {
+                              const isCurrent = version.id === config.jd_id;
+                              const linkedConfig = linkedConfigForJobVersion(version.id);
+                              const clickable = isCurrent || !!linkedConfig;
+                              return (
+                                <button
+                                  key={version.id}
+                                  type="button"
+                                  role="menuitem"
+                                  aria-current={isCurrent ? 'true' : undefined}
+                                  disabled={!clickable}
+                                  onClick={() => {
+                                    if (!clickable) return;
+                                    setShowJobVersionMenu(false);
+                                    if (!isCurrent && linkedConfig) {
+                                      router.push(`/recruitment/ai-interviews/${linkedConfig.id}`);
+                                    }
+                                  }}
+                                  title={!clickable ? 'No AI interview has been created for this job version' : undefined}
+                                  className={`w-full px-3 py-2 text-left transition-colors ${
+                                    !clickable
+                                      ? 'opacity-50 cursor-not-allowed'
+                                      : isCurrent
+                                        ? 'bg-brand-blue/5 hover:bg-brand-blue/10'
+                                        : 'hover:bg-brand-blue/5'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-4 flex-shrink-0 flex items-center justify-center">
+                                      {isCurrent && <Check className="w-3.5 h-3.5 text-brand-blue" />}
+                                    </span>
+                                    <span className="text-sm font-semibold text-gray-900 dark:text-slate-100 tabular-nums flex-shrink-0">
+                                      V{version.version_number}
+                                    </span>
+                                    {version.is_latest_version && (
+                                      <span className="flex-shrink-0 text-2xs px-1.5 py-0.5 rounded-full font-medium bg-brand-blue/10 text-brand-blue">
+                                        Current
+                                      </span>
+                                    )}
+                                    <Badge variant={getStatusVariant(version.status)} className="flex-shrink-0 text-2xs px-1.5 py-0.5">
+                                      {getStatusLabel(version.status)}
+                                    </Badge>
+                                    <span aria-hidden className="ml-auto flex-shrink-0 text-2xs font-medium text-brand-blue">
+                                      {isCurrent ? 'Linked' : clickable ? 'View' : 'No interview'}
+                                    </span>
+                                  </div>
+                                  {(version.published_at || version.created_at) && (
+                                    <div className="pl-6 mt-0.5 text-2xs text-gray-500 dark:text-slate-400">
+                                      {formatIST(version.published_at || version.created_at || '')}
+                                    </div>
+                                  )}
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}
 
-                {/* Line 3: Stats */}
-                <div className="text-2xs sm:text-xs text-white/90 flex items-center gap-x-2 gap-y-1 sm:gap-x-3 flex-wrap">
-                  {config.jd_experience_level && <span>{config.jd_experience_level}</span>}
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3 h-3" />
-                    {formattedDuration}
-                  </span>
-                  <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 text-2xs sm:text-2xs font-medium rounded-full ring-1 ${
-                    interviewMode === 'flexible'
-                      ? 'bg-white/15 text-white ring-white/25 backdrop-blur-sm'
-                      : 'bg-brand-orange/25 text-white ring-brand-orange/40 backdrop-blur-sm'
-                  }`}>
-                    {interviewMode === 'flexible' ? (
-                      <><Zap className="w-2.5 h-2.5" /> Flexible</>
-                    ) : (
-                      <><Timer className="w-2.5 h-2.5" /> Timed</>
-                    )}
-                  </span>
-                  {enabledRounds.length > 0 && (
-                    <span className="flex items-center gap-1 flex-wrap">
-                      <Layers className="w-3 h-3 shrink-0" />
-                      {enabledRounds.map((r, i) => (
-                        <span key={i} className="px-1.5 py-0.5 text-2xs sm:text-2xs bg-white/15 text-white rounded-full ring-1 ring-white/25 backdrop-blur-sm">
-                          {ROUND_LABELS[r.type] || r.type}
-                        </span>
-                      ))}
-                    </span>
-                  )}
-                  <span className="flex items-center gap-1">
-                    <Users className="w-3 h-3" />
-                    {invitationStats.total} invite{invitationStats.total !== 1 ? 's' : ''}
-                  </span>
-                  {config.created_at && (
-                    <span className="hidden sm:inline">Created {formatIST(config.created_at)}</span>
-                  )}
-                  {config.updated_at && (
-                    <span className="hidden md:inline">Updated {formatIST(config.updated_at)}</span>
-                  )}
-                </div>
+                {/* Interview Version — static. An AI interview config is one
+                    evolving record, not a family of standalone records the
+                    way an assessment is, so there is nothing for this badge
+                    to switch to; it states the fact (this config's ordinal
+                    among every interview authored against its job version)
+                    and stops there. */}
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-blue text-white rounded-full text-xs font-medium whitespace-nowrap">
+                  Interview Version
+                  <span aria-hidden className="text-white/50">&middot;</span>
+                  V{interviewVersionOrdinal}
+                </span>
               </div>
             </div>
 
-            {/* Action buttons */}
-            <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0 self-start sm:self-auto flex-wrap">
+            {/* Actions */}
+            <div className="flex items-center gap-2 flex-shrink-0 self-start flex-wrap">
+              {/* Share — a dialog now, not a tab; same slot & styling the
+                  Assessment Details header's Share button uses. */}
+              {config.status === 'published' && canShareAIInterviews && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setShowShareModal(true)}
+                  icon={<Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+                >
+                  Share
+                </Button>
+              )}
               {config.status === 'draft' && config.jd_id && canUpdateAIInterviews && (
                 <Button
-                  tone="onColor"
                   variant="primary"
                   size="sm"
                   onClick={() => {
@@ -642,7 +871,6 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 </Button>
               )}
               <Button
-                tone="onColor"
                 variant="secondary"
                 size="sm"
                 onClick={handleExportCSV}
@@ -654,7 +882,6 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               </Button>
               {onRefresh && (
                 <Button
-                  tone="onColor"
                   variant="secondary"
                   size="sm"
                   onClick={onRefresh}
@@ -669,47 +896,51 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
         </div>
       </div>
 
-      {/* Tab bar (scrolls with content; horizontally scrollable on small screens) */}
-      <div className="border-b border-gray-100 z-10 mb-4">
-        <div>
-          <div className="flex gap-1 sm:gap-4 lg:gap-6 overflow-x-auto scrollbar-hide -mb-px">
-            {(() => {
-              const tabs: { key: typeof activeTab; label: string }[] = [
-                { key: 'overview', label: 'Interview Details' },
-                { key: 'activity', label: 'Recent Activity' },
-                { key: 'versions', label: 'Version History' },
-                { key: 'info', label: 'AI Interview Info' },
-                { key: 'results', label: 'Results' },
-                { key: 'invites', label: 'Invites' },
-              ];
-              // Share tab mirrors the list card: only for published interviews
-              // and only when the user can share.
-              if (config.status === 'published' && canShareAIInterviews) {
-                tabs.push({ key: 'share', label: 'Share' });
-              }
-              return tabs;
-            })().map((t) => {
-              const isActive = activeTab === t.key;
-              return (
-                <button
-                  key={t.key}
-                  onClick={() => setActiveTab(t.key)}
-                  className={`py-3 sm:py-4 px-2 sm:px-0 min-h-[44px] text-xs sm:text-sm border-b-2 transition-colors whitespace-nowrap ${
-                    isActive
-                      ? 'border-brand-blue text-brand-blue font-semibold'
-                      : 'border-transparent text-gray-600 hover:text-brand-blue font-medium'
-                  }`}
-                >
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      </div>
+      {/* Unified detail layout: vertical navigation on the left, the selected
+          tab's content on the right — the same grid, aside chrome and button
+          states as the Assessment Details page (`AssessmentDetailsView.tsx`),
+          so the two detail pages read as one screen. The strip this replaced
+          was horizontal and scrolled sideways (`overflow-x-auto
+          scrollbar-hide`), so with seven tabs the last of them was
+          off-screen and undiscoverable under a wide desktop. */}
+      <div className="grid grid-cols-[180px_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[220px_minmax(0,1fr)] sm:gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
+        <aside className="sticky top-20 self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+          <nav className="p-2 sm:p-3" aria-label="Interview details sections">
+            <div className="flex flex-col gap-1.5">
+              {([
+                { key: 'overview', label: 'Interview Details', icon: FileText },
+                { key: 'activity', label: 'Recent Activity', icon: Clock },
+                { key: 'versions', label: 'Version History', icon: Layers },
+                { key: 'info', label: 'AI Interview Info', icon: Brain },
+                { key: 'results', label: 'Results', icon: TrendingUp },
+                { key: 'invites', label: 'Track', icon: Mail },
+              ] as { key: typeof activeTab; label: string; icon: typeof FileText }[]).map((t) => {
+                const isActive = activeTab === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setActiveTab(t.key)}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`w-full rounded-lg px-3 py-2.5 text-left text-xs sm:text-sm transition-colors flex items-center gap-2 ${
+                      isActive
+                        ? 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
+                        : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
+                    }`}
+                  >
+                    <t.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                    <span className="min-w-0 leading-snug">{t.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        </aside>
 
-      {/* Content area */}
-      <div className="py-4 sm:py-6 space-y-4 sm:space-y-6">
+        {/* Content — `min-w-0` so a wide table inside a tab scrolls in its own
+            box instead of stretching the grid column and pushing the nav off
+            the page. */}
+        <div className="min-w-0 overflow-x-auto scroll-mt-24 py-4 sm:py-6 space-y-4 sm:space-y-6">
 
           {/* JD staleness banner — shows when the linked JD was edited after
               this interview config was created. Computed by the single-config
@@ -1713,284 +1944,36 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             />
           )}
 
-          {/* Invites Tab — mirrors the Candidate Invitations modal on the list page */}
-          {activeTab === 'invites' && (() => {
-            // Overview counts derived from the loaded invitations.
-            const total = recentActivity.length;
-            const completed = recentActivity.filter(a => a.status === 'completed').length;
-            const inProgress = recentActivity.filter(a => a.status === 'in_progress').length;
-            const terminated = recentActivity.filter(a => a.status === 'terminated').length;
-            const cancelled = recentActivity.filter(a => a.status === 'cancelled').length;
-            const invited = Math.max(0, total - completed - inProgress - terminated - cancelled);
-            const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
-
-            const statCards = [
-              { label: 'Total', value: total, icon: Users, tone: 'text-gray-500', num: 'text-gray-900' },
-              { label: 'Invited', value: invited, icon: Mail, tone: 'text-brand-blue', num: 'text-brand-blue' },
-              { label: 'In Progress', value: inProgress, icon: Play, tone: 'text-brand-orange-deep', num: 'text-brand-orange-deep' },
-              { label: 'Completed', value: completed, icon: CheckCircle, tone: 'text-success', num: 'text-success' },
-              { label: 'Terminated', value: terminated, icon: Ban, tone: 'text-destructive', num: 'text-destructive' },
-              { label: 'Cancelled', value: cancelled, icon: X, tone: 'text-destructive', num: 'text-destructive' },
-              { label: 'Completion', value: `${completionRate}%`, icon: TrendingUp, tone: 'text-brand-cyan', num: 'text-brand-cyan' },
-            ];
-
-            const hasActiveFilters =
-              inviteSearch.trim() !== '' || inviteStatusFilter !== 'all' || inviteDateFrom !== '' || inviteDateTo !== '';
-
-            const filtered = recentActivity.filter((a) => {
-              if (inviteStatusFilter !== 'all' && a.status !== inviteStatusFilter) return false;
-              if (inviteSearch.trim()) {
-                const q = inviteSearch.toLowerCase();
-                if (!(a.candidate_name || '').toLowerCase().includes(q) &&
-                    !(a.candidate_email || '').toLowerCase().includes(q)) return false;
-              }
-              if (inviteDateFrom || inviteDateTo) {
-                /* Filter on the same moment the row prints as "Invited" — the
-                   last send, falling back to created_at on pre-column rows. */
-                const invitedAt = a.invitation_sent_at || a.created_at;
-                if (!invitedAt) return false;
-                const d = parseIST(invitedAt);
-                if (inviteDateFrom && d < new Date(`${inviteDateFrom}T00:00:00`)) return false;
-                if (inviteDateTo && d > new Date(`${inviteDateTo}T23:59:59`)) return false;
-              }
-              return true;
-            });
-
-            const clearFilters = () => {
-              setInviteSearch(''); setInviteStatusFilter('all'); setInviteDateFrom(''); setInviteDateTo('');
-            };
-
-            // Status pill with icon — matches the reference modal.
-            const statusPill = (status: string) => {
-              const meta: Record<string, { icon: React.ReactNode; label: string }> = {
-                completed: { icon: <CheckCircle className="w-3 h-3" />, label: 'Completed' },
-                in_progress: { icon: <Play className="w-3 h-3" />, label: 'In Progress' },
-                invited: { icon: <Mail className="w-3 h-3" />, label: 'Invited' },
-                terminated: { icon: <Ban className="w-3 h-3" />, label: 'Terminated' },
-                cancelled: { icon: <X className="w-3 h-3" />, label: 'Cancelled' },
-                expired: { icon: <Clock className="w-3 h-3" />, label: 'Expired' },
-              };
-              const m = meta[status];
-              return m
-                ? <Badge variant={getStatusVariant(status)}>{m.icon}{m.label}</Badge>
-                : <Badge variant={getStatusVariant(status)}>{getStatusLabel(status)}</Badge>;
-            };
-
-            const resultsLabel = hasActiveFilters
-              ? `${filtered.length} matching candidate${filtered.length === 1 ? '' : 's'}`
-              : `${total} candidate${total !== 1 ? 's' : ''} invited`;
-
-            return (
-              <div className="space-y-4 sm:space-y-6">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <div className="w-10 h-10 rounded-xl bg-brand-blue flex items-center justify-center flex-shrink-0 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                      <Users className="w-5 h-5 text-white" />
-                    </div>
-                    <div className="min-w-0">
-                      <h3 className="text-base font-semibold text-gray-900 tracking-tight">Candidate Invitations</h3>
-                      <p className="text-sm text-gray-500 truncate">{config.jd_title || config.position}</p>
-                    </div>
-                  </div>
-                  {config.status === 'published' && canShareAIInterviews && (
-                    <Button variant="primary" size="md" onClick={() => setActiveTab('share')} icon={<Send className="w-4 h-4" />} className="self-start sm:self-auto">
-                      Invite More
-                    </Button>
-                  )}
-                </div>
-
-                {/* Stat cards */}
-                <div className="grid grid-cols-3 lg:grid-cols-7 gap-2 sm:gap-3">
-                  {statCards.map((s) => {
-                    const Icon = s.icon;
-                    return (
-                      <div key={s.label} className="bg-white rounded-xl p-3 border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-                        <div className={`flex items-center gap-1.5 text-2xs sm:text-xs mb-1 ${s.tone}`}>
-                          <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
-                          <span className="truncate">{s.label}</span>
-                        </div>
-                        <p className={`text-lg sm:text-2xl font-bold tracking-tight ${s.num}`}>{s.value}</p>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Filter bar */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
-                  <div className="flex-1 relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-brand-blue" />
-                    <input
-                      type="text"
-                      value={inviteSearch}
-                      onChange={(e) => setInviteSearch(e.target.value)}
-                      placeholder="Search by candidate name or email"
-                      className="w-full pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                    />
-                  </div>
-                  <select
-                    value={inviteStatusFilter}
-                    onChange={(e) => setInviteStatusFilter(e.target.value)}
-                    className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                  >
-                    <option value="all">All Statuses</option>
-                    <option value="invited">Invited</option>
-                    <option value="in_progress">In Progress</option>
-                    <option value="completed">Completed</option>
-                    <option value="terminated">Terminated</option>
-                    <option value="cancelled">Cancelled</option>
-                    <option value="expired">Expired</option>
-                  </select>
-                  <input
-                    type="date"
-                    value={inviteDateFrom}
-                    onChange={(e) => setInviteDateFrom(e.target.value)}
-                    className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                  />
-                  <input
-                    type="date"
-                    value={inviteDateTo}
-                    onChange={(e) => setInviteDateTo(e.target.value)}
-                    className="px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                  />
-                  <button
-                    onClick={clearFilters}
-                    disabled={!hasActiveFilters}
-                    className="px-3 py-2 text-sm text-gray-600 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed whitespace-nowrap"
-                  >
-                    Clear Filters
-                  </button>
-                </div>
-
-                {/* Candidate list */}
-                {activityLoading ? (
-                  <div className="space-y-3">
-                    {Array.from({ length: 6 }).map((_, i) => (
-                      <div key={i} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 p-3 sm:p-4 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl bg-white">
-                        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                          <Skeleton className="w-9 h-9 sm:w-10 sm:h-10 rounded-full flex-shrink-0" />
-                          <div className="min-w-0 space-y-1.5">
-                            <Skeleton className="h-4 w-32" />
-                            <Skeleton className="h-3 w-40" />
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3 sm:gap-4 flex-wrap pl-11 sm:pl-0">
-                          <Skeleton className="h-5 w-20 rounded-full" />
-                          <Skeleton className="h-4 w-10" />
-                          <Skeleton className="h-3 w-24" />
-                          <Skeleton className="h-7 w-24 rounded-md" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : filtered.length === 0 ? (
-                  <div className="text-center py-12 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02]">
-                    <div className="w-20 h-20 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
-                      <Users className="w-10 h-10 text-brand-blue" />
-                    </div>
-                    <p className="text-gray-700 font-medium mb-2">
-                      {hasActiveFilters ? 'No candidates match the current filters' : 'No candidates invited yet'}
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      {hasActiveFilters ? 'Try adjusting your search or filters' : 'Invite candidates to see them listed here'}
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {filtered.map((a) => {
-                      const capScore = (a as any).ai_evaluation?.capability_score;
-                      const displayScore = capScore != null ? capScore : a.score;
-                      // Requirement: clicking anywhere on the row opens View Details.
-                      return (
-                        <div
-                          key={a.id}
-                          onClick={() => handleCandidateClick(a.id, filtered.map(f => f.id))}
-                          className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 p-3 sm:p-4 border border-gray-100 ring-1 ring-black/[0.02] rounded-xl bg-white cursor-pointer hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all"
-                        >
-                          {/* Candidate info */}
-                          <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
-                            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                              <span className="text-xs sm:text-sm font-medium text-brand-blue">
-                                {(a.candidate_name || '?').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()}
-                              </span>
-                            </div>
-                            <div className="min-w-0">
-                              <div className="font-medium text-gray-900 text-sm truncate">{a.candidate_name || 'Unknown'}</div>
-                              <div className="text-xs text-gray-500 truncate">{a.candidate_email}</div>
-                            </div>
-                          </div>
-
-                          {/* Status + score + timeline + action */}
-                          <div className="flex items-center gap-3 sm:gap-4 flex-wrap pl-11 sm:pl-0">
-                            {statusPill(a.status)}
-
-                            {displayScore != null && (() => {
-                              // Round to whole number so this matches the detail
-                              // page (17.5 → 18). Pass ≥ 60% → green, else red.
-                              const rounded = Math.round(Number(displayScore));
-                              const scoreColor = rounded >= 60 ? 'text-success' : 'text-destructive';
-                              return (
-                                <div className="text-right">
-                                  <div className="text-2xs text-gray-500">Score</div>
-                                  <div className={`text-sm font-semibold ${scoreColor}`}>{rounded}%</div>
-                                </div>
-                              );
-                            })()}
-
-                            <div className="hidden sm:flex items-center gap-3 text-2xs text-gray-400">
-                              {(a.invitation_sent_at || a.created_at) && (
-                                <span className="flex items-center gap-1" title="Invited">
-                                  <Mail className="w-3 h-3 text-brand-blue" />
-                                  {formatIST(a.invitation_sent_at || a.created_at)}
-                                </span>
-                              )}
-                              {a.started_at && (
-                                <span className="flex items-center gap-1" title="Started">
-                                  <Play className="w-3 h-3 text-brand-orange" />
-                                  {formatIST(a.started_at)}
-                                </span>
-                              )}
-                              {a.completed_at && (
-                                <span className="flex items-center gap-1" title="Completed">
-                                  <CheckCircle className="w-3 h-3 text-success" />
-                                  {formatIST(a.completed_at)}
-                                </span>
-                              )}
-                            </div>
-
-                            {(a.status === 'completed' || a.status === 'in_progress' || a.status === 'terminated') && (
-                              <Button
-                                variant="secondary"
-                                size="sm"
-                                onClick={(e) => { e.stopPropagation(); handleCandidateClick(a.id, filtered.map(f => f.id)); }}
-                                icon={<Eye className="w-3 h-3" />}
-                              >
-                                View Details
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                    <div className="pt-1 text-xs sm:text-sm text-gray-500">{resultsLabel}</div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
-
-          {/* Share Tab — embedded send-invite form */}
-          {activeTab === 'share' && config.status === 'published' && canShareAIInterviews && (
-            <ShareAIInterviewModal
+          {/* Track Tab — the AI Interview Track Invites popup (the same one
+              the AI Interviews list and Job Details open over their own
+              pages), embedded here as this page's own view instead of a
+              popup over it. */}
+          {activeTab === 'invites' && (
+            <AIInterviewTrackInvitesModal
               embedded
               isOpen
-              config={config}
-              onClose={() => setActiveTab('overview')}
-              onInviteSent={() => { loadActivity(); }}
+              onClose={() => {}}
+              configId={config.id}
+              jdTitle={config.jd_title || config.position || 'Untitled'}
+              // Completed rows offer View Result — swap the popup for the
+              // same inline candidate result view the Results tab opens.
+              onViewResult={(inv) => handleCandidateClick(inv.id)}
             />
           )}
 
+        </div>
       </div>
+
+      {/* Share — a dialog off the header's Share button / Invites tab's
+          "Invite More", not embedded in a tab. */}
+      {config.status === 'published' && canShareAIInterviews && (
+        <ShareAIInterviewModal
+          isOpen={showShareModal}
+          config={config}
+          onClose={() => setShowShareModal(false)}
+          onInviteSent={() => { loadActivity(); }}
+        />
+      )}
 
       {/* Confirmation Dialog */}
       {confirmAction && (
