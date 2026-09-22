@@ -168,7 +168,7 @@ function StatusBadge({ status, depth }: { status: SkillStatus; depth?: 'Low' | '
   const s = STATUS_STYLES[status];
   const Icon = s.icon;
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${s.badge}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium border ${s.badge}`}>
       <Icon className="w-3 h-3" />
       {s.label}
       {status === 'asked_demonstrated' && depth ? <span className="opacity-70">· {depth}</span> : null}
@@ -182,7 +182,7 @@ function LevelBadge({ level }: { level: string }) {
   const cfg = LEVEL_CONFIG[level] || LEVEL_CONFIG.not_started;
   const Icon = cfg.icon;
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${cfg.bg} ${cfg.color} ${cfg.border} border`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium ${cfg.bg} ${cfg.color} ${cfg.border} border`}>
       <Icon className="w-3 h-3" />
       {cfg.label}
     </span>
@@ -193,7 +193,7 @@ function CovBadge({ level }: { level: CovLevel }) {
   const s = COV_STYLES[level];
   const Icon = s.icon;
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${s.badge}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium border ${s.badge}`}>
       <Icon className="w-3 h-3" />
       {s.label}
     </span>
@@ -211,7 +211,7 @@ function TruncatedText({ text, limit = 180, className = '' }: { text: string; li
       {' '}
       <button
         onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
-        className="text-[10px] font-medium text-indigo-600 hover:text-indigo-800"
+        className="text-2xs font-medium text-indigo-600 hover:text-indigo-800"
       >
         {open ? 'Show less' : 'Show more'}
       </button>
@@ -236,13 +236,13 @@ function CoverageTrail({ entries }: { entries: TrailEntry[] }) {
             </div>
             <div className="flex-1 flex items-center gap-2 flex-wrap min-w-0 -mt-0.5">
               <LevelBadge level={entry.state} />
-              {entry.q_num > 0 && <span className="text-[10px] font-mono text-gray-400">Q{entry.q_num}</span>}
+              {entry.q_num > 0 && <span className="text-2xs font-mono text-gray-400">Q{entry.q_num}</span>}
               {(() => {
                 const intent = (entry.question_intent || '').toLowerCase();
                 const isDd = intent === 'deep_dive';
                 const isFu = !isDd && (entry.is_follow_up || ['follow_up', 'probe'].includes(intent));
-                if (isDd) return <span className="text-[10px] font-semibold text-teal-700 bg-teal-100 rounded px-1 py-0.5">D</span>;
-                if (isFu) return <span className="text-[10px] font-semibold text-violet-700 bg-violet-100 rounded px-1 py-0.5">F</span>;
+                if (isDd) return <span className="text-2xs font-semibold text-teal-700 bg-teal-100 rounded px-1 py-0.5">D</span>;
+                if (isFu) return <span className="text-2xs font-semibold text-violet-700 bg-violet-100 rounded px-1 py-0.5">F</span>;
                 return null;
               })()}
               {entry.state === 'asked' && <ArrowRight className="w-3 h-3 text-gray-300" />}
@@ -271,7 +271,7 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-gray-200 w-full tf-table-shell">
       <table className="w-full text-xs" style={{ tableLayout: 'auto' }}>
-        <thead className="bg-gray-100 text-gray-600 uppercase tracking-wide text-[10px]">
+        <thead className="bg-gray-100 text-gray-600 uppercase tracking-wide text-2xs">
           <tr>
             <th className="px-3 py-2 text-left font-semibold w-12 whitespace-nowrap">Q #</th>
             <th className="px-3 py-2 text-left font-semibold">Question</th>
@@ -288,18 +288,18 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
             return (
               <tr key={i} className="align-top">
                 <td className="px-3 py-2 align-top whitespace-nowrap">
-                  <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">
+                  <span className="text-2xs font-semibold text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">
                     Q{g.q_num}
                   </span>
                 </td>
                 <td className="px-3 py-2 align-top" style={{ maxWidth: '28rem' }}>
-                  <div className="text-[12px] font-medium text-gray-800 leading-snug break-words">
+                  <div className="text-xs font-medium text-gray-800 leading-snug break-words">
                     <TruncatedText text={g.question || ''} limit={160} />
                   </div>
                   {hasFu && (
                     <div className="mt-2 pl-3 border-l-2 border-violet-200">
                       {!isOpen ? (
-                        <button onClick={() => toggle(i)} className="text-[10px] text-violet-600 hover:text-violet-800 flex items-center gap-1">
+                        <button onClick={() => toggle(i)} className="text-2xs text-violet-600 hover:text-violet-800 flex items-center gap-1">
                           <ChevronDown className="w-3 h-3" />
                           {(() => {
                             const dd = fus.filter(f => (f.question_intent || '').toLowerCase() === 'deep_dive').length;
@@ -309,7 +309,7 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                         </button>
                       ) : (
                         <div className="space-y-2">
-                          <button onClick={() => toggle(i)} className="text-[10px] text-violet-600 hover:text-violet-800 flex items-center gap-1">
+                          <button onClick={() => toggle(i)} className="text-2xs text-violet-600 hover:text-violet-800 flex items-center gap-1">
                             <ChevronUp className="w-3 h-3" />
                             Hide
                           </button>
@@ -322,9 +322,9 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                               return (
                                 <div key={fi}>
                                   <div className="flex items-center gap-1.5 mb-0.5">
-                                    <span className={`text-[10px] font-semibold ${tagCls} rounded px-1.5 py-0.5`}>{tag}</span>
+                                    <span className={`text-2xs font-semibold ${tagCls} rounded px-1.5 py-0.5`}>{tag}</span>
                                   </div>
-                                  <div className="text-[11px] font-medium text-gray-700 leading-snug break-words">
+                                  <div className="text-2xs font-medium text-gray-700 leading-snug break-words">
                                     <TruncatedText text={fu.question || ''} limit={140} />
                                   </div>
                                 </div>
@@ -337,7 +337,7 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                   )}
                 </td>
                 <td className="px-3 py-2 align-top" style={{ maxWidth: '40rem' }}>
-                  <div className="text-[12px] text-gray-700 leading-snug whitespace-pre-wrap break-words">
+                  <div className="text-xs text-gray-700 leading-snug whitespace-pre-wrap break-words">
                     <TruncatedText text={g.answer || ''} limit={220} />
                   </div>
                   {hasFu && isOpen && (
@@ -349,8 +349,8 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                           const tag = isDd ? `D${++dCtr}` : `F${++fCtr}`;
                           const tagColor = isDd ? 'text-teal-700' : 'text-violet-700';
                           return (
-                            <div key={fi} className="text-[11px] text-gray-600 leading-snug whitespace-pre-wrap break-words">
-                              <span className={`text-[10px] font-semibold ${tagColor} mr-1`}>{tag}:</span>
+                            <div key={fi} className="text-2xs text-gray-600 leading-snug whitespace-pre-wrap break-words">
+                              <span className={`text-2xs font-semibold ${tagColor} mr-1`}>{tag}:</span>
                               <TruncatedText text={fu.answer || ''} limit={180} />
                             </div>
                           );
@@ -729,13 +729,13 @@ export default function CoverageTab({
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-semibold">Coverage</h2>
                 {isInProgress && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-red-500 text-white text-2xs font-bold rounded-full">
                     <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
                     LIVE {liveWsConnected ? '· WS' : '· polling'}
                   </span>
                 )}
                 {isCompleted && (
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-500/20 text-emerald-200 text-[10px] font-bold rounded-full border border-emerald-500/30">
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-emerald-500/20 text-emerald-200 text-2xs font-bold rounded-full border border-emerald-500/30">
                     <CheckCircle2 className="w-3 h-3" />
                     COMPLETED
                   </span>
@@ -845,8 +845,8 @@ export default function CoverageTab({
               <span className={`w-2.5 h-2.5 rounded-full ${item.dot}`} />
               <span className={`text-2xl font-bold ${item.text} leading-none`}>{item.count}</span>
             </div>
-            <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider">{item.label}</p>
-            <p className="text-[10px] text-gray-400 mt-0.5">{item.sub}</p>
+            <p className="text-2xs font-semibold text-gray-600 uppercase tracking-wider">{item.label}</p>
+            <p className="text-2xs text-gray-400 mt-0.5">{item.sub}</p>
           </div>
         ))}
         <div className="bg-white border border-gray-200 rounded-xl p-3">
@@ -856,16 +856,16 @@ export default function CoverageTab({
               {clusterStats.touched}<span className="text-sm text-gray-400 font-normal">/{clusterStats.total || '—'}</span>
             </span>
           </div>
-          <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider">Clusters</p>
-          <p className="text-[10px] text-gray-400 mt-0.5">Addressed / total</p>
+          <p className="text-2xs font-semibold text-gray-600 uppercase tracking-wider">Clusters</p>
+          <p className="text-2xs text-gray-400 mt-0.5">Addressed / total</p>
         </div>
         <div className="bg-white border border-gray-200 rounded-xl p-3">
           <div className="flex items-center justify-between mb-1">
             <TrendingUp className="w-3.5 h-3.5 text-emerald-500" />
             <span className="text-2xl font-bold text-emerald-700 leading-none">{coveredPct}%</span>
           </div>
-          <p className="text-[10px] font-semibold text-gray-600 uppercase tracking-wider">Medium+</p>
-          <p className="text-[10px] text-gray-400 mt-0.5">{touchedPct}% touched total</p>
+          <p className="text-2xs font-semibold text-gray-600 uppercase tracking-wider">Medium+</p>
+          <p className="text-2xs text-gray-400 mt-0.5">{touchedPct}% touched total</p>
         </div>
       </div>
 
@@ -876,7 +876,7 @@ export default function CoverageTab({
           <div className="h-full bg-amber-400 transition-[width] duration-700" style={{ width: `${counts.total > 0 ? (counts.medium / counts.total) * 100 : 0}%` }} />
           <div className="h-full bg-orange-400 transition-[width] duration-700" style={{ width: `${counts.total > 0 ? (counts.low / counts.total) * 100 : 0}%` }} />
         </div>
-        <div className="flex justify-between text-[10px] text-gray-400 mt-1.5">
+        <div className="flex justify-between text-2xs text-gray-400 mt-1.5">
           <span>0 skills</span>
           <span className="font-medium text-gray-500">{counts.total} total</span>
         </div>
@@ -895,11 +895,11 @@ export default function CoverageTab({
           {crossClusterEvents.slice(-3).map((ev, i) => (
             <div key={i} className="bg-white rounded-lg px-3 py-2 border border-blue-100">
               <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[10px] text-gray-400">Q{ev.qNum}</span>
+                <span className="text-2xs text-gray-400">Q{ev.qNum}</span>
                 {ev.clusters.map(cn => (
                   <span key={cn} className="text-xs px-1.5 py-0.5 rounded-full bg-blue-100 text-blue-700">{cn}</span>
                 ))}
-                <span className="text-[10px] text-gray-400 ml-auto">
+                <span className="text-2xs text-gray-400 ml-auto">
                   {ev.skills.length} skill{ev.skills.length > 1 ? 's' : ''} newly covered
                 </span>
               </div>
@@ -948,18 +948,18 @@ export default function CoverageTab({
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-semibold">{section.label}</span>
                   {section.key !== 'hr' && (
-                    <span className={`text-[10px] ${section.accentBg} ${section.accentText} rounded px-1.5 py-0.5`}>
+                    <span className={`text-2xs ${section.accentBg} ${section.accentText} rounded px-1.5 py-0.5`}>
                       {section.clusters.length} cluster{section.clusters.length !== 1 ? 's' : ''} · {sectionSkillList.length} skill{sectionSkillList.length !== 1 ? 's' : ''}
                     </span>
                   )}
                   {section.key === 'hr' && (
-                    <span className={`text-[10px] ${section.accentBg} ${section.accentText} rounded px-1.5 py-0.5`}>
+                    <span className={`text-2xs ${section.accentBg} ${section.accentText} rounded px-1.5 py-0.5`}>
                       {hrGroups.length} question{hrGroups.length !== 1 ? 's' : ''}
                     </span>
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-4 flex-wrap text-[11px]">
+              <div className="flex items-center gap-4 flex-wrap text-2xs">
                 {allocatedQs > 0 && (
                   <span className="flex items-center gap-1 text-gray-600">
                     <MessageSquare className="w-3 h-3" /> Allocated: {allocatedQs} Q{allocatedQs !== 1 ? 's' : ''}
@@ -1038,10 +1038,10 @@ export default function CoverageTab({
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
                             <span className="text-sm font-semibold text-gray-900 truncate">{cluster.name}</span>
-                            <span className={`px-1.5 py-0.5 text-[10px] rounded border ${priorityStyle(cluster.priority, pLabel)}`}>
+                            <span className={`px-1.5 py-0.5 text-2xs rounded border ${priorityStyle(cluster.priority, pLabel)}`}>
                               {pLabel} Priority
                             </span>
-                            <span className="text-[11px] text-gray-400">
+                            <span className="text-2xs text-gray-400">
                               {skillsAsked.length}/{cluster.skills.length} asked
                               <span className="text-gray-300"> · </span>
                               {skillsDemonstrated.length} demonstrated
@@ -1055,7 +1055,7 @@ export default function CoverageTab({
                                 style={{ width: `${clusterPct}%` }}
                               />
                             </div>
-                            <span className={`text-[11px] font-semibold ${
+                            <span className={`text-2xs font-semibold ${
                               clusterPct >= 70 ? 'text-emerald-600' :
                               clusterPct >= 40 ? 'text-amber-600' :
                               clusterPct > 0 ? 'text-orange-500' : 'text-gray-400'
@@ -1100,7 +1100,7 @@ export default function CoverageTab({
                                     <span className="text-sm font-medium text-gray-900 flex-1 min-w-0 truncate">{skill}</span>
                                     <StatusBadge status={status} depth={depth} />
                                     {groups.length > 0 && (
-                                      <span className="inline-flex items-center gap-0.5 text-[10px] text-gray-500">
+                                      <span className="inline-flex items-center gap-0.5 text-2xs text-gray-500">
                                         <MessageSquare className="w-3 h-3" />
                                         {groups.length}
                                         {totalFollowUps > 0 && <span className="text-blue-500">+{totalFollowUps}</span>}
@@ -1113,7 +1113,7 @@ export default function CoverageTab({
                                       {/* Coverage trail (progression) */}
                                       {trail.length > 0 && (
                                         <div>
-                                          <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                          <div className="text-2xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
                                             <Activity className="w-3 h-3" /> Coverage Progression
                                           </div>
                                           <CoverageTrail entries={trail} />
@@ -1122,7 +1122,7 @@ export default function CoverageTab({
                                       {/* Question table */}
                                       {groups.length > 0 ? (
                                         <div>
-                                          <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                          <div className="text-2xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
                                             <MessageSquare className="w-3 h-3" /> Questions & Responses
                                           </div>
                                           <QuestionTable groups={groups} />
@@ -1135,12 +1135,12 @@ export default function CoverageTab({
                                         if (evidence.length > 0) {
                                           return (
                                             <div>
-                                              <div className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
+                                              <div className="text-2xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1">
                                                 <MessageSquare className="w-3 h-3" /> Evidence
                                               </div>
                                               <div className="space-y-1.5">
                                                 {evidence.map((e, i) => (
-                                                  <div key={i} className="flex items-start gap-2 text-[11px]">
+                                                  <div key={i} className="flex items-start gap-2 text-2xs">
                                                     <span className="flex-shrink-0 font-mono font-semibold text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">
                                                       Q{e.q_num}
                                                     </span>
@@ -1162,7 +1162,7 @@ export default function CoverageTab({
                                       })()}
                                       {/* Skill note (from cluster insights) */}
                                       {ciSkill?.note && (
-                                        <div className="text-[11px] text-gray-600 bg-gray-50 border border-gray-200 rounded px-2.5 py-1.5">
+                                        <div className="text-2xs text-gray-600 bg-gray-50 border border-gray-200 rounded px-2.5 py-1.5">
                                           <span className="font-semibold text-gray-700">Evaluator note: </span>
                                           {ciSkill.note}
                                         </div>
@@ -1174,7 +1174,7 @@ export default function CoverageTab({
                             })
                           )}
                           {ci_?.cluster_note && (
-                            <div className="text-[11px] text-gray-600 bg-gray-50 border-t border-gray-200 px-6 py-2.5">
+                            <div className="text-2xs text-gray-600 bg-gray-50 border-t border-gray-200 px-6 py-2.5">
                               <span className="font-semibold text-gray-700">Cluster note: </span>
                               {ci_.cluster_note}
                             </div>

@@ -75,7 +75,7 @@ export function DuplicateResumeDetectedModal({
           {/* Existing Resume Info */}
           <div className="border rounded-lg overflow-hidden">
             <div className="px-2.5 sm:px-3 py-1.5 sm:py-2 bg-amber-50 border-b border-amber-200">
-              <span className="text-[10px] sm:text-xs font-medium text-amber-700">Existing Record in Database</span>
+              <span className="text-2xs sm:text-xs font-medium text-amber-700">Existing Record in Database</span>
             </div>
             <div className="p-3 sm:p-4 space-y-2 sm:space-y-3">
               <div className="flex items-center gap-2">

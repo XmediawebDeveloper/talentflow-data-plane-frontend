@@ -94,7 +94,7 @@ const fieldClassName =
 // appended to `fieldClassName`, so the red border/ring can't lose a Tailwind
 // specificity tie against the gray/blue ones it replaces.
 const fieldErrorClassName =
-  'w-full rounded-xl border border-red-300 bg-white px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-red-400 focus:ring-4 focus:ring-red-100';
+  'w-full rounded-xl border border-destructive-line bg-white px-4 py-3 text-sm text-gray-900 outline-none transition-all placeholder:text-gray-400 focus:border-destructive-line focus:ring-4 focus:ring-destructive-line';
 
 const getErrorDetail = (error: unknown): string | undefined => {
   if (typeof error !== 'object' || error === null || !('response' in error)) {
@@ -355,7 +355,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
     >
       <span>{label}</span>
       {hasDependencies && (
-        <span className={`text-[11px] ${isSelected ? 'text-white/80' : 'text-gray-400'}`} title="Auto-enables dependencies">
+        <span className={`text-2xs ${isSelected ? 'text-white/80' : 'text-gray-400'}`} title="Auto-enables dependencies">
           *
         </span>
       )}
@@ -427,7 +427,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="text-sm font-semibold text-gray-900">{category.name}</h3>
                       {category.isMenuToggle && (
-                        <span className="inline-flex items-center rounded-full bg-brand-orange/10 px-2.5 py-1 text-[11px] font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
+                        <span className="inline-flex items-center rounded-full bg-brand-orange/10 px-2.5 py-1 text-2xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
                           Menu toggle
                         </span>
                       )}
@@ -486,7 +486,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
                             {subCategory.name}
                           </span>
                           {subCategory.viewCode && selectedPermissionCodes.has(subCategory.viewCode) && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-brand-teal/10 px-2.5 py-1 text-[11px] font-medium text-brand-teal ring-1 ring-brand-teal/15">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-brand-teal/10 px-2.5 py-1 text-2xs font-medium text-brand-teal ring-1 ring-brand-teal/15">
                               <Check className="h-3 w-3" />
                               View enabled
                             </span>
@@ -688,7 +688,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
                     className={showError('name') ? fieldErrorClassName : fieldClassName}
                   />
                   {showError('name') && (
-                    <span className="mt-1.5 block text-xs font-medium text-red-600">{fieldErrors.name}</span>
+                    <span className="mt-1.5 block text-xs font-medium text-destructive">{fieldErrors.name}</span>
                   )}
                 </label>
 
@@ -706,7 +706,7 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
                     className={showError('code') ? fieldErrorClassName : fieldClassName}
                   />
                   {showError('code') && (
-                    <span className="mt-1.5 block text-xs font-medium text-red-600">{fieldErrors.code}</span>
+                    <span className="mt-1.5 block text-xs font-medium text-destructive">{fieldErrors.code}</span>
                   )}
                 </label>
               </div>

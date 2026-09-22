@@ -15,6 +15,7 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import api from '@/lib/services/api';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 // Addon interface
 interface Addon {
@@ -973,7 +974,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                             </p>
                           )}
                           {remaining.isExpired && (
-                            <p className="text-xs text-red-500 mt-2 flex items-center sm:justify-end gap-1">
+                            <p className="text-xs text-destructive mt-2 flex items-center sm:justify-end gap-1">
                               <AlertTriangle className="w-3 h-3" />
                               Plan Expired
                             </p>
@@ -1023,7 +1024,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   </div>
                 </div>
                 {quotaSummary.billing_period && (
-                  <div className="inline-flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-slate-500 bg-white dark:bg-slate-800 ring-1 ring-gray-200 dark:ring-slate-700 px-2.5 py-1 rounded-full self-start sm:self-auto">
+                  <div className="inline-flex items-center gap-1.5 text-2xs text-gray-500 dark:text-slate-500 bg-white dark:bg-slate-800 ring-1 ring-gray-200 dark:ring-slate-700 px-2.5 py-1 rounded-full self-start sm:self-auto">
                     <Calendar className="w-3 h-3 flex-shrink-0" />
                     <span className="truncate">{formatISTDate(quotaSummary.billing_period.start)} – {formatISTDate(quotaSummary.billing_period.end)}</span>
                   </div>
@@ -1100,7 +1101,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                                   : isAddonPurchaseBlocked
                                   ? 'bg-gray-200 text-gray-500 ring-gray-300 cursor-not-allowed'
                                   : quota.is_exceeded_critical
-                                    ? 'bg-red-600 text-white ring-red-700 hover:bg-red-700'
+                                    ? 'bg-destructive text-white ring-destructive-line hover:bg-destructive'
                                     : quota.is_exceeded
                                       ? 'bg-brand-orange text-white ring-brand-orange-deep hover:bg-brand-orange-deep'
                                       : quota.is_exhausted
@@ -1111,10 +1112,10 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                               <Plus className="w-3 h-3" />
                               {canPurchaseAddons ? `Add ${quota.name}` : `${quota.name} Read Only`}
                               {quota.is_exceeded && canPurchaseAddons && !isAddonPurchaseBlocked && (
-                                <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full">+{formatNum(quota.exceeded_by)} over</span>
+                                <span className="text-2xs bg-white/20 px-1.5 py-0.5 rounded-full">+{formatNum(quota.exceeded_by)} over</span>
                               )}
                               {quota.is_exhausted && canPurchaseAddons && !isAddonPurchaseBlocked && (
-                                <span className="text-[10px] bg-white/20 px-1.5 py-0.5 rounded-full">Exhausted</span>
+                                <span className="text-2xs bg-white/20 px-1.5 py-0.5 rounded-full">Exhausted</span>
                               )}
                             </button>
                           );
@@ -1154,7 +1155,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 const statusPill = isUnlimited
                   ? { label: '∞ Unlimited', cls: 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-gray-200 dark:ring-slate-700' }
                   : quota.is_exceeded_critical
-                  ? { label: 'Exceeded', cls: 'bg-red-50 text-red-600 ring-red-200' }
+                  ? { label: 'Exceeded', cls: 'bg-destructive-subtle text-destructive ring-destructive-line' }
                   : quota.is_exceeded
                   ? { label: 'Exceeded', cls: 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20' }
                   : quota.is_exhausted
@@ -1168,7 +1169,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     key={quota.quota_type}
                     className={`flex flex-col rounded-xl border bg-white dark:bg-slate-900 p-3 shadow-sm transition-all hover:shadow-md ${
                       quota.is_exceeded_critical
-                        ? 'border-red-200 hover:border-red-300'
+                        ? 'border-destructive-line hover:border-destructive-line'
                         : quota.is_exceeded || quota.is_exhausted
                           ? 'border-brand-orange/30 hover:border-brand-orange/40'
                           : 'border-gray-200 dark:border-slate-700/60 hover:border-brand-blue/30'
@@ -1178,7 +1179,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     <div className="flex items-center gap-2 mb-2">
                       <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ring-1 ${
                         quota.is_exceeded_critical
-                          ? 'bg-red-50 text-red-600 ring-red-200'
+                          ? 'bg-destructive-subtle text-destructive ring-destructive-line'
                           : quota.is_exceeded || quota.is_exhausted
                             ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
                             : 'bg-brand-blue/10 text-brand-blue ring-brand-blue/15'
@@ -1187,7 +1188,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       </div>
                       <span className="text-xs font-semibold text-gray-700 dark:text-slate-300 truncate flex-1 min-w-0" title={quota.name}>{quota.name}</span>
                       {statusPill && (
-                        <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded-full ring-1 whitespace-nowrap ${statusPill.cls}`}>
+                        <span className={`inline-flex items-center text-2xs font-semibold px-1.5 py-0.5 rounded-full ring-1 whitespace-nowrap ${statusPill.cls}`}>
                           {statusPill.label}
                         </span>
                       )}
@@ -1197,7 +1198,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     <div className="flex items-baseline justify-between gap-2 mb-2">
                       <div className="flex items-baseline gap-1 min-w-0">
                         <span className={`text-lg sm:text-xl font-semibold tabular-nums tracking-tight ${
-                          quota.is_exceeded_critical ? 'text-red-600' : quota.is_exceeded ? 'text-brand-orange-deep' : 'text-gray-900 dark:text-slate-50'
+                          quota.is_exceeded_critical ? 'text-destructive' : quota.is_exceeded ? 'text-brand-orange-deep' : 'text-gray-900 dark:text-slate-50'
                         }`}>
                           {isUnlimited ? '∞' : formatNum(quota.used)}
                         </span>
@@ -1206,7 +1207,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                         </span>
                       </div>
                       {!isUnlimited && !quota.is_exceeded && (
-                        <span className="text-[10px] font-semibold text-gray-600 dark:text-slate-400 tabular-nums">
+                        <span className="text-2xs font-semibold text-gray-600 dark:text-slate-400 tabular-nums">
                           {quota.limit <= 0 ? '0%' : `${Math.max(0, 100 - quota.percentage_used).toFixed(0)}%`} left
                         </span>
                       )}
@@ -1219,7 +1220,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                           isUnlimited
                             ? 'bg-brand-cyan'
                             : quota.is_exceeded_critical
-                              ? 'bg-red-500'
+                              ? 'bg-destructive'
                               : quota.is_exceeded || quota.is_exhausted
                                 ? 'bg-brand-orange'
                                 : quota.is_low
@@ -1231,15 +1232,15 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                     </div>
 
                     {/* Remaining footer */}
-                    <p className={`text-[11px] font-medium mb-2 ${
-                      quota.is_exceeded_critical ? 'text-red-600' : quota.is_exceeded ? 'text-brand-orange-deep' : 'text-gray-500 dark:text-slate-500'
+                    <p className={`text-2xs font-medium mb-2 ${
+                      quota.is_exceeded_critical ? 'text-destructive' : quota.is_exceeded ? 'text-brand-orange-deep' : 'text-gray-500 dark:text-slate-500'
                     }`}>
                       {isUnlimited ? 'Unlimited usage' : `${formatNum(quota.remaining)} remaining`}
                     </p>
 
                     {/* Plan vs Add-on breakdown — single condensed row */}
                     {!isUnlimited && (
-                      <div className="mt-auto pt-2 border-t border-gray-100 dark:border-slate-700/60 grid grid-cols-2 gap-2 text-[11px]">
+                      <div className="mt-auto pt-2 border-t border-gray-100 dark:border-slate-700/60 grid grid-cols-2 gap-2 text-2xs">
                         <div className="flex items-center justify-between">
                           <span className="text-gray-500 dark:text-slate-500">Plan</span>
                           <span className="font-semibold text-gray-700 dark:text-slate-300 tabular-nums">{formatNum(quota.subscription_limit)}</span>
@@ -1275,7 +1276,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   <p className="text-xs text-gray-500 dark:text-slate-500">Purchase additional units to extend your quota limits</p>
                 </div>
               </div>
-              <div className="hidden sm:inline-flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-slate-500 bg-white dark:bg-slate-800 ring-1 ring-gray-200 dark:ring-slate-700 px-2.5 py-1 rounded-full flex-shrink-0">
+              <div className="hidden sm:inline-flex items-center gap-1.5 text-2xs text-gray-500 dark:text-slate-500 bg-white dark:bg-slate-800 ring-1 ring-gray-200 dark:ring-slate-700 px-2.5 py-1 rounded-full flex-shrink-0">
                 <Info className="w-3 h-3" />
                 <span>Valid until plan expiry</span>
               </div>
@@ -1284,39 +1285,43 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
           {/* Trial banner */}
           {isAddonPurchaseBlocked && subscriptionSummary?.is_trial && (
-            <div className="mx-4 sm:mx-6 mt-4 mb-1 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3.5">
-              <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
+            <div className="mx-4 sm:mx-6 mt-4 mb-1 flex items-start gap-3 rounded-xl border border-warning-line bg-warning-subtle px-4 py-3.5">
+              <AlertTriangle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-amber-800">Add-on Units — Not Available on Free Trial</p>
-                <p className="text-sm text-amber-700 mt-0.5">
+                <p className="text-sm font-semibold text-warning-strong">Add-on Units — Not Available on Free Trial</p>
+                <p className="text-sm text-warning mt-0.5">
                   Purchasing add-on units is only available for paid subscriptions. Upgrade your plan to unlock this feature.
                 </p>
               </div>
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={handleUpgradeClick}
-                className="flex-shrink-0 flex items-center gap-1.5 bg-amber-500 hover:bg-amber-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                className="flex-shrink-0"
               >
                 Upgrade <ArrowUpRight className="w-3.5 h-3.5" />
-              </button>
+              </Button>
             </div>
           )}
 
           {/* Expired plan banner */}
           {isAddonPurchaseBlocked && !subscriptionSummary?.is_trial && (subscriptionSummary?.status?.toLowerCase() === 'expired' || subscriptionSummary?.status?.toLowerCase() === 'inactive') && (
-            <div className="mx-4 sm:mx-6 mt-4 mb-1 flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-4 py-3.5">
-              <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+            <div className="mx-4 sm:mx-6 mt-4 mb-1 flex items-start gap-3 rounded-xl border border-destructive-line bg-destructive-subtle px-4 py-3.5">
+              <AlertTriangle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-red-800">Add-on Purchase Unavailable — Plan Expired</p>
-                <p className="text-sm text-red-700 mt-0.5">
+                <p className="text-sm font-semibold text-destructive-strong">Add-on Purchase Unavailable — Plan Expired</p>
+                <p className="text-sm text-destructive mt-0.5">
                   Renew your subscription to purchase add-on units.
                 </p>
               </div>
-              <button
+              <Button
+                variant="primary"
+                size="sm"
                 onClick={handleUpgradeClick}
-                className="flex-shrink-0 flex items-center gap-1.5 bg-red-500 hover:bg-red-600 text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition-colors"
+                className="flex-shrink-0"
               >
                 Renew Plan <ArrowUpRight className="w-3.5 h-3.5" />
-              </button>
+              </Button>
             </div>
           )}
 
@@ -1418,27 +1423,25 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                           <span className="text-base font-bold text-gray-900 dark:text-slate-50 tabular-nums">
                             ₹{(addon.price || addon.unit_price || 0).toLocaleString()}
                           </span>
-                          <span className="text-[10px] text-gray-400 dark:text-slate-500 ml-1">one-time</span>
+                          <span className="text-2xs text-gray-400 dark:text-slate-500 ml-1">one-time</span>
                         </div>
                       </div>
 
                       {/* Purchase button */}
-                      <button
+                      <Button
+                        variant="primary"
+                        size="sm"
                         onClick={() => handleBuyAddon(addon)}
                         disabled={isAddonPurchaseBlocked}
                         title={isAddonPurchaseBlocked ? addonBlockedMessage : ""}
-                        className={`mt-auto w-full px-3 py-2 rounded-lg text-xs font-semibold transition-all flex items-center justify-center gap-1.5 ${
-                          isAddonPurchaseBlocked
-                            ? 'bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed'
-                            : 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2'
-                        }`}
+                        className="mt-auto w-full"
                       >
                         <ShoppingCart className="w-3.5 h-3.5" />
                         {isAddonPurchaseBlocked
                           ? (subscriptionSummary?.status?.toLowerCase() === 'expired' ? 'Renew Plan' : 'Upgrade Plan')
                           : 'Purchase Now'}
                         {!isAddonPurchaseBlocked && <ChevronRight className="w-3.5 h-3.5" />}
-                      </button>
+                      </Button>
                     </div>
                   );
                 })}
@@ -1474,41 +1477,44 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             <div className="p-6 border-b border-gray-200 dark:border-slate-700 shrink-0">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                    <Plus className="w-5 h-5 text-green-600" />
+                  <div className="w-10 h-10 bg-success-subtle rounded-lg flex items-center justify-center">
+                    <Plus className="w-5 h-5 text-success" />
                   </div>
                   <div>
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50">Record Usage</h2>
                     <p className="text-sm text-gray-600 dark:text-slate-400">Track quota consumption</p>
                   </div>
                 </div>
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => {
                     setShowRecordModal(false);
                     setRecordError(null);
                     setRecordSuccess(null);
                   }}
-                  className="p-2 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
-                 aria-label="Close">
-                  <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-                </button>
+                  aria-label="Close"
+                  className="px-2"
+                >
+                  <X className="w-5 h-5" />
+                </Button>
               </div>
             </div>
 
             <div className="p-6 space-y-4 flex-1 overflow-y-auto">
               {/* Success Message */}
               {recordSuccess && (
-                <div className="p-3 bg-green-50 border border-green-200 rounded-lg flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0" />
-                  <p className="text-sm text-green-700">{recordSuccess}</p>
+                <div className="p-3 bg-success-subtle border border-success-line rounded-lg flex items-center gap-2">
+                  <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0" />
+                  <p className="text-sm text-success">{recordSuccess}</p>
                 </div>
               )}
 
               {/* Error Message */}
               {recordError && (
-                <div className="p-3 bg-red-50 border border-red-200 rounded-lg flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0" />
-                  <p className="text-sm text-red-700">{recordError}</p>
+                <div className="p-3 bg-destructive-subtle border border-destructive-line rounded-lg flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0" />
+                  <p className="text-sm text-destructive">{recordError}</p>
                 </div>
               )}
 
@@ -1520,7 +1526,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 <select
                   value={recordForm.quota_type}
                   onChange={(e) => setRecordForm({ ...recordForm, quota_type: e.target.value as RecordUsageRequest['quota_type'] })}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-success-line focus:border-success-line transition-colors"
                 >
                   <option value="RU">Resume Storage (RU)</option>
                   <option value="RS">Resume Scoring (RS)</option>
@@ -1540,7 +1546,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   min="1"
                   value={recordForm.amount || 1}
                   onChange={(e) => setRecordForm({ ...recordForm, amount: parseInt(e.target.value) || 1 })}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-success-line focus:border-success-line transition-colors"
                 />
               </div>
 
@@ -1554,7 +1560,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   value={recordForm.operation_type || ''}
                   onChange={(e) => setRecordForm({ ...recordForm, operation_type: e.target.value })}
                   placeholder="e.g., resume_upload, bulk_score"
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-success-line focus:border-success-line transition-colors"
                 />
               </div>
 
@@ -1568,7 +1574,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                   value={recordForm.resource_id || ''}
                   onChange={(e) => setRecordForm({ ...recordForm, resource_id: e.target.value })}
                   placeholder="e.g., resume-abc123"
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-green-500 focus:border-green-500 transition-colors"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-xl focus:ring-2 focus:ring-success-line focus:border-success-line transition-colors"
                 />
               </div>
 
@@ -1583,20 +1589,22 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
             <div className="p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 rounded-b-2xl shrink-0">
               <div className="flex gap-3">
-                <button
+                <Button
+                  variant="secondary"
                   onClick={() => {
                     setShowRecordModal(false);
                     setRecordError(null);
                     setRecordSuccess(null);
                   }}
-                  className="flex-1 px-4 py-2.5 border border-gray-300 dark:border-slate-700 rounded-lg text-gray-700 dark:text-slate-300 font-medium hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
+                  className="flex-1"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="primary"
                   onClick={handleRecordUsage}
                   disabled={recordingUsage}
-                  className="flex-1 px-4 py-2.5 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                  className="flex-1"
                 >
                   {recordingUsage ? (
                     <>
@@ -1609,7 +1617,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       Record Usage
                     </>
                   )}
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -1633,7 +1641,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 mb-0.5">
                     <h2 className="text-lg sm:text-xl font-bold text-white">Purchase Add-on</h2>
-                    <span className="text-[10px] font-semibold bg-white/20 text-white px-2 py-0.5 rounded-full border border-white/20">INSTANT</span>
+                    <span className="text-2xs font-semibold bg-white/20 text-white px-2 py-0.5 rounded-full border border-white/20">INSTANT</span>
                   </div>
                   <p className="text-xs sm:text-sm text-gray-400">Add units to your quota immediately</p>
                 </div>
@@ -1656,30 +1664,30 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
                 {/* Success Message */}
                 {addonPurchaseSuccess && (
-                  <div className="p-4 bg-green-50 border border-green-200 rounded-2xl flex items-start gap-3 animate-in slide-in-from-top duration-200">
-                    <div className="w-8 h-8 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">
+                  <div className="p-4 bg-success-subtle border border-success-line rounded-2xl flex items-start gap-3 animate-in slide-in-from-top duration-200">
+                    <div className="w-8 h-8 bg-success rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">
                       <CheckCircle2 className="w-4 h-4 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-green-800 text-sm">Purchase Successful!</p>
-                      <p className="text-xs text-green-600 mt-0.5">{addonPurchaseSuccess}</p>
+                      <p className="font-semibold text-success-strong text-sm">Purchase Successful!</p>
+                      <p className="text-xs text-success mt-0.5">{addonPurchaseSuccess}</p>
                     </div>
                   </div>
                 )}
 
                 {/* Error Message */}
                 {addonPurchaseError && (
-                  <div className="p-4 bg-red-50 border border-red-200 rounded-2xl flex items-start gap-3 animate-in slide-in-from-top duration-200">
-                    <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">
+                  <div className="p-4 bg-destructive-subtle border border-destructive-line rounded-2xl flex items-start gap-3 animate-in slide-in-from-top duration-200">
+                    <div className="w-8 h-8 bg-destructive rounded-full flex items-center justify-center flex-shrink-0 shadow-sm">
                       <AlertCircle className="w-4 h-4 text-white" />
                     </div>
                     <div className="min-w-0">
-                      <p className="font-semibold text-red-800 text-sm">
+                      <p className="font-semibold text-destructive-strong text-sm">
                         {paymentCaptured ? 'Activation Failed — Payment Was Captured' : 'Purchase Failed'}
                       </p>
-                      <p className="text-xs text-red-600 mt-0.5">{addonPurchaseError}</p>
+                      <p className="text-xs text-destructive mt-0.5">{addonPurchaseError}</p>
                       {paymentCaptured && (
-                        <p className="text-xs text-red-700 mt-1 font-medium">
+                        <p className="text-xs text-destructive mt-1 font-medium">
                           Your payment was received. Please check Billing History to retry activation — you will not be charged again.
                         </p>
                       )}
@@ -1797,21 +1805,22 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             {/* Modal Footer */}
             <div className="p-4 sm:p-5 border-t border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 flex-shrink-0">
               <div className="flex gap-3">
-                <button
+                <Button
+                  variant="secondary"
                   onClick={() => {
                     setShowAddonModal(false);
                     setAddonPurchaseError(null);
                     setAddonPurchaseSuccess(null);
                     setPaymentCaptured(false);
                   }}
-                  className="px-5 py-3 border border-gray-200 dark:border-slate-700 rounded-2xl text-gray-600 dark:text-slate-400 font-semibold text-sm hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-gray-300 transition-all"
                 >
                   {paymentCaptured && addonPurchaseError ? 'Close' : 'Cancel'}
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="primary"
                   onClick={handlePurchaseAddon}
                   disabled={purchasingAddon || razorpayProcessing || !!addonPurchaseSuccess || paymentCaptured}
-                  className="flex flex-1 items-center justify-center gap-2 rounded-2xl bg-brand-blue py-3 text-sm font-semibold text-white shadow-lg shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-xl active:scale-[0.98] disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="flex-1"
                 >
                   {purchasingAddon || razorpayProcessing ? (
                     <>
@@ -1828,9 +1837,9 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                       <span>Pay ₹{((selectedAddon.price || selectedAddon.unit_price || 0) * addonQuantity * 1.18).toFixed(2)}</span>
                     </>
                   )}
-                </button>
+                </Button>
               </div>
-              <p className="text-center text-[11px] text-gray-400 dark:text-slate-500 mt-3 flex items-center justify-center gap-1">
+              <p className="text-center text-2xs text-gray-400 dark:text-slate-500 mt-3 flex items-center justify-center gap-1">
                 <span>🔒</span>
                 <span>Secured by Razorpay · 256-bit SSL encryption</span>
               </p>

@@ -124,7 +124,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                       </div>
                       <div className="flex items-center gap-3 sm:gap-4 ml-10 sm:ml-0">
                         {hasIssues && (
-                          <span className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 bg-brand-blue/10 text-brand-blue text-[10px] sm:text-xs rounded-full border border-brand-blue/20">
+                          <span className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-3 py-1 sm:py-1.5 bg-brand-blue/10 text-brand-blue text-2xs sm:text-xs rounded-full border border-brand-blue/20">
                             <AlertCircle className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                             Needs Review
                           </span>
@@ -137,7 +137,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                           }`}>
                             {successRate}%
                           </div>
-                          <div className="text-[10px] sm:text-xs text-gray-500">Success Rate</div>
+                          <div className="text-2xs sm:text-xs text-gray-500">Success Rate</div>
                         </div>
                         <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
                       </div>
@@ -151,7 +151,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                           <div className="w-6 h-6 sm:w-8 sm:h-8 bg-green-500 rounded-lg flex items-center justify-center flex-shrink-0">
                             <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                           </div>
-                          <span className="text-[10px] sm:text-xs text-gray-700 truncate">Completed</span>
+                          <span className="text-2xs sm:text-xs text-gray-700 truncate">Completed</span>
                         </div>
                         <div className="text-lg sm:text-xl lg:text-2xl text-green-700">{record.completed}</div>
                       </div>
@@ -162,7 +162,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                           <div className="w-6 h-6 sm:w-8 sm:h-8 bg-brand-blue rounded-lg flex items-center justify-center flex-shrink-0">
                             <RefreshCw className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                           </div>
-                          <span className="text-[10px] sm:text-xs text-gray-700 truncate">Pending</span>
+                          <span className="text-2xs sm:text-xs text-gray-700 truncate">Pending</span>
                         </div>
                         <div className="text-lg sm:text-xl lg:text-2xl text-brand-blue">{record.pending}</div>
                       </div>
@@ -173,7 +173,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                           <div className="w-6 h-6 sm:w-8 sm:h-8 bg-red-500 rounded-lg flex items-center justify-center flex-shrink-0">
                             <AlertCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                           </div>
-                          <span className="text-[10px] sm:text-xs text-gray-700 truncate">Error</span>
+                          <span className="text-2xs sm:text-xs text-gray-700 truncate">Error</span>
                         </div>
                         <div className="text-lg sm:text-xl lg:text-2xl text-red-700">{record.errors}</div>
                       </div>
@@ -184,7 +184,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                           <div className="w-6 h-6 sm:w-8 sm:h-8 bg-brand-cyan rounded-lg flex items-center justify-center flex-shrink-0">
                             <Copy className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                           </div>
-                          <span className="text-[10px] sm:text-xs text-gray-700 truncate">Duplicate</span>
+                          <span className="text-2xs sm:text-xs text-gray-700 truncate">Duplicate</span>
                         </div>
                         <div className="text-lg sm:text-xl lg:text-2xl text-brand-cyan">{record.duplicated}</div>
                       </div>
@@ -195,7 +195,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                           <div className="w-6 h-6 sm:w-8 sm:h-8 bg-brand-blue-2 rounded-lg flex items-center justify-center flex-shrink-0">
                             <GitBranch className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                           </div>
-                          <span className="text-[10px] sm:text-xs text-gray-700 truncate">Versioned</span>
+                          <span className="text-2xs sm:text-xs text-gray-700 truncate">Versioned</span>
                         </div>
                         <div className="text-lg sm:text-xl lg:text-2xl text-brand-blue-2">{record.versioned}</div>
                       </div>
@@ -206,7 +206,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
                           <div className="w-6 h-6 sm:w-8 sm:h-8 bg-gray-600 rounded-lg flex items-center justify-center flex-shrink-0">
                             <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                           </div>
-                          <span className="text-[10px] sm:text-xs text-gray-700 truncate">Total Files</span>
+                          <span className="text-2xs sm:text-xs text-gray-700 truncate">Total Files</span>
                         </div>
                         <div className="text-lg sm:text-xl lg:text-2xl text-gray-700">{record.totalFiles}</div>
                       </div>
@@ -214,7 +214,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
 
                     {/* Progress Bar */}
                     <div className="mt-3 sm:mt-5">
-                      <div className="flex items-center justify-between text-[10px] sm:text-xs text-gray-600 mb-1.5 sm:mb-2">
+                      <div className="flex items-center justify-between text-2xs sm:text-xs text-gray-600 mb-1.5 sm:mb-2">
                         <span>Upload Progress</span>
                         <span>{record.completed} of {record.totalFiles} processed</span>
                       </div>
@@ -232,7 +232,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
 
                     {/* Click to view hint */}
                     <div className="mt-3 sm:mt-4 pt-3 sm:pt-4 border-t border-gray-200">
-                      <p className="text-[10px] sm:text-xs text-gray-500 text-center">
+                      <p className="text-2xs sm:text-xs text-gray-500 text-center">
                         Click to view detailed file-by-file status
                       </p>
                     </div>

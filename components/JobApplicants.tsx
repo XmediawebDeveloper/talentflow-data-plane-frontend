@@ -2,6 +2,7 @@ import { ArrowLeft, Search, Filter, Download, Mail, Phone, MapPin, Briefcase, Gr
 import { useState } from 'react';
 import ResumeAnalysis from './ResumeAnalysis';
 import SkillsList from '@/components/ui/SkillsList';
+import { Button } from '@/components/ui/button';
 
 interface Applicant {
   id: string;
@@ -56,20 +57,20 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
       case 'Reviewing':
         return { bg: 'bg-gray-100', text: 'text-gray-900', border: 'border-gray-300', icon: Eye };
       case 'Shortlisted':
-        return { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-300', icon: CheckCircle2 };
+        return { bg: 'bg-success-subtle', text: 'text-success', border: 'border-success-line', icon: CheckCircle2 };
       case 'Interview':
-        return { bg: 'bg-amber-100', text: 'text-amber-700', border: 'border-amber-300', icon: MessageSquare };
+        return { bg: 'bg-warning-subtle', text: 'text-warning', border: 'border-warning-line', icon: MessageSquare };
       case 'Rejected':
-        return { bg: 'bg-red-100', text: 'text-red-700', border: 'border-red-300', icon: XCircle };
+        return { bg: 'bg-destructive-subtle', text: 'text-destructive', border: 'border-destructive-line', icon: XCircle };
       default:
         return { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-300', icon: Clock };
     }
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 85) return 'text-green-600 bg-green-100';
+    if (score >= 85) return 'text-success bg-success-subtle';
     if (score >= 70) return 'text-gray-800 bg-gray-100';
-    return 'text-yellow-600 bg-yellow-100';
+    return 'text-warning bg-warning-subtle';
   };
 
   const getMatchStatusConfig = (matchStatus: 'exact' | 'partial' | 'low') => {
@@ -77,9 +78,9 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
       case 'exact':
         return { 
           label: 'Exact Match', 
-          bg: 'bg-green-100', 
-          text: 'text-green-700', 
-          border: 'border-green-300',
+          bg: 'bg-success-subtle', 
+          text: 'text-success', 
+          border: 'border-success-line',
           icon: CheckCircle2 
         };
       case 'partial':
@@ -93,9 +94,9 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
       case 'low':
         return { 
           label: 'Low Match', 
-          bg: 'bg-yellow-100', 
-          text: 'text-yellow-700', 
-          border: 'border-yellow-300',
+          bg: 'bg-warning-subtle', 
+          text: 'text-warning', 
+          border: 'border-warning-line',
           icon: XCircle 
         };
     }
@@ -141,14 +142,12 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
             </p>
           </div>
           <div className="flex gap-3">
-            <button className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
-              <Download className="w-4 h-4" />
+            <Button variant="secondary" size="md" icon={<Download className="w-4 h-4" />}>
               Export
-            </button>
-            <button className="flex items-center gap-2 bg-gray-800 text-white px-6 py-2.5 rounded-lg hover:bg-gray-900 transition-colors shadow-lg shadow-blue-500/25">
-              <Mail className="w-5 h-5" />
+            </Button>
+            <Button variant="primary" size="md" icon={<Mail className="w-5 h-5" />}>
               Email Selected
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -159,7 +158,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
               <div className="p-2.5 bg-gray-50 rounded-lg">
                 <Users className="w-5 h-5 text-gray-800" />
               </div>
-              <TrendingUp className="w-4 h-4 text-green-500" />
+              <TrendingUp className="w-4 h-4 text-success" />
             </div>
             <div className="text-2xl text-gray-900 mb-1">{stats.total}</div>
             <div className="text-sm text-gray-600">Total Applicants</div>
@@ -167,10 +166,10 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-3">
-              <div className="p-2.5 bg-green-50 rounded-lg">
-                <Target className="w-5 h-5 text-green-600" />
+              <div className="p-2.5 bg-success-subtle rounded-lg">
+                <Target className="w-5 h-5 text-success" />
               </div>
-              <div className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">85+</div>
+              <div className="px-2 py-0.5 bg-success-subtle text-success rounded text-xs">85+</div>
             </div>
             <div className="text-2xl text-gray-900 mb-1">{stats.exactMatch}</div>
             <div className="text-sm text-gray-600">Exact Match</div>
@@ -189,10 +188,10 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-3">
-              <div className="p-2.5 bg-green-50 rounded-lg">
-                <CheckCircle2 className="w-5 h-5 text-green-600" />
+              <div className="p-2.5 bg-success-subtle rounded-lg">
+                <CheckCircle2 className="w-5 h-5 text-success" />
               </div>
-              <div className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-xs">Active</div>
+              <div className="px-2 py-0.5 bg-success-subtle text-success rounded text-xs">Active</div>
             </div>
             <div className="text-2xl text-gray-900 mb-1">{stats.shortlisted}</div>
             <div className="text-sm text-gray-600">Shortlisted</div>
@@ -200,10 +199,10 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
 
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
             <div className="flex items-center justify-between mb-3">
-              <div className="p-2.5 bg-amber-50 rounded-lg">
-                <MessageSquare className="w-5 h-5 text-amber-600" />
+              <div className="p-2.5 bg-warning-subtle rounded-lg">
+                <MessageSquare className="w-5 h-5 text-warning" />
               </div>
-              <div className="px-2 py-0.5 bg-amber-100 text-amber-700 rounded text-xs">Pending</div>
+              <div className="px-2 py-0.5 bg-warning-subtle text-warning rounded text-xs">Pending</div>
             </div>
             <div className="text-2xl text-gray-900 mb-1">{stats.interview}</div>
             <div className="text-sm text-gray-600">Interviews</div>
@@ -275,10 +274,9 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
             </div>
 
             {/* Advanced Filters */}
-            <button className="px-4 py-3 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-2 text-sm">
-              <Filter className="w-4 h-4 text-gray-600" />
-              <span className="text-gray-700">More Filters</span>
-            </button>
+            <Button variant="secondary" icon={<Filter className="w-4 h-4" />}>
+              More Filters
+            </Button>
           </div>
         </div>
       </div>
@@ -299,7 +297,7 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
             >
               <div className="flex">
                 {/* Left Color Bar */}
-                <div className={`w-2 ${applicant.score >= 85 ? 'bg-green-500' : applicant.score >= 70 ? 'bg-gray-700' : 'bg-yellow-500'}`}></div>
+                <div className={`w-2 ${applicant.score >= 85 ? 'bg-success' : applicant.score >= 70 ? 'bg-gray-700' : 'bg-warning'}`}></div>
 
                 <div className="flex-1 p-5">
                   <div className="flex items-center justify-between gap-6">
@@ -376,22 +374,24 @@ export default function JobApplicants({ jobTitle, applicants, onBack }: JobAppli
 
                     {/* Actions */}
                     <div className="flex items-center gap-2">
-                      <button 
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={(e) => {
                           e.stopPropagation();
                           setSelectedApplicant(applicant);
                         }}
-                        className="px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors text-sm flex items-center gap-2"
+                        icon={<Eye className="w-4 h-4" />}
                       >
-                        <Eye className="w-4 h-4" />
                         View Analysis
-                      </button>
-                      <button 
+                      </Button>
+                      <Button
+                        variant="primary"
+                        size="sm"
                         onClick={(e) => e.stopPropagation()}
-                        className="px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm"
                       >
                         Schedule Interview
-                      </button>
+                      </Button>
                       <button 
                         onClick={(e) => e.stopPropagation()}
                         className="p-2.5 hover:bg-gray-100 rounded-lg transition-colors"

@@ -50,7 +50,7 @@ export default function DashboardMenuGrid() {
             key={section.id}
             className="rounded-2xl border border-gray-100 bg-white p-4 shadow-sm shadow-brand-blue/5 ring-1 ring-black/[0.02]"
           >
-            <h3 className="mb-3 text-[11px] font-semibold uppercase tracking-wider text-gray-500">
+            <h3 className="mb-3 text-2xs font-semibold uppercase tracking-wider text-gray-500">
               {section.label}
             </h3>
             <ul className="flex flex-col gap-1.5">

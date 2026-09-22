@@ -84,7 +84,7 @@ function ScoreGauge({ score, size = 'lg' }: { score: number; size?: 'lg' | 'sm' 
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
         <span className={`${size === 'lg' ? 'text-2xl' : 'text-sm'} font-bold ${color}`}>{Math.round(pct)}</span>
-        {size === 'lg' && <span className="text-[10px] text-gray-400">/ 100</span>}
+        {size === 'lg' && <span className="text-2xs text-gray-400">/ 100</span>}
       </div>
     </div>
   );
@@ -304,7 +304,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
               const s = BAND_STYLES[band] || BAND_STYLES.NO;
               const isActive = band === recommendation;
               return (
-                <span key={band} className={`text-[10px] font-medium px-2 py-0.5 rounded ${isActive ? `${s.bg} ${s.text} ring-1 ring-current` : 'text-gray-400'}`}>
+                <span key={band} className={`text-2xs font-medium px-2 py-0.5 rounded ${isActive ? `${s.bg} ${s.text} ring-1 ring-current` : 'text-gray-400'}`}>
                   {band.replace(/_/g, ' ')} ({threshold})
                 </span>
               );
@@ -330,7 +330,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                   <div className="flex items-center justify-between">
                     <div>
                       <h4 className="text-sm font-bold">{section.name}</h4>
-                      <p className="text-[11px] opacity-60 mt-0.5">
+                      <p className="text-2xs opacity-60 mt-0.5">
                         Weight: {section.weight}% of final score · Contributes {Math.round(section.contribution)} to overall
                       </p>
                     </div>
@@ -361,17 +361,17 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                           >
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-semibold text-gray-900">{cl.name}</span>
-                              <span className={`text-[10px] px-1.5 py-0.5 rounded ${
+                              <span className={`text-2xs px-1.5 py-0.5 rounded ${
                                 (cl as any).priority_label === 'High' || cl.priority >= 3 ? 'bg-emerald-50 text-emerald-700' :
                                 (cl as any).priority_label === 'Medium' || cl.priority === 2 ? 'bg-amber-50 text-amber-700' :
                                 'bg-orange-50 text-orange-700'
                               }`}>
                                 {(cl as any).priority_label || (cl.priority >= 3 ? 'High' : cl.priority === 2 ? 'Medium' : 'Low')} Priority · {cl.weight}% weight
                               </span>
-                              <span className="text-[11px] text-gray-400">{clSkills.length} skill{clSkills.length !== 1 ? 's' : ''}</span>
+                              <span className="text-2xs text-gray-400">{clSkills.length} skill{clSkills.length !== 1 ? 's' : ''}</span>
                             </div>
                             <div className="flex items-center gap-3">
-                              <span className={`text-sm font-bold ${scoreColor(clPct, 100)}`}>{Math.round(clScore010)}<span className="text-[10px] text-gray-400 font-normal">/10</span></span>
+                              <span className={`text-sm font-bold ${scoreColor(clPct, 100)}`}>{Math.round(clScore010)}<span className="text-2xs text-gray-400 font-normal">/10</span></span>
                               {cOpen ? <ChevronDown className="w-4 h-4 text-gray-400" /> : <ChevronRight className="w-4 h-4 text-gray-400" />}
                             </div>
                           </button>
@@ -384,7 +384,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                               ) : (
                                 <div className="overflow-x-auto tf-table-shell">
                                   <table className="w-full text-xs">
-                                    <thead className="bg-gray-100 text-gray-500 uppercase text-[10px] tracking-wider">
+                                    <thead className="bg-gray-100 text-gray-500 uppercase text-2xs tracking-wider">
                                       <tr>
                                         <th className="px-5 py-2 text-left font-semibold">Skill</th>
                                         <th className="px-3 py-2 text-center font-semibold w-20">Base</th>
@@ -409,10 +409,10 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                                             <td className="px-5 py-2.5 align-top">
                                               <div className="flex items-center gap-2">
                                                 <span className="text-sm font-medium text-gray-900">{card.skill}</span>
-                                                <span className="text-[10px] text-gray-400 capitalize">{(card.coverage_level || '').replace(/_/g, ' ')}</span>
+                                                <span className="text-2xs text-gray-400 capitalize">{(card.coverage_level || '').replace(/_/g, ' ')}</span>
                                               </div>
                                               {isExp && card.formula && (
-                                                <div className="mt-1.5 px-2 py-1 bg-indigo-50/60 rounded text-[10px] font-mono text-indigo-600 border border-indigo-100">
+                                                <div className="mt-1.5 px-2 py-1 bg-indigo-50/60 rounded text-2xs font-mono text-indigo-600 border border-indigo-100">
                                                   {card.formula}
                                                 </div>
                                               )}
@@ -442,7 +442,7 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                     ) : (
                       <div className="overflow-x-auto tf-table-shell">
                         <table className="w-full text-xs">
-                          <thead className="bg-gray-100 text-gray-500 uppercase text-[10px] tracking-wider">
+                          <thead className="bg-gray-100 text-gray-500 uppercase text-2xs tracking-wider">
                             <tr>
                               <th className="px-5 py-2 text-left font-semibold">Skill</th>
                               <th className="px-3 py-2 text-center font-semibold w-20">Base</th>
@@ -467,10 +467,10 @@ export default function EvaluationTab({ sessionId, aiEvaluation: eval_, isComple
                                   <td className="px-5 py-2.5 align-top">
                                     <div className="flex items-center gap-2">
                                       <span className="text-sm font-medium text-gray-900">{card.skill}</span>
-                                      <span className="text-[10px] text-gray-400 capitalize">{(card.coverage_level || '').replace(/_/g, ' ')}</span>
+                                      <span className="text-2xs text-gray-400 capitalize">{(card.coverage_level || '').replace(/_/g, ' ')}</span>
                                     </div>
                                     {isExp && card.formula && (
-                                      <div className="mt-1.5 px-2 py-1 bg-indigo-50/60 rounded text-[10px] font-mono text-indigo-600 border border-indigo-100">
+                                      <div className="mt-1.5 px-2 py-1 bg-indigo-50/60 rounded text-2xs font-mono text-indigo-600 border border-indigo-100">
                                         {card.formula}
                                       </div>
                                     )}

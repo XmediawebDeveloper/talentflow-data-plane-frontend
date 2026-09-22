@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Calendar, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera } from 'lucide-react';
+import { ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { assessmentService, DetailedResultResponse, InvitationResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
 import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringService';
@@ -10,17 +10,23 @@ import RecordPager from '@/components/RecordPager';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import ResumeDetailView from '@/components/ResumeDetailView';
 import ViewResumeButton from '@/components/ui/view-resume-button';
+import { Button } from '@/components/ui/button';
+import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
+import JDOverviewSections from '@/components/jobs/JDOverviewSections';
+import AssessmentInfoPanel from '@/components/assessments/AssessmentInfoPanel';
+import { jdService, JDResponse } from '@/lib/services/jdService';
 import { Skeleton } from '@/components/ui/skeleton';
 
 interface CandidateResultDetailsProps {
   onBack: () => void;
   assessmentId: string;
-  assessmentShortId?: string;
   candidateId: string;
   candidateDisplayId?: string;
   assessmentTitle: string;
-  jdTitle?: string;
   jdId?: string;
+  jdTitle?: string;
+  /** The JOB's version, resolved by the caller from the JD row. */
+  jdVersion?: number | null;
   assessmentVersion?: number | null;
   currentIndex?: number;
   totalCount?: number;
@@ -167,15 +173,85 @@ function getDisplaySectionPercentage(questions: QuestionEvaluation[]) {
   return Math.round((totalDisplayedEarned / totalPossible) * 100);
 }
 
+/* ── The summary card at the top of the result ──────────────────────────
+   Icon tile, muted label, bold value: the same three parts eight times over,
+   so they are one component rather than eight copies that drift.
+
+   `tone` names WHAT the row is about, not a colour — the tile is the only
+   coloured thing in a row, and keeping the pairs here is what stops the card
+   turning back into the patchwork it was. */
+const INFO_ROW_TONES = {
+  blue: 'bg-brand-blue/10 text-brand-blue',
+  cyan: 'bg-brand-cyan/10 text-brand-cyan',
+  green: 'bg-green-50 text-green-600 dark:bg-green-500/10 dark:text-green-400',
+  orange: 'bg-brand-orange/10 text-brand-orange-deep',
+} as const;
+
+function ResultInfoRow({
+  icon: Icon,
+  tone,
+  label,
+  value,
+  badge,
+}: {
+  icon: ComponentType<{ className?: string }>;
+  tone: keyof typeof INFO_ROW_TONES;
+  label: string;
+  value: string;
+  /** The version chip the reference sets beside a title. */
+  badge?: string;
+}) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${INFO_ROW_TONES[tone]}`}>
+        <Icon className="h-5 w-5" />
+      </span>
+      <div className="min-w-0">
+        <div className="text-xs text-gray-500 dark:text-slate-400">{label}</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="truncate text-sm font-semibold text-gray-900 dark:text-slate-50 sm:text-[15px]">
+            {value}
+          </span>
+          {badge && (
+            <span className="inline-flex shrink-0 items-center rounded-md bg-brand-blue/10 px-1.5 py-0.5 text-[11px] font-bold text-brand-blue">
+              {badge}
+            </span>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** The mark a round reads as passed at — the same 70 `getScoreColor` below
+ *  already turns green on, named so the card and that colour cannot disagree. */
+const ROUND_PASS_MARK = 70;
+
+/** "HR Score" / "Code Score" / "Technical Score", from the round's own type. */
+const roundScoreLabel = (roundType: string) => {
+  const key = roundType.toLowerCase();
+  if (key === 'hr') return 'HR Score';
+  if (key === 'coding') return 'Code Score';
+  return `${roundType.charAt(0).toUpperCase()}${roundType.slice(1)} Score`;
+};
+
+/** Rounds the summary card does not tile.
+ *
+ *  Not a data change: the HR round keeps its full reporting below — its own
+ *  round tab, its row in Section-wise Performance, its questions and scores.
+ *  This is only about which scores the card at the top of the page leads with. */
+const SUMMARY_HIDDEN_ROUND_TYPES = new Set(['hr']);
+
+
 export default function CandidateResultDetails({
   onBack,
   assessmentId,
-  assessmentShortId,
   candidateId,
   candidateDisplayId,
   assessmentTitle,
-  jdTitle,
   jdId,
+  jdTitle,
+  jdVersion,
   assessmentVersion,
   currentIndex,
   totalCount,
@@ -221,6 +297,17 @@ export default function CandidateResultDetails({
   // `activeTab` is still kept for the proctoring-events fetch trigger, but the
   // visible panel is driven by this top-level selection.
   const [overviewTab, setOverviewTab] = useState<string>('jd-summary');
+  /* The pair of views under the Job Description Summary. Same two the
+     assessment's own page offers, so a recruiter reading a result sees the job
+     and the assessment exactly as they would there. */
+  const [jdSummaryTab, setJdSummaryTab] = useState<'viewjd' | 'info'>('viewjd');
+  /* The linked JD record, for the View JD view. Fetched lazily — on the tab
+     being opened, not on page load — because a result is usually read for its
+     scores and this is a second request for a job the reader may never look
+     at. Mirrors the assessment page's own lazy JD fetch. */
+  const [jdData, setJdData] = useState<JDResponse | null>(null);
+  const [jdLoading, setJdLoading] = useState(false);
+  const [jdError, setJdError] = useState<string | null>(null);
   // A tab is offered only when its panel has something to render — the JD
   // snapshot may not have loaded (or the JD captured nothing), and insights
   // only exist once scoring completes. Without this, switching could land the
@@ -419,6 +506,41 @@ export default function CandidateResultDetails({
     return () => { cancelled = true; };
   }, [assessmentId]);
 
+  /* The linked JD, for the View JD view under the Job Description Summary.
+     Runs on the tab being opened and only while it has no record yet, so
+     switching between the two views costs one request in total rather than one
+     per switch. `assessmentMeta.jd_id` is the JD ROW this assessment was
+     authored against — the page's own `jdId` prop is the human "JD-014", which
+     the JD endpoint does not take. */
+  /* Keyed by the JD row already asked for, so opening the view a second time
+     is free and an assessment that points somewhere else refetches. A ref, not
+     state: gating on `jdLoading` would put it in the dependency list, where the
+     effect that sets it re-runs itself. */
+  const jdRequestedRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (currentDetailTab !== 'jd-summary' || jdSummaryTab !== 'viewjd') return;
+    const rawJdId: string | undefined = assessmentMeta?.jd_id;
+    if (!rawJdId || jdRequestedRef.current === rawJdId) return;
+    jdRequestedRef.current = rawJdId;
+    let cancelled = false;
+    /* The whole request lives in the callback — the file's other fetches do the
+       same, and a setState in the effect BODY is a cascading render. */
+    (async () => {
+      setJdLoading(true);
+      setJdError(null);
+      try {
+        const jd = await jdService.getById(rawJdId);
+        if (!cancelled) setJdData(jd);
+      } catch (err: any) {
+        console.warn('[CandidateResultDetails] Failed to load the linked JD:', err);
+        if (!cancelled) setJdError(err?.message || 'Failed to load the job description');
+      } finally {
+        if (!cancelled) setJdLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [currentDetailTab, jdSummaryTab, assessmentMeta]);
+
   // The detailed-result payload carries no resume reference, so the id has to
   // be worked backwards. Two independent routes, because neither is reliable on
   // its own: the invitation the candidate was sent may carry `resume_id` (only
@@ -616,15 +738,15 @@ export default function CandidateResultDetails({
 
   // Helper functions
   const getScoreColor = (score: number) => {
-    if (score >= 70) return 'text-green-600';
+    if (score >= 70) return 'text-success';
     if (score >= 40) return 'text-brand-orange-deep';
-    return 'text-red-600';
+    return 'text-destructive';
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'Completed':
-        return 'bg-green-100 text-green-700 ring-1 ring-green-200';
+        return 'bg-success-subtle text-success ring-1 ring-success-line';
       case 'In Progress':
         return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
       case 'Pending':
@@ -708,7 +830,7 @@ export default function CandidateResultDetails({
         {/* Content */}
         <div className="py-4 sm:py-6 bg-white">
           {/* Assessment Info card — grid of icon + label + value cells */}
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-4 sm:p-6 mb-4 sm:mb-6">
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
               {Array.from({ length: 6 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-3">
@@ -724,7 +846,7 @@ export default function CandidateResultDetails({
 
           {/* Two-column body: left nav rail + right content card */}
           <div className="grid grid-cols-[180px_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[220px_minmax(0,1fr)] sm:gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
-            <aside className="self-start bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm">
+            <aside className="self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700">
               <div className="p-2 sm:p-3">
                 <div className="flex flex-col gap-1.5">
                   {Array.from({ length: 5 }).map((_, i) => (
@@ -734,7 +856,7 @@ export default function CandidateResultDetails({
               </div>
             </aside>
             <div className="min-w-0">
-              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm p-4 sm:p-6 space-y-3">
+              <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-4 sm:p-6 space-y-3">
                 <Skeleton className="h-5 w-40 mb-2" />
                 <Skeleton className="h-3.5 w-full" />
                 <Skeleton className="h-3.5 w-5/6" />
@@ -752,14 +874,15 @@ export default function CandidateResultDetails({
     return (
       <div className="flex-1 bg-slate-50 flex items-center justify-center">
         <div className="text-center">
-          <AlertCircle className="w-12 h-12 text-red-400 mx-auto mb-4" />
-          <p className="text-red-600 mb-4">{detailsError}</p>
-          <button
+          <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
+          <p className="text-destructive mb-4">{detailsError}</p>
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={onBack}
-            className="px-4 py-2 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg text-sm transition-colors"
           >
             Back to Results
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -818,7 +941,7 @@ export default function CandidateResultDetails({
     return (
       <main className="flex-1 overflow-x-clip bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 border border-gray-200 dark:border-slate-700">
             <PageBreadcrumb
               className="mb-4 md:mb-6"
               items={[
@@ -869,38 +992,37 @@ export default function CandidateResultDetails({
           />
         </div>
       )}
-      {/* Candidate/assessment header. This must scroll normally so it does not
-          cover the sticky side menu or question content. */}
-      <div className="bg-brand-blue border-b border-brand-blue-2/40 shadow-md shadow-brand-blue/20 ring-1 ring-white/10">
-        <div className="px-3 sm:px-4 py-3 sm:py-4">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 lg:gap-4">
-            {/* No back arrow here — the breadcrumb above owns the way back. */}
+      {/* Header */}
+      <div className="bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700">
+        <div className="px-3 sm:px-4 py-4 sm:py-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
             <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <div className="w-9 h-9 sm:w-12 sm:h-12 bg-white/20 backdrop-blur-sm rounded-xl flex items-center justify-center flex-shrink-0 ring-1 ring-white/20">
-                <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
+              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-brand-blue flex items-center justify-center text-white text-base sm:text-xl flex-shrink-0 font-semibold">
+                {(candidateData?.name || 'U').split(' ').map(n => n[0]).join('')}
               </div>
               <div className="min-w-0">
-                <div className="text-white/80 text-xs mb-0.5 sm:mb-1">Assessment</div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h1 className="text-white text-base sm:text-xl truncate tracking-tight">{assessmentTitle}</h1>
-                  {assessmentVersion != null && (
-                    <span
-                      className="inline-flex items-center text-xs sm:text-sm font-semibold rounded-md border border-white/30 bg-white/15 text-white px-2 py-0.5"
-                      title={`Version ${assessmentVersion}`}
-                    >
-                      v{assessmentVersion}
-                    </span>
-                  )}
-                </div>
-                {jdTitle && (
-                  <div className="flex items-center gap-1.5 sm:gap-2 mt-0.5 sm:mt-1">
-                    <Briefcase className="w-3 h-3 sm:w-3.5 sm:h-3.5 text-white/80 flex-shrink-0" />
-                    <span className="text-white/90 text-xs sm:text-sm truncate">Linked to: {jdTitle}</span>
-                  </div>
-                )}
+                <h1 className="text-sm sm:text-base md:text-lg text-gray-900 mb-0.5 sm:mb-1 truncate tracking-tight font-semibold">{candidateData?.name || 'Unknown'}</h1>
+                <p className="text-xs sm:text-sm text-gray-600 truncate">{candidateData?.email}</p>
+                <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs font-mono font-medium mt-0.5">
+                  {candidateDisplayId || detailedResult?.candidate_display_id || `CID-${candidateId}`}
+                </span>
               </div>
             </div>
-            <div className="flex items-center gap-2 self-start lg:self-auto flex-wrap">
+            {/* The candidate's two document actions and their status.
+                `flex-wrap` because this row gained a third control: on a narrow
+                phone the badge drops to its own line instead of squeezing the
+                buttons or pushing them off the edge. */}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 self-start sm:self-auto">
+              {/* View Resume — always rendered, like the resume-scoring
+                  candidate page's button. Whether a resume can be found is
+                  decided on click, not by hiding the control. */}
+              <ViewResumeButton onClick={handleViewResume} loading={isLoadingResume} />
+              {/* Export (PDF) — the same single-candidate export that used to
+                  sit in a bar of its own above, now next to View Resume so the
+                  page's two document actions read as one pair. Its chrome is
+                  `ViewResumeButton`'s, class for class (padding, type scale,
+                  border weight, icon size, gap), which is what makes the two
+                  line up rather than merely sit beside each other. */}
               <button
                 onClick={async () => {
                   // Single-candidate export — emit a PDF report for this
@@ -928,38 +1050,12 @@ export default function CandidateResultDetails({
                     toast.error('Failed to export result PDF. Please try again.');
                   }
                 }}
-                className="px-3 sm:px-6 py-2 sm:py-2.5 bg-white/15 backdrop-blur-sm hover:bg-white/25 text-white rounded-lg transition-colors flex items-center gap-1.5 sm:gap-2 ring-1 ring-white/25 text-xs sm:text-sm whitespace-nowrap font-medium"
+                className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-brand-blue bg-white dark:bg-slate-900 border border-brand-blue/40 rounded-lg hover:bg-brand-blue/5 transition-colors flex items-center gap-1.5 whitespace-nowrap"
               >
-                <FileText className="w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="hidden sm:inline">Export Result (PDF)</span>
+                <FileText className="w-4 h-4" />
+                <span className="hidden sm:inline">Export (PDF)</span>
                 <span className="sm:hidden">PDF</span>
               </button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Header */}
-      <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border-b border-brand-blue/15 ring-1 ring-brand-blue/10 shadow-sm shadow-brand-blue/10">
-        <div className="px-3 sm:px-4 py-4 sm:py-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
-            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <div className="w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-brand-blue flex items-center justify-center text-white text-base sm:text-xl flex-shrink-0 shadow-md shadow-brand-blue/25 ring-1 ring-white/20 font-semibold">
-                {(candidateData?.name || 'U').split(' ').map(n => n[0]).join('')}
-              </div>
-              <div className="min-w-0">
-                <h1 className="text-sm sm:text-base md:text-lg text-gray-900 mb-0.5 sm:mb-1 truncate tracking-tight font-semibold">{candidateData?.name || 'Unknown'}</h1>
-                <p className="text-xs sm:text-sm text-gray-600 truncate">{candidateData?.email}</p>
-                <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs font-mono font-medium mt-0.5">
-                  {candidateDisplayId || detailedResult?.candidate_display_id || `CID-${candidateId}`}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-3 self-start sm:self-auto">
-              {/* View Resume — always rendered, like the resume-scoring
-                  candidate page's button. Whether a resume can be found is
-                  decided on click, not by hiding the control. */}
-              <ViewResumeButton onClick={handleViewResume} loading={isLoadingResume} />
               {/* Status Badge */}
               {(() => {
                 let displayStatus = candidateData?.status || 'In Progress';
@@ -983,97 +1079,155 @@ export default function CandidateResultDetails({
 
       {/* Content */}
       <div className="py-4 sm:py-6 bg-white">
-        {/* Assessment Info */}
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6 mb-4 sm:mb-6">
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 sm:gap-6">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                <Briefcase className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs sm:text-sm text-gray-600">Assessment</div>
-                <div className="text-sm sm:text-base text-gray-900 truncate">{assessmentTitle}</div>
-              </div>
+        {/* Assessment Info — three groups divided by a rule: what was
+            assessed, when it ran, and how it went. Every value below is the one
+            this card already carried; only the arrangement changed.
+            The divider is a left border from `lg` up and a top border below it,
+            so the groups read as columns on a desktop and as stacked blocks on
+            a phone without a stray line at either end. */}
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-4 sm:p-6 mb-4 sm:mb-6">
+          <div className="grid grid-cols-1 gap-5 lg:grid-cols-3 lg:gap-0">
+            {/* What was assessed. The version moves into a chip beside the
+                assessment it versions, which is what it describes — it was a
+                cell of its own reading "v1" next to nothing. */}
+            <div className="space-y-4 lg:pr-6">
+              {/* The job: its id and its title on one line, the way the
+                  reference reads them ("JD-014 Java developer"), with the JOB's
+                  own version as the chip. Either half can be missing — an
+                  assessment with no linked JD, or a JD whose title did not come
+                  back — so the value is joined from whichever parts exist
+                  rather than printing a bare separator. */}
+              <ResultInfoRow
+                icon={Briefcase}
+                tone="blue"
+                label="Job Title"
+                value={[jdId, jdTitle].filter(Boolean).join(' - ') || 'N/A'}
+                badge={jdVersion != null ? `V${jdVersion}` : undefined}
+              />
+              <ResultInfoRow
+                icon={FileText}
+                tone="blue"
+                label="Assessment"
+                value={assessmentTitle}
+                badge={assessmentVersion != null ? `V${assessmentVersion}` : undefined}
+              />
             </div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 ring-1 ring-green-200 flex items-center justify-center flex-shrink-0">
-                <Calendar className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
-              </div>
-              <div>
-                <div className="text-xs sm:text-sm text-gray-600">Completed</div>
-                <div className="text-sm sm:text-base text-gray-900">{candidateData?.completedDate}</div>
-              </div>
+
+            {/* When it ran. */}
+            <div className="space-y-4 border-t border-gray-200 pt-5 dark:border-slate-700 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
+              <ResultInfoRow
+                icon={Clock}
+                tone="cyan"
+                label="Start Time"
+                value={detailedResult?.started_at ? formatISTWithSeconds(detailedResult.started_at) : 'N/A'}
+              />
+              <ResultInfoRow
+                icon={CheckCircle}
+                tone="green"
+                label="Submission Time"
+                value={detailedResult?.completed_at ? formatISTWithSeconds(detailedResult.completed_at) : 'N/A'}
+              />
             </div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/15 flex items-center justify-center flex-shrink-0">
-                <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-brand-orange-deep" />
-              </div>
-              <div>
-                <div className="text-xs sm:text-sm text-gray-600">Time Taken</div>
-                <div className="text-sm sm:text-base text-gray-900">{candidateData?.duration}</div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs sm:text-sm text-gray-600">JD ID</div>
-                <span className="inline-flex items-center px-2.5 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs font-semibold font-mono">
-                  {jdId || 'N/A'}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
-                <Clipboard className="w-5 h-5 sm:w-6 sm:h-6 text-brand-cyan" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs sm:text-sm text-gray-600">Assessment ID</div>
-                <span className="inline-flex items-center px-2.5 py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs font-semibold font-mono">
-                  {assessmentShortId || `AS-${assessmentId}`}
-                </span>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                <Info className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
-              </div>
-              <div className="min-w-0">
-                <div className="text-xs sm:text-sm text-gray-600">Version</div>
-                <div className="text-sm sm:text-base text-gray-900">
-                  {assessmentVersion != null ? `v${assessmentVersion}` : 'N/A'}
+
+            {/* How it went. */}
+            <div className="space-y-4 border-t border-gray-200 pt-5 dark:border-slate-700 lg:border-t-0 lg:border-l lg:pt-0 lg:pl-6">
+              <ResultInfoRow
+                icon={Clock}
+                tone="orange"
+                label="Time Taken"
+                value={candidateData?.duration || 'N/A'}
+              />
+              {/* One tile per round the result actually has — never a fixed HR
+                  and Coding pair, since which rounds an assessment runs is the
+                  assessment's own configuration. Absent entirely while scoring
+                  is still processing, rather than showing a 0% that is not a
+                  score yet. */}
+              {(() => {
+                const summaryRounds = (detailedResult?.round_scores ?? []).filter(
+                  (round) => !SUMMARY_HIDDEN_ROUND_TYPES.has(round.round_type.toLowerCase()),
+                );
+                if (summaryRounds.length === 0) return null;
+                return (
+                <div
+                  className={`grid items-stretch gap-3 ${
+                    /* Equal columns, and `items-stretch` (the grid default,
+                       spelled out) plus `h-full` on each cell is what makes the
+                       two the same HEIGHT as well as the same width — a longer
+                       round name wrapping in one would otherwise leave the
+                       other short. A lone score spans the column instead of
+                       leaving half the row empty. */
+                    summaryRounds.length > 1
+                      ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2'
+                      : 'grid-cols-1'
+                  }`}
+                >
+                  {summaryRounds.map((round) => {
+                    const score = Math.round(round.raw_score ?? 0);
+                    const passed = score >= ROUND_PASS_MARK;
+                    return (
+                      <div
+                        key={round.round_type}
+                        className="flex h-full flex-col justify-between gap-2.5 rounded-xl border border-gray-200 p-3 dark:border-slate-700"
+                      >
+                        {/* Label on the left, verdict and score on the right.
+                            `items-center`, not `items-baseline`: the verdict is
+                            a padded chip, and baseline-aligning a chip against
+                            plain text sits it low against the number. */}
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="min-w-0 truncate text-xs text-gray-500 dark:text-slate-400">
+                            {roundScoreLabel(round.round_type)}
+                          </span>
+                          <span className="flex shrink-0 items-center gap-2">
+                            {/* Read from the score itself — the same `passed`
+                                the bar is coloured by, so the chip and the fill
+                                can never tell different stories. */}
+                            <span
+                              className={`rounded-md px-1.5 py-0.5 text-[11px] font-semibold ${
+                                passed
+                                  ? 'bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-300'
+                                  : 'bg-red-100 text-red-600 dark:bg-red-500/20 dark:text-red-300'
+                              }`}
+                            >
+                              {passed ? 'Pass' : 'Fail'}
+                            </span>
+                            <span className="text-base font-bold text-gray-900 dark:text-slate-50">
+                              {score}%
+                            </span>
+                          </span>
+                        </div>
+                        {/* The track and its fill. `aria-*` because a bar with
+                            no text of its own says nothing to a screen reader;
+                            the percentage beside it is what sighted users read.
+                            The width is the score itself — clamped to 0–100 so
+                            a stray value cannot overflow the track. */}
+                        <div
+                          role="progressbar"
+                          aria-valuenow={score}
+                          aria-valuemin={0}
+                          aria-valuemax={100}
+                          aria-label={roundScoreLabel(round.round_type)}
+                          className="h-2 w-full overflow-hidden rounded-full bg-gray-100 dark:bg-slate-800"
+                        >
+                          <div
+                            className={`h-full rounded-full transition-[width] ${
+                              passed ? 'bg-green-500' : 'bg-red-500'
+                            }`}
+                            style={{ width: `${Math.min(100, Math.max(0, score))}%` }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center flex-shrink-0">
-                <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-brand-teal" />
-              </div>
-              <div>
-                <div className="text-xs sm:text-sm text-gray-600">Start Time</div>
-                <div className="text-sm sm:text-base text-gray-900">
-                  {detailedResult?.started_at ? formatISTWithSeconds(detailedResult.started_at) : 'N/A'}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 ring-1 ring-green-200 flex items-center justify-center flex-shrink-0">
-                <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
-              </div>
-              <div>
-                <div className="text-xs sm:text-sm text-gray-600">Submission Time</div>
-                <div className="text-sm sm:text-base text-gray-900">
-                  {detailedResult?.completed_at ? formatISTWithSeconds(detailedResult.completed_at) : 'N/A'}
-                </div>
-              </div>
+                );
+              })()}
             </div>
           </div>
         </div>
 
         {/* Unified detail layout: vertical navigation on the left, selected content on the right. */}
         <div className="grid grid-cols-[180px_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[220px_minmax(0,1fr)] sm:gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
-          <aside className="sticky top-20 self-start bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+          <aside className="sticky top-20 self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700">
           {/* No border-b here — the card's own border already draws the
               baseline the active tab's underline sits on. Adding one gave a
               doubled 2px rule under the row. */}
@@ -1088,10 +1242,10 @@ export default function CandidateResultDetails({
                     className={`w-full rounded-lg px-3 py-2.5 text-left text-xs sm:text-sm transition-colors flex items-center justify-between gap-2 ${
                       isActive
                         ? tab.danger
-                          ? 'bg-red-50 text-red-700 font-medium ring-1 ring-red-200'
+                          ? 'bg-destructive-subtle text-destructive font-medium ring-1 ring-destructive-line'
                           : 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
                         : tab.danger
-                          ? 'text-gray-600 hover:bg-red-50 hover:text-red-700'
+                          ? 'text-gray-600 hover:bg-destructive-subtle hover:text-destructive'
                           : 'text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
                     }`}
                   >
@@ -1103,7 +1257,7 @@ export default function CandidateResultDetails({
                       <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${
                         tab.danger
                           ? isActive || tab.count > 0
-                            ? 'bg-red-100 text-red-700 ring-1 ring-red-200'
+                            ? 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line'
                             : 'bg-slate-100 text-gray-600'
                           : isActive
                             ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20'
@@ -1121,80 +1275,83 @@ export default function CandidateResultDetails({
 
           <div ref={detailContentRef} className="min-w-0 overflow-x-auto scroll-mt-24">
 
-        {/* JD Summary — Must-Have & Nice-to-Have skills snapshotted from the
-            JD when the assessment was generated. Both sections always render
-            (with an empty-state placeholder) so the layout is consistent
-            even when the JD didn't capture preferred skills. Same shape as
-            the AI-Interview detail page's Overview tab. */}
-        {currentDetailTab === 'jd-summary' && (() => {
-          const skillDepth: any[] = (assessmentMeta?.jd_skill_depth as any[]) || [];
-          const niceToHaveSkills: any[] = (assessmentMeta?.jd_nice_to_have_skills as any[]) || [];
-          if (!assessmentMeta) return null;
-          const skillName = (s: any): string =>
-            typeof s === 'string' ? s : (s?.skill || s?.name || s?.label || '');
-          return (
-            <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-4 sm:mb-6">
-              <div className="flex items-center gap-2 mb-3 sm:mb-4">
-                <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-700" />
-                <h3 className="text-sm sm:text-base font-semibold text-gray-900">Job Description Summary</h3>
-              </div>
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
-                <div>
-                  <div className="text-xs sm:text-sm font-medium text-gray-700 mb-2">
-                    Must-Have Skills <span className="text-gray-400 font-normal">({skillDepth.length})</span>
-                  </div>
-                  {skillDepth.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                      {skillDepth.map((skill: any, idx: number) => {
-                        const name = skillName(skill);
-                        if (!name) return null;
-                        return (
-                          <span
-                            key={`mhs-${idx}`}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-50 text-green-700 rounded-full text-xs border border-green-200"
-                          >
-                            <CheckCircle className="w-3 h-3" />
-                            {name}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs text-gray-400 bg-gray-50 border border-gray-200">
-                      None configured for this JD
-                    </span>
-                  )}
-                </div>
-                <div>
-                  <div className="text-xs sm:text-sm font-medium text-gray-700 mb-2">
-                    Nice-to-Have Skills <span className="text-gray-400 font-normal">({niceToHaveSkills.length})</span>
-                  </div>
-                  {niceToHaveSkills.length > 0 ? (
-                    <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                      {niceToHaveSkills.map((skill: any, idx: number) => {
-                        const name = skillName(skill);
-                        if (!name) return null;
-                        return (
-                          <span
-                            key={`nhs-${idx}`}
-                            className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-50 text-gray-600 rounded-full text-xs border border-gray-200"
-                          >
-                            {name}
-                            <span className="text-[10px] text-gray-400">(preferred)</span>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs text-gray-400 bg-gray-50 border border-gray-200">
-                      None configured for this JD
-                    </span>
-                  )}
-                </div>
-              </div>
+        {/* The job and the assessment — the same two views the assessment's
+            own page offers, from the same components, so a recruiter reading a
+            result is not shown a second rendering of either. They are now the
+            whole of this tab: the skills summary that used to sit above them
+            said less than View JD does, in a second style.
+            Nothing here is fetched twice: Assessment Info reads the record this
+            page already loaded, and View JD pulls the linked JD once, when it
+            is first opened. */}
+        {currentDetailTab === 'jd-summary' && assessmentMeta && (
+          <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
+            <div
+              role="tablist"
+              aria-label="Job and assessment views"
+              className="flex flex-wrap items-center gap-1.5"
+            >
+              {([
+                { id: 'viewjd' as const, label: 'View JD', icon: Briefcase },
+                { id: 'info' as const, label: 'Assessment Info', icon: Info },
+              ]).map((tab) => {
+                const isActive = jdSummaryTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    role="tab"
+                    aria-selected={isActive}
+                    onClick={() => setJdSummaryTab(tab.id)}
+                    className={`rounded-lg px-3 py-2 text-xs sm:text-sm transition-colors flex items-center gap-2 ${
+                      isActive
+                        ? 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
+                        : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
+                    }`}
+                  >
+                    <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                    <span className="leading-snug">{tab.label}</span>
+                  </button>
+                );
+              })}
             </div>
-          );
-        })()}
+
+            {jdSummaryTab === 'info' ? (
+              <AssessmentInfoPanel assessment={assessmentMeta} />
+            ) : (
+              <div className="space-y-4 sm:space-y-5">
+                {/* "No linked job description" is a property of the ASSESSMENT
+                    — it has no job behind it — so it is asked first, off
+                    `jd_id`, exactly as the assessment page asks it. Reading it
+                    off the record instead would make the gap before the fetch
+                    lands announce that the job has no description at all. */}
+                {!assessmentMeta.jd_id ? (
+                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 lg:px-6 py-8 text-center">
+                    <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                    <p className="text-sm text-gray-500 dark:text-slate-400">No linked job description found</p>
+                  </div>
+                ) : jdError ? (
+                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 lg:px-6 py-8 text-center">
+                    <AlertCircle className="w-8 h-8 text-red-400 mx-auto mb-2" />
+                    <p className="text-sm text-red-600 dark:text-red-400">{jdError}</p>
+                  </div>
+                ) : jdLoading || !jdData ? (
+                  <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 px-3 sm:px-4 lg:px-6 py-12 flex items-center justify-center tf-loader-center">
+                    <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
+                  </div>
+                ) : (
+                  <>
+                    {/* The JOB's version as this page already resolved it —
+                        the same number the info card's Job Title chip shows, so
+                        the two cannot disagree. Falls back to the JD record's
+                        own `current_version` when the page has none. */}
+                    <JDIdentityHeader jd={jdData} versionNumber={jdVersion ?? undefined} />
+                    <JDOverviewSections jd={jdData} />
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Score Calculation Notice - Show if individual questions are all 0.
             Rides with the Section-wise Performance tab because it explains the
@@ -1206,7 +1363,7 @@ export default function CandidateResultDetails({
 
           if (allQuestionsZero && sectionsHaveScores) {
             return (
-              <div className="bg-brand-orange/5 border border-brand-orange/30 ring-1 ring-brand-orange/15 rounded-xl p-4 mb-6">
+              <div className="bg-white dark:bg-slate-900 border border-brand-orange/30 rounded-xl p-4 mb-6">
                 <div className="flex items-start gap-3">
                   <Info className="w-5 h-5 text-brand-orange-deep flex-shrink-0 mt-0.5" />
                   <div className="flex-1">
@@ -1238,7 +1395,7 @@ export default function CandidateResultDetails({
 
         {/* Section Scores */}
         {currentDetailTab === 'section-performance' && (
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 sm:p-6 mb-4 sm:mb-6">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-4 sm:p-6 mb-4 sm:mb-6">
           <h2 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4 tracking-tight font-semibold">Section-wise Performance</h2>
           <div className="space-y-4">
             {candidateData?.sections.map((section, idx) => {
@@ -1271,10 +1428,10 @@ export default function CandidateResultDetails({
               const unansweredPct = totalQ > 0 ? (unansweredQ / totalQ) * 100 : 0;
 
               return (
-                <div key={idx} className={`border rounded-xl p-4 ring-1 ${
+                <div key={idx} className={`border rounded-xl p-4 bg-white dark:bg-slate-900 ${
                   isHR
-                    ? 'border-gray-100 bg-slate-50/40 ring-black/[0.02]'
-                    : 'border-brand-blue/15 bg-brand-blue/5 ring-brand-blue/5'
+                    ? 'border-gray-200 dark:border-slate-700'
+                    : 'border-brand-blue/30 dark:border-brand-blue/40'
                 }`}>
                   {/* Hide score / pct / bar until AI scoring is finished.
                       Mid-evaluation we'd otherwise render "0/10 correct, 0%"
@@ -1293,7 +1450,7 @@ export default function CandidateResultDetails({
                                   Not Scored
                                 </span>
                               ) : scoringDone ? (
-                                <span className="px-2 py-0.5 bg-green-100 text-green-700 ring-1 ring-green-200 rounded text-xs font-medium">
+                                <span className="px-2 py-0.5 bg-success-subtle text-success ring-1 ring-success-line rounded text-xs font-medium">
                                   Scored (0-10)
                                 </span>
                               ) : (
@@ -1324,7 +1481,7 @@ export default function CandidateResultDetails({
                         {!isHR && scoringDone && (
                           <div className="w-full bg-slate-100 rounded-full h-3 overflow-hidden mb-3 ring-1 ring-black/[0.03]">
                             <div
-                              className={`h-3 rounded-full ${section.percentage >= 70 ? 'bg-gradient-to-r from-green-600 to-emerald-600' : section.percentage >= 40 ? 'bg-brand-orange' : 'bg-gradient-to-r from-red-600 to-red-700'}`}
+                              className={`h-3 rounded-full ${section.percentage >= 70 ? 'bg-green-500' : section.percentage >= 40 ? 'bg-brand-orange' : 'bg-red-500'}`}
                               style={{ width: `${Math.min(section.percentage, 100)}%` }}
                             />
                           </div>
@@ -1348,13 +1505,13 @@ export default function CandidateResultDetails({
                       <div className="w-full h-2.5 rounded-full overflow-hidden flex bg-slate-100 mb-2 ring-1 ring-black/[0.03]">
                         {submittedQ > 0 && (
                           <div
-                            className="h-full bg-gradient-to-r from-green-500 to-emerald-500 transition-all"
+                            className="h-full bg-green-500 transition-all"
                             style={{ width: `${submittedPct}%` }}
                           />
                         )}
                         {(unansweredQ + skippedQ) > 0 && (
                           <div
-                            className="h-full bg-gradient-to-r from-red-400 to-red-500 transition-all"
+                            className="h-full bg-red-500 transition-all"
                             style={{ width: `${unansweredPct + skippedPct}%` }}
                           />
                         )}
@@ -1362,12 +1519,12 @@ export default function CandidateResultDetails({
                       {/* Legend */}
                       <div className="flex items-center gap-4 text-xs">
                         <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-sm bg-green-500 inline-block flex-shrink-0" />
-                          <span className="text-green-700 font-medium">{submittedQ} Submitted</span>
+                          <span className="w-2.5 h-2.5 rounded-sm bg-success inline-block flex-shrink-0" />
+                          <span className="text-success font-medium">{submittedQ} Submitted</span>
                         </span>
                         <span className="flex items-center gap-1.5">
-                          <span className="w-2.5 h-2.5 rounded-sm bg-red-400 inline-block flex-shrink-0" />
-                          <span className="text-red-600 font-medium">{unansweredQ + skippedQ} Unanswered</span>
+                          <span className="w-2.5 h-2.5 rounded-sm bg-destructive inline-block flex-shrink-0" />
+                          <span className="text-destructive font-medium">{unansweredQ + skippedQ} Unanswered</span>
                         </span>
                       </div>
                     </div>
@@ -1410,32 +1567,32 @@ export default function CandidateResultDetails({
                   <span className="text-gray-700">Displayed in reports</span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-yellow-500 mt-1.5 flex-shrink-0"></div>
-                  <span className="text-gray-700"><strong className="text-yellow-700">NOT part of PASS/FAIL</strong> decision</span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-warning mt-1.5 flex-shrink-0"></div>
+                  <span className="text-gray-700"><strong className="text-warning">NOT part of PASS/FAIL</strong> decision</span>
                 </div>
               </div>
             </div>
 
             {/* Technical & Coding Rules */}
-            <div className="bg-white rounded-lg border-2 border-green-300 p-4">
+            <div className="bg-white rounded-lg border-2 border-success-line p-4">
               <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center">
-                  <CheckCircle className="w-4 h-4 text-green-600" />
+                <div className="w-8 h-8 bg-success-subtle rounded-lg flex items-center justify-center">
+                  <CheckCircle className="w-4 h-4 text-success" />
                 </div>
                 <h3 className="text-gray-900">Technical & Coding</h3>
               </div>
               <div className="space-y-2 text-sm">
                 <div className="flex items-start gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-600 mt-1.5 flex-shrink-0"></div>
+                  <div className="w-1.5 h-1.5 rounded-full bg-success mt-1.5 flex-shrink-0"></div>
                   <span className="text-gray-700">Rating scale: <strong>0-10</strong> per question</span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-600 mt-1.5 flex-shrink-0"></div>
+                  <div className="w-1.5 h-1.5 rounded-full bg-success mt-1.5 flex-shrink-0"></div>
                   <span className="text-gray-700">Minimum passing: <strong>≥7 per question</strong></span>
                 </div>
                 <div className="flex items-start gap-2">
-                  <div className="w-1.5 h-1.5 rounded-full bg-green-600 mt-1.5 flex-shrink-0"></div>
-                  <span className="text-gray-700"><strong className="text-green-700">Used for PASS/FAIL</strong> determination</span>
+                  <div className="w-1.5 h-1.5 rounded-full bg-success mt-1.5 flex-shrink-0"></div>
+                  <span className="text-gray-700"><strong className="text-success">Used for PASS/FAIL</strong> determination</span>
                 </div>
               </div>
             </div>
@@ -1476,15 +1633,15 @@ export default function CandidateResultDetails({
           </div>
 
           {/* Final Result Calculation */}
-          <div className="mt-4 bg-gradient-to-r from-green-50 to-gray-50 border-2 border-green-300 rounded-lg p-4">
+          <div className="mt-4 bg-gradient-to-r from-green-50 to-gray-50 border-2 border-success-line rounded-lg p-4">
             <div className="flex items-center gap-2 mb-2">
-              <Award className="w-5 h-5 text-green-600" />
+              <Award className="w-5 h-5 text-success" />
               <h3 className="text-gray-900">Final Assessment Result</h3>
             </div>
             <div className="text-sm text-gray-700">
               <strong>PASS</strong> if <strong>ALL</strong> evaluated sections (Technical + Coding) pass
             </div>
-            <div className="mt-2 flex items-center gap-2 text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded px-3 py-2">
+            <div className="mt-2 flex items-center gap-2 text-xs text-warning bg-warning-subtle border border-warning-line rounded px-3 py-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
               <span>Remember: HR section is excluded from final PASS/FAIL calculation</span>
             </div>
@@ -1493,7 +1650,7 @@ export default function CandidateResultDetails({
 
         {/* Candidate Insights - AI Generated Analysis */}
         {currentDetailTab === 'candidate-insights' && detailedResult && detailedResult.scoring_status === 'completed' && (
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden mb-6">
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden mb-6">
             <div className="bg-gray-50 border-b border-brand-blue/15 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-brand-blue ring-1 ring-white/20 shadow-md shadow-brand-blue/25 flex items-center justify-center flex-shrink-0">
@@ -1507,10 +1664,10 @@ export default function CandidateResultDetails({
                 </div>
               </div>
               {(!detailedResult.candidate_insights?.interview_strength) && (
-                <button
+                <Button
+                  variant="primary"
                   onClick={handleGenerateInsights}
                   disabled={isGeneratingInsights}
-                  className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
                 >
                   {isGeneratingInsights ? (
                     <>
@@ -1523,7 +1680,7 @@ export default function CandidateResultDetails({
                       Generate Insights
                     </>
                   )}
-                </button>
+                </Button>
               )}
             </div>
             <div className="p-4 sm:p-6">
@@ -1531,12 +1688,12 @@ export default function CandidateResultDetails({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 {/* Interview Strength */}
                 {detailedResult.candidate_insights.interview_strength && (
-                  <div className="bg-green-50 rounded-xl p-4 border border-green-200 ring-1 ring-green-100">
-                    <h3 className="text-green-800 font-medium mb-3 flex items-center gap-2">
+                  <div className="bg-success-subtle rounded-xl p-4 border border-success-line ring-1 ring-success-line">
+                    <h3 className="text-success-strong font-medium mb-3 flex items-center gap-2">
                       <CheckCircle className="w-4 h-4" />
                       Interview Strength
                     </h3>
-                    <p className="text-sm text-green-700">
+                    <p className="text-sm text-success">
                       {detailedResult.candidate_insights.interview_strength}
                     </p>
                   </div>
@@ -1544,7 +1701,7 @@ export default function CandidateResultDetails({
 
                 {/* Interview Weakness */}
                 {detailedResult.candidate_insights.interview_weakness && (
-                  <div className="bg-brand-orange/5 rounded-xl p-4 border border-brand-orange/30 ring-1 ring-brand-orange/15">
+                  <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-gray-200 dark:border-slate-700">
                     <h3 className="text-brand-orange-deep font-medium mb-3 flex items-center gap-2">
                       <AlertCircle className="w-4 h-4" />
                       Interview Weakness
@@ -1557,7 +1714,7 @@ export default function CandidateResultDetails({
 
                 {/* Interview Training Modules */}
                 {detailedResult.candidate_insights.interview_training_modules && (
-                  <div className="bg-brand-blue/5 rounded-xl p-4 border border-brand-blue/20 ring-1 ring-brand-blue/10">
+                  <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-gray-200 dark:border-slate-700">
                     <h3 className="text-brand-blue font-medium mb-3 flex items-center gap-2">
                       <FileText className="w-4 h-4" />
                       Interview Training Modules
@@ -1570,7 +1727,7 @@ export default function CandidateResultDetails({
 
                 {/* Interview Training Suggestion */}
                 {detailedResult.candidate_insights.interview_training_suggestion && (
-                  <div className="bg-brand-cyan/5 rounded-xl p-4 border border-brand-cyan/30 ring-1 ring-brand-cyan/15">
+                  <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-gray-200 dark:border-slate-700">
                     <h3 className="text-brand-cyan font-medium mb-3 flex items-center gap-2">
                       <Briefcase className="w-4 h-4" />
                       Interview Training Suggestion
@@ -1588,10 +1745,11 @@ export default function CandidateResultDetails({
                   <p className="text-gray-600 mb-4">
                     Click &quot;Generate Insights&quot; to analyze this candidate&apos;s Technical and Coding performance
                   </p>
-                  <button
+                  <Button
+                    variant="primary"
                     onClick={handleGenerateInsights}
                     disabled={isGeneratingInsights}
-                    className="px-6 py-3 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 mx-auto disabled:opacity-50 disabled:cursor-not-allowed font-medium"
+                    className="mx-auto"
                   >
                     {isGeneratingInsights ? (
                       <>
@@ -1604,7 +1762,7 @@ export default function CandidateResultDetails({
                         Generate AI Insights
                       </>
                     )}
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>
@@ -1612,12 +1770,12 @@ export default function CandidateResultDetails({
         )}
 
         {isQuestionAnalysisTab && (
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
 
           {/* Agent Processing State */}
           {detailedResult && detailedResult.scoring_status === 'processing' && (
             <div className="p-8">
-              <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 border border-brand-blue/15 ring-1 ring-brand-blue/10 rounded-xl p-8 text-center shadow-sm shadow-brand-blue/10">
+              <div className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-8 text-center">
                 <div className="w-20 h-20 bg-brand-blue rounded-full flex items-center justify-center mx-auto mb-4 shadow-md shadow-brand-blue/25 ring-1 ring-white/20">
                   <Loader2 className="w-10 h-10 text-white animate-spin" />
                 </div>
@@ -1711,7 +1869,7 @@ export default function CandidateResultDetails({
                       {questionsForRound.length > 0 ? (
                         <div className="space-y-6">
                           {questionsForRound.map((q, qIdx) => (
-                            <div key={qIdx} className="border border-gray-100 ring-1 ring-black/[0.02] rounded-xl overflow-hidden hover:border-brand-blue/20 hover:ring-brand-blue/5 transition-colors shadow-sm shadow-brand-blue/5">
+                            <div key={qIdx} className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden hover:border-brand-blue/20 hover:ring-brand-blue/5 transition-colors">
                               {(() => {
                                 const isTextQuestion = !['coding', 'mcq', 'single_choice', 'multiple_choice'].includes(q.question_type);
                                 // For MCQs the recruiter only needs to see what
@@ -1745,7 +1903,7 @@ export default function CandidateResultDetails({
                                   ? 'bg-slate-50'
                                   : isNotAnswered
                                     ? 'bg-slate-50'
-                                    : (q.is_correct ? 'bg-green-50' : 'bg-red-50')
+                                    : (q.is_correct ? 'bg-success-subtle' : 'bg-destructive-subtle')
                               }`}>
                                 <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
                                   <div className="flex-1 min-w-0">
@@ -1764,9 +1922,9 @@ export default function CandidateResultDetails({
                                         isNotAnswered ? (
                                           <span className="px-2 py-0.5 bg-gray-100 text-gray-600 ring-1 ring-gray-200 rounded text-xs font-medium">Not Answered</span>
                                         ) : q.is_correct ? (
-                                          <span className="px-2 py-0.5 bg-green-100 text-green-700 ring-1 ring-green-200 rounded text-xs font-medium">Correct</span>
+                                          <span className="px-2 py-0.5 bg-success-subtle text-success ring-1 ring-success-line rounded text-xs font-medium">Correct</span>
                                         ) : (
-                                          <span className="px-2 py-0.5 bg-red-100 text-red-700 ring-1 ring-red-200 rounded text-xs font-medium">Incorrect</span>
+                                          <span className="px-2 py-0.5 bg-destructive-subtle text-destructive ring-1 ring-destructive-line rounded text-xs font-medium">Incorrect</span>
                                         )
                                       )}
                                     </div>
@@ -1827,7 +1985,7 @@ export default function CandidateResultDetails({
                                             {q.sample_input && (
                                               <div>
                                                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Input</div>
-                                                <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
+                                                <pre className="bg-gray-900 text-success p-3 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
                                                   {q.sample_input}
                                                 </pre>
                                               </div>
@@ -1835,7 +1993,7 @@ export default function CandidateResultDetails({
                                             {q.sample_output && (
                                               <div>
                                                 <div className="text-xs font-medium text-gray-500 uppercase tracking-wide mb-1">Expected Output</div>
-                                                <pre className="bg-gray-900 text-green-400 p-3 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
+                                                <pre className="bg-gray-900 text-success p-3 rounded-lg text-sm font-mono overflow-x-auto whitespace-pre-wrap">
                                                   {q.sample_output}
                                                 </pre>
                                               </div>
@@ -2009,14 +2167,14 @@ export default function CandidateResultDetails({
                                             const isSelected = selectedSet.has(oid);
                                             const isWrongSelection = isSelected && !isCorrect;
                                             const wrap = isCorrect
-                                              ? 'bg-green-50 border-green-300 ring-1 ring-green-200 text-green-900'
+                                              ? 'bg-success-subtle border-success-line ring-1 ring-success-line text-success-strong'
                                               : isWrongSelection
-                                                ? 'bg-red-50 border-red-300 ring-1 ring-red-200 text-red-900'
+                                                ? 'bg-destructive-subtle border-destructive-line ring-1 ring-destructive-line text-destructive-strong'
                                                 : 'bg-slate-50 border-gray-100 ring-1 ring-black/[0.02] text-gray-800';
                                             const badge = isCorrect
-                                              ? 'bg-gradient-to-br from-green-600 to-emerald-600 text-white shadow-sm shadow-green-600/25'
+                                              ? 'bg-green-600 text-white'
                                               : isWrongSelection
-                                                ? 'bg-gradient-to-br from-red-600 to-red-700 text-white shadow-sm shadow-red-600/25'
+                                                ? 'bg-red-600 text-white'
                                                 : 'bg-slate-200 text-gray-700';
                                             return (
                                               <div
@@ -2028,12 +2186,12 @@ export default function CandidateResultDetails({
                                                 </span>
                                                 <div className="flex-1 text-sm">
                                                   <div>{opt.text}</div>
-                                                  <div className="mt-1 flex items-center gap-2 text-[11px] font-medium">
+                                                  <div className="mt-1 flex items-center gap-2 text-2xs font-medium">
                                                     {isCorrect && (
-                                                      <span className="text-green-700">Correct answer</span>
+                                                      <span className="text-success">Correct answer</span>
                                                     )}
                                                     {isSelected && (
-                                                      <span className={isCorrect ? 'text-green-700' : 'text-red-700'}>
+                                                      <span className={isCorrect ? 'text-success' : 'text-destructive'}>
                                                         • Candidate answer
                                                       </span>
                                                     )}
@@ -2062,7 +2220,7 @@ export default function CandidateResultDetails({
                                       </div>
                                       <div className={`rounded-lg p-4 ${
                                         q.question_type === 'coding'
-                                          ? 'bg-slate-900 text-green-400 font-mono text-sm overflow-x-auto ring-1 ring-black/20'
+                                          ? 'bg-slate-900 text-success font-mono text-sm overflow-x-auto ring-1 ring-black/20'
                                           : 'bg-slate-50 ring-1 ring-black/[0.03] text-gray-800'
                                       }`}>
                                         {q.question_type === 'coding' ? (
@@ -2158,8 +2316,8 @@ export default function CandidateResultDetails({
                                                 </div>
                                                 <span className={`inline-flex w-fit items-center rounded px-2 py-0.5 text-xs font-medium uppercase ring-1 ${
                                                   testCase.passed
-                                                    ? 'bg-green-100 text-green-700 ring-green-200'
-                                                    : 'bg-red-100 text-red-700 ring-red-200'
+                                                    ? 'bg-success-subtle text-success ring-success-line'
+                                                    : 'bg-destructive-subtle text-destructive ring-destructive-line'
                                                 }`}>
                                                   {testCase.passed ? 'Pass' : 'Fail'}
                                                 </span>
@@ -2170,7 +2328,7 @@ export default function CandidateResultDetails({
                                                   <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
                                                     Test Case Input
                                                   </div>
-                                                  <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-100 ring-1 ring-black/[0.02]">
+                                                  <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-200 dark:border-slate-700">
                                                     <pre className="whitespace-pre-wrap">{testCase.input || (testCase.is_hidden ? 'Hidden test input' : 'No input')}</pre>
                                                   </div>
                                                 </div>
@@ -2178,7 +2336,7 @@ export default function CandidateResultDetails({
                                                   <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
                                                     Expected Output
                                                   </div>
-                                                  <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-100 ring-1 ring-black/[0.02]">
+                                                  <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-200 dark:border-slate-700">
                                                     <pre className="whitespace-pre-wrap">{testCase.expected_output || (testCase.is_hidden ? 'Hidden expected output' : 'No expected output')}</pre>
                                                   </div>
                                                 </div>
@@ -2191,7 +2349,7 @@ export default function CandidateResultDetails({
                                                       <div className="mb-1 text-xs font-medium uppercase tracking-wide text-gray-600">
                                                         Why It Failed
                                                       </div>
-                                                      <div className="rounded border border-red-200 ring-1 ring-red-100 bg-red-50 p-3 font-mono text-sm text-red-800">
+                                                      <div className="rounded border border-destructive-line ring-1 ring-destructive-line bg-destructive-subtle p-3 font-mono text-sm text-destructive-strong">
                                                         <pre className="whitespace-pre-wrap">{testCase.error}</pre>
                                                       </div>
                                                     </div>
@@ -2216,7 +2374,7 @@ export default function CandidateResultDetails({
                                     )}
 
                                   {q.candidate_code_submission && (!q.candidate_test_results?.details || q.candidate_test_results.details.length === 0) && (
-                                    <div className="rounded-lg border border-red-200 ring-1 ring-red-100 bg-red-50 p-4 text-sm text-red-800">
+                                    <div className="rounded-lg border border-destructive-line ring-1 ring-destructive-line bg-destructive-subtle p-4 text-sm text-destructive-strong">
                                       No judged test-case results were recorded for this coding submission. This result should be rescored.
                                     </div>
                                   )}
@@ -2232,16 +2390,16 @@ export default function CandidateResultDetails({
                                 {q.correct_answer && q.correct_answer.length > 0 && !(['single_choice', 'multiple_choice', 'mcq'].includes(String(q.question_type || '').toLowerCase())) && (
                                   <div>
                                     <div className="flex items-center gap-2 mb-3">
-                                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 ring-1 ring-green-200 flex items-center justify-center flex-shrink-0">
-                                        <CheckCircle className="w-4 h-4 text-green-600" />
+                                      <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-green-100 to-emerald-100 ring-1 ring-success-line flex items-center justify-center flex-shrink-0">
+                                        <CheckCircle className="w-4 h-4 text-success" />
                                       </div>
                                       <div className="text-sm font-medium text-gray-800">CORRECT ANSWER</div>
                                     </div>
-                                    <div className="bg-green-50 ring-1 ring-green-100 rounded-lg p-4">
+                                    <div className="bg-success-subtle ring-1 ring-success-line rounded-lg p-4">
                                       {q.correct_answer.map((opt, i) => {
                                         const option = q.options?.find(o => o.id === opt);
                                         return (
-                                          <div key={i} className="flex items-center gap-2 mb-1 text-green-800">
+                                          <div key={i} className="flex items-center gap-2 mb-1 text-success-strong">
                                             <CheckCircle className="w-4 h-4" />
                                             <span>{option?.text || opt}</span>
                                           </div>
@@ -2263,7 +2421,7 @@ export default function CandidateResultDetails({
                                         {isTextQuestion ? 'WHY THIS SCORE WAS GIVEN' : 'AI FEEDBACK & EVALUATION'}
                                       </div>
                                     </div>
-                                    <div className="bg-slate-50 rounded-lg p-4 border border-gray-100 ring-1 ring-black/[0.02]">
+                                    <div className="bg-slate-50 rounded-lg p-4 border border-gray-200 dark:border-slate-700">
                                       <div className="text-gray-800 leading-relaxed">
                                         {q.question_type === 'coding' ? getCodingEvaluationState(q).summary : q.feedback}
                                       </div>
@@ -2274,9 +2432,9 @@ export default function CandidateResultDetails({
                                 {/* Strengths — hidden for MCQ. */}
                                 {!isHRRound && !isMCQQuestion && ((q.strengths && q.strengths.length > 0) || (q.question_type === 'coding' && q.candidate_test_results?.strengths && q.candidate_test_results.strengths.length > 0)) && (
                                   <div className="pt-4 border-t border-gray-100">
-                                    <div className="bg-green-50 ring-1 ring-green-100 rounded-lg p-4">
-                                      <div className="text-sm font-medium text-green-800 mb-2">Strengths</div>
-                                      <ul className="text-sm text-green-700 space-y-1">
+                                    <div className="bg-success-subtle ring-1 ring-success-line rounded-lg p-4">
+                                      <div className="text-sm font-medium text-success-strong mb-2">Strengths</div>
+                                      <ul className="text-sm text-success space-y-1">
                                         {(q.strengths && q.strengths.length > 0 ? q.strengths : (q.candidate_test_results?.strengths || [])).map((s, i) => (
                                           <li key={i} className="flex items-start gap-2">
                                             <CheckCircle className="w-3 h-3 mt-1 flex-shrink-0" />
@@ -2312,7 +2470,7 @@ export default function CandidateResultDetails({
                           ))}
                         </div>
                       ) : (
-                        <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-gray-200 ring-1 ring-black/[0.02]">
+                        <div className="text-center py-12 bg-slate-50 rounded-xl border border-dashed border-gray-200 dark:border-slate-700">
                           <FileText className="w-12 h-12 text-brand-blue/30 mx-auto mb-3" />
                           <p className="text-gray-600">No questions available for this section</p>
                         </div>
@@ -2336,9 +2494,9 @@ export default function CandidateResultDetails({
                         <div className="text-sm text-gray-600 mb-1">Integrity Status</div>
                         <span className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ring-1 ${
                           detailedResult.proctoring_stats.integrity_status === 'clean'
-                            ? 'bg-green-100 text-green-800 ring-green-200'
+                            ? 'bg-success-subtle text-success-strong ring-success-line'
                             : detailedResult.proctoring_stats.integrity_status === 'flagged'
-                            ? 'bg-red-100 text-red-800 ring-red-200'
+                            ? 'bg-destructive-subtle text-destructive-strong ring-destructive-line'
                             : 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
                         }`}>
                           {detailedResult.proctoring_stats.integrity_status === 'clean' && <CheckCircle className="w-4 h-4 mr-2" />}
@@ -2354,17 +2512,17 @@ export default function CandidateResultDetails({
                       {/* Window Focus Lost */}
                       <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         detailedResult.proctoring_stats.window_blur_count > 0
-                          ? 'bg-red-50 border-red-200 ring-red-100'
+                          ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           detailedResult.proctoring_stats.window_blur_count > 0
-                            ? 'bg-red-100 ring-red-200'
+                            ? 'bg-destructive-subtle ring-destructive-line'
                             : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <Eye className={`w-6 h-6 ${
                             detailedResult.proctoring_stats.window_blur_count > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`} />
                         </div>
@@ -2372,7 +2530,7 @@ export default function CandidateResultDetails({
                         <div className="flex items-center gap-2">
                           <div className={`text-3xl font-bold tracking-tight ${
                             detailedResult.proctoring_stats.window_blur_count > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`}>
                             {detailedResult.proctoring_stats.window_blur_count}
@@ -2384,17 +2542,17 @@ export default function CandidateResultDetails({
                       {/* Mouse Movement */}
                       <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
-                          ? 'bg-red-50 border-red-200 ring-red-100'
+                          ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
-                            ? 'bg-red-100 ring-red-200'
+                            ? 'bg-destructive-subtle ring-destructive-line'
                             : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <MousePointer className={`w-6 h-6 ${
                             (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`} />
                         </div>
@@ -2402,7 +2560,7 @@ export default function CandidateResultDetails({
                         <div className="flex items-center gap-2">
                           <div className={`text-3xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`}>
                             {detailedResult.proctoring_stats.mouse_movement_count || 0}
@@ -2504,17 +2662,17 @@ export default function CandidateResultDetails({
                       {/* Camera Obstructed / Off */}
                       <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
-                          ? 'bg-red-50 border-red-200 ring-red-100'
+                          ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
-                            ? 'bg-red-100 ring-red-200'
+                            ? 'bg-destructive-subtle ring-destructive-line'
                             : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <Eye className={`w-6 h-6 ${
                             (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`} />
                         </div>
@@ -2522,7 +2680,7 @@ export default function CandidateResultDetails({
                         <div className="flex items-center gap-2">
                           <div className={`text-3xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`}>
                             {detailedResult.proctoring_stats.camera_obstructed_count || 0}
@@ -2534,17 +2692,17 @@ export default function CandidateResultDetails({
                       {/* Face Not Detected */}
                       <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
-                          ? 'bg-red-50 border-red-200 ring-red-100'
+                          ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
-                            ? 'bg-red-100 ring-red-200'
+                            ? 'bg-destructive-subtle ring-destructive-line'
                             : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <UserX className={`w-6 h-6 ${
                             (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`} />
                         </div>
@@ -2552,7 +2710,7 @@ export default function CandidateResultDetails({
                         <div className="flex items-center gap-2">
                           <div className={`text-3xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`}>
                             {detailedResult.proctoring_stats.face_not_visible_count || 0}
@@ -2594,17 +2752,17 @@ export default function CandidateResultDetails({
                       {/* Multiple Faces */}
                       <div className={`rounded-xl p-5 border ring-1 ${
                         (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
-                          ? 'bg-red-50 border-red-200 ring-red-100'
+                          ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
-                            ? 'bg-red-100 ring-red-200'
+                            ? 'bg-destructive-subtle ring-destructive-line'
                             : 'bg-slate-100 ring-slate-200'
                         }`}>
                           <User className={`w-6 h-6 ${
                             (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`} />
                         </div>
@@ -2612,7 +2770,7 @@ export default function CandidateResultDetails({
                         <div className="flex items-center gap-2">
                           <div className={`text-3xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
-                              ? 'text-red-600'
+                              ? 'text-destructive'
                               : 'text-gray-400'
                           }`}>
                             {detailedResult.proctoring_stats.multiple_faces_count || 0}
@@ -2698,26 +2856,26 @@ export default function CandidateResultDetails({
                       {/* Total Violations */}
                       <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
                         detailedResult.proctoring_stats.total_violations > 0
-                          ? 'bg-red-50 border-red-300 ring-red-200'
-                          : 'bg-green-50 border-green-200 ring-green-100'
+                          ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
+                          : 'bg-success-subtle border-success-line ring-success-line'
                       }`}>
                         <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
                           detailedResult.proctoring_stats.total_violations > 0
-                            ? 'bg-red-100 ring-red-200'
-                            : 'bg-green-100 ring-green-200'
+                            ? 'bg-destructive-subtle ring-destructive-line'
+                            : 'bg-success-subtle ring-success-line'
                         }`}>
                           <ShieldAlert className={`w-6 h-6 ${
                             detailedResult.proctoring_stats.total_violations > 0
-                              ? 'text-red-600'
-                              : 'text-green-600'
+                              ? 'text-destructive'
+                              : 'text-success'
                           }`} />
                         </div>
                         <div className="text-sm text-gray-600 mb-1">Total Violations</div>
                         <div className="flex items-center gap-2">
                           <div className={`text-3xl font-bold tracking-tight ${
                             detailedResult.proctoring_stats.total_violations > 0
-                              ? 'text-red-600'
-                              : 'text-green-600'
+                              ? 'text-destructive'
+                              : 'text-success'
                           }`}>
                             {detailedResult.proctoring_stats.total_violations}
                           </div>
@@ -2742,7 +2900,7 @@ export default function CandidateResultDetails({
                         /* Mirrors the Event Log table that replaces it: the same
                            S.No / Event / Timestamp / Severity / Count column grid,
                            in the same bordered container, with a few skeleton rows. */
-                        <div className="border border-gray-100 ring-1 ring-black/[0.02] rounded-xl overflow-hidden shadow-sm shadow-brand-blue/5">
+                        <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
                           <div className="grid grid-cols-[40px_2fr_1fr_1fr_80px] bg-slate-50 border-b border-gray-100 px-4 py-2">
                             <Skeleton className="h-3 w-8" />
                             <Skeleton className="h-3 w-16" />
@@ -2771,7 +2929,7 @@ export default function CandidateResultDetails({
                           <p className="text-sm">No individual events recorded</p>
                         </div>
                       ) : (
-                        <div className="border border-gray-100 ring-1 ring-black/[0.02] rounded-xl overflow-hidden shadow-sm shadow-brand-blue/5">
+                        <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
                           {/* Table header */}
                           <div className="grid grid-cols-[40px_2fr_1fr_1fr_80px] bg-slate-50 border-b border-gray-100 px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                             <span>S.No</span>
@@ -2796,15 +2954,15 @@ export default function CandidateResultDetails({
                                   case 'devtools_detected':        return { label: 'DevTools Attempt',        icon: <Monitor className="w-4 h-4" />,      color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
                                   case 'copy_attempt':             return { label: 'Copy Attempt',             icon: <Clipboard className="w-4 h-4" />,    color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
                                   case 'paste_attempt':            return { label: 'Paste Attempt',            icon: <MousePointer className="w-4 h-4" />, color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
-                                  case 'camera_disabled':          return { label: 'Camera Disabled',          icon: <Eye className="w-4 h-4" />,          color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
-                                  case 'camera_obstructed':        return { label: 'Camera Obstructed',        icon: <Eye className="w-4 h-4" />,          color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
-                                  case 'microphone_disabled':      return { label: 'Microphone Disabled',      icon: <Volume2 className="w-4 h-4" />,      color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
+                                  case 'camera_disabled':          return { label: 'Camera Disabled',          icon: <Eye className="w-4 h-4" />,          color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
+                                  case 'camera_obstructed':        return { label: 'Camera Obstructed',        icon: <Eye className="w-4 h-4" />,          color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
+                                  case 'microphone_disabled':      return { label: 'Microphone Disabled',      icon: <Volume2 className="w-4 h-4" />,      color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
                                   case 'voice_detected':           return { label: 'Voice Detected',           icon: <Volume2 className="w-4 h-4" />,      color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
-                                  case 'multiple_voices':          return { label: 'Multiple Voices',          icon: <Volume2 className="w-4 h-4" />,      color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
-                                  case 'multiple_faces':           return { label: 'Multiple Faces',           icon: <User className="w-4 h-4" />,         color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
-                                  case 'face_missing':             return { label: 'Face Not Detected',       icon: <UserX className="w-4 h-4" />,        color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
+                                  case 'multiple_voices':          return { label: 'Multiple Voices',          icon: <Volume2 className="w-4 h-4" />,      color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
+                                  case 'multiple_faces':           return { label: 'Multiple Faces',           icon: <User className="w-4 h-4" />,         color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
+                                  case 'face_missing':             return { label: 'Face Not Detected',       icon: <UserX className="w-4 h-4" />,        color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
                                   case 'screenshot_attempt':       return { label: 'Screenshot Attempt',      icon: <Maximize className="w-4 h-4" />,     color: 'text-brand-blue',        bg: 'bg-brand-blue/5',    severity: 'high'   };
-                                  case 'screen_recording_attempt': return { label: 'Screen Recording Attempt', icon: <Monitor className="w-4 h-4" />,      color: 'text-red-600',           bg: 'bg-red-50',          severity: 'high'   };
+                                  case 'screen_recording_attempt': return { label: 'Screen Recording Attempt', icon: <Monitor className="w-4 h-4" />,      color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
                                   case 'fullscreen_exit':          return { label: 'Fullscreen Exit',          icon: <Maximize className="w-4 h-4" />,     color: 'text-brand-blue',        bg: 'bg-brand-blue/5',    severity: 'medium'   };
                                   default:                         return { label: row.event_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), icon: <AlertCircle className="w-4 h-4" />, color: 'text-slate-600', bg: 'bg-slate-50', severity: 'low' };
                                 }
@@ -2812,8 +2970,8 @@ export default function CandidateResultDetails({
 
                               const severityBadge = (() => {
                                 switch (cfg.severity) {
-                                  case 'critical': return 'bg-red-100 text-red-700 ring-1 ring-red-200';
-                                  case 'high':     return 'bg-red-100 text-red-700 ring-1 ring-red-200';
+                                  case 'critical': return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
+                                  case 'high':     return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
                                   case 'medium':   return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
                                   case 'low':      return 'bg-slate-100 text-slate-600 ring-1 ring-slate-200';
                                   default:         return 'bg-slate-100 text-slate-600 ring-1 ring-slate-200';
@@ -2849,7 +3007,7 @@ export default function CandidateResultDetails({
                                   {/* Count */}
                                   <div className="flex justify-center">
                                     <span className={`inline-flex items-center justify-center min-w-[28px] px-2 py-0.5 rounded-full text-xs font-bold ring-1 ${
-                                      row.count >= 5 ? 'bg-red-100 text-red-700 ring-red-200' :
+                                      row.count >= 5 ? 'bg-destructive-subtle text-destructive ring-destructive-line' :
                                       row.count >= 3 ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20' :
                                       'bg-slate-100 text-slate-700 ring-slate-200'
                                     }`}>
@@ -2915,10 +3073,10 @@ export default function CandidateResultDetails({
 
                     {/* Summary Note */}
                     {detailedResult.proctoring_stats.total_violations === 0 ? (
-                      <div className="bg-green-50 border border-green-200 ring-1 ring-green-100 rounded-xl p-6 text-center shadow-sm shadow-green-600/5">
-                        <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-3" />
-                        <h4 className="text-lg font-medium text-green-800 mb-1 tracking-tight">No Violations Detected</h4>
-                        <p className="text-sm text-green-700">
+                      <div className="bg-success-subtle border border-success-line ring-1 ring-success-line rounded-xl p-6 text-center shadow-sm shadow-green-600/5">
+                        <CheckCircle className="w-12 h-12 text-success mx-auto mb-3" />
+                        <h4 className="text-lg font-medium text-success-strong mb-1 tracking-tight">No Violations Detected</h4>
+                        <p className="text-sm text-success">
                           This candidate completed the assessment without any proctoring violations.
                         </p>
                       </div>

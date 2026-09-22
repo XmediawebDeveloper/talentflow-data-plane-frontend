@@ -617,7 +617,7 @@ export default function RoleManagement() {
                                   <div className="flex flex-wrap items-center gap-2">
                                     <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{role.name}</p>
                                     {role.is_default && (
-                                      <span className="inline-flex items-center rounded-full bg-brand-orange/10 px-2.5 py-1 text-[11px] font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
+                                      <span className="inline-flex items-center rounded-full bg-brand-orange/10 px-2.5 py-1 text-2xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
                                         Default
                                       </span>
                                     )}
@@ -676,7 +676,7 @@ export default function RoleManagement() {
                                 {!role.is_system ? (
                                   <button
                                     onClick={() => handleDeleteRole(role.id)}
-                                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-red-500/15 bg-red-500/[0.05] text-red-600 transition-all hover:-translate-y-0.5 hover:bg-red-500/[0.1]"
+                                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-destructive-line/15 bg-destructive/[0.05] text-destructive transition-all hover:-translate-y-0.5 hover:bg-destructive/[0.1]"
                                     title={`Delete ${role.name}`}
                                     aria-label={`Delete ${role.name}`}
                                   >
@@ -709,7 +709,7 @@ export default function RoleManagement() {
                             <div className="min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
                                 <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">{role.name}</h3>
-                                <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${role.is_system ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700' : 'bg-brand-cyan/10 text-brand-blue ring-1 ring-brand-cyan/20'}`}>
+                                <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-2xs font-medium ${role.is_system ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-1 ring-gray-200 dark:ring-slate-700' : 'bg-brand-cyan/10 text-brand-blue ring-1 ring-brand-cyan/20'}`}>
                                   {role.is_system ? 'System' : 'Custom'}
                                 </span>
                               </div>
@@ -718,7 +718,7 @@ export default function RoleManagement() {
                             </div>
                           </div>
                           {role.is_default && (
-                            <span className="inline-flex items-center rounded-full bg-brand-orange/10 px-2.5 py-1 text-[11px] font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
+                            <span className="inline-flex items-center rounded-full bg-brand-orange/10 px-2.5 py-1 text-2xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
                               Default
                             </span>
                           )}
@@ -763,7 +763,7 @@ export default function RoleManagement() {
                           {!role.is_system && (
                             <button
                               onClick={() => handleDeleteRole(role.id)}
-                              className="inline-flex items-center gap-2 rounded-xl border border-red-500/15 bg-red-500/[0.05] px-3 py-2 text-sm font-medium text-red-600 transition-all hover:bg-red-500/[0.1]"
+                              className="inline-flex items-center gap-2 rounded-xl border border-destructive-line/15 bg-destructive/[0.05] px-3 py-2 text-sm font-medium text-destructive transition-all hover:bg-destructive/[0.1]"
                             >
                               <Ban className="h-4 w-4" />
                               Delete
@@ -881,9 +881,9 @@ export default function RoleManagement() {
                               <div key={p.id} className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-gray-50/60 dark:bg-slate-800/40 p-3 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                                 <div className="flex items-start justify-between gap-2">
                                   <p className="text-sm font-semibold text-gray-900 dark:text-slate-50">{p.name}</p>
-                                  <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-gray-400 dark:text-slate-500 whitespace-nowrap">{p.action}</span>
+                                  <span className="text-2xs font-medium uppercase tracking-[0.14em] text-gray-400 dark:text-slate-500 whitespace-nowrap">{p.action}</span>
                                 </div>
-                                <p className="mt-1 font-mono text-[11px] text-brand-blue">{p.code}</p>
+                                <p className="mt-1 font-mono text-2xs text-brand-blue">{p.code}</p>
                                 {p.description && (
                                   <p className="mt-2 text-xs text-gray-500 dark:text-slate-500">{p.description}</p>
                                 )}
@@ -1004,7 +1004,7 @@ export default function RoleManagement() {
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
                       <h2 className="truncate text-xl font-semibold">{viewingRole.name}</h2>
-                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-[11px] font-medium ${getRoleBadgeClass(viewingRole.is_system)}`}>
+                      <span className={`inline-flex items-center rounded-full px-2.5 py-1 text-2xs font-medium ${getRoleBadgeClass(viewingRole.is_system)}`}>
                         {viewingRole.is_system ? 'System role' : 'Custom role'}
                       </span>
                     </div>

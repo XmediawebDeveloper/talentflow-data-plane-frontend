@@ -218,14 +218,14 @@ export default function SelectedCandidatesPanel({
                         ? `Version ${chosen.number} of ${chosen.total} — chosen from the version list`
                         : hasMultiple ? `Latest of ${count} versions` : 'Only version'
                     }
-                    className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2 py-0.5 text-[10px] font-semibold text-brand-blue ring-1 ring-brand-blue/15 tabular-nums"
+                    className="inline-flex items-center gap-1 rounded-full bg-brand-blue/10 px-2 py-0.5 text-2xs font-semibold text-brand-blue ring-1 ring-brand-blue/15 tabular-nums"
                   >
                     {shownTotal > 1 && <Layers className="w-3 h-3" />}
                     v{shownVersion}
                     {shownTotal > 1 && <span className="font-normal">of {shownTotal}</span>}
                   </span>
                   {chosen && chosen.number !== latest && (
-                    <span className="text-[10px] font-medium text-brand-orange-deep">not latest</span>
+                    <span className="text-2xs font-medium text-brand-orange-deep">not latest</span>
                   )}
                 </div>
                 {/* Role first, then how to reach them. */}

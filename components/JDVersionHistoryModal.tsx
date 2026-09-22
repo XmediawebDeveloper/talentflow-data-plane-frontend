@@ -12,6 +12,7 @@ import VersionCompareModal, { type CompareVersion } from './VersionCompareModal'
 import { formatEmploymentType, formatIndustryType } from '@/lib/utils/jobOpeningDisplay';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 interface JDVersionHistoryModalProps {
   isOpen: boolean;
@@ -100,13 +101,13 @@ const versionStatusLabel = (version: JDHistoryVersion): string => {
 const versionStatusBadgeClass = (label: string) => {
   switch (label) {
     case 'Published':
-      return 'bg-green-100 text-green-700 border-green-200';
+      return 'bg-success-subtle text-success border-success-line';
     case 'Republished':
       return 'bg-blue-100 text-blue-700 border-blue-200';
     case 'Draft':
-      return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+      return 'bg-warning-subtle text-warning border-warning-line';
     case 'Disabled':
-      return 'bg-red-100 text-red-700 border-red-200';
+      return 'bg-destructive-subtle text-destructive border-destructive-line';
     case 'Archived':
       return 'bg-purple-100 text-purple-700 border-purple-200';
     default:
@@ -251,7 +252,7 @@ function VersionHeaderCard({ version, action }: { version: JDHistoryVersion; act
             {/* Salary */}
             <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium ${
               salaryText
-                ? 'bg-green-50 text-green-700'
+                ? 'bg-success-subtle text-success'
                 : 'bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-400 font-normal italic'
             }`}>
               {salaryText || 'Salary not specified'}
@@ -479,14 +480,16 @@ export default function JDVersionHistoryModal({
         <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
           <div className="flex items-center gap-3 min-w-0">
             {selectedVersion ? (
-              <button
+              <Button
                 type="button"
+                variant="secondary"
+                size="sm"
                 onClick={() => setSelectedVersion(null)}
-                className="p-2 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg transition-colors"
+                className="px-2"
                 aria-label="Back to version list"
               >
-                <ArrowLeft className="w-5 h-5 text-gray-600 dark:text-slate-400" />
-              </button>
+                <ArrowLeft className="w-5 h-5" />
+              </Button>
             ) : (
               <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
                 <History className="w-4 h-4 text-brand-blue" />
@@ -510,27 +513,27 @@ export default function JDVersionHistoryModal({
           </div>
           <div className="flex items-center gap-2 flex-shrink-0">
             {!selectedVersion && versions.length > 1 && (
-              <button
+              <Button
                 type="button"
+                variant="primary"
+                size="sm"
                 onClick={compareSelected}
                 disabled={compareChecked.length !== 2}
-                className={`hidden sm:inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
-                  compareChecked.length === 2
-                    ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2'
-                    : 'bg-slate-100 dark:bg-slate-800 text-gray-400 cursor-not-allowed'
-                }`}
+                className="hidden sm:inline-flex"
               >
                 {compareChecked.length === 2 ? 'Compare selected' : 'Select 2 versions to compare'}
-              </button>
+              </Button>
             )}
-            <button
+            <Button
               type="button"
+              variant="secondary"
+              size="sm"
               onClick={closeModal}
-              className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors"
+              className="px-2"
               aria-label="Close"
             >
               <X className="w-5 h-5" />
-            </button>
+            </Button>
           </div>
         </div>
 
@@ -575,15 +578,17 @@ export default function JDVersionHistoryModal({
               <VersionHeaderCard
                 version={selectedVersion}
                 action={
-                  <button
+                  <Button
                     type="button"
+                    variant="secondary"
+                    size="sm"
                     onClick={() => handleDownload(selectedVersion)}
-                    className="flex items-center justify-center p-1.5 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors font-medium"
+                    className="px-2"
                     aria-label="Download this version as a Word document"
                     title="Download this version as a Word document"
                   >
                     <Download className="w-3.5 h-3.5" />
-                  </button>
+                  </Button>
                 }
               />
 
@@ -673,27 +678,30 @@ export default function JDVersionHistoryModal({
 
                       <div className="flex items-center gap-2 flex-shrink-0">
                         {previousVersion ? (
-                          <button
+                          <Button
                             type="button"
+                            variant="secondary"
+                            size="sm"
                             onClick={() => openComparison(previousVersion, version)}
-                            className="inline-flex items-center gap-1.5 rounded-lg border border-gray-200 dark:border-slate-700 px-3 py-1.5 text-xs font-medium text-gray-700 dark:text-slate-200 hover:border-brand-blue/40 hover:bg-brand-blue/5 hover:text-brand-blue transition-colors"
                             title="Compare with the previous version"
                           >
                             <History className="w-3.5 h-3.5" />
                             <span className="hidden sm:inline">View Changes</span>
-                          </button>
+                          </Button>
                         ) : (
                           <span className="hidden sm:inline text-xs italic text-gray-400 dark:text-slate-500">First version</span>
                         )}
-                        <button
+                        <Button
                           type="button"
+                          variant="secondary"
+                          size="sm"
                           onClick={() => setSelectedVersion(version)}
-                          className="p-2 text-gray-600 dark:text-slate-400 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+                          className="px-2"
                           aria-label={`View version ${version.version_number}`}
                           title="View JD"
                         >
                           <Eye className="w-4 h-4" />
-                        </button>
+                        </Button>
                       </div>
                     </div>
                   </div>
@@ -724,22 +732,23 @@ export default function JDVersionHistoryModal({
             </p>
             <div className="flex items-center gap-2">
               {!selectedVersion && versions.length > 1 && (
-                <button
+                <Button
                   type="button"
+                  variant="primary"
                   onClick={compareSelected}
                   disabled={compareChecked.length !== 2}
-                  className="sm:hidden inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium bg-brand-blue text-white disabled:bg-slate-200 disabled:text-gray-400"
+                  className="sm:hidden"
                 >
                   Compare
-                </button>
+                </Button>
               )}
-              <button
+              <Button
                 type="button"
+                variant="secondary"
                 onClick={selectedVersion ? () => setSelectedVersion(null) : closeModal}
-                className="px-4 py-2 bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-300 dark:hover:bg-slate-700 transition-colors font-medium text-sm"
               >
                 {selectedVersion ? 'Back to List' : 'Close'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

@@ -9,6 +9,7 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface StepIntroVideoProps {
   candidateName?: string;
@@ -91,10 +92,10 @@ export default function StepIntroVideo({
         <div className="space-y-4 text-center">
           <div className="flex justify-center">
             {videoError ? (
-              <div className="w-full max-w-2xl rounded-xl border border-red-200 bg-red-50 p-8 text-center">
-                <div className="text-red-500 text-4xl mb-3">⚠️</div>
-                <p className="text-red-700 font-medium">Failed to load the introduction video.</p>
-                <p className="text-red-500 text-sm mt-1">Please check your connection and refresh the page, or skip and continue.</p>
+              <div className="w-full max-w-2xl rounded-xl border border-destructive-line bg-destructive-subtle p-8 text-center">
+                <div className="text-destructive text-4xl mb-3">⚠️</div>
+                <p className="text-destructive font-medium">Failed to load the introduction video.</p>
+                <p className="text-destructive text-sm mt-1">Please check your connection and refresh the page, or skip and continue.</p>
               </div>
             ) : (
               <div className="relative w-full max-w-2xl">
@@ -205,7 +206,7 @@ export default function StepIntroVideo({
                 );
               })}
             </div>
-            <p className="text-sm text-green-600 font-medium">
+            <p className="text-sm text-success font-medium">
               Current Selection: {selectedLanguage}
             </p>
           </div>
@@ -215,15 +216,15 @@ export default function StepIntroVideo({
       {/* Footer actions */}
       <div className="flex items-center justify-end pt-2 border-t border-gray-100">
         <div className="flex items-center gap-3">
-          <button
+          <Button
+            variant="primary"
             type="button"
             onClick={onContinue}
             disabled={submitting}
-            className="px-6 py-2.5 rounded-lg bg-gray-900 text-white text-sm font-medium hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 shadow-sm"
           >
             {submitting ? 'Loading...' : 'Continue to Interview'}
             {!submitting && <ChevronRight className="w-4 h-4" />}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

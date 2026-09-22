@@ -8,6 +8,7 @@ import {
   Loader2,
   X,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 /**
  * What archiving actually does, spelled out before it happens.
@@ -73,14 +74,16 @@ export default function ArchiveJobModal({
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6">
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-2xl w-full animate-scale-in max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
-        <button
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={onCancel}
           disabled={isLoading}
           aria-label="Close"
-          className="absolute top-4 right-4 p-1.5 text-gray-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-600 dark:hover:text-slate-300 rounded-lg transition-colors disabled:opacity-50"
+          className="absolute top-4 right-4 px-2"
         >
           <X className="w-5 h-5" />
-        </button>
+        </Button>
 
         <div className="px-5 sm:px-8 pt-7 sm:pt-8 pb-5 overflow-y-auto">
           {/* Header: tinted disc + title + the JD this is about */}
@@ -135,8 +138,8 @@ export default function ArchiveJobModal({
           </div>
 
           {/* The reassurance — archiving is not deleting */}
-          <div className="mt-4 flex items-start gap-3 rounded-xl border border-emerald-100 dark:border-emerald-500/25 bg-emerald-50/60 dark:bg-emerald-500/10 px-4 py-3">
-            <CheckCircle2 className="w-5 h-5 shrink-0 text-emerald-600 dark:text-emerald-400 mt-0.5" />
+          <div className="mt-4 flex items-start gap-3 rounded-xl border border-success-line bg-success-subtle/60 px-4 py-3">
+            <CheckCircle2 className="w-5 h-5 shrink-0 text-success mt-0.5" />
             <div className="min-w-0 text-sm">
               <p className="font-semibold text-gray-900 dark:text-slate-100">
                 You can unarchive {subject} anytime to restore all features.
@@ -147,17 +150,19 @@ export default function ArchiveJobModal({
         </div>
 
         <div className="px-5 sm:px-8 py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col-reverse sm:flex-row sm:justify-end gap-3 shrink-0">
-          <button
+          <Button
+            variant="secondary"
             onClick={onCancel}
             disabled={isLoading}
-            className="px-6 py-2.5 text-sm font-semibold bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
             onClick={onConfirm}
             disabled={isLoading}
-            className="px-6 py-2.5 text-sm font-semibold bg-brand-orange hover:bg-brand-orange-deep text-white rounded-lg shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="px-6"
           >
             {isLoading ? (
               <span className="flex items-center justify-center gap-2">
@@ -167,7 +172,7 @@ export default function ArchiveJobModal({
             ) : (
               'Yes, Archive'
             )}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

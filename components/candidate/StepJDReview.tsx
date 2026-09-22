@@ -69,7 +69,7 @@ function generateBadges(
       badges.push({ label: 'Technical', bgColor: 'bg-blue-100', textColor: 'text-blue-700' });
     }
     if (typeLower.includes('behavioral') || typeLower.includes('behaviour')) {
-      badges.push({ label: 'Behavioral', bgColor: 'bg-green-100', textColor: 'text-green-700' });
+      badges.push({ label: 'Behavioral', bgColor: 'bg-success-subtle', textColor: 'text-success' });
     }
     if (typeLower.includes('system') || typeLower.includes('design')) {
       badges.push({ label: 'System Design', bgColor: 'bg-purple-100', textColor: 'text-purple-700' });
@@ -80,11 +80,11 @@ function generateBadges(
   }
 
   if (experienceLevel) {
-    badges.push({ label: formatLabel(experienceLevel), bgColor: 'bg-amber-100', textColor: 'text-amber-700' });
+    badges.push({ label: formatLabel(experienceLevel), bgColor: 'bg-warning-subtle', textColor: 'text-warning' });
   }
 
   if (employmentType) {
-    badges.push({ label: formatLabel(employmentType), bgColor: 'bg-green-100', textColor: 'text-green-700' });
+    badges.push({ label: formatLabel(employmentType), bgColor: 'bg-success-subtle', textColor: 'text-success' });
   }
 
   if (remoteType) {
@@ -234,7 +234,7 @@ export default function StepJDReview({
                     <div key={item.label} className="flex items-center gap-3 bg-gray-50 rounded-lg p-3">
                       <Icon className="w-4 h-4 text-gray-500 flex-shrink-0" />
                       <div>
-                        <p className="text-[11px] text-gray-400 uppercase tracking-wide">{item.label}</p>
+                        <p className="text-2xs text-gray-400 uppercase tracking-wide">{item.label}</p>
                         <p className="text-sm font-medium text-gray-900">{item.value}</p>
                       </div>
                     </div>

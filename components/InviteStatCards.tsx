@@ -94,7 +94,7 @@ export default function InviteStatCards({
                 key={key}
                 className="bg-white dark:bg-slate-900 rounded-md sm:rounded-lg p-1.5 sm:p-3 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 text-center sm:text-left"
               >
-                <div className={`flex items-center justify-center sm:justify-start gap-1 sm:gap-2 ${tone} text-[9px] sm:text-xs mb-0.5 sm:mb-1`}>
+                <div className={`flex items-center justify-center sm:justify-start gap-1 sm:gap-2 ${tone} text-2xs sm:text-xs mb-0.5 sm:mb-1`}>
                   <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                   <span className="truncate">{label}</span>
                 </div>
@@ -130,7 +130,7 @@ export default function InviteStatCards({
                   <ListFilter className="w-3 h-3 sm:w-3.5 sm:h-3.5 opacity-30 group-hover:opacity-80 transition-opacity" />
                 )}
               </span>
-              <div className={`flex items-center justify-center sm:justify-start gap-1 sm:gap-2 ${tone} text-[9px] sm:text-xs mb-0.5 sm:mb-1`}>
+              <div className={`flex items-center justify-center sm:justify-start gap-1 sm:gap-2 ${tone} text-2xs sm:text-xs mb-0.5 sm:mb-1`}>
                 <Icon className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                 <span className="truncate">{label}</span>
               </div>

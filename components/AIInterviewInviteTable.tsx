@@ -189,7 +189,7 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
     case 'ai_interview_invite':
       return { label: 'Invited', Icon: Mail, tone: 'text-brand-blue' };
     case 'ai_interview_invite_revoke':
-      return { label: 'Revoked', Icon: Ban, tone: 'text-red-600' };
+      return { label: 'Revoked', Icon: Ban, tone: 'text-destructive' };
     case 'ai_interview_invite_edit':
       return { label: 'Edited', Icon: Pencil, tone: 'text-brand-orange-deep' };
     case 'ai_interview_consent':
@@ -197,9 +197,9 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
     case 'ai_interview_start':
       return { label: 'Started', Icon: Play, tone: 'text-brand-orange-deep' };
     case 'ai_interview_complete':
-      return { label: 'Completed', Icon: CheckCircle, tone: 'text-green-600' };
+      return { label: 'Completed', Icon: CheckCircle, tone: 'text-success' };
     case 'ai_interview_terminated':
-      return { label: 'Terminated', Icon: Ban, tone: 'text-red-600' };
+      return { label: 'Terminated', Icon: Ban, tone: 'text-destructive' };
     case 'ai_interview_invite_expired':
       return { label: 'Expired at', Icon: Clock, tone: 'text-brand-orange-deep' };
     default:
@@ -250,6 +250,26 @@ const inferMissingExpiries = (
   return [...events, ...inferred];
 };
 
+/** An invitation can lapse at most once per send: between one "Invited" and
+ *  the next there is a single deadline. More than one "Expired at" in that
+ *  stretch is always an artefact — rows written out of order around a resend,
+ *  or by older code that re-logged the same lapse — so keep the earliest and
+ *  drop the rest. A fresh send ("Invited") starts a new stretch, so a genuine
+ *  Invited -> Expired -> Invited -> Expired history is untouched. */
+const collapseRepeatedExpiries = (sorted: TimelineEntry[]): TimelineEntry[] => {
+  let expiredSinceLastSend = false;
+  return sorted.filter((entry) => {
+    if (entry.label === 'Invited') {
+      expiredSinceLastSend = false;
+      return true;
+    }
+    if (entry.label !== 'Expired at') return true;
+    if (expiredSinceLastSend) return false;
+    expiredSinceLastSend = true;
+    return true;
+  });
+};
+
 const FALLBACK_MATCH_WINDOW_MS = 2 * 60 * 1000;
 const buildFullTimeline = (
   inv: any,
@@ -280,7 +300,13 @@ const buildFullTimeline = (
   // decide whether history from BEFORE that resend still shows.
   const clockExpired =
     !inv.started_at && !inv.unit_consumed && inv.expires_at && new Date(inv.expires_at) < new Date();
-  const isLiveExpired = !inv.completed_at && ((inv.status || '').toLowerCase() === 'expired' || clockExpired);
+  // Revoked is the recruiter's doing, not the deadline's: once the (untouched)
+  // expires_at later slips into the past, clockExpired would otherwise add an
+  // "Expired at" line after the Revoked one.
+  const isLiveExpired =
+    !inv.completed_at &&
+    (inv.status || '').toLowerCase() !== 'revoked' &&
+    ((inv.status || '').toLowerCase() === 'expired' || clockExpired);
   const fallback: [string, string | null | undefined][] = [
     // created_at specifically, not invitation_sent_at — the latter is
     // overwritten to the LATEST send time by every resend, so using it here
@@ -315,16 +341,17 @@ const buildFullTimeline = (
     }
   }
 
-  return inferMissingExpiries(out, inv.expires_at && inv.invitation_sent_at ? new Date(inv.expires_at).getTime() - new Date(inv.invitation_sent_at).getTime() : 0, 'ai_interview_invite_expired').sort(
+  const merged = inferMissingExpiries(out, inv.expires_at && inv.invitation_sent_at ? new Date(inv.expires_at).getTime() - new Date(inv.invitation_sent_at).getTime() : 0, 'ai_interview_invite_expired').sort(
     (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
   );
+  return collapseRepeatedExpiries(merged);
 };
 
 /** Badge wording and colours kept in one place so a recruiter reads the same
  *  status regardless of where tracking was opened from. */
 export const AIInviteStatusBadge = ({ inv }: { inv: any }) => {
   const base =
-    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] sm:text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1';
+    'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs sm:text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1';
   switch (inv.status) {
     case 'completed': {
       // (Auto) surfaces when the timeout monitor finalized an abandoned session —
@@ -333,11 +360,11 @@ export const AIInviteStatusBadge = ({ inv }: { inv: any }) => {
       const autoCompleted = reason.startsWith('time_limit');
       return (
         <span
-          className={`${base} bg-green-100 dark:bg-green-500/15 text-green-700 dark:text-green-300 ring-green-200 dark:ring-green-500/25`}
+          className={`${base} bg-success-subtle text-success ring-success-line`}
           title={autoCompleted ? 'Auto-completed when the interview duration elapsed' : undefined}
         >
           <CheckCircle className="w-3 h-3" /> Completed
-          {autoCompleted && <span className="text-green-600/80 dark:text-green-400/80">(Auto)</span>}
+          {autoCompleted && <span className="text-success/80">(Auto)</span>}
         </span>
       );
     }
@@ -346,7 +373,7 @@ export const AIInviteStatusBadge = ({ inv }: { inv: any }) => {
     case 'invited':
       return <span className={`${base} bg-brand-blue/10 text-brand-blue ring-brand-blue/20`}><Mail className="w-3 h-3" /> Invited</span>;
     case 'cancelled':
-      return <span className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`}><X className="w-3 h-3" /> Cancelled</span>;
+      return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}><X className="w-3 h-3" /> Cancelled</span>;
     case 'terminated': {
       // closing_reason is set by evaluate_and_persist_session as
       // "proctoring_terminated: <human message>" (candidate_ai_interview.py) once
@@ -357,7 +384,7 @@ export const AIInviteStatusBadge = ({ inv }: { inv: any }) => {
       const detail = rawReason.replace(/^proctoring_terminated:\s*/i, '').trim();
       return (
         <span
-          className={`${base} bg-red-100 dark:bg-red-500/15 text-red-700 dark:text-red-300 ring-red-200 dark:ring-red-500/25`}
+          className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}
           title={detail || 'Auto-ended by the proctoring policy — candidate left the interview screen'}
         >
           <Ban className="w-3 h-3" /> Terminated
@@ -385,7 +412,7 @@ export const AIInviteStatusBadge = ({ inv }: { inv: any }) => {
  *  per-round breakdown. 60 is the same pass mark the overall Score column uses. */
 const ScoreCell = ({ value }: { value: number | null }) =>
   value != null ? (
-    <span className={`font-semibold ${value >= 60 ? 'text-green-600' : 'text-red-600'}`}>{value}%</span>
+    <span className={`font-semibold ${value >= 60 ? 'text-success' : 'text-destructive'}`}>{value}%</span>
   ) : (
     <span className="text-gray-400 dark:text-slate-500">—</span>
   );
@@ -587,7 +614,7 @@ export default function AIInterviewInviteTable({
           {hasActiveFilters ? 'No candidates match the current filters.' : 'No candidates invited yet.'}
         </p>
         {!hasActiveFilters && emptyHint && (
-          <p className="text-[11px] sm:text-xs text-gray-400 dark:text-slate-500 mt-1">{emptyHint}</p>
+          <p className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500 mt-1">{emptyHint}</p>
         )}
       </div>
     );
@@ -618,17 +645,17 @@ export default function AIInterviewInviteTable({
               <div className="flex items-center gap-2 min-w-0 mb-1.5">
                 <SelectBox inv={inv} />
                 <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-                  <span className="text-[10px] font-medium text-brand-blue">{initialsOf(inv.candidate_name)}</span>
+                  <span className="text-2xs font-medium text-brand-blue">{initialsOf(inv.candidate_name)}</span>
                 </div>
                 <div className="min-w-0 flex-1">
                   <p className="font-medium text-gray-900 dark:text-slate-50 text-xs truncate">
                     {inv.candidate_name || 'Unknown'}
                   </p>
-                  <p className="text-[10px] text-gray-500 dark:text-slate-500 truncate break-all">
+                  <p className="text-2xs text-gray-500 dark:text-slate-500 truncate break-all">
                     {inv.candidate_email}
                   </p>
                   {inv.candidate_cid && (
-                    <p className="text-[10px] font-medium text-gray-600 dark:text-slate-400 truncate">
+                    <p className="text-2xs font-medium text-gray-600 dark:text-slate-400 truncate">
                       {inv.candidate_cid}
                     </p>
                   )}
@@ -638,7 +665,7 @@ export default function AIInterviewInviteTable({
 
               {/* Two-column grid rather than a free wrap, so entries line up
                   instead of staggering by label width. */}
-              <div className="text-[10px] text-gray-500 dark:text-slate-500 grid grid-cols-2 gap-x-3 gap-y-0.5 mb-1">
+              <div className="text-2xs text-gray-500 dark:text-slate-500 grid grid-cols-2 gap-x-3 gap-y-0.5 mb-1">
                 {timelineEvents(inv).map(({ label, at, Icon, tone }, i) => (
                   <div key={`${label}-${i}`} className="flex items-center gap-1 min-w-0">
                     <Icon className={`w-2.5 h-2.5 flex-shrink-0 ${tone}`} />
@@ -650,7 +677,7 @@ export default function AIInterviewInviteTable({
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); openTimeline(inv); }}
-                  className="flex items-center gap-1 text-[10px] font-medium text-brand-blue hover:underline mb-1.5"
+                  className="flex items-center gap-1 text-2xs font-medium text-brand-blue hover:underline mb-1.5"
                 >
                   <History className="w-2.5 h-2.5" /> View full history
                 </button>
@@ -664,17 +691,17 @@ export default function AIInterviewInviteTable({
                   {([
                     { label: 'Score', value: score },
                   ] as const).map(({ label, value }) => (
-                    <span key={label} className="text-[10px] text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                    <span key={label} className="text-2xs text-gray-600 dark:text-slate-400 whitespace-nowrap">
                       {label}:{' '}
                       {value != null ? (
-                        <span className={`font-semibold ${value >= 60 ? 'text-green-600' : 'text-red-600'}`}>{value}%</span>
+                        <span className={`font-semibold ${value >= 60 ? 'text-success' : 'text-destructive'}`}>{value}%</span>
                       ) : (
                         <span className="text-gray-400 dark:text-slate-500">—</span>
                       )}
                     </span>
                   ))}
                   {isInviteExpired(inv) && (
-                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[9px] font-medium ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20 whitespace-nowrap flex-shrink-0">
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-2xs font-medium ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20 whitespace-nowrap flex-shrink-0">
                       <Clock className="w-2.5 h-2.5" /> Expired
                     </span>
                   )}
@@ -688,9 +715,9 @@ export default function AIInterviewInviteTable({
                       onClick={(e) => { e.stopPropagation(); run(); }}
                       disabled={disabled}
                       title={title || label}
-                      className={`flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+                      className={`flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
                         destructive
-                          ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 ring-1 ring-red-200 dark:ring-red-500/20 hover:bg-red-100 dark:hover:bg-red-500/20'
+                          ? 'text-destructive bg-destructive-subtle ring-1 ring-destructive-line hover:bg-destructive-subtle'
                           : 'border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
                       }`}
                     >
@@ -813,7 +840,7 @@ export default function AIInterviewInviteTable({
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); openTimeline(inv); }}
-                        className="flex items-center gap-1 text-[11px] font-medium text-brand-blue hover:underline mt-1"
+                        className="flex items-center gap-1 text-2xs font-medium text-brand-blue hover:underline mt-1"
                       >
                         <History className="w-3 h-3" /> View full history
                       </button>
@@ -881,7 +908,7 @@ export default function AIInterviewInviteTable({
                 <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
               </div>
             ) : timelineError ? (
-              <p className="text-sm text-red-600 dark:text-red-400 py-6 text-center">{timelineError}</p>
+              <p className="text-sm text-destructive py-6 text-center">{timelineError}</p>
             ) : timelineEntries && timelineEntries.length > 0 ? (
               <ol className="space-y-3">
                 {timelineEntries.map((entry, i) => (

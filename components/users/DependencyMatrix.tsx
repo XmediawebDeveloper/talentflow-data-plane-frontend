@@ -197,10 +197,10 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                           }`}
                         >
                           <div className="flex items-center gap-1.5 sm:gap-2">
-                            <CheckCircle className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${selectedFeature === node.code ? 'text-white' : 'text-emerald-500'}`} />
+                            <CheckCircle className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${selectedFeature === node.code ? 'text-white' : 'text-success'}`} />
                             <span className="truncate">{node.name}</span>
                             {node.dependents.length > 0 && (
-                              <span className={`text-[10px] sm:text-xs px-1.5 py-0.5 rounded-full ring-1 flex-shrink-0 ${
+                              <span className={`text-2xs sm:text-xs px-1.5 py-0.5 rounded-full ring-1 flex-shrink-0 ${
                                 selectedFeature === node.code
                                   ? 'bg-white/20 text-white ring-white/30'
                                   : 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/30'
@@ -245,7 +245,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                                 </div>
                                 <span className="font-semibold text-gray-900 text-sm sm:text-base truncate">{node.name}</span>
                               </div>
-                              <div className="flex items-center gap-1.5 text-[10px] sm:text-xs flex-shrink-0 pl-9 sm:pl-0">
+                              <div className="flex items-center gap-1.5 text-2xs sm:text-xs flex-shrink-0 pl-9 sm:pl-0">
                                 <span className="px-2 py-0.5 rounded-full ring-1 ring-brand-blue/20 bg-brand-blue/10 text-brand-blue font-medium">
                                   Requires {node.dependencies.length}
                                 </span>
@@ -260,11 +260,11 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
 
                           {/* Dependencies */}
                           <div className="mt-3 flex items-center gap-1.5 sm:gap-2 flex-wrap">
-                            <span className="text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider">Requires:</span>
+                            <span className="text-2xs sm:text-xs font-medium text-gray-500 uppercase tracking-wider">Requires:</span>
                             {node.dependencies.map((dep, i) => (
                               <React.Fragment key={dep}>
                                 <span
-                                  className={`text-[10px] sm:text-xs px-2 py-0.5 sm:py-1 rounded-full font-medium ring-1 ${
+                                  className={`text-2xs sm:text-xs px-2 py-0.5 sm:py-1 rounded-full font-medium ring-1 ${
                                     selectedFeature === dep
                                       ? 'bg-brand-blue text-white ring-brand-blue/40 shadow-sm'
                                       : 'bg-gray-50 text-gray-700 ring-gray-200'
@@ -278,7 +278,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                               </React.Fragment>
                             ))}
                             <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-cyan mx-1 flex-shrink-0" />
-                            <span className="text-[10px] sm:text-xs px-2 py-0.5 sm:py-1 rounded-full font-medium ring-1 ring-brand-blue/30 bg-brand-blue/10 text-brand-blue">
+                            <span className="text-2xs sm:text-xs px-2 py-0.5 sm:py-1 rounded-full font-medium ring-1 ring-brand-blue/30 bg-brand-blue/10 text-brand-blue">
                               {node.name}
                             </span>
                           </div>
@@ -301,13 +301,13 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                   <table className="w-full border-collapse min-w-[400px]">
                     <thead className="bg-gray-50">
                       <tr>
-                        <th className="sticky left-0 bg-gray-50 p-2 sm:p-3 border-b border-r border-gray-200 text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider text-left">
+                        <th className="sticky left-0 bg-gray-50 p-2 sm:p-3 border-b border-r border-gray-200 text-2xs sm:text-xs font-medium text-gray-500 uppercase tracking-wider text-left">
                           Feature
                         </th>
                         {(matrix?.features || Object.keys(matrix?.feature_names || {})).map(code => (
                           <th
                             key={code}
-                            className="p-2 sm:p-3 border-b border-gray-200 text-[10px] sm:text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"
+                            className="p-2 sm:p-3 border-b border-gray-200 text-2xs sm:text-xs font-medium text-gray-500 uppercase tracking-wider whitespace-nowrap"
                             style={{ writingMode: 'vertical-rl', textOrientation: 'mixed' }}
                           >
                             {(matrix?.feature_names || {})[code] || code}
@@ -351,7 +351,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                                       : isDependency
                                       ? 'bg-brand-blue/10'
                                       : isDependent
-                                      ? 'bg-emerald-50'
+                                      ? 'bg-success-subtle'
                                       : ''
                                   }`}
                                 >
@@ -363,7 +363,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                                     </span>
                                   ) : isDependent ? (
                                     <span title="Required by">
-                                      <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 mx-auto rotate-180" />
+                                      <ArrowRight className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-success mx-auto rotate-180" />
                                     </span>
                                   ) : (
                                     <span className="text-gray-200">·</span>
@@ -384,7 +384,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                 <span className="px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-brand-blue/30 bg-brand-blue/10 text-brand-blue inline-flex items-center gap-1.5">
                   <ArrowRight className="w-3 h-3" /> Depends on
                 </span>
-                <span className="px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-emerald-300 bg-emerald-50 text-emerald-700 inline-flex items-center gap-1.5">
+                <span className="px-2.5 py-1 rounded-full text-xs font-medium ring-1 ring-success-line bg-success-subtle text-success inline-flex items-center gap-1.5">
                   <ArrowRight className="w-3 h-3 rotate-180" /> Required by
                 </span>
               </div>
@@ -404,7 +404,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
               {selectedFeatureInfo.dependencies.length > 0 && (
                 <div className="mb-4">
                   <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 ring-brand-blue/30 bg-brand-blue/10 text-brand-blue inline-flex items-center gap-1">
+                    <span className="px-2 py-0.5 rounded-full text-2xs font-medium ring-1 ring-brand-blue/30 bg-brand-blue/10 text-brand-blue inline-flex items-center gap-1">
                       <ArrowRight className="w-3 h-3" /> Requires {selectedFeatureInfo.dependencies.length}
                     </span>
                   </h4>
@@ -415,7 +415,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                       </li>
                     ))}
                   </ul>
-                  <div className="mt-2 p-2 bg-brand-blue/[0.06] border border-brand-blue/20 ring-1 ring-brand-blue/10 rounded-lg text-[10px] sm:text-xs text-brand-blue flex items-start gap-1.5">
+                  <div className="mt-2 p-2 bg-brand-blue/[0.06] border border-brand-blue/20 ring-1 ring-brand-blue/10 rounded-lg text-2xs sm:text-xs text-brand-blue flex items-start gap-1.5">
                     <Info className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                     <span>These features must be enabled first</span>
                   </div>
@@ -425,7 +425,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
               {selectedFeatureInfo.dependents.length > 0 && (
                 <div>
                   <h4 className="text-xs sm:text-sm font-semibold text-gray-700 mb-2 flex items-center gap-2">
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium ring-1 ring-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan inline-flex items-center gap-1">
+                    <span className="px-2 py-0.5 rounded-full text-2xs font-medium ring-1 ring-brand-cyan/30 bg-brand-cyan/10 text-brand-cyan inline-flex items-center gap-1">
                       <ArrowRight className="w-3 h-3 rotate-180" /> Required by {selectedFeatureInfo.dependents.length}
                     </span>
                   </h4>
@@ -436,7 +436,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
                       </li>
                     ))}
                   </ul>
-                  <div className="mt-2 p-2 bg-brand-orange/[0.06] border border-brand-orange/20 ring-1 ring-brand-orange/10 rounded-lg text-[10px] sm:text-xs text-brand-orange-deep flex items-start gap-1.5">
+                  <div className="mt-2 p-2 bg-brand-orange/[0.06] border border-brand-orange/20 ring-1 ring-brand-orange/10 rounded-lg text-2xs sm:text-xs text-brand-orange-deep flex items-start gap-1.5">
                     <AlertTriangle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                     <span>Cannot be disabled while these are enabled</span>
                   </div>
@@ -445,7 +445,7 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
 
               {selectedFeatureInfo.dependencies.length === 0 && selectedFeatureInfo.dependents.length === 0 && (
                 <div className="p-3 bg-white border border-gray-200 rounded-lg text-xs sm:text-sm text-gray-600 flex items-start gap-2">
-                  <CheckCircle className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                  <CheckCircle className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
                   <span>This feature has no dependencies and is not required by any other feature.</span>
                 </div>
               )}

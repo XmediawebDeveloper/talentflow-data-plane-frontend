@@ -83,7 +83,7 @@ function LevelBadge({ level }: { level: string }) {
   const cfg = LEVEL_CONFIG[level] || LEVEL_CONFIG.not_started;
   const Icon = cfg.icon;
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${cfg.bg} ${cfg.color} ${cfg.border} border`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium ${cfg.bg} ${cfg.color} ${cfg.border} border`}>
       <Icon className="w-3 h-3" />
       {cfg.label}
     </span>
@@ -93,7 +93,7 @@ function LevelBadge({ level }: { level: string }) {
 function ScorePill({ score }: { score: number | null }) {
   if (score == null) return null;
   const color = score >= 4 ? 'bg-emerald-100 text-emerald-700' : score >= 3 ? 'bg-amber-100 text-amber-700' : 'bg-orange-100 text-orange-700';
-  return <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded ${color}`}>{score}/5</span>;
+  return <span className={`text-2xs font-bold px-1.5 py-0.5 rounded ${color}`}>{score}/5</span>;
 }
 
 // ── Coverage Trail Stepper ───────────────────────────────────────────────────
@@ -114,13 +114,13 @@ function CoverageTrail({ entries }: { entries: TrailEntry[] }) {
             </div>
             <div className="flex-1 flex items-center gap-2 flex-wrap min-w-0 -mt-0.5">
               <LevelBadge level={entry.state} />
-              {entry.q_num > 0 && <span className="text-[10px] font-mono text-gray-400">Q{entry.q_num}</span>}
+              {entry.q_num > 0 && <span className="text-2xs font-mono text-gray-400">Q{entry.q_num}</span>}
               {(() => {
                 const intent = (entry.question_intent || '').toLowerCase();
                 const isDd = intent === 'deep_dive';
                 const isFu = !isDd && (entry.is_follow_up || ['follow_up', 'probe'].includes(intent));
-                if (isDd) return <span className="text-[10px] font-semibold text-teal-700 bg-teal-100 rounded px-1 py-0.5">D</span>;
-                if (isFu) return <span className="text-[10px] font-semibold text-violet-700 bg-violet-100 rounded px-1 py-0.5">F</span>;
+                if (isDd) return <span className="text-2xs font-semibold text-teal-700 bg-teal-100 rounded px-1 py-0.5">D</span>;
+                if (isFu) return <span className="text-2xs font-semibold text-violet-700 bg-violet-100 rounded px-1 py-0.5">F</span>;
                 return null;
               })()}
               {entry.score != null && <ScorePill score={entry.score} />}
@@ -156,7 +156,7 @@ function CovBadge({ level }: { level: CovLevel }) {
   const s = COV_STYLES[level];
   const Icon = s.icon;
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium border ${s.badge}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium border ${s.badge}`}>
       <Icon className="w-3 h-3" />
       {s.label}
     </span>
@@ -176,7 +176,7 @@ function TruncatedText({ text, limit = 180, className = '' }: { text: string; li
       {' '}
       <button
         onClick={(e) => { e.stopPropagation(); setOpen(v => !v); }}
-        className="text-[10px] font-medium text-indigo-600 hover:text-indigo-800"
+        className="text-2xs font-medium text-indigo-600 hover:text-indigo-800"
       >
         {open ? 'Show less' : 'Show more'}
       </button>
@@ -205,7 +205,7 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
           and long responses get more room. */}
       <div className="tf-table-shell">
         <table className="w-full text-xs" style={{ tableLayout: 'auto' }}>
-          <thead className="bg-gray-100 text-gray-600 uppercase tracking-wide text-[10px]">
+          <thead className="bg-gray-100 text-gray-600 uppercase tracking-wide text-2xs">
             <tr>
               <th className="px-3 py-2 text-left font-semibold w-12 whitespace-nowrap">Q #</th>
               <th className="px-3 py-2 text-left font-semibold">Question</th>
@@ -224,12 +224,12 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
               return (
                 <tr key={i} className="align-top">
                   <td className="px-3 py-2 align-top whitespace-nowrap">
-                    <span className="text-[11px] font-semibold text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">
+                    <span className="text-2xs font-semibold text-indigo-700 bg-indigo-50 rounded px-1.5 py-0.5">
                       Q{g.q_num}
                     </span>
                   </td>
                   <td className="px-3 py-2 align-top" style={{ maxWidth: '28rem' }}>
-                    <div className="text-[12px] font-medium text-gray-800 leading-snug break-words">
+                    <div className="text-xs font-medium text-gray-800 leading-snug break-words">
                       <TruncatedText text={g.question || ''} limit={160} />
                     </div>
                     {hasClarif && isOpen && (
@@ -237,11 +237,11 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                         {clarifs.map((cl, ci) => (
                           <div key={`cl-${ci}`}>
                             <div className="flex items-center gap-1.5 mb-0.5">
-                              <span className="text-[10px] font-semibold text-amber-700 bg-amber-100 rounded px-1.5 py-0.5">
+                              <span className="text-2xs font-semibold text-amber-700 bg-amber-100 rounded px-1.5 py-0.5">
                                 CL{cl.clarification_number}
                               </span>
                             </div>
-                            <div className="text-[11px] font-medium text-gray-700 leading-snug break-words">
+                            <div className="text-2xs font-medium text-gray-700 leading-snug break-words">
                               <TruncatedText text={cl.question || ''} limit={140} />
                             </div>
                           </div>
@@ -250,7 +250,7 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                     )}
                     {hasClarif && !isOpen && !hasFu && (
                       <div className="mt-2 pl-3 border-l-2 border-amber-200">
-                        <button onClick={() => toggle(i)} className="text-[10px] text-amber-700 hover:text-amber-900 flex items-center gap-1">
+                        <button onClick={() => toggle(i)} className="text-2xs text-amber-700 hover:text-amber-900 flex items-center gap-1">
                           <ChevronDown className="w-3 h-3" />
                           {clarifs.length} clarification{clarifs.length > 1 ? 's' : ''}
                         </button>
@@ -259,7 +259,7 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                     {hasFu && (
                       <div className="mt-2 pl-3 border-l-2 border-violet-200">
                         {!isOpen ? (
-                          <button onClick={() => toggle(i)} className="text-[10px] text-violet-600 hover:text-violet-800 flex items-center gap-1">
+                          <button onClick={() => toggle(i)} className="text-2xs text-violet-600 hover:text-violet-800 flex items-center gap-1">
                             <ChevronDown className="w-3 h-3" />
                             {(() => {
                               const dd = fus.filter(f => (f.question_intent || '').toLowerCase() === 'deep_dive').length;
@@ -269,7 +269,7 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                           </button>
                         ) : (
                           <div className="space-y-2">
-                            <button onClick={() => toggle(i)} className="text-[10px] text-violet-600 hover:text-violet-800 flex items-center gap-1">
+                            <button onClick={() => toggle(i)} className="text-2xs text-violet-600 hover:text-violet-800 flex items-center gap-1">
                               <ChevronUp className="w-3 h-3" />
                               Hide
                             </button>
@@ -282,9 +282,9 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                                 return (
                                   <div key={fi}>
                                     <div className="flex items-center gap-1.5 mb-0.5">
-                                      <span className={`text-[10px] font-semibold ${tagCls} rounded px-1.5 py-0.5`}>{tag}</span>
+                                      <span className={`text-2xs font-semibold ${tagCls} rounded px-1.5 py-0.5`}>{tag}</span>
                                     </div>
-                                    <div className="text-[11px] font-medium text-gray-700 leading-snug break-words">
+                                    <div className="text-2xs font-medium text-gray-700 leading-snug break-words">
                                       <TruncatedText text={fu.question || ''} limit={140} />
                                     </div>
                                   </div>
@@ -297,14 +297,14 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                     )}
                   </td>
                   <td className="px-3 py-2 align-top" style={{ maxWidth: '40rem' }}>
-                    <div className="text-[12px] text-gray-700 leading-snug whitespace-pre-wrap break-words">
+                    <div className="text-xs text-gray-700 leading-snug whitespace-pre-wrap break-words">
                       <TruncatedText text={g.answer || ''} limit={220} />
                     </div>
                     {hasClarif && isOpen && (
                       <div className="mt-2 pl-3 border-l-2 border-amber-200 space-y-2">
                         {clarifs.map((cl, ci) => (
-                          <div key={`cl-a-${ci}`} className="text-[11px] text-gray-600 leading-snug whitespace-pre-wrap break-words">
-                            <span className="text-[10px] font-semibold text-amber-700 mr-1">CL{cl.clarification_number}:</span>
+                          <div key={`cl-a-${ci}`} className="text-2xs text-gray-600 leading-snug whitespace-pre-wrap break-words">
+                            <span className="text-2xs font-semibold text-amber-700 mr-1">CL{cl.clarification_number}:</span>
                             <TruncatedText text={cl.answer || ''} limit={180} />
                           </div>
                         ))}
@@ -319,8 +319,8 @@ function QuestionTable({ groups }: { groups: QuestionGroup[] }) {
                             const tag = isDd ? `D${++dCtr}` : `F${++fCtr}`;
                             const tagColor = isDd ? 'text-teal-700' : 'text-violet-700';
                             return (
-                              <div key={fi} className="text-[11px] text-gray-600 leading-snug whitespace-pre-wrap break-words">
-                                <span className={`text-[10px] font-semibold ${tagColor} mr-1`}>{tag}:</span>
+                              <div key={fi} className="text-2xs text-gray-600 leading-snug whitespace-pre-wrap break-words">
+                                <span className={`text-2xs font-semibold ${tagColor} mr-1`}>{tag}:</span>
                                 <TruncatedText text={fu.answer || ''} limit={180} />
                               </div>
                             );
@@ -368,8 +368,8 @@ function QACard({ group, coverageLevel }: { group: QuestionGroup; coverageLevel:
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-1">
-            <span className="text-[10px] font-bold text-gray-500 bg-white px-1.5 py-0.5 rounded border border-gray-200">Q{group.q_num}</span>
-            <span className={`text-[10px] font-medium px-1.5 py-0.5 rounded ${
+            <span className="text-2xs font-bold text-gray-500 bg-white px-1.5 py-0.5 rounded border border-gray-200">Q{group.q_num}</span>
+            <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ${
               group.round_type?.includes('must_have') ? 'bg-indigo-50 text-indigo-600' :
               group.round_type?.includes('nice_to_have') ? 'bg-purple-50 text-purple-600' :
               'bg-gray-100 text-gray-500'
@@ -384,7 +384,7 @@ function QACard({ group, coverageLevel }: { group: QuestionGroup; coverageLevel:
               const fuCt = fuCount - ddCt;
               const parts = [fuCt > 0 ? `${fuCt} follow-up${fuCt > 1 ? 's' : ''}` : '', ddCt > 0 ? `${ddCt} deep dive${ddCt > 1 ? 's' : ''}` : ''].filter(Boolean).join(', ');
               return (
-                <span className="inline-flex items-center gap-1 text-[10px] text-blue-600 font-medium">
+                <span className="inline-flex items-center gap-1 text-2xs text-blue-600 font-medium">
                   <MessageSquare className="w-3 h-3" />
                   {parts}
                 </span>
@@ -402,7 +402,7 @@ function QACard({ group, coverageLevel }: { group: QuestionGroup; coverageLevel:
           {/* Main answer */}
           {group.answer && (
             <div className="px-4 py-3 bg-white">
-              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mb-1">Candidate Answer</p>
+              <p className="text-2xs font-semibold text-gray-400 uppercase tracking-wider mb-1">Candidate Answer</p>
               <p className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">{group.answer}</p>
             </div>
           )}
@@ -425,10 +425,10 @@ function QACard({ group, coverageLevel }: { group: QuestionGroup; coverageLevel:
                 <div key={i} className="border-t border-gray-100">
                   <div className={`px-4 py-3 ${bgCls}`}>
                     <div className="flex items-center gap-2 mb-1.5">
-                      <span className={`text-[10px] font-semibold ${tagCls} px-1.5 py-0.5 rounded`}>
+                      <span className={`text-2xs font-semibold ${tagCls} px-1.5 py-0.5 rounded`}>
                         {tag}
                       </span>
-                      <span className={`text-[10px] font-medium capitalize ${isDd ? 'text-teal-600' : 'text-violet-600'}`}>
+                      <span className={`text-2xs font-medium capitalize ${isDd ? 'text-teal-600' : 'text-violet-600'}`}>
                         {intentLabel}
                       </span>
                       <ScorePill score={fu.score} />
@@ -646,7 +646,7 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
               <span className={`w-2.5 h-2.5 rounded-full ${item.dot}`} />
               <span className={`text-xl font-bold ${item.text}`}>{item.count}</span>
             </div>
-            <p className="text-[10px] text-gray-500">{item.label}</p>
+            <p className="text-2xs text-gray-500">{item.label}</p>
           </div>
         ))}
       </div>
@@ -741,7 +741,7 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
                       }
                     </span>
                   </div>
-                  <div className="flex items-center gap-4 flex-wrap text-[11px]">
+                  <div className="flex items-center gap-4 flex-wrap text-2xs">
                     {stats.allocatedQs > 0 && (
                       <span className="flex items-center gap-1 text-gray-600">
                         <MessageSquare className="w-3 h-3" />
@@ -811,7 +811,7 @@ export default function SkillCoverageTab({ sessionId, aiEvaluation: eval_, isCom
                             </div>
                             <LevelBadge level={level} />
                             {totalFollowUps > 0 && (
-                              <span className="inline-flex items-center gap-1 text-[10px] text-blue-500 font-medium">
+                              <span className="inline-flex items-center gap-1 text-2xs text-blue-500 font-medium">
                                 <MessageSquare className="w-3 h-3" />
                                 +{totalFollowUps}
                               </span>

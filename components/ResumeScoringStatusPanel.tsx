@@ -2,6 +2,7 @@
 
 import { CheckCircle2, Loader2, XCircle, ClipboardList, TrendingUp, Clock, AlertCircle, RefreshCw, History, Minus } from 'lucide-react';
 import { useState, useEffect, useRef, useId, Fragment } from 'react';
+import { Button } from '@/components/ui/button';
 import { useRouter } from 'next/navigation';
 import { scoringService } from '@/lib/services';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
@@ -586,9 +587,9 @@ export default function ResumeScoringStatusPanel({
   };
 
   const getScoreColor = (score: number) => {
-    if (score >= 85) return 'text-green-600';
+    if (score >= 85) return 'text-success';
     if (score >= 70) return 'text-gray-800';
-    return 'text-yellow-600';
+    return 'text-warning';
   };
 
   return (
@@ -637,7 +638,7 @@ export default function ResumeScoringStatusPanel({
                     style={{ width: `${(completedCount / resumes.length) * 100}%` }}
                   />
                   <div
-                    className="bg-red-500 transition-all duration-500"
+                    className="bg-destructive transition-all duration-500"
                     style={{ width: `${(errorCount / resumes.length) * 100}%` }}
                   />
                 </div>
@@ -670,15 +671,15 @@ export default function ResumeScoringStatusPanel({
 
             {/* Failed Resumes Alert */}
             {failedResumes.length > 0 && remainingResumes === 0 && (
-              <div className="mb-4 bg-red-50 border border-red-200 rounded-xl p-4">
+              <div className="mb-4 bg-destructive-subtle border border-destructive-line rounded-xl p-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
-                    <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
+                    <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0" />
                     <div>
-                      <h4 className="font-medium text-red-900">
+                      <h4 className="font-medium text-destructive-strong">
                         {failedResumes.length} {failedResumes.length === 1 ? 'Resume' : 'Resumes'} Failed
                       </h4>
-                      <p className="text-sm text-red-700 mt-0.5">
+                      <p className="text-sm text-destructive mt-0.5">
                         {selectedForRetry.length > 0
                           ? `${selectedForRetry.length} selected for retry`
                           : 'Select resumes below to retry or continue with successful results'
@@ -690,33 +691,36 @@ export default function ResumeScoringStatusPanel({
                     {failedResumes.length > 1 && (
                       <button
                         onClick={selectAllFailed}
-                        className="px-3 py-1.5 border-2 border-red-300 text-red-700 rounded-lg hover:bg-red-100 transition-colors text-sm font-medium"
+                        className="px-3 py-1.5 border-2 border-destructive-line text-destructive rounded-lg hover:bg-destructive-subtle transition-colors text-sm font-medium"
                       >
                         {selectedForRetry.length === failedResumes.length ? 'Deselect All' : 'Select All'}
                       </button>
                     )}
                     {selectedForRetry.length > 0 && (
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={handleRetrySelected}
-                        className="px-3 py-1.5 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors text-sm font-medium flex items-center gap-1.5"
+                        icon={<RefreshCw className="w-3.5 h-3.5" />}
                       >
-                        <RefreshCw className="w-3.5 h-3.5" />
                         Retry Selected ({selectedForRetry.length})
-                      </button>
+                      </Button>
                     )}
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={handleRetryAllFailed}
-                      className="px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium flex items-center gap-1.5"
+                      icon={<RefreshCw className="w-3.5 h-3.5" />}
                     >
-                      <RefreshCw className="w-3.5 h-3.5" />
                       Retry All
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="primary"
+                      size="sm"
                       onClick={handleCompleteWithErrors}
-                      className="px-3 py-1.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium"
                     >
                       Continue
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -749,9 +753,9 @@ export default function ResumeScoringStatusPanel({
                 <div className="flex items-center justify-between">
                   <div>
                     <div className="text-xs text-gray-600 mb-1">Failed</div>
-                    <div className="text-2xl font-bold text-red-600">{errorCount}</div>
+                    <div className="text-2xl font-bold text-destructive">{errorCount}</div>
                   </div>
-                  <XCircle className="w-8 h-8 text-red-600 opacity-30" />
+                  <XCircle className="w-8 h-8 text-destructive opacity-30" />
                 </div>
               </div>
             </div>
@@ -765,11 +769,11 @@ export default function ResumeScoringStatusPanel({
                   <div
                     className={`flex items-center gap-4 p-4 rounded-xl border-2 transition-all duration-300 ${
                       resume.status === 'completed'
-                        ? 'bg-green-50 border-green-300 shadow-sm'
+                        ? 'bg-success-subtle border-success-line shadow-sm'
                         : resume.status === 'scoring'
                         ? 'bg-gray-50 border-gray-400 shadow-md scale-[1.02]'
                         : resume.status === 'error'
-                        ? `bg-red-50 border-red-300 ${selectedForRetry.includes(resume.id) ? 'ring-2 ring-red-400' : ''}`
+                        ? `bg-destructive-subtle border-destructive-line ${selectedForRetry.includes(resume.id) ? 'ring-2 ring-destructive-line' : ''}`
                         : 'bg-gray-50 border-gray-200'
                     }`}
                   >
@@ -780,7 +784,7 @@ export default function ResumeScoringStatusPanel({
                           type="checkbox"
                           checked={selectedForRetry.includes(resume.id)}
                           onChange={() => toggleRetrySelection(resume.id)}
-                          className="w-4 h-4 rounded border-gray-300 text-red-600 focus:ring-red-600"
+                          className="w-4 h-4 rounded border-gray-300 text-destructive focus:ring-destructive-line"
                         />
                       </div>
                     )}
@@ -788,7 +792,7 @@ export default function ResumeScoringStatusPanel({
                     {/* Status Icon */}
                     <div className="flex-shrink-0">
                       {resume.status === 'completed' ? (
-                        <div className="w-10 h-10 bg-green-600 rounded-full flex items-center justify-center shadow-lg animate-in zoom-in duration-200">
+                        <div className="w-10 h-10 bg-success rounded-full flex items-center justify-center shadow-lg animate-in zoom-in duration-200">
                           <CheckCircle2 className="w-6 h-6 text-white" />
                         </div>
                       ) : resume.status === 'scoring' ? (
@@ -796,7 +800,7 @@ export default function ResumeScoringStatusPanel({
                           <Loader2 className="w-6 h-6 text-white animate-spin" />
                         </div>
                       ) : resume.status === 'error' ? (
-                        <div className="w-10 h-10 bg-red-600 rounded-full flex items-center justify-center shadow-lg">
+                        <div className="w-10 h-10 bg-destructive rounded-full flex items-center justify-center shadow-lg">
                           <XCircle className="w-6 h-6 text-white" />
                         </div>
                       ) : (
@@ -840,7 +844,7 @@ export default function ResumeScoringStatusPanel({
                         {resume.status === 'scoring' && 'Evaluating skills, experience, and job fit...'}
                         {resume.status === 'pending' && 'Waiting in queue...'}
                         {resume.status === 'error' && resume.errorReason && (
-                          <div className="flex items-start gap-1 text-red-600">
+                          <div className="flex items-start gap-1 text-destructive">
                             <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
                             <span>{resume.errorReason}</span>
                           </div>
@@ -860,13 +864,15 @@ export default function ResumeScoringStatusPanel({
                       </div>
                     )}
                     {resume.status === 'error' && (
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => handleRetryIndividual(resume.id)}
-                        className="flex-shrink-0 px-3 py-1.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-xs font-medium flex items-center gap-1.5"
+                        className="flex-shrink-0"
+                        icon={<RefreshCw className="w-3 h-3" />}
                       >
-                        <RefreshCw className="w-3 h-3" />
                         Retry
-                      </button>
+                      </Button>
                     )}
                   </div>
 
@@ -884,19 +890,19 @@ export default function ResumeScoringStatusPanel({
                             className="flex items-start gap-3 bg-white rounded-lg p-3 border border-gray-200"
                           >
                             <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
-                              attempt.status === 'Success' ? 'bg-green-100' : 'bg-red-100'
+                              attempt.status === 'Success' ? 'bg-success-subtle' : 'bg-destructive-subtle'
                             }`}>
                               {attempt.status === 'Success' ? (
-                                <CheckCircle2 className="w-4 h-4 text-green-600" />
+                                <CheckCircle2 className="w-4 h-4 text-success" />
                               ) : (
-                                <XCircle className="w-4 h-4 text-red-600" />
+                                <XCircle className="w-4 h-4 text-destructive" />
                               )}
                             </div>
                             <div className="flex-1">
                               <div className="flex items-center gap-3 mb-1">
                                 <span className="font-medium text-gray-900">Attempt #{attempt.attemptNumber}</span>
                                 <span className={`text-xs px-2 py-0.5 rounded-full ${
-                                  attempt.status === 'Success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                  attempt.status === 'Success' ? 'bg-success-subtle text-success' : 'bg-destructive-subtle text-destructive'
                                 }`}>
                                   {attempt.status}
                                 </span>
@@ -911,7 +917,7 @@ export default function ResumeScoringStatusPanel({
                                 })}
                               </div>
                               {attempt.errorReason && (
-                                <div className="flex items-start gap-1 text-xs text-red-600 mt-2">
+                                <div className="flex items-start gap-1 text-xs text-destructive mt-2">
                                   <AlertCircle className="w-3 h-3 flex-shrink-0 mt-0.5" />
                                   <span>{attempt.errorReason}</span>
                                 </div>
@@ -943,7 +949,7 @@ export default function ResumeScoringStatusPanel({
                   </>
                 ) : (
                   <>
-                    <CheckCircle2 className="w-4 h-4 text-green-600" />
+                    <CheckCircle2 className="w-4 h-4 text-success" />
                     <span>
                       {errorCount > 0
                         ? `Processing complete with ${errorCount} ${errorCount === 1 ? 'error' : 'errors'}`

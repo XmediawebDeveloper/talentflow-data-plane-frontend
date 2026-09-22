@@ -209,7 +209,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                       className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-750 last:border-b-0"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-[11px] font-medium text-brand-blue ring-1 ring-brand-blue/15">
+                        <span className="inline-flex items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-2xs font-medium text-brand-blue ring-1 ring-brand-blue/15">
                           Folder
                         </span>
                         <span className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">
@@ -238,7 +238,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                       className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-750 last:border-b-0"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700 ring-1 ring-green-200">
+                        <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-2xs font-medium text-green-700 ring-1 ring-green-200">
                           Resume
                         </span>
                         <span className="font-medium text-sm text-gray-900 dark:text-gray-100 truncate">

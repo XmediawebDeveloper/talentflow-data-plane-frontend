@@ -106,11 +106,11 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-gray-900 truncate">{t.title}</div>
-                      <div className="text-[11px] text-gray-500 mt-0.5">
+                      <div className="text-2xs text-gray-500 mt-0.5">
                         Due <span className="font-medium">{t.due}</span>
                       </div>
                     </div>
-                    <span className={`px-2.5 py-1 rounded-full text-[11px] font-medium ring-1 ${toneMap[t.tone as keyof typeof toneMap]}`}>
+                    <span className={`px-2.5 py-1 rounded-full text-2xs font-medium ring-1 ${toneMap[t.tone as keyof typeof toneMap]}`}>
                       {t.due}
                     </span>
                   </div>
@@ -128,7 +128,7 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
             <div className="p-6 space-y-4">
               {schedule.map((item, i) => (
                 <div key={i} className="flex items-start gap-3">
-                  <div className="text-[11px] font-medium text-gray-500 w-16 pt-1.5 flex-shrink-0">{item.time}</div>
+                  <div className="text-2xs font-medium text-gray-500 w-16 pt-1.5 flex-shrink-0">{item.time}</div>
                   <div className="flex-1 min-w-0 border-l-2 border-brand-cyan pl-3">
                     <div className="flex items-center gap-2">
                       <span className="text-brand-cyan">{item.icon}</span>
@@ -266,11 +266,11 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-medium text-gray-900 truncate">{jd.title}</div>
-                    <div className="text-[11px] text-gray-500">{jd.dept}</div>
+                    <div className="text-2xs text-gray-500">{jd.dept}</div>
                   </div>
                   <div className="text-right">
                     <div className="text-sm font-semibold text-gray-900 tabular-nums">{jd.applicants}</div>
-                    <div className="text-[10px] text-gray-500 uppercase tracking-wide">applicants</div>
+                    <div className="text-2xs text-gray-500 uppercase tracking-wide">applicants</div>
                   </div>
                 </button>
               ))}
@@ -292,8 +292,8 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
                     <div className="text-sm text-gray-900">
                       <span className="font-medium">{a.action}</span>
                     </div>
-                    <div className="text-[11px] text-gray-500 truncate">{a.target}</div>
-                    <div className="text-[10px] text-gray-400 mt-0.5">{a.time}</div>
+                    <div className="text-2xs text-gray-500 truncate">{a.target}</div>
+                    <div className="text-2xs text-gray-400 mt-0.5">{a.time}</div>
                   </div>
                 </div>
               ))}

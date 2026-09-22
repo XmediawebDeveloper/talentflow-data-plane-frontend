@@ -2,6 +2,7 @@ import { ArrowLeft, Star, TrendingUp, Award, Briefcase, CheckCircle, AlertCircle
 import { Resume, Job } from '@/lib/types/types';
 import { useState } from 'react';
 import { toast } from '@/components/ui/enhanced-toast';
+import { Button } from '@/components/ui/button';
 import ListPagination from '@/components/ListPagination';
 
 interface ResumeScoringProps {
@@ -182,20 +183,20 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
 
   const getMatchColor = (type: string) => {
     switch (type) {
-      case 'excellent': return 'bg-green-100 text-green-800 border-green-200';
+      case 'excellent': return 'bg-success-subtle text-success-strong border-success-line';
       case 'good': return 'bg-gray-100 text-gray-800 border-gray-200';
-      case 'fair': return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'poor': return 'bg-red-100 text-red-800 border-red-200';
+      case 'fair': return 'bg-warning-subtle text-warning-strong border-warning-line';
+      case 'poor': return 'bg-destructive-subtle text-destructive-strong border-destructive-line';
       default: return 'bg-gray-100 text-gray-800 border-gray-200';
     }
   };
 
   const getScoreIcon = (type: string) => {
     switch (type) {
-      case 'excellent': return <Award className="w-5 h-5 text-green-600" />;
+      case 'excellent': return <Award className="w-5 h-5 text-success" />;
       case 'good': return <CheckCircle className="w-5 h-5 text-gray-800" />;
-      case 'fair': return <TrendingUp className="w-5 h-5 text-yellow-600" />;
-      case 'poor': return <AlertCircle className="w-5 h-5 text-red-600" />;
+      case 'fair': return <TrendingUp className="w-5 h-5 text-warning" />;
+      case 'poor': return <AlertCircle className="w-5 h-5 text-destructive" />;
       default: return <Star className="w-5 h-5 text-gray-600" />;
     }
   };
@@ -219,7 +220,8 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
                 AI-powered match scoring for {resumes?.length || 0} resume{(resumes?.length || 0) !== 1 ? 's' : ''} {effectiveJobs.length > 1 ? `across ${effectiveJobs.length} job openings` : jobTitle ? `for ${jobTitle}` : ''}
               </p>
             </div>
-            <button
+            <Button
+              variant="primary"
               onClick={() => {
                 if (onProceedToApplicants) {
                   onProceedToApplicants();
@@ -227,10 +229,10 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
                   onComplete();
                 }
               }}
-              className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors text-sm font-medium w-full sm:w-auto"
+              className="w-full sm:w-auto"
             >
               {onProceedToApplicants ? 'Proceed to Applicants' : 'Complete & Apply'}
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -258,8 +260,8 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
                   {scoringResults.filter(r => r.matchType === 'excellent').length}
                 </div>
               </div>
-              <div className="h-9 w-9 bg-green-100 rounded-lg flex items-center justify-center">
-                <Award className="w-4 h-4 text-green-600" />
+              <div className="h-9 w-9 bg-success-subtle rounded-lg flex items-center justify-center">
+                <Award className="w-4 h-4 text-success" />
               </div>
             </div>
           </div>
@@ -344,7 +346,7 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
                           {result.keyMatches.map((skill, i) => (
                             <span
                               key={i}
-                              className="inline-flex items-center px-2 py-0.5 rounded-md bg-green-50 text-green-700 text-xs border border-green-200"
+                              className="inline-flex items-center px-2 py-0.5 rounded-md bg-success-subtle text-success text-xs border border-success-line"
                             >
                               {skill}
                             </span>
@@ -373,13 +375,14 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
                         </span>
                       </td>
                       <td className="px-4 py-3 text-center">
-                        <button
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           onClick={() => setSelectedResultForDetail(resultKey)}
-                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs bg-gray-800 text-white rounded-md hover:bg-gray-900 transition-colors"
+                          icon={<Eye className="w-3 h-3" />}
                         >
-                          <Eye className="w-3 h-3" />
                           View Details
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   );
@@ -427,12 +430,12 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
                       </span>
                     </div>
                   </div>
-                  <button
+                  <Button
+                    variant="secondary"
                     onClick={() => setSelectedResultForDetail(null)}
-                    className="px-4 py-2 text-sm text-white bg-gray-800 rounded-lg hover:bg-gray-900 transition-colors"
                   >
                     Close Detailed View
-                  </button>
+                  </Button>
                 </div>
               </div>
             </>
@@ -449,13 +452,14 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
               </p>
             </div>
             <div className="flex items-center gap-2">
-              <button
+              <Button
+                variant="secondary"
                 onClick={onBack}
-                className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-white transition-colors"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
                 onClick={() => {
                   // ✅ SCORING COMPLETED FEEDBACK
                   toast.success({
@@ -474,10 +478,9 @@ export default function ResumeScoring({ resumes, jobs, jobTitle, onBack, onCompl
                     onComplete();
                   }
                 }}
-                className="px-4 py-2 text-sm bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors"
               >
                 {onProceedToApplicants ? 'Proceed to Applicants' : 'Complete & Apply'}
-              </button>
+              </Button>
             </div>
           </div>
         </div>

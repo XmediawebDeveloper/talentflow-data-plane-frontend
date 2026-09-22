@@ -33,19 +33,27 @@ export const tokens = {
   input:
     'bg-white dark:bg-slate-800 border border-gray-300 dark:border-slate-700 rounded-lg text-sm text-black dark:text-slate-100 placeholder:text-gray-400 dark:placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 transition',
 
-  // Primary button (matches "Create New Job" on job-openings)
+  // ── Buttons ──────────────────────────────────────────────────────────────
+  // Per UI–UX Guidelines §4 the app uses only THREE button types. Prefer the
+  // <Button> component (components/ui/button.tsx); these strings exist only for
+  // the rare raw <button> that can't use the component. Do not add a 4th.
+
+  // Primary → main CTA (matches "Create New Job" on job-openings)
   buttonPrimary:
     'px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed',
 
-  // Secondary button — neutral
+  // Secondary → neutral / icon-button / dropdown trigger
   buttonSecondary:
     'px-4 py-2 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-700 rounded-lg transition-all flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed',
 
-  // Ghost button — minimal
-  buttonGhost:
-    'px-3 py-1.5 hover:bg-gray-100 dark:hover:bg-slate-800 text-gray-700 dark:text-slate-200 rounded-lg transition-colors text-sm font-medium',
+  // Destructive → red, must be paired with a confirmation step
+  buttonDestructive:
+    'px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg shadow-md shadow-red-600/25 transition-all flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50',
 
-  // Danger button
+  // Deprecated aliases — kept so existing imports compile. Both normalize onto
+  // the canonical styles above; do not use for new code.
+  buttonGhost:
+    'px-4 py-2 bg-white dark:bg-slate-800 hover:bg-gray-50 dark:hover:bg-slate-700 text-gray-700 dark:text-slate-200 border border-gray-300 dark:border-slate-700 rounded-lg transition-all flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed',
   buttonDanger:
     'px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-lg shadow-md shadow-red-600/25 transition-all flex items-center justify-center gap-2 text-sm font-medium disabled:opacity-50',
 

@@ -296,19 +296,19 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">
                   Candidate
                 </th>
-                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-2xs sm:text-xs font-medium text-gray-500 uppercase">
                   Feature
                 </th>
-                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-2xs sm:text-xs font-medium text-gray-500 uppercase">
                   Status
                 </th>
-                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
+                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-2xs sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
                   Device
                 </th>
-                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
+                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-2xs sm:text-xs font-medium text-gray-500 uppercase hidden md:table-cell">
                   IP Address
                 </th>
-                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-[10px] sm:text-xs font-medium text-gray-500 uppercase">
+                <th className="px-3 sm:px-4 py-2.5 sm:py-3 text-left text-2xs sm:text-xs font-medium text-gray-500 uppercase">
                   Date
                 </th>
               </tr>
@@ -335,12 +335,12 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                         <p className="text-sm font-medium text-gray-900">
                           {log.candidate_name || 'Unknown'}
                         </p>
-                        <p className="text-[10px] sm:text-xs text-gray-500 truncate">{log.candidate_email}</p>
+                        <p className="text-2xs sm:text-xs text-gray-500 truncate">{log.candidate_email}</p>
                       </div>
                     </div>
                   </td>
                   <td className="px-3 sm:px-4 py-2.5 sm:py-3">
-                    <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-[10px] sm:text-xs font-medium ${
+                    <span className={`px-1.5 sm:px-2 py-0.5 sm:py-1 rounded text-2xs sm:text-xs font-medium ${
                       log.feature_name === 'ASSESSMENT'
                         ? 'bg-blue-100 text-blue-700'
                         : 'bg-purple-100 text-purple-700'
@@ -352,13 +352,13 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                     <div className="flex items-center gap-1">
                       {log.consent_status ? (
                         <>
-                          <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-green-500" />
-                          <span className="text-xs sm:text-sm text-green-700">Accepted</span>
+                          <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-success" />
+                          <span className="text-xs sm:text-sm text-success">Accepted</span>
                         </>
                       ) : (
                         <>
-                          <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-500" />
-                          <span className="text-xs sm:text-sm text-red-700">Declined</span>
+                          <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-destructive" />
+                          <span className="text-xs sm:text-sm text-destructive">Declined</span>
                         </>
                       )}
                     </div>
@@ -380,7 +380,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                   <td className="px-3 sm:px-4 py-2.5 sm:py-3">
                     <div className="flex items-center gap-1">
                       <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-400 flex-shrink-0" />
-                      <span className="text-[10px] sm:text-sm text-gray-600 whitespace-nowrap">
+                      <span className="text-2xs sm:text-sm text-gray-600 whitespace-nowrap">
                         {new Date(log.created_at).toLocaleDateString()}
                       </span>
                     </div>
@@ -468,7 +468,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                   </div>
                   <div>
                     <p className="text-xs sm:text-sm text-gray-500">Status</p>
-                    <p className={`text-sm sm:text-base font-medium ${selectedLog.consent_status ? 'text-green-600' : 'text-red-600'}`}>
+                    <p className={`text-sm sm:text-base font-medium ${selectedLog.consent_status ? 'text-success' : 'text-destructive'}`}>
                       {selectedLog.consent_status ? 'Accepted' : 'Declined'}
                     </p>
                   </div>
@@ -513,7 +513,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                       >
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1">
                           <span className="font-medium text-gray-900">{audit.action}</span>
-                          <span className="text-gray-500 text-[10px] sm:text-xs">
+                          <span className="text-gray-500 text-2xs sm:text-xs">
                             {formatIST(audit.created_at)}
                           </span>
                         </div>

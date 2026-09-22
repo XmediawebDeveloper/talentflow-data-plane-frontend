@@ -455,7 +455,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                     <td className="px-4 py-4 text-sm text-gray-700 dark:text-slate-300">{item.sort_order}</td>
                     <td className="px-4 py-4">
                       <span
-                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                        className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-2xs font-medium ${
                           item.is_active
                             ? 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20'
                             : 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-400 ring-1 ring-gray-200'
@@ -477,7 +477,7 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => handleDelete(item.id)}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-red-600 text-white shadow-sm shadow-red-600/25 transition-all hover:-translate-y-0.5 hover:bg-red-700"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-destructive text-white shadow-sm shadow-red-600/25 transition-all hover:-translate-y-0.5 hover:bg-destructive"
                               aria-label="Confirm delete" title="Confirm delete"
                             >
                               <Check className="h-4 w-4" />

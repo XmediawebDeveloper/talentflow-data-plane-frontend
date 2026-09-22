@@ -210,7 +210,7 @@ export function AssessmentInterface({
   };
 
   // Network status and retry queue
-  const { isOnline, isSlowConnection, connectionType } = useNetworkStatus();
+  const { isOnline, offlineReason, isSlowConnection, connectionType } = useNetworkStatus();
   const { queueSize, isProcessing, addToQueue, processQueue } = useRetryQueue();
   const [showNetworkBanner, setShowNetworkBanner] = useState(false);
   const [lastSaveError, setLastSaveError] = useState<string | null>(null);
@@ -1272,7 +1272,14 @@ export function AssessmentInterface({
         setLastSaveError('Assessment time has expired. Your progress has been saved.');
         setTimeout(() => onComplete(), 1000);
       } else if (isNetworkError) {
-        setLastSaveError('No internet connection. Your answer is saved locally and will be submitted when connection is restored.');
+        /* `navigator.onLine` is the only signal here that means the DEVICE is
+           offline; a request that simply got no response is the server being
+           unreachable, which is not the candidate's connection. */
+        setLastSaveError(
+          !navigator.onLine
+            ? 'No internet connection. Your answer is saved and will be submitted when you are back online.'
+            : "Can't reach the server right now. Your answer is saved and will be submitted automatically.",
+        );
         setAutoSaveStatus('offline');
       } else {
         setLastSaveError(errorMessage);
@@ -1566,7 +1573,7 @@ export function AssessmentInterface({
       case 'technical':
         return 'bg-blue-500';
       case 'coding':
-        return 'bg-green-500';
+        return 'bg-success';
       default:
         return 'bg-gray-500';
     }
@@ -1594,26 +1601,26 @@ export function AssessmentInterface({
       {/* DISQUALIFICATION Modal - Shows when fullscreen is exited */}
       {showDisqualificationModal && (
         <div className="fixed inset-0 bg-black/98 backdrop-blur-lg flex items-center justify-center z-[10000]">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full mx-4 p-10 text-center border-8 border-red-700">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full mx-4 p-10 text-center border-8 border-destructive">
             {/* Disqualification Icon */}
-            <div className="w-32 h-32 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-8">
+            <div className="w-32 h-32 bg-destructive rounded-full flex items-center justify-center mx-auto mb-8">
               <ShieldAlert className="w-20 h-20 text-white" />
             </div>
 
             {/* Title */}
-            <h2 className="text-4xl font-black text-red-600 mb-6 uppercase tracking-wider">
+            <h2 className="text-4xl font-bold text-destructive mb-6 uppercase tracking-wider">
               DISQUALIFIED
             </h2>
 
             {/* Main Message */}
-            <div className="bg-red-50 border-4 border-red-400 rounded-xl p-6 mb-6">
-              <p className="text-xl font-bold text-red-900 mb-4">
+            <div className="bg-destructive-subtle border-4 border-destructive rounded-xl p-6 mb-6">
+              <p className="text-xl font-bold text-destructive-strong mb-4">
                 Critical Assessment Violation
               </p>
-              <p className="text-base text-red-800 font-semibold">
+              <p className="text-base text-destructive-strong font-semibold">
                 You have been disqualified for violating assessment security rules.
               </p>
-              <p className="text-sm text-red-700 mt-3">
+              <p className="text-sm text-destructive mt-3">
                 Alt+Tab window switching is strictly prohibited and results in immediate disqualification.
               </p>
             </div>
@@ -1632,7 +1639,7 @@ export function AssessmentInterface({
             <Button
               variant="primary"
               onClick={handleDisqualificationAcknowledgment}
-              className="w-full bg-red-700 hover:bg-red-800 text-white py-5 text-xl font-bold uppercase tracking-wider"
+              className="w-full bg-destructive hover:bg-destructive text-white py-5 text-xl font-bold uppercase tracking-wider"
             >
               I UNDERSTAND
             </Button>
@@ -1648,40 +1655,40 @@ export function AssessmentInterface({
       {/* Auto-Submit Modal - Shows on 3rd violation (NO CONTINUE BUTTON) */}
       {showViolationWarning && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center z-[9999]">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-md w-full mx-4 p-8 text-center border-4 border-red-600">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-md w-full mx-4 p-8 text-center border-4 border-destructive">
             {/* Skull/Warning Icon */}
-            <div className="w-24 h-24 bg-red-600 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
+            <div className="w-24 h-24 bg-destructive rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
               <ShieldAlert className="w-16 h-16 text-white" />
             </div>
 
             {/* Title - AUTO-SUBMITTING */}
-            <h2 className="text-3xl font-bold text-red-600 mb-4 uppercase">
+            <h2 className="text-3xl font-bold text-destructive mb-4 uppercase">
               💀 3 VIOLATIONS - AUTO-SUBMITTING 💀
             </h2>
 
             {/* Violation Count */}
-            <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 mb-4">
-              <p className="text-6xl font-bold text-red-600 mb-2">{violationCount}</p>
-              <p className="text-sm font-semibold text-red-800">VIOLATIONS DETECTED</p>
+            <div className="bg-destructive-subtle border-2 border-destructive-line rounded-xl p-4 mb-4">
+              <p className="text-6xl font-bold text-destructive mb-2">{violationCount}</p>
+              <p className="text-sm font-semibold text-destructive-strong">VIOLATIONS DETECTED</p>
             </div>
 
             {/* Main Message */}
-            <div className="bg-red-100 border-2 border-red-400 rounded-xl p-6 mb-6">
-              <p className="text-xl font-bold text-red-900 mb-3">
+            <div className="bg-destructive-subtle border-2 border-destructive rounded-xl p-6 mb-6">
+              <p className="text-xl font-bold text-destructive-strong mb-3">
                 Maximum Violations Reached
               </p>
-              <p className="text-base text-red-800 font-semibold">
+              <p className="text-base text-destructive-strong font-semibold">
                 You have violated assessment security rules 3 times.
               </p>
             </div>
 
             {/* Violations List */}
-            <div className="bg-yellow-50 border-2 border-yellow-300 rounded-xl p-4 mb-6 text-left">
-              <p className="font-bold text-yellow-900 mb-2 flex items-center gap-2">
+            <div className="bg-warning-subtle border-2 border-warning-line rounded-xl p-4 mb-6 text-left">
+              <p className="font-bold text-warning-strong mb-2 flex items-center gap-2">
                 <AlertCircle className="w-5 h-5" />
                 VIOLATIONS RECORDED
               </p>
-              <ul className="text-sm text-yellow-800 space-y-1">
+              <ul className="text-sm text-warning-strong space-y-1">
                 <li>✗ ESC key attempts (fullscreen exit)</li>
                 <li>✗ Tab switching detected</li>
                 <li>✗ Window focus violations</li>
@@ -1689,8 +1696,8 @@ export function AssessmentInterface({
             </div>
 
             {/* Countdown Timer - NO CONTINUE BUTTON */}
-            <div className="bg-red-600 text-white rounded-xl p-8 mb-6">
-              <p className="text-5xl font-black mb-4 tabular-nums">
+            <div className="bg-destructive text-white rounded-xl p-8 mb-6">
+              <p className="text-5xl font-bold mb-4 tabular-nums">
                 {autoSubmitCountdown}
               </p>
               <p className="text-xl font-bold uppercase tracking-wider">
@@ -1719,12 +1726,19 @@ export function AssessmentInterface({
       {/* Sticky Header Container */}
       <div className="sticky top-0 z-50">
         {/* Network Status Banner */}
+        {/* Two different facts, two different messages. A backend restart used
+            to render as "No internet connection", which blames the candidate's
+            connection for something happening on our side — alarming, and
+            wrong, in the middle of a timed assessment. `offlineReason` is
+            'browser' only when the device itself reports being offline. */}
         {!isOnline && (
-          <div className="bg-amber-500 text-white px-4 py-2 flex items-center justify-between">
+          <div className="bg-warning text-white px-4 py-2 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <WifiOff className="w-4 h-4" />
               <span className="text-sm font-medium">
-                No internet connection. Your answers are saved locally and will sync when connection is restored.
+                {offlineReason === 'browser'
+                  ? 'No internet connection. Your answers are saved and will sync automatically when you are back online.'
+                  : "Can't reach the server right now. Your answers are saved and will sync automatically — please keep this tab open."}
               </span>
             </div>
             {queueSize > 0 && (
@@ -1773,20 +1787,20 @@ export function AssessmentInterface({
             <div className="flex items-center gap-1.5 sm:gap-3">
               {/* Global Assessment Timer */}
               <div className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-1.5 sm:py-2 rounded-lg ${
-                  globalTimeRemaining < 300 ? 'bg-red-100 text-red-700 animate-pulse' :
-                  globalTimeRemaining < 600 ? 'bg-amber-100 text-amber-700' : 'bg-green-100 text-green-700'
+                  globalTimeRemaining < 300 ? 'bg-destructive-subtle text-destructive animate-pulse' :
+                  globalTimeRemaining < 600 ? 'bg-warning-subtle text-warning' : 'bg-success-subtle text-success'
                 }`}>
                   <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                   <div className="flex flex-col items-center">
                     <span className="font-mono font-bold text-sm sm:text-lg">{formatTime(globalTimeRemaining)}</span>
-                    <span className="hidden sm:block text-[10px] uppercase tracking-wide opacity-75">Total Time</span>
+                    <span className="hidden sm:block text-2xs uppercase tracking-wide opacity-75">Total Time</span>
                   </div>
                 </div>
 
               {/* Question Timer */}
               {timeRemaining !== null && (
                 <div className={`hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-lg ${
-                  timeRemaining < 30 ? 'bg-red-50 text-red-700' : 'bg-gray-100 text-gray-700'
+                  timeRemaining < 30 ? 'bg-destructive-subtle text-destructive' : 'bg-gray-100 text-gray-700'
                 }`}>
                   <span className="text-xs text-gray-500">Q:</span>
                   <span className="font-mono font-medium text-sm">{formatTime(timeRemaining)}</span>
@@ -1809,14 +1823,14 @@ export function AssessmentInterface({
               {/* Auto-save warnings only. Success/saving badges are intentionally hidden to avoid constant flashing. */}
               {(autoSaveStatus === 'offline' || autoSaveStatus === 'retrying' || autoSaveStatus === 'error') && (
                 <div className={`hidden lg:flex items-center gap-1.5 px-3 py-1.5 rounded-lg ${
-                  autoSaveStatus === 'offline' ? 'bg-amber-50 border border-amber-200' :
-                  autoSaveStatus === 'error' ? 'bg-red-50 border border-red-200' :
+                  autoSaveStatus === 'offline' ? 'bg-warning-subtle border border-warning-line' :
+                  autoSaveStatus === 'error' ? 'bg-destructive-subtle border border-destructive-line' :
                   'bg-gray-50 border border-gray-200'
                 }`}>
                   {autoSaveStatus === 'offline' && (
                     <>
-                      <WifiOff className="w-3.5 h-3.5 text-amber-500" />
-                      <span className="text-xs text-amber-700">Offline - will retry</span>
+                      <WifiOff className="w-3.5 h-3.5 text-warning" />
+                      <span className="text-xs text-warning">Offline - will retry</span>
                     </>
                   )}
                   {autoSaveStatus === 'retrying' && (
@@ -1827,8 +1841,8 @@ export function AssessmentInterface({
                   )}
                   {autoSaveStatus === 'error' && (
                     <>
-                      <AlertCircle className="w-3.5 h-3.5 text-red-500" />
-                      <span className="text-xs text-red-600">Save failed</span>
+                      <AlertCircle className="w-3.5 h-3.5 text-destructive" />
+                      <span className="text-xs text-destructive">Save failed</span>
                     </>
                   )}
                 </div>
@@ -1859,7 +1873,7 @@ export function AssessmentInterface({
                   <div className="flex items-center gap-2">
                     <div className={`w-5 h-5 sm:w-7 sm:h-7 rounded-full flex items-center justify-center text-xs font-medium transition-all ${
                       step.completed
-                        ? 'bg-green-500 text-white'
+                        ? 'bg-success text-white'
                         : step.active
                           ? 'bg-blue-600 text-white'
                           : 'bg-gray-300 text-gray-600'
@@ -1867,14 +1881,14 @@ export function AssessmentInterface({
                       {step.completed ? <Check className="w-3 h-3" /> : index + 1}
                     </div>
                     <span className={`text-xs font-medium hidden lg:block ${
-                      step.active ? 'text-gray-900' : step.completed ? 'text-green-600' : 'text-gray-500'
+                      step.active ? 'text-gray-900' : step.completed ? 'text-success' : 'text-gray-500'
                     }`}>
                       {step.label}
                     </span>
                   </div>
                   {index < progressSteps.length - 1 && (
                     <div className={`hidden sm:block w-6 sm:w-12 h-0.5 mx-2 ${
-                      step.completed ? 'bg-green-500' : 'bg-gray-300'
+                      step.completed ? 'bg-success' : 'bg-gray-300'
                     }`} />
                   )}
                 </div>
@@ -1917,13 +1931,13 @@ export function AssessmentInterface({
           {/* Review Mode Banner — informational only; Submit & Confirm at the
               bottom of the question card is the sole submission path. */}
           {allQuestionsAnswered && (
-            <div className="mb-3 sm:mb-4 bg-green-50 border border-green-200 rounded-lg p-3 sm:p-4 flex items-center gap-3">
-              <div className="w-9 h-9 sm:w-10 sm:h-10 bg-green-100 rounded-full flex items-center justify-center flex-shrink-0">
-                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
+            <div className="mb-3 sm:mb-4 bg-success-subtle border border-success-line rounded-lg p-3 sm:p-4 flex items-center gap-3">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 bg-success-subtle rounded-full flex items-center justify-center flex-shrink-0">
+                <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-success" />
               </div>
               <div>
-                <p className="font-medium text-green-800 text-sm sm:text-base">All questions answered!</p>
-                <p className="text-xs sm:text-sm text-green-600">You can review and edit your answers before submitting.</p>
+                <p className="font-medium text-success-strong text-sm sm:text-base">All questions answered!</p>
+                <p className="text-xs sm:text-sm text-success">You can review and edit your answers before submitting.</p>
               </div>
             </div>
           )}
@@ -2011,7 +2025,7 @@ export function AssessmentInterface({
                     loading={isSubmitting}
                     disabled={isSubmitting || isNavigating}
                     title="Submit and lock this answer (cannot be edited after)"
-                    className="border-green-500 text-green-600 hover:bg-green-50"
+                    className="border-success text-success hover:bg-success-subtle"
                   >
                     <Lock className="w-4 h-4 mr-2" />
                     Submit
@@ -2020,7 +2034,7 @@ export function AssessmentInterface({
 
                 {/* Show locked indicator if answer is already submitted */}
                 {isCurrentAnswerLocked && (
-                  <span className="flex items-center gap-2 px-3 py-2 bg-green-100 text-green-700 rounded-lg text-sm">
+                  <span className="flex items-center gap-2 px-3 py-2 bg-success-subtle text-success rounded-lg text-sm">
                     <Lock className="w-4 h-4" />
                     Answer Submitted
                   </span>
@@ -2059,7 +2073,7 @@ export function AssessmentInterface({
               <p className="text-sm font-medium text-gray-700">Progress</p>
               <div className="flex items-center gap-3 text-xs flex-wrap">
                 <span className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded bg-yellow-100 border border-yellow-300"></div>
+                  <div className="w-3 h-3 rounded bg-warning-subtle border border-warning-line"></div>
                   Unanswered
                 </span>
                 <span className="flex items-center gap-1">
@@ -2067,7 +2081,7 @@ export function AssessmentInterface({
                   Draft
                 </span>
                 <span className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded bg-green-100 border border-green-300"></div>
+                  <div className="w-3 h-3 rounded bg-success-subtle border border-success-line"></div>
                   Submitted
                 </span>
               </div>
@@ -2080,7 +2094,7 @@ export function AssessmentInterface({
                 const questionStatus = answerStatuses.get(`question_${num}`);
                 const isLocked = questionStatus?.isLocked || false;
                 const hasDraft = questionStatus?.hasDraft || false;
-                let colorClass = 'bg-yellow-100 text-yellow-700'; // Unanswered
+                let colorClass = 'bg-warning-subtle text-warning'; // Unanswered
                 let icon = null;
                 let titleText = `Question ${num} - Unanswered`;
 
@@ -2088,7 +2102,7 @@ export function AssessmentInterface({
                   colorClass = 'bg-gray-800 text-white ring-2 ring-gray-800 ring-offset-2';
                   titleText = 'Current question';
                 } else if (isLocked) {
-                  colorClass = 'bg-green-100 text-green-700';
+                  colorClass = 'bg-success-subtle text-success';
                   icon = <Lock className="w-4 h-4" />;
                   titleText = `Question ${num} - Submitted`;
                 } else if (hasDraft) {
@@ -2158,11 +2172,11 @@ export function AssessmentInterface({
             </button>
 
             <div className="flex items-center gap-4 mb-4">
-              <div className={`w-12 h-12 ${unansweredQuestions.length > 0 ? 'bg-amber-100' : 'bg-green-100'} rounded-full flex items-center justify-center`}>
+              <div className={`w-12 h-12 ${unansweredQuestions.length > 0 ? 'bg-warning-subtle' : 'bg-success-subtle'} rounded-full flex items-center justify-center`}>
                 {unansweredQuestions.length > 0 ? (
-                  <AlertCircle className="w-6 h-6 text-amber-600" />
+                  <AlertCircle className="w-6 h-6 text-warning" />
                 ) : (
-                  <CheckCircle className="w-6 h-6 text-green-600" />
+                  <CheckCircle className="w-6 h-6 text-success" />
                 )}
               </div>
               <div>
@@ -2178,13 +2192,13 @@ export function AssessmentInterface({
 
             {/* Unanswered Questions Warning */}
             {unansweredQuestions.length > 0 && (
-              <div className="bg-yellow-50 rounded-xl p-4 mb-3 border border-yellow-200">
-                <p className="text-sm text-yellow-700 mb-2 font-semibold">
+              <div className="bg-warning-subtle rounded-xl p-4 mb-3 border border-warning-line">
+                <p className="text-sm text-warning mb-2 font-semibold">
                   ⚠️ Unanswered: <span className="font-bold">{unansweredQuestions.length}</span> question(s)
                 </p>
                 <div className="flex flex-wrap gap-2">
                   {unansweredQuestions.map((qNum) => (
-                    <span key={qNum} className="px-3 py-1 bg-yellow-100 text-yellow-800 rounded-full text-sm font-medium">
+                    <span key={qNum} className="px-3 py-1 bg-warning-subtle text-warning-strong rounded-full text-sm font-medium">
                       Q{qNum}
                     </span>
                   ))}
@@ -2193,19 +2207,19 @@ export function AssessmentInterface({
             )}
 
             {unansweredQuestions.length === 0 && (
-              <div className="bg-green-50 rounded-xl p-3 mb-3 border border-green-200">
-                <p className="text-sm text-green-700 font-semibold">✅ All questions answered!</p>
+              <div className="bg-success-subtle rounded-xl p-3 mb-3 border border-success-line">
+                <p className="text-sm text-success font-semibold">✅ All questions answered!</p>
               </div>
             )}
 
             <div className="bg-gray-50 rounded-xl p-4 mb-4">
               <div className="grid grid-cols-3 gap-3 text-center mb-3">
                 <div>
-                  <div className="text-lg font-bold text-green-600">{answeredCount}</div>
+                  <div className="text-lg font-bold text-success">{answeredCount}</div>
                   <div className="text-xs text-gray-500">Answered</div>
                 </div>
                 <div>
-                  <div className="text-lg font-bold text-yellow-600">{unansweredQuestions.length}</div>
+                  <div className="text-lg font-bold text-warning">{unansweredQuestions.length}</div>
                   <div className="text-xs text-gray-500">Unanswered</div>
                 </div>
                 <div>
@@ -2217,7 +2231,7 @@ export function AssessmentInterface({
               </div>
               <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
                 <div
-                  className={`h-full ${answeredCount === totalCount ? 'bg-green-500' : 'bg-amber-500'}`}
+                  className={`h-full ${answeredCount === totalCount ? 'bg-success' : 'bg-warning'}`}
                   style={{ width: `${totalCount > 0 ? Math.round((answeredCount / totalCount) * 100) : 0}%` }}
                 />
               </div>
@@ -2231,9 +2245,9 @@ export function AssessmentInterface({
               </p>
             </div>
 
-            <div className="flex items-start gap-3 p-4 bg-amber-50 rounded-xl mb-6 border border-amber-200">
-              <AlertCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-amber-700">
+            <div className="flex items-start gap-3 p-4 bg-warning-subtle rounded-xl mb-6 border border-warning-line">
+              <AlertCircle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-warning">
                 Once submitted, you cannot modify your answers. Please review all your responses before continuing.
               </p>
             </div>

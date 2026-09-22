@@ -6,6 +6,7 @@ import { Clock } from 'lucide-react';
 import { assessmentService } from '@/lib/services';
 import { Skeleton } from '@/components/ui/skeleton';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
+import { resolveJobVersionsByJdId } from '@/lib/utils/jobAssessmentHierarchy';
 import CandidateResultDetails from '@/components/CandidateResultDetails';
 import FeatureGate from '@/components/shared/FeatureGate';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -31,9 +32,10 @@ function DetailsContent() {
   const fromCandidateResults = searchParams.get('from') === 'candidate-results';
 
   const [assessmentTitle, setAssessmentTitle] = useState<string>('');
-  const [assessmentShortId, setAssessmentShortId] = useState<string>('');
-  const [jdTitle, setJdTitle] = useState<string>('');
   const [jdId, setJdId] = useState<string>('');
+  const [jdTitle, setJdTitle] = useState<string>('');
+  /** The JOB's version, for the chip beside its title. */
+  const [jdVersion, setJdVersion] = useState<number | null>(null);
   const [assessmentVersion, setAssessmentVersion] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   // Reported by CandidateResultDetails once the result loads, so the deepest
@@ -75,11 +77,24 @@ function DetailsContent() {
           // "Version 1" show v1 in the header while the metadata grid
           // correctly shows v19, which looks like a bug to recruiters.
           setAssessmentTitle(stripVersionFromTitle(response.title));
-          setAssessmentShortId(response.short_id || '');
-          setJdTitle(response.jd_title || '');
           // Use jd_short_id (e.g. "JD-014") if available, else fall back to raw jd_id
           setJdId(response.jd_short_id || (response.jd_id ? `JD-${response.jd_id}` : ''));
+          setJdTitle(response.jd_title || '');
           setAssessmentVersion(response.version ?? null);
+          /* The JOB version, resolved from the JD ROW this assessment points
+             at rather than from `response.jd_version`. That field is a
+             creation-time snapshot which comes back as 1 for assessments
+             authored against a later version, so reading it alone would label
+             a V3 job as V1 — the same precedence the assessments list and the
+             results page already follow. It stays as the fallback for when the
+             lineage cannot be read. */
+          const rawJdId = response.jd_id || '';
+          let resolvedJdVersion = response.jd_version ?? null;
+          if (rawJdId) {
+            const jobVersionByJdId = await resolveJobVersionsByJdId([rawJdId]);
+            resolvedJdVersion = jobVersionByJdId.get(rawJdId) ?? resolvedJdVersion;
+          }
+          setJdVersion(resolvedJdVersion);
         } else {
           setError('Assessment not found');
         }
@@ -212,12 +227,12 @@ function DetailsContent() {
       <CandidateResultDetails
         onBack={handleBack}
         assessmentId={assessmentId}
-        assessmentShortId={assessmentShortId}
         candidateId={candidateId}
         candidateDisplayId={candidateDisplayId}
         assessmentTitle={assessmentTitle}
-        jdTitle={jdTitle}
         jdId={jdId}
+        jdTitle={jdTitle}
+        jdVersion={jdVersion}
         assessmentVersion={assessmentVersion}
         currentIndex={navIndex >= 0 ? navIndex : undefined}
         totalCount={navList.length || undefined}
