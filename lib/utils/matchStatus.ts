@@ -18,6 +18,32 @@
 export type MatchResult = 'Exact Match' | 'Partial Match' | 'No Match';
 
 /**
+ * Resume scoring formula v3 (September 2026 revision): a per-criterion rating
+ * of 6 or above now passes (was 7). Mirrors `PASS_THRESHOLD` in
+ * `app/utils/scoring_formula.py` on the backend — the two must never drift
+ * apart, since both decide the same "is this criterion a pass" question
+ * independently (the backend for the real classification, the frontend only
+ * for its own client-side display checks such as an Eligible/Not Eligible
+ * badge computed straight from a rating already on screen).
+ */
+export const RATING_PASS_THRESHOLD = 6;
+
+/**
+ * Truncate (never round) to one decimal place, matching the backend's
+ * `truncate1` in `app/utils/scoring_formula.py`. Every rating this app shows
+ * (Overall Rating, Must-Have Avg, Nice-to-Have Avg, Combined Average) is
+ * already truncated server-side before it reaches the frontend, so this is
+ * only needed where the frontend itself builds a new average from ratings
+ * already on screen (e.g. an illustrative "MAX(a, b)" tooltip line) rather
+ * than just displaying a value the API already computed.
+ */
+// The tiny epsilon guards against binary float representation noise (e.g.
+// 7.3 * 10 can evaluate to 72.99999999999999 in JS), which would otherwise
+// truncate 7.3 down to 7.2. It is far too small to move a genuinely
+// different value across a 0.1 boundary.
+export const truncate1 = (value: number): number => Math.floor(value * 10 + 1e-9) / 10;
+
+/**
  * Reduce any of the spellings the backends and older components use to one
  * verdict. `exact_match`, `Exact Match`, `excellentmatch`, `excellent` and
  * `good_match` have all appeared in this codebase for the same thing.

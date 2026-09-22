@@ -10957,7 +10957,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           ------------------------------------------------------------------------------
           Reported 2026-09-21. The JD said "2-4 years of experience ... but we also welcome
           freshers with relevant internship experience". Extraction correctly refused to mark
-          experience Required - Required means Essential, and an Essential rating below 7 is
+          experience Required - Required means Essential, and an Essential rating below 6 is
           an automatic No Match, so every fresher the JD invited would be rejected by the
           sentence that invited them - but it did so SILENTLY, which read as the JD being
           ignored.
@@ -10981,7 +10981,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               </span>
               <span className="block">
                 Making experience <strong>Required</strong> turns it into an <strong>Essential</strong>{' '}
-                criterion in Resume Scoring: any candidate rated below 7 on experience is a{' '}
+                criterion in Resume Scoring: any candidate rated below 6 on experience is a{' '}
                 <strong>No Match</strong> outright - so the freshers this JD invites will be
                 rejected by it.
               </span>

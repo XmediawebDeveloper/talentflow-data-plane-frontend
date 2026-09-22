@@ -752,7 +752,7 @@ export const jdService = {
    *
    * Used when the recruiter answers "Make it Required" on a JD that states a minimum
    * and also welcomes freshers (or credits internship experience towards it): once
-   * experience is Essential, a rating below 7 is an automatic No Match, so the JD must
+   * experience is Essential, a rating below 6 is an automatic No Match, so the JD must
    * stop inviting the people it will now reject. Deterministic server-side edit - same
    * rule that raised the warning, no LLM, nothing else reworded.
    */

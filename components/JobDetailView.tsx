@@ -586,7 +586,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
    * published JD reads back the same way it was configured.
    *
    * "Required" means Resume Scoring treats the criterion as Essential: it shares
-   * the 60% block, and a rating below 7 on it fails the whole Essential section.
+   * the 60% block, and a rating below 6 on it fails the whole Essential section.
    * "Preferred" criteria share the 40% block and never fail a candidate on their own.
    */
   const requirementLabel = requirementBadge;
