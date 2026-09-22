@@ -32,7 +32,7 @@ import { STT_MODELS, DEFAULT_STT_MODEL } from '@/lib/constants/aiInterviewSttMod
 import { PROXY_INTEGRITY_VERIFICATION_ENABLED } from '@/lib/constants/featureFlags';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
 import AIInterviewFlowLoader from './AIInterviewFlowLoader';
-import { SectionHeader, SummaryLocation, SummaryTips } from './ConfigSummary';
+import { SectionHeader, SummaryLocation } from './ConfigSummary';
 import WizardDiscardButton from './WizardDiscardButton';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JDFullViewModal from '@/components/jobs/JDFullViewModal';
@@ -3718,7 +3718,7 @@ export default function AIInterviewConfig() {
                       <span className="text-xs font-medium text-brand-blue">Question Budget (Total: 15)</span>
                       <span className="text-xs text-gray-400">{totalFixed} min</span>
                     </div>
-                    <div className="tf-table-shell">
+                    <div>
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b border-gray-100">
@@ -3754,7 +3754,6 @@ export default function AIInterviewConfig() {
                         </tbody>
                       </table>
                     </div>
-                    <SummaryTips />
                   </div>
                 </div>
               )}
@@ -3799,7 +3798,7 @@ export default function AIInterviewConfig() {
                           {bufferEnabled ? '30 min base + 5 min buffer' : '30 min total'}
                         </span>
                       </div>
-                      <div className="tf-table-shell">
+                      <div>
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="border-b border-gray-100">
@@ -3845,7 +3844,6 @@ export default function AIInterviewConfig() {
                           </tbody>
                         </table>
                       </div>
-                      <SummaryTips />
                     </div>
                   )}
                 </div>
