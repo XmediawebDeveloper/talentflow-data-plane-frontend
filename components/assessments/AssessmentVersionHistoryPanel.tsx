@@ -236,6 +236,47 @@ interface AssessmentVersionHistoryPanelProps {
    */
   activeSelection?: { jobVersion: number; assessmentId: string } | null;
   /**
+   * Which JOB VERSIONS have their assessment table open, and the way to
+   * change it — the same controlled/uncontrolled split as the selection
+   * above, for the same reason.
+   *
+   * Expansion is a reading position, and a reading position has to outlive
+   * the panel wherever the panel does not outlive the reading. The Job List
+   * is exactly that case: opening an assessment version leaves the page
+   * entirely, so a panel that owned its own expansion came back collapsed and
+   * the recruiter had to walk down to their job version again. That host
+   * therefore holds the set itself, keyed per job, and persists it.
+   *
+   * Uncontrolled where the panel really is the whole lifetime of the reading
+   * — the Send Invite picker, which lives inside a dialog and is gone when
+   * the dialog closes. Omit both and the panel keeps its own set, as before.
+   *
+   * Version NUMBERS, matching `group.jobVersion`, because that is what the
+   * groups are keyed by here; the JD row id is the panel's way of naming a
+   * version elsewhere, but the grouping is by number.
+   */
+  expandedJobVersions?: number[];
+  /** Reports one job version's expander being toggled. See above. */
+  onToggleJobVersion?: (jobVersion: number) => void;
+  /**
+   * Where the job version's own eye sits among that row's actions.
+   *
+   * `'leading'`, the default, is the historic order: the eye first, then the
+   * View / Create slot beside it.
+   *
+   * `'trailing'` puts it AFTER that slot, so the pair reads as "View
+   * Assessment, and here is the version behind it" rather than as two
+   * unrelated buttons with the eye claiming the first position. The Job List
+   * asks for this: it is the surface where the row's point is the assessment,
+   * and the eye is the aside.
+   *
+   * A prop rather than a change to every caller, because the other surfaces —
+   * the Send Invite picker and the AI Interview panels — were not part of the
+   * request, and an action column quietly reordering under a recruiter who
+   * uses both is worse than the inconsistency.
+   */
+  viewJobVersionPlacement?: 'leading' | 'trailing';
+  /**
    * The eye on an ASSESSMENT row - opens that assessment's details.
    *
    * A slot, like `renderAction` and `headerAction`: the panel does not own
@@ -711,6 +752,9 @@ export default function AssessmentVersionHistoryPanel({
   selectedAssessmentId,
   onSelectAssessment,
   activeSelection,
+  expandedJobVersions: controlledExpandedJobVersions,
+  onToggleJobVersion,
+  viewJobVersionPlacement = 'leading',
   onViewAssessment,
   selectionGroupName = 'assessment-version-selection',
   vocabulary = ASSESSMENT_VOCABULARY,
@@ -718,13 +762,26 @@ export default function AssessmentVersionHistoryPanel({
   renderChildExtraDetail,
 }: AssessmentVersionHistoryPanelProps) {
   const childColumns = childColumnsFor(vocabulary);
-  /* Which job versions have their assessment table open. Local to the panel:
-     nothing outside it needs to know, and the state dies with the panel when
-     the row is collapsed - which is the right lifetime for it. */
-  const [expandedJobVersions, setExpandedJobVersions] = useState<Set<number>>(new Set());
+  /* Which job versions have their assessment table open, when this panel owns
+     the answer: nothing outside it needs to know, and the state dying with the
+     panel is the right lifetime wherever the panel outlives the reading.
+
+     A host that passes `expandedJobVersions` with a way to toggle it takes the
+     answer over instead — see the prop. Both halves are required for that: a
+     set with no toggle would be an expander that cannot be clicked, so the
+     local set stays in charge unless the host can actually accept a change. */
+  const [localExpandedJobVersions, setLocalExpandedJobVersions] = useState<Set<number>>(new Set());
+  const expansionIsControlled = !!controlledExpandedJobVersions && !!onToggleJobVersion;
+  const expandedJobVersions = expansionIsControlled
+    ? new Set(controlledExpandedJobVersions)
+    : localExpandedJobVersions;
 
   const toggleJobVersion = (jobVersion: number) => {
-    setExpandedJobVersions((prev) => {
+    if (expansionIsControlled) {
+      onToggleJobVersion!(jobVersion);
+      return;
+    }
+    setLocalExpandedJobVersions((prev) => {
       const next = new Set(prev);
       if (next.has(jobVersion)) next.delete(jobVersion);
       else next.add(jobVersion);
@@ -993,10 +1050,51 @@ export default function AssessmentVersionHistoryPanel({
                      shut whenever another version held the pick, which is what
                      made changing a choice impossible without clearing it. */
                   const isOpen = expandedJobVersions.has(group.jobVersion);
+                  /* THE job version the reader is in: the one holding the
+                     assessment version this panel has selected.
+
+                     Matched on the assessment's own id inside this group's
+                     rows, never on a version NUMBER — assessment versions
+                     restart per job version, so every job version tends to
+                     have a "V1" and a number would light up the wrong branch.
+
+                     What it is for: after opening an assessment version and
+                     coming back, the panel reopens with several job versions
+                     possibly expanded and nothing saying which one was being
+                     read. This tints that row, so the branch the reader left
+                     from is the one they return to visually as well. */
+                  const holdsSelection =
+                    !!selectedAssessmentId
+                    && group.assessments.some((child) => child.id === selectedAssessmentId);
                   /* The newest assessment version in this group — the one its
                      inner table badges Latest. Read off the sorted list rather
                      than recomputed, so the badge and the ordering agree. */
                   const newestAssessmentVersion = group.assessments[0]?.version ?? 1;
+                  /* Read THIS version. Never disabled and never conditional on
+                     the assessment state beside it: reading a job version is
+                     unrelated to whether one can be built against it, so an
+                     Archived, Disabled or Draft row opens exactly like a
+                     published one. Same button, same popup, as the eye on the
+                     Create Assessment picker's own version rows.
+
+                     Built once here and rendered on whichever side of the
+                     View / Create slot `viewJobVersionPlacement` names, so the
+                     two orders are one button in two positions rather than two
+                     copies that can drift apart. */
+                  const viewJobVersionButton =
+                    onViewJobVersion && group.jobVersionId ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        size="sm"
+                        onClick={() => onViewJobVersion(group.jobVersionId!, group.jobVersion)}
+                        aria-label={`View job V${group.jobVersion} details`}
+                        title={`View job V${group.jobVersion} details`}
+                        className="px-2 flex-shrink-0"
+                      >
+                        <Eye className="w-3.5 h-3.5" />
+                      </Button>
+                    ) : null;
 
                   return (
                     /* One <tr> per job version, then one more carrying its
@@ -1008,12 +1106,29 @@ export default function AssessmentVersionHistoryPanel({
                           the containing block for its cells, which silently
                           kills position:sticky on the pinned Actions cell. */}
                       <tr
+                        /* Anchors for a host that scrolls the reader back to
+                           where they were. Inert markers — no styling and no
+                           behaviour hangs off them — carrying the two facts a
+                           scroll needs: which job version is open, and (below,
+                           on the child rows) which assessment version is
+                           picked. Set from the same values the row renders
+                           from, so what is found is by construction what is
+                           highlighted. */
+                        data-tf-job-version-open={isOpen ? 'true' : undefined}
                         title={
                           jobVersionDimmed
                             ? `Job V${activeSelection?.jobVersion} currently holds the selection — open this version to choose from it instead`
                             : undefined
                         }
-                        className={`group border-t border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 transition-all duration-200 ease-out hover:bg-brand-blue/[0.03] dark:hover:bg-brand-blue/[0.08] ${
+                        className={`group border-t border-gray-200 dark:border-slate-700 transition-all duration-200 ease-out ${
+                          /* The tint is lighter than the one the picked
+                             ASSESSMENT row carries inside it, so the pair reads
+                             as branch-then-row rather than as two selections
+                             competing. Hover still lifts either. */
+                          holdsSelection
+                            ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/[0.14] hover:bg-brand-blue/[0.10] dark:hover:bg-brand-blue/[0.18]'
+                            : 'bg-white dark:bg-slate-900 hover:bg-brand-blue/[0.03] dark:hover:bg-brand-blue/[0.08]'
+                        } ${
                           hasAssessments ? 'cursor-pointer' : ''
                         } ${
                           /* Faded back, not switched off - and hover restores
@@ -1060,27 +1175,9 @@ export default function AssessmentVersionHistoryPanel({
                             than its host panel, clipping Completed from view. */}
                         <td className="py-3 px-3 whitespace-nowrap align-middle">
                           <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                            {/* Read THIS version. Never disabled and never
-                                conditional on the assessment state beside it:
-                                reading a job version is unrelated to whether
-                                one can be built against it, so an Archived,
-                                Disabled or Draft row opens exactly like a
-                                published one. Same button, same popup, as the
-                                eye on the Create Assessment picker's own
-                                version rows. */}
-                            {onViewJobVersion && group.jobVersionId && (
-                              <Button
-                                type="button"
-                                variant="secondary"
-                                size="sm"
-                                onClick={() => onViewJobVersion(group.jobVersionId!, group.jobVersion)}
-                                aria-label={`View job V${group.jobVersion} details`}
-                                title={`View job V${group.jobVersion} details`}
-                                className="px-2 flex-shrink-0"
-                              >
-                                <Eye className="w-3.5 h-3.5" />
-                              </Button>
-                            )}
+                            {/* The job version eye, when this surface wants it
+                                first. See `viewJobVersionPlacement`. */}
+                            {viewJobVersionPlacement === 'leading' && viewJobVersionButton}
                             {/* Create Assessment and View Assessment are the
                                 SAME slot, decided per job version by one
                                 thing: whether an assessment exists against
@@ -1163,6 +1260,9 @@ export default function AssessmentVersionHistoryPanel({
                             ) : (
                               <span className="text-xs text-gray-500 dark:text-slate-400">{vocabulary.childNone}</span>
                             )}
+                            {/* …or last, beside the View Assessment button it
+                                belongs with. Same button either way. */}
+                            {viewJobVersionPlacement === 'trailing' && viewJobVersionButton}
                           </div>
                         </td>
                       </tr>
@@ -1271,6 +1371,10 @@ export default function AssessmentVersionHistoryPanel({
                                             return (
                                               <tr
                                                 key={assessment.id}
+                                                /* The finest scroll anchor of
+                                                   the three — see the job
+                                                   version row above. */
+                                                data-tf-assessment-selected={isPicked ? 'true' : undefined}
                                                 className={`border-b last:border-b-0 border-gray-100 dark:border-slate-700/70 transition-all ${
                                                   isPicked
                                                     ? 'bg-brand-blue/[0.10] dark:bg-brand-blue/[0.18] ring-1 ring-inset ring-brand-blue/40'
