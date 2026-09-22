@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Headphones, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle,
@@ -192,21 +193,18 @@ export default function InternalHelpDesk() {
   };
 
   const getStatusBadge = (status: string) => {
-    const styles = {
-      'open': { bg: 'bg-gray-100', text: 'text-gray-900', border: 'border-gray-300', icon: Circle },
-      'in-progress': { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-300', icon: Clock3 },
-      'resolved': { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-300', icon: CheckCircle2 },
-      'closed': { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-300', icon: XCircle }
+    const map: Record<string, { variant: 'info' | 'warning' | 'success' | 'muted'; icon: typeof Circle }> = {
+      'open': { variant: 'warning', icon: Circle },
+      'in-progress': { variant: 'info', icon: Clock3 },
+      'resolved': { variant: 'success', icon: CheckCircle2 },
+      'closed': { variant: 'muted', icon: XCircle },
     };
-
-    const style = styles[status as keyof typeof styles] || styles['open'];
-    const Icon = style.icon;
-
+    const { variant, icon: Icon } = map[status] || map['open'];
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border ${style.bg} ${style.text} ${style.border}`}>
+      <Badge variant={variant} className="gap-1.5 px-3 py-1.5">
         <Icon className="w-3.5 h-3.5" />
         {status.charAt(0).toUpperCase() + status.slice(1).replace('-', ' ')}
-      </span>
+      </Badge>
     );
   };
 

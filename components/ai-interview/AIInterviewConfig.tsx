@@ -1155,7 +1155,7 @@ function HRSection({
             {atLimit && (
               <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-advice-positive-bg border border-advice-positive/25">
                 <AlertCircle className="w-3.5 h-3.5 text-advice-positive flex-shrink-0 mt-0.5" />
-                <p className="text-[11px] text-advice-positive">
+                <p className="text-2xs text-advice-positive">
                   {effectiveCount} question{effectiveCount !== 1 ? 's' : ''} selected — limit reached. Deselect a question to choose a different one.
                 </p>
               </div>
@@ -3062,7 +3062,7 @@ export default function AIInterviewConfig() {
                             </span>
                           </div>
                           {option.recommended && (
-                            <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25 flex-shrink-0">
+                            <span className="inline-flex items-center px-2 py-0.5 text-2xs font-medium rounded-full bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25 flex-shrink-0">
                               Recommended
                             </span>
                           )}
@@ -3074,7 +3074,7 @@ export default function AIInterviewConfig() {
                           {option.lines.map(line => (
                             <div
                               key={line}
-                              className={`flex items-center gap-1.5 text-[11px] ${selected ? 'text-gray-700' : 'text-gray-500'}`}
+                              className={`flex items-center gap-1.5 text-2xs ${selected ? 'text-gray-700' : 'text-gray-500'}`}
                             >
                               <CheckCircle2 className={`w-3.5 h-3.5 flex-shrink-0 ${selected ? 'text-brand-blue' : 'text-gray-400'}`} />
                               {line}
@@ -3148,7 +3148,7 @@ export default function AIInterviewConfig() {
                   return (
                     <>
                       {sel.recommended && (
-                        <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25">
+                        <span className="inline-flex items-center px-2 py-0.5 text-2xs font-medium rounded-full bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25">
                           Recommended
                         </span>
                       )}

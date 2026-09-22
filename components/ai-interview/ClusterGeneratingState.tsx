@@ -114,7 +114,7 @@ export default function ClusterGeneratingState() {
                     ) : null}
                   </span>
                   <span
-                    className={`text-[11px] sm:text-xs leading-tight transition-colors duration-500 ${
+                    className={`text-2xs sm:text-xs leading-tight transition-colors duration-500 ${
                       done || current ? 'text-brand-blue font-medium' : 'text-gray-400'
                     }`}
                   >
@@ -150,7 +150,7 @@ export default function ClusterGeneratingState() {
                 <card.icon className="w-4 h-4" />
               </div>
               <p className="mt-2 text-xs font-semibold text-gray-900">{card.title}</p>
-              <p className="text-[11px] text-gray-500 leading-snug">{card.body}</p>
+              <p className="text-2xs text-gray-500 leading-snug">{card.body}</p>
             </div>
           ))}
         </div>

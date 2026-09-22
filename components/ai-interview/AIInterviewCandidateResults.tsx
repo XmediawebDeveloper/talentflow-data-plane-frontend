@@ -13,8 +13,9 @@ import { Button } from '@/components/ui/button';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { Badge } from '@/components/ui/badge';
 import {
-  getStatusBadge,
+  getStatusVariant,
   getStatusLabel,
   getStatusIcon,
   getProctoringRisk,
@@ -395,9 +396,7 @@ export default function AIInterviewCandidateResults() {
 
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {getStatusIcon(row.status)}
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(row.status)}`}>
-                        {getStatusLabel(row.status)}
-                      </span>
+                      <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
                       {row.status === 'in_progress' && (
                         <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
                           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
@@ -553,9 +552,7 @@ export default function AIInterviewCandidateResults() {
                         <td className="px-4 py-3 whitespace-nowrap">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {getStatusIcon(row.status)}
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(row.status)}`}>
-                              {getStatusLabel(row.status)}
-                            </span>
+                            <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
                             {row.status === 'in_progress' && (
                               <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
                                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />

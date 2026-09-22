@@ -17,9 +17,11 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
+import AssessmentResultsSkeleton from '@/components/AssessmentResultsSkeleton';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import EmptySearchIllustration from '@/components/ui/empty-search-illustration';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 
 interface AssessmentResultsProps {
   onBack: () => void;
@@ -1024,12 +1026,15 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
        full set the cards are counted from. */
   }, [jobVersionsLoaded, scopeKey, jobVersionByAssessmentId, assessmentVersionByAssessmentId, searchQuery, passFailFilter, dateFrom, dateTo]);
 
-  const getStatusColor = (status: string) => {
+  // Canonical status → Badge variant (shared mapping so statuses don't drift).
+  const getStatusVariant = (status: string): 'success' | 'info' | 'warning' | 'muted' | 'destructive' => {
     switch (status) {
-      case 'Pending': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
-      case 'Completed': return 'bg-success-subtle text-success ring-1 ring-success-line';
-      case 'In Progress': return 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20';
-      default: return 'bg-gray-100 text-gray-700 ring-1 ring-gray-200';
+      case 'Completed': return 'success';
+      case 'In Progress': return 'info';
+      case 'Pending': return 'warning';
+      case 'Failed':
+      case 'Abandoned': return 'destructive';
+      default: return 'muted';
     }
   };
 
@@ -1440,110 +1445,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   // Loading state
   if (isLoading) {
-    return (
-      <div className="flex-1 overflow-x-clip bg-slate-50">
-        <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-            {/* Breadcrumb */}
-            <div className="mb-4 md:mb-6 flex items-center gap-2">
-              <Skeleton className="h-3.5 w-20" />
-              <Skeleton className="h-3.5 w-3" />
-              <Skeleton className="h-3.5 w-24" />
-              <Skeleton className="h-3.5 w-3" />
-              <Skeleton className="h-3.5 w-32" />
-            </div>
-
-            {/* Header */}
-            <div className="mb-4 sm:mb-6">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
-                <div className="min-w-0 space-y-2">
-                  <Skeleton className="h-6 w-64" />
-                  <Skeleton className="h-4 w-48" />
-                </div>
-                <Skeleton className="h-10 w-36 rounded-lg flex-shrink-0" />
-              </div>
-            </div>
-
-            {/* Statistics Cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="space-y-2">
-                      <Skeleton className="h-3.5 w-24" />
-                      <Skeleton className="h-7 w-12" />
-                    </div>
-                    <Skeleton className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl" />
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Tally */}
-            <div className="mb-3 sm:mb-4 flex items-center justify-end">
-              <Skeleton className="h-3.5 w-24" />
-            </div>
-
-            {/* Search + filter bar */}
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-3 sm:mb-4 space-y-3 sm:space-y-4">
-              <Skeleton className="h-10 w-full rounded-lg" />
-              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-                <Skeleton className="h-9 w-32 rounded-lg" />
-                <Skeleton className="h-9 w-32 rounded-lg" />
-                <Skeleton className="h-9 w-28 rounded-lg" />
-              </div>
-            </div>
-
-            {/* Results table */}
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[2040px] table-fixed">
-                  <thead className="bg-slate-50 border-b border-gray-100">
-                    <tr>
-                      <th className="px-4 py-3 w-10"><Skeleton className="h-4 w-4 rounded" /></th>
-                      {['w-24', 'w-48', 'w-64', 'w-56', 'w-36', 'w-36', 'w-28', 'w-28', 'w-28', 'w-96', 'w-32', 'w-28'].map((w, i) => (
-                        <th key={i} className={`${w} text-left px-4 py-3`}><Skeleton className="h-3 w-20" /></th>
-                      ))}
-                      <th className="w-32 px-4 py-3"><Skeleton className="h-3 w-16 mx-auto" /></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {Array.from({ length: 8 }).map((_, r) => (
-                      <tr key={r}>
-                        <td className="px-4 py-4 w-10"><Skeleton className="h-4 w-4 rounded" /></td>
-                        <td className="px-4 py-4"><Skeleton className="h-4 w-16" /></td>
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-2">
-                            <Skeleton className="h-8 w-8 rounded-full flex-shrink-0" />
-                            <Skeleton className="h-4 w-28" />
-                          </div>
-                        </td>
-                        <td className="px-4 py-4"><Skeleton className="h-4 w-48" /></td>
-                        <td className="px-4 py-4"><Skeleton className="h-4 w-40" /></td>
-                        <td className="px-4 py-4"><Skeleton className="h-4 w-28" /></td>
-                        <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
-                        <td className="px-4 py-4"><Skeleton className="h-4 w-12 mx-auto" /></td>
-                        <td className="px-4 py-4"><Skeleton className="h-4 w-12 mx-auto" /></td>
-                        <td className="px-4 py-4"><Skeleton className="h-5 w-20 rounded-full mx-auto" /></td>
-                        <td className="px-4 py-4"><Skeleton className="h-4 w-72" /></td>
-                        <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
-                        <td className="px-4 py-4"><Skeleton className="h-4 w-16 mx-auto" /></td>
-                        <td className="px-4 py-4">
-                          <div className="flex items-center justify-center gap-2">
-                            <Skeleton className="h-7 w-7 rounded-md" />
-                            <Skeleton className="h-7 w-7 rounded-md" />
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
+    return <AssessmentResultsSkeleton />;
   }
 
   // AS-23: Handle sort toggle
@@ -1820,11 +1722,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           >
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-gray-600 text-xs sm:text-sm mb-1">Completed</div>
-                <div className="text-xl sm:text-2xl text-success tracking-tight">{completedCount}</div>
+                <div className="text-gray-600 text-xs sm:text-sm mb-1">In Progress</div>
+                <div className="text-xl sm:text-2xl text-brand-cyan tracking-tight">{inProgressCount}</div>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-success-line flex items-center justify-center">
-                <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-success" />
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
+                <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 text-brand-cyan" />
               </div>
             </div>
           </button>
@@ -2243,9 +2145,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               </div>
                             </div>
                           </div>
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs shrink-0 ${getStatusColor(candidate.status)}`}>
+                          <Badge variant={getStatusVariant(candidate.status)} className="shrink-0">
                             {statusLabel(candidate.status)}
-                          </span>
+                          </Badge>
                         </div>
 
                         <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
@@ -2658,36 +2560,38 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       )}
                       {isColumnEnabled('status') && (
                         <td className="px-4 py-4 text-center">
-                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs ${getStatusColor(candidate.status)}`}>
+                          <Badge variant={getStatusVariant(candidate.status)}>
                             {statusLabel(candidate.status)}
-                          </span>
+                          </Badge>
                         </td>
                       )}
                       {isColumnEnabled('timeline') && (
                         <td className="px-4 py-4 overflow-hidden text-xs text-gray-500">
-                          <div className="flex min-w-0 items-center gap-3 overflow-hidden" title={getTimelineSummary(candidate)}>
+                          {/* One event per line, in chronological order — the events
+                              read as a timeline rather than a single run-on row. */}
+                          <div className="flex min-w-0 flex-col gap-1 overflow-hidden" title={getTimelineSummary(candidate)}>
                             {candidate.sent_at && (
-                              <div className="inline-flex shrink-0 items-center gap-2">
+                              <div className="flex min-w-0 items-center gap-2">
                                 <Mail className="w-3 h-3 shrink-0 text-brand-blue" />
-                                <span>Sent: {formatTimelineDate(candidate.sent_at)}</span>
+                                <span className="truncate">Sent: {formatTimelineDate(candidate.sent_at)}</span>
                               </div>
                             )}
                             {candidate.started_at && (
-                              <div className="inline-flex shrink-0 items-center gap-2">
+                              <div className="flex min-w-0 items-center gap-2">
                                 <Play className="w-3 h-3 shrink-0 text-brand-orange-deep" />
-                                <span>Started: {formatTimelineDate(candidate.started_at)}</span>
+                                <span className="truncate">Started: {formatTimelineDate(candidate.started_at)}</span>
                               </div>
                             )}
                             {candidate.completed_at && (
-                              <div className="inline-flex shrink-0 items-center gap-2">
+                              <div className="flex min-w-0 items-center gap-2">
                                 <CheckCircle className="w-3 h-3 shrink-0 text-success" />
-                                <span>Completed: {formatTimelineDate(candidate.completed_at)}</span>
+                                <span className="truncate">Completed: {formatTimelineDate(candidate.completed_at)}</span>
                               </div>
                             )}
                             {!candidate.sent_at && !candidate.started_at && !candidate.completed_at && (
-                              <div className="inline-flex shrink-0 items-center gap-2">
+                              <div className="flex min-w-0 items-center gap-2">
                                 <Clock className="w-3 h-3 shrink-0 text-gray-400" />
-                                <span>{candidate.created_at ? `Created: ${formatTimelineDate(candidate.created_at)}` : '-'}</span>
+                                <span className="truncate">{candidate.created_at ? `Created: ${formatTimelineDate(candidate.created_at)}` : '-'}</span>
                               </div>
                             )}
                           </div>

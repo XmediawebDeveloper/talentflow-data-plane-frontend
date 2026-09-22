@@ -396,34 +396,35 @@ const QueuedAmountBreakdown = ({ upgrade }: { upgrade: QueuedUpgrade }) => {
 };
 
 
-const getStatusBadge = (status?: string, paymentStatus?: string, trialDays?: number) => {
+type PlanStatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted';
+const getStatusBadge = (status?: string, paymentStatus?: string, trialDays?: number): { variant: PlanStatusVariant; label: string; icon: typeof Clock } => {
   if (paymentStatus === 'pending') {
-    return { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Pending Payment', icon: Clock };
+    return { variant: 'warning', label: 'Pending Payment', icon: Clock };
   }
 
   if (!status) {
-    return { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Unknown', icon: AlertCircle };
+    return { variant: 'muted', label: 'Unknown', icon: AlertCircle };
   }
 
   switch (status.toLowerCase()) {
     case 'active':
-      return { bg: 'bg-success-subtle', text: 'text-success', label: 'Active', icon: CheckCircle };
+      return { variant: 'success', label: 'Active', icon: CheckCircle };
     case 'trial':
-      return { bg: 'bg-warning-subtle', text: 'text-warning', label: 'Free Trial', icon: Clock };
+      return { variant: 'warning', label: 'Free Trial', icon: Clock };
     case 'pending_payment':
-      return { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Pending Payment', icon: Clock };
+      return { variant: 'warning', label: 'Pending Payment', icon: Clock };
     case 'suspended':
-      return { bg: 'bg-destructive-subtle', text: 'text-destructive', label: 'Suspended', icon: XCircle };
+      return { variant: 'destructive', label: 'Suspended', icon: XCircle };
     case 'expired':
-      return { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Expired', icon: XCircle };
+      return { variant: 'destructive', label: 'Expired', icon: XCircle };
     case 'locked':
-      return { bg: 'bg-destructive-subtle', text: 'text-destructive', label: 'Account Locked', icon: Lock };
+      return { variant: 'destructive', label: 'Account Locked', icon: Lock };
     case 'error':
-      return { bg: 'bg-destructive-subtle', text: 'text-destructive', label: 'Unable to load', icon: AlertCircle };
+      return { variant: 'destructive', label: 'Unable to load', icon: AlertCircle };
     case 'loading':
-      return { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Loading...', icon: Clock };
+      return { variant: 'muted', label: 'Loading...', icon: Clock };
     default:
-      return { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Unknown', icon: AlertCircle };
+      return { variant: 'muted', label: 'Unknown', icon: AlertCircle };
   }
 };
 
@@ -2258,10 +2259,10 @@ function CurrentPlanContent() {
                 }
               </p>
             </div>
-            <span className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-medium ${statusBadge.bg} ${statusBadge.text} flex items-center gap-1.5 sm:gap-2 w-fit`}>
+            <Badge variant={statusBadge.variant} className="px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm gap-1.5 sm:gap-2">
               <StatusIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               {statusBadge.label}
-            </span>
+            </Badge>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 lg:gap-6">
             <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg">

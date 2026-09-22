@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { Badge } from '@/components/ui/badge';
 import Link from 'next/link';
 import {
   Loader2,
@@ -628,11 +629,11 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                   };
 
                   // Determine status badge color
-                  const getStatusBadgeStyle = () => {
-                    if (isSuccess) return 'bg-green-100 text-green-700';
-                    if (isAbandoned) return 'bg-yellow-100 text-yellow-700';
-                    if (isInterrupted) return 'bg-orange-100 text-orange-700';
-                    return 'bg-red-100 text-red-700';
+                  const getStatusBadgeVariant = (): 'success' | 'warning' | 'destructive' => {
+                    if (isSuccess) return 'success';
+                    if (isAbandoned) return 'warning';
+                    if (isInterrupted) return 'warning';
+                    return 'destructive';
                   };
 
                   return (
@@ -650,9 +651,9 @@ export default function TenantUnitPool({ compact = false, showHistory = true }: 
                               <span className="font-medium text-gray-900">
                                 {entry.units_consumed} {getUnitTypeName(entry.unit_type)}
                               </span>
-                              <span className={`text-xs px-1.5 py-0.5 rounded ${getStatusBadgeStyle()}`}>
+                              <Badge variant={getStatusBadgeVariant()} className="px-1.5">
                                 {entry.status}
-                              </span>
+                              </Badge>
                               {/* Resume Scoring Usage Logging: Display overall_score for RS entries */}
                               {entry.unit_type === 'RS' && entry.overall_score != null && (
                                 <span className="text-xs px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 font-medium">

@@ -121,6 +121,10 @@ export default function AIInterview() {
   const { quotaData } = useQuota();
 
   const [activeTab, setActiveTab] = useState<TabKey>('all');
+  // "AI Interview Published" success modal (was referenced in JSX but never
+  // declared — pre-existing build error). Defaults hidden; no behavior change.
+  const [showPublishedModal, setShowPublishedModal] = useState(false);
+  const [publishedTitle, setPublishedTitle] = useState('');
   // Two-step view: 'cards' shows only the stat tiles; 'list' shows the tabs + filters + list.
   // Mirrors the Job Openings page pattern — fresh visit lands on the cards overview.
   const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
@@ -1547,23 +1551,6 @@ export default function AIInterview() {
     (processingPage - 1) * processingItemsPerPage,
     processingPage * processingItemsPerPage,
   );
-
-  const getStatusBadge = (status: string) => {
-    switch (normalizeConfigStatus(status)) {
-      case 'published':
-        return 'bg-success-subtle text-success';
-      case 'draft':
-        return 'bg-warning-subtle text-warning';
-      case 'completed':
-        return 'bg-blue-100 dark:bg-blue-500/15 text-blue-700 dark:text-blue-300';
-      case 'cancelled':
-        return 'bg-destructive-subtle text-destructive';
-      case 'archived':
-        return 'bg-orange-100 dark:bg-orange-500/15 text-orange-700 dark:text-orange-300';
-      default:
-        return 'bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-slate-300';
-    }
-  };
 
   const getStatusLabel = (status: string) => {
     switch (normalizeConfigStatus(status)) {

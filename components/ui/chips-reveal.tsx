@@ -231,7 +231,7 @@ export default function ChipsReveal({
               {items.map(item => (
                 <span
                   key={item}
-                  className="px-2 py-0.5 bg-slate-50 text-gray-600 ring-1 ring-gray-200 rounded-full text-[11px] break-words"
+                  className="px-2 py-0.5 bg-slate-50 text-gray-600 ring-1 ring-gray-200 rounded-full text-2xs break-words"
                 >
                   {item}
                 </span>

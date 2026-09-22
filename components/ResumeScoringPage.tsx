@@ -31,7 +31,8 @@ import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import QuotaBadge from '@/components/ui/quota-badge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
-import { PageSkeleton, TableSkeleton, Skeleton } from '@/components/ui/skeleton';
+import { TableSkeleton, Skeleton } from '@/components/ui/skeleton';
+import ResumeScoringSkeleton from '@/components/ResumeScoringSkeleton';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
@@ -1859,9 +1860,11 @@ export default function ResumeScoringPage({
     });
   };
 
-  // Show loading when waiting for initial JD's history to load
+  // Show loading when waiting for initial JD's history to load — same skeleton
+  // the route page uses, so only ONE consistent skeleton ever shows (no flash
+  // between two different skeletons).
   if (isWaitingForInitialJd) {
-    return <PageSkeleton variant="table" showStats={false} />;
+    return <ResumeScoringSkeleton />;
   }
 
   // View Candidate Scoring Detail Page
