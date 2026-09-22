@@ -1739,18 +1739,6 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
           .forEach((el) => { if (!hideEls.includes(el)) hideEls.push(el); });
       } catch { /* querySelector never throws in practice; guard anyway */ }
     }
-    // DIAGNOSTIC (temporary): the blank-to-white swap below has been
-    // confirmed, from a real candidate's raw screenshot, to sometimes never
-    // visually land even after an 8s retry budget — which is far longer than
-    // normal capture-pipeline lag, so something structural (not just slow)
-    // may be preventing it. Logs exactly what this function sees so a
-    // browser-console capture from a live failing attempt tells us the real
-    // cause instead of guessing with more timeout increases.
-    console.warn('[ShareBar-Diag] capture starting', {
-      hideElsCount: hideEls.length,
-      cardRefPresent: !!shareBarCardRef.current,
-      pageRefPresent: !!shareBarPageRef.current,
-    });
     const restores = hideEls.map((el) => {
       const prev = el.style.visibility;
       el.style.visibility = 'hidden';
@@ -1850,17 +1838,14 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       };
       const grabFrame = async (): Promise<Blob | null> => {
         let canvas = grabCanvas();
-        // Up to 20 extra retries (~8s worst case) waiting for the blank to
-        // actually land before giving up. Raised from 10 (~3.5s) after a real
-        // test on a loaded machine still failed on EVERY attempt (6/6) at that
-        // budget — the OS screen-capture pipeline (pipewire/Wayland under
-        // load) can lag several seconds behind the compositor, not just
-        // ~1.5s, so a short budget was guaranteeing failure rather than
-        // occasionally missing it. 8s is a longer spinner than ideal, but a
-        // slow-and-correct check beats a fast-and-permanently-stuck one.
+        // Up to 10 extra retries (~3.5s worst case) waiting for the blank to
+        // actually land before giving up. Raised from 4 (~1.4s) after a real
+        // capture (sharebar_original_bd1bbdbc.jpg) showed the swap still
+        // hadn't landed even after the previous budget — on a loaded/slower
+        // machine the OS screen-capture pipeline can lag well past ~1.5s.
         let confirmedBlank = canvas ? looksBlank(canvas) : false;
-        for (let attempt = 0; canvas && !confirmedBlank && attempt < 20; attempt++) {
-          await new Promise<void>((r) => window.setTimeout(r, 400));
+        for (let attempt = 0; canvas && !confirmedBlank && attempt < 10; attempt++) {
+          await new Promise<void>((r) => window.setTimeout(r, 350));
           canvas = grabCanvas();
           confirmedBlank = canvas ? looksBlank(canvas) : false;
         }
@@ -1882,18 +1867,6 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
 
       // Page background WHITE for the capture.
       if (pageEl) pageEl.style.background = 'var(--raw-ffffff)';
-      // DIAGNOSTIC (temporary, see note above): read back what the DOM
-      // actually resolved to right after we set it, and what the card's
-      // real (not just React-ref) visibility computes to. If computedBg
-      // isn't white here, the CSS assignment itself failed (a real bug, not
-      // a timing issue); if it IS white but captures still aren't blank,
-      // the problem is purely in the OS/browser screen-capture pipeline.
-      try {
-        const computedBg = pageEl ? window.getComputedStyle(pageEl).backgroundColor : 'no pageEl';
-        const cardComputedVis = shareBarCardRef.current
-          ? window.getComputedStyle(shareBarCardRef.current).visibility : 'no cardRef';
-        console.warn('[ShareBar-Diag] after DOM mutation', { computedBg, cardComputedVis });
-      } catch { /* diagnostic only */ }
       if (hideEls.length || pageEl) {
         // Wait for ACTUAL new decoded frames, not a fixed wall-clock delay —
         // that's what silently failed before (see root-cause comment above).
