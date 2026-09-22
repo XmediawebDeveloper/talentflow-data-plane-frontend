@@ -1923,23 +1923,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       return;
     }
     // Keep the start IN fullscreen (this click is the required user gesture).
-    // When fullscreen actually had to be (re)requested here, Chrome/Edge show
-    // their own transient "<site> - to exit full screen, press Esc" reminder
-    // bar near the top of the screen for a few seconds — pure browser chrome,
-    // not a foreign app. It is NOT in the vision-LLM prompt's exception list
-    // (see _SHARE_BAR_VISION_PROMPT) and IS dark-on-white enough to trip the
-    // backend's pixel-color corner backstop, so if the screen frame below is
-    // grabbed while it's still showing, the candidate gets falsely blocked
-    // with "unidentified text"/"unidentified icon/blob" even with nothing else
-    // open (confirmed from a support recording). Give it time to fade before
-    // capturing — only when we just triggered it, so an already-fullscreen
-    // retry isn't slowed down.
-    if (!isFullscreen()) {
-      try {
-        await requestFullscreen();
-        await new Promise((resolve) => window.setTimeout(resolve, 4000));
-      } catch { /* verified in UI */ }
-    }
+    if (!isFullscreen()) { try { await requestFullscreen(); } catch { /* verified in UI */ } }
     // Resume audio (Bina TTS) on this gesture too.
     try {
       const ctx = (window as any).__interviewAudioContext || new AudioContext({ sampleRate: 24000 });
