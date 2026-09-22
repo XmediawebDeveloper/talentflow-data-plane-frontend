@@ -277,12 +277,10 @@ export const resumeService = {
   /**
    * Get single resume by ID.
    *
-   * `logView` must be true ONLY when this call itself IS the user viewing the
-   * resume (e.g. opening the Resume Details page, or the "View Resume" action
-   * in the scoring detail page). Leave it false (the default) for every
-   * incidental fetch - version backfills, data dependencies for some other
-   * page's Personal Info fields, etc. - so those never get recorded as a
-   * "Resume viewed" Audit Log entry.
+   * `logView` is a no-op now — viewing a resume is no longer recorded in the
+   * Audit Log at all, by any caller. The parameter (and the `log_view` query
+   * param it sends) is kept only so existing call sites — Resume Details, the
+   * scoring detail page's "View Resume" — don't need to change.
    */
   async get(id: string, logView: boolean = false): Promise<Resume> {
     try {
@@ -567,11 +565,19 @@ export const resumeService = {
   },
 
   /**
-   * Move resume to folder
+   * Move resume to folder.
+   *
+   * `skipAudit` is for the internal move that archive/unarchive makes as a
+   * side effect (filing the resume into/out of "Archived Resumes" — see
+   * handleArchiveResumes/handleUnarchiveResumes in my-resumes/page.tsx),
+   * not a move the recruiter asked for. Without it the audit trail's only
+   * row for an archive click was "Resume moved" — the wrong action name —
+   * since the archive endpoint itself logs its own "Resume archived" row.
+   * A real "Move to folder" call leaves this false and logs normally.
    */
-  async move(resumeId: string, folderId?: string): Promise<void> {
+  async move(resumeId: string, folderId?: string, skipAudit = false): Promise<void> {
     try {
-      await api.put(`/resumes/${resumeId}/move`, { folder_id: folderId });
+      await api.put(`/resumes/${resumeId}/move`, { folder_id: folderId, skip_audit: skipAudit });
     } catch (error) {
       throw new Error(handleApiError(error));
     }

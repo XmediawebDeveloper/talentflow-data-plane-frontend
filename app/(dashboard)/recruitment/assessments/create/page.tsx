@@ -97,12 +97,13 @@ export default function CreateAssessmentPage() {
   };
 
   const handleCreateAssessment = async (assessment: any) => {
+    const published = String(assessment?.status || '').toLowerCase() === 'active';
+
     // Navigate back to returnUrl if provided, otherwise to assessments list
     if (returnUrl) {
       // Publishing from a JD's Job Details page lands on that job's assessment
       // results, which now has a live assessment to show. Draft saves return the
       // page as the recruiter left it.
-      const published = String(assessment?.status || '').toLowerCase() === 'active';
       const toJobDetails = returnUrl.startsWith('/recruitment/job-details');
       router.replace(
         published && toJobDetails
@@ -110,14 +111,24 @@ export default function CreateAssessmentPage() {
           : returnUrl
       );
     } else {
-      /* `?tab=all` opens the Assessments page on All Assessments — the list
-         holding what was just created, with the Total Assessments card lit
-         because that card selects this very tab. Without it the recruiter
-         landed on the summary cards and had to find their way back into the
-         list they had just added a row to.
+      /* `?tab=…` opens the Assessments page on the list holding what was just
+         created, rather than on the summary cards the recruiter would then
+         have to find their way back out of.
+
+         A publish opens All Assessments, with the Total Assessments card lit
+         because that card selects this very tab.
+
+         A DRAFT opens Draft Assessments instead. All Assessments collapses a
+         job's assessments to one row per lineage and resolves ties by making a
+         draft lose to any non-draft version of the same job, so a new draft on
+         a republished job is hidden there the moment it is saved. The Draft tab
+         filters those non-drafts out first, so it is the cut of the list that
+         always contains it. Same rule as the in-place flow — see
+         `handleCreateAssessment` in components/Assessments.tsx.
+
          The param is read on the first render there and stripped straight
          away, so a later reload of that page shows its normal cards view. */
-      router.replace('/recruitment/assessments?tab=all');
+      router.replace(`/recruitment/assessments?tab=${published ? 'all' : 'draft'}`);
     }
   };
 

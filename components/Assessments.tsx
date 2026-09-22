@@ -2912,13 +2912,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     // Just close the creation view and reload from API
     setShowCreation(false);
 
-    /* Land on All Assessments, not on the summary cards the flow was opened
-       from. The recruiter has just made a thing and the next question is
-       "where is it" — this is the tab that lists it, and the same state the
-       Total Assessments card selects, so that card reads as active too.
+    /* Land on the tab that actually LISTS what was just saved, not on the
+       summary cards the flow was opened from. The recruiter has just made a
+       thing and the next question is "where is it".
+
+       A publish goes to All Assessments — the same state the Total Assessments
+       card selects, so that card reads as active too.
+
+       A DRAFT goes to Draft Assessments, because All Assessments cannot be
+       relied on to show it. That list collapses a job's assessments to one row
+       per lineage (`collapseByLineage`, keyed by `jobLineageKey` = the job's
+       `jd_short_id`, shared by every VERSION of the job), and its tie-break
+       rule makes a draft lose to any non-draft in the same lineage whatever
+       the version numbers say. So on a republished job whose earlier version
+       already carries a published/completed/archived assessment, a brand-new
+       draft is collapsed out of sight the moment it is saved — success toast,
+       empty-handed list. The Draft tab filters the non-drafts out first
+       (`filteredAssessments`), which leaves the new draft to represent its own
+       lineage, so it is the one cut of the list guaranteed to contain it.
+
        The standalone /assessments/create route arrives at the same place by
-       URL (`?tab=all`) since it navigates rather than closing in place. */
-    openAssessmentsList('all');
+       URL (`?tab=all` / `?tab=draft`) since it navigates rather than closing
+       in place. */
+    openAssessmentsList(String(assessment?.status || '').toLowerCase() === 'draft' ? 'draft' : 'all');
 
     /* Reload the list to pick up the new assessment — and, with it, everything
        that decides a job version's action. The new assessment is what turns

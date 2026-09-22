@@ -21,6 +21,7 @@
  */
 
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import {
   Activity,
@@ -369,6 +370,7 @@ function KpiCard({ label, value, note, icon: Icon, accent, bar, loading, trendVa
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { user, tenant, hasPermission, isTenantAdmin } = useAuth();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -612,9 +614,23 @@ export default function DashboardPage() {
   const pipelineMax = Math.max(...pipelineSteps.map((s) => s.value), 1);
   const pipelineTotal = pipelineSteps.reduce((a, b) => a + b.value, 0);
 
+  // Always start a BRAND-NEW JD — never resume the last in-progress draft.
+  // The jd-creation route segment is cached by the App Router, so a bare
+  // "/recruitment/jd-creation" push (which is all a plain `href` on the Link
+  // below does) can reuse whatever that segment was last showing — a colleague's
+  // or the same recruiter's own still-open draft, extracted data and all. Same
+  // fix, same reasoning, as Job Openings' own "Create New" button
+  // (handleCreateNew in job-openings/page.tsx) — this Dashboard button just
+  // hadn't gotten it: a unique `new` nonce makes each click a distinct URL, so
+  // the segment remounts the form clean instead of reusing the cached one.
+  const handleCreateJob = (e: React.MouseEvent) => {
+    e.preventDefault();
+    router.push(`/recruitment/jd-creation?new=${Date.now()}`);
+  };
+
   // CTAs (gated by real permissions)
   const featuredActions = [
-    { label: 'Create Job', href: '/recruitment/jd-creation', visible: isTenantAdmin || hasPermission('canCreateJD'), primary: true, icon: Plus },
+    { label: 'Create Job', href: '/recruitment/jd-creation', onClick: handleCreateJob, visible: isTenantAdmin || hasPermission('canCreateJD'), primary: true, icon: Plus },
   ].filter((item) => item.visible);
 
   return (
@@ -682,6 +698,7 @@ export default function DashboardPage() {
                   <Link
                     key={item.href}
                     href={item.href}
+                    onClick={item.onClick}
                     className={
                       item.primary
                         ? 'inline-flex w-full sm:w-auto items-center justify-center sm:justify-start gap-2 whitespace-nowrap rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-brand-blue/20 transition-colors hover:opacity-90'
