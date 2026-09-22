@@ -265,7 +265,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
-                      <Video className="w-4 h-4 text-green-600" />
+                      <Video className="w-4 h-4 text-success" />
                       <span className="text-sm text-gray-900">AI Interview Recording</span>
                     </div>
                     <p className="text-xs text-gray-600">
@@ -297,10 +297,10 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             </div>
 
             {/* Warning */}
-            <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 mb-4">
+            <div className="bg-warning-subtle border border-warning-line rounded-lg p-3 mb-4">
               <div className="flex items-start gap-2">
-                <AlertCircle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
-                <div className="text-xs text-yellow-800">
+                <AlertCircle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
+                <div className="text-xs text-warning-strong">
                   <p className="mb-1">⚠️ Important Notes:</p>
                   <ul className="space-y-0.5 ml-3 list-disc">
                     <li>Once started, the assessment must be completed in one session</li>
@@ -340,7 +340,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
               <Sparkles className="w-8 h-8" />
               <div>
                 <h1 className="text-xl">Ready to Begin!</h1>
-                <p className="text-green-100 text-sm">You're all set for your AI-powered interview</p>
+                <p className="text-success text-sm">You're all set for your AI-powered interview</p>
               </div>
             </div>
           </div>
@@ -369,8 +369,8 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                   <div className="text-xl text-gray-900">{assessment.sections.length}</div>
                   <div className="text-xs text-gray-600">Sections</div>
                 </div>
-                <div className="p-3 bg-green-50 rounded-lg border border-green-200">
-                  <Sparkles className="w-5 h-5 text-green-600 mb-1" />
+                <div className="p-3 bg-success-subtle rounded-lg border border-success-line">
+                  <Sparkles className="w-5 h-5 text-success mb-1" />
                   <div className="text-xl text-gray-900">AI-Driven</div>
                   <div className="text-xs text-gray-600">Interview Type</div>
                 </div>
@@ -407,7 +407,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             {/* Start Button */}
             <button
               onClick={handleBeginAssessment}
-              className="w-full bg-green-600 text-white px-6 py-3 rounded-lg hover:bg-green-700 transition-colors shadow-lg shadow-green-500/25 flex items-center justify-center gap-2"
+              className="w-full bg-success text-white px-6 py-3 rounded-lg hover:bg-success transition-colors shadow-lg shadow-green-500/25 flex items-center justify-center gap-2"
             >
               <Play className="w-5 h-5" />
               Begin Assessment
@@ -438,14 +438,14 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             </div>
             <div className="flex items-center gap-6">
               {isRecording && (
-                <div className="flex items-center gap-2 text-red-600">
-                  <div className="w-3 h-3 bg-red-600 rounded-full animate-pulse"></div>
+                <div className="flex items-center gap-2 text-destructive">
+                  <div className="w-3 h-3 bg-destructive rounded-full animate-pulse"></div>
                   <span className="text-sm">Recording</span>
                 </div>
               )}
               <div className="flex items-center gap-2">
                 <Clock className="w-5 h-5 text-gray-600" />
-                <span className={`text-lg ${timeRemaining < 300 ? 'text-red-600' : 'text-gray-900'}`}>
+                <span className={`text-lg ${timeRemaining < 300 ? 'text-destructive' : 'text-gray-900'}`}>
                   {formatTime(timeRemaining)}
                 </span>
               </div>
@@ -652,7 +652,7 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
                               <button
                                 onClick={handleRunCode}
                                 disabled={!codeAnswer.trim() || isRunning}
-                                className="flex items-center gap-2.5 bg-green-600 text-white px-10 py-3.5 rounded-xl hover:bg-green-700 transition-all disabled:bg-gray-300 disabled:cursor-not-allowed shadow-lg hover:shadow-xl font-medium text-base"
+                                className="flex items-center gap-2.5 bg-success text-white px-10 py-3.5 rounded-xl hover:bg-success transition-all disabled:bg-gray-300 disabled:cursor-not-allowed shadow-lg hover:shadow-xl font-medium text-base"
                               >
                                 <Play className="w-5 h-5" />
                                 {isRunning ? 'Running...' : 'Run Code'}
@@ -710,8 +710,8 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
       <div className="min-h-[100dvh] max-h-[100dvh] overflow-y-auto bg-gradient-to-br from-green-50 via-white to-gray-50 flex items-center justify-center p-6">
         <div className="max-w-3xl w-full bg-white rounded-2xl shadow-xl border border-gray-200 my-6">
           <div className="p-8 text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 className="w-10 h-10 text-green-600" />
+            <div className="w-16 h-16 bg-success-subtle rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="w-10 h-10 text-success" />
             </div>
             <h1 className="text-2xl text-gray-900 mb-3">Assessment Completed!</h1>
             <p className="text-base text-gray-600 mb-6">
@@ -738,12 +738,12 @@ export default function CandidateAssessment({ assessmentId, candidateName = 'Joh
             </div>
 
             {/* Thank You Message */}
-            <div className="bg-green-50 border border-green-200 rounded-lg p-4 mb-6">
-              <div className="flex items-center justify-center gap-2 text-green-700 mb-1">
+            <div className="bg-success-subtle border border-success-line rounded-lg p-4 mb-6">
+              <div className="flex items-center justify-center gap-2 text-success mb-1">
                 <ThumbsUp className="w-4 h-4" />
                 <span className="text-sm">Thank You!</span>
               </div>
-              <p className="text-xs text-green-800">
+              <p className="text-xs text-success-strong">
                 We appreciate the time and effort you put into this assessment. Good luck with your application!
               </p>
             </div>

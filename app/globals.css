@@ -57,6 +57,42 @@
   100% { transform: scaleY(0.05); }
 }
 
+/* ── Wizard step indicator: the pulse around the CURRENT step ────────
+   Its own keyframes rather than `animate-ping` with an inline duration
+   override, so the ring runs identically on every page of a flow no matter
+   what utility layer or plugin order that page's CSS ends up with. */
+@keyframes tf-step-pulse {
+  0%   { transform: scale(1); opacity: 0.55; }
+  70%  { transform: scale(2); opacity: 0; }
+  100% { transform: scale(2); opacity: 0; }
+}
+.tf-step-pulse {
+  animation: tf-step-pulse 2.4s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+
+/* The dot inside the current stage of the cluster-generation rail. Its own
+   keyframes rather than `animate-pulse`, so the beat matches the step
+   indicator's pulse above it. */
+@keyframes tf-step-pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(0.7); }
+}
+.tf-step-pulse-dot {
+  animation: tf-step-pulse-dot 1.4s ease-in-out infinite;
+}
+
+/* ── App-shell scroll lock ──────────────────────────────────────────────
+   Set on <html> by the (dashboard) layout while it is mounted. The dashboard
+   shell is 100dvh tall with its own scroll container, so the document has
+   nothing legitimate to scroll; any document scroll there is a body-level
+   element (a portal, an overlay, a probe) reaching past the viewport, and it
+   shows up as a second scrollbar plus a blank strip under the shell. */
+html.tf-app-shell,
+html.tf-app-shell body {
+  height: 100%;
+  overflow: hidden;
+}
+
 /* Hide scrollbar for horizontal scrollable tabs */
 .scrollbar-hide {
   -ms-overflow-style: none;
@@ -248,6 +284,30 @@
   --score-low: #ef4444;
   --score-low-bg: #fee2e2;
 
+  /* ── Semantic status colors (§11) ───────────────────────────────────────
+     success / warning / info, each with a solid tone plus a -subtle fill, a
+     -line border, and a -strong text value for readable text on the subtle
+     fill. Destructive already has a solid (--destructive) so only its subtle
+     set is added here. Mirrors the score-band pattern. Dark values in .dark.
+     Utilities: text-success, bg-success, bg-success-subtle,
+     border-success-line, text-success-strong, and the warning/info/destructive
+     equivalents — see @theme below. */
+  --success: #16a34a;
+  --success-subtle: #dcfce7;
+  --success-line: #bbf7d0;
+  --success-strong: #166534;
+  --warning: #d97706;
+  --warning-subtle: #fef3c7;
+  --warning-line: #fde68a;
+  --warning-strong: #92400e;
+  --info: #2563eb;
+  --info-subtle: #dbeafe;
+  --info-line: #bfdbfe;
+  --info-strong: #1e40af;
+  --destructive-subtle: #fee2e2;
+  --destructive-line: #fecaca;
+  --destructive-strong: #991b1b;
+
   /* ── Invite / attempt status tokens ─────────────────────────────────────
      One semantic colour per status in the invite lifecycle, so a status reads
      the same wherever it is drawn — the badge in an invite table, the status
@@ -271,6 +331,22 @@
   --status-expired: var(--brand-orange-deep);
   --status-progress: var(--brand-cyan);
   --status-completed: #15803d;
+
+  /* ── Advisory tokens (recommendation / note) ────────────────────────
+     The two voices a configuration form uses to talk back: "this is the one
+     we recommend" and "here is the rule behind this setting". They live here
+     so a form says WHICH of the two it means instead of each card picking a
+     green or a blue by eye — which is how one wizard ended up with three
+     different greens for the same recommendation chip.
+
+     Used through the utilities in @theme below: text-advice-positive,
+     bg-advice-positive-bg, border-advice-info/30, … Dark values are listed
+     explicitly in the .dark block, for the same reason the status tokens list
+     theirs: --brand-* keep their light values in dark mode. */
+  --advice-positive: #15803d;
+  --advice-positive-bg: #f0fdf4;
+  --advice-info: var(--brand-blue);
+  --advice-info-bg: #eff6ff;
 
   /* ── Brand palette (logo-based) ─────────────────────────────────────── */
   /* Deep blue family (primary brand) */
@@ -712,6 +788,32 @@
   --color-status-progress: var(--status-progress);
   --color-status-completed: var(--status-completed);
 
+  /* Advisory utilities — text-advice-positive, bg-advice-positive-bg,
+     border-advice-info/30, and so on. See the token definitions in :root. */
+  --color-advice-positive: var(--advice-positive);
+  --color-advice-positive-bg: var(--advice-positive-bg);
+  --color-advice-info: var(--advice-info);
+  --color-advice-info-bg: var(--advice-info-bg);
+
+  /* Semantic status utilities — bg-success, text-warning-strong,
+     border-info-line, bg-destructive-subtle, and so on. Alpha modifiers work
+     because these resolve to plain colour values. See :root / .dark above. */
+  --color-success: var(--success);
+  --color-success-subtle: var(--success-subtle);
+  --color-success-line: var(--success-line);
+  --color-success-strong: var(--success-strong);
+  --color-warning: var(--warning);
+  --color-warning-subtle: var(--warning-subtle);
+  --color-warning-line: var(--warning-line);
+  --color-warning-strong: var(--warning-strong);
+  --color-info: var(--info);
+  --color-info-subtle: var(--info-subtle);
+  --color-info-line: var(--info-line);
+  --color-info-strong: var(--info-strong);
+  --color-destructive-subtle: var(--destructive-subtle);
+  --color-destructive-line: var(--destructive-line);
+  --color-destructive-strong: var(--destructive-strong);
+
   /* Three-dot (⋮) menu icon utilities — text-menu-icon-view,
      text-menu-icon-archive, etc. See the token definitions in :root above. */
   --color-menu-icon-view: var(--menu-icon-view);
@@ -743,6 +845,16 @@
 
   --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+
+  /* ── Type scale (§11 clear hierarchy) ───────────────────────────────────
+     One font family (Inter). Sanctioned size steps — use these, not arbitrary
+     text-[Npx]. Standard Tailwind steps stay as-is (xs 12 · sm 14 · base 16 ·
+     lg 18 · xl 20 · 2xl 24 · 3xl 30). Added below: a single dense-data MICRO
+     tier for tables/chips/badges, so the ~1,200 scattered text-[8-11px] values
+     collapse to one token instead of four ad-hoc sizes.
+       Meta = text-xs · Micro (dense data only) = text-2xs. */
+  --text-2xs: 0.625rem;            /* 10px */
+  --text-2xs--line-height: 0.875rem; /* 14px */
 
   /* The marketing pages used to load their own display and mono faces here.
      They're on Inter now, like the product, so the tokens are gone rather than
@@ -811,6 +923,23 @@
   --score-low: #f87171;
   --score-low-bg: rgba(239, 68, 68, 0.15);
 
+  /* Semantic status colors — dark mode (mirrors :root set above) */
+  --success: #4ade80;
+  --success-subtle: rgba(22, 163, 74, 0.15);
+  --success-line: rgba(74, 222, 128, 0.3);
+  --success-strong: #86efac;
+  --warning: #fbbf24;
+  --warning-subtle: rgba(217, 119, 6, 0.15);
+  --warning-line: rgba(251, 191, 36, 0.3);
+  --warning-strong: #fcd34d;
+  --info: #60a5fa;
+  --info-subtle: rgba(37, 99, 235, 0.15);
+  --info-line: rgba(96, 165, 250, 0.3);
+  --info-strong: #93c5fd;
+  --destructive-subtle: rgba(220, 38, 38, 0.15);
+  --destructive-line: rgba(239, 68, 68, 0.3);
+  --destructive-strong: #fca5a5;
+
   /* Invite / attempt status tokens — dark mode. Listed explicitly rather than
      left to alias the brand tokens: --brand-* keep their light values in dark
      mode (it is the `.dark .text-brand-*` utility overrides further down that
@@ -826,6 +955,13 @@
   --status-expired: #fdba74;
   --status-progress: #67e8f9;
   --status-completed: #4ade80;
+
+  /* Advisory tokens — dark mode. Spelled out rather than aliased, for the
+     same reason as the status tokens directly above. */
+  --advice-positive: #4ade80;
+  --advice-positive-bg: rgba(34, 197, 94, 0.14);
+  --advice-info: #93c5fd;
+  --advice-info-bg: rgba(59, 130, 246, 0.14);
 
   /* Marketing palette — dark side. Only the tokens that actually flip are
      listed; the fixed ones (navy band, solid buttons, cyan/amber fills) keep
@@ -2230,6 +2366,16 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
 .tf-table-shell td.tf-wrap {
   white-space: normal;
 }
+
+/* ── Empty-state panel for a data table ───────────────────────────────
+   Lives in TypeScript, not here: `TABLE_EMPTY_PANEL_CLASS` in
+   lib/constants/tableEmptyPanel.ts. Tailwind compiles utilities from the JSX
+   that references them, so the panel arrives with its component; a rule here
+   would depend on this stylesheet being rebuilt, and an empty state that
+   renders unstyled until a dev server restarts is worse than an import.
+   That constant also documents the half neither it nor a rule here can do —
+   a table with no rows has to drop its `min-w-[…]` and its `<thead>`, or the
+   cell being centred is still wider than the screen. */
 
 /* ── Sticky Select-All / Actions columns — project-wide, reusable ──────
    Add `tf-sticky-col` to a right-pinned Actions <th>/<td>, or

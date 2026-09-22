@@ -47,7 +47,7 @@ export function PlanCard({ plan, isYearly }: { plan: MarketingPlan; isYearly: bo
       }`}
     >
       <span
-        className={`absolute -top-3 left-6 inline-flex items-center rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.14em] ${
+        className={`absolute -top-3 left-6 inline-flex items-center rounded-full px-3 py-1 text-2xs font-semibold uppercase tracking-[0.14em] ${
           highlighted ? "bg-mkt-amber text-mkt-ink" : "bg-mkt-accent-solid text-white"
         }`}
       >

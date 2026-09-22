@@ -67,7 +67,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
   };
 
   const getComplianceStatusColor = (compliant: boolean) => {
-    return compliant ? 'text-green-600 bg-green-100' : 'text-red-600 bg-red-100';
+    return compliant ? 'text-success bg-success-subtle' : 'text-destructive bg-destructive-subtle';
   };
 
   const toggleSection = (section: string) => {
@@ -130,7 +130,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                 <Lock className="w-4 h-4 text-gray-500" />
                 <span className="text-sm font-medium text-gray-700">Immutability</span>
               </div>
-              <div className={`flex items-center gap-2 ${report?.immutability_status.all_records_immutable ? 'text-green-600' : 'text-red-600'}`}>
+              <div className={`flex items-center gap-2 ${report?.immutability_status.all_records_immutable ? 'text-success' : 'text-destructive'}`}>
                 {report?.immutability_status.all_records_immutable ? (
                   <CheckCircle className="w-5 h-5" />
                 ) : (
@@ -151,7 +151,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                 <AlertTriangle className="w-4 h-4 text-gray-500" />
                 <span className="text-sm font-medium text-gray-700">Blocked Attempts</span>
               </div>
-              <div className={`font-semibold text-2xl ${(modSummary?.total_attempts || 0) > 0 ? 'text-amber-600' : 'text-green-600'}`}>
+              <div className={`font-semibold text-2xl ${(modSummary?.total_attempts || 0) > 0 ? 'text-warning' : 'text-success'}`}>
                 {modSummary?.total_attempts || 0}
               </div>
               <p className="text-xs text-gray-500 mt-1">
@@ -251,17 +251,17 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div className="flex items-center gap-2">
                   {report?.compliance_flags.full_audit_trail ? (
-                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <CheckCircle className="w-4 h-4 text-success" />
                   ) : (
-                    <XCircle className="w-4 h-4 text-red-500" />
+                    <XCircle className="w-4 h-4 text-destructive" />
                   )}
                   <span>Full Audit Trail</span>
                 </div>
                 <div className="flex items-center gap-2">
                   {report?.compliance_flags.corrections_via_new_records ? (
-                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <CheckCircle className="w-4 h-4 text-success" />
                   ) : (
-                    <XCircle className="w-4 h-4 text-red-500" />
+                    <XCircle className="w-4 h-4 text-destructive" />
                   )}
                   <span>Corrections via New Records</span>
                 </div>
@@ -279,7 +279,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
             className="w-full px-6 py-4 flex items-center justify-between border-b border-gray-200"
           >
             <div className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-amber-500" />
+              <AlertTriangle className="w-5 h-5 text-warning" />
               <h3 className="font-semibold text-gray-900">Blocked Modification Attempts</h3>
               <span className="text-sm text-gray-500">({modSummary.total_attempts} total)</span>
             </div>
@@ -316,10 +316,10 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                           <p className="text-xs text-gray-500">{table}</p>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="text-sm text-amber-600 font-semibold">{count}</span>
+                          <span className="text-sm text-warning font-semibold">{count}</span>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-700 rounded">
+                          <span className="px-2 py-1 text-xs font-medium bg-success-subtle text-success rounded">
                             All Blocked
                           </span>
                         </td>
@@ -383,7 +383,7 @@ export default function ComplianceDashboard({ showFullReport = true }: Complianc
                     <p className="text-xs text-gray-500 mt-1">
                       By {correction.corrected_by_email}
                       {correction.requires_approval && !correction.approved_at && (
-                        <span className="ml-2 text-amber-600">(Pending Approval)</span>
+                        <span className="ml-2 text-warning">(Pending Approval)</span>
                       )}
                     </p>
                   </div>

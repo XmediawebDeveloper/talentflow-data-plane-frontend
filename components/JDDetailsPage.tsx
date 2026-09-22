@@ -13,6 +13,8 @@ import { useModulePermissions } from '@/lib/hooks/usePermissions';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 
 // Utility function to format employment type for display
 // Converts "full_time" -> "Full Time", "part_time" -> "Part Time", etc.
@@ -97,50 +99,21 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
 
   const getStatusBadge = (status: AssessmentResultItem['status'], passed: boolean | null) => {
     if (status === 'completed') {
-      if (passed === true) {
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700">
-            <CheckCircle className="w-3 h-3" />
-            Passed
-          </span>
-        );
-      } else if (passed === false) {
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700">
-            <XCircle className="w-3 h-3" />
-            Failed
-          </span>
-        );
-      } else {
-        return (
-          <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
-            <CheckCircle className="w-3 h-3" />
-            Completed
-          </span>
-        );
-      }
+      if (passed === true) return <Badge variant="success"><CheckCircle className="w-3 h-3" />Passed</Badge>;
+      if (passed === false) return <Badge variant="destructive"><XCircle className="w-3 h-3" />Failed</Badge>;
+      return <Badge variant="info"><CheckCircle className="w-3 h-3" />Completed</Badge>;
     } else if (status === 'in_progress') {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700">
-          <AlertCircle className="w-3 h-3" />
-          In Progress
-        </span>
-      );
+      return <Badge variant="info"><AlertCircle className="w-3 h-3" />In Progress</Badge>;
     } else {
-      return (
-        <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-600">
-          <Clock className="w-3 h-3" />
-          Pending
-        </span>
-      );
+      return <Badge variant="warning"><Clock className="w-3 h-3" />Pending</Badge>;
     }
   };
 
   const getScoreColor = (score: number | null): string => {
     if (score === null) return 'text-gray-400';
-    if (score >= 80) return 'text-green-600';
-    if (score >= 60) return 'text-yellow-600';
-    return 'text-red-600';
+    if (score >= 80) return 'text-success';
+    if (score >= 60) return 'text-warning';
+    return 'text-destructive';
   };
 
   if (loading && !results) {
@@ -235,11 +208,11 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
           <div className="text-sm text-gray-500">Completed</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-2xl font-bold text-green-600">{results.passed_count}</div>
+          <div className="text-2xl font-bold text-success">{results.passed_count}</div>
           <div className="text-sm text-gray-500">Passed</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
-          <div className="text-2xl font-bold text-red-600">{results.failed_count}</div>
+          <div className="text-2xl font-bold text-destructive">{results.failed_count}</div>
           <div className="text-sm text-gray-500">Failed</div>
         </div>
         <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -295,12 +268,12 @@ function AssessmentResultsTab({ jdId }: { jdId: string }) {
             <option value="failed">Failed</option>
           </select>
 
-          <button
+          <Button
+            variant="secondary"
             onClick={handleSearch}
-            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
           >
             Search
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -536,9 +509,9 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
 
   const getMatchBadge = (status: string) => {
     const configs: Record<string, { bg: string; text: string }> = {
-      good_match: { bg: 'bg-green-100', text: 'text-green-700' },
+      good_match: { bg: 'bg-success-subtle', text: 'text-success' },
       partial_match: { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep' },
-      no_match: { bg: 'bg-red-100', text: 'text-red-700' },
+      no_match: { bg: 'bg-destructive-subtle', text: 'text-destructive' },
     };
     const config = configs[status] || { bg: 'bg-gray-100', text: 'text-gray-600' };
     return (
@@ -623,12 +596,12 @@ function ScoredResumesTab({ jdId }: { jdId: string }) {
               className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             />
           </div>
-          <button
+          <Button
+            variant="secondary"
             onClick={handleSearch}
-            className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
           >
             Search
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -849,18 +822,13 @@ export default function JDDetailsPage() {
   };
 
   const getStatusBadge = (status: string) => {
-    const configs: Record<string, { bg: string; text: string; dot: string }> = {
-      draft: { bg: 'bg-yellow-50', text: 'text-yellow-700', dot: 'bg-yellow-500' },
-      published: { bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
-      archived: { bg: 'bg-gray-50', text: 'text-gray-600', dot: 'bg-gray-400' },
-      disabled: { bg: 'bg-red-50', text: 'text-red-600', dot: 'bg-red-400' },
+    const variants: Record<string, 'success' | 'info' | 'destructive' | 'muted'> = {
+      draft: 'info', published: 'success', archived: 'muted', disabled: 'destructive',
     };
-    const config = configs[status] || configs.draft;
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium ${config.bg} ${config.text}`}>
-        <span className={`w-2 h-2 rounded-full ${config.dot}`}></span>
+      <Badge variant={variants[status] || 'info'} className="px-3 py-1.5 text-sm">
         {status.charAt(0).toUpperCase() + status.slice(1)}
-      </span>
+      </Badge>
     );
   };
 
@@ -954,12 +922,12 @@ export default function JDDetailsPage() {
         <FileText className="w-16 h-16 text-gray-300 mb-4" />
         <h2 className="text-xl font-medium text-gray-900 mb-2">Job Description Not Found</h2>
         <p className="text-gray-500 mb-6">The job description you're looking for doesn't exist.</p>
-        <button
+        <Button
+          variant="primary"
           onClick={() => router.push('/recruitment/jd-list')}
-          className="px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
         >
           Back to Job Descriptions
-        </button>
+        </Button>
       </div>
     );
   }
@@ -1031,40 +999,40 @@ export default function JDDetailsPage() {
 
             <div className="flex items-center gap-3">
               {jd.status === 'draft' && (
-                <button
+                <Button
+                  variant="primary"
                   onClick={handlePublish}
-                  className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
+                  icon={<CheckCircle2 className="w-4 h-4" />}
                 >
-                  <CheckCircle2 className="w-4 h-4" />
                   Publish
-                </button>
+                </Button>
               )}
               {jd.status === 'published' && canRunScoring && (
-                <button
+                <Button
+                  variant="primary"
                   onClick={() => router.push(`/recruitment/resume-scoring?jd_id=${jd.id}&mode=new`)}
-                  className="flex items-center gap-2 px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-900"
+                  icon={<ClipboardList className="w-4 h-4" />}
                 >
-                  <ClipboardList className="w-4 h-4" />
                   Score Resumes
-                </button>
+                </Button>
               )}
               {jdPerms.canUpdate && (
-                <button
+                <Button
+                  variant="secondary"
                   onClick={() => router.push(`/recruitment/jd-creation?id=${jd.id}`)}
-                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  icon={<Edit2 className="w-4 h-4" />}
                 >
-                  <Edit2 className="w-4 h-4" />
                   Edit
-                </button>
+                </Button>
               )}
               {jdPerms.canArchive && jd.status !== 'archived' && (
-                <button
+                <Button
+                  variant="secondary"
                   onClick={handleArchive}
-                  className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                  icon={<Archive className="w-4 h-4" />}
                 >
-                  <Archive className="w-4 h-4" />
                   Archive
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -1141,9 +1109,9 @@ export default function JDDetailsPage() {
 
               {/* Internal Comments */}
               {jd.internal_comments && (
-                <div className="bg-yellow-50 rounded-xl border border-yellow-200 p-6">
-                  <h2 className="text-lg font-semibold text-yellow-800 mb-4">Internal Comments</h2>
-                  <p className="text-yellow-700">{jd.internal_comments}</p>
+                <div className="bg-warning-subtle rounded-xl border border-warning-line p-6">
+                  <h2 className="text-lg font-semibold text-warning-strong mb-4">Internal Comments</h2>
+                  <p className="text-warning">{jd.internal_comments}</p>
                 </div>
               )}
             </div>
@@ -1307,7 +1275,7 @@ export default function JDDetailsPage() {
                             <span className="font-medium text-gray-900">
                               Version {version.version_number}
                               {version.version_number === currentVersion && (
-                                <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                                <span className="ml-2 text-xs bg-success-subtle text-success px-2 py-0.5 rounded-full">
                                   Current
                                 </span>
                               )}

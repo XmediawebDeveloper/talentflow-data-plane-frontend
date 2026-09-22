@@ -308,15 +308,15 @@ export function SkillsView({ data }: { data: DashboardData }) {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <div className="text-[11px] text-gray-500 mb-0.5">Avg Score</div>
+                  <div className="text-2xs text-gray-500 mb-0.5">Avg Score</div>
                   <div className="text-xl font-bold text-indigo-700">{mhAvg.toFixed(2)}</div>
                 </div>
                 <div>
-                  <div className="text-[11px] text-gray-500 mb-0.5">Skills</div>
+                  <div className="text-2xs text-gray-500 mb-0.5">Skills</div>
                   <div className="text-xl font-bold text-indigo-700">{mhSkills.length}</div>
                 </div>
                 <div>
-                  <div className="text-[11px] text-gray-500 mb-0.5">Strong (≥8)</div>
+                  <div className="text-2xs text-gray-500 mb-0.5">Strong (≥8)</div>
                   <div className="text-xl font-bold text-emerald-600">
                     {mhSkills.filter(s => s.score >= 8.0).length}
                   </div>
@@ -331,15 +331,15 @@ export function SkillsView({ data }: { data: DashboardData }) {
               </div>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <div className="text-[11px] text-gray-500 mb-0.5">Avg Score</div>
+                  <div className="text-2xs text-gray-500 mb-0.5">Avg Score</div>
                   <div className="text-xl font-bold text-amber-600">{nhAvg.toFixed(2)}</div>
                 </div>
                 <div>
-                  <div className="text-[11px] text-gray-500 mb-0.5">Skills</div>
+                  <div className="text-2xs text-gray-500 mb-0.5">Skills</div>
                   <div className="text-xl font-bold text-amber-600">{nhSkills.length}</div>
                 </div>
                 <div>
-                  <div className="text-[11px] text-gray-500 mb-0.5">Strong (≥8)</div>
+                  <div className="text-2xs text-gray-500 mb-0.5">Strong (≥8)</div>
                   <div className="text-xl font-bold text-emerald-600">
                     {nhSkills.filter(s => s.score >= 8.0).length}
                   </div>
@@ -685,14 +685,14 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                       {!isOpen && (
                         <span className="hidden sm:flex items-center gap-1 min-w-0">
                           {q.skills.slice(0, 3).map((s, i) => (
-                            <span key={i} className="text-[10px] px-1.5 py-0.5 rounded bg-white border border-gray-200 text-gray-500 truncate max-w-[110px]">
+                            <span key={i} className="text-2xs px-1.5 py-0.5 rounded bg-white border border-gray-200 text-gray-500 truncate max-w-[110px]">
                               {s.name}
                             </span>
                           ))}
-                          {q.skills.length > 3 && <span className="text-[10px] text-gray-400">+{q.skills.length - 3}</span>}
+                          {q.skills.length > 3 && <span className="text-2xs text-gray-400">+{q.skills.length - 3}</span>}
                         </span>
                       )}
-                      <span className="text-[11px] font-mono text-gray-500 shrink-0">
+                      <span className="text-2xs font-mono text-gray-500 shrink-0">
                         Q Score <span className="text-gray-900 font-semibold">{q.questionScore.toFixed(2)}</span>
                       </span>
                     </span>
@@ -707,13 +707,13 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                             <div className="flex items-center justify-between gap-3">
                               <div className="flex items-center gap-2 min-w-0 flex-1">
                                 <span className="text-sm text-gray-900 truncate">{s.name}</span>
-                                <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded border ${priorityChipClass(s.priority)}`}>
+                                <span className={`text-2xs font-semibold px-1.5 py-0.5 rounded border ${priorityChipClass(s.priority)}`}>
                                   {priorityLabel(s.priority)}
                                 </span>
                               </div>
                               {s.is_unscored ? (
                                 <span
-                                  className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-500 border border-gray-300"
+                                  className="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-semibold bg-gray-100 text-gray-500 border border-gray-300"
                                   title="No evaluator score for this skill — excluded from the question score (not counted as 0.0)."
                                 >
                                   Not evaluated
@@ -726,12 +726,12 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                                       {s.score.toFixed(1)}
                                     </span>
                                     {s.is_skipped ? (
-                                      <span className="ml-1 inline-flex items-center px-1.5 py-0 rounded text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-300"
+                                      <span className="ml-1 inline-flex items-center px-1.5 py-0 rounded text-2xs font-semibold bg-gray-100 text-gray-600 border border-gray-300"
                                         title="Candidate skipped or said 'I don't know' — not scored for this skill.">
                                         Skipped
                                       </span>
                                     ) : s.is_fallback ? (
-                                      <span className="ml-1 inline-flex items-center px-1.5 py-0 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"
+                                      <span className="ml-1 inline-flex items-center px-1.5 py-0 rounded text-2xs font-semibold bg-amber-100 text-amber-800 border border-amber-200"
                                         title="Q-level fallback: skill not directly evaluated by AI; reflects overall answer on this question.">
                                         Q
                                       </span>
@@ -753,15 +753,15 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                         );
                       })}
                       {sumW > 0 ? (
-                        <div className="text-[11px] font-mono text-gray-500 pl-1 pt-1">
+                        <div className="text-2xs font-mono text-gray-500 pl-1 pt-1">
                           Question Score = {sumWS.toFixed(1)} ÷ {sumW} = <span className="text-gray-900 font-semibold">{q.questionScore.toFixed(2)}</span>
                         </div>
                       ) : q.isUnscored && displayOnlyScore !== null ? (
-                        <div className="text-[11px] text-amber-700 italic pl-1 pt-1">
+                        <div className="text-2xs text-amber-700 italic pl-1 pt-1">
                           Partial runtime score shown for this attended question. Excluded from the terminated-session section average.
                         </div>
                       ) : q.isUnscored ? (
-                        <div className="text-[11px] text-gray-400 italic pl-1 pt-1">
+                        <div className="text-2xs text-gray-400 italic pl-1 pt-1">
                           Not evaluated — excluded from the section average.
                         </div>
                       ) : null}
@@ -814,25 +814,25 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                 return (
                   <div key={fi} className="rounded bg-amber-50 border border-amber-200 p-3 space-y-1.5">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">
+                      <span className="text-2xs font-bold px-1.5 py-0.5 rounded bg-amber-200 text-amber-900">
                         FU{fi + 1}
                       </span>
                       {/* Which question this is a follow-up to (parent), and —
                           when the trigger skill was volunteered earlier — which
                           question it came from (source). */}
-                      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
+                      <span className="text-2xs font-semibold px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 border border-amber-200">
                         Follow-up to Q{q.qNum}
                       </span>
                       {typeof fu.source_qnum === 'number' && fu.source_qnum > 0 && fu.source_qnum !== q.qNum && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
+                        <span className="text-2xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700 border border-amber-200">
                           from Q{fu.source_qnum}
                         </span>
                       )}
                       {fu.topic && (
-                        <span className="text-[10px] text-amber-700 italic">on {fu.topic}</span>
+                        <span className="text-2xs text-amber-700 italic">on {fu.topic}</span>
                       )}
                       {typeof fu.score === 'number' && (
-                        <span className="ml-auto text-[10px] font-mono text-amber-800">
+                        <span className="ml-auto text-2xs font-mono text-amber-800">
                           Score {fu.score.toFixed(1)}
                         </span>
                       )}
@@ -843,10 +843,10 @@ export function QuestionsView({ data }: { data: DashboardData }) {
                       {fu.answer ? fu.answer : <span className="italic text-gray-500">(no response)</span>}
                     </div>
                     {fu.note && (
-                      <div className="text-[11px] italic text-gray-600">{fu.note}</div>
+                      <div className="text-2xs italic text-gray-600">{fu.note}</div>
                     )}
                     {reasonNote && (
-                      <div className="text-[11px] text-amber-900 bg-amber-100 border border-amber-300 rounded px-2 py-1.5 mt-1">
+                      <div className="text-2xs text-amber-900 bg-amber-100 border border-amber-300 rounded px-2 py-1.5 mt-1">
                         <span className="font-semibold">Note:</span> {reasonNote}
                       </div>
                     )}
@@ -871,10 +871,10 @@ export function QuestionsView({ data }: { data: DashboardData }) {
               {q.clarifications.map((cl, ci) => (
                 <div key={ci} className="rounded bg-brand-orange/5 border border-brand-orange/20 p-3 space-y-1.5">
                   <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold px-1.5 py-0.5 rounded text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20">
+                    <span className="text-2xs font-bold px-1.5 py-0.5 rounded text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20">
                       CL{cl.number ?? ci + 1}
                     </span>
-                    <span className="text-[10px] text-brand-orange-deep italic">candidate asked to repeat / rephrase</span>
+                    <span className="text-2xs text-brand-orange-deep italic">candidate asked to repeat / rephrase</span>
                   </div>
                   <div className="text-sm text-gray-800">
                     {cl.question || <span className="italic text-gray-500">(no clarification text)</span>}
@@ -1183,14 +1183,14 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
                                       </div>
                                       {s.is_skipped ? (
                                         <span
-                                          className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-300"
+                                          className="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-semibold bg-gray-100 text-gray-600 border border-gray-300"
                                           title="Candidate skipped or said 'I don't know' — not scored for this skill."
                                         >
                                           Skipped
                                         </span>
                                       ) : s.is_fallback ? (
                                         <span
-                                          className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"
+                                          className="inline-flex items-center px-1.5 py-0.5 rounded text-2xs font-semibold bg-amber-100 text-amber-800 border border-amber-200"
                                           title="Q-level fallback: this skill was not directly evaluated by the AI; score reflects the candidate's overall answer on this question."
                                         >
                                           Q

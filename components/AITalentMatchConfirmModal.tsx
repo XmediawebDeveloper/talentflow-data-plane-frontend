@@ -1,6 +1,7 @@
 'use client';
 
 import { FileText, FileSearch, Briefcase, Sparkle, Plus, Loader2, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 
 interface AITalentMatchConfirmModalProps {
   isOpen: boolean;
@@ -23,14 +24,16 @@ export default function AITalentMatchConfirmModal({
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-[10000] flex items-center justify-center p-4 sm:p-6">
       <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-2xl w-full animate-scale-in max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
         {/* Close button */}
-        <button
+        <Button
+          variant="secondary"
+          size="sm"
           onClick={onCancel}
           disabled={isLoading}
           aria-label="Close"
-          className="absolute top-4 right-4 p-1.5 text-gray-400 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-600 dark:hover:text-slate-300 rounded-lg transition-colors disabled:opacity-50"
+          className="absolute top-4 right-4 px-2"
         >
           <X className="w-5 h-5" />
-        </button>
+        </Button>
 
         <div className="px-6 sm:px-8 pt-8 pb-6 overflow-y-auto">
           {/* Header: small icon + title */}
@@ -92,17 +95,19 @@ export default function AITalentMatchConfirmModal({
 
         {/* Footer */}
         <div className="px-6 sm:px-8 py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col-reverse sm:flex-row gap-3 shrink-0">
-          <button
+          <Button
+            variant="secondary"
             onClick={onCancel}
             disabled={isLoading}
-            className="flex-1 px-4 py-2.5 text-sm font-semibold bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/30 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1"
           >
             No
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
             onClick={onConfirm}
             disabled={isLoading}
-            className="flex-1 px-4 py-2.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1"
           >
             {isLoading ? (
               <span className="flex items-center justify-center gap-2">
@@ -112,7 +117,7 @@ export default function AITalentMatchConfirmModal({
             ) : (
               'Yes, find matches'
             )}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

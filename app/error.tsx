@@ -33,7 +33,7 @@ export default function GlobalError({
 
         {error?.digest && (
           <div className="mb-6 rounded-lg border border-gray-200 bg-gray-50 px-3 py-2">
-            <p className="text-[11px] font-medium uppercase tracking-wide text-gray-500">Error reference</p>
+            <p className="text-2xs font-medium uppercase tracking-wide text-gray-500">Error reference</p>
             <p className="font-mono text-xs text-gray-700 mt-0.5 break-all">{error.digest}</p>
           </div>
         )}

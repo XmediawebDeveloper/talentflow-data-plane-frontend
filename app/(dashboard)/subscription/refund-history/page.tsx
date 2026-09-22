@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ListPagination from '@/components/ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 // Use backend proxy instead of direct Admin API calls
@@ -230,33 +231,34 @@ export default function RefundHistoryPage() {
       case 'completed':
       case 'success':
       case 'paid':
-        return <CheckCircle2 className="h-3.5 w-3.5 text-brand-teal" />;
+        return <CheckCircle2 className="h-3.5 w-3.5" />;
       case 'pending':
       case 'processing':
-        return <Clock className="h-3.5 w-3.5 text-amber-600" />;
+        return <Clock className="h-3.5 w-3.5" />;
       case 'failed':
       case 'rejected':
-        return <XCircle className="h-3.5 w-3.5 text-red-600" />;
+        return <XCircle className="h-3.5 w-3.5" />;
       default:
-        return <Clock className="h-3.5 w-3.5 text-gray-500" />;
+        return <Clock className="h-3.5 w-3.5" />;
     }
   };
 
-  const getStatusStyles = (status: string) => {
+  // Canonical status → shared Badge variant (same status looks the same everywhere).
+  const getStatusVariant = (status: string): 'success' | 'warning' | 'destructive' | 'muted' => {
     switch (status.toLowerCase()) {
       case 'refunded':
       case 'completed':
       case 'success':
       case 'paid':
-        return 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20';
+        return 'success';
       case 'pending':
       case 'processing':
-        return 'bg-amber-100 text-amber-700 ring-1 ring-amber-200';
+        return 'warning';
       case 'failed':
       case 'rejected':
-        return 'bg-red-100 text-red-700 ring-1 ring-red-200';
+        return 'destructive';
       default:
-        return 'bg-gray-100 text-gray-700 ring-1 ring-gray-200';
+        return 'muted';
     }
   };
 
@@ -478,11 +480,11 @@ export default function RefundHistoryPage() {
 
         {/* Error State */}
         {error && (
-          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50/80 p-4 ring-1 ring-red-100">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive-subtle text-destructive">
               <AlertCircle className="h-5 w-5" />
             </span>
-            <p className="text-sm font-medium text-red-700">{error}</p>
+            <p className="text-sm font-medium text-destructive">{error}</p>
           </div>
         )}
 
@@ -610,10 +612,10 @@ export default function RefundHistoryPage() {
                         </span>
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${getStatusStyles(refund.status || 'unknown')}`}>
+                        <Badge variant={getStatusVariant(refund.status || 'unknown')} className="capitalize">
                           {getStatusIcon(refund.status || 'unknown')}
                           {refund.status || '-'}
-                        </span>
+                        </Badge>
                       </td>
                       <td className="px-4 py-4 text-right tf-sticky-col">
                         <div className="flex items-center justify-end gap-1.5">
@@ -685,33 +687,33 @@ export default function RefundHistoryPage() {
               <div className="flex-1 min-h-0 space-y-5 overflow-y-auto p-5 sm:p-6">
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Issue Date</p>
+                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Issue Date</p>
                     <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedRefund.issue_date)}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Original Invoice</p>
+                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Original Invoice</p>
                     <p className="mt-1 break-all font-mono text-sm font-semibold text-gray-900 dark:text-slate-50">{selectedRefund.metadata?.original_invoice_number || '-'}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Status</p>
-                    <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${getStatusStyles(selectedRefund.status)}`}>
+                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Status</p>
+                    <Badge variant={getStatusVariant(selectedRefund.status)} className="mt-1 capitalize">
                       {getStatusIcon(selectedRefund.status)}
                       {selectedRefund.status}
-                    </span>
+                    </Badge>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Refund Method</p>
+                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Refund Method</p>
                     <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{selectedRefund.metadata?.refund_method || '-'}</p>
                   </div>
                   {selectedRefund.payment_method && (
                     <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Payment Method</p>
+                      <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Payment Method</p>
                       <p className="mt-1 text-sm font-semibold capitalize text-gray-900 dark:text-slate-50">{selectedRefund.payment_method}</p>
                     </div>
                   )}
                   {selectedRefund.paid_at && (
                     <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Paid At</p>
+                      <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Paid At</p>
                       <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedRefund.paid_at)}</p>
                     </div>
                   )}
@@ -719,7 +721,7 @@ export default function RefundHistoryPage() {
 
                 <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                   <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-2.5">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Refund Details</p>
+                    <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Refund Details</p>
                   </div>
                   <div className="space-y-3 p-4">
                     <div className="flex items-start justify-between gap-4">
@@ -757,14 +759,14 @@ export default function RefundHistoryPage() {
 
                 {selectedRefund.metadata?.notes && (
                   <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50 p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Notes</p>
+                    <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Notes</p>
                     <p className="mt-1 text-sm text-gray-800 dark:text-slate-100">{selectedRefund.metadata.notes}</p>
                   </div>
                 )}
 
                 {selectedRefund.metadata?.razorpay_refund_id && (
                   <div className="rounded-xl border border-brand-cyan/20 bg-brand-cyan/[0.05] p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-cyan">Razorpay Refund ID</p>
+                    <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-brand-cyan">Razorpay Refund ID</p>
                     <p className="mt-1 break-all font-mono text-sm text-gray-900 dark:text-slate-50">{selectedRefund.metadata.razorpay_refund_id}</p>
                   </div>
                 )}

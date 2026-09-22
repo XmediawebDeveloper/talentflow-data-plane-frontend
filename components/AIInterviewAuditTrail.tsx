@@ -12,6 +12,7 @@ import ListToolbar from '@/components/ui/list-toolbar';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 type CategoryFilter = 'all' | 'config_lifecycle' | 'candidate_activity';
 
@@ -31,13 +32,13 @@ const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
 const ACTIVITY_COLORS: Record<string, { bg: string; text: string; icon: string; border: string }> = {
   config_created: { bg: 'bg-blue-50', text: 'text-blue-700', icon: 'text-blue-500', border: 'border-blue-200' },
   config_updated: { bg: 'bg-purple-50', text: 'text-purple-700', icon: 'text-purple-500', border: 'border-purple-200' },
-  config_deleted: { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500', border: 'border-red-200' },
-  config_published: { bg: 'bg-green-50', text: 'text-green-700', icon: 'text-green-500', border: 'border-green-200' },
+  config_deleted: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
+  config_published: { bg: 'bg-success-subtle', text: 'text-success', icon: 'text-success', border: 'border-success-line' },
   config_archived: { bg: 'bg-gray-50', text: 'text-gray-700', icon: 'text-gray-500', border: 'border-gray-200' },
   candidate_invited: { bg: 'bg-indigo-50', text: 'text-indigo-700', icon: 'text-indigo-500', border: 'border-indigo-200' },
-  candidate_started: { bg: 'bg-yellow-50', text: 'text-yellow-700', icon: 'text-yellow-500', border: 'border-yellow-200' },
-  candidate_completed: { bg: 'bg-green-50', text: 'text-green-700', icon: 'text-green-500', border: 'border-green-200' },
-  candidate_failed: { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500', border: 'border-red-200' },
+  candidate_started: { bg: 'bg-warning-subtle', text: 'text-warning', icon: 'text-warning', border: 'border-warning-line' },
+  candidate_completed: { bg: 'bg-success-subtle', text: 'text-success', icon: 'text-success', border: 'border-success-line' },
+  candidate_failed: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
   candidate_expired: { bg: 'bg-orange-50', text: 'text-orange-700', icon: 'text-orange-500', border: 'border-orange-200' },
 };
 
@@ -191,13 +192,13 @@ export default function AIInterviewAuditTrail() {
               </p>
             </div>
 
-            <button
+            <Button
+              variant="secondary"
               onClick={handleExportAuditLogs}
-              className="px-4 py-2 text-sm border border-gray-300 text-gray-700 rounded-md hover:bg-gray-50 transition-colors flex items-center gap-2"
+              icon={<Download className="w-4 h-4" />}
             >
-              <Download className="w-4 h-4" />
               Export Logs
-            </button>
+            </Button>
           </div>
 
           {/* Category Filter Chips */}
@@ -278,12 +279,13 @@ export default function AIInterviewAuditTrail() {
               {/* Panel footer: "Done" applies the selection and reveals the
                   toolbar Clear - same flow as job-openings. */}
               <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
-                <button
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={() => { search.applyFilters(); setShowFilters(false); }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
                 >
                   Done
-                </button>
+                </Button>
               </div>
             </div>
             }

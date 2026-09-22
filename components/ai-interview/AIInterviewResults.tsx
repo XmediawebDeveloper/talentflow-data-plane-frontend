@@ -4,6 +4,9 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import TabEmptyState from '@/components/ui/tab-empty-state';
+import { TableSkeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useRouter } from 'next/navigation';
@@ -64,13 +67,27 @@ const STATUS_OPTIONS = [
 
 export function getStatusBadge(status: string) {
   switch (status) {
-    case 'completed': return 'bg-green-100 text-green-700 ring-1 ring-green-200';
-    case 'in_progress': return 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20';
+    case 'completed': return 'bg-success-subtle text-success ring-1 ring-success-line';
+    case 'in_progress': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
     case 'invited': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
     case 'expired': return 'bg-gray-100 text-gray-600 ring-1 ring-gray-200';
-    case 'terminated': return 'bg-red-100 text-red-700 ring-1 ring-red-200';
-    case 'cancelled': return 'bg-red-100 text-red-600 ring-1 ring-red-200';
+    case 'terminated': return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
+    case 'cancelled': return 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line';
     default: return 'bg-gray-100 text-gray-600 ring-1 ring-gray-200';
+  }
+}
+
+// Canonical status → shared Badge variant (single source of truth so a status
+// reads the same colour everywhere it is shown).
+export function getStatusVariant(status: string): 'success' | 'warning' | 'info' | 'destructive' | 'muted' {
+  switch (status) {
+    case 'completed': return 'success';
+    case 'in_progress': return 'info';
+    case 'invited': return 'info';
+    case 'terminated':
+    case 'cancelled': return 'destructive';
+    case 'expired':
+    default: return 'muted';
   }
 }
 
@@ -88,11 +105,11 @@ export function getStatusLabel(status: string) {
 
 export function getStatusIcon(status: string) {
   switch (status) {
-    case 'completed': return <CheckCircle className="w-4 h-4 text-green-500" />;
+    case 'completed': return <CheckCircle className="w-4 h-4 text-success" />;
     case 'in_progress': return <Clock className="w-4 h-4 text-brand-orange-deep" />;
     case 'invited': return <Mail className="w-4 h-4 text-brand-blue" />;
-    case 'terminated': return <Ban className="w-4 h-4 text-red-600" />;
-    case 'cancelled': return <XCircle className="w-4 h-4 text-red-500" />;
+    case 'terminated': return <Ban className="w-4 h-4 text-destructive" />;
+    case 'cancelled': return <XCircle className="w-4 h-4 text-destructive" />;
     case 'expired': return <XCircle className="w-4 h-4 text-gray-400" />;
     default: return <Mail className="w-4 h-4 text-gray-400" />;
   }
@@ -102,19 +119,19 @@ export function getProctoringRisk(session: AIInterviewResponse): { level: string
   // Prefer server-computed risk_level (persisted at completion time, AIU-82)
   const stored = session.risk_level;
   if (stored) {
-    if (stored === 'high')   return { level: 'High',   badge: 'bg-red-100 text-red-700 ring-1 ring-red-200' };
+    if (stored === 'high')   return { level: 'High',   badge: 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line' };
     if (stored === 'medium') return { level: 'Medium', badge: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' };
     if (stored === 'low')    return { level: 'Low',    badge: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20' };
-    return { level: 'None', badge: 'bg-green-100 text-green-700 ring-1 ring-green-200' };
+    return { level: 'None', badge: 'bg-success-subtle text-success ring-1 ring-success-line' };
   }
   // Fallback: heuristic from raw violations (pre-AIU-82 sessions or incomplete data)
   const violations = session.proctoring_violations || [];
   const severe = violations.filter((v) => v.severity === 'high' || v.severity === 'critical').length;
   const medium = violations.filter((v) => v.severity === 'medium').length;
-  if (severe >= 3 || (severe >= 1 && medium >= 2)) return { level: 'High',   badge: 'bg-red-100 text-red-700 ring-1 ring-red-200' };
+  if (severe >= 3 || (severe >= 1 && medium >= 2)) return { level: 'High',   badge: 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line' };
   if (severe >= 1 || medium >= 2)                  return { level: 'Medium', badge: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20' };
   if (violations.length > 0)                       return { level: 'Low',    badge: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20' };
-  return { level: 'None', badge: 'bg-green-100 text-green-700 ring-1 ring-green-200' };
+  return { level: 'None', badge: 'bg-success-subtle text-success ring-1 ring-success-line' };
 }
 
 export function formatDuration(session: AIInterviewResponse): string {
@@ -300,8 +317,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
           </div>
           <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
             <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 flex items-center justify-center">
-                <CheckCircle className="w-4 h-4 text-green-600" />
+              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-success-line flex items-center justify-center">
+                <CheckCircle className="w-4 h-4 text-success" />
               </div>
               <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Completed</span>
             </div>
@@ -411,12 +428,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
           {/* Panel footer: "Done" applies the selection and reveals the
               toolbar Clear - same flow as job-openings. */}
           <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
-            <button
-              onClick={() => { search.applyFilters(); setShowFilters(false); }}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
-            >
+            <Button variant="secondary" size="sm" onClick={() => { search.applyFilters(); setShowFilters(false); }}>
               Done
-            </button>
+            </Button>
           </div>
           </div>
         )}
@@ -428,9 +442,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
           Talent Match tab's does. */}
       <div className={isUnstarted ? '' : 'bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden'}>
         {isLoading ? (
-          <div className="flex items-center justify-center py-16 tf-loader-center">
-            <Loader2 className="w-7 h-7 animate-spin text-brand-blue" />
-          </div>
+          /* Skeleton matches the results table structure (no double border — the
+             parent card already provides it) instead of a bare spinner. */
+          <TableSkeleton toolbar={false} columns={6} rows={6} className="border-0 shadow-none rounded-none" />
         ) : isUnstarted ? (
           /* Nothing here yet — the shared tab empty state, carrying the actions
              since the toolbar they normally sit in is gone. */
@@ -479,7 +493,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                         </p>
                       </div>
                       {session.candidate_cid && (
-                        <span className="text-[10px] font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-1.5 py-0.5 rounded shrink-0">
+                        <span className="text-2xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-1.5 py-0.5 rounded shrink-0">
                           {session.candidate_cid}
                         </span>
                       )}
@@ -488,11 +502,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                     <div>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {getStatusIcon(session.status)}
-                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(session.status)}`}>
+                        <Badge variant={getStatusVariant(session.status)}>
                           {getStatusLabel(session.status)}
-                        </span>
+                        </Badge>
                         {session.status === 'in_progress' && (
-                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full">
+                          <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
                             <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                             LIVE
                           </span>
@@ -507,12 +521,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                       {sc && (
                         <div className="mt-1.5">
                           <div className="flex items-center gap-1 mb-0.5">
-                            <span className="text-[10px] text-gray-500">{sc.questions_asked}/{sc.total_questions} Q</span>
-                            <span className="text-[10px] text-green-600 font-medium ml-auto">{scCoveredPct}% covered</span>
+                            <span className="text-2xs text-gray-500">{sc.questions_asked}/{sc.total_questions} Q</span>
+                            <span className="text-2xs text-success font-medium ml-auto">{scCoveredPct}% covered</span>
                           </div>
                           <div className="flex h-1 rounded-full overflow-hidden bg-gray-200 w-full">
-                            <div className="bg-green-500" style={{ width: `${Math.round((sc.covered.length / (scTotal || 1)) * 100)}%` }} />
-                            <div className="bg-yellow-400" style={{ width: `${Math.round((sc.medium_covered.length / (scTotal || 1)) * 100)}%` }} />
+                            <div className="bg-success" style={{ width: `${Math.round((sc.covered.length / (scTotal || 1)) * 100)}%` }} />
+                            <div className="bg-warning" style={{ width: `${Math.round((sc.medium_covered.length / (scTotal || 1)) * 100)}%` }} />
                             <div className="bg-orange-400" style={{ width: `${Math.round((sc.low_covered.length / (scTotal || 1)) * 100)}%` }} />
                           </div>
                         </div>
@@ -524,15 +538,15 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                         <div className="flex-1 bg-gray-200 rounded-full h-1.5">
                           <div
                             className={`h-1.5 rounded-full ${
-                              session.score >= 70 ? 'bg-green-500' :
-                              session.score >= 50 ? 'bg-brand-orange' : 'bg-red-500'
+                              session.score >= 70 ? 'bg-success' :
+                              session.score >= 50 ? 'bg-brand-orange' : 'bg-destructive'
                             }`}
                             style={{ width: `${Math.min(100, session.score)}%` }}
                           />
                         </div>
                         <span className={`font-medium text-xs shrink-0 ${
-                          session.score >= 70 ? 'text-green-600' :
-                          session.score >= 50 ? 'text-brand-orange-deep' : 'text-red-600'
+                          session.score >= 70 ? 'text-success' :
+                          session.score >= 50 ? 'text-brand-orange-deep' : 'text-destructive'
                         }`}>
                           {Math.round(session.score)}%
                         </span>
@@ -657,11 +671,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                         <td className="px-4 py-3 whitespace-nowrap">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {getStatusIcon(session.status)}
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(session.status)}`}>
+                            <Badge variant={getStatusVariant(session.status)}>
                               {getStatusLabel(session.status)}
-                            </span>
+                            </Badge>
                             {session.status === 'in_progress' && (
-                              <span className="flex items-center gap-1 px-1.5 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full">
+                              <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
                                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                                 LIVE
                               </span>
@@ -675,12 +689,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                             return (
                               <div className="mt-1.5">
                                 <div className="flex items-center gap-1 mb-0.5">
-                                  <span className="text-[10px] text-gray-500">{sc.questions_asked}/{sc.total_questions} Q</span>
-                                  <span className="text-[10px] text-green-600 font-medium ml-auto">{coveredPct}% covered</span>
+                                  <span className="text-2xs text-gray-500">{sc.questions_asked}/{sc.total_questions} Q</span>
+                                  <span className="text-2xs text-success font-medium ml-auto">{coveredPct}% covered</span>
                                 </div>
                                 <div className="flex h-1 rounded-full overflow-hidden bg-gray-200 w-28">
-                                  <div className="bg-green-500" style={{ width: `${Math.round((sc.covered.length / (total || 1)) * 100)}%` }} />
-                                  <div className="bg-yellow-400" style={{ width: `${Math.round((sc.medium_covered.length / (total || 1)) * 100)}%` }} />
+                                  <div className="bg-success" style={{ width: `${Math.round((sc.covered.length / (total || 1)) * 100)}%` }} />
+                                  <div className="bg-warning" style={{ width: `${Math.round((sc.medium_covered.length / (total || 1)) * 100)}%` }} />
                                   <div className="bg-orange-400" style={{ width: `${Math.round((sc.low_covered.length / (total || 1)) * 100)}%` }} />
                                 </div>
                               </div>
@@ -693,15 +707,15 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                               <div className="w-16 bg-gray-200 rounded-full h-1.5">
                                 <div
                                   className={`h-1.5 rounded-full ${
-                                    session.score >= 70 ? 'bg-green-500' :
-                                    session.score >= 50 ? 'bg-brand-orange' : 'bg-red-500'
+                                    session.score >= 70 ? 'bg-success' :
+                                    session.score >= 50 ? 'bg-brand-orange' : 'bg-destructive'
                                   }`}
                                   style={{ width: `${Math.min(100, session.score)}%` }}
                                 />
                               </div>
                               <span className={`font-medium text-xs ${
-                                session.score >= 70 ? 'text-green-600' :
-                                session.score >= 50 ? 'text-brand-orange-deep' : 'text-red-600'
+                                session.score >= 70 ? 'text-success' :
+                                session.score >= 50 ? 'text-brand-orange-deep' : 'text-destructive'
                               }`}>
                                 {Math.round(session.score)}%
                               </span>
@@ -729,13 +743,14 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                           )}
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap tf-sticky-col">
-                          <button
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={(e) => { e.stopPropagation(); handleViewDetails(session); }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
+                            icon={<Eye className="w-3.5 h-3.5" />}
                           >
-                            <Eye className="w-3.5 h-3.5" />
                             View Details
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                     );

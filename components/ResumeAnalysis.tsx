@@ -1,5 +1,6 @@
 import { ArrowLeft, Star, TrendingUp, TrendingDown, Minus, CheckCircle2, XCircle, AlertTriangle, Sparkles, Mail, Phone, MapPin, Briefcase, GraduationCap, Award, Download, FileText, Target, Brain, Code, Users } from 'lucide-react';
 import { useState } from 'react';
+import { Button } from '@/components/ui/button';
 
 interface Applicant {
   id: string;
@@ -171,8 +172,8 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
     if (score >= 85) {
       return { 
         label: 'Exact Match', 
-        color: 'text-green-700', 
-        bg: 'bg-green-100 border-green-300',
+        color: 'text-success', 
+        bg: 'bg-success-subtle border-success-line',
         icon: CheckCircle2
       };
     } else if (score >= 70) {
@@ -185,8 +186,8 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
     } else {
       return { 
         label: 'Low Match', 
-        color: 'text-yellow-700', 
-        bg: 'bg-yellow-100 border-yellow-300',
+        color: 'text-warning', 
+        bg: 'bg-warning-subtle border-warning-line',
         icon: XCircle
       };
     }
@@ -198,11 +199,11 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
   const getStatusIcon = (status: 'pass' | 'partial' | 'fail') => {
     switch (status) {
       case 'pass':
-        return <CheckCircle2 className="w-4 h-4 text-green-600" />;
+        return <CheckCircle2 className="w-4 h-4 text-success" />;
       case 'partial':
-        return <Minus className="w-4 h-4 text-yellow-600" />;
+        return <Minus className="w-4 h-4 text-warning" />;
       case 'fail':
-        return <XCircle className="w-4 h-4 text-red-600" />;
+        return <XCircle className="w-4 h-4 text-destructive" />;
     }
   };
 
@@ -291,14 +292,12 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
           </div>
 
           <div className="flex gap-3">
-            <button className="flex items-center gap-2 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors">
-              <Download className="w-4 h-4" />
+            <Button variant="secondary" icon={<Download className="w-4 h-4" />}>
               Download Resume
-            </button>
-            <button className="flex items-center gap-2 bg-green-600 text-white px-6 py-2.5 rounded-lg hover:bg-green-700 transition-colors shadow-lg shadow-green-500/25">
-              <CheckCircle2 className="w-5 h-5" />
+            </Button>
+            <Button variant="primary" icon={<CheckCircle2 className="w-5 h-5" />}>
               Shortlist Candidate
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -468,8 +467,8 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
                           <div className="flex items-center gap-2 mb-1">
                             <span className="text-gray-900">{rec.type}</span>
                             <span className={`px-2 py-0.5 rounded text-xs ${
-                              rec.priority === 'high' ? 'bg-red-100 text-red-700' :
-                              rec.priority === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                              rec.priority === 'high' ? 'bg-destructive-subtle text-destructive' :
+                              rec.priority === 'medium' ? 'bg-warning-subtle text-warning' :
                               'bg-gray-100 text-gray-700'
                             }`}>
                               {rec.priority} priority
@@ -535,30 +534,30 @@ export default function ResumeAnalysis({ applicant, jobTitle, onBack }: ResumeAn
 
               {/* Strengths & Areas for Improvement */}
               <div className="grid grid-cols-2 gap-6">
-                <div className="border border-green-200 rounded-lg p-6 bg-green-50">
+                <div className="border border-success-line rounded-lg p-6 bg-success-subtle">
                   <div className="flex items-center gap-2 mb-4">
-                    <TrendingUp className="w-5 h-5 text-green-600" />
+                    <TrendingUp className="w-5 h-5 text-success" />
                     <h3 className="text-gray-900">Key Strengths</h3>
                   </div>
                   <ul className="space-y-3">
                     {strengths.map((strength, idx) => (
                       <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
-                        <CheckCircle2 className="w-4 h-4 text-green-600 flex-shrink-0 mt-0.5" />
+                        <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
                         <span>{strength}</span>
                       </li>
                     ))}
                   </ul>
                 </div>
 
-                <div className="border border-yellow-200 rounded-lg p-6 bg-yellow-50">
+                <div className="border border-warning-line rounded-lg p-6 bg-warning-subtle">
                   <div className="flex items-center gap-2 mb-4">
-                    <TrendingDown className="w-5 h-5 text-yellow-600" />
+                    <TrendingDown className="w-5 h-5 text-warning" />
                     <h3 className="text-gray-900">Areas for Improvement</h3>
                   </div>
                   <ul className="space-y-3">
                     {improvements.map((improvement, idx) => (
                       <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
-                        <AlertTriangle className="w-4 h-4 text-yellow-600 flex-shrink-0 mt-0.5" />
+                        <AlertTriangle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
                         <span>{improvement}</span>
                       </li>
                     ))}

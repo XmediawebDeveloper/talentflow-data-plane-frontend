@@ -9,7 +9,7 @@ export default function DashboardNotFound() {
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-brand-blue/10 mb-5">
             <Search className="h-8 w-8 text-brand-blue" aria-hidden="true" />
           </div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-brand-blue mb-2">
+          <p className="text-2xs font-semibold uppercase tracking-[0.18em] text-brand-blue mb-2">
             404 — Not found
           </p>
           <h1 className="text-xl sm:text-2xl font-semibold text-gray-900 mb-2">

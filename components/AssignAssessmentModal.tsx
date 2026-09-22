@@ -2,6 +2,7 @@ import { X, ClipboardCheck, CheckCircle, AlertCircle, FileText, Calendar, Clock,
 import { Resume } from '@/lib/types/types';
 import { useState } from 'react';
 import { toast } from '@/components/ui/enhanced-toast';
+import { Button } from '@/components/ui/button';
 
 interface Assessment {
   id: string;
@@ -68,13 +69,15 @@ export default function AssignAssessmentModal({
               <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Send assessment invitations to candidates</p>
             </div>
           </div>
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={onClose}
-            className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
+            className="px-2 flex-shrink-0"
             aria-label="Close"
           >
             <X className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
 
         {/* Content */}
@@ -147,9 +150,9 @@ export default function AssignAssessmentModal({
                           {assessment.questions} Questions
                         </span>
                         <span className={`px-1.5 sm:px-2 py-0.5 rounded font-medium ${
-                          assessment.difficulty === 'Hard' ? 'bg-red-100 text-red-700' :
-                          assessment.difficulty === 'Medium' ? 'bg-yellow-100 text-yellow-700' :
-                          'bg-green-100 text-green-700'
+                          assessment.difficulty === 'Hard' ? 'bg-destructive-subtle text-destructive' :
+                          assessment.difficulty === 'Medium' ? 'bg-warning-subtle text-warning' :
+                          'bg-success-subtle text-success'
                         }`}>
                           {assessment.difficulty}
                         </span>
@@ -181,19 +184,19 @@ export default function AssignAssessmentModal({
                   <h4 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 mb-2">What Happens Next?</h4>
                   <ul className="text-xs text-gray-700 dark:text-slate-300 space-y-1">
                     <li className="flex items-start gap-2">
-                      <CheckCircle className="w-3 h-3 text-green-600 mt-0.5 flex-shrink-0" />
+                      <CheckCircle className="w-3 h-3 text-success mt-0.5 flex-shrink-0" />
                       <span>Email invitations will be sent to all selected candidates</span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <CheckCircle className="w-3 h-3 text-green-600 mt-0.5 flex-shrink-0" />
+                      <CheckCircle className="w-3 h-3 text-success mt-0.5 flex-shrink-0" />
                       <span>Candidates can access the assessment via secure link</span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <CheckCircle className="w-3 h-3 text-green-600 mt-0.5 flex-shrink-0" />
+                      <CheckCircle className="w-3 h-3 text-success mt-0.5 flex-shrink-0" />
                       <span>You'll receive notifications when assessments are completed</span>
                     </li>
                     <li className="flex items-start gap-2">
-                      <CheckCircle className="w-3 h-3 text-green-600 mt-0.5 flex-shrink-0" />
+                      <CheckCircle className="w-3 h-3 text-success mt-0.5 flex-shrink-0" />
                       <span>Results will be available in the Assessments section</span>
                     </li>
                   </ul>
@@ -205,16 +208,18 @@ export default function AssignAssessmentModal({
 
         {/* Footer */}
         <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
-          <button
+          <Button
+            variant="secondary"
             onClick={onClose}
-            className="order-2 sm:order-1 px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
+            className="order-2 sm:order-1"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
             onClick={handleAssign}
             disabled={!selectedAssessment || isAssigning}
-            className="order-1 sm:order-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:bg-gray-300 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+            className="order-1 sm:order-2"
           >
             {isAssigning ? (
               <>
@@ -227,7 +232,7 @@ export default function AssignAssessmentModal({
                 Assign Assessment
               </>
             )}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

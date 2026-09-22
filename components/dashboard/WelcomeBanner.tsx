@@ -162,7 +162,7 @@ export default function WelcomeBanner({ user, tenant }: WelcomeBannerProps) {
             </h1>
             <div className="mt-1.5 sm:mt-2 flex flex-wrap items-center gap-x-3 gap-y-1.5 text-xs sm:text-sm text-white/80">
               {user?.role && (
-                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] sm:text-xs font-medium shadow-sm ${roleBadgeColors[user.role]}`}>
+                <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-2xs sm:text-xs font-medium shadow-sm ${roleBadgeColors[user.role]}`}>
                   {roleLabels[user.role]}
                 </span>
               )}
@@ -189,12 +189,12 @@ export default function WelcomeBanner({ user, tenant }: WelcomeBannerProps) {
             {formatDateTime(now)}
           </span>
           {user?.lastLogin ? (
-            <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs text-white/60">
+            <span className="inline-flex items-center gap-1.5 text-2xs sm:text-xs text-white/60">
               <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               Last login: {formatLastLogin(user.lastLogin)}
             </span>
           ) : user?.createdAt ? (
-            <span className="inline-flex items-center gap-1.5 text-[11px] sm:text-xs text-white/60">
+            <span className="inline-flex items-center gap-1.5 text-2xs sm:text-xs text-white/60">
               <Clock className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
               Member since {formatISTDate(user.createdAt)}
             </span>

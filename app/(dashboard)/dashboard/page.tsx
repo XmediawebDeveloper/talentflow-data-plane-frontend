@@ -196,7 +196,7 @@ function SectionShell({
     >
       <div className="mb-5 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{eyebrow}</p>
+          <p className="text-2xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{eyebrow}</p>
           <h2 className="mt-1.5 text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50">{title}</h2>
           {description && <p className="mt-1 text-sm text-slate-500 dark:text-slate-500">{description}</p>}
         </div>
@@ -321,7 +321,7 @@ function FunnelDonut({ segments, centerLabel, centerValue }: FunnelDonutProps) {
       </svg>
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
         <p className="text-lg font-semibold tracking-tight text-slate-900 dark:text-slate-50 tabular-nums">{centerValue}</p>
-        <p className="mt-0.5 text-[9px] font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{centerLabel}</p>
+        <p className="mt-0.5 text-2xs font-semibold uppercase tracking-[0.18em] text-slate-400 dark:text-slate-500">{centerLabel}</p>
       </div>
     </div>
   );
@@ -354,16 +354,16 @@ function KpiCard({ label, value, note, icon: Icon, accent, bar, loading, trendVa
           <Icon className="h-4 w-4" />
         </div>
         {trendValue && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-[10px] font-semibold text-slate-600 dark:text-slate-400 ring-1 ring-slate-200 dark:ring-slate-700">
+          <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 text-2xs font-semibold text-slate-600 dark:text-slate-400 ring-1 ring-slate-200 dark:ring-slate-700">
             {trendValue}
           </span>
         )}
       </div>
-      <p className="mt-3 text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">{label}</p>
+      <p className="mt-3 text-2xs font-semibold uppercase tracking-[0.16em] text-slate-400 dark:text-slate-500">{label}</p>
       <p className="mt-0.5 text-xl font-semibold leading-tight tracking-tight text-slate-900 dark:text-slate-50 tabular-nums">
         {loading ? <span className="inline-block h-6 w-14 animate-pulse rounded bg-slate-100 dark:bg-slate-800" /> : formatCompactNumber(value)}
       </p>
-      <p className="mt-0.5 line-clamp-1 text-[11px] text-slate-500 dark:text-slate-500">{note}</p>
+      <p className="mt-0.5 line-clamp-1 text-2xs text-slate-500 dark:text-slate-500">{note}</p>
     </Wrapper>
   );
 }
@@ -658,17 +658,17 @@ export default function DashboardPage() {
                   {timeOfDayGreeting()},
                 </p>
                 <div className="mt-0.5 flex flex-wrap items-center gap-2">
-                  <h1 className="truncate text-lg font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-[28px]">
+                  <h1 className="truncate text-lg font-bold tracking-tight text-slate-900 dark:text-slate-50 sm:text-3xl">
                     {displayName}
                   </h1>
                   {isTenantAdmin && (
-                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-0.5 text-[11px] font-semibold text-brand-blue ring-1 ring-brand-blue/15">
+                    <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-brand-blue/10 px-2.5 py-0.5 text-2xs font-semibold text-brand-blue ring-1 ring-brand-blue/15">
                       <BadgeCheck className="h-3 w-3" />
                       Owner
                     </span>
                   )}
                 </div>
-                <p className="mt-1 sm:mt-1.5 text-[13px] sm:text-sm text-slate-500 dark:text-slate-500">
+                <p className="mt-1 sm:mt-1.5 text-sm sm:text-sm text-slate-500 dark:text-slate-500">
                   Streamline your entire recruitment journey with AI-powered talent solutions.
                 </p>
               </div>
@@ -760,7 +760,7 @@ export default function DashboardPage() {
                             <p className="text-xs font-semibold text-slate-900">{step.label}</p>
                           </div>
                           <div className="flex items-center gap-2">
-                            <span className="rounded-full bg-white px-1.5 py-0.5 text-[9px] font-semibold text-slate-600 ring-1 ring-slate-200 tabular-nums">
+                            <span className="rounded-full bg-white px-1.5 py-0.5 text-2xs font-semibold text-slate-600 ring-1 ring-slate-200 tabular-nums">
                               {conversion}
                             </span>
                             <p className="w-10 text-right text-sm font-semibold text-slate-900 tabular-nums">
@@ -781,23 +781,23 @@ export default function DashboardPage() {
             {!loading && pipelineTotal > 0 && (
               <div className="mt-4 grid gap-2 sm:grid-cols-3">
                 <div className="rounded-lg border border-slate-200/80 bg-white p-2.5">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Weekly inflow</p>
+                  <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-slate-400">Weekly inflow</p>
                   <p className="mt-1 text-lg font-semibold text-slate-900 tabular-nums">
                     {formatCompactNumber(stats?.resumes_this_week ?? null)}
                   </p>
                 </div>
                 <div className="rounded-lg border border-slate-200/80 bg-white p-2.5">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Assessment</p>
+                  <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-slate-400">Assessment</p>
                   <p className="mt-1 text-lg font-semibold text-slate-900 tabular-nums">{assessmentCompletion}%</p>
-                  <p className="text-[10px] text-slate-500">
+                  <p className="text-2xs text-slate-500">
                     {formatCompactNumber(stats?.assessment_completed_count ?? null)} /{' '}
                     {formatCompactNumber(stats?.total_assessments ?? null)}
                   </p>
                 </div>
                 <div className="rounded-lg border border-slate-200/80 bg-white p-2.5">
-                  <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-slate-400">Interview</p>
+                  <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-slate-400">Interview</p>
                   <p className="mt-1 text-lg font-semibold text-slate-900 tabular-nums">{interviewCompletion}%</p>
-                  <p className="text-[10px] text-slate-500">
+                  <p className="text-2xs text-slate-500">
                     {formatCompactNumber(interviewCompleted)} / {formatCompactNumber(interviewTotal)}
                   </p>
                 </div>
@@ -846,7 +846,7 @@ export default function DashboardPage() {
                           </div>
                           <div className="min-w-0">
                             <p className="truncate text-xs font-semibold text-slate-900">{item.label}</p>
-                            <p className="text-[10px] text-slate-500">
+                            <p className="text-2xs text-slate-500">
                               {item.value.is_unlimited
                                 ? `${item.value.used.toLocaleString()} · unlimited`
                                 : `${item.value.used.toLocaleString()} / ${item.value.limit.toLocaleString()}`}
@@ -854,7 +854,7 @@ export default function DashboardPage() {
                           </div>
                         </div>
                         {!item.value.is_unlimited && (
-                          <span className={`inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-[9px] font-semibold ring-1 ${status.tone}`}>
+                          <span className={`inline-flex shrink-0 items-center rounded-full px-1.5 py-0.5 text-2xs font-semibold ring-1 ${status.tone}`}>
                             {status.label}
                           </span>
                         )}
@@ -866,7 +866,7 @@ export default function DashboardPage() {
                             style={{ width: item.value.is_unlimited ? '28%' : `${percentage}%` }}
                           />
                         </div>
-                        <span className="text-[10px] font-medium tabular-nums text-slate-500">
+                        <span className="text-2xs font-medium tabular-nums text-slate-500">
                           {item.value.is_unlimited ? '∞' : `${percentage}%`}
                         </span>
                       </div>
@@ -914,7 +914,7 @@ export default function DashboardPage() {
                         <div className="flex items-center gap-1.5">
                           <p className="truncate text-sm font-semibold text-slate-900 group-hover:text-brand-blue">{item.title}</p>
                           {item.urgency === 'high' && (
-                            <span className="rounded-full bg-brand-orange/10 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-brand-orange ring-1 ring-brand-orange/20">
+                            <span className="rounded-full bg-brand-orange/10 px-1.5 py-0.5 text-2xs font-bold uppercase tracking-wider text-brand-orange ring-1 ring-brand-orange/20">
                               High
                             </span>
                           )}
@@ -935,7 +935,7 @@ export default function DashboardPage() {
             description="Bucketed from real upload events. Older days outside the API window stay 0 honestly."
             action={
               inflowHasData ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-cyan/10 px-2.5 py-1 text-[11px] font-medium text-brand-cyan ring-1 ring-brand-cyan/15">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-brand-cyan/10 px-2.5 py-1 text-2xs font-medium text-brand-cyan ring-1 ring-brand-cyan/15">
                   Peak {Math.max(...inflowBuckets.map((b) => b.value))} / day
                 </span>
               ) : undefined
@@ -956,25 +956,25 @@ export default function DashboardPage() {
                 <AreaChart buckets={inflowBuckets} stroke="#079cc4" fillFrom="#079cc4" fillTo="#079cc4" />
                 <div className="mt-5 grid gap-3 sm:grid-cols-4">
                   <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Last 14 days</p>
+                    <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-slate-400">Last 14 days</p>
                     <p className="mt-1 text-xl font-semibold text-slate-900 tabular-nums">
                       {inflowBuckets.reduce((a, b) => a + b.value, 0)}
                     </p>
                   </div>
                   <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">This week</p>
+                    <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-slate-400">This week</p>
                     <p className="mt-1 text-xl font-semibold text-slate-900 tabular-nums">
                       {formatCompactNumber(stats?.resumes_this_week ?? null)}
                     </p>
                   </div>
                   <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Daily avg</p>
+                    <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-slate-400">Daily avg</p>
                     <p className="mt-1 text-xl font-semibold text-slate-900 tabular-nums">
                       {(inflowBuckets.reduce((a, b) => a + b.value, 0) / Math.max(inflowBuckets.length, 1)).toFixed(1)}
                     </p>
                   </div>
                   <div className="rounded-xl border border-slate-200/80 bg-slate-50/60 p-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">Best day</p>
+                    <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-slate-400">Best day</p>
                     <p className="mt-1 text-xl font-semibold text-slate-900 tabular-nums">
                       {Math.max(...inflowBuckets.map((b) => b.value))}
                     </p>
@@ -1043,7 +1043,7 @@ export default function DashboardPage() {
                                 <p className="truncate text-xs text-slate-500">{extractDetail(activity)}</p>
                               )}
                             </div>
-                            <span className="whitespace-nowrap text-[11px] text-slate-400">{activity.time_ago}</span>
+                            <span className="whitespace-nowrap text-2xs text-slate-400">{activity.time_ago}</span>
                           </div>
                         </div>
                       </div>
@@ -1098,7 +1098,7 @@ export default function DashboardPage() {
                         {extractDetail(activity) && (
                           <p className="truncate text-xs text-slate-500">{extractDetail(activity)}</p>
                         )}
-                        <p className="mt-0.5 text-[11px] text-slate-400">{activity.time_ago}</p>
+                        <p className="mt-0.5 text-2xs text-slate-400">{activity.time_ago}</p>
                       </div>
                     </div>
                   );
@@ -1132,7 +1132,7 @@ export default function DashboardPage() {
                     <p className="truncate text-sm font-medium text-slate-900 dark:text-slate-50">{item.action_display}</p>
                     <p className="truncate text-xs text-slate-500 dark:text-slate-500">{item.jd_title || 'Job description update'}</p>
                   </div>
-                  <span className="whitespace-nowrap text-[11px] text-slate-400 dark:text-slate-500">{item.time_ago}</span>
+                  <span className="whitespace-nowrap text-2xs text-slate-400 dark:text-slate-500">{item.time_ago}</span>
                 </div>
               ))}
             </div>

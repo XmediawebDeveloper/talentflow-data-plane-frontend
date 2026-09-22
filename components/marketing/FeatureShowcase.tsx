@@ -19,11 +19,11 @@ function PreviewFrame({
 }) {
   return (
     <div className="flex h-full flex-col rounded-2xl border border-slate-200/80 bg-mkt-surface p-4 shadow-[0_20px_50px_-30px_rgba(8,19,46,0.45)] dark:border-white/10 sm:p-5">
-      <p className="border-b border-slate-100 pb-3 text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:border-white/10 dark:text-slate-400 sm:text-[11px]">
+      <p className="border-b border-slate-100 pb-3 text-2xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:border-white/10 dark:text-slate-400 sm:text-2xs">
         {label}
       </p>
       <div className="flex-1 py-4">{children}</div>
-      <p className="border-t border-slate-100 pt-3 text-[10px] font-medium tracking-wide text-slate-500 dark:border-white/10 dark:text-slate-400 sm:text-[11px]">
+      <p className="border-t border-slate-100 pt-3 text-2xs font-medium tracking-wide text-slate-500 dark:border-white/10 dark:text-slate-400 sm:text-2xs">
         {footer}
       </p>
     </div>
@@ -128,7 +128,7 @@ function InterviewPreview() {
           { label: "Sentiment", value: "+0.62" },
         ].map((metric) => (
           <div key={metric.label}>
-            <dt className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
+            <dt className="text-2xs font-semibold uppercase tracking-[0.14em] text-slate-500 dark:text-slate-400">
               {metric.label}
             </dt>
             <dd className="mt-0.5 text-sm font-semibold tabular-nums text-mkt-ink">
@@ -152,14 +152,14 @@ function CollaborationPreview() {
       <ul className="space-y-3">
         {thread.map((entry) => (
           <li key={entry.initials} className="flex items-start gap-3">
-            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-mkt-accent-solid/10 text-[11px] font-semibold text-mkt-accent dark:bg-white/10 dark:text-slate-200">
+            <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-mkt-accent-solid/10 text-2xs font-semibold text-mkt-accent dark:bg-white/10 dark:text-slate-200">
               {entry.initials}
             </span>
             <span className="min-w-0 flex-1">
               <span className="flex flex-wrap items-center gap-2">
                 <span className="text-sm font-medium text-mkt-ink">{entry.name}</span>
                 <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] ${
+                  className={`rounded-full px-2 py-0.5 text-2xs font-semibold uppercase tracking-[0.12em] ${
                     entry.verdict === "Advance"
                       ? "bg-mkt-cyan/12 text-mkt-cyan-ink"
                       : "bg-mkt-amber/12 text-mkt-amber-ink"
@@ -299,7 +299,7 @@ export function FeatureShowcase() {
                   <Icon className="h-4.5 w-4.5" />
                 </span>
                 <span className="min-w-0">
-                  <span className="block text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                  <span className="block text-2xs font-semibold uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
                     {feature.stage}
                   </span>
                   <span

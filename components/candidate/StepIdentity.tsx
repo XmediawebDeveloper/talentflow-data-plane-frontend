@@ -5,6 +5,7 @@ import { ArrowLeft,
   Shield, Camera, Lock, AlertCircle, Mail, User,
   CheckCircle, RefreshCw, Loader2, ArrowRight, KeyRound,
 } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { candidateAIInterviewService } from '@/lib/services/candidateAIInterviewService';
 import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
 import { FACE_API_MODEL_URLS, loadFaceApiNetWithFallback, assessCandidateFaceVisibility, type FaceRegion } from '@/lib/proctoring/faceDetection';
@@ -614,7 +615,7 @@ export default function StepIdentity({
       <div className="w-full max-w-2xl mx-auto space-y-6">
         {progressStepper}
         <div className="text-center">
-          <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
+          <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
             <Shield className="w-3.5 h-3.5" /> Identity Verification
           </span>
           <h1 className="text-2xl font-bold text-gray-900">Verify Your Identity</h1>
@@ -631,14 +632,14 @@ export default function StepIdentity({
             </div>
           </div>
           <div className="p-6 space-y-5">
-            <div className="border-l-4 border-amber-400 bg-amber-50 rounded-r-lg p-3">
-              <p className="text-sm text-amber-800 font-medium">Important</p>
-              <p className="text-xs text-amber-700 mt-1">Enter your name exactly as it appears on your government ID.</p>
+            <div className="border-l-4 border-warning-line bg-warning-subtle rounded-r-lg p-3">
+              <p className="text-sm text-warning-strong font-medium">Important</p>
+              <p className="text-xs text-warning mt-1">Enter your name exactly as it appears on your government ID.</p>
             </div>
 
             <div>
               <label htmlFor="identity-name" className="flex items-center gap-1.5 text-sm font-medium text-gray-900 mb-1.5">
-                <User className="w-4 h-4 text-gray-500" /> Full Name <span className="text-red-500">*</span>
+                <User className="w-4 h-4 text-gray-500" /> Full Name <span className="text-destructive">*</span>
               </label>
               <input
                 id="identity-name" type="text" value={name}
@@ -650,31 +651,32 @@ export default function StepIdentity({
 
             <div className="space-y-3">
               <label htmlFor="identity-email" className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
-                <Mail className="w-4 h-4 text-gray-500" /> Email Address <span className="text-red-500">*</span>
+                <Mail className="w-4 h-4 text-gray-500" /> Email Address <span className="text-destructive">*</span>
               </label>
               <div className="flex gap-2">
                 <input
                   id="identity-email" type="email" value={email}
                   readOnly
                   className={`flex-1 px-4 py-2.5 border rounded-lg text-sm bg-gray-50 cursor-not-allowed transition-colors ${
-                    otpVerified ? 'border-green-400 bg-green-50' : 'border-gray-200'
+                    otpVerified ? 'border-success-line bg-success-subtle' : 'border-gray-200'
                   }`}
                 />
                 {!otpVerified && !otpSent && (
-                  <button
+                  <Button
                     type="button"
+                    variant="primary"
                     onClick={handleSendOtp}
                     disabled={!isEmailValid || otpSending}
-                    className="flex-shrink-0 flex items-center gap-1.5 bg-gray-800 text-white text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+                    className="flex-shrink-0 whitespace-nowrap"
                   >
                     {otpSending
                       ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Sending…</>
                       : 'Get OTP'
                     }
-                  </button>
+                  </Button>
                 )}
                 {otpVerified && (
-                  <div className="flex items-center gap-1.5 text-green-700 text-sm font-medium px-3">
+                  <div className="flex items-center gap-1.5 text-success text-sm font-medium px-3">
                     <CheckCircle className="w-4 h-4" /> Verified
                   </div>
                 )}
@@ -684,7 +686,7 @@ export default function StepIdentity({
               {otpSent && !otpVerified && (
                 <div className="space-y-3">
                   <label className="flex items-center gap-1.5 text-sm font-medium text-gray-900">
-                    <KeyRound className="w-4 h-4 text-gray-500" /> Enter OTP <span className="text-red-500">*</span>
+                    <KeyRound className="w-4 h-4 text-gray-500" /> Enter OTP <span className="text-destructive">*</span>
                   </label>
                   <div className="flex gap-2">
                     <input
@@ -720,14 +722,15 @@ export default function StepIdentity({
                       placeholder="Enter 6-digit OTP"
                       className="flex-1 px-4 py-2.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-gray-500 tracking-widest font-mono"
                     />
-                    <button
+                    <Button
                       type="button"
+                      variant="primary"
                       onClick={() => handleVerifyOtp()}
                       disabled={otpCode.length < 4 || otpVerifying}
-                      className="flex-shrink-0 flex items-center gap-1.5 bg-gray-900 text-white text-sm font-medium px-4 py-2.5 rounded-lg hover:bg-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                      className="flex-shrink-0"
                     >
                       {otpVerifying ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Verifying…</> : 'Verify OTP'}
-                    </button>
+                    </Button>
                   </div>
 
                   {/* Resend timer */}
@@ -747,7 +750,7 @@ export default function StepIdentity({
                               style={{ transition: 'stroke-dashoffset 0.9s linear' }}
                             />
                           </svg>
-                          <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-gray-700">
+                          <span className="absolute inset-0 flex items-center justify-center text-2xs font-bold text-gray-700">
                             {resendCooldown}
                           </span>
                         </div>
@@ -758,8 +761,8 @@ export default function StepIdentity({
                       </>
                     ) : (
                       <>
-                        <div className="w-9 h-9 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0">
-                          <RefreshCw className="w-4 h-4 text-amber-600" />
+                        <div className="w-9 h-9 rounded-full bg-warning-subtle flex items-center justify-center flex-shrink-0">
+                          <RefreshCw className="w-4 h-4 text-warning" />
                         </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-gray-600">Didn't receive the OTP?</p>
@@ -779,7 +782,7 @@ export default function StepIdentity({
               )}
 
               {otpError && (
-                <div className="flex items-center gap-2 text-red-600 text-sm">
+                <div className="flex items-center gap-2 text-destructive text-sm">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" /> {otpError}
                 </div>
               )}
@@ -790,10 +793,10 @@ export default function StepIdentity({
         </div>
 
         <div className="flex justify-end">
-          <button
-            type="button" onClick={handleFormSubmit}
+          <Button
+            type="button" variant="primary" onClick={handleFormSubmit}
             disabled={!isFormValid || submitting}
-            className="inline-flex items-center gap-2 bg-gray-900 text-white font-semibold py-2.5 px-6 rounded-xl hover:bg-gray-800 transition-colors disabled:opacity-40 disabled:cursor-not-allowed text-sm shadow-sm"
+            className="px-6"
           >
             {submitting
               ? <><Loader2 className="w-4 h-4 animate-spin" /> Verifying…</>
@@ -801,7 +804,7 @@ export default function StepIdentity({
                 ? <>Verify Email to Continue <ArrowRight className="w-4 h-4" /></>
                 : <>Continue to Photo <ArrowRight className="w-4 h-4" /></>
             }
-          </button>
+          </Button>
         </div>
       </div>
     );
@@ -812,7 +815,7 @@ export default function StepIdentity({
     <div className="w-full max-w-4xl mx-auto space-y-6" style={{ colorScheme: 'light' }}>
       {progressStepper}
       <div className="text-center">
-        <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
+        <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold px-3 py-1.5 rounded-full mb-3">
           <Camera className="w-3.5 h-3.5" /> Live Photo Capture
         </span>
         <h1 className="text-2xl font-bold text-gray-900">Identity Validation</h1>
@@ -851,9 +854,9 @@ export default function StepIdentity({
               {phase !== 'captured' && !cameraError && (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                   <div className={`w-36 h-44 md:w-44 md:h-52 rounded-[50%] border-[3px] transition-all duration-300 ${
-                    phase === 'countdown' || phase === 'verifying' ? 'border-yellow-400 shadow-[0_0_20px_rgba(250,204,21,0.4)]' :
-                    phase === 'photo_ready' && liveFaceStatus === 'ok' ? 'border-green-400 shadow-[0_0_20px_rgba(74,222,128,0.45)]' :
-                    phase === 'photo_ready' && (liveFaceStatus === 'multiple' || liveFaceStatus === 'none') ? 'border-red-400 shadow-[0_0_20px_rgba(248,113,113,0.45)]' :
+                    phase === 'countdown' || phase === 'verifying' ? 'border-warning-line shadow-[0_0_20px_rgba(250,204,21,0.4)]' :
+                    phase === 'photo_ready' && liveFaceStatus === 'ok' ? 'border-success-line shadow-[0_0_20px_rgba(74,222,128,0.45)]' :
+                    phase === 'photo_ready' && (liveFaceStatus === 'multiple' || liveFaceStatus === 'none') ? 'border-destructive-line shadow-[0_0_20px_rgba(248,113,113,0.45)]' :
                     'border-white/50'
                   }`} />
                   <p className="absolute bottom-12 text-xs text-white/90 font-medium text-center px-4">
@@ -890,12 +893,12 @@ export default function StepIdentity({
               {/* Status badges */}
               {phase !== 'captured' && !cameraError && (
                 <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-black/60 text-white text-xs px-2.5 py-1 rounded-full">
-                  <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                  <span className="w-2 h-2 bg-success rounded-full animate-pulse" />
                   Camera Active
                 </div>
               )}
               {phase === 'captured' && (
-                <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-green-600/90 text-white text-xs px-2.5 py-1 rounded-full">
+                <div className="absolute bottom-3 left-3 flex items-center gap-1.5 bg-success/90 text-white text-xs px-2.5 py-1 rounded-full">
                   <CheckCircle className="w-3 h-3" /> Captured
                 </div>
               )}
@@ -929,9 +932,9 @@ export default function StepIdentity({
                   </div>
 
                   {faceError && (
-                    <div className="flex items-start gap-2 bg-red-50 border border-red-200 rounded-lg p-3">
-                      <AlertCircle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />
-                      <p className="text-sm text-red-700">{faceError}</p>
+                    <div className="flex items-start gap-2 bg-destructive-subtle border border-destructive-line rounded-lg p-3">
+                      <AlertCircle className="w-4 h-4 text-destructive flex-shrink-0 mt-0.5" />
+                      <p className="text-sm text-destructive">{faceError}</p>
                     </div>
                   )}
 
@@ -952,20 +955,21 @@ export default function StepIdentity({
                     return (
                       <>
                         {!captureReady && blockedMsg && (
-                          <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-lg p-3">
-                            <AlertCircle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                            <p className="text-sm text-amber-700">{blockedMsg}</p>
+                          <div className="flex items-start gap-2 bg-warning-subtle border border-warning-line rounded-lg p-3">
+                            <AlertCircle className="w-4 h-4 text-warning flex-shrink-0 mt-0.5" />
+                            <p className="text-sm text-warning">{blockedMsg}</p>
                           </div>
                         )}
-                        <button
+                        <Button
                           type="button"
+                          variant="primary"
                           onClick={handleStartCapture}
                           disabled={cameraError || !captureReady}
                           title={!captureReady ? blockedMsg : undefined}
-                          className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 rounded-xl hover:bg-gray-800 active:bg-gray-700 active:scale-[0.98] transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 text-sm shadow-sm"
+                          className="w-full"
                         >
                           {faceError ? 'Retake Photo' : 'Capture Photo →'}
-                        </button>
+                        </Button>
                       </>
                     );
                   })()}
@@ -973,48 +977,49 @@ export default function StepIdentity({
               )}
 
               {phase === 'verifying' && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
-                  <Loader2 className="w-8 h-8 text-yellow-600 mx-auto mb-2 animate-spin" />
-                  <h4 className="text-sm font-semibold text-yellow-900">Verifying Photo…</h4>
-                  <p className="text-xs text-yellow-800 mt-1">Checking that your face is clearly visible</p>
+                <div className="bg-warning-subtle border border-warning-line rounded-xl p-4 text-center">
+                  <Loader2 className="w-8 h-8 text-warning mx-auto mb-2 animate-spin" />
+                  <h4 className="text-sm font-semibold text-warning-strong">Verifying Photo…</h4>
+                  <p className="text-xs text-warning-strong mt-1">Checking that your face is clearly visible</p>
                 </div>
               )}
 
               {phase === 'countdown' && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-xl p-4 text-center">
-                  <Camera className="w-8 h-8 text-yellow-600 mx-auto mb-2" />
-                  <h4 className="text-sm font-semibold text-yellow-900">Capturing Photo…</h4>
-                  <p className="text-xs text-yellow-800 mt-1">Hold still and look at the camera</p>
+                <div className="bg-warning-subtle border border-warning-line rounded-xl p-4 text-center">
+                  <Camera className="w-8 h-8 text-warning mx-auto mb-2" />
+                  <h4 className="text-sm font-semibold text-warning-strong">Capturing Photo…</h4>
+                  <p className="text-xs text-warning-strong mt-1">Hold still and look at the camera</p>
                 </div>
               )}
 
               {phase === 'captured' && (
                 <div className="space-y-3">
-                  <div className="bg-green-50 border border-green-300 rounded-xl p-4 flex items-start gap-3">
-                    <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                  <div className="bg-success-subtle border border-success-line rounded-xl p-4 flex items-start gap-3">
+                    <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
                     <div>
-                      <h4 className="text-sm font-semibold text-green-900">Photo Verified</h4>
-                      <p className="text-xs text-green-700 mt-1">One face detected and clearly visible — no other people in frame. Review your photo on the left, then click Continue.</p>
+                      <h4 className="text-sm font-semibold text-success-strong">Photo Verified</h4>
+                      <p className="text-xs text-success mt-1">One face detected and clearly visible — no other people in frame. Review your photo on the left, then click Continue.</p>
                     </div>
                   </div>
-                  <button
+                  <Button
                     type="button"
+                    variant="primary"
                     onClick={handleConfirmAndSubmit}
                     disabled={submitting}
-                    className="w-full flex items-center justify-center gap-2 bg-gray-900 text-white font-semibold py-3 rounded-xl hover:bg-gray-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed text-sm shadow-sm"
+                    className="w-full"
                   >
                     {submitting
                       ? <><Loader2 className="w-4 h-4 animate-spin" /> Submitting…</>
                       : <>Continue <ArrowRight className="w-4 h-4" /></>
                     }
-                  </button>
-                  <button
-                    type="button" onClick={handleRetake}
+                  </Button>
+                  <Button
+                    type="button" variant="secondary" onClick={handleRetake}
                     disabled={submitting}
-                    className="w-full inline-flex items-center justify-center gap-2 border border-gray-300 text-gray-700 font-medium py-2.5 px-5 rounded-xl hover:bg-gray-50 transition-colors text-sm disabled:opacity-50"
+                    className="w-full"
                   >
                     <RefreshCw className="w-4 h-4" /> Retake Photo
-                  </button>
+                  </Button>
                 </div>
               )}
             </div>

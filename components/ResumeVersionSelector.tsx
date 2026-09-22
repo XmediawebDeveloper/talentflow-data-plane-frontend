@@ -221,7 +221,7 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
                         Version {versionNumber}
                       </span>
                       {isLatest && (
-                        <span className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-brand-blue text-white">
+                        <span className="rounded px-1.5 py-0.5 text-2xs font-semibold bg-brand-blue text-white">
                           Latest
                         </span>
                       )}
@@ -229,7 +229,7 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
                     {version.name && (
                       <p className="text-xs text-gray-600 dark:text-slate-400 truncate mt-0.5">{version.name}</p>
                     )}
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-gray-500 dark:text-slate-400">
+                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-2xs text-gray-500 dark:text-slate-400">
                       <span className="flex items-center gap-1">
                         <Calendar className="w-3 h-3 flex-shrink-0" />
                         {formatISTDate(version.uploadDate)}
@@ -272,7 +272,7 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
                         <span className="hidden sm:inline">View Changes</span>
                       </button>
                     ) : (
-                      <span className="hidden sm:inline text-[11px] italic text-gray-400 dark:text-slate-500">First version</span>
+                      <span className="hidden sm:inline text-2xs italic text-gray-400 dark:text-slate-500">First version</span>
                     )}
                     {/* A radio, not a tick: exactly one version is applied, and
                         the checkbox on the left already means something else. */}

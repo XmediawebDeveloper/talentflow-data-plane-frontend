@@ -108,7 +108,7 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
   return (
     // Semibold: at 11px, uppercase and widely tracked, Inter needs the extra
     // weight to hold the line the mono face used to hold on its own.
-    <span className="text-[11px] sm:text-xs font-semibold uppercase tracking-[0.22em] text-mkt-accent">
+    <span className="text-2xs sm:text-xs font-semibold uppercase tracking-[0.22em] text-mkt-accent">
       {children}
     </span>
   );
@@ -199,7 +199,7 @@ function BillingToggle({
             {option.label}
             {option.yearly && savePercent > 0 && (
               <span
-                className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold tabular-nums ${
+                className={`rounded-full px-1.5 py-0.5 text-2xs font-semibold tabular-nums ${
                   selected
                     ? "bg-mkt-amber text-mkt-ink"
                     : "bg-mkt-amber/15 text-mkt-amber-ink"
@@ -648,7 +648,7 @@ export function LandingPageContent() {
                     key={figure.label}
                     className="bg-mkt-surface p-6 dark:bg-mkt-surface sm:p-8"
                   >
-                    <dt className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
+                    <dt className="text-2xs font-semibold uppercase tracking-[0.16em] text-slate-500 dark:text-slate-400">
                       {figure.label}
                     </dt>
                     <dd className="mt-2 text-2xl font-extrabold tabular-nums tracking-[-0.02em] text-mkt-ink sm:text-3xl">
@@ -721,7 +721,7 @@ export function LandingPageContent() {
           >
             <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
               <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/60">
+                <p className="text-2xs font-semibold uppercase tracking-[0.18em] text-white/60">
                   Product demo
                 </p>
                 <h3 className="mt-1 text-lg font-bold tracking-[-0.02em]">

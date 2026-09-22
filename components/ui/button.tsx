@@ -1,8 +1,44 @@
 import { ReactNode, forwardRef, cloneElement, isValidElement } from 'react';
 import { ButtonLoader } from './loading-spinner';
 
+/**
+ * Canonical button variants — per UI–UX Guidelines §4, the project uses only
+ * THREE action types:
+ *   - primary     → main CTA, brand color (Create JD, Upload, Export)
+ *   - secondary   → neutral / icon-button / dropdown trigger (Edit, Download)
+ *   - destructive → red, must require confirmation (Delete)
+ *
+ * Legacy aliases (`danger`, `ghost`, `outline`) are still accepted so existing
+ * callers keep compiling, but they normalize onto the three canonical styles.
+ * Do NOT introduce new variants — extend these three instead.
+ */
+type CanonicalVariant = 'primary' | 'secondary' | 'destructive';
+type LegacyVariant = 'danger' | 'ghost' | 'outline';
+type ButtonVariant = CanonicalVariant | LegacyVariant;
+
+const VARIANT_ALIAS: Record<ButtonVariant, CanonicalVariant> = {
+  primary: 'primary',
+  secondary: 'secondary',
+  destructive: 'destructive',
+  danger: 'destructive',
+  ghost: 'secondary',
+  outline: 'secondary',
+};
+
+/**
+ * `tone` is a MODIFIER on the three variants, not a fourth variant — §4 still
+ * holds (only primary / secondary / destructive exist). Use `onColor` for
+ * buttons that sit on a dark, gradient, on-video, or colored-header surface,
+ * where the default light styles clash:
+ *   - primary   → inverse white CTA (brand-blue text on white)
+ *   - secondary → translucent white (bg-white/10, white text, white hairline)
+ *   - destructive → solid red still reads on dark; keeps a white ring
+ */
+type ButtonTone = 'default' | 'onColor';
+
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'danger' | 'ghost' | 'outline';
+  variant?: ButtonVariant;
+  tone?: ButtonTone;
   size?: 'sm' | 'md' | 'lg';
   loading?: boolean;
   icon?: ReactNode;
@@ -11,10 +47,11 @@ interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
 }
 
 /**
- * Enhanced button component with loading states and variants
+ * Shared button — the single sanctioned button in the app.
  */
 export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
   variant = 'primary',
+  tone = 'default',
   size = 'md',
   loading = false,
   icon,
@@ -24,14 +61,24 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
   asChild = false,
   ...props
 }, ref) => {
-  const baseClasses = 'inline-flex items-center justify-center gap-2 rounded-lg transition-all duration-150 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--ring)] disabled:opacity-50 disabled:cursor-not-allowed select-none whitespace-nowrap';
+  // `[&>svg]:shrink-0` keeps an icon at its intended size even when a caller
+  // pins a narrow width (e.g. icon-only `h-9 w-9`) — otherwise the flex child
+  // collapses and the icon disappears.
+  const baseClasses = 'inline-flex items-center justify-center gap-2 rounded-lg transition-all duration-150 font-medium focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-[var(--ring)] disabled:opacity-50 disabled:cursor-not-allowed select-none whitespace-nowrap [&>svg]:shrink-0';
 
-  const variantClasses = {
-    primary: 'bg-[var(--primary)] text-[var(--primary-foreground)] hover:bg-[var(--primary-hover)] shadow-sm hover:shadow-md active:shadow-sm',
-    secondary: 'bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)] border border-[var(--border)]',
-    danger: 'bg-[var(--destructive)] text-white hover:opacity-90 shadow-sm hover:shadow-md',
-    ghost: 'text-[var(--text-secondary)] hover:bg-[var(--surface-hover)] hover:text-[var(--text-primary)]',
-    outline: 'border border-[var(--border-dark)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)] bg-transparent',
+  const variantClasses: Record<ButtonTone, Record<CanonicalVariant, string>> = {
+    default: {
+      // Primary CTA = brand blue (the app's long-standing CTA color), sourced
+      // from globals.css tokens. NOT --primary, which is the grey theme accent.
+      primary: 'bg-[var(--brand-blue)] text-white hover:bg-[var(--brand-blue-2)] shadow-sm hover:shadow-md active:shadow-sm',
+      secondary: 'bg-[var(--surface)] text-[var(--text-primary)] hover:bg-[var(--surface-hover)] border border-[var(--border)]',
+      destructive: 'bg-[var(--destructive)] text-white hover:opacity-90 shadow-sm hover:shadow-md',
+    },
+    onColor: {
+      primary: 'bg-white text-[var(--brand-blue)] hover:bg-white/90 shadow-sm hover:shadow-md active:shadow-sm focus-visible:ring-white',
+      secondary: 'bg-white/10 text-white hover:bg-white/20 border border-white/25 backdrop-blur-sm focus-visible:ring-white',
+      destructive: 'bg-[var(--destructive)] text-white hover:opacity-90 shadow-sm hover:shadow-md ring-1 ring-white/20 focus-visible:ring-white',
+    },
   };
 
   const sizeClasses = {
@@ -40,7 +87,8 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(({
     lg: 'h-11 px-6 text-base',
   };
 
-  const combinedClassName = `${baseClasses} ${variantClasses[variant]} ${sizeClasses[size]} ${className}`;
+  const resolvedVariant = VARIANT_ALIAS[variant] ?? 'primary';
+  const combinedClassName = `${baseClasses} ${variantClasses[tone][resolvedVariant]} ${sizeClasses[size]} ${className}`;
 
   // If asChild is true, clone the child element and pass the button styles to it
   if (asChild && isValidElement(children)) {

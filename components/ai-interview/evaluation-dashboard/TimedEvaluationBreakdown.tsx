@@ -201,7 +201,7 @@ function Weight({ label, value, color }: { label: string; value: number; color: 
         : 'bg-slate-50 border-slate-200 text-slate-900';
   return (
     <div className={`p-3 rounded-lg border ${styles}`}>
-      <div className="text-[11px] uppercase tracking-wider font-semibold opacity-80" style={{ fontFamily: 'var(--font-mono)' }}>
+      <div className="text-2xs uppercase tracking-wider font-semibold opacity-80" style={{ fontFamily: 'var(--font-mono)' }}>
         {label}
       </div>
       <div className="text-2xl font-bold mt-1" style={{ fontFamily: 'var(--font-mono)' }}>
@@ -232,7 +232,7 @@ function SectionPill({
       <div className="text-3xl font-bold" style={{ fontFamily: 'var(--font-mono)' }}>
         {value.toFixed(2)}<span className="text-base opacity-60 font-normal"> / 10</span>
       </div>
-      <div className="text-[11px] opacity-70 mt-1">
+      <div className="text-2xs opacity-70 mt-1">
         avg of {count} question{count === 1 ? '' : 's'}
         {informational && ' • informational only'}
       </div>
@@ -291,14 +291,14 @@ function QuestionTable({
                       <span className={s.is_skipped ? 'text-gray-400' : ''}>{s.score.toFixed(1)}</span>
                       {s.is_skipped ? (
                         <span
-                          className="inline-flex items-center px-1 py-0 rounded text-[10px] font-semibold bg-gray-100 text-gray-600 border border-gray-300"
+                          className="inline-flex items-center px-1 py-0 rounded text-2xs font-semibold bg-gray-100 text-gray-600 border border-gray-300"
                           title="Candidate skipped or said 'I don't know' — not scored for this skill."
                         >
                           Skipped
                         </span>
                       ) : s.is_fallback ? (
                         <span
-                          className="inline-flex items-center px-1 py-0 rounded text-[10px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"
+                          className="inline-flex items-center px-1 py-0 rounded text-2xs font-semibold bg-amber-100 text-amber-800 border border-amber-200"
                           title="Q-level fallback: not directly evaluated; reflects overall answer score for this question."
                         >
                           Q

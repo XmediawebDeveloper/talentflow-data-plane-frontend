@@ -250,7 +250,7 @@ export default function AIMatchVersionHistoryTable({
                       v{versionNumber}
                     </span>
                     {isLatest && (
-                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-brand-blue text-white text-[10px] font-semibold tracking-wide">
+                      <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-brand-blue text-white text-2xs font-semibold tracking-wide">
                         LATEST
                       </span>
                     )}
@@ -388,7 +388,7 @@ export default function AIMatchVersionHistoryTable({
                   v{versionNumber}
                 </span>
                 {isLatest && (
-                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-brand-blue text-white text-[10px] font-semibold tracking-wide">
+                  <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-brand-blue text-white text-2xs font-semibold tracking-wide">
                     LATEST
                   </span>
                 )}

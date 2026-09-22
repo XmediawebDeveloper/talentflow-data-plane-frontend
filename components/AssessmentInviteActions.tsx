@@ -24,6 +24,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 /**
  * Shared invitation-action logic for the Assessment module, ported from (and
@@ -130,7 +131,7 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
     case 'assessment_invite_resend':
       return { label: 'Invited', Icon: Mail, tone: 'text-brand-blue' };
     case 'assessment_invitation_revoke':
-      return { label: 'Revoked', Icon: Ban, tone: 'text-red-600' };
+      return { label: 'Revoked', Icon: Ban, tone: 'text-destructive' };
     case 'assessment_invitation_edit':
       return { label: 'Edited', Icon: Pencil, tone: 'text-brand-orange-deep' };
     case 'assessment_invitation_email_changed':
@@ -138,9 +139,9 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
     case 'assessment_start':
       return { label: 'Started', Icon: Play, tone: 'text-brand-orange-deep' };
     case 'assessment_exit':
-      return { label: 'Terminated', Icon: Ban, tone: 'text-red-600' };
+      return { label: 'Terminated', Icon: Ban, tone: 'text-destructive' };
     case 'assessment_complete':
-      return { label: 'Completed', Icon: CheckCircle, tone: 'text-green-600' };
+      return { label: 'Completed', Icon: CheckCircle, tone: 'text-success' };
     case 'assessment_invitation_expired':
       return { label: 'Expired at', Icon: Clock, tone: 'text-brand-orange-deep' };
     case 'assessment_invite_failed':
@@ -321,7 +322,7 @@ const buildFullTimeline = (
   // IMAP/consent signals, not recruiter or candidate actions) — always
   // synthesized from their own columns.
   if (inv.email_read_at) out.push({ label: 'Email Read', at: inv.email_read_at, Icon: Eye, tone: 'text-brand-cyan' });
-  if (inv.bounced_at) out.push({ label: 'Bounced', at: inv.bounced_at, Icon: RefreshCw, tone: 'text-red-600' });
+  if (inv.bounced_at) out.push({ label: 'Bounced', at: inv.bounced_at, Icon: RefreshCw, tone: 'text-destructive' });
   if (inv.opened_at) out.push({ label: 'System Check', at: inv.opened_at, Icon: Monitor, tone: 'text-brand-cyan' });
 
   const merged = inferMissingExpiries(out, inv.expires_at && inv.sent_at ? new Date(inv.expires_at).getTime() - new Date(inv.sent_at).getTime() : 0, 'assessment_invitation_expired').sort(
@@ -489,9 +490,9 @@ export function InvitationActionButtons({ actions }: { actions: RowAction[] }) {
           onClick={(e) => { e.stopPropagation(); run(); }}
           disabled={disabled}
           title={title || label}
-          className={`flex items-center gap-1 px-2 py-1 text-[10px] font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
+          className={`flex items-center gap-1 px-2 py-1 text-2xs font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${
             destructive
-              ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-500/10 ring-1 ring-red-200 dark:ring-red-500/20 hover:bg-red-100 dark:hover:bg-red-500/20'
+              ? 'text-destructive bg-destructive-subtle ring-1 ring-destructive-line hover:bg-destructive-subtle'
               : 'border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
           }`}
         >
@@ -509,7 +510,7 @@ export function ViewFullHistoryLink({ onClick, compact }: { onClick: () => void;
     <button
       type="button"
       onClick={(e) => { e.stopPropagation(); onClick(); }}
-      className={`flex items-center gap-1 font-medium text-brand-blue hover:underline ${compact ? 'text-[10px] mb-1.5' : 'text-[11px] mt-1'}`}
+      className={`flex items-center gap-1 font-medium text-brand-blue hover:underline ${compact ? 'text-2xs mb-1.5' : 'text-2xs mt-1'}`}
     >
       <History className={compact ? 'w-2.5 h-2.5' : 'w-3 h-3'} /> View full history
     </button>
@@ -573,13 +574,15 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md">
         <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between">
           <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Edit Invitation</h3>
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={() => { if (!saving) onClose(); }}
-            className="p-1.5 text-gray-500 dark:text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-gray-700 rounded-lg transition-colors"
             aria-label="Close"
+            className="px-2"
           >
             <X className="w-5 h-5" />
-          </button>
+          </Button>
         </div>
         <div className="px-5 sm:px-6 py-4 space-y-4">
           <p className="text-sm text-gray-500 dark:text-slate-500">
@@ -605,21 +608,18 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
           </div>
         </div>
         <div className="px-5 sm:px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-end gap-2">
-          <button
-            onClick={onClose}
-            disabled={saving}
-            className="px-4 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50"
-          >
+          <Button variant="secondary" size="md" onClick={onClose} disabled={saving}>
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
             onClick={save}
             disabled={saving}
-            className="flex items-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-50"
+            icon={saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
           >
-            {saving && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             Save & Send
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -707,7 +707,7 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
               <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
             </div>
           ) : error ? (
-            <p className="text-sm text-red-600 dark:text-red-400 py-6 text-center">{error}</p>
+            <p className="text-sm text-destructive py-6 text-center">{error}</p>
           ) : entries && entries.length > 0 ? (
             <ol className="space-y-3">
               {entries.map((entry, i) => (

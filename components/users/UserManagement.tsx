@@ -313,7 +313,7 @@ const defaultRoleBadgeColors: Record<string, string> = {
   admin: 'bg-brand-blue/10 text-brand-blue',
   recruiter: 'bg-brand-cyan/10 text-brand-cyan',
   viewer: 'bg-gray-100 text-gray-600',
-  billing_manager: 'bg-green-100 text-green-700',
+  billing_manager: 'bg-success-subtle text-success',
   standard_user: 'bg-gray-100 text-gray-600',
 };
 
@@ -325,9 +325,9 @@ const customRoleColors = [
   'bg-indigo-100 text-indigo-700',
   'bg-cyan-100 text-cyan-700',
   'bg-teal-100 text-teal-700',
-  'bg-emerald-100 text-emerald-700',
+  'bg-success-subtle text-success',
   'bg-lime-100 text-lime-700',
-  'bg-amber-100 text-amber-700',
+  'bg-warning-subtle text-warning',
   'bg-orange-100 text-orange-700',
   'bg-rose-100 text-rose-700',
   'bg-fuchsia-100 text-fuchsia-700',
@@ -2162,7 +2162,7 @@ export default function UserManagement() {
                       {quotaData?.quotas?.max_seats?.addon?.total_purchased}
                     </span>
                   ) : (
-                    <span className="text-gray-400 dark:text-slate-500 italic text-[10px]">None purchased</span>
+                    <span className="text-gray-400 dark:text-slate-500 italic text-2xs">None purchased</span>
                   )}
                 </div>
               </div>
@@ -2300,28 +2300,28 @@ export default function UserManagement() {
             <table className="w-full">
               <thead className="bg-gradient-to-r from-slate-50 to-gray-50 dark:from-slate-800 dark:to-slate-800 border-b border-gray-200 dark:border-slate-700">
                 <tr>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden sm:table-cell whitespace-nowrap">
+                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden sm:table-cell whitespace-nowrap">
                     User ID
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
                     User
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
                     Role
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden md:table-cell">
+                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden md:table-cell">
                     Permissions
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
+                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider">
                     Status
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden lg:table-cell">
+                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden lg:table-cell">
                     Created At
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden lg:table-cell">
+                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-left text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider hidden lg:table-cell">
                     Last Login
                   </th>
-                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-[11px] font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider tf-sticky-col">
+                  <th className="px-3 sm:px-4 lg:px-6 py-3 sm:py-3.5 lg:py-4 text-center text-2xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider tf-sticky-col">
                     Actions
                   </th>
                 </tr>
@@ -2331,11 +2331,11 @@ export default function UserManagement() {
                   <tr key={user.id} className="hover:bg-brand-blue/5 transition-colors">
                     <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4 hidden sm:table-cell">
                       {user.user_display_id ? (
-                        <span className="px-2 py-0.5 text-[10px] sm:text-xs font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15">
+                        <span className="px-2 py-0.5 text-2xs sm:text-xs font-mono font-semibold bg-brand-blue/5 text-brand-blue rounded ring-1 ring-brand-blue/15">
                           {user.user_display_id}
                         </span>
                       ) : (
-                        <span className="text-[10px] sm:text-xs text-gray-400 dark:text-slate-500">—</span>
+                        <span className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500">—</span>
                       )}
                     </td>
                     <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
@@ -2353,7 +2353,7 @@ export default function UserManagement() {
                         </div>
                         <div className="min-w-0">
                           <div className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{user.name || user.email || 'Unknown'}</div>
-                          <div className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 flex items-center gap-1 truncate">
+                          <div className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 flex items-center gap-1 truncate">
                             <Mail className="w-3 h-3 flex-shrink-0" />
                             <span className="truncate">{user.email}</span>
                           </div>
@@ -2361,7 +2361,7 @@ export default function UserManagement() {
                       </div>
                     </td>
                     <td className="px-3 sm:px-4 lg:px-6 py-2.5 sm:py-3 lg:py-4">
-                      <span className={`px-2 sm:px-2.5 py-0.5 sm:py-1 text-[10px] sm:text-xs font-semibold rounded-full ring-1 ring-inset ring-black/5 ${getRoleBadgeColor(user.role, availableRoles)}`}>
+                      <span className={`px-2 sm:px-2.5 py-0.5 sm:py-1 text-2xs sm:text-xs font-semibold rounded-full ring-1 ring-inset ring-black/5 ${getRoleBadgeColor(user.role, availableRoles)}`}>
                         {getRoleLabel(user.role, availableRoles)}
                       </span>
                     </td>
@@ -2404,15 +2404,15 @@ export default function UserManagement() {
                               }`}
                             />
                           </button>
-                          <span className={`text-xs font-semibold ${user.is_active ? 'text-green-700' : 'text-gray-500 dark:text-slate-500'}`}>
+                          <span className={`text-xs font-semibold ${user.is_active ? 'text-success' : 'text-gray-500 dark:text-slate-500'}`}>
                             {user.is_active ? 'Active' : 'Inactive'}
                           </span>
                         </div>
                       ) : (
                         <span className={`px-2 py-0.5 text-xs font-semibold rounded-full ring-1 ${
                           user.is_active
-                            ? 'bg-green-50 text-green-700 ring-green-200'
-                            : 'bg-red-50 text-red-700 ring-red-200'
+                            ? 'bg-success-subtle text-success ring-success-line'
+                            : 'bg-destructive-subtle text-destructive ring-destructive-line'
                         }`}>
                           {user.is_active ? 'Active' : 'Inactive'}
                         </span>
@@ -2466,7 +2466,7 @@ export default function UserManagement() {
                             disabled={!user.is_active}
                             className={`p-2 rounded-lg transition-all ${
                               user.is_active
-                                ? 'text-gray-500 dark:text-slate-500 hover:text-amber-600 hover:bg-amber-50 cursor-pointer'
+                                ? 'text-gray-500 dark:text-slate-500 hover:text-warning hover:bg-warning-subtle cursor-pointer'
                                 : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
                             }`}
                             title={user.is_active ? 'Reset Password' : 'Cannot reset password for inactive user'}
@@ -2550,7 +2550,7 @@ export default function UserManagement() {
             <div className="space-y-4 p-5 sm:p-6 overflow-y-auto flex-1">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
-                  Full Name <span className="text-red-500">*</span>
+                  Full Name <span className="text-destructive">*</span>
                 </label>
                 <input
                   type="text"
@@ -2562,7 +2562,7 @@ export default function UserManagement() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-1.5">
-                  Email <span className="text-red-500">*</span>
+                  Email <span className="text-destructive">*</span>
                 </label>
 
                 <input
@@ -2586,11 +2586,11 @@ export default function UserManagement() {
                 )}
 
                 {emailCheckResult.error && (
-                  <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg ring-1 ring-red-100">
+                  <div className="mt-2 p-3 bg-destructive-subtle border border-destructive-line rounded-lg ring-1 ring-destructive-line">
                     <div className="flex items-start gap-2">
-                      <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+                      <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
                       <div className="flex-1">
-                        <p className="text-sm text-red-800 font-medium">
+                        <p className="text-sm text-destructive-strong font-medium">
                           {emailCheckResult.error}
                         </p>
                       </div>
@@ -2605,7 +2605,7 @@ export default function UserManagement() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">
-                  Role <span className="text-red-500">*</span>
+                  Role <span className="text-destructive">*</span>
                 </label>
                 {/* Role Selection Grid */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -2630,7 +2630,7 @@ export default function UserManagement() {
                               {role.name}
                             </span>
                             {isSystemRole && (
-                              <span className="text-[10px] font-medium text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20 px-1.5 py-0.5 rounded flex-shrink-0">
+                              <span className="text-2xs font-medium text-brand-cyan bg-brand-cyan/10 ring-1 ring-brand-cyan/20 px-1.5 py-0.5 rounded flex-shrink-0">
                                 System
                               </span>
                             )}
@@ -2716,14 +2716,14 @@ export default function UserManagement() {
 
                         return (
                           <div key={category.id} className="flex items-start gap-2">
-                            <div className="flex-shrink-0 w-5 h-5 bg-green-100 rounded flex items-center justify-center mt-0.5">
-                              <Check className="w-3 h-3 text-green-600" />
+                            <div className="flex-shrink-0 w-5 h-5 bg-success-subtle rounded flex items-center justify-center mt-0.5">
+                              <Check className="w-3 h-3 text-success" />
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="text-sm font-medium text-gray-900 dark:text-slate-50">
                                 {category.name}
                                 {category.isMenuToggle && (
-                                  <span className="ml-2 text-xs text-green-600 bg-green-50 px-1.5 py-0.5 rounded">
+                                  <span className="ml-2 text-xs text-success bg-success-subtle px-1.5 py-0.5 rounded">
                                     Menu Access
                                   </span>
                                 )}
@@ -2998,9 +2998,9 @@ export default function UserManagement() {
                         const getActionBadge = (code: string) => {
                           const action = code.split(':').pop() || '';
                           if (action === 'read') return { cls: 'bg-blue-100 text-blue-600', letter: 'R' };
-                          if (action === 'create') return { cls: 'bg-green-100 text-green-600', letter: 'C' };
-                          if (action === 'update') return { cls: 'bg-yellow-100 text-yellow-600', letter: 'U' };
-                          if (action === 'delete') return { cls: 'bg-red-100 text-red-600', letter: 'D' };
+                          if (action === 'create') return { cls: 'bg-success-subtle text-success', letter: 'C' };
+                          if (action === 'update') return { cls: 'bg-warning-subtle text-warning', letter: 'U' };
+                          if (action === 'delete') return { cls: 'bg-destructive-subtle text-destructive', letter: 'D' };
                           return { cls: 'bg-purple-100 text-purple-600', letter: (action[0] || 'A').toUpperCase() };
                         };
 
@@ -3036,12 +3036,12 @@ export default function UserManagement() {
                                   {category.name} ({allCodes.length})
                                 </h4>
                                 {category.isMenuToggle && isCategoryActive && (
-                                  <span className="text-[10px] text-brand-orange bg-brand-orange/10 ring-1 ring-brand-orange/20 px-1.5 py-0.5 rounded-full font-medium">
+                                  <span className="text-2xs text-brand-orange bg-brand-orange/10 ring-1 ring-brand-orange/20 px-1.5 py-0.5 rounded-full font-medium">
                                     Menu
                                   </span>
                                 )}
                               </div>
-                              <span className="text-[10px] font-medium text-gray-500 dark:text-slate-500">{selectedCount} selected</span>
+                              <span className="text-2xs font-medium text-gray-500 dark:text-slate-500">{selectedCount} selected</span>
                             </div>
 
                             {/* Permission Cards Grid */}
@@ -3057,7 +3057,7 @@ export default function UserManagement() {
                                     className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-blue/5 border-brand-blue/30 ring-1 ring-brand-blue/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-blue/30 hover:bg-brand-blue/5'}`}
                                   >
                                     <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
-                                      <span className="text-[10px] sm:text-xs font-bold">{badge.letter}</span>
+                                      <span className="text-2xs sm:text-xs font-bold">{badge.letter}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">View {category.name}</div>
@@ -3076,7 +3076,7 @@ export default function UserManagement() {
                                     className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-blue/5 border-brand-blue/30 ring-1 ring-brand-blue/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-blue/30 hover:bg-brand-blue/5'}`}
                                   >
                                     <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
-                                      <span className="text-[10px] sm:text-xs font-bold">{badge.letter}</span>
+                                      <span className="text-2xs sm:text-xs font-bold">{badge.letter}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
                                       <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">{action.label}</div>
@@ -3145,7 +3145,7 @@ export default function UserManagement() {
                                         {sub.name} ({subAllCodes.length})
                                       </span>
                                     </div>
-                                    <span className="text-[10px] font-medium text-gray-500 dark:text-slate-500">{subSelectedCount} selected</span>
+                                    <span className="text-2xs font-medium text-gray-500 dark:text-slate-500">{subSelectedCount} selected</span>
                                   </div>
                                   {/* Sub-category cards */}
                                   <div className="p-2 sm:p-4 grid grid-cols-1 md:grid-cols-2 gap-2 sm:gap-3">
@@ -3170,7 +3170,7 @@ export default function UserManagement() {
                                           className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-cyan/5 border-brand-cyan/30 ring-1 ring-brand-cyan/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-cyan/30 hover:bg-brand-cyan/5'}`}
                                         >
                                           <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
-                                            <span className="text-[10px] sm:text-xs font-bold">{badge.letter}</span>
+                                            <span className="text-2xs sm:text-xs font-bold">{badge.letter}</span>
                                           </div>
                                           <div className="flex-1 min-w-0">
                                             <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">View {sub.name}</div>
@@ -3231,7 +3231,7 @@ export default function UserManagement() {
                                           className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-cyan/5 border-brand-cyan/30 ring-1 ring-brand-cyan/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-cyan/30 hover:bg-brand-cyan/5'}`}
                                         >
                                           <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
-                                            <span className="text-[10px] sm:text-xs font-bold">{badge.letter}</span>
+                                            <span className="text-2xs sm:text-xs font-bold">{badge.letter}</span>
                                           </div>
                                           <div className="flex-1 min-w-0">
                                             <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">{action.label}</div>
@@ -3254,7 +3254,7 @@ export default function UserManagement() {
 
             {/* Footer */}
             <div className="flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50 shrink-0">
-              <span className="text-[10px] sm:text-xs font-medium text-brand-orange hidden sm:inline-flex items-center gap-1.5">
+              <span className="text-2xs sm:text-xs font-medium text-brand-orange hidden sm:inline-flex items-center gap-1.5">
                 {editSelectedPermissionCodes.size !== editOriginalPermissionCodes.size ||
                  ![...editSelectedPermissionCodes].every(c => editOriginalPermissionCodes.has(c)) ? (
                   <>
@@ -3322,10 +3322,10 @@ export default function UserManagement() {
                   <button
                     onClick={() => handleResetPasswordEmail(resetPwUser)}
                     disabled={resetPwSubmitting}
-                    className="w-full text-left p-4 rounded-xl ring-1 ring-gray-200 dark:ring-slate-600 hover:ring-amber-400 hover:bg-amber-50/50 dark:hover:bg-slate-700/50 transition-all disabled:opacity-60"
+                    className="w-full text-left p-4 rounded-xl ring-1 ring-gray-200 dark:ring-slate-600 hover:ring-warning-line hover:bg-warning-subtle/50 dark:hover:bg-slate-700/50 transition-all disabled:opacity-60"
                   >
                     <div className="flex items-center gap-3">
-                      <Mail className="w-5 h-5 text-amber-600 flex-shrink-0" />
+                      <Mail className="w-5 h-5 text-warning flex-shrink-0" />
                       <div>
                         <p className="font-medium text-gray-900 dark:text-slate-50 text-sm">Email a temporary password</p>
                         <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">Sends a temp password to the user and forces a reset on next login. You never see it.</p>
@@ -3458,15 +3458,15 @@ export default function UserManagement() {
             <div className="p-3 sm:p-6 overflow-y-auto flex-1 bg-slate-50/30 dark:bg-slate-800/30">
               <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-4 sm:mb-6 p-3 sm:p-4 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl shadow-sm">
                 <div>
-                  <div className="text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role Code</div>
+                  <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Role Code</div>
                   <div className="font-semibold text-brand-blue text-xs sm:text-base truncate">{viewingRolePopup.code}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Users</div>
+                  <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Users</div>
                   <div className="font-bold text-gray-900 dark:text-slate-50 text-xs sm:text-base">{viewingRolePopup.user_count}</div>
                 </div>
                 <div>
-                  <div className="text-[10px] sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
+                  <div className="text-2xs sm:text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wide mb-0.5 sm:mb-1">Permissions</div>
                   <div className="font-bold text-gray-900 dark:text-slate-50 text-xs sm:text-base">{viewingRolePopupPermissions.length}</div>
                 </div>
               </div>
@@ -3525,12 +3525,12 @@ export default function UserManagement() {
                           >
                             <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${
                               perm.action === 'read'   ? 'bg-blue-100 text-blue-600' :
-                              perm.action === 'create' ? 'bg-green-100 text-green-600' :
-                              perm.action === 'update' ? 'bg-yellow-100 text-yellow-600' :
-                              perm.action === 'delete' ? 'bg-red-100 text-red-600' :
+                              perm.action === 'create' ? 'bg-success-subtle text-success' :
+                              perm.action === 'update' ? 'bg-warning-subtle text-warning' :
+                              perm.action === 'delete' ? 'bg-destructive-subtle text-destructive' :
                               'bg-purple-100 text-purple-600'
                             }`}>
-                              <span className="text-[10px] sm:text-xs font-bold uppercase">{perm.action[0]}</span>
+                              <span className="text-2xs sm:text-xs font-bold uppercase">{perm.action[0]}</span>
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">{perm.name}</div>
@@ -3548,7 +3548,7 @@ export default function UserManagement() {
             <div className="bg-slate-50/50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 sm:gap-3 border-t border-gray-200 dark:border-slate-700 shrink-0">
               <div className="text-sm text-gray-500 dark:text-slate-500">
                 {viewingRolePopup.is_system && (
-                  <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-[10px] sm:text-xs font-semibold">
+                  <span className="inline-flex items-center gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20 rounded-full text-2xs sm:text-xs font-semibold">
                     <Lock className="w-3 h-3" />
                     System Role (Read-Only)
                   </span>

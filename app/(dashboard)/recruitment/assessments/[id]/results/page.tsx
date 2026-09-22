@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import AssessmentResults from '@/components/AssessmentResults';
-import { Skeleton } from '@/components/ui/skeleton';
+import AssessmentResultsSkeleton from '@/components/AssessmentResultsSkeleton';
 import { assessmentService } from '@/lib/services';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import FeatureGate from '@/components/shared/FeatureGate';
@@ -21,6 +21,17 @@ export default function AssessmentResultsPage() {
   // Assessments list.
   const fromSource = searchParams.get('from');
   const fromJdId = searchParams.get('jd_id');
+  /* Which job version the results open on, named by the link that sent the
+     recruiter here.
+     A JD row id scopes the page to that one job version — every job version is
+     its own JD row, so the id names one version exactly. The literal `all` asks
+     for the whole job, every version combined. Absent (a deep link, or the
+     assessment details view's own Results button) leaves the page on what it
+     restores or on its All Versions default, unchanged.
+     It is a scope, not a filter the page invents: the version it resolves to
+     has to be one the JD's own lineage returns, or the page falls back to All
+     Versions. */
+  const jobVersionScopeParam = searchParams.get('job_version_id');
   const canDownloadPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
   const canBatchDownload = isTenantAdmin || hasPermissionCode('assessments:batch_download') || (user?.permissions?.canExport ?? false);
 
@@ -115,67 +126,7 @@ export default function AssessmentResultsPage() {
   };
 
   if (isLoading) {
-    return (
-      <main className="flex-1 overflow-x-clip bg-slate-50">
-        <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
-            {/* Header: back/icon + title + subtitle + action buttons */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-10 w-10 rounded-xl shrink-0" />
-                <div className="space-y-2">
-                  <Skeleton className="h-6 w-64" />
-                  <Skeleton className="h-4 w-40" />
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <Skeleton className="h-9 w-28 rounded-lg" />
-                <Skeleton className="h-9 w-24 rounded-lg" />
-              </div>
-            </div>
-
-            {/* Stat cards */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <div key={i} className="rounded-xl border border-gray-100 bg-white p-4 sm:p-5">
-                  <Skeleton className="h-3.5 w-20 mb-3" />
-                  <Skeleton className="h-7 w-16" />
-                </div>
-              ))}
-            </div>
-
-            {/* Results table — 6 columns × 8 rows */}
-            <div className="rounded-xl border border-gray-100 overflow-hidden">
-              <div className="flex items-center justify-between gap-4 border-b border-gray-100 bg-gray-50 px-4 py-4">
-                <Skeleton className="h-9 w-64 rounded-lg" />
-                <Skeleton className="h-9 w-24 rounded-lg" />
-              </div>
-              <div
-                className="hidden md:grid border-b border-gray-100 px-4 py-3"
-                style={{ gridTemplateColumns: 'repeat(6, minmax(0, 1fr))' }}
-              >
-                {Array.from({ length: 6 }).map((_, i) => (
-                  <Skeleton key={i} className="h-3.5 w-20" />
-                ))}
-              </div>
-              <div className="divide-y divide-gray-100">
-                {Array.from({ length: 8 }).map((_, r) => (
-                  <div
-                    key={r}
-                    className="grid items-center gap-4 px-4 py-4"
-                    style={{ gridTemplateColumns: 'repeat(6, minmax(0, 1fr))' }}
-                  >
-                    {Array.from({ length: 6 }).map((_, c) => (
-                      <Skeleton key={c} className="h-4" style={{ width: `${55 + ((r + c) * 7) % 40}%` }} />
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      </main>
-    );
+    return <AssessmentResultsSkeleton />;
   }
 
   if (error) {
@@ -209,6 +160,7 @@ export default function AssessmentResultsPage() {
         jdId={jdId}
         jdShortId={jdShortId}
         jdVersion={jdVersion}
+        jobVersionScope={jobVersionScopeParam}
         canDownloadPDF={canDownloadPDF}
         canBatchDownload={canBatchDownload}
         prevId={prevId}

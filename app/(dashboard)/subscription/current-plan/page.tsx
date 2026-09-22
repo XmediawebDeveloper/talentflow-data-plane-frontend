@@ -396,34 +396,35 @@ const QueuedAmountBreakdown = ({ upgrade }: { upgrade: QueuedUpgrade }) => {
 };
 
 
-const getStatusBadge = (status?: string, paymentStatus?: string, trialDays?: number) => {
+type PlanStatusVariant = 'success' | 'info' | 'warning' | 'destructive' | 'muted';
+const getStatusBadge = (status?: string, paymentStatus?: string, trialDays?: number): { variant: PlanStatusVariant; label: string; icon: typeof Clock } => {
   if (paymentStatus === 'pending') {
-    return { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Pending Payment', icon: Clock };
+    return { variant: 'warning', label: 'Pending Payment', icon: Clock };
   }
 
   if (!status) {
-    return { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Unknown', icon: AlertCircle };
+    return { variant: 'muted', label: 'Unknown', icon: AlertCircle };
   }
 
   switch (status.toLowerCase()) {
     case 'active':
-      return { bg: 'bg-green-100', text: 'text-green-700', label: 'Active', icon: CheckCircle };
+      return { variant: 'success', label: 'Active', icon: CheckCircle };
     case 'trial':
-      return { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Free Trial', icon: Clock };
+      return { variant: 'warning', label: 'Free Trial', icon: Clock };
     case 'pending_payment':
-      return { bg: 'bg-orange-100', text: 'text-orange-700', label: 'Pending Payment', icon: Clock };
+      return { variant: 'warning', label: 'Pending Payment', icon: Clock };
     case 'suspended':
-      return { bg: 'bg-red-100', text: 'text-red-700', label: 'Suspended', icon: XCircle };
+      return { variant: 'destructive', label: 'Suspended', icon: XCircle };
     case 'expired':
-      return { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Expired', icon: XCircle };
+      return { variant: 'destructive', label: 'Expired', icon: XCircle };
     case 'locked':
-      return { bg: 'bg-red-100', text: 'text-red-700', label: 'Account Locked', icon: Lock };
+      return { variant: 'destructive', label: 'Account Locked', icon: Lock };
     case 'error':
-      return { bg: 'bg-red-100', text: 'text-red-700', label: 'Unable to load', icon: AlertCircle };
+      return { variant: 'destructive', label: 'Unable to load', icon: AlertCircle };
     case 'loading':
-      return { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Loading...', icon: Clock };
+      return { variant: 'muted', label: 'Loading...', icon: Clock };
     default:
-      return { bg: 'bg-gray-100', text: 'text-gray-700', label: 'Unknown', icon: AlertCircle };
+      return { variant: 'muted', label: 'Unknown', icon: AlertCircle };
   }
 };
 
@@ -1948,9 +1949,9 @@ function CurrentPlanContent() {
   // Show pending account status (non-blocking banners)
   if (tenantStatus && tenantStatus.status !== 'SUSPENDED') {
     const statusColors = {
-      PENDING: { bg: 'bg-amber-50', border: 'border-amber-300', text: 'text-amber-800', icon: 'text-amber-500' },
-      SUSPENDED: { bg: 'bg-red-50', border: 'border-red-300', text: 'text-red-800', icon: 'text-red-500' },
-      LOCKED: { bg: 'bg-red-50', border: 'border-red-300', text: 'text-red-800', icon: 'text-red-500' },
+      PENDING: { bg: 'bg-warning-subtle', border: 'border-warning-line', text: 'text-warning-strong', icon: 'text-warning' },
+      SUSPENDED: { bg: 'bg-destructive-subtle', border: 'border-destructive-line', text: 'text-destructive-strong', icon: 'text-destructive' },
+      LOCKED: { bg: 'bg-destructive-subtle', border: 'border-destructive-line', text: 'text-destructive-strong', icon: 'text-destructive' },
     };
     const colors = statusColors[tenantStatus.status as keyof typeof statusColors] || statusColors.PENDING;
 
@@ -1967,7 +1968,7 @@ function CurrentPlanContent() {
                 <CreditCard className="h-4 w-4 text-white" />
               </div>
               <div>
-                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-2xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
                   <Sparkles className="h-3 w-3 text-brand-orange" />
                   Subscription
                 </div>
@@ -2139,11 +2140,11 @@ function CurrentPlanContent() {
         )}
 
         {error && (
-          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50/80 p-4 ring-1 ring-red-100">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive-subtle text-destructive">
               <AlertCircle className="h-5 w-5" />
             </span>
-            <p className="text-sm font-medium text-red-700">{error}</p>
+            <p className="text-sm font-medium text-destructive">{error}</p>
           </div>
         )}
 
@@ -2184,12 +2185,12 @@ function CurrentPlanContent() {
         <>
         {/* Account Locked Warning */}
         {isLocked && (
-          <div className="bg-red-50 border-2 border-red-300 rounded-xl p-4 sm:p-5 lg:p-6 mb-4 sm:mb-6 lg:mb-8">
+          <div className="bg-destructive-subtle border-2 border-destructive-line rounded-xl p-4 sm:p-5 lg:p-6 mb-4 sm:mb-6 lg:mb-8">
             <div className="flex items-start sm:items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-              <Lock className="w-6 h-6 sm:w-8 sm:h-8 text-red-500 flex-shrink-0" />
+              <Lock className="w-6 h-6 sm:w-8 sm:h-8 text-destructive flex-shrink-0" />
               <div>
-                <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-red-700">Account Locked</h3>
-                <p className="text-red-600 text-xs sm:text-sm">Your trial has ended and payment was not completed. Please select a plan and complete payment to continue.</p>
+                <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-destructive">Account Locked</h3>
+                <p className="text-destructive text-xs sm:text-sm">Your trial has ended and payment was not completed. Please select a plan and complete payment to continue.</p>
               </div>
             </div>
           </div>
@@ -2213,7 +2214,7 @@ function CurrentPlanContent() {
               <button
                 onClick={() => handleSimulatePayment(true)}
                 disabled={isProcessingPayment}
-                className="flex-1 bg-green-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium hover:bg-green-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
+                className="flex-1 bg-success text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium hover:bg-success transition-colors disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
               >
                 {isProcessingPayment ? (
                   <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
@@ -2225,7 +2226,7 @@ function CurrentPlanContent() {
               <button
                 onClick={() => handleSimulatePayment(false)}
                 disabled={isProcessingPayment}
-                className="flex-1 bg-red-600 text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
+                className="flex-1 bg-destructive text-white px-4 sm:px-6 py-2.5 sm:py-3 rounded-lg font-medium hover:bg-destructive transition-colors disabled:opacity-50 flex items-center justify-center gap-2 text-sm sm:text-base"
               >
                 {isProcessingPayment ? (
                   <Loader2 className="w-4 h-4 sm:w-5 sm:h-5 animate-spin" />
@@ -2258,10 +2259,10 @@ function CurrentPlanContent() {
                 }
               </p>
             </div>
-            <span className={`px-2 sm:px-3 py-0.5 sm:py-1 rounded-full text-xs sm:text-sm font-medium ${statusBadge.bg} ${statusBadge.text} flex items-center gap-1.5 sm:gap-2 w-fit`}>
+            <Badge variant={statusBadge.variant} className="px-2 sm:px-3 py-0.5 sm:py-1 text-xs sm:text-sm gap-1.5 sm:gap-2">
               <StatusIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               {statusBadge.label}
-            </span>
+            </Badge>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-2 sm:gap-4 lg:gap-6">
             <div className="p-2.5 sm:p-3 lg:p-4 bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg">
@@ -2324,13 +2325,13 @@ function CurrentPlanContent() {
               // If no expiry date but status is expired, show expired banner directly
               if (!companySettings?.plan_expiry_date && isExpiredSubscription) {
                 return (
-                  <div className="mt-4 sm:mt-6 p-3 sm:p-4 rounded-lg border-2 bg-red-50 border-red-300">
+                  <div className="mt-4 sm:mt-6 p-3 sm:p-4 rounded-lg border-2 bg-destructive-subtle border-destructive-line">
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <div className="flex items-start sm:items-center gap-2 sm:gap-3">
-                        <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-red-600 flex-shrink-0" />
+                        <AlertCircle className="w-5 h-5 sm:w-6 sm:h-6 text-destructive flex-shrink-0" />
                         <div>
-                          <h4 className="font-medium text-red-800 text-sm sm:text-base">Plan Expired</h4>
-                          <p className="text-xs sm:text-sm text-red-700">
+                          <h4 className="font-medium text-destructive-strong text-sm sm:text-base">Plan Expired</h4>
+                          <p className="text-xs sm:text-sm text-destructive">
                             Your {planName} plan has expired. Please renew to continue using all features.
                           </p>
                         </div>
@@ -2347,7 +2348,7 @@ function CurrentPlanContent() {
                             setError(null);
                             setShowPaymentModal(true);
                           }}
-                          className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm w-full sm:w-auto justify-center flex-shrink-0"
+                          className="px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 bg-destructive hover:bg-destructive text-white text-xs sm:text-sm w-full sm:w-auto justify-center flex-shrink-0"
                         >
                           <ArrowRight className="w-4 h-4" />
                           Renew Current Plan
@@ -2369,22 +2370,22 @@ function CurrentPlanContent() {
                 return (
                   <div className={`mt-4 sm:mt-6 p-3 sm:p-4 rounded-lg border-2 ${
                     isExpired
-                      ? 'bg-red-50 border-red-300'
-                      : 'bg-amber-50 border-amber-300'
+                      ? 'bg-destructive-subtle border-destructive-line'
+                      : 'bg-warning-subtle border-warning-line'
                   }`}>
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                       <div className="flex items-start sm:items-center gap-2 sm:gap-3">
                         <AlertCircle className={`w-5 h-5 sm:w-6 sm:h-6 flex-shrink-0 ${
-                          isExpired ? 'text-red-600' : 'text-amber-600'
+                          isExpired ? 'text-destructive' : 'text-warning'
                         }`} />
                         <div>
                           <h4 className={`font-medium text-sm sm:text-base ${
-                            isExpired ? 'text-red-800' : 'text-amber-800'
+                            isExpired ? 'text-destructive-strong' : 'text-warning-strong'
                           }`}>
                             {isExpired ? 'Plan Expired' : 'Plan Expiring Soon'}
                           </h4>
                           <p className={`text-xs sm:text-sm ${
-                            isExpired ? 'text-red-700' : 'text-amber-700'
+                            isExpired ? 'text-destructive' : 'text-warning'
                           }`}>
                             {isExpired
                               ? daysSinceExpiry === 0
@@ -2409,8 +2410,8 @@ function CurrentPlanContent() {
                           }}
                           className={`px-3 sm:px-5 py-2 sm:py-2.5 rounded-lg font-medium transition-colors flex items-center gap-2 text-xs sm:text-sm w-full sm:w-auto justify-center flex-shrink-0 ${
                             isExpired
-                              ? 'bg-red-600 hover:bg-red-700 text-white'
-                              : 'bg-amber-600 hover:bg-amber-700 text-white'
+                              ? 'bg-destructive hover:bg-destructive text-white'
+                              : 'bg-warning hover:opacity-90 text-white'
                           }`}
                         >
                           <ArrowRight className="w-4 h-4" />
@@ -2510,7 +2511,7 @@ function CurrentPlanContent() {
                   {nonQuotaFeatures.map(f => (
                     <div key={f.feature_key} className="flex items-center gap-2 p-2 rounded-lg bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700">
                       {f.is_enabled ? (
-                        <CheckCircle className="w-4 h-4 text-green-500 flex-shrink-0" />
+                        <CheckCircle className="w-4 h-4 text-success flex-shrink-0" />
                       ) : (
                         <XCircle className="w-4 h-4 text-gray-300 flex-shrink-0" />
                       )}
@@ -2528,12 +2529,12 @@ function CurrentPlanContent() {
 
         {/* Queued Upgrades Section */}
         {queuedUpgrades.length > 0 && (
-          <div className="bg-amber-50 border-2 border-amber-300 rounded-xl p-4 sm:p-5 lg:p-6 mb-4 sm:mb-6 lg:mb-8">
+          <div className="bg-warning-subtle border-2 border-warning-line rounded-xl p-4 sm:p-5 lg:p-6 mb-4 sm:mb-6 lg:mb-8">
             <div className="flex items-start sm:items-center gap-2 sm:gap-3 mb-3 sm:mb-4">
-              <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-amber-600 flex-shrink-0" />
+              <Clock className="w-6 h-6 sm:w-8 sm:h-8 text-warning flex-shrink-0" />
               <div>
-                <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-amber-800">Pending Plan Changes</h3>
-                <p className="text-xs sm:text-sm text-amber-700">
+                <h3 className="text-sm sm:text-base lg:text-lg font-semibold text-warning-strong">Pending Plan Changes</h3>
+                <p className="text-xs sm:text-sm text-warning">
                   You have {queuedUpgrades.length} queued plan change{queuedUpgrades.length > 1 ? 's' : ''} waiting to be applied
                 </p>
               </div>
@@ -2541,7 +2542,7 @@ function CurrentPlanContent() {
 
             <div className="space-y-3 sm:space-y-4">
               {queuedUpgrades.map((upgrade) => (
-                <div key={upgrade.id} className="bg-white dark:bg-slate-900 rounded-lg p-3 sm:p-4 border border-amber-200">
+                <div key={upgrade.id} className="bg-white dark:bg-slate-900 rounded-lg p-3 sm:p-4 border border-warning-line">
                   <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1.5 sm:gap-2 mb-2 flex-wrap">
@@ -2550,11 +2551,11 @@ function CurrentPlanContent() {
                           {upgrade.new_plan_name}
                           {upgrade.billing_interval && <span className="font-normal text-gray-500 dark:text-slate-500"> ({upgrade.billing_interval.charAt(0).toUpperCase() + upgrade.billing_interval.slice(1).toLowerCase()})</span>}
                         </span>
-                        <Badge className="bg-amber-100 text-amber-700 text-xs">
+                        <Badge className="bg-warning-subtle text-warning text-xs">
                           {upgrade.status === 'SCHEDULED' ? 'Scheduled' : 'Queued'}
                         </Badge>
                         {upgrade.days_until_activation !== undefined && upgrade.days_until_activation > 0 && (
-                          <span className="text-xs text-amber-600">
+                          <span className="text-xs text-warning">
                             ({upgrade.days_until_activation} day{upgrade.days_until_activation !== 1 ? 's' : ''} until activation)
                           </span>
                         )}
@@ -2611,7 +2612,7 @@ function CurrentPlanContent() {
                           setTcAccepted(false);
                           setShowTCModal(true);
                         }}
-                        className="px-3 sm:px-4 py-1.5 sm:py-2 bg-green-600 text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-green-700 transition-colors flex items-center gap-1.5 sm:gap-2"
+                        className="px-3 sm:px-4 py-1.5 sm:py-2 bg-success text-white rounded-lg text-xs sm:text-sm font-medium hover:bg-success transition-colors flex items-center gap-1.5 sm:gap-2"
                       >
                         <Zap className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         Apply Now
@@ -2624,7 +2625,7 @@ function CurrentPlanContent() {
                             setShowCancelModal(true);
                           }}
                           disabled={isCancellingUpgrade}
-                          className="px-3 sm:px-4 py-1.5 sm:py-2 bg-red-100 text-red-700 rounded-lg text-xs sm:text-sm font-medium hover:bg-red-200 transition-colors flex items-center gap-1.5 sm:gap-2"
+                          className="px-3 sm:px-4 py-1.5 sm:py-2 bg-destructive-subtle text-destructive rounded-lg text-xs sm:text-sm font-medium hover:bg-destructive-subtle transition-colors flex items-center gap-1.5 sm:gap-2"
                         >
                           <XCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           Cancel
@@ -2636,7 +2637,7 @@ function CurrentPlanContent() {
               ))}
             </div>
 
-            <p className="text-xs text-amber-600 mt-4">
+            <p className="text-xs text-warning mt-4">
               Queued plan changes will automatically apply when your current plan expires.
               Click "Apply Now" to apply immediately (remaining credits will be forfeited).
             </p>
@@ -2651,7 +2652,7 @@ function CurrentPlanContent() {
                 {isOnTrial || isLocked ? 'Choose a Plan' : 'Available Plans'}
               </h2>
               {queuedUpgrades.length > 0 && !isOnTrial && !isLocked && (
-                <p className="text-xs sm:text-sm text-amber-600 text-center mt-2">
+                <p className="text-xs sm:text-sm text-warning text-center mt-2">
                   You have a pending plan change queued. {queuedUpgrades.some(u => u.can_cancel !== false)
                     ? 'Cancel it above or apply it now to select a different plan.'
                     : 'Apply it now to select a different plan.'}
@@ -2798,7 +2799,7 @@ function CurrentPlanContent() {
                                 {formatCurrency(plan.monthlyPrice * 12, plan.currency)}
                               </span>
                               {plan.discountPercentage && plan.discountPercentage > 0 && (
-                                <span className="inline-block px-2 py-0.5 text-xs font-medium bg-green-100 text-green-700 rounded-full">
+                                <span className="inline-block px-2 py-0.5 text-xs font-medium bg-success-subtle text-success rounded-full">
                                   Save {Math.round(plan.discountPercentage)}%
                                 </span>
                               )}
@@ -2806,13 +2807,13 @@ function CurrentPlanContent() {
                           )}
                           {/* Show note when yearly is selected but only monthly is available */}
                           {isYearly && !plan.annualPrice && plan.monthlyPrice && (
-                            <p className="text-xs text-amber-600 mt-1">
+                            <p className="text-xs text-warning mt-1">
                               Billed monthly (yearly not available)
                             </p>
                           )}
                           {/* Show note when monthly is selected but only yearly is available */}
                           {!isYearly && !plan.monthlyPrice && plan.annualPrice && (
-                            <p className="text-xs text-amber-600 mt-1">
+                            <p className="text-xs text-warning mt-1">
                               Billed annually (monthly not available)
                             </p>
                           )}
@@ -2827,7 +2828,7 @@ function CurrentPlanContent() {
                             <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
                               or {formatCurrency(plan.annualPrice, plan.currency)}/year
                               {plan.discountPercentage && plan.discountPercentage > 0 && (
-                                <span className="text-green-600"> (Save {Math.round(plan.discountPercentage)}%)</span>
+                                <span className="text-success"> (Save {Math.round(plan.discountPercentage)}%)</span>
                               )}
                             </p>
                           )}
@@ -2955,7 +2956,7 @@ function CurrentPlanContent() {
                           : isCurrentForToggle || isSelectedPending
                           ? "bg-gray-100 dark:bg-slate-800 text-gray-400 dark:text-slate-500 cursor-not-allowed"
                           : queuedUpgrades.length > 0
-                            ? "bg-amber-100 text-amber-600 cursor-not-allowed"
+                            ? "bg-warning-subtle text-warning cursor-not-allowed"
                             : (!plan.monthlyPrice && !plan.annualPrice)
                               ? "bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 cursor-not-allowed"
                               : // Also gray out when billing cycle not available
@@ -3082,17 +3083,17 @@ function CurrentPlanContent() {
                     </div>
                     {/* Show note when billing period doesn't match available pricing */}
                     {isYearly && !selectedPlanForPayment?.annualPrice && selectedPlanForPayment?.monthlyPrice && (
-                      <div className="text-xs text-amber-600">
+                      <div className="text-xs text-warning">
                         Yearly billing not available for this plan. Will be billed monthly.
                       </div>
                     )}
                     {!isYearly && !selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice && (
-                      <div className="text-xs text-amber-600">
+                      <div className="text-xs text-warning">
                         Monthly billing not available for this plan. Will be billed annually.
                       </div>
                     )}
                     {isolationType === 'database' && (
-                      <div className="flex justify-between text-amber-700">
+                      <div className="flex justify-between text-warning">
                         <span>Database Isolation Fee{isYearly ? ' (12 months)' : ''}:</span>
                         <span className="font-medium">
                           +{formatCurrency(
@@ -3106,7 +3107,7 @@ function CurrentPlanContent() {
                     )}
                     {isYearly && selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice &&
                      (selectedPlanForPayment.monthlyPrice * 12) > selectedPlanForPayment.annualPrice && (
-                      <div className="flex justify-between pt-2 border-t border-gray-200 dark:border-slate-700 text-green-700">
+                      <div className="flex justify-between pt-2 border-t border-gray-200 dark:border-slate-700 text-success">
                         <span className="flex items-center gap-1">
                           <Crown className="w-4 h-4" />
                           Annual Savings:
@@ -3192,7 +3193,7 @@ function CurrentPlanContent() {
                       </span>
                       {isYearly && selectedPlanForPayment?.monthlyPrice && selectedPlanForPayment?.annualPrice &&
                        (selectedPlanForPayment.monthlyPrice * 12) > selectedPlanForPayment.annualPrice && (
-                        <p className="text-xs text-green-400">
+                        <p className="text-xs text-success">
                           You save {formatCurrency(
                             (selectedPlanForPayment.monthlyPrice * 12) - selectedPlanForPayment.annualPrice,
                             selectedPlanForPayment?.currency || 'INR'
@@ -3208,7 +3209,7 @@ function CurrentPlanContent() {
                   hasDedicatedDatabase || planSettingsError
                     ? 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 cursor-not-allowed opacity-60'
                     : isolationType === 'database'
-                      ? 'border-amber-500 bg-amber-50 cursor-pointer'
+                      ? 'border-warning-line bg-warning-subtle cursor-pointer'
                       : 'border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800 cursor-pointer'
                 }`}>
                   <input
@@ -3220,14 +3221,14 @@ function CurrentPlanContent() {
                       }
                     }}
                     disabled={hasDedicatedDatabase || planSettingsError}
-                    className="mt-1 w-5 h-5 text-amber-600 border-gray-300 rounded focus:ring-amber-500 disabled:cursor-not-allowed"
+                    className="mt-1 w-5 h-5 text-warning border-gray-300 rounded focus:ring-warning-line disabled:cursor-not-allowed"
                   />
                   <div className="flex-1">
                     <div className="flex items-center gap-2">
-                      <Database className="w-5 h-5 text-amber-600" />
+                      <Database className="w-5 h-5 text-warning" />
                       <span className="font-medium text-gray-900 dark:text-slate-50">Dedicated Database</span>
                       {hasDedicatedDatabase && (
-                        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                        <span className="text-xs bg-warning-subtle text-warning px-2 py-0.5 rounded-full font-medium">
                           Active
                         </span>
                       )}
@@ -3238,12 +3239,12 @@ function CurrentPlanContent() {
                         : 'Get your own dedicated database for enhanced isolation and performance'}
                     </p>
                     {planSettingsError ? (
-                      <p className="text-sm text-red-500 font-medium mt-1 flex items-center gap-1">
+                      <p className="text-sm text-destructive font-medium mt-1 flex items-center gap-1">
                         <AlertCircle className="w-4 h-4" />
                         Pricing unavailable — unable to load from server
                       </p>
                     ) : (
-                      <p className="text-sm text-amber-600 font-medium mt-1">
+                      <p className="text-sm text-warning font-medium mt-1">
                         +{formatCurrency(
                           isYearly
                             ? (planSettings!.databasePerTenantMonthlyPrice) * 12
@@ -3257,11 +3258,11 @@ function CurrentPlanContent() {
 
                 {/* Error Display in Modal */}
                 {error && (
-                  <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+                  <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4 flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
                     <div>
-                      <p className="text-red-700 text-sm font-medium">Plan Selection Failed</p>
-                      <p className="text-red-600 text-sm mt-1">{error}</p>
+                      <p className="text-destructive text-sm font-medium">Plan Selection Failed</p>
+                      <p className="text-destructive text-sm mt-1">{error}</p>
                     </div>
                   </div>
                 )}
@@ -3307,14 +3308,14 @@ function CurrentPlanContent() {
                   /* Queued Upgrade Result */
                   <>
                     <div className="text-center">
-                      <div className="w-16 h-16 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <Clock className="w-10 h-10 text-amber-600" />
+                      <div className="w-16 h-16 bg-warning-subtle rounded-full flex items-center justify-center mx-auto mb-4">
+                        <Clock className="w-10 h-10 text-warning" />
                       </div>
                       <h3 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-2">{isDowngradePayment ? 'Downgrade Queued!' : 'Upgrade Queued!'}</h3>
                       <p className="text-gray-600 dark:text-slate-400">Your payment was successful. The {isDowngradePayment ? 'downgrade' : 'upgrade'} will apply automatically.</p>
                     </div>
 
-                    <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 space-y-3">
+                    <div className="bg-warning-subtle border border-warning-line rounded-xl p-4 space-y-3">
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600 dark:text-slate-400">Current Plan:</span>
                         <span className="font-medium text-gray-900 dark:text-slate-50">
@@ -3324,9 +3325,9 @@ function CurrentPlanContent() {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600 dark:text-slate-400">New Plan:</span>
-                        <span className="font-medium text-amber-700">
+                        <span className="font-medium text-warning">
                           {transactionResult.plan_name}
-                          {transactionResult.billing_interval && <span className="text-amber-600 font-normal"> ({transactionResult.billing_interval.charAt(0).toUpperCase() + transactionResult.billing_interval.slice(1).toLowerCase()})</span>}
+                          {transactionResult.billing_interval && <span className="text-warning font-normal"> ({transactionResult.billing_interval.charAt(0).toUpperCase() + transactionResult.billing_interval.slice(1).toLowerCase()})</span>}
                         </span>
                       </div>
                       <div className="flex justify-between text-sm">
@@ -3339,7 +3340,7 @@ function CurrentPlanContent() {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600 dark:text-slate-400">Amount Paid:</span>
-                        <span className="font-medium text-green-600">
+                        <span className="font-medium text-success">
                           {formatCurrency(transactionResult.total_amount, transactionResult.currency || 'INR')}
                         </span>
                       </div>
@@ -3374,8 +3375,8 @@ function CurrentPlanContent() {
                   /* Immediate Upgrade Result */
                   <>
                     <div className="text-center">
-                      <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                        <CheckCircle className="w-10 h-10 text-green-600" />
+                      <div className="w-16 h-16 bg-success-subtle rounded-full flex items-center justify-center mx-auto mb-4">
+                        <CheckCircle className="w-10 h-10 text-success" />
                       </div>
                       <h3 className="text-xl font-semibold text-gray-900 dark:text-slate-50 mb-2">
                         {companySettings?.status?.toLowerCase() === 'expired' || companySettings?.status?.toLowerCase() === 'suspended'
@@ -3391,11 +3392,11 @@ function CurrentPlanContent() {
 
                     {/* PS03 Fix: Reactivation Confirmation Banner */}
                     {(companySettings?.status?.toLowerCase() === 'expired' || companySettings?.status?.toLowerCase() === 'suspended') && (
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-3 flex items-start gap-2">
-                        <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
+                      <div className="bg-success-subtle border border-success-line rounded-lg p-3 flex items-start gap-2">
+                        <CheckCircle className="w-5 h-5 text-success flex-shrink-0 mt-0.5" />
                         <div>
-                          <p className="text-sm font-medium text-green-800">Welcome back!</p>
-                          <p className="text-sm text-green-700 mt-0.5">
+                          <p className="text-sm font-medium text-success-strong">Welcome back!</p>
+                          <p className="text-sm text-success mt-0.5">
                             Your account is now active. You have full access to all features and resources.
                           </p>
                         </div>
@@ -3426,7 +3427,7 @@ function CurrentPlanContent() {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600 dark:text-slate-400">Amount Paid:</span>
-                        <span className="font-medium text-green-600">
+                        <span className="font-medium text-success">
                           {formatCurrency(transactionResult.total_amount, transactionResult.currency || 'INR')}
                         </span>
                       </div>
@@ -3436,60 +3437,60 @@ function CurrentPlanContent() {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span className="text-gray-600 dark:text-slate-400">Status:</span>
-                        <Badge className="bg-green-100 text-green-700">{transactionResult.subscription_status}</Badge>
+                        <Badge className="bg-success-subtle text-success">{transactionResult.subscription_status}</Badge>
                       </div>
                     </div>
 
                     {/* PS02 Fix: Resource Allocation Details */}
-                    <div className="bg-green-50 border border-green-200 rounded-xl p-4">
-                      <h4 className="font-medium text-green-900 mb-3 flex items-center gap-2">
+                    <div className="bg-success-subtle border border-success-line rounded-xl p-4">
+                      <h4 className="font-medium text-success-strong mb-3 flex items-center gap-2">
                         <Package className="w-4 h-4" />
                         Resources Provisioned
                       </h4>
                       <div className="space-y-2">
                         {selectedPlanForPayment?.quotas?.max_seats && (
                           <div className="flex justify-between text-sm">
-                            <span className="text-green-700 flex items-center gap-1.5">
+                            <span className="text-success flex items-center gap-1.5">
                               <Users className="w-3.5 h-3.5" />
                               User Seats:
                             </span>
-                            <span className="font-medium text-green-900">{selectedPlanForPayment.quotas.max_seats} seats</span>
+                            <span className="font-medium text-success-strong">{selectedPlanForPayment.quotas.max_seats} seats</span>
                           </div>
                         )}
                         {selectedPlanForPayment?.quotas?.RS && (
                           <div className="flex justify-between text-sm">
-                            <span className="text-green-700 flex items-center gap-1.5">
+                            <span className="text-success flex items-center gap-1.5">
                               <Sparkles className="w-3.5 h-3.5" />
                               Resume Scoring (RS):
                             </span>
-                            <span className="font-medium text-green-900">{selectedPlanForPayment.quotas.RS} units</span>
+                            <span className="font-medium text-success-strong">{selectedPlanForPayment.quotas.RS} units</span>
                           </div>
                         )}
                         {selectedPlanForPayment?.quotas?.AS && (
                           <div className="flex justify-between text-sm">
-                            <span className="text-green-700 flex items-center gap-1.5">
+                            <span className="text-success flex items-center gap-1.5">
                               <FileText className="w-3.5 h-3.5" />
                               Assessments (AS):
                             </span>
-                            <span className="font-medium text-green-900">{selectedPlanForPayment.quotas.AS} units</span>
+                            <span className="font-medium text-success-strong">{selectedPlanForPayment.quotas.AS} units</span>
                           </div>
                         )}
                         {selectedPlanForPayment?.quotas?.AIU && (
                           <div className="flex justify-between text-sm">
-                            <span className="text-green-700 flex items-center gap-1.5">
+                            <span className="text-success flex items-center gap-1.5">
                               <Zap className="w-3.5 h-3.5" />
                               AI Interviews (AIU):
                             </span>
-                            <span className="font-medium text-green-900">{selectedPlanForPayment.quotas.AIU} units</span>
+                            <span className="font-medium text-success-strong">{selectedPlanForPayment.quotas.AIU} units</span>
                           </div>
                         )}
                         {selectedPlanForPayment?.quotas?.RU && (
                           <div className="flex justify-between text-sm">
-                            <span className="text-green-700 flex items-center gap-1.5">
+                            <span className="text-success flex items-center gap-1.5">
                               <ArrowUpRight className="w-3.5 h-3.5" />
                               Resume Storage (RU):
                             </span>
-                            <span className="font-medium text-green-900">{selectedPlanForPayment.quotas.RU} units</span>
+                            <span className="font-medium text-success-strong">{selectedPlanForPayment.quotas.RU} units</span>
                           </div>
                         )}
                       </div>
@@ -3551,12 +3552,12 @@ function CurrentPlanContent() {
 
             <div className="p-6 space-y-5">
               {/* Warning */}
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4">
+              <div className="bg-warning-subtle border border-warning-line rounded-xl p-4">
                 <div className="flex items-start gap-3">
-                  <AlertCircle className="w-6 h-6 text-amber-600 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-6 h-6 text-warning flex-shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="font-semibold text-amber-800 mb-1">Important Notice</h4>
-                    <p className="text-sm text-amber-700">
+                    <h4 className="font-semibold text-warning-strong mb-1">Important Notice</h4>
+                    <p className="text-sm text-warning">
                       By applying this {isQueuedDowngrade ? 'downgrade' : 'upgrade'} immediately, any remaining credits and unused quota
                       on your current plan ({companySettings?.current_plan_name || 'your active plan'}) will be
                       <strong> forfeited</strong>. Your new plan will start today.
@@ -3577,7 +3578,7 @@ function CurrentPlanContent() {
                   </div>
                   <div>
                     <span className="text-gray-500 dark:text-slate-500">To:</span>
-                    <span className="ml-1 font-medium text-green-600">{selectedQueuedUpgrade.new_plan_name}</span>
+                    <span className="ml-1 font-medium text-success">{selectedQueuedUpgrade.new_plan_name}</span>
                   </div>
                   <div className="col-span-2">
                     <QueuedAmountBreakdown upgrade={selectedQueuedUpgrade} />
@@ -3603,13 +3604,13 @@ function CurrentPlanContent() {
 
               {/* Accept Checkbox */}
               <label className={`flex items-start gap-3 p-4 border-2 rounded-xl cursor-pointer transition-colors ${
-                tcAccepted ? 'border-green-500 bg-green-50' : 'border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800'
+                tcAccepted ? 'border-success-line bg-success-subtle' : 'border-gray-200 dark:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800'
               }`}>
                 <input
                   type="checkbox"
                   checked={tcAccepted}
                   onChange={(e) => setTcAccepted(e.target.checked)}
-                  className="mt-1 w-5 h-5 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                  className="mt-1 w-5 h-5 text-success border-gray-300 rounded focus:ring-success-line"
                 />
                 <div className="flex-1">
                   <span className="font-medium text-gray-900 dark:text-slate-50">I accept the terms and conditions</span>
@@ -3672,8 +3673,8 @@ function CurrentPlanContent() {
             <div className="flex-shrink-0 p-6 border-b border-gray-200 dark:border-slate-700">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-red-100 rounded-full flex items-center justify-center">
-                    <XCircle className="w-6 h-6 text-red-600" />
+                  <div className="w-10 h-10 bg-destructive-subtle rounded-full flex items-center justify-center">
+                    <XCircle className="w-6 h-6 text-destructive" />
                   </div>
                   <div>
                     <h2 className="text-xl font-semibold text-gray-900 dark:text-slate-50">Cancel {changeLabel}</h2>
@@ -3695,12 +3696,12 @@ function CurrentPlanContent() {
 
             <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-5">
               {/* Warning */}
-              <div className="bg-red-50 border border-red-200 rounded-xl p-4">
+              <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4">
                 <div className="flex items-start gap-3">
-                  <AlertCircle className="w-6 h-6 text-red-600 flex-shrink-0 mt-0.5" />
+                  <AlertCircle className="w-6 h-6 text-destructive flex-shrink-0 mt-0.5" />
                   <div>
-                    <h4 className="font-semibold text-red-800 mb-1">Are you sure?</h4>
-                    <p className="text-sm text-red-700">
+                    <h4 className="font-semibold text-destructive-strong mb-1">Are you sure?</h4>
+                    <p className="text-sm text-destructive">
                       You are about to cancel the queued {changeLabel.toLowerCase()} to <strong>{selectedQueuedUpgrade.new_plan_name}</strong>.
                       If you paid for this {changeLabel.toLowerCase()}, you may need to request a refund separately.
                     </p>
@@ -3752,7 +3753,7 @@ function CurrentPlanContent() {
                   onChange={(e) => setCancelReason(e.target.value)}
                   placeholder="Please let us know why you're cancelling..."
                   rows={3}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 resize-none"
+                  className="w-full px-4 py-3 border border-gray-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-destructive-line focus:border-destructive-line resize-none"
                 />
               </div>
 
@@ -3771,7 +3772,7 @@ function CurrentPlanContent() {
                 <button
                   onClick={handleCancelUpgrade}
                   disabled={isCancellingUpgrade}
-                  className="flex-1 px-4 py-2.5 bg-red-600 text-white rounded-lg font-medium hover:bg-red-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-1 px-4 py-2.5 bg-destructive text-white rounded-lg font-medium hover:bg-destructive transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
                   {isCancellingUpgrade ? (
                     <>

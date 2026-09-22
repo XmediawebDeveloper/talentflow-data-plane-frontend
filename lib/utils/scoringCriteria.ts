@@ -2,7 +2,7 @@
  * What the Required / Preferred badges are allowed to claim.
  *
  * These badges are not decoration: they tell the recruiter how Resume Scoring treats a
- * criterion. "Required (Essential)" means it shares the 60% block and a rating below 7
+ * criterion. "Required (Essential)" means it shares the 60% block and a rating below 6
  * fails the whole Essential section; "Preferred" means the 40% block, and it can never
  * fail a candidate on its own. So a badge on something the scorer does not look at is a
  * false statement about the candidate's result, not a cosmetic slip.

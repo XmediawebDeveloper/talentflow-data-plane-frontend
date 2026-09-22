@@ -1002,7 +1002,7 @@ export default function SelectSourceModal({
               <Users className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
               <span className="hidden sm:inline">My Resumes</span>
               <span className="sm:hidden">Resumes</span>
-              <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs ${
+              <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-2xs sm:text-xs ${
                 activeTab === 'my-resumes'
                   ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
                   : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
@@ -1023,7 +1023,7 @@ export default function SelectSourceModal({
                 <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                 <span className="hidden sm:inline">Internal Database</span>
                 <span className="sm:hidden">Internal DB</span>
-                <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-[10px] sm:text-xs ${
+                <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-2xs sm:text-xs ${
                   activeTab === 'internal-db'
                     ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
                     : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'

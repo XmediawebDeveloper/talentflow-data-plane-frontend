@@ -183,7 +183,7 @@ export default function VersionHistoryModal({
                       changed ? 'bg-brand-orange/[0.06]' : ''
                     }`}
                   >
-                    <p className="text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-slate-400 mb-1">
+                    <p className="text-2xs font-medium uppercase tracking-wider text-gray-500 dark:text-slate-400 mb-1">
                       {field.label}
                       {changed && (
                         <span className="ml-2 normal-case tracking-normal text-brand-orange-deep">changed</span>
@@ -205,7 +205,7 @@ export default function VersionHistoryModal({
             {/* Skills read as a set, not a string — added and dropped is the
                 useful shape, rather than two long lists side by side. */}
             <div className="mt-4 rounded-xl border border-gray-100 dark:border-slate-700/60 p-3">
-              <p className="text-[11px] font-medium uppercase tracking-wider text-gray-500 dark:text-slate-400 mb-2">
+              <p className="text-2xs font-medium uppercase tracking-wider text-gray-500 dark:text-slate-400 mb-2">
                 Skills
               </p>
               {addedSkills.length === 0 && removedSkills.length === 0 ? (

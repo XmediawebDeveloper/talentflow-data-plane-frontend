@@ -133,7 +133,7 @@ export default function ActivityLogsPage() {
                       </div>
                       <div className="text-right flex-shrink-0">
                         <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-400 whitespace-nowrap">{log.timestamp}</p>
-                        <p className="text-[10px] sm:text-xs text-gray-400 dark:text-slate-500 whitespace-nowrap">{log.user}</p>
+                        <p className="text-2xs sm:text-xs text-gray-400 dark:text-slate-500 whitespace-nowrap">{log.user}</p>
                       </div>
                     </div>
                   </div>

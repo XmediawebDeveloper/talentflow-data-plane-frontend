@@ -21,6 +21,7 @@ import ShareResumeModal from './ShareResumeModal';
 import { toast } from 'sonner';
 import { resumeService } from '@/lib/services/resumeService';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 /* Loading placeholder that mirrors THIS table's real structure — the same
    columns in the same order (checkbox, Candidate Name, Role, Email, Phone,
@@ -98,7 +99,7 @@ export function ResumeTableSkeleton({ rows = 8 }: { rows?: number }) {
    scale-on-hover label. Orange/red variants mirror that same menu's
    Disable Job / Delete Job treatment for Archive and Delete here. */
 const resumeActionMenuItemClass = 'group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50';
-const resumeActionMenuItemRedClass = 'group w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50';
+const resumeActionMenuItemRedClass = 'group w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive-subtle';
 // Drag item type for resumes
 const RESUME_DRAG_TYPE = 'RESUME';
 
@@ -277,7 +278,7 @@ const highlightText = (text: string, query: string): React.ReactNode => {
   return parts.map((part, index) => {
     const isMatch = keywords.some(k => part.toLowerCase() === k);
     return isMatch ? (
-      <mark key={index} className="bg-yellow-200 text-gray-900 px-0.5 rounded">
+      <mark key={index} className="bg-warning-subtle text-gray-900 px-0.5 rounded">
         {part}
       </mark>
     ) : (
@@ -871,18 +872,19 @@ export default function ResumeTable({
               >
                 <div className="flex items-center justify-end gap-1">
                   {selectionMode ? (
-                    <button
+                    <Button
+                      variant="primary"
+                      size="sm"
                       onClick={() => {
                         onSelectResume(resume.id);
                         if (onApplySelected) {
                           onApplySelected();
                         }
                       }}
-                      className="px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm flex items-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                      icon={<Briefcase className="w-4 h-4" />}
                     >
-                      <Briefcase className="w-4 h-4" />
                       Apply to Job
-                    </button>
+                    </Button>
                   ) : (
                     <>
                       <div className="relative">
@@ -932,7 +934,7 @@ export default function ResumeTable({
                                 app uses (VersionHistoryModal's field headings),
                                 so the menu names itself without competing with
                                 its own options. */}
-                            <div className="flex-none px-3 py-2 border-b border-gray-100 text-[11px] font-medium uppercase tracking-wider text-gray-500">
+                            <div className="flex-none px-3 py-2 border-b border-gray-100 text-2xs font-medium uppercase tracking-wider text-gray-500">
                               Actions
                             </div>
                             <div
@@ -1111,13 +1113,15 @@ export default function ResumeTable({
 
             {/* Card Actions */}
             <div className="flex items-center gap-2 pt-3 border-t border-gray-100">
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => onQuickView(resume)}
-                className="flex-1 px-3 py-2 text-sm text-gray-700 bg-slate-100 hover:bg-brand-blue/5 hover:text-brand-blue rounded-lg flex items-center justify-center gap-1 transition-colors"
+                icon={<Eye className="w-4 h-4" />}
+                className="flex-1"
               >
-                <Eye className="w-4 h-4" />
                 View
-              </button>
+              </Button>
               {/* Apply to Job was dropped here too, to match the desktop ⋮
                   menu — the action lives in the bulk actions bar. */}
             </div>
@@ -1181,16 +1185,18 @@ export default function ResumeTable({
                   Update information for {selectedResumeForAction.name}
                 </p>
               </div>
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => {
                   setShowEditModal(false);
                   setSelectedResumeForAction(null);
                 }}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0 ml-2"
+                className="px-2 flex-shrink-0 ml-2"
                 aria-label="Close"
               >
                 <X className="w-5 h-5" />
-              </button>
+              </Button>
             </div>
             <div className="p-6 overflow-y-auto flex-1">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -1253,25 +1259,29 @@ export default function ResumeTable({
               </div>
             </div>
             <div className="flex gap-3 p-6 border-t border-gray-200 shrink-0">
-              <button
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => {
                   setShowEditModal(false);
                   setSelectedResumeForAction(null);
                 }}
-                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
+                className="flex-1"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
                 onClick={() => {
                   toast.success('Candidate details updated successfully');
                   setShowEditModal(false);
                   setSelectedResumeForAction(null);
                 }}
-                className="flex-1 px-4 py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                className="flex-1"
               >
                 Save Changes
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1299,16 +1309,18 @@ export default function ResumeTable({
                   Add tags to {selectedResumeForAction.name}'s resume
                 </p>
               </div>
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => {
                   setShowAddTagsModal(false);
                   setSelectedResumeForAction(null);
                 }}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0 ml-2"
+                className="px-2 flex-shrink-0 ml-2"
                 aria-label="Close"
               >
                 <X className="w-5 h-5" />
-              </button>
+              </Button>
             </div>
             <div className="p-6 overflow-y-auto flex-1">
               <div className="mb-6">
@@ -1335,26 +1347,30 @@ export default function ResumeTable({
               </div>
             </div>
             <div className="flex gap-3 p-6 border-t border-gray-200 shrink-0">
-              <button
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => {
                   setShowAddTagsModal(false);
                   setSelectedResumeForAction(null);
                 }}
-                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
+                className="flex-1"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
                 onClick={() => {
                   toast.success('Tags added successfully');
                   setShowAddTagsModal(false);
                   setSelectedResumeForAction(null);
                 }}
-                className="flex-1 px-4 py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
+                icon={<Tag className="w-4 h-4" />}
+                className="flex-1"
               >
-                <Tag className="w-4 h-4" />
                 Add Tags
-              </button>
+              </Button>
             </div>
           </div>
         </div>
@@ -1376,16 +1392,18 @@ export default function ResumeTable({
                   Archive {selectedResumeForAction.name}'s resume?
                 </p>
               </div>
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={() => {
                   setShowArchiveModal(false);
                   setSelectedResumeForAction(null);
                 }}
-                className="p-2 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-md transition-colors flex-shrink-0 ml-2"
+                className="px-2 flex-shrink-0 ml-2"
                 aria-label="Close"
               >
                 <X className="w-5 h-5" />
-              </button>
+              </Button>
             </div>
             <div className="p-6 overflow-y-auto flex-1">
               <div className="bg-brand-orange/5 border border-brand-orange/20 rounded-lg p-4">
@@ -1401,16 +1419,20 @@ export default function ResumeTable({
               </div>
             </div>
             <div className="flex gap-3 p-6 border-t border-gray-200 shrink-0">
-              <button
+              <Button
+                variant="secondary"
+                size="md"
                 onClick={() => {
                   setShowArchiveModal(false);
                   setSelectedResumeForAction(null);
                 }}
-                className="flex-1 px-4 py-2.5 border border-gray-200 text-gray-700 rounded-lg hover:bg-slate-100 transition-colors"
+                className="flex-1"
               >
                 Cancel
-              </button>
-              <button
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
                 onClick={async () => {
                   if (onArchive) {
                     onArchive(selectedResumeForAction.id);
@@ -1426,11 +1448,11 @@ export default function ResumeTable({
                   setShowArchiveModal(false);
                   setSelectedResumeForAction(null);
                 }}
-                className="flex-1 px-4 py-2.5 bg-brand-orange hover:bg-brand-orange-deep text-white rounded-lg transition-all flex items-center justify-center gap-2 shadow-md shadow-brand-orange/25 ring-1 ring-white/10"
+                icon={<Archive className="w-4 h-4" />}
+                className="flex-1"
               >
-                <Archive className="w-4 h-4" />
                 Archive
-              </button>
+              </Button>
             </div>
           </div>
         </div>

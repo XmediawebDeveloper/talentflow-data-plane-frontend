@@ -527,7 +527,7 @@ export default function TeamChatPage() {
             <div className="pointer-events-none absolute -right-10 -top-10 h-32 w-32 rounded-full bg-brand-cyan/25 blur-3xl" />
             <div className="pointer-events-none absolute -bottom-12 -left-6 h-28 w-28 rounded-full bg-brand-orange/20 blur-3xl" />
             <div className="relative">
-              <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+              <div className="mb-3 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-2xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
                 <Sparkles className="h-3 w-3 text-brand-orange" />
                 Real-time workspace
               </div>
@@ -538,11 +538,11 @@ export default function TeamChatPage() {
                   </span>
                   <div>
                     <h1 className="text-base font-semibold tracking-tight">Team Chat</h1>
-                    <p className="text-[11px] text-white/70">{channels.length + directMessages.length} conversations</p>
+                    <p className="text-2xs text-white/70">{channels.length + directMessages.length} conversations</p>
                   </div>
                 </div>
                 {totalUnread > 0 && (
-                  <span className="inline-flex items-center rounded-full bg-brand-orange px-2.5 py-1 text-[11px] font-semibold text-white shadow-sm">
+                  <span className="inline-flex items-center rounded-full bg-brand-orange px-2.5 py-1 text-2xs font-semibold text-white shadow-sm">
                     {totalUnread} unread
                   </span>
                 )}
@@ -586,7 +586,7 @@ export default function TeamChatPage() {
             {(activeTab === 'all' || activeTab === 'channels') && (
               <div className="mb-2">
                 <div className="flex items-center justify-between px-2 py-1.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">Channels</span>
+                  <span className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-400">Channels</span>
                   {permissions.can_create_channel && (
                     <button
                       onClick={openCreateModal}
@@ -635,13 +635,13 @@ export default function TeamChatPage() {
                                 {channel.name}
                               </span>
                               {channel.unread_count > 0 && (
-                                <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-brand-orange px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-brand-orange px-1.5 py-0.5 text-2xs font-semibold text-white">
                                   {channel.unread_count}
                                 </span>
                               )}
                             </div>
                             {channel.last_message && (
-                              <p className="truncate text-[11px] text-gray-400">
+                              <p className="truncate text-2xs text-gray-400">
                                 {channel.last_message_by}: {channel.last_message}
                               </p>
                             )}
@@ -657,7 +657,7 @@ export default function TeamChatPage() {
             {(activeTab === 'all' || activeTab === 'direct') && (
               <div>
                 <div className="flex items-center justify-between px-2 py-1.5">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-400">Direct</span>
+                  <span className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-400">Direct</span>
                   <button
                     onClick={openNewDMModal}
                     className="inline-flex h-6 w-6 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-brand-blue/[0.06] hover:text-brand-blue"
@@ -683,7 +683,7 @@ export default function TeamChatPage() {
                           }`}
                         >
                           <div className="relative">
-                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue text-[11px] font-semibold text-white shadow-sm shadow-brand-blue/20">
+                            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-brand-blue text-2xs font-semibold text-white shadow-sm shadow-brand-blue/20">
                               {dm.members[0]?.initials || '?'}
                             </div>
                             {dm.members[0]?.is_online && (
@@ -700,13 +700,13 @@ export default function TeamChatPage() {
                                 {dm.name}
                               </span>
                               {dm.unread_count > 0 && (
-                                <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-brand-orange px-1.5 py-0.5 text-[10px] font-semibold text-white">
+                                <span className="inline-flex min-w-[20px] items-center justify-center rounded-full bg-brand-orange px-1.5 py-0.5 text-2xs font-semibold text-white">
                                   {dm.unread_count}
                                 </span>
                               )}
                             </div>
                             {dm.last_message && (
-                              <p className="truncate text-[11px] text-gray-400">{dm.last_message}</p>
+                              <p className="truncate text-2xs text-gray-400">{dm.last_message}</p>
                             )}
                           </div>
                         </button>
@@ -719,7 +719,7 @@ export default function TeamChatPage() {
           </div>
 
           <div className="border-t border-gray-100 bg-slate-50/50 px-3 py-2.5">
-            <p className="text-center text-[11px] text-gray-400">Message retention: 90 days</p>
+            <p className="text-center text-2xs text-gray-400">Message retention: 90 days</p>
           </div>
         </aside>
 
@@ -747,7 +747,7 @@ export default function TeamChatPage() {
                         {selectedChannel.name}
                       </h2>
                       {selectedChannel.is_private && (
-                        <span className="inline-flex items-center gap-1 rounded-full bg-brand-orange/10 px-2 py-0.5 text-[10px] font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-brand-orange/10 px-2 py-0.5 text-2xs font-medium text-brand-orange-deep ring-1 ring-brand-orange/15">
                           <Lock className="h-2.5 w-2.5" />
                           Private
                         </span>
@@ -792,7 +792,7 @@ export default function TeamChatPage() {
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setShowPinnedPanel(false)} />
                         <div className="absolute right-0 top-full z-50 mt-2 max-h-96 w-80 overflow-y-auto rounded-2xl border border-gray-100 bg-white p-2 shadow-xl ring-1 ring-black/[0.04]">
-                          <div className="flex items-center gap-1.5 px-2 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-gray-400">
+                          <div className="flex items-center gap-1.5 px-2 py-1.5 text-2xs font-semibold uppercase tracking-wider text-gray-400">
                             <Pin className="h-3.5 w-3.5" /> Pinned messages
                           </div>
                           {pinnedMessages.length === 0 ? (
@@ -803,7 +803,7 @@ export default function TeamChatPage() {
                                 <div key={m.id} className="rounded-xl px-3 py-2 hover:bg-slate-50">
                                   <div className="flex items-center justify-between gap-2">
                                     <span className="truncate text-xs font-semibold text-brand-blue">{m.user_name}</span>
-                                    <span className="shrink-0 text-[11px] text-gray-400">{formatISTTime(m.created_at)}</span>
+                                    <span className="shrink-0 text-2xs text-gray-400">{formatISTTime(m.created_at)}</span>
                                   </div>
                                   <p className="mt-0.5 line-clamp-2 text-sm text-gray-700">{m.content}</p>
                                 </div>
@@ -871,7 +871,7 @@ export default function TeamChatPage() {
                           {selectedChannel.type === 'channel' && permissions.can_create_channel && (
                             <button
                               onClick={handleDeleteChannel}
-                              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-red-600 transition-colors hover:bg-red-50"
+                              className="flex w-full items-center gap-2.5 rounded-xl px-3 py-2 text-sm text-destructive transition-colors hover:bg-destructive-subtle"
                             >
                               <Trash2 className="h-4 w-4" /> Delete channel
                             </button>
@@ -937,7 +937,7 @@ export default function TeamChatPage() {
                           {showDateSeparator && (
                             <div className="flex items-center gap-3 py-3">
                               <div className="h-px flex-1 bg-gray-100" />
-                              <span className="rounded-full bg-slate-100 px-3 py-0.5 text-[11px] font-medium text-gray-500 ring-1 ring-gray-200/70">
+                              <span className="rounded-full bg-slate-100 px-3 py-0.5 text-2xs font-medium text-gray-500 ring-1 ring-gray-200/70">
                                 {dayLabel}
                               </span>
                               <div className="h-px flex-1 bg-gray-100" />
@@ -1000,16 +1000,16 @@ export default function TeamChatPage() {
                                 isSender ? 'justify-end' : 'justify-start'
                               }`}
                             >
-                              <span className="text-[11px] text-gray-400">
+                              <span className="text-2xs text-gray-400">
                                 {formatISTTime(message.created_at)}
                               </span>
                               {message.is_pinned && (
-                                <span className="inline-flex items-center gap-0.5 text-[11px] text-brand-orange-deep">
+                                <span className="inline-flex items-center gap-0.5 text-2xs text-brand-orange-deep">
                                   <Pin className="h-3 w-3" /> Pinned
                                 </span>
                               )}
                               {message.is_edited && (
-                                <span className="text-[11px] text-gray-400">(edited)</span>
+                                <span className="text-2xs text-gray-400">(edited)</span>
                               )}
                             </div>
                             )}
@@ -1120,7 +1120,7 @@ export default function TeamChatPage() {
                     Send
                   </button>
                 </div>
-                <p className="mt-2 px-2 text-[11px] text-gray-400">
+                <p className="mt-2 px-2 text-2xs text-gray-400">
                   Press Enter to send · Shift + Enter for a new line · Use @name to mention someone
                 </p>
               </div>
@@ -1270,7 +1270,7 @@ export default function TeamChatPage() {
                       <Globe className="h-4 w-4" />
                       <div className="text-left">
                         <div className="text-sm font-semibold">Public</div>
-                        <div className={`text-[11px] ${!newChannelPrivate ? 'text-white/75' : 'text-gray-500'}`}>
+                        <div className={`text-2xs ${!newChannelPrivate ? 'text-white/75' : 'text-gray-500'}`}>
                           Anyone can join
                         </div>
                       </div>
@@ -1286,7 +1286,7 @@ export default function TeamChatPage() {
                       <Lock className="h-4 w-4" />
                       <div className="text-left">
                         <div className="text-sm font-semibold">Private</div>
-                        <div className={`text-[11px] ${newChannelPrivate ? 'text-white/75' : 'text-gray-500'}`}>
+                        <div className={`text-2xs ${newChannelPrivate ? 'text-white/75' : 'text-gray-500'}`}>
                           Invite only
                         </div>
                       </div>
@@ -1321,14 +1321,14 @@ export default function TeamChatPage() {
                                   : 'border-gray-300 bg-white'
                               }`}
                             >
-                              {checked && <span className="text-[10px]">✓</span>}
+                              {checked && <span className="text-2xs">✓</span>}
                             </span>
-                            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue/10 text-[11px] font-semibold text-brand-blue ring-1 ring-brand-blue/10">
+                            <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand-blue/10 text-2xs font-semibold text-brand-blue ring-1 ring-brand-blue/10">
                               {getInitials(user.name)}
                             </div>
                             <div className="min-w-0 flex-1">
                               <p className="truncate text-sm font-medium text-gray-900">{user.name}</p>
-                              <p className="truncate text-[11px] text-gray-500">{user.email}</p>
+                              <p className="truncate text-2xs text-gray-500">{user.email}</p>
                             </div>
                           </button>
                         );
@@ -1425,7 +1425,7 @@ export default function TeamChatPage() {
                                   : 'border-gray-300 bg-white'
                               }`}
                             >
-                              {checked && <span className="text-[10px]">✓</span>}
+                              {checked && <span className="text-2xs">✓</span>}
                             </span>
                             <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-brand-blue text-xs font-semibold text-white shadow-sm shadow-brand-blue/20">
                               {getInitials(user.name)}
@@ -1528,7 +1528,7 @@ export default function TeamChatPage() {
                               <p className="truncate text-sm font-medium text-gray-900">{user.name}</p>
                               <p className="truncate text-xs text-gray-500">{user.email}</p>
                             </div>
-                            <span className="hidden rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-medium capitalize text-gray-600 sm:inline-flex">
+                            <span className="hidden rounded-full bg-slate-100 px-2.5 py-1 text-2xs font-medium capitalize text-gray-600 sm:inline-flex">
                               {user.role?.replace(/_/g, ' ') || 'User'}
                             </span>
                           </button>

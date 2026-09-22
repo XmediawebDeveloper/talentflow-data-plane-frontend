@@ -19,7 +19,7 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
           <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 shadow-sm shadow-brand-blue/10">
             <Shield className="h-5 w-5 text-brand-blue" />
           </div>
-          <span className="inline-flex items-center rounded-full bg-brand-cyan/10 px-2.5 py-1 text-[11px] font-medium text-brand-blue ring-1 ring-brand-cyan/20">
+          <span className="inline-flex items-center rounded-full bg-brand-cyan/10 px-2.5 py-1 text-2xs font-medium text-brand-blue ring-1 ring-brand-cyan/20">
             Team
           </span>
         </div>

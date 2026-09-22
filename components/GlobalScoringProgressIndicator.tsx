@@ -5,6 +5,7 @@ import { useScoringProgress, ScoringJob } from '@/contexts/ScoringProgressContex
 import { ClipboardList, X, Minimize2, Maximize2, CheckCircle2, XCircle, Loader2, Clock, ChevronDown, ChevronUp } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import BulkScoringProgressModal, { ScoringProgressItem } from '@/components/BulkScoringProgressModal';
+import { Button } from '@/components/ui/button';
 
 export default function GlobalScoringProgressIndicator() {
   const router = useRouter();
@@ -258,7 +259,7 @@ export default function GlobalScoringProgressIndicator() {
      hover-preview of it (isMinimized && shrunk && isHoveringShrunk) — same
      run, same content, so it's built once instead of kept in sync twice. */
   const cardClassName = `fixed bottom-6 right-6 z-[10050] text-white px-4 py-3 rounded-xl shadow-2xl transition-all cursor-pointer flex items-center gap-3 border max-w-xs ${
-    isAllFailed ? 'bg-red-700 hover:bg-red-800 border-red-600' : 'bg-gray-900 hover:bg-gray-800 border-gray-700'
+    isAllFailed ? 'bg-destructive hover:bg-destructive border-destructive-line' : 'bg-gray-900 hover:bg-gray-800 border-gray-700'
   }`;
   const cardBody = (
     <>
@@ -281,7 +282,7 @@ export default function GlobalScoringProgressIndicator() {
       </div>
       <div className="w-12 h-1.5 bg-gray-700 rounded-full overflow-hidden flex-shrink-0">
         <div
-          className={`h-full transition-[width] duration-300 ease-out ${isAllFailed ? 'bg-red-400' : isAllComplete ? 'bg-green-500' : 'bg-blue-500'}`}
+          className={`h-full transition-[width] duration-300 ease-out ${isAllFailed ? 'bg-destructive' : isAllComplete ? 'bg-success' : 'bg-blue-500'}`}
           style={{ width: `${overallProgress}%` }}
         />
       </div>
@@ -343,7 +344,7 @@ export default function GlobalScoringProgressIndicator() {
             : `Scoring ${overallProgress}% complete. Open progress.`
         }
         title={isAllComplete ? 'Scoring complete' : `Scoring ${overallProgress}%`}
-        className="fixed bottom-6 right-6 z-[10050] h-12 w-12 rounded-full p-[3px] shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-transform hover:scale-105 animate-in zoom-in duration-200"
+        className="fixed bottom-6 right-6 z-[10050] h-12 w-12 rounded-full p-0.5 shadow-lg shadow-brand-blue/30 ring-1 ring-white/10 transition-transform hover:scale-105 animate-in zoom-in duration-200"
         style={{
           background: `conic-gradient(${isAllComplete ? 'var(--raw-22c55e)' : 'var(--raw-ffffff)'} ${overallProgress * 3.6}deg, rgba(255,255,255,0.25) 0deg)`,
         }}
@@ -375,7 +376,7 @@ export default function GlobalScoringProgressIndicator() {
     <div className="fixed bottom-4 right-3 sm:bottom-6 sm:right-6 z-[10050] w-[calc(100vw-1.5rem)] sm:w-96 max-w-96 bg-white rounded-xl shadow-2xl border border-gray-200 overflow-hidden">
       {/* Header */}
       <div className={`flex items-center justify-between px-4 py-3 ${
-        isAllFailed ? 'bg-red-700' : hasSomeFailures ? 'bg-amber-600' : isAllComplete ? 'bg-green-600' : 'bg-gray-800'
+        isAllFailed ? 'bg-destructive' : hasSomeFailures ? 'bg-warning' : isAllComplete ? 'bg-success' : 'bg-gray-800'
       } text-white`}>
         <div className="flex items-center gap-2">
           {hasActiveScoring ? (
@@ -396,20 +397,26 @@ export default function GlobalScoringProgressIndicator() {
           </span>
         </div>
         <div className="flex items-center gap-1">
-          <button
+          <Button
+            tone="onColor"
+            variant="secondary"
+            size="sm"
             onClick={() => setMinimized(true)}
-            className="p-1.5 hover:bg-white/20 rounded transition-colors"
+            className="px-2"
             aria-label="Minimize" title="Minimize"
           >
             <Minimize2 className="w-4 h-4" />
-          </button>
-          <button
+          </Button>
+          <Button
+            tone="onColor"
+            variant="secondary"
+            size="sm"
             onClick={() => activeScoringJobs.forEach(job => clearJob(job.jobId))}
-            className="p-1.5 hover:bg-white/20 rounded transition-colors"
+            className="px-2"
             aria-label="Close" title="Close"
           >
             <X className="w-4 h-4" />
-          </button>
+          </Button>
         </div>
       </div>
 
@@ -421,11 +428,11 @@ export default function GlobalScoringProgressIndicator() {
         <div className="w-full h-2 bg-gray-200 rounded-full overflow-hidden">
           <div className="h-full flex">
             <div
-              className="bg-green-500 transition-all duration-300"
+              className="bg-success transition-all duration-300"
               style={{ width: `${(totalStats.completed / totalStats.total) * 100}%` }}
             />
             <div
-              className="bg-red-500 transition-all duration-300"
+              className="bg-destructive transition-all duration-300"
               style={{ width: `${(totalStats.failed / totalStats.total) * 100}%` }}
             />
             <div
@@ -437,12 +444,12 @@ export default function GlobalScoringProgressIndicator() {
         <div className="flex items-center justify-between mt-2 text-xs text-gray-500">
           <div className="flex items-center gap-3">
             <span className="flex items-center gap-1">
-              <div className="w-2 h-2 rounded-full bg-green-500" />
+              <div className="w-2 h-2 rounded-full bg-success" />
               {totalStats.completed} done
             </span>
             {totalStats.failed > 0 && (
               <span className="flex items-center gap-1">
-                <div className="w-2 h-2 rounded-full bg-red-500" />
+                <div className="w-2 h-2 rounded-full bg-destructive" />
                 {totalStats.failed} failed
               </span>
             )}
@@ -516,10 +523,10 @@ function JobProgressItem({
       >
         <div className="flex items-center gap-3 flex-1 min-w-0">
           <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
-            isComplete ? 'bg-green-100' : 'bg-gray-100'
+            isComplete ? 'bg-success-subtle' : 'bg-gray-100'
           }`}>
             {isComplete ? (
-              <CheckCircle2 className="w-4 h-4 text-green-600" />
+              <CheckCircle2 className="w-4 h-4 text-success" />
             ) : (
               <Loader2 className="w-4 h-4 text-gray-600 animate-spin" />
             )}
@@ -530,7 +537,7 @@ function JobProgressItem({
             </div>
             <div className="text-xs text-gray-500">
               {job.completed}/{job.total} scored
-              {job.failed > 0 && <span className="text-red-500 ml-1">({job.failed} failed)</span>}
+              {job.failed > 0 && <span className="text-destructive ml-1">({job.failed} failed)</span>}
             </div>
           </div>
         </div>
@@ -550,11 +557,11 @@ function JobProgressItem({
           <div className="w-full h-1.5 bg-gray-200 rounded-full overflow-hidden mb-3">
             <div className="h-full flex">
               <div
-                className="bg-green-500"
+                className="bg-success"
                 style={{ width: `${(job.completed / job.total) * 100}%` }}
               />
               <div
-                className="bg-red-500"
+                className="bg-destructive"
                 style={{ width: `${(job.failed / job.total) * 100}%` }}
               />
               <div
@@ -576,16 +583,16 @@ function JobProgressItem({
             </div>
             <div className="text-center">
               <div className="text-xs text-gray-500">Done</div>
-              <div className="text-sm font-medium text-green-600">{job.completed}</div>
+              <div className="text-sm font-medium text-success">{job.completed}</div>
             </div>
             <div className="text-center">
               <div className="text-xs text-gray-500">Failed</div>
-              <div className="text-sm font-medium text-red-600">{job.failed}</div>
+              <div className="text-sm font-medium text-destructive">{job.failed}</div>
             </div>
           </div>
 
           {isComplete && job.failed > 0 && friendlyFailureReason && (
-            <div className="mb-3 px-3 py-2 bg-red-50 border border-red-200 rounded text-xs text-red-700">
+            <div className="mb-3 px-3 py-2 bg-destructive-subtle border border-destructive-line rounded text-xs text-destructive">
               {friendlyFailureReason}
             </div>
           )}

@@ -29,6 +29,7 @@ import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useQuota } from '@/contexts/QuotaContext';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { formatISTDate } from '@/lib/utils/dateUtils';
+import { Button } from '@/components/ui/button';
 
 interface RecruiterDashboardProps {
   user?: User;
@@ -288,7 +289,7 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
                               <h3 className="font-medium text-gray-900 dark:text-slate-50 truncate group-hover:text-brand-blue">
                                 {jd.title || 'Untitled'}
                               </h3>
-                              <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-green-50 text-green-700 ring-1 ring-green-100">
+                              <span className="px-2 py-0.5 rounded-full text-2xs font-medium bg-success-subtle text-success ring-1 ring-success-line">
                                 Published
                               </span>
                             </div>
@@ -329,10 +330,10 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
                 { time: '05:00 PM', title: 'Assessment Review · UX Lead', type: 'Review', tone: 'brand-teal' },
               ].map((item, i) => (
                 <div key={i} className="flex items-start gap-3">
-                  <div className="w-16 flex-shrink-0 text-[11px] font-medium text-gray-500 dark:text-slate-500 pt-1">{item.time}</div>
+                  <div className="w-16 flex-shrink-0 text-2xs font-medium text-gray-500 dark:text-slate-500 pt-1">{item.time}</div>
                   <div className="flex-1 min-w-0 border-l-2 pl-3" style={{ borderColor: `var(--${item.tone})` }}>
                     <div className="text-sm text-gray-900 dark:text-slate-50 truncate">{item.title}</div>
-                    <div className="text-[10px] text-gray-500 dark:text-slate-500 mt-0.5 uppercase tracking-wide">{item.type}</div>
+                    <div className="text-2xs text-gray-500 dark:text-slate-500 mt-0.5 uppercase tracking-wide">{item.type}</div>
                   </div>
                 </div>
               ))}
@@ -360,20 +361,20 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
               </p>
               <div className="flex flex-wrap gap-2">
                 {canCreateAssessments && (
-                  <button
+                  <Button
+                    variant="secondary"
                     onClick={() => router.push('/recruitment/assessments')}
-                    className="px-4 py-2 bg-white dark:bg-slate-900 border border-brand-orange/30 text-brand-orange-deep rounded-lg text-sm font-medium hover:bg-brand-orange/5 transition-colors"
                   >
                     Review assessments
-                  </button>
+                  </Button>
                 )}
                 {hasPlanFeature('ai_interview') && (
-                  <button
+                  <Button
+                    variant="secondary"
                     onClick={() => router.push('/recruitment/ai-interview')}
-                    className="px-4 py-2 bg-white dark:bg-slate-900 border border-brand-cyan/30 text-brand-cyan rounded-lg text-sm font-medium hover:bg-brand-cyan/5 transition-colors"
                   >
                     View interview reports
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -404,7 +405,7 @@ function KpiTile({
       <div className="flex items-start justify-between mb-3">
         <div className={`w-12 h-12 rounded-xl ${accent} ring-1 flex items-center justify-center`}>{icon}</div>
         {trend && (
-          <span className="inline-flex items-center gap-1 text-xs text-green-600 font-medium">
+          <span className="inline-flex items-center gap-1 text-xs text-success font-medium">
             <TrendingUp className="w-3 h-3" />
             {trend}
           </span>
@@ -412,7 +413,7 @@ function KpiTile({
       </div>
       <div className="text-3xl font-bold text-gray-900 dark:text-slate-50 tracking-tight">{value}</div>
       <div className="text-sm text-gray-600 dark:text-slate-400 mt-0.5">{label}</div>
-      {sub && <div className="text-[11px] text-gray-500 dark:text-slate-500 mt-1" dangerouslySetInnerHTML={{ __html: sub }} />}
+      {sub && <div className="text-2xs text-gray-500 dark:text-slate-500 mt-1" dangerouslySetInnerHTML={{ __html: sub }} />}
     </div>
   );
 }
@@ -463,7 +464,7 @@ function Stat({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="text-right">
       <div className="text-base font-semibold text-gray-900 dark:text-slate-50 tabular-nums">{value}</div>
-      <div className="text-[10px] text-gray-500 dark:text-slate-500 uppercase tracking-wide">{label}</div>
+      <div className="text-2xs text-gray-500 dark:text-slate-500 uppercase tracking-wide">{label}</div>
     </div>
   );
 }
@@ -485,13 +486,13 @@ function EmptyState({
       <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-1">{title}</h3>
       <p className="text-xs text-gray-500 dark:text-slate-500 mb-4">{body}</p>
       {cta && (
-        <button
+        <Button
+          variant="primary"
           onClick={cta.onClick}
-          className="px-4 py-2 bg-brand-blue text-white rounded-lg text-sm font-medium hover:bg-brand-blue-2 transition-colors inline-flex items-center gap-2"
+          icon={<Plus className="w-4 h-4" />}
         >
-          <Plus className="w-4 h-4" />
           {cta.label}
-        </button>
+        </Button>
       )}
     </div>
   );

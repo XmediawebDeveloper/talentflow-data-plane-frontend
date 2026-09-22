@@ -18,6 +18,7 @@ import {
   formatTeamUsageForExport,
   TEAM_USAGE_COLUMNS,
 } from '@/lib/utils/exportUtils';
+import { Button } from '@/components/ui/button';
 import {
   BarChart,
   Bar,
@@ -247,16 +248,17 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
 
   if (error) {
     return (
-      <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
-        <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-        <h3 className="text-lg font-semibold text-red-800 mb-2">Error Loading Analytics</h3>
-        <p className="text-red-700">{error}</p>
-        <button
+      <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-6 text-center">
+        <AlertCircle className="w-12 h-12 text-destructive mx-auto mb-4" />
+        <h3 className="text-lg font-semibold text-destructive-strong mb-2">Error Loading Analytics</h3>
+        <p className="text-destructive">{error}</p>
+        <Button
+          variant="primary"
           onClick={fetchAnalyticsData}
-          className="mt-4 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+          className="mt-4"
         >
           Retry
-        </button>
+        </Button>
       </div>
     );
   }
@@ -297,13 +299,14 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
             />
           </div>
           {canExport && teamsUsage?.teams && teamsUsage.teams.length > 0 && (
-            <button
+            <Button
+              variant="primary"
+              size="sm"
               onClick={handleExport}
-              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm text-gray-700 dark:text-slate-300 transition-all hover:border-brand-cyan/20 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
+              icon={<Download className="w-4 h-4" />}
             >
-              <Download className="w-4 h-4" />
               Export CSV
-            </button>
+            </Button>
           )}
         </div>
       </div>
@@ -454,7 +457,7 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
                   <p className="font-medium text-gray-900 dark:text-slate-50">{team.name}</p>
                   <div className="flex gap-4 mt-1">
                     <span className="text-xs text-blue-600">RS: {Math.round(team.RS)}</span>
-                    <span className="text-xs text-green-600">AS: {team.AS.toFixed(1)}</span>
+                    <span className="text-xs text-success">AS: {team.AS.toFixed(1)}</span>
                     <span className="text-xs text-purple-600">AIU: {Math.round(team.AIU)}</span>
                     <span className="text-xs text-orange-600">RU: {Math.round(team.RU)}</span>
                     <span className="text-xs text-indigo-600">JDs: {team.JDs}</span>

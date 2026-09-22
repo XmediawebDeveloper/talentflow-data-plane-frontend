@@ -579,7 +579,7 @@ export function EvalReportCombined({
               ['Duration', interview.duration || '—'],
             ].map(([label, val], i) => (
               <div key={i}>
-                <div className="text-[11px] uppercase tracking-wide text-gray-400 mb-0.5">{label}</div>
+                <div className="text-2xs uppercase tracking-wide text-gray-400 mb-0.5">{label}</div>
                 <div className="text-sm font-semibold text-gray-900 break-words">{val}</div>
               </div>
             ))}
@@ -783,7 +783,7 @@ export function EvalReportCombined({
                   return (
                     <div key={`mh-${i}`} className="grid grid-cols-[30%_15%_15%_minmax(0,1fr)_15%] items-center gap-2 py-2 border-b border-gray-100 last:border-b-0">
                       <div className="text-sm font-semibold text-gray-900 truncate">{s.name}</div>
-                      <div><span className={`inline-block text-[10px] font-bold text-white px-2 py-0.5 rounded ${tagBg}`}>{s.tag}</span></div>
+                      <div><span className={`inline-block text-2xs font-bold text-white px-2 py-0.5 rounded ${tagBg}`}>{s.tag}</span></div>
                       <div className="text-xs text-gray-500">Weight: {s.weight}</div>
                       <div className="pr-2">
                         <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -809,7 +809,7 @@ export function EvalReportCombined({
                   return (
                     <div key={`nh-${i}`} className="grid grid-cols-[30%_15%_15%_minmax(0,1fr)_15%] items-center gap-2 py-2 border-b border-gray-100 last:border-b-0">
                       <div className="text-sm font-semibold text-gray-900 truncate">{s.name}</div>
-                      <div><span className={`inline-block text-[10px] font-bold text-white px-2 py-0.5 rounded ${tagBg}`}>{s.tag}</span></div>
+                      <div><span className={`inline-block text-2xs font-bold text-white px-2 py-0.5 rounded ${tagBg}`}>{s.tag}</span></div>
                       <div className="text-xs text-gray-500">Weight: {s.weight}</div>
                       <div className="pr-2">
                         <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
@@ -874,7 +874,7 @@ export function EvalReportCombined({
                       {isHR
                         ? <div className="text-xs font-medium text-gray-400 text-right italic">Review only</div>
                         : q.notDelivered
-                          ? <div className="text-right"><div className={`text-base font-bold ${sc.text}`}>{q.questionScore.toFixed(2)}</div><div className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Not Delivered</div></div>
+                          ? <div className="text-right"><div className={`text-base font-bold ${sc.text}`}>{q.questionScore.toFixed(2)}</div><div className="text-2xs font-semibold text-gray-400 uppercase tracking-wide">Not Delivered</div></div>
                           : <div className={`text-base font-bold ${sc.text} text-right`}>{q.questionScore.toFixed(2)}</div>}
                     </div>
                     {/* Actual interview question text (was missing — recruiters
@@ -894,7 +894,7 @@ export function EvalReportCombined({
                     </div>
                     {hasRationale && (
                       <div className="px-5 pb-3 -mt-1">
-                        <div className="text-[11px] leading-relaxed text-amber-900 bg-amber-50 border border-amber-100 rounded-md px-3 py-2" style={{ pageBreakInside: 'avoid' }}>
+                        <div className="text-2xs leading-relaxed text-amber-900 bg-amber-50 border border-amber-100 rounded-md px-3 py-2" style={{ pageBreakInside: 'avoid' }}>
                           <div className="font-semibold mb-0.5">Why this score</div>
                           <div className="space-y-0.5">
                             {rationaleLines.map((line, li) => {

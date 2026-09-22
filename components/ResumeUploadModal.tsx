@@ -3,6 +3,7 @@
 import { X, Upload, FileText, CheckCircle2, AlertCircle, AlertTriangle, Loader2, XCircle, RefreshCw } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import dynamic from 'next/dynamic';
+import { Badge } from '@/components/ui/badge';
 import { useQuotaCheck } from '@/lib/hooks/useQuotaCheck';
 import { usePlanFeature } from '@/lib/hooks/usePlanFeature';
 import { toast } from 'sonner';
@@ -327,15 +328,15 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
   const getStatusBadge = (fileWithStatus: FileWithStatus) => {
     switch (fileWithStatus.status) {
       case 'valid':
-        return <span className="px-2 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">Ready</span>;
+        return <Badge variant="success">Ready</Badge>;
       case 'duplicate':
-        return <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full">Exact Duplicate</span>;
+        return <Badge variant="destructive">Exact Duplicate</Badge>;
       case 'version':
-        return <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs rounded-full">Update Available</span>;
+        return <Badge variant="warning">Update Available</Badge>;
       case 'checking':
-        return <span className="px-2 py-0.5 bg-blue-100 text-blue-700 text-xs rounded-full">Checking...</span>;
+        return <Badge variant="info">Checking...</Badge>;
       case 'error':
-        return <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs rounded-full">Error</span>;
+        return <Badge variant="destructive">Error</Badge>;
       default:
         return null;
     }

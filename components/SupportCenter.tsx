@@ -1,6 +1,7 @@
 'use client';
 
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
+import { Badge } from '@/components/ui/badge';
 import { useState, useEffect, useRef } from 'react';
 import {
   HelpCircle, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle,
@@ -175,7 +176,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
     { value: 'low', label: 'Low', color: 'text-gray-600 bg-gray-100 border-gray-300' },
     { value: 'medium', label: 'Medium', color: 'text-gray-800 bg-gray-100 border-gray-300' },
     { value: 'high', label: 'High', color: 'text-orange-600 bg-orange-100 border-orange-300' },
-    { value: 'urgent', label: 'Urgent', color: 'text-red-600 bg-red-100 border-red-300' }
+    { value: 'urgent', label: 'Urgent', color: 'text-destructive bg-destructive-subtle border-destructive-line' }
   ];
 
   const getAuthToken = () => {
@@ -443,8 +444,8 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   const getInternalStatusBadge = (status: string) => {
     const styles = {
       'open': { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300', icon: Circle },
-      'in-progress': { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-300', icon: Clock3 },
-      'resolved': { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-300', icon: CheckCircle2 },
+      'in-progress': { bg: 'bg-warning-subtle', text: 'text-warning', border: 'border-warning-line', icon: Clock3 },
+      'resolved': { bg: 'bg-success-subtle', text: 'text-success', border: 'border-success-line', icon: CheckCircle2 },
       'closed': { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-300', icon: XCircle }
     };
 
@@ -666,21 +667,18 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
   };
 
   const getStatusBadge = (status: SupportTicket['status']) => {
-    const styles = {
-      'open': { bg: 'bg-gray-100', text: 'text-gray-900', border: 'border-gray-300', icon: Circle },
-      'in-progress': { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-300', icon: Clock3 },
-      'resolved': { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-300', icon: CheckCircle2 },
-      'closed': { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-300', icon: XCircle }
+    const map = {
+      'open': { variant: 'warning' as const, icon: Circle },
+      'in-progress': { variant: 'info' as const, icon: Clock3 },
+      'resolved': { variant: 'success' as const, icon: CheckCircle2 },
+      'closed': { variant: 'muted' as const, icon: XCircle },
     };
-
-    const style = styles[status];
-    const Icon = style.icon;
-
+    const { variant, icon: Icon } = map[status];
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border ${style.bg} ${style.text} ${style.border}`}>
+      <Badge variant={variant} className="gap-1.5 px-3 py-1.5">
         <Icon className="w-3.5 h-3.5" />
         {status.charAt(0).toUpperCase() + status.slice(1).replace('-', ' ')}
-      </span>
+      </Badge>
     );
   };
 
@@ -760,7 +758,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                   <HelpCircle className="h-6 w-6 text-white" />
                 </div>
                 <div>
-                  <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                  <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-2xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
                     <Sparkles className="h-3 w-3 text-brand-orange" />
                     Help & support
                   </div>
@@ -769,7 +767,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     {activeTab === 'external' ? 'Get help from the TalentFlow support team.' : 'Manage help requests from your team in one place.'}
                   </p>
                   <FeatureGate feature="priority_support" mode="hidden">
-                    <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-50 ring-1 ring-emerald-300/30 backdrop-blur-sm">
+                    <div className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-emerald-400/15 px-3 py-1.5 text-xs font-medium text-emerald-50 ring-1 ring-success-line/30 backdrop-blur-sm">
                       <Sparkles className="h-3 w-3 text-emerald-200" />
                       Priority Support is enabled for your plan — tickets are handled with higher priority and faster response times.
                     </div>
@@ -829,7 +827,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     <span className="hidden sm:inline">Team Support Tickets</span>
                     <span className="sm:hidden">Team</span>
                     {internalUnassignedTickets > 0 && (
-                      <span className="px-1.5 sm:px-2 py-0.5 text-[10px] sm:text-xs bg-brand-orange/30 text-white ring-1 ring-white/20 rounded-full font-semibold">
+                      <span className="px-1.5 sm:px-2 py-0.5 text-2xs sm:text-xs bg-brand-orange/30 text-white ring-1 ring-white/20 rounded-full font-semibold">
                         {internalUnassignedTickets}
                       </span>
                     )}
@@ -856,11 +854,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 className="text-left w-full bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
               >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Open Tickets</span>
+                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Open Tickets</span>
                   <Circle className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{openTickets}</div>
-                <div className="text-[10px] sm:text-xs text-gray-600">Awaiting response</div>
+                <div className="text-2xs sm:text-xs text-gray-600">Awaiting response</div>
               </button>
 
               <button
@@ -869,11 +867,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 className="text-left w-full bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
               >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">In Progress</span>
-                  <Clock3 className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600 flex-shrink-0" />
+                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">In Progress</span>
+                  <Clock3 className="w-4 h-4 sm:w-5 sm:h-5 text-warning flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{inProgressTickets}</div>
-                <div className="text-[10px] sm:text-xs text-gray-600">Being worked on</div>
+                <div className="text-2xs sm:text-xs text-gray-600">Being worked on</div>
               </button>
 
               <button
@@ -882,11 +880,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 className="text-left w-full bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
               >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Resolved</span>
-                  <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 flex-shrink-0" />
+                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Resolved</span>
+                  <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-success flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{resolvedTickets}</div>
-                <div className="text-[10px] sm:text-xs text-gray-600">Successfully solved</div>
+                <div className="text-2xs sm:text-xs text-gray-600">Successfully solved</div>
               </button>
 
               <button
@@ -895,11 +893,11 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 className="text-left w-full bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden hover:border-brand-blue/30 hover:shadow-md transition-all"
               >
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Total Tickets</span>
+                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Total Tickets</span>
                   <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl text-gray-900 mb-0.5 sm:mb-1">{totalTickets}</div>
-                <div className="text-[10px] sm:text-xs text-gray-600">All time</div>
+                <div className="text-2xs sm:text-xs text-gray-600">All time</div>
               </button>
             </div>
 
@@ -969,12 +967,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     >
                       <div className="flex items-start justify-between mb-1.5 sm:mb-2 gap-2">
                         <div className="flex-1 min-w-0">
-                          <span className="text-[10px] sm:text-xs text-gray-600 block mb-0.5 sm:mb-1">{ticket.ticketNumber}</span>
+                          <span className="text-2xs sm:text-xs text-gray-600 block mb-0.5 sm:mb-1">{ticket.ticketNumber}</span>
                           <h4 className="text-xs sm:text-sm text-gray-900 truncate">{ticket.title}</h4>
                         </div>
                         {getStatusBadge(ticket.status)}
                       </div>
-                      <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-gray-600 flex-wrap">
+                      <div className="flex items-center gap-2 sm:gap-3 text-2xs sm:text-xs text-gray-600 flex-wrap">
                         <span className="truncate max-w-[80px] sm:max-w-none">{getCategoryLabel(ticket.category)}</span>
                         <span className="hidden sm:inline">-</span>
                         {getPriorityBadge(ticket.priority)}
@@ -1030,21 +1028,21 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 <div className="flex items-center gap-2 sm:gap-3">
                   <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 flex-shrink-0" />
                   <div className="min-w-0">
-                    <div className="text-[10px] sm:text-xs text-gray-600">Email</div>
+                    <div className="text-2xs sm:text-xs text-gray-600">Email</div>
                     <div className="text-xs sm:text-sm text-gray-900 truncate">support@talentflow.com</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3">
                   <Phone className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 flex-shrink-0" />
                   <div>
-                    <div className="text-[10px] sm:text-xs text-gray-600">Phone</div>
+                    <div className="text-2xs sm:text-xs text-gray-600">Phone</div>
                     <div className="text-xs sm:text-sm text-gray-900">1-800-TALENT-1</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-2 sm:gap-3">
                   <Globe className="w-4 h-4 sm:w-5 sm:h-5 text-gray-800 flex-shrink-0" />
                   <div>
-                    <div className="text-[10px] sm:text-xs text-gray-600">Hours</div>
+                    <div className="text-2xs sm:text-xs text-gray-600">Hours</div>
                     <div className="text-xs sm:text-sm text-gray-900">Mon-Fri, 9AM-6PM EST</div>
                   </div>
                 </div>
@@ -1070,7 +1068,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
               <div className="space-y-4 sm:space-y-6">
                 <div>
                   <label className="block text-xs sm:text-sm text-gray-700 mb-1.5 sm:mb-2">
-                    Title <span className="text-red-500">*</span>
+                    Title <span className="text-destructive">*</span>
                   </label>
                   <input
                     type="text"
@@ -1084,7 +1082,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                   <div>
                     <label className="block text-xs sm:text-sm text-gray-700 mb-1.5 sm:mb-2">
-                      Category <span className="text-red-500">*</span>
+                      Category <span className="text-destructive">*</span>
                     </label>
                     <select
                       value={category}
@@ -1099,7 +1097,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                   <div>
                     <label className="block text-xs sm:text-sm text-gray-700 mb-1.5 sm:mb-2">
-                      Priority <span className="text-red-500">*</span>
+                      Priority <span className="text-destructive">*</span>
                     </label>
                     <select
                       value={priority}
@@ -1115,7 +1113,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                 <div>
                   <label className="block text-xs sm:text-sm text-gray-700 mb-1.5 sm:mb-2">
-                    Description <span className="text-red-500">*</span>
+                    Description <span className="text-destructive">*</span>
                   </label>
                   <textarea
                     value={description}
@@ -1146,7 +1144,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <span className="text-xs sm:text-sm text-gray-900 mb-1">
                         Click to upload files
                       </span>
-                      <span className="text-[10px] sm:text-xs text-gray-600">
+                      <span className="text-2xs sm:text-xs text-gray-600">
                         Screenshots, logs, or documents (Max 10MB each)
                       </span>
                     </label>
@@ -1160,7 +1158,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
                             <div className="min-w-0">
                               <div className="text-xs sm:text-sm text-gray-900 truncate">{file.name}</div>
-                              <div className="text-[10px] sm:text-xs text-gray-600">
+                              <div className="text-2xs sm:text-xs text-gray-600">
                                 {(file.size / 1024).toFixed(1)} KB
                               </div>
                             </div>
@@ -1169,7 +1167,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                             onClick={() => removeAttachment(index)}
                             className="p-1.5 sm:p-2 hover:bg-gray-200 rounded transition-colors flex-shrink-0"
                           >
-                            <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-red-600" />
+                            <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-destructive" />
                           </button>
                         </div>
                       ))}
@@ -1280,7 +1278,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         >
                           <div className="flex items-start justify-between gap-2 mb-1.5">
                             <div className="min-w-0 flex-1">
-                              <span className="text-[10px] sm:text-xs text-gray-600 block mb-0.5">{ticket.ticketNumber}</span>
+                              <span className="text-2xs sm:text-xs text-gray-600 block mb-0.5">{ticket.ticketNumber}</span>
                               <h4 className="text-xs sm:text-sm text-gray-900 font-medium truncate">{ticket.title}</h4>
                             </div>
                             {getStatusBadge(ticket.status)}
@@ -1288,10 +1286,10 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           <div className="flex items-center gap-2 flex-wrap mt-1.5">
                             <div className="flex items-center gap-1">
                               <CategoryIcon className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                              <span className="text-[10px] sm:text-xs text-gray-600">{getCategoryLabel(ticket.category)}</span>
+                              <span className="text-2xs sm:text-xs text-gray-600">{getCategoryLabel(ticket.category)}</span>
                             </div>
                             {getPriorityBadge(ticket.priority)}
-                            <span className="text-[10px] sm:text-xs text-gray-600">{formatISTDate(ticket.updatedAt)}</span>
+                            <span className="text-2xs sm:text-xs text-gray-600">{formatISTDate(ticket.updatedAt)}</span>
                           </div>
                         </button>
                       );
@@ -1402,12 +1400,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                   <div className="flex items-start justify-between mb-3 sm:mb-4">
                     <div>
-                      <span className="text-[10px] sm:text-xs text-gray-600 block mb-1 sm:mb-2">{selectedTicket.ticketNumber}</span>
+                      <span className="text-2xs sm:text-xs text-gray-600 block mb-1 sm:mb-2">{selectedTicket.ticketNumber}</span>
                       <h2 className="text-sm sm:text-base md:text-lg text-gray-900 font-semibold mb-2 sm:mb-3">{selectedTicket.title}</h2>
                       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                         {getStatusBadge(selectedTicket.status)}
                         {getPriorityBadge(selectedTicket.priority)}
-                        <span className="text-[10px] sm:text-xs text-gray-600">
+                        <span className="text-2xs sm:text-xs text-gray-600">
                           {getCategoryLabel(selectedTicket.category)}
                         </span>
                       </div>
@@ -1435,7 +1433,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               U
                             </div>
                           ) : (
-                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-green-600 rounded-full flex items-center justify-center text-white text-xs sm:text-sm flex-shrink-0">
+                            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-success rounded-full flex items-center justify-center text-white text-xs sm:text-sm flex-shrink-0">
                               S
                             </div>
                           )}
@@ -1444,7 +1442,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               <span className="text-xs sm:text-sm text-gray-900 font-medium truncate">
                                 {response.from === 'user' ? 'You' : response.agentName || 'Support Team'}
                               </span>
-                              <span className="text-[10px] sm:text-xs text-gray-600 whitespace-nowrap flex-shrink-0">{formatISTDate(response.timestamp)}</span>
+                              <span className="text-2xs sm:text-xs text-gray-600 whitespace-nowrap flex-shrink-0">{formatISTDate(response.timestamp)}</span>
                             </div>
                             <p className="text-xs sm:text-sm text-gray-700 leading-relaxed">{response.message}</p>
                           </div>
@@ -1487,20 +1485,20 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                   <div className="space-y-3 sm:space-y-4">
                     <div>
-                      <div className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Created</div>
+                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Created</div>
                       <div className="text-xs sm:text-sm text-gray-900">{formatIST(selectedTicket.createdAt)}</div>
                     </div>
 
                     <div>
-                      <div className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Last Updated</div>
+                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Last Updated</div>
                       <div className="text-xs sm:text-sm text-gray-900">{formatIST(selectedTicket.updatedAt)}</div>
                     </div>
 
                     {selectedTicket.assignedAgent && (
                       <div>
-                        <div className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Assigned Agent</div>
+                        <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Assigned Agent</div>
                         <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 sm:w-6 sm:h-6 bg-green-600 rounded-full flex items-center justify-center text-white text-[10px] sm:text-xs flex-shrink-0">
+                          <div className="w-5 h-5 sm:w-6 sm:h-6 bg-success rounded-full flex items-center justify-center text-white text-2xs sm:text-xs flex-shrink-0">
                             {selectedTicket.assignedAgent.split(' ').map(n => n[0]).join('')}
                           </div>
                           <div className="text-xs sm:text-sm text-gray-900">{selectedTicket.assignedAgent}</div>
@@ -1509,7 +1507,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     )}
 
                     <div>
-                      <div className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Responses</div>
+                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Responses</div>
                       <div className="text-xs sm:text-sm text-gray-900">{selectedTicket.responses?.length || 0} messages</div>
                     </div>
                   </div>
@@ -1554,7 +1552,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     {selectedTicket.status !== 'closed' && (
                       <button
                         onClick={handleCloseTicket}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2"
+                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-destructive-subtle text-destructive rounded-lg hover:bg-destructive-subtle transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2"
                       >
                         <X className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                         Close Ticket
@@ -1627,47 +1625,47 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
             <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3 sm:gap-4 md:gap-6">
               <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Open</span>
+                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Open</span>
                   <Circle className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600 flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl font-semibold text-gray-900 mb-0.5 sm:mb-1">{internalOpenTickets}</div>
-                <div className="text-[10px] sm:text-xs text-gray-600">Awaiting action</div>
+                <div className="text-2xs sm:text-xs text-gray-600">Awaiting action</div>
               </div>
 
               <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">In Progress</span>
-                  <Clock3 className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600 flex-shrink-0" />
+                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">In Progress</span>
+                  <Clock3 className="w-4 h-4 sm:w-5 sm:h-5 text-warning flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl font-semibold text-gray-900 mb-0.5 sm:mb-1">{internalInProgressTickets}</div>
-                <div className="text-[10px] sm:text-xs text-gray-600">Being handled</div>
+                <div className="text-2xs sm:text-xs text-gray-600">Being handled</div>
               </div>
 
               <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Resolved</span>
-                  <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 flex-shrink-0" />
+                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Resolved</span>
+                  <CheckCircle2 className="w-4 h-4 sm:w-5 sm:h-5 text-success flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl font-semibold text-gray-900 mb-0.5 sm:mb-1">{internalResolvedTickets}</div>
-                <div className="text-[10px] sm:text-xs text-gray-600">Successfully resolved</div>
+                <div className="text-2xs sm:text-xs text-gray-600">Successfully resolved</div>
               </div>
 
               <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Unassigned</span>
+                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Unassigned</span>
                   <Users className="w-4 h-4 sm:w-5 sm:h-5 text-orange-600 flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl font-semibold text-gray-900 mb-0.5 sm:mb-1">{internalUnassignedTickets}</div>
-                <div className="text-[10px] sm:text-xs text-gray-600">Need assignment</div>
+                <div className="text-2xs sm:text-xs text-gray-600">Need assignment</div>
               </div>
 
               <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
                 <div className="flex items-center justify-between mb-1 sm:mb-2">
-                  <span className="text-[10px] sm:text-xs md:text-sm text-gray-600">Total</span>
+                  <span className="text-2xs sm:text-xs md:text-sm text-gray-600">Total</span>
                   <Ticket className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
                 </div>
                 <div className="text-lg sm:text-2xl md:text-3xl font-semibold text-gray-900 mb-0.5 sm:mb-1">{internalTotalTickets}</div>
-                <div className="text-[10px] sm:text-xs text-gray-600">All time</div>
+                <div className="text-2xs sm:text-xs text-gray-600">All time</div>
               </div>
             </div>
 
@@ -1683,7 +1681,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                         <CategoryIcon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600 flex-shrink-0" />
                         <div className="min-w-0">
                           <div className="text-sm sm:text-lg font-semibold text-gray-900">{count}</div>
-                          <div className="text-[10px] sm:text-xs text-gray-600 truncate">{getInternalCategoryLabel(cat)}</div>
+                          <div className="text-2xs sm:text-xs text-gray-600 truncate">{getInternalCategoryLabel(cat)}</div>
                         </div>
                       </div>
                     );
@@ -1764,22 +1762,22 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <div className="flex items-start justify-between mb-1.5 sm:mb-2 gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-1.5 sm:gap-2 mb-0.5 sm:mb-1 flex-wrap">
-                            <span className="text-[10px] sm:text-xs text-gray-600">{ticket.ticket_number}</span>
-                            <span className="text-[10px] sm:text-xs text-gray-400 hidden sm:inline">-</span>
-                            <span className="text-[10px] sm:text-xs text-gray-600 truncate">from {ticket.created_by?.name}</span>
+                            <span className="text-2xs sm:text-xs text-gray-600">{ticket.ticket_number}</span>
+                            <span className="text-2xs sm:text-xs text-gray-400 hidden sm:inline">-</span>
+                            <span className="text-2xs sm:text-xs text-gray-600 truncate">from {ticket.created_by?.name}</span>
                           </div>
                           <h4 className="text-xs sm:text-sm font-medium text-gray-900 truncate">{ticket.title}</h4>
                         </div>
                         <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
                           {!ticket.assigned_to && (
-                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-orange-100 text-orange-700 text-[10px] sm:text-xs rounded border border-orange-200">
+                            <span className="px-1.5 sm:px-2 py-0.5 sm:py-1 bg-orange-100 text-orange-700 text-2xs sm:text-xs rounded border border-orange-200">
                               Unassigned
                             </span>
                           )}
                           {getInternalStatusBadge(ticket.status)}
                         </div>
                       </div>
-                      <div className="flex items-center gap-2 sm:gap-3 text-[10px] sm:text-xs text-gray-600 flex-wrap">
+                      <div className="flex items-center gap-2 sm:gap-3 text-2xs sm:text-xs text-gray-600 flex-wrap">
                         <span className="truncate max-w-[80px] sm:max-w-none">{getInternalCategoryLabel(ticket.category)}</span>
                         <span className="hidden sm:inline">-</span>
                         {getInternalPriorityBadge(ticket.priority)}
@@ -1881,15 +1879,15 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           <div className="flex items-start justify-between gap-2 mb-1.5">
                             <div className="min-w-0 flex-1">
                               <div className="flex items-center gap-1.5 mb-0.5 flex-wrap">
-                                <span className="text-[10px] sm:text-xs text-gray-600">{ticket.ticket_number}</span>
-                                <span className="text-[10px] sm:text-xs text-gray-600 truncate">from {ticket.created_by?.name}</span>
+                                <span className="text-2xs sm:text-xs text-gray-600">{ticket.ticket_number}</span>
+                                <span className="text-2xs sm:text-xs text-gray-600 truncate">from {ticket.created_by?.name}</span>
                               </div>
                               <h4 className="text-xs sm:text-sm text-gray-900 font-medium truncate">{ticket.title}</h4>
                             </div>
                             <div className="flex flex-col items-end gap-1 flex-shrink-0">
                               {getInternalStatusBadge(ticket.status)}
                               {!ticket.assigned_to && (
-                                <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 text-[10px] rounded border border-orange-200">
+                                <span className="px-1.5 py-0.5 bg-orange-100 text-orange-700 text-2xs rounded border border-orange-200">
                                   Unassigned
                                 </span>
                               )}
@@ -1898,12 +1896,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                           <div className="flex items-center gap-2 flex-wrap mt-1.5">
                             <div className="flex items-center gap-1">
                               <CategoryIcon className="w-3 h-3 text-gray-600 flex-shrink-0" />
-                              <span className="text-[10px] sm:text-xs text-gray-600">{getInternalCategoryLabel(ticket.category)}</span>
+                              <span className="text-2xs sm:text-xs text-gray-600">{getInternalCategoryLabel(ticket.category)}</span>
                             </div>
                             {getInternalPriorityBadge(ticket.priority)}
-                            <span className="text-[10px] sm:text-xs text-gray-600">{formatISTDate(ticket.updated_at)}</span>
+                            <span className="text-2xs sm:text-xs text-gray-600">{formatISTDate(ticket.updated_at)}</span>
                             {ticket.assigned_to && (
-                              <span className="text-[10px] sm:text-xs text-gray-600 truncate max-w-[80px]">{ticket.assigned_to.name}</span>
+                              <span className="text-2xs sm:text-xs text-gray-600 truncate max-w-[80px]">{ticket.assigned_to.name}</span>
                             )}
                           </div>
                         </button>
@@ -2029,12 +2027,12 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                 <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-3 sm:p-4 md:p-6">
                   <div className="flex items-start justify-between mb-3 sm:mb-4">
                     <div>
-                      <span className="text-[10px] sm:text-xs text-gray-600 block mb-1 sm:mb-2">{selectedInternalTicket.ticket_number}</span>
+                      <span className="text-2xs sm:text-xs text-gray-600 block mb-1 sm:mb-2">{selectedInternalTicket.ticket_number}</span>
                       <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 mb-2 sm:mb-3">{selectedInternalTicket.title}</h2>
                       <div className="flex flex-wrap items-center gap-2 sm:gap-3">
                         {getInternalStatusBadge(selectedInternalTicket.status)}
                         {getInternalPriorityBadge(selectedInternalTicket.priority)}
-                        <span className="text-[10px] sm:text-xs text-gray-600">
+                        <span className="text-2xs sm:text-xs text-gray-600">
                           {getInternalCategoryLabel(selectedInternalTicket.category)}
                         </span>
                       </div>
@@ -2045,7 +2043,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <User className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
                       <span>Submitted by <strong>{selectedInternalTicket.created_by?.name}</strong></span>
                       {selectedInternalTicket.created_by?.email && (
-                        <span className="text-gray-500 truncate text-[10px] sm:text-xs">({selectedInternalTicket.created_by.email})</span>
+                        <span className="text-gray-500 truncate text-2xs sm:text-xs">({selectedInternalTicket.created_by.email})</span>
                       )}
                     </div>
                   </div>
@@ -2080,7 +2078,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                               <span className="text-xs sm:text-sm font-medium text-gray-900 truncate">
                                 {response.user_role === 'admin' ? `${response.user_name} (Admin)` : response.user_name}
                               </span>
-                              <span className="text-[10px] sm:text-xs text-gray-600 whitespace-nowrap flex-shrink-0">{formatISTDate(response.created_at)}</span>
+                              <span className="text-2xs sm:text-xs text-gray-600 whitespace-nowrap flex-shrink-0">{formatISTDate(response.created_at)}</span>
                             </div>
                             <p className="text-xs sm:text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">{response.message}</p>
                           </div>
@@ -2123,20 +2121,20 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
 
                   <div className="space-y-3 sm:space-y-4">
                     <div>
-                      <div className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Created</div>
+                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Created</div>
                       <div className="text-xs sm:text-sm text-gray-900">{formatIST(selectedInternalTicket.created_at)}</div>
                     </div>
 
                     <div>
-                      <div className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Last Updated</div>
+                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Last Updated</div>
                       <div className="text-xs sm:text-sm text-gray-900">{formatIST(selectedInternalTicket.updated_at)}</div>
                     </div>
 
                     <div>
-                      <div className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Assigned To</div>
+                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Assigned To</div>
                       {selectedInternalTicket.assigned_to ? (
                         <div className="flex items-center gap-2">
-                          <div className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-700 rounded-full flex items-center justify-center text-white text-[10px] sm:text-xs flex-shrink-0">
+                          <div className="w-5 h-5 sm:w-6 sm:h-6 bg-gray-700 rounded-full flex items-center justify-center text-white text-2xs sm:text-xs flex-shrink-0">
                             {selectedInternalTicket.assigned_to.name.charAt(0)}
                           </div>
                           <div className="text-xs sm:text-sm text-gray-900">{selectedInternalTicket.assigned_to.name}</div>
@@ -2147,7 +2145,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                     </div>
 
                     <div>
-                      <div className="text-[10px] sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Responses</div>
+                      <div className="text-2xs sm:text-xs text-gray-600 mb-0.5 sm:mb-1">Responses</div>
                       <div className="text-xs sm:text-sm text-gray-900">{selectedInternalTicket.responses?.length || 0} messages</div>
                     </div>
                   </div>
@@ -2193,7 +2191,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <button
                         onClick={() => handleResolveInternalTicket(selectedInternalTicket.id)}
                         disabled={internalActionLoading === selectedInternalTicket.id}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2 disabled:bg-green-400"
+                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-success text-white rounded-lg hover:bg-success transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2 disabled:bg-success/60"
                       >
                         {internalActionLoading === selectedInternalTicket.id ? (
                           <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
@@ -2223,7 +2221,7 @@ export default function SupportCenter({ isAdmin = false }: SupportCenterProps) {
                       <button
                         onClick={() => handleCloseInternalTicket(selectedInternalTicket.id)}
                         disabled={internalActionLoading === selectedInternalTicket.id}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2 disabled:bg-red-50"
+                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 bg-destructive-subtle text-destructive rounded-lg hover:bg-destructive-subtle transition-colors text-xs sm:text-sm text-left flex items-center gap-1.5 sm:gap-2 disabled:bg-destructive-subtle"
                       >
                         {internalActionLoading === selectedInternalTicket.id ? (
                           <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />

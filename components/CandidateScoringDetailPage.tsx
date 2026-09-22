@@ -3,6 +3,7 @@
 import { Target, Award, CheckCircle, XCircle, TrendingUp, Mail, Phone, MapPin, Briefcase, GraduationCap, Star, Calendar, Zap, FileText, AlertCircle, Download, Clock, Building2, ChevronLeft, ChevronRight, ChevronDown, Code, Languages, BarChart3, CheckSquare, MessageSquare, Minus, BookOpen, ThumbsUp, ThumbsDown, Loader2, Sparkles, UserPlus, History, File, HardDrive, User, X, Eye, Share2, Paperclip, Send } from 'lucide-react';
 import DetailedScorecardTab from './DetailedScorecardTab';
 import ViewResumeButton from '@/components/ui/view-resume-button';
+import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/tooltip';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
@@ -638,10 +639,10 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // No static recommendations - removed hardcoded next steps
 
   const getScoreColor = (score: number) => {
-    if (score >= 85) return 'text-green-600';
+    if (score >= 85) return 'text-success';
     if (score >= 70) return 'text-gray-800';
-    if (score >= 60) return 'text-yellow-600';
-    return 'text-red-600';
+    if (score >= 60) return 'text-warning';
+    return 'text-destructive';
   };
 
   // Same three colors as the Match Status badge next to it, so the one
@@ -651,23 +652,23 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // own match status to key off.
   const getOverallScoreColor = (matchStatus: string) => {
     const normalized = matchStatus?.toLowerCase().replace(/[_\s]/g, '');
-    if (normalized === 'exactmatch' || normalized === 'excellentmatch') return 'text-green-600';
+    if (normalized === 'exactmatch' || normalized === 'excellentmatch') return 'text-success';
     if (normalized === 'partialmatch') return 'text-brand-orange-deep';
-    return 'text-red-600';
+    return 'text-destructive';
   };
 
   const getScoreBgColor = (score: number) => {
-    if (score >= 85) return 'bg-green-100 border-green-300 text-green-700';
+    if (score >= 85) return 'bg-success-subtle border-success-line text-success';
     if (score >= 70) return 'bg-gray-100 border-gray-300 text-gray-700';
-    if (score >= 60) return 'bg-yellow-100 border-yellow-300 text-yellow-700';
-    return 'bg-red-100 border-red-300 text-red-700';
+    if (score >= 60) return 'bg-warning-subtle border-warning-line text-warning';
+    return 'bg-destructive-subtle border-destructive-line text-destructive';
   };
 
   const getProgressBarColor = (score: number) => {
-    if (score >= 85) return 'bg-green-600';
+    if (score >= 85) return 'bg-success';
     if (score >= 70) return 'bg-gray-600';
-    if (score >= 60) return 'bg-yellow-600';
-    return 'bg-red-600';
+    if (score >= 60) return 'bg-warning';
+    return 'bg-destructive';
   };
 
   // Format match status from API (e.g., "partial_match" -> "Partial Match")
@@ -680,9 +681,9 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
 
   const getMatchStatusColor = (status: string) => {
     const normalized = status?.toLowerCase().replace(/[_\s]/g, '');
-    if (normalized === 'exactmatch' || normalized === 'excellentmatch') return 'bg-green-100 text-green-700 border-green-300';
+    if (normalized === 'exactmatch' || normalized === 'excellentmatch') return 'bg-success-subtle text-success border-success-line';
     if (normalized === 'partialmatch') return 'bg-brand-orange/10 text-brand-orange-deep border-brand-orange/30';
-    return 'bg-red-100 text-red-700 border-red-300';
+    return 'bg-destructive-subtle text-destructive border-destructive-line';
   };
 
   // ---- Read-only label helpers for the View JD tab (mirrors JobDetailView's
@@ -721,7 +722,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
    * Summary, worded exactly as the JD view and the Step 3 review show it.
    *
    * "Required" means Resume Scoring treated the criterion as Essential: it shares
-   * the 60% block and a rating below 7 on it fails the whole Essential section.
+   * the 60% block and a rating below 6 on it fails the whole Essential section.
    * "Preferred" criteria share the 40% block and never fail a candidate alone.
    */
   const jdRequirementLabel = requirementBadge;
@@ -759,10 +760,10 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
 
   const jdStatusBadgeClass = (status?: string) => {
     switch ((status || '').toLowerCase()) {
-      case 'published': return 'bg-green-100 text-green-700 border-green-300';
-      case 'draft': return 'bg-yellow-100 text-yellow-700 border-yellow-300';
+      case 'published': return 'bg-success-subtle text-success border-success-line';
+      case 'draft': return 'bg-warning-subtle text-warning border-warning-line';
       case 'archived': return 'bg-gray-100 text-gray-700 border-gray-300';
-      case 'disabled': return 'bg-red-100 text-red-700 border-red-300';
+      case 'disabled': return 'bg-destructive-subtle text-destructive border-destructive-line';
       default: return 'bg-gray-100 text-gray-700 border-gray-300';
     }
   };
@@ -1231,12 +1232,12 @@ Best regards`);
               <span className={`truncate ${resume.email ? 'text-gray-900' : 'text-gray-400'}`}>{resume.email || '-'}</span>
             </span>
             <span className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200">
-              <Phone className="w-4 h-4 text-green-600 flex-shrink-0" />
+              <Phone className="w-4 h-4 text-success flex-shrink-0" />
               <span className={`whitespace-nowrap ${resume.phone ? 'text-gray-900' : 'text-gray-400'}`}>{resume.phone || '-'}</span>
             </span>
             {resume.location && (
               <span className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-200 min-w-0">
-                <MapPin className="w-4 h-4 text-red-500 flex-shrink-0" />
+                <MapPin className="w-4 h-4 text-destructive flex-shrink-0" />
                 <span className="text-gray-900 truncate">{resume.location}</span>
               </span>
             )}
@@ -1247,30 +1248,34 @@ Best regards`);
               {/* Share leads the group: sending the resume on is a step that
                   usually comes before inviting anyone to anything. */}
               {canShareResume && viewResumeId && (
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={openShareModal}
                   title="Share resume"
-                  className="px-3 sm:px-4 py-1.5 text-xs sm:text-sm text-gray-700 border border-gray-300 bg-white rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors flex items-center gap-1.5 whitespace-nowrap"
+                  icon={<Share2 className="w-4 h-4" />}
+                  className="whitespace-nowrap"
                 >
-                  <Share2 className="w-4 h-4" />
                   Share
-                </button>
+                </Button>
               )}
 
               {canInvite && (
                 <div className="relative" ref={inviteMenuRef}>
-                  <button
+                  <Button
+                    variant="primary"
+                    size="sm"
                     onClick={() => setShowInviteMenu(!showInviteMenu)}
                     disabled={!!loadingInvite || inviteDisabled}
                     title={inviteDisabled ? 'No published assessment or AI interview for this job yet' : undefined}
                     aria-haspopup="menu"
                     aria-expanded={showInviteMenu}
-                    className="px-3 sm:px-4 py-1.5 text-xs sm:text-sm font-medium text-white bg-brand-blue rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 transition-colors flex items-center gap-1.5 whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none disabled:hover:bg-brand-blue"
+                    className="whitespace-nowrap"
                   >
                     {loadingInvite ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
                     Invite
                     <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showInviteMenu ? 'rotate-180' : ''}`} />
-                  </button>
+                  </Button>
 
                   {showInviteMenu && (
                     <div
@@ -1321,15 +1326,17 @@ Best regards`);
               <ViewResumeButton onClick={handleViewResume} loading={loadingResumeDetail} />
 
               {canExport && (
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={handleDownloadScorecard}
                   title="Download scorecard PDF"
-                  className="px-3 sm:px-4 py-1.5 text-xs sm:text-sm text-gray-700 border border-gray-300 bg-white rounded-lg hover:bg-gray-50 transition-colors flex items-center gap-1.5 whitespace-nowrap"
+                  icon={<Download className="w-4 h-4" />}
+                  className="whitespace-nowrap"
                 >
-                  <Download className="w-4 h-4" />
                   <span className="hidden lg:inline">Download Scorecard</span>
                   <span className="lg:hidden">Scorecard</span>
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -1432,12 +1439,12 @@ Best regards`);
                     <ul className="space-y-3 text-gray-600">
                       {keyStrengths.length > 0 ? keyStrengths.map((strength, idx) => (
                         <li key={idx} className="flex items-start gap-3">
-                          <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                          <CheckCircle className="w-5 h-5 text-success mt-0.5 flex-shrink-0" />
                           <span>{strength}</span>
                         </li>
                       )) : (
                         <li className="flex items-start gap-3">
-                          <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                          <AlertCircle className="w-5 h-5 text-warning mt-0.5 flex-shrink-0" />
                           <span>No specific strengths identified</span>
                         </li>
                       )}
@@ -1447,26 +1454,26 @@ Best regards`);
                     <h4 className="font-medium text-gray-700 mb-4 text-lg">Candidate Profile</h4>
                     <ul className="space-y-3 text-gray-600">
                       <li className="flex items-start gap-3">
-                        <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                        <CheckCircle className="w-5 h-5 text-success mt-0.5 flex-shrink-0" />
                         <span><strong>Experience:</strong> {resume.experience || 'Not specified'}</span>
                       </li>
                       <li className="flex items-start gap-3">
-                        <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                        <CheckCircle className="w-5 h-5 text-success mt-0.5 flex-shrink-0" />
                         <span><strong>Skills:</strong> {matchedSkills.length} matched skills</span>
                       </li>
                       <li className="flex items-start gap-3">
                         {resume.currentCompany ? (
-                          <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                          <CheckCircle className="w-5 h-5 text-success mt-0.5 flex-shrink-0" />
                         ) : (
-                          <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                          <AlertCircle className="w-5 h-5 text-warning mt-0.5 flex-shrink-0" />
                         )}
                         <span><strong>Company:</strong> {resume.currentCompany || 'Not specified'}</span>
                       </li>
                       <li className="flex items-start gap-3">
                         {resume.education ? (
-                          <CheckCircle className="w-5 h-5 text-green-600 mt-0.5 flex-shrink-0" />
+                          <CheckCircle className="w-5 h-5 text-success mt-0.5 flex-shrink-0" />
                         ) : (
-                          <AlertCircle className="w-5 h-5 text-yellow-600 mt-0.5 flex-shrink-0" />
+                          <AlertCircle className="w-5 h-5 text-warning mt-0.5 flex-shrink-0" />
                         )}
                         <span><strong>Education:</strong> {
                           typeof resume.education === 'string'
@@ -1498,12 +1505,12 @@ Best regards`);
 
               <div className={`rounded-xl p-6 border-2 ${
                 resume.scorePercentage >= 85
-                  ? 'bg-green-50 border-green-300'
+                  ? 'bg-success-subtle border-success-line'
                   : resume.scorePercentage >= 70
                   ? 'bg-gray-50 border-gray-300'
                   : resume.scorePercentage >= 60
-                  ? 'bg-yellow-50 border-yellow-300'
-                  : 'bg-red-50 border-red-300'
+                  ? 'bg-warning-subtle border-warning-line'
+                  : 'bg-destructive-subtle border-destructive-line'
               }`}>
                 <h4 className="text-lg font-semibold text-gray-900 mb-3 flex items-center gap-2">
                   <Award className="w-5 h-5" />
@@ -1539,16 +1546,16 @@ Best regards`);
               {/* Strengths & Weaknesses */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Strengths */}
-                <div className="bg-green-50 border border-green-200 rounded-xl p-6">
+                <div className="bg-success-subtle border border-success-line rounded-xl p-6">
                   <div className="flex items-center gap-2 mb-4">
-                    <ThumbsUp className="w-5 h-5 text-green-600" />
+                    <ThumbsUp className="w-5 h-5 text-success" />
                     <h3 className="text-lg font-semibold text-gray-900">Strengths</h3>
                   </div>
                   {keyStrengths.length > 0 ? (
                     <ul className="space-y-3">
                       {keyStrengths.map((strength: string, idx: number) => (
                         <li key={idx} className="flex items-start gap-3">
-                          <CheckCircle className="w-4 h-4 text-green-600 mt-0.5 flex-shrink-0" />
+                          <CheckCircle className="w-4 h-4 text-success mt-0.5 flex-shrink-0" />
                           <span className="text-sm text-gray-800">{strength}</span>
                         </li>
                       ))}
@@ -1559,16 +1566,16 @@ Best regards`);
                 </div>
 
                 {/* Weaknesses */}
-                <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+                <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-6">
                   <div className="flex items-center gap-2 mb-4">
-                    <ThumbsDown className="w-5 h-5 text-red-500" />
+                    <ThumbsDown className="w-5 h-5 text-destructive" />
                     <h3 className="text-lg font-semibold text-gray-900">Weaknesses</h3>
                   </div>
                   {(improvementAreas.length > 0 || missingSkills.length > 0) ? (
                     <ul className="space-y-3">
                       {improvementAreas.map((gap: string, idx: number) => (
                         <li key={`gap-${idx}`} className="flex items-start gap-3">
-                          <XCircle className="w-4 h-4 text-red-500 mt-0.5 flex-shrink-0" />
+                          <XCircle className="w-4 h-4 text-destructive mt-0.5 flex-shrink-0" />
                           <span className="text-sm text-gray-800">{gap}</span>
                         </li>
                       ))}
@@ -2510,7 +2517,7 @@ Best regards`);
                         </span>
                       )}
                       {jdSalary && (
-                        <span className="inline-flex items-center px-2.5 py-1 bg-green-50 text-green-700 rounded-md text-xs font-medium">
+                        <span className="inline-flex items-center px-2.5 py-1 bg-success-subtle text-success rounded-md text-xs font-medium">
                           {jdSalary}{jdDetails.compensation_type ? ` / ${jdDetails.compensation_type}` : ''}
                         </span>
                       )}
@@ -2545,7 +2552,7 @@ Best regards`);
                     <div className="bg-gray-50 border border-gray-300 rounded-xl p-4">
                       <div className="flex items-center gap-2 mb-3">
                         <h4 className="text-sm font-semibold text-gray-900">Additional Details</h4>
-                        <span className="text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded">
+                        <span className="text-xs text-success bg-success-subtle border border-success-line px-2 py-0.5 rounded">
                           Visible to candidates
                         </span>
                       </div>
@@ -2596,7 +2603,7 @@ Best regards`);
                             <div className="space-y-2">
                               {jdMustHaveSkills.map((skill, index) => (
                                 <div key={index} className="flex items-center gap-2 text-sm text-gray-700">
-                                  <CheckCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                                  <CheckCircle className="w-4 h-4 text-destructive flex-shrink-0" />
                                   {skill}
                                 </div>
                               ))}
@@ -2772,13 +2779,15 @@ Best regards`);
                       This job has {pickerAssessments.length} published assessments. Select which one(s) to invite {resume.candidateName} to.
                     </p>
                   </div>
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => setShowAssessmentPicker(false)}
-                    className="p-1 hover:bg-gray-100 rounded"
+                    className="px-2"
                     aria-label="Close"
                   >
                     <XCircle className="w-5 h-5 text-gray-500" />
-                  </button>
+                  </Button>
                 </div>
                 <div className="flex-1 overflow-y-auto p-3">
                   {pickerAssessments.map((a: any) => {
@@ -2822,19 +2831,19 @@ Best regards`);
                     {pickerSelectedIds.length} of {pickerAssessments.length} selected
                   </span>
                   <div className="flex gap-2">
-                    <button
+                    <Button
+                      variant="secondary"
                       onClick={() => setShowAssessmentPicker(false)}
-                      className="px-4 py-2 text-sm font-medium text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50"
                     >
                       Cancel
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="primary"
                       onClick={handleConfirmAssessmentPick}
                       disabled={pickerSelectedIds.length === 0}
-                      className="px-4 py-2 text-sm font-medium text-white bg-brand-blue rounded-lg hover:bg-brand-blue-2 disabled:bg-gray-300 disabled:cursor-not-allowed"
                     >
                       Continue
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -2858,13 +2867,15 @@ Best regards`);
                         <p className="text-sm text-gray-500">The selected candidate&rsquo;s resume will be shared with the recipient via email.</p>
                       </div>
                     </div>
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={closeShareModal}
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                      className="px-2"
                       aria-label="Close"
                     >
                       <X className="w-5 h-5 text-gray-500" />
-                    </button>
+                    </Button>
                   </div>
 
                   <div className="space-y-4">
@@ -2938,7 +2949,7 @@ Best regards`);
 
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Recipient Email <span className="text-red-500">*</span>
+                        Recipient Email <span className="text-destructive">*</span>
                       </label>
                       <input
                         type="email"
@@ -2973,16 +2984,16 @@ Best regards`);
                   </div>
 
                   <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
-                    <button
+                    <Button
+                      variant="secondary"
                       onClick={closeShareModal}
-                      className="px-4 py-2 text-gray-700 hover:bg-slate-100 rounded-lg transition-colors"
                     >
                       Cancel
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="primary"
                       onClick={handleSendShareEmail}
                       disabled={isSendingEmail || !shareEmail.trim()}
-                      className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                     >
                       {isSendingEmail ? (
                         <>
@@ -2995,7 +3006,7 @@ Best regards`);
                           Send Email
                         </>
                       )}
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -3023,20 +3034,23 @@ Best regards`);
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    <button
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={handleDownloadScorecard}
-                      className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm cursor-pointer"
+                      icon={<Download className="w-4 h-4" />}
                     >
-                      <Download className="w-4 h-4" />
                       <span className="hidden sm:inline">Download</span>
-                    </button>
-                    <button
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
                       onClick={closeScorecardPreview}
-                      className="p-2 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                      className="px-2"
                       aria-label="Close"
                     >
                       <X className="w-5 h-5 text-gray-500" />
-                    </button>
+                    </Button>
                   </div>
                 </div>
 
@@ -3192,11 +3206,11 @@ Best regards`);
               let tone = 'text-gray-800';
               let marker = '';
               if (line.type === 'removed' && side === 'left') {
-                tone = 'text-red-800';
-                marker = 'bg-red-50 border-l-4 border-red-400 pl-2';
+                tone = 'text-destructive-strong';
+                marker = 'bg-destructive-subtle border-l-4 border-destructive-line pl-2';
               } else if (line.type === 'added' && side === 'right') {
-                tone = 'text-green-800';
-                marker = 'bg-green-50 border-l-4 border-green-400 pl-2';
+                tone = 'text-success-strong';
+                marker = 'bg-success-subtle border-l-4 border-success-line pl-2';
               }
 
               if (isHeader) {
@@ -3255,22 +3269,24 @@ Best regards`);
                         </button>
                       </div>
                       <div className="flex items-center gap-2 text-xs">
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-green-50 border border-green-200 rounded-full text-green-700">
-                          <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-success-subtle border border-success-line rounded-full text-success">
+                          <span className="w-2 h-2 bg-success rounded-full"></span>
                           +{diff.addedCount}
                         </span>
-                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-red-50 border border-red-200 rounded-full text-red-700">
-                          <span className="w-2 h-2 bg-red-500 rounded-full"></span>
+                        <span className="flex items-center gap-1.5 px-2.5 py-1 bg-destructive-subtle border border-destructive-line rounded-full text-destructive">
+                          <span className="w-2 h-2 bg-destructive rounded-full"></span>
                           −{diff.removedCount}
                         </span>
                       </div>
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={closeCompare}
-                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
+                        className="px-2"
                         aria-label="Close"
                       >
                         <X className="w-5 h-5 text-gray-500" />
-                      </button>
+                      </Button>
                     </div>
                   </div>
 
@@ -3284,7 +3300,7 @@ Best regards`);
                       </div>
                     ) : diff.addedCount === 0 && diff.removedCount === 0 ? (
                       <div className="text-center text-gray-500 py-12">
-                        <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-400" />
+                        <CheckCircle className="w-12 h-12 mx-auto mb-3 text-success" />
                         <p className="font-medium">No changes detected</p>
                         <p className="text-sm mt-1">Content is identical between these versions.</p>
                       </div>
@@ -3292,13 +3308,13 @@ Best regards`);
                       <div className="flex h-full gap-0">
                         {/* Older */}
                         <div className="flex-1 flex flex-col border-r border-gray-300 min-w-0">
-                          <div className="px-4 py-2.5 bg-red-50 border-b border-gray-200 flex-shrink-0">
+                          <div className="px-4 py-2.5 bg-destructive-subtle border-b border-gray-200 flex-shrink-0">
                             <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 bg-red-400 rounded-full"></span>
-                              <span className="text-sm font-semibold text-red-800">Version {older.version}</span>
-                              <span className="text-xs text-red-600 ml-1">(older)</span>
+                              <span className="w-2 h-2 bg-destructive rounded-full"></span>
+                              <span className="text-sm font-semibold text-destructive-strong">Version {older.version}</span>
+                              <span className="text-xs text-destructive ml-1">(older)</span>
                             </div>
-                            <p className="text-xs text-red-600 mt-0.5 truncate">{older.fileName}</p>
+                            <p className="text-xs text-destructive mt-0.5 truncate">{older.fileName}</p>
                           </div>
                           <div className="flex-1 overflow-y-auto p-4">
                             <div className="bg-white rounded-lg border border-gray-200 p-5">
@@ -3308,13 +3324,13 @@ Best regards`);
                         </div>
                         {/* Newer */}
                         <div className="flex-1 flex flex-col min-w-0">
-                          <div className="px-4 py-2.5 bg-green-50 border-b border-gray-200 flex-shrink-0">
+                          <div className="px-4 py-2.5 bg-success-subtle border-b border-gray-200 flex-shrink-0">
                             <div className="flex items-center gap-2">
-                              <span className="w-2 h-2 bg-green-400 rounded-full"></span>
-                              <span className="text-sm font-semibold text-green-800">Version {newer.version}</span>
-                              <span className="text-xs text-green-600 ml-1">(newer)</span>
+                              <span className="w-2 h-2 bg-success rounded-full"></span>
+                              <span className="text-sm font-semibold text-success-strong">Version {newer.version}</span>
+                              <span className="text-xs text-success ml-1">(newer)</span>
                             </div>
-                            <p className="text-xs text-green-600 mt-0.5 truncate">{newer.fileName}</p>
+                            <p className="text-xs text-success mt-0.5 truncate">{newer.fileName}</p>
                           </div>
                           <div className="flex-1 overflow-y-auto p-4">
                             <div className="bg-white rounded-lg border border-gray-200 p-5">
@@ -3337,14 +3353,14 @@ Best regards`);
                             );
 
                             const marker = line.type === 'added'
-                              ? 'bg-green-100 border-l-4 border-green-500 pl-3'
+                              ? 'bg-success-subtle border-l-4 border-success-line pl-3'
                               : line.type === 'removed'
-                                ? 'bg-red-50 border-l-4 border-red-400 pl-3 line-through opacity-70'
+                                ? 'bg-destructive-subtle border-l-4 border-destructive-line pl-3 line-through opacity-70'
                                 : '';
                             const tone = line.type === 'added'
-                              ? 'text-green-900'
+                              ? 'text-success-strong'
                               : line.type === 'removed'
-                                ? 'text-red-700'
+                                ? 'text-destructive'
                                 : 'text-gray-800';
 
                             if (isHeader) {
@@ -3369,12 +3385,12 @@ Best regards`);
 
                   {/* Footer */}
                   <div className="flex items-center justify-end px-4 sm:px-6 py-3 border-t border-gray-100 bg-slate-50 flex-shrink-0">
-                    <button
+                    <Button
+                      variant="primary"
                       onClick={closeCompare}
-                      className="px-5 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
                     >
                       Close
-                    </button>
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -3423,23 +3439,26 @@ Best regards`);
                       </div>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      <button
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => handleVersionDownload(
                           { id: versionPreview.id, fileName: versionPreview.fileName },
                           versionPreview.versionNumber,
                         )}
-                        className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors text-sm cursor-pointer"
+                        icon={<Download className="w-4 h-4" />}
                       >
-                        <Download className="w-4 h-4" />
                         <span className="hidden sm:inline">Download</span>
-                      </button>
-                      <button
+                      </Button>
+                      <Button
+                        variant="secondary"
+                        size="sm"
                         onClick={() => setVersionPreview(null)}
-                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors cursor-pointer"
+                        className="px-2"
                         aria-label="Close"
                       >
                         <X className="w-5 h-5 text-gray-500" />
-                      </button>
+                      </Button>
                     </div>
                   </div>
 

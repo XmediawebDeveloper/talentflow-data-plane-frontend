@@ -545,10 +545,10 @@ export default function StepSystemCheck({
     { id: 'internet', label: 'Internet Connection', detail: `Required: ≥ ${MIN_INTERNET_MBPS} Mbps`, icon: <Wifi className="w-4 h-4" />, status: 'pending', colorClass: 'text-cyan-600' },
     { id: 'ai_engine', label: 'AI Engine', detail: 'Pending...', icon: <Zap className="w-4 h-4" />, status: 'pending', colorClass: 'text-purple-600' },
     { id: 'websocket', label: 'WebSocket Connection', detail: 'Pending...', icon: <Radio className="w-4 h-4" />, status: 'pending', colorClass: 'text-teal-600' },
-    { id: 'lighting', label: 'Lighting Conditions', detail: 'Pending...', icon: <Sun className="w-4 h-4" />, status: 'pending', colorClass: 'text-yellow-600' },
+    { id: 'lighting', label: 'Lighting Conditions', detail: 'Pending...', icon: <Sun className="w-4 h-4" />, status: 'pending', colorClass: 'text-warning' },
     { id: 'noise', label: 'Background Noise', detail: 'Pending...', icon: <Volume2 className="w-4 h-4" />, status: 'pending', colorClass: 'text-orange-600' },
-    { id: 'face', label: 'Face Detection', detail: 'Pending...', icon: <Eye className="w-4 h-4" />, status: 'pending', colorClass: 'text-green-600' },
-    { id: 'multiple', label: 'Multiple People Check', detail: 'Pending...', icon: <Users className="w-4 h-4" />, status: 'pending', colorClass: 'text-red-600' },
+    { id: 'face', label: 'Face Detection', detail: 'Pending...', icon: <Eye className="w-4 h-4" />, status: 'pending', colorClass: 'text-success' },
+    { id: 'multiple', label: 'Multiple People Check', detail: 'Pending...', icon: <Users className="w-4 h-4" />, status: 'pending', colorClass: 'text-destructive' },
   ];
 
   // Initialize system checks when entering that phase
@@ -1998,7 +1998,7 @@ export default function StepSystemCheck({
 
         {/* Pill badge */}
         <div className="flex justify-center">
-          <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full">
+          <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold px-3 py-1.5 rounded-full">
             <Shield className="w-3.5 h-3.5" />
             Browser Verification
           </span>
@@ -2054,7 +2054,7 @@ export default function StepSystemCheck({
 
         {/* Pill badge */}
         <div className="flex justify-center">
-          <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full">
+          <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold px-3 py-1.5 rounded-full">
             <Shield className="w-3.5 h-3.5" />
             Browser Verification
           </span>
@@ -2087,23 +2087,23 @@ export default function StepSystemCheck({
           <div className="bg-white rounded-b-xl p-6 space-y-5">
             {/* All Requirements Met banner */}
             {deviceAllPass ? (
-              <div className="bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
-                <p className="font-semibold text-green-800">All Requirements Met!</p>
+              <div className="bg-success-subtle border border-success-line rounded-xl p-4 flex items-center gap-3">
+                <CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
+                <p className="font-semibold text-success-strong">All Requirements Met!</p>
               </div>
             ) : (
-              <div className="bg-red-50 border border-red-200 rounded-xl p-4 flex items-center gap-3">
-                <XCircle className="w-5 h-5 text-red-600 flex-shrink-0" />
-                <p className="font-semibold text-red-800">Requirements Not Met</p>
+              <div className="bg-destructive-subtle border border-destructive-line rounded-xl p-4 flex items-center gap-3">
+                <XCircle className="w-5 h-5 text-destructive flex-shrink-0" />
+                <p className="font-semibold text-destructive-strong">Requirements Not Met</p>
               </div>
             )}
 
             {blockedBrowserName && (
-              <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-                <XCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="bg-warning-subtle border border-warning-line rounded-xl p-4 flex items-start gap-3">
+                <XCircle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-amber-900">{blockedBrowserName} is not a compatible browser</p>
-                  <p className="text-sm text-amber-800 mt-1">
+                  <p className="font-semibold text-warning-strong">{blockedBrowserName} is not a compatible browser</p>
+                  <p className="text-sm text-warning-strong mt-1">
                     Use Chrome, Edge, or Safari to continue the interview. You cannot proceed while this interview is opened in {blockedBrowserName}.
                   </p>
                 </div>
@@ -2119,9 +2119,9 @@ export default function StepSystemCheck({
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold text-gray-900">Device Type</h3>
                   {!deviceInfo.isMobile ? (
-                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <CheckCircle className="w-4 h-4 text-success" />
                   ) : (
-                    <XCircle className="w-4 h-4 text-red-500" />
+                    <XCircle className="w-4 h-4 text-destructive" />
                   )}
                 </div>
               </div>
@@ -2139,9 +2139,9 @@ export default function StepSystemCheck({
                   <span className="font-medium">{deviceInfo.screenWidth} x {deviceInfo.screenHeight}</span>
                 </p>
                 {deviceInfo.isMobile && (
-                  <div className="mt-2 p-3 bg-red-50 border border-red-200 rounded-lg">
-                    <p className="text-sm text-red-700 font-medium">Mobile devices are not supported</p>
-                    <p className="text-xs text-red-600 mt-0.5">
+                  <div className="mt-2 p-3 bg-destructive-subtle border border-destructive-line rounded-lg">
+                    <p className="text-sm text-destructive font-medium">Mobile devices are not supported</p>
+                    <p className="text-xs text-destructive mt-0.5">
                       AI interviews must be completed on a desktop or laptop computer. Switching to "Desktop Mode" in your mobile browser does not bypass this restriction.
                     </p>
                   </div>
@@ -2158,9 +2158,9 @@ export default function StepSystemCheck({
                 <div className="flex items-center gap-2">
                   <h3 className="font-semibold text-gray-900">Browser Compatibility</h3>
                   {deviceInfo.browser.supported ? (
-                    <CheckCircle className="w-4 h-4 text-green-500" />
+                    <CheckCircle className="w-4 h-4 text-success" />
                   ) : (
-                    <XCircle className="w-4 h-4 text-red-500" />
+                    <XCircle className="w-4 h-4 text-destructive" />
                   )}
                 </div>
               </div>
@@ -2179,7 +2179,7 @@ export default function StepSystemCheck({
                           key={b.name}
                           className={`rounded-lg p-3 text-center text-sm font-medium border ${
                             isCurrent
-                              ? 'bg-green-50 border-green-300 text-green-800'
+                              ? 'bg-success-subtle border-success-line text-success-strong'
                               : 'bg-gray-50 border-gray-200 text-gray-700'
                           }`}
                         >
@@ -2191,9 +2191,9 @@ export default function StepSystemCheck({
                   </div>
                 </div>
                 {blockedBrowserName === 'Brave' && (
-                  <div className="p-3 bg-amber-50 border border-amber-200 rounded-lg">
-                    <p className="text-sm text-amber-800 font-medium">Brave browser is blocked for AI interviews.</p>
-                    <p className="text-xs text-amber-700 mt-1">
+                  <div className="p-3 bg-warning-subtle border border-warning-line rounded-lg">
+                    <p className="text-sm text-warning-strong font-medium">Brave browser is blocked for AI interviews.</p>
+                    <p className="text-xs text-warning mt-1">
                       Please open this interview link in Chrome, Edge, or Safari.
                     </p>
                   </div>
@@ -2210,11 +2210,11 @@ export default function StepSystemCheck({
                   return (
                     <div key={idx} className="flex items-start gap-3">
                       {passed ? (
-                        <div className="w-5 h-5 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <div className="w-5 h-5 bg-success rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                           <CheckCircle className="w-3.5 h-3.5 text-white" />
                         </div>
                       ) : (
-                        <div className="w-5 h-5 bg-red-500 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
+                        <div className="w-5 h-5 bg-destructive rounded-full flex items-center justify-center flex-shrink-0 mt-0.5">
                           <XCircle className="w-3.5 h-3.5 text-white" />
                         </div>
                       )}
@@ -2279,7 +2279,7 @@ export default function StepSystemCheck({
 
         {/* Pill badge */}
         <div className="flex justify-center">
-          <span className="inline-flex items-center gap-1.5 bg-green-100 text-green-700 text-xs font-semibold px-3 py-1.5 rounded-full">
+          <span className="inline-flex items-center gap-1.5 bg-success-subtle text-success text-xs font-semibold px-3 py-1.5 rounded-full">
             <Shield className="w-3.5 h-3.5" />
             System Checks
           </span>
@@ -2300,10 +2300,10 @@ export default function StepSystemCheck({
               <div className="flex-1">
                 <div className="flex items-center gap-2">
                   <p className="text-sm font-semibold text-gray-900">Voice Verification</p>
-                  <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${
+                  <span className={`text-2xs font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${
                     voiceEnrollStatus === 'success'
-                      ? 'bg-green-100 text-green-700'
-                      : 'bg-amber-100 text-amber-700'
+                      ? 'bg-success-subtle text-success'
+                      : 'bg-warning-subtle text-warning'
                   }`}>
                     {voiceEnrollStatus === 'success' ? 'Done' : 'Required'}
                   </span>
@@ -2317,13 +2317,13 @@ export default function StepSystemCheck({
             {/* A suggested line — NOT required. The candidate can say anything;
                 we only need to hear their voice (no word-matching). */}
             <div className="rounded-lg border border-indigo-200 bg-white px-4 py-3">
-              <p className="text-[11px] font-medium uppercase tracking-wide text-indigo-500 mb-1">
+              <p className="text-2xs font-medium uppercase tracking-wide text-indigo-500 mb-1">
                 Just speak naturally — say anything, or read this
               </p>
               <p className="text-base font-medium text-gray-900 leading-snug">
                 &ldquo;{ENROLL_PASSAGE}&rdquo;
               </p>
-              <p className="text-[11px] text-gray-400 mt-1.5">
+              <p className="text-2xs text-gray-400 mt-1.5">
                 You don&apos;t have to read this exactly — we only check that you spoke.
               </p>
             </div>
@@ -2340,8 +2340,8 @@ export default function StepSystemCheck({
                   retrying is a real new attempt, not a no-op. */}
               {voiceEnrollStatus === 'idle' && micAcquireFailed && (
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-medium text-red-700 flex items-center gap-1.5">
-                    <MicOff className="w-4 h-4 text-red-600 flex-shrink-0" />
+                  <p className="text-xs font-medium text-destructive flex items-center gap-1.5">
+                    <MicOff className="w-4 h-4 text-destructive flex-shrink-0" />
                     Couldn&apos;t access your microphone. Check your browser&apos;s site permissions, or pick a different device below, then retry.
                   </p>
                   <button
@@ -2362,8 +2362,8 @@ export default function StepSystemCheck({
                   button until they resolve it via the dropdown below, same
                   rule the Microphone check itself already enforces. */}
               {voiceEnrollStatus === 'idle' && !micAcquireFailed && micDevices.length > 1 && !selectedMicId && (
-                <p className="text-xs font-medium text-red-700 flex items-center gap-1.5">
-                  <MicOff className="w-4 h-4 text-red-600 flex-shrink-0" />
+                <p className="text-xs font-medium text-destructive flex items-center gap-1.5">
+                  <MicOff className="w-4 h-4 text-destructive flex-shrink-0" />
                   Select your microphone in Device Settings below, then click Start recording — with more than one device connected we can&apos;t guess which one you&apos;ll speak into.
                 </p>
               )}
@@ -2387,7 +2387,7 @@ export default function StepSystemCheck({
               {voiceEnrollStatus === 'recording' && (
                 <div className="space-y-1.5">
                   <p className="text-xs font-medium text-indigo-700 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                    <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
                     Recording — keep speaking…
                   </p>
                   <div className="h-1.5 w-full rounded-full bg-indigo-100 overflow-hidden">
@@ -2401,8 +2401,8 @@ export default function StepSystemCheck({
 
               {/* SUCCESS */}
               {voiceEnrollStatus === 'success' && (
-                <p className="text-xs font-medium text-green-700 flex items-center gap-1.5">
-                  <CheckCircle className="w-4 h-4 text-green-600" />
+                <p className="text-xs font-medium text-success flex items-center gap-1.5">
+                  <CheckCircle className="w-4 h-4 text-success" />
                   Voice sample captured — you&apos;re all set.
                 </p>
               )}
@@ -2411,8 +2411,8 @@ export default function StepSystemCheck({
                   rejects a silent or noise-only clip. No word-matching. */}
               {voiceEnrollStatus === 'failed' && (
                 <div className="flex items-center justify-between gap-3">
-                  <p className="text-xs font-medium text-red-700 flex items-center gap-1.5">
-                    <XCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                  <p className="text-xs font-medium text-destructive flex items-center gap-1.5">
+                    <XCircle className="w-4 h-4 text-destructive flex-shrink-0" />
                     We didn&apos;t hear any speech. Please speak clearly for a few seconds, then record again.
                   </p>
                   <button
@@ -2449,10 +2449,10 @@ export default function StepSystemCheck({
               {voiceEnrollStatus === 'disconnected' && (
                 <div className="flex items-center justify-between gap-3">
                   <p className={`text-xs font-medium flex items-center gap-1.5 ${
-                    micReadyForVoice ? 'text-amber-700' : 'text-red-700'
+                    micReadyForVoice ? 'text-warning' : 'text-destructive'
                   }`}>
                     <MicOff className={`w-4 h-4 flex-shrink-0 ${
-                      micReadyForVoice ? 'text-amber-600' : 'text-red-600'
+                      micReadyForVoice ? 'text-warning' : 'text-destructive'
                     }`} />
                     {micReadyForVoice
                       ? 'Microphone reconnected. Your earlier recording was discarded — start the voice verification again from the beginning.'
@@ -2485,9 +2485,9 @@ export default function StepSystemCheck({
                 {checksRunning ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
                 ) : checksCompleted && allSystemPassed ? (
-                  <CheckCircle className="w-5 h-5 text-green-400" />
+                  <CheckCircle className="w-5 h-5 text-success" />
                 ) : checksCompleted ? (
-                  <XCircle className="w-5 h-5 text-amber-400" />
+                  <XCircle className="w-5 h-5 text-warning" />
                 ) : (
                   <Shield className="w-5 h-5" />
                 )}
@@ -2498,7 +2498,7 @@ export default function StepSystemCheck({
                     : 'System Checks'}
                 </h2>
               </div>
-              <p className="text-green-100 text-sm">
+              <p className="text-success text-sm">
                 {checksRunning ? 'Please wait while we verify your environment'
                   : checksCompleted && allSystemPassed ? 'All environment checks have been completed'
                   : checksCompleted ? 'Fix the issues below and retry'
@@ -2528,7 +2528,7 @@ export default function StepSystemCheck({
                   className={`flex-shrink-0 inline-flex items-center gap-2 font-bold py-2.5 px-5 rounded-lg text-sm transition-colors ${
                     runCheckLocked
                       ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                      : 'bg-amber-400 hover:bg-amber-300 text-gray-900 ring-2 ring-white/80 shadow-lg'
+                      : 'bg-warning hover:bg-warning text-gray-900 ring-2 ring-white/80 shadow-lg'
                   }`}
                 >
                   <Play className="w-4 h-4" />
@@ -2566,13 +2566,13 @@ export default function StepSystemCheck({
                         video element's actual playback state (cameraLive)
                         instead of always claiming "Camera Active". */}
                     {cameraLive ? (
-                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-green-600/90 text-white text-xs font-medium px-3 py-1.5 rounded-full backdrop-blur-sm">
-                        <span className="w-2 h-2 bg-green-300 rounded-full animate-pulse" />
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-success/90 text-white text-xs font-medium px-3 py-1.5 rounded-full backdrop-blur-sm">
+                        <span className="w-2 h-2 bg-success rounded-full animate-pulse" />
                         Camera Active
                       </div>
                     ) : (
-                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-red-600/90 text-white text-xs font-medium px-3 py-1.5 rounded-full backdrop-blur-sm">
-                        <span className="w-2 h-2 bg-red-300 rounded-full" />
+                      <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex items-center gap-1.5 bg-destructive/90 text-white text-xs font-medium px-3 py-1.5 rounded-full backdrop-blur-sm">
+                        <span className="w-2 h-2 bg-destructive rounded-full" />
                         No Camera Signal
                       </div>
                     )}
@@ -2612,14 +2612,14 @@ export default function StepSystemCheck({
                       ))}
                     </select>
                     {cameraSelectionError && (
-                      <p className="mt-1 text-xs font-medium text-red-600">{cameraSelectionError}</p>
+                      <p className="mt-1 text-xs font-medium text-destructive">{cameraSelectionError}</p>
                     )}
                   </div>
 
                   <div>
                     <label htmlFor="tf-mic-select" className="flex items-center gap-1.5 text-xs font-medium text-gray-500 mb-1">
                       <Mic className="w-3.5 h-3.5" /> Microphone
-                      <span className="text-red-500 font-semibold">*</span>
+                      <span className="text-destructive font-semibold">*</span>
                     </label>
                     <select
                       id="tf-mic-select"
@@ -2649,7 +2649,7 @@ export default function StepSystemCheck({
                         to detect your connected microphone(s), then select one here.
                       </p>
                     ) : !selectedMicId && (
-                      <p className="mt-1 text-xs text-amber-600 font-medium">
+                      <p className="mt-1 text-xs text-warning font-medium">
                         Required — select your microphone to complete the Microphone check.
                       </p>
                     )}
@@ -2672,18 +2672,18 @@ export default function StepSystemCheck({
                     <div
                       className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${
                         check.status === 'pass'
-                          ? 'bg-green-100'
+                          ? 'bg-success-subtle'
                           : check.status === 'fail'
-                          ? 'bg-red-100'
+                          ? 'bg-destructive-subtle'
                           : 'bg-gray-100'
                       }`}
                     >
                       <span
                         className={
                           check.status === 'pass'
-                            ? 'text-green-600'
+                            ? 'text-success'
                             : check.status === 'fail'
-                            ? 'text-red-600'
+                            ? 'text-destructive'
                             : 'text-gray-400'
                         }
                       >
@@ -2703,11 +2703,11 @@ export default function StepSystemCheck({
                     {/* Right: status icon + per-check retry (only that row re-runs) */}
                     <div className="flex-shrink-0 flex items-center gap-2">
                       {check.status === 'pass' && (
-                        <CheckCircle className="w-5 h-5 text-green-500" />
+                        <CheckCircle className="w-5 h-5 text-success" />
                       )}
                       {check.status === 'fail' && (
                         <>
-                          <XCircle className="w-5 h-5 text-red-500" />
+                          <XCircle className="w-5 h-5 text-destructive" />
                           {/* Microphone can only get its first pass from the real
                               "Run Check" flow (see retryCheck's guard above) — before
                               that's ever completed once, a per-row Retry here would be
@@ -2716,7 +2716,7 @@ export default function StepSystemCheck({
                             <button
                               type="button"
                               onClick={() => retryCheck(check.id)}
-                              className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 hover:text-red-700 border border-red-200 hover:border-red-300 rounded-md px-2 py-1 transition-colors"
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-destructive hover:text-destructive border border-destructive-line hover:border-destructive-line rounded-md px-2 py-1 transition-colors"
                               title={`Retry ${check.label}`}
                             >
                               <RefreshCw className="w-3 h-3" />
@@ -2738,20 +2738,20 @@ export default function StepSystemCheck({
                 overall system-check result reads first, then the (separate)
                 voice enrollment step. */}
             {checksCompleted && allSystemPassed && (
-              <div className="mt-5 bg-green-50 border border-green-200 rounded-xl p-4 flex items-center gap-3">
-                <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0" />
+              <div className="mt-5 bg-success-subtle border border-success-line rounded-xl p-4 flex items-center gap-3">
+                <CheckCircle className="w-5 h-5 text-success flex-shrink-0" />
                 <div>
-                  <p className="font-semibold text-green-800">All Checks Passed!</p>
-                  <p className="text-sm text-green-700">Your environment is ready for the interview.</p>
+                  <p className="font-semibold text-success-strong">All Checks Passed!</p>
+                  <p className="text-sm text-success">Your environment is ready for the interview.</p>
                 </div>
               </div>
             )}
             {checksCompleted && !allSystemPassed && (
-              <div className="mt-5 bg-amber-50 border border-amber-200 rounded-xl p-4 flex items-start gap-3">
-                <XCircle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
+              <div className="mt-5 bg-warning-subtle border border-warning-line rounded-xl p-4 flex items-start gap-3">
+                <XCircle className="w-5 h-5 text-warning flex-shrink-0 mt-0.5" />
                 <div>
-                  <p className="font-semibold text-amber-800">Some checks failed</p>
-                  <p className="text-sm text-amber-700 mt-0.5">
+                  <p className="font-semibold text-warning-strong">Some checks failed</p>
+                  <p className="text-sm text-warning mt-0.5">
                     {systemChecks.find((c) => c.id === 'webcam' && c.status === 'fail')
                       ? 'Camera access is required for the interview. Allow camera access in your browser settings, then click Retry on that check.'
                       : systemChecks.find((c) => c.id === 'microphone' && c.status === 'fail')
@@ -2820,9 +2820,9 @@ export default function StepSystemCheck({
             moment the device is back — no button to click here. */}
         {micDisconnectedPopup && (
           <div className="fixed top-4 inset-x-0 z-[200] flex justify-center px-4 pointer-events-none">
-            <div className="w-full max-w-md bg-white border border-red-300 rounded-2xl shadow-2xl p-5 flex items-start gap-3 pointer-events-auto">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-red-100 flex-shrink-0">
-                <MicOff className="w-5 h-5 text-red-600" />
+            <div className="w-full max-w-md bg-white border border-destructive-line rounded-2xl shadow-2xl p-5 flex items-start gap-3 pointer-events-auto">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-destructive-subtle flex-shrink-0">
+                <MicOff className="w-5 h-5 text-destructive" />
               </div>
               <div className="min-w-0">
                 <h3 className="text-gray-900 font-semibold text-sm mb-0.5">No microphone detected.</h3>
@@ -2842,9 +2842,9 @@ export default function StepSystemCheck({
             the popup above it never blocks Continue and dismisses itself. */}
         {micFallbackNotice && (
           <div className="fixed top-4 inset-x-0 z-[200] flex justify-center px-4 pointer-events-none">
-            <div className="w-full max-w-md bg-white border border-amber-300 rounded-2xl shadow-2xl p-5 flex items-start gap-3 pointer-events-auto">
-              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-amber-100 flex-shrink-0">
-                <MicOff className="w-5 h-5 text-amber-600" />
+            <div className="w-full max-w-md bg-white border border-warning-line rounded-2xl shadow-2xl p-5 flex items-start gap-3 pointer-events-auto">
+              <div className="flex items-center justify-center w-10 h-10 rounded-full bg-warning-subtle flex-shrink-0">
+                <MicOff className="w-5 h-5 text-warning" />
               </div>
               <div className="min-w-0">
                 <h3 className="text-gray-900 font-semibold text-sm mb-0.5">Your device removed</h3>

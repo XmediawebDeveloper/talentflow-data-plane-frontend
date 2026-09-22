@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { Badge } from '@/components/ui/badge';
 import { useSearchParams, useRouter } from 'next/navigation';
 import {
   Inbox, Send, Ticket, Clock, CheckCircle, MessageSquare, AlertCircle,
@@ -245,21 +246,18 @@ export default function InternalTicketAdmin() {
   };
 
   const getStatusBadge = (status: string) => {
-    const styles = {
-      'open': { bg: 'bg-blue-100', text: 'text-blue-700', border: 'border-blue-300', icon: Circle },
-      'in-progress': { bg: 'bg-yellow-100', text: 'text-yellow-700', border: 'border-yellow-300', icon: Clock3 },
-      'resolved': { bg: 'bg-green-100', text: 'text-green-700', border: 'border-green-300', icon: CheckCircle2 },
-      'closed': { bg: 'bg-gray-100', text: 'text-gray-700', border: 'border-gray-300', icon: XCircle }
+    const map: Record<string, { variant: 'info' | 'warning' | 'success' | 'muted'; icon: typeof Circle }> = {
+      'open': { variant: 'warning', icon: Circle },
+      'in-progress': { variant: 'info', icon: Clock3 },
+      'resolved': { variant: 'success', icon: CheckCircle2 },
+      'closed': { variant: 'muted', icon: XCircle },
     };
-
-    const style = styles[status as keyof typeof styles] || styles['open'];
-    const Icon = style.icon;
-
+    const { variant, icon: Icon } = map[status] || map['open'];
     return (
-      <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs border ${style.bg} ${style.text} ${style.border}`}>
+      <Badge variant={variant} className="gap-1.5 px-3 py-1.5">
         <Icon className="w-3.5 h-3.5" />
         {status.charAt(0).toUpperCase() + status.slice(1).replace('-', ' ')}
-      </span>
+      </Badge>
     );
   };
 
@@ -314,7 +312,7 @@ export default function InternalTicketAdmin() {
                   <Inbox className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-[11px] font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
+                  <div className="mb-2 inline-flex items-center gap-1.5 rounded-full bg-white/10 px-2.5 py-0.5 text-2xs font-medium text-white/90 ring-1 ring-white/15 backdrop-blur-sm">
                     <Sparkles className="h-3 w-3 text-brand-orange" />
                     Internal helpdesk
                   </div>
@@ -363,7 +361,7 @@ export default function InternalTicketAdmin() {
               >
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-xs font-medium uppercase tracking-wide text-gray-500">In Progress</span>
-                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600 ring-1 ring-amber-100">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-warning-subtle text-warning ring-1 ring-warning-line">
                     <Clock3 className="w-4 h-4" />
                   </span>
                 </div>
@@ -879,7 +877,7 @@ export default function InternalTicketAdmin() {
                       <button
                         onClick={() => handleResolveTicket(selectedTicket.id)}
                         disabled={actionLoading === selectedTicket.id}
-                        className="w-full px-4 py-2.5 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm text-left flex items-center gap-2 disabled:bg-green-400"
+                        className="w-full px-4 py-2.5 bg-success text-white rounded-lg hover:bg-success transition-colors text-sm text-left flex items-center gap-2 disabled:bg-success/60"
                       >
                         {actionLoading === selectedTicket.id ? (
                           <Loader2 className="w-4 h-4 animate-spin" />
@@ -909,7 +907,7 @@ export default function InternalTicketAdmin() {
                       <button
                         onClick={() => handleCloseTicket(selectedTicket.id)}
                         disabled={actionLoading === selectedTicket.id}
-                        className="w-full px-4 py-2.5 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors text-sm text-left flex items-center gap-2 disabled:bg-red-50"
+                        className="w-full px-4 py-2.5 bg-destructive-subtle text-destructive rounded-lg hover:bg-destructive-subtle transition-colors text-sm text-left flex items-center gap-2 disabled:bg-destructive-subtle"
                       >
                         {actionLoading === selectedTicket.id ? (
                           <Loader2 className="w-4 h-4 animate-spin" />

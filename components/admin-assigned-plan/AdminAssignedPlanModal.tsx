@@ -182,9 +182,9 @@ export default function AdminAssignedPlanModal() {
         {/* Body */}
         <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
           {error && (
-            <div className="flex items-start gap-2 p-3 rounded-lg bg-red-50 border border-red-200">
-              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-red-800">{error}</p>
+            <div className="flex items-start gap-2 p-3 rounded-lg bg-destructive-subtle border border-destructive-line">
+              <AlertCircle className="w-5 h-5 text-destructive flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-destructive-strong">{error}</p>
             </div>
           )}
 
@@ -333,7 +333,7 @@ export default function AdminAssignedPlanModal() {
 
           {/* Reassurance copy */}
           <div className="flex items-start gap-2 text-xs text-gray-600">
-            <CheckCircle2 className="w-4 h-4 text-green-500 flex-shrink-0 mt-0.5" />
+            <CheckCircle2 className="w-4 h-4 text-success flex-shrink-0 mt-0.5" />
             <span>
               {effectiveApplyMode === 'immediate'
                 ? 'You will continue on your current plan until payment is confirmed. Activation is instant after a successful payment.'

@@ -26,11 +26,13 @@ import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { formatIST, formatISTDate, toISODateIST } from '@/lib/utils/dateUtils';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { Button } from '@/components/ui/button';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import QuotaBadge from '@/components/ui/quota-badge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
-import { PageSkeleton, TableSkeleton, Skeleton } from '@/components/ui/skeleton';
+import { TableSkeleton, Skeleton } from '@/components/ui/skeleton';
+import ResumeScoringSkeleton from '@/components/ResumeScoringSkeleton';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { useJobInviteTargets } from '@/lib/hooks/useJobInviteTargets';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
@@ -1707,9 +1709,9 @@ export default function ResumeScoringPage({
   };
 
   const getScoreBgColor = (score: number) => {
-    if (score >= 70) return 'bg-green-100 border-green-300 text-green-700';
+    if (score >= 70) return 'bg-success-subtle border-success-line text-success';
     if (score >= 50) return 'bg-gray-100 border-gray-300 text-gray-900';
-    return 'bg-yellow-100 border-yellow-300 text-yellow-700';
+    return 'bg-warning-subtle border-warning-line text-warning';
   };
 
   const getScoreLabel = (score: number) => {
@@ -1858,9 +1860,11 @@ export default function ResumeScoringPage({
     });
   };
 
-  // Show loading when waiting for initial JD's history to load
+  // Show loading when waiting for initial JD's history to load — same skeleton
+  // the route page uses, so only ONE consistent skeleton ever shows (no flash
+  // between two different skeletons).
   if (isWaitingForInitialJd) {
-    return <PageSkeleton variant="table" showStats={false} />;
+    return <ResumeScoringSkeleton />;
   }
 
   // View Candidate Scoring Detail Page
@@ -2188,7 +2192,8 @@ export default function ResumeScoringPage({
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto sm:flex-shrink-0">
                 {/* Prev/Next — placed before the Score New Resumes action */}
                 {canRunScoring && (
-                  <button
+                  <Button
+                    variant="primary"
                     onClick={() => {
                       /* Already on this job's own page — skip the job
                          picker entirely and land straight on "Select
@@ -2220,11 +2225,11 @@ export default function ResumeScoringPage({
                       handleJobPicked({ job: jobForPicker, lineage: lineageKey(jobForPicker) });
                       setShowResumeSelectionModal(true);
                     }}
-                    className="w-full sm:w-auto px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 bg-brand-blue text-white hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
+                    className="w-full sm:w-auto"
                   >
                     <ClipboardList className="w-4 h-4" />
                     Score New Resumes
-                  </button>
+                  </Button>
                 )}
               </div>
             </div>
@@ -2556,13 +2561,15 @@ export default function ResumeScoringPage({
           {/* Left: back + icon + title */}
           <div className="flex items-center gap-3 min-w-0">
             {onBack && (
-              <button
+              <Button
+                variant="secondary"
+                size="sm"
                 onClick={onBack}
-                className="p-2 bg-white dark:bg-slate-900 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors flex items-center justify-center shadow-sm border border-gray-200 dark:border-slate-700"
+                className="px-2"
                 aria-label="Back to Dashboard" title="Back to Dashboard"
               >
-                <ArrowLeft className="w-4 h-4 text-gray-700 dark:text-slate-300" />
-              </button>
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
             )}
             <div className="h-9 w-9 bg-brand-blue rounded-xl flex items-center justify-center shadow-md shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
               <ClipboardList className="w-4 h-4 text-white" />
@@ -2625,7 +2632,8 @@ export default function ResumeScoringPage({
 
             {/* Score Resumes Button - only shown to users with run scoring permission */}
             {canRunScoring && (
-              <button
+              <Button
+                variant="primary"
                 onClick={() => {
                   setViewMode('new');
                   setSelectedJob('');
@@ -2633,11 +2641,10 @@ export default function ResumeScoringPage({
                   setSelectedResumes([]);
                   requestJobPickerScroll();
                 }}
-                className="px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center gap-2 shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 bg-brand-blue text-white hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
+                icon={<ClipboardList className="w-4 h-4" />}
               >
-                <ClipboardList className="w-4 h-4" />
                 Score Resumes
-              </button>
+              </Button>
             )}
           </div>
         </div>
@@ -2844,13 +2851,13 @@ export default function ResumeScoringPage({
                 {selectedHistoryItems.size} selected
               </span>
 
-              <button
+              <Button
+                variant="primary"
                 onClick={handleDownloadSelectedHistory}
-                className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm font-medium shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30"
+                icon={<Download className="w-4 h-4" />}
               >
-                <Download className="w-4 h-4" />
                 Download Selected ({selectedHistoryItems.size})
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -2950,13 +2957,14 @@ export default function ResumeScoringPage({
                       lives on the toolbar Clear button, so there is exactly one
                       clear control instead of one here and one outside. */}
                   <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
-                    <button
+                    <Button
+                      variant="primary"
+                      size="sm"
                       // The controls above commit as they change, so Done just closes.
                       onClick={() => setShowHistoryFilters(false)}
-                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
                     >
                       Done
-                    </button>
+                    </Button>
                   </div>
                 </div>
               );
@@ -3240,9 +3248,9 @@ export default function ResumeScoringPage({
                           {(() => {
                             const s = (item.jdStatus || 'published').toLowerCase();
                             const cfg: Record<string, { label: string; bg: string; text: string; border: string; dot: string }> = {
-                              published: { label: 'Published', bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-200',  dot: 'bg-green-500' },
-                              active:    { label: 'Published', bg: 'bg-green-50',  text: 'text-green-700',  border: 'border-green-200',  dot: 'bg-green-500' },
-                              closed:    { label: 'Closed',    bg: 'bg-red-50',    text: 'text-red-700',    border: 'border-red-200',    dot: 'bg-red-500' },
+                              published: { label: 'Published', bg: 'bg-success-subtle',  text: 'text-success',  border: 'border-success-line',  dot: 'bg-success' },
+                              active:    { label: 'Published', bg: 'bg-success-subtle',  text: 'text-success',  border: 'border-success-line',  dot: 'bg-success' },
+                              closed:    { label: 'Closed',    bg: 'bg-destructive-subtle',    text: 'text-destructive',    border: 'border-destructive-line',    dot: 'bg-destructive' },
                               archived:  { label: 'Archived',  bg: 'bg-gray-50',   text: 'text-gray-500',   border: 'border-gray-200',   dot: 'bg-gray-400' },
                               disabled:  { label: 'Disabled',  bg: 'bg-orange-50', text: 'text-orange-700', border: 'border-orange-200', dot: 'bg-orange-500' },
                               draft:     { label: 'Draft',     bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', border: 'border-brand-orange/20', dot: 'bg-brand-orange' },
@@ -3263,13 +3271,15 @@ export default function ResumeScoringPage({
                             </span>
                           )}
                           {/* History icon button */}
-                          <button
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={(e) => { e.stopPropagation(); setHistoryModalItem(item); }}
-                            className="inline-flex h-7 w-7 items-center justify-center p-1.5 rounded-lg border border-brand-cyan/20 bg-brand-cyan/10 text-brand-cyan hover:bg-brand-cyan/15 transition-colors flex-shrink-0"
+                            className="h-7 w-7 p-0 flex-shrink-0"
                             aria-label="Scoring History" title="Scoring History"
                           >
                             <History className="w-3.5 h-3.5" />
-                          </button>
+                          </Button>
                         </div>
 
                         {/* Info row — matches JD list card exactly */}
@@ -3328,7 +3338,9 @@ export default function ResumeScoringPage({
                           just as well while taking up far more space. */}
                       <div className="flex flex-col gap-2 flex-shrink-0 w-full sm:w-auto">
                         <div className="flex items-center gap-1.5 self-end">
-                          <button
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedHistoryItem(item);
@@ -3348,21 +3360,23 @@ export default function ResumeScoringPage({
                             }}
                             aria-label="View Details"
                             title="View Details"
-                            className="h-9 w-9 flex items-center justify-center border border-brand-cyan/30 bg-white dark:bg-slate-900 text-brand-cyan hover:bg-brand-cyan/5 hover:border-brand-cyan/50 rounded-lg transition-colors"
+                            className="h-9 w-9 p-0"
                           >
                             <FileText className="w-4 h-4" />
-                          </button>
-                          <button
+                          </Button>
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={(e) => { e.stopPropagation(); openWholeJobProgress(); }}
                             disabled={loadingProgressJobId === item.jobId}
                             aria-label="View Progress"
                             title="View Progress (every version of this job)"
-                            className="h-9 w-9 flex items-center justify-center border border-brand-blue/30 bg-white dark:bg-slate-900 text-brand-blue hover:bg-brand-blue/5 hover:border-brand-blue/50 rounded-lg transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+                            className="h-9 w-9 p-0"
                           >
                             {loadingProgressJobId === item.jobId
                               ? <Loader2 className="w-4 h-4 animate-spin" />
                               : <WorkInProgressIcon className="w-4 h-4" />}
-                          </button>
+                          </Button>
                         </div>
                         {hasVersionHistory && (
                           <button
@@ -3447,18 +3461,18 @@ export default function ResumeScoringPage({
                 Start scoring resumes against job descriptions to see your results here. Our AI will analyze and rank candidates based on job fit.
               </p>
               {canRunScoring && (
-                <button
+                <Button
+                  variant="primary"
                   onClick={() => {
                     setViewMode('new');
                     setSelectedJob('');
                     setResumeSource(null);
                     setSelectedResumes([]);
                   }}
-                  className="px-4 py-2 rounded-lg transition-all font-medium text-sm shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 inline-flex items-center gap-1.5 bg-brand-blue text-white hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
+                  icon={<ClipboardList className="w-4 h-4" />}
                 >
-                  <ClipboardList className="w-4 h-4" />
                   Score Resumes Now
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -3746,7 +3760,7 @@ export default function ResumeScoringPage({
           .sort((a, b) => b.version - a.version);
         const VERSION_ACCENTS = [
           { dot: 'bg-blue-600', bar: 'bg-blue-600' },
-          { dot: 'bg-green-600', bar: 'bg-green-600' },
+          { dot: 'bg-success', bar: 'bg-success' },
           { dot: 'bg-orange-500', bar: 'bg-orange-500' },
           { dot: 'bg-purple-600', bar: 'bg-purple-600' },
           { dot: 'bg-brand-cyan', bar: 'bg-brand-cyan' },
@@ -3784,12 +3798,13 @@ export default function ResumeScoringPage({
                       and the guard in refreshHistoryModalData drops repeat
                       clicks until it settles. Same pattern as the Track
                       Invites popup's own manual Refresh button. */}
-                  <button
+                  <Button
+                    variant="secondary"
+                    size="sm"
                     onClick={() => refreshHistoryModalData(historyModalItem)}
                     disabled={isRefreshingHistoryModal}
                     title="Fetch the latest scoring history"
                     aria-label="Refresh"
-                    className="flex items-center gap-1.5 px-2 sm:px-3 py-1.5 text-xs sm:text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0 ${isRefreshingHistoryModal ? 'animate-spin' : ''}`} />
                     {/* The label swaps to "Refreshing..." mid-request, and the
@@ -3799,10 +3814,10 @@ export default function ResumeScoringPage({
                     <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
                       {isRefreshingHistoryModal ? 'Refreshing...' : 'Refresh'}
                     </span>
-                  </button>
-                  <button onClick={() => setHistoryModalItem(null)} className="p-1.5 hover:bg-gray-100 dark:hover:bg-slate-700 rounded-lg transition-colors" aria-label="Close">
-                    <X className="w-5 h-5 text-gray-500 dark:text-slate-500" />
-                  </button>
+                  </Button>
+                  <Button variant="secondary" size="sm" onClick={() => setHistoryModalItem(null)} className="px-2" aria-label="Close">
+                    <X className="w-5 h-5" />
+                  </Button>
                 </div>
               </div>
 
@@ -3827,12 +3842,12 @@ export default function ResumeScoringPage({
                     </div>
                   </div>
                   <div className="flex items-center gap-2.5 p-3.5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
-                    <div className="w-10 h-10 rounded-full bg-green-50 flex items-center justify-center flex-shrink-0">
-                      <CheckCircle className="w-4 h-4 text-green-600" />
+                    <div className="w-10 h-10 rounded-full bg-success-subtle flex items-center justify-center flex-shrink-0">
+                      <CheckCircle className="w-4 h-4 text-success" />
                     </div>
                     <div className="min-w-0">
                       <div className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">Exact Match</div>
-                      <div className="text-xl font-bold text-green-600">{summary.exact}</div>
+                      <div className="text-xl font-bold text-success">{summary.exact}</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-2.5 p-3.5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
@@ -3845,12 +3860,12 @@ export default function ResumeScoringPage({
                     </div>
                   </div>
                   <div className="flex items-center gap-2.5 p-3.5 rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900">
-                    <div className="w-10 h-10 rounded-full bg-red-50 flex items-center justify-center flex-shrink-0">
-                      <XCircle className="w-4 h-4 text-red-500" />
+                    <div className="w-10 h-10 rounded-full bg-destructive-subtle flex items-center justify-center flex-shrink-0">
+                      <XCircle className="w-4 h-4 text-destructive" />
                     </div>
                     <div className="min-w-0">
                       <div className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">No Match</div>
-                      <div className="text-xl font-bold text-red-500">{summary.noMatch}</div>
+                      <div className="text-xl font-bold text-destructive">{summary.noMatch}</div>
                     </div>
                   </div>
                 </div>
@@ -3923,14 +3938,15 @@ export default function ResumeScoringPage({
                     </div>
                     {isHistoryModalFilterActive && (
                       <div className="flex-shrink-0">
-                        <button
+                        <Button
                           type="button"
+                          variant="secondary"
                           onClick={resetHistoryModalFilters}
-                          className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium border border-red-200 dark:border-red-900/50 rounded-full text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/30 hover:bg-red-100 dark:hover:bg-red-950/50 transition-colors whitespace-nowrap"
+                          icon={<XCircle className="w-4 h-4" />}
+                          className="whitespace-nowrap"
                         >
-                          <XCircle className="w-4 h-4" />
                           Reset
-                        </button>
+                        </Button>
                       </div>
                     )}
                   </div>
@@ -3978,9 +3994,9 @@ export default function ResumeScoringPage({
                             <th rowSpan={2} className="py-2.5 px-3 font-bold text-gray-900 dark:text-slate-100 align-bottom text-right">Action</th>
                           </tr>
                           <tr className="text-left bg-brand-sky dark:bg-slate-800">
-                            <th className="py-1.5 px-3 font-semibold text-green-700 dark:text-green-400">Exact</th>
+                            <th className="py-1.5 px-3 font-semibold text-success">Exact</th>
                             <th className="py-1.5 px-3 font-semibold text-brand-orange-deep dark:text-orange-400">Partial</th>
-                            <th className="py-1.5 px-3 font-semibold text-red-600 dark:text-red-400">No Match</th>
+                            <th className="py-1.5 px-3 font-semibold text-destructive">No Match</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100 dark:divide-slate-800">
@@ -4006,22 +4022,24 @@ export default function ResumeScoringPage({
                                   </span>
                                 </td>
                                 <td className="py-2.5 px-3 font-semibold text-gray-900 dark:text-slate-100">{g.count}</td>
-                                <td className="py-2.5 px-3 text-center font-semibold text-green-700 bg-green-50/60 dark:bg-green-500/10 dark:text-green-400">{g.exactCount}</td>
+                                <td className="py-2.5 px-3 text-center font-semibold text-success bg-success-subtle/60">{g.exactCount}</td>
                                 <td className="py-2.5 px-3 text-center font-semibold text-brand-orange-deep bg-orange-50/60 dark:bg-orange-500/10 dark:text-orange-400">{g.partialCount}</td>
-                                <td className="py-2.5 px-3 text-center font-semibold text-red-600 bg-red-50/60 dark:bg-red-500/10 dark:text-red-400">{g.noMatchCount}</td>
+                                <td className="py-2.5 px-3 text-center font-semibold text-destructive bg-destructive-subtle/60">{g.noMatchCount}</td>
                                 <td className="py-2.5 px-3 font-bold text-brand-blue">{Math.round(g.totalScore / g.count)}</td>
                                 <td className="py-2.5 px-3 text-right">
                                   {/* Always a direct link to this session's JD scoring page
                                       (filtered to this day) — never an inline expand/collapse,
                                       regardless of how many resumes the session scored. */}
-                                  <button
+                                  <Button
+                                    variant="secondary"
+                                    size="sm"
                                     onClick={() => goToHistoryResume(g.resumes[0])}
-                                    className="p-1.5 rounded-lg text-gray-400 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
+                                    className="px-2"
                                     aria-label="View job scores"
                                     title="View job scores"
                                   >
                                     <Eye className="w-4 h-4" />
-                                  </button>
+                                  </Button>
                                 </td>
                             </tr>
                           );
@@ -4040,7 +4058,7 @@ export default function ResumeScoringPage({
                   <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50">
                     <div className="min-w-0">
                       <p className="text-sm font-bold text-gray-900 dark:text-slate-100">Job Version Average</p>
-                      <p className="text-[11px] text-gray-500 dark:text-slate-500">Average score by version</p>
+                      <p className="text-2xs text-gray-500 dark:text-slate-500">Average score by version</p>
                     </div>
                     <TrendingUp className="w-4 h-4 text-brand-blue flex-shrink-0" />
                   </div>
@@ -4156,8 +4174,8 @@ export default function ResumeScoringPage({
                       <JobIdBadge>{selectedJobData.job_id}</JobIdBadge>
                     )}
                     <span className="font-semibold text-gray-900 dark:text-slate-50 text-sm">{selectedJobData.title}</span>
-                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-50 text-green-700 border border-green-200">
-                      <span className="w-1.5 h-1.5 rounded-full bg-green-500 inline-block"></span>
+                    <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-success-subtle text-success border border-success-line">
+                      <span className="w-1.5 h-1.5 rounded-full bg-success inline-block"></span>
                       Published
                     </span>
                     {selectedJobData.creation_method === 'ai_generated' && (
@@ -4194,13 +4212,14 @@ export default function ResumeScoringPage({
                 </div>
               </div>
               {canRunScoring && (
-                <button
+                <Button
+                  variant="primary"
                   onClick={() => setShowResumeSelectionModal(true)}
-                  className="w-full sm:w-auto px-4 py-2 rounded-lg transition-all text-sm font-medium flex items-center justify-center gap-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
+                  className="w-full sm:w-auto"
+                  icon={<ClipboardList className="w-4 h-4" />}
                 >
-                  <ClipboardList className="w-4 h-4" />
                   Select Resumes
-                </button>
+                </Button>
               )}
             </div>
           </div>

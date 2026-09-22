@@ -617,19 +617,19 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
                   {assessment.short_id && (
-                    <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 bg-brand-blue text-white rounded font-semibold">
+                    <span className="text-2xs sm:text-xs px-1.5 sm:px-2 py-0.5 bg-brand-blue text-white rounded font-semibold">
                       {assessment.short_id}
                     </span>
                   )}
                   <span className="text-gray-900 dark:text-slate-50">{assessmentTitleForEmail}</span>
                   <VersionBadge version={assessment.version} size="sm" variant="secondary" />
                   {allAssessments.length > 1 && (
-                    <span className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full font-medium">
+                    <span className="text-2xs sm:text-xs px-1.5 sm:px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full font-medium">
                       +{allAssessments.length - 1} more
                     </span>
                   )}
                 </div>
-                <div className="flex flex-wrap items-center gap-1.5 sm:gap-4 text-[10px] sm:text-sm text-gray-600 dark:text-slate-400">
+                <div className="flex flex-wrap items-center gap-1.5 sm:gap-4 text-2xs sm:text-sm text-gray-600 dark:text-slate-400">
                   <span className="flex items-center gap-1">
                     <Clock className="w-3 h-3 sm:w-4 sm:h-4" />
                     {assessment.duration}
@@ -660,7 +660,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                   })()}
                 </div>
                 {assessment.jd_short_id && (
-                  <div className="text-[10px] sm:text-xs text-gray-600 dark:text-slate-400 mt-1">
+                  <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mt-1">
                     <span className="font-medium">Linked: </span>
                     <span className="text-gray-800 dark:text-slate-100">{assessment.jd_short_id}</span>
                     {assessment.jd_title && (
@@ -673,12 +673,12 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                 )}
                 {allAssessments.length > 1 && (
                   <div className="mt-2 pt-2 border-t border-gray-200 dark:border-slate-700">
-                    <p className="text-[10px] sm:text-xs text-gray-600 dark:text-slate-400 font-medium mb-1">
+                    <p className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 font-medium mb-1">
                       Invitations for {allAssessments.length} assessments:
                     </p>
                     <div className="space-y-1">
                       {allAssessments.map((a, idx) => (
-                        <div key={idx} className="text-[10px] sm:text-xs px-2 py-1 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] text-gray-700 dark:text-slate-300 rounded">
+                        <div key={idx} className="text-2xs sm:text-xs px-2 py-1 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] text-gray-700 dark:text-slate-300 rounded">
                           <div className="flex items-center gap-1 flex-wrap">
                             {a.short_id && <span className="font-semibold">{a.short_id}</span>}
                             <span className="truncate">{stripVersionFromTitle(a.title)}</span>
@@ -863,7 +863,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       )}
                       <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                         <div>
-                          <label className="text-[10px] sm:text-xs text-gray-600 dark:text-slate-400 mb-0.5 sm:mb-1 block">Full Name</label>
+                          <label className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mb-0.5 sm:mb-1 block">Full Name</label>
                           <input
                             type="text"
                             value={candidate.name}
@@ -876,7 +876,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                           />
                         </div>
                         <div>
-                          <label className="text-[10px] sm:text-xs text-gray-600 dark:text-slate-400 mb-0.5 sm:mb-1 block">Email Address</label>
+                          <label className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mb-0.5 sm:mb-1 block">Email Address</label>
                           <input
                             type="email"
                             value={candidate.email}
@@ -892,7 +892,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                             }`}
                           />
                           {candidate.email.trim() && !isValidEmail(candidate.email) && (
-                            <p className="text-[10px] sm:text-xs text-red-500 mt-0.5 sm:mt-1">Enter a valid email</p>
+                            <p className="text-2xs sm:text-xs text-red-500 mt-0.5 sm:mt-1">Enter a valid email</p>
                           )}
                         </div>
                       </div>
@@ -1046,7 +1046,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
           <div className="mb-4 sm:mb-6">
             <div className="flex items-center justify-between mb-1.5 sm:mb-2">
               <label className="text-xs sm:text-base text-gray-900 dark:text-slate-50 font-medium">Email Message</label>
-              <span className="text-[10px] sm:text-xs text-brand-blue font-medium">✓ Live preview</span>
+              <span className="text-2xs sm:text-xs text-brand-blue font-medium">✓ Live preview</span>
             </div>
             <textarea
               value={customMessage}
@@ -1055,7 +1055,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               className="w-full px-3 sm:px-4 py-2 sm:py-3 border border-gray-200 dark:border-slate-700 rounded-lg text-xs sm:text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue resize-none font-mono text-black placeholder-gray-400"
               placeholder="Edit the message content here..."
             />
-            <p className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mt-1">
+            <p className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 mt-1">
               Use <code className="bg-slate-100 px-1 rounded">[Candidate Name]</code> as a placeholder.
             </p>
           </div>
@@ -1097,11 +1097,11 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                 <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                 <h3 className="text-xs sm:text-base text-gray-900 dark:text-slate-50 font-semibold">Email Preview</h3>
               </div>
-              <span className="text-[10px] sm:text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full font-medium">
+              <span className="text-2xs sm:text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full font-medium">
                 Exact format
               </span>
             </div>
-            <p className="text-[10px] sm:text-xs text-gray-600 dark:text-slate-400 mb-3 sm:mb-4 bg-white dark:bg-slate-900 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 border border-brand-blue/20">
+            <p className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mb-3 sm:mb-4 bg-white dark:bg-slate-900 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 border border-brand-blue/20">
               This is how the email will appear to candidates.
             </p>
 
@@ -1110,7 +1110,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               {/* Brand Header */}
               <div className="bg-gradient-to-r from-brand-blue to-brand-cyan px-4 sm:px-8 py-4 sm:py-8 text-center">
                 <h1 className="text-white text-base sm:text-2xl font-bold mb-1 sm:mb-2">Assessment Invitation</h1>
-                <p className="text-white/80 text-[10px] sm:text-sm">TalentFlow</p>
+                <p className="text-white/80 text-2xs sm:text-sm">TalentFlow</p>
               </div>
 
               {/* Email Body */}
@@ -1135,15 +1135,15 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                 </div>
 
                 {/* Expiry Info */}
-                <p className="text-center text-gray-600 dark:text-slate-400 text-[10px] sm:text-sm mb-4 sm:mb-6">
+                <p className="text-center text-gray-600 dark:text-slate-400 text-2xs sm:text-sm mb-4 sm:mb-6">
                   Expires: <strong>{expiryDays > 0 ? `${expiryDays} day${expiryDays > 1 ? 's' : ''}` : 'No expiry'}</strong>
                 </p>
               </div>
 
               {/* Footer */}
               <div className="bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-8 py-3 sm:py-6 text-center border-t border-gray-200 dark:border-slate-700">
-                <p className="text-gray-500 dark:text-slate-500 text-[10px] sm:text-xs mb-1 sm:mb-2">© 2026 TalentFlow. All rights reserved.</p>
-                <p className="text-gray-400 dark:text-slate-500 text-[10px] sm:text-xs">If you did not expect this email, please ignore it.</p>
+                <p className="text-gray-500 dark:text-slate-500 text-2xs sm:text-xs mb-1 sm:mb-2">© 2026 TalentFlow. All rights reserved.</p>
+                <p className="text-gray-400 dark:text-slate-500 text-2xs sm:text-xs">If you did not expect this email, please ignore it.</p>
               </div>
             </div>
           </div>

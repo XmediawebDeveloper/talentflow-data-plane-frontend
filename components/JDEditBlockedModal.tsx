@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { Loader2, AlertTriangle, LayoutGrid, ShieldCheck, ChevronRight, X, Lightbulb } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import type { JDUsageModule } from '@/lib/utils/jdUsageModules';
 
 /**
@@ -66,8 +67,8 @@ export default function JDEditBlockedModal({
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-[95vw] sm:max-w-lg w-full max-h-[90dvh] flex flex-col border border-gray-300 dark:border-slate-700">
         {/* Header */}
         <div className="flex items-start gap-3 px-4 sm:px-5 pt-4 pb-3 shrink-0">
-          <div className="w-9 h-9 rounded-full bg-amber-100 dark:bg-amber-500/15 flex items-center justify-center shrink-0">
-            <AlertTriangle className="w-[18px] h-[18px] text-amber-600 dark:text-amber-400" />
+          <div className="w-9 h-9 rounded-full bg-warning-subtle flex items-center justify-center shrink-0">
+            <AlertTriangle className="w-[18px] h-[18px] text-warning" />
           </div>
           <div className="min-w-0 flex-1">
             <h3
@@ -81,25 +82,27 @@ export default function JDEditBlockedModal({
               modified to maintain data integrity.
             </p>
           </div>
-          <button
+          <Button
+            variant="secondary"
+            size="sm"
             onClick={onClose}
             disabled={creating}
-            className="p-1 -mt-0.5 -mr-0.5 hover:bg-gray-100 dark:hover:bg-slate-800 rounded transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed"
+            className="px-2 -mt-0.5 -mr-0.5 shrink-0"
             aria-label="Close"
           >
-            <X className="w-5 h-5 text-gray-500 dark:text-slate-400" />
-          </button>
+            <X className="w-5 h-5" />
+          </Button>
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 sm:px-5 pb-4 space-y-3">
           {modules.length > 0 ? (
-            <div className="rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-500/5 p-3">
+            <div className="rounded-lg border border-warning-line bg-warning-subtle/60 p-3">
               <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-amber-100 dark:bg-amber-500/15 flex items-center justify-center shrink-0">
-                  <LayoutGrid className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+                <div className="w-8 h-8 rounded-full bg-warning-subtle flex items-center justify-center shrink-0">
+                  <LayoutGrid className="w-4 h-4 text-warning" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h4 className="text-xs font-semibold uppercase tracking-wide text-amber-700 dark:text-amber-400">
+                  <h4 className="text-xs font-semibold uppercase tracking-wide text-warning">
                     Active in ({modules.length})
                   </h4>
                   <p className="text-xs text-gray-600 dark:text-slate-400 leading-relaxed mt-0.5">
@@ -121,7 +124,7 @@ export default function JDEditBlockedModal({
                           <span className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
                             {module.name}
                           </span>
-                          <span className="px-1.5 py-px text-[11px] font-medium rounded bg-brand-blue/10 text-brand-blue shrink-0">
+                          <span className="px-1.5 py-px text-2xs font-medium rounded bg-brand-blue/10 text-brand-blue shrink-0">
                             {module.count}
                           </span>
                         </div>
@@ -158,7 +161,7 @@ export default function JDEditBlockedModal({
           ) : (
             /* Blocked for a reason the usage breakdown does not name — show
                whatever the backend said rather than inventing a module. */
-            <div className="rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50/60 dark:bg-amber-500/5 p-3">
+            <div className="rounded-lg border border-warning-line bg-warning-subtle/60 p-3">
               <p className="text-xs text-gray-700 dark:text-slate-300 leading-relaxed">
                 {reason || 'This JD cannot be edited because it is already in use.'}
               </p>
@@ -192,8 +195,8 @@ export default function JDEditBlockedModal({
                 indented by the icon's width plus the gap (24 + 8 = pl-8) so
                 its text starts on the same vertical line as "Tip:". */}
             <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded-full bg-amber-100 dark:bg-amber-500/15 flex items-center justify-center shrink-0">
-                <Lightbulb className="w-3.5 h-3.5 text-amber-600 dark:text-amber-400" />
+              <div className="w-6 h-6 rounded-full bg-warning-subtle flex items-center justify-center shrink-0">
+                <Lightbulb className="w-3.5 h-3.5 text-warning" />
               </div>
               <h4 className="text-xs font-semibold text-gray-900 dark:text-slate-100 leading-none">Tip:</h4>
             </div>
@@ -218,17 +221,17 @@ export default function JDEditBlockedModal({
 
         {/* Footer */}
         <div className="flex flex-col sm:flex-row gap-2 sm:justify-end px-4 sm:px-5 py-3 border-t border-gray-200 dark:border-slate-700 shrink-0">
-          <button
+          <Button
+            variant="secondary"
             onClick={handleCreateNewJD}
             disabled={creating}
-            className="px-4 py-2 bg-white dark:bg-slate-900 text-sm font-medium text-gray-900 dark:text-slate-100 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             Create New JD
-          </button>
-          <button
+          </Button>
+          <Button
+            variant="primary"
             onClick={onCreateNewVersion}
             disabled={creating}
-            className="px-4 py-2 bg-brand-blue text-sm font-medium text-white rounded-lg hover:bg-brand-blue-2 transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
           >
             {creating ? (
               <>
@@ -241,7 +244,7 @@ export default function JDEditBlockedModal({
             ) : (
               'Create New Version'
             )}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

@@ -3,7 +3,7 @@ import {
   Download, CheckCircle, XCircle, Clock, AlertTriangle,
   FileText, RefreshCw, Eye, Calendar, Mail, User, Building2, Hash, Activity,
   Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff, Loader2,
-  ChevronLeft, ChevronRight, MailWarning, LogOut, Ban, Save
+  ChevronLeft, ChevronRight, MailWarning, LogOut, Ban, Save, Copy, X
 } from 'lucide-react';
 import { assessmentService, CombinedAuditActivity, CombinedAuditTrailResponse } from '@/lib/services';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -12,6 +12,7 @@ import ListToolbar from '@/components/ui/list-toolbar';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 type CategoryFilter = 'all' | 'assessment_lifecycle' | 'candidate_activity';
 
@@ -19,8 +20,10 @@ type CategoryFilter = 'all' | 'assessment_lifecycle' | 'candidate_activity';
 const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
   assessment_created: <Plus className="w-4 h-4" />,
   assessment_updated: <Edit className="w-4 h-4" />,
+  assessment_version_created: <Copy className="w-4 h-4" />,
   assessment_deleted: <Trash2 className="w-4 h-4" />,
   assessment_published: <Send className="w-4 h-4" />,
+  assessment_activated: <RefreshCw className="w-4 h-4" />,
   assessment_archived: <FileText className="w-4 h-4" />,
   assessment_saved_as_draft: <Save className="w-4 h-4" />,
   assessment_draft_updated: <Save className="w-4 h-4" />,
@@ -40,21 +43,23 @@ const ACTIVITY_ICONS: Record<string, React.ReactNode> = {
 const ACTIVITY_COLORS: Record<string, { bg: string; text: string; icon: string; border: string }> = {
   assessment_created: { bg: 'bg-brand-blue/5', text: 'text-brand-blue', icon: 'text-brand-blue', border: 'border-brand-blue/20' },
   assessment_updated: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
-  assessment_deleted: { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500', border: 'border-red-200' },
-  assessment_published: { bg: 'bg-green-50', text: 'text-green-700', icon: 'text-green-500', border: 'border-green-200' },
+  assessment_version_created: { bg: 'bg-brand-blue/5', text: 'text-brand-blue', icon: 'text-brand-blue', border: 'border-brand-blue/20' },
+  assessment_deleted: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
+  assessment_published: { bg: 'bg-success-subtle', text: 'text-success', icon: 'text-success', border: 'border-success-line' },
+  assessment_activated: { bg: 'bg-green-50', text: 'text-green-700', icon: 'text-green-500', border: 'border-green-200' },
   assessment_archived: { bg: 'bg-slate-50', text: 'text-gray-700', icon: 'text-gray-500', border: 'border-gray-200' },
   assessment_saved_as_draft: { bg: 'bg-brand-blue/5', text: 'text-brand-blue', icon: 'text-brand-blue', border: 'border-brand-blue/20' },
   assessment_draft_updated: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
   invites_revoked: { bg: 'bg-slate-50', text: 'text-gray-700', icon: 'text-gray-500', border: 'border-gray-200' },
   candidate_invited: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
   candidate_started: { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', icon: 'text-brand-orange', border: 'border-brand-orange/20' },
-  candidate_completed: { bg: 'bg-green-50', text: 'text-green-700', icon: 'text-green-500', border: 'border-green-200' },
-  candidate_failed: { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500', border: 'border-red-200' },
+  candidate_completed: { bg: 'bg-success-subtle', text: 'text-success', icon: 'text-success', border: 'border-success-line' },
+  candidate_failed: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
   candidate_expired: { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', icon: 'text-brand-orange', border: 'border-brand-orange/20' },
-  invite_failed: { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500', border: 'border-red-200' },
+  invite_failed: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
   invite_email_changed: { bg: 'bg-brand-cyan/5', text: 'text-brand-cyan', icon: 'text-brand-cyan', border: 'border-brand-cyan/20' },
   candidate_exited: { bg: 'bg-brand-orange/10', text: 'text-brand-orange-deep', icon: 'text-brand-orange', border: 'border-brand-orange/20' },
-  candidate_errored: { bg: 'bg-red-50', text: 'text-red-700', icon: 'text-red-500', border: 'border-red-200' },
+  candidate_errored: { bg: 'bg-destructive-subtle', text: 'text-destructive', icon: 'text-destructive', border: 'border-destructive-line' },
 };
 
 export default function AssessmentAuditTrail() {
@@ -156,9 +161,44 @@ export default function AssessmentAuditTrail() {
     if (page === 1) loadAuditTrail();
   }, [searchTerm, filterDateFrom, filterDateTo]);
 
-  const handleExportAuditLogs = () => {
-    console.log('Exporting audit logs:', activities);
-    toast.info(`Exporting ${activities.length} audit log entries to CSV`);
+  const [isExporting, setIsExporting] = useState(false);
+  // "Export Logs" opens the format dialog rather than downloading straight
+  // away — the same choice the Assessment Results export offers, and the
+  // format the recruiter picks is what the audit trail then names
+  // ("Activity Logs Exported – CSV" / "– Excel").
+  const [showExportModal, setShowExportModal] = useState(false);
+
+  // Honors whatever the tab is currently filtered to — not just the
+  // current page — so the export matches what the recruiter is looking at.
+  // The backend logs this call itself.
+  const handleExportAuditLogs = async (exportFormat: 'csv' | 'excel') => {
+    if (isExporting) return;
+    setIsExporting(true);
+    setShowExportModal(false);
+    try {
+      const blob = await assessmentService.exportCombinedAuditTrail({
+        category: categoryFilter === 'all' ? undefined : categoryFilter,
+        search: searchTerm || undefined,
+        date_from: filterDateFrom || undefined,
+        date_to: filterDateTo || undefined,
+        format: exportFormat,
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+      link.download = `assessment_activity_logs_${stamp}.${exportFormat === 'excel' ? 'xlsx' : 'csv'}`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success(`Activity logs exported as ${exportFormat === 'excel' ? 'Excel' : 'CSV'}`);
+    } catch (error) {
+      console.error('Failed to export audit logs:', error);
+      toast.error('Failed to export activity logs. Please try again.');
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -288,7 +328,7 @@ export default function AssessmentAuditTrail() {
                 <SegmentIcon className={`w-3.5 h-3.5 flex-shrink-0 ${segment.text}`} />
                 <span className="hidden sm:inline">{segment.label}</span>
                 <span className="sm:hidden">{segment.short}</span>
-                <span className={`inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-[10px] font-semibold tabular-nums ring-1 transition-colors ${segment.text} ${segment.tint} ${segment.ring}`}>
+                <span className={`inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-2xs font-semibold tabular-nums ring-1 transition-colors ${segment.text} ${segment.tint} ${segment.ring}`}>
                   {isLoading ? '—' : segment.value.toLocaleString()}
                 </span>
               </button>
@@ -306,7 +346,7 @@ export default function AssessmentAuditTrail() {
             { icon: Plus, value: stats.assessments_created, label: 'created', text: 'text-brand-blue' },
             { icon: Mail, value: stats.candidates_invited, label: 'invited', text: 'text-brand-cyan' },
             { icon: Clock, value: stats.candidates_in_progress, label: 'in progress', text: 'text-brand-orange' },
-            { icon: CheckCircle, value: stats.candidates_completed, label: 'completed', text: 'text-green-600' },
+            { icon: CheckCircle, value: stats.candidates_completed, label: 'completed', text: 'text-success' },
           ]).map((item, index) => {
             const ItemIcon = item.icon;
             return (
@@ -339,13 +379,20 @@ export default function AssessmentAuditTrail() {
               </p>
             </div>
 
-            <button
-              onClick={handleExportAuditLogs}
-              className="self-start sm:self-auto px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 rounded-md hover:bg-slate-100 transition-colors flex items-center gap-1.5 sm:gap-2"
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={() => setShowExportModal(true)}
+              disabled={isExporting}
+              className="self-start sm:self-auto"
+              icon={isExporting ? (
+                <Loader2 className="w-3.5 h-3.5 sm:w-4 sm:h-4 animate-spin" />
+              ) : (
+                <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
+              )}
             >
-              <Download className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              Export Logs
-            </button>
+              {isExporting ? 'Exporting…' : 'Export Logs'}
+            </Button>
           </div>
 
           {/* Search + filters in the job-openings format. */}
@@ -391,12 +438,13 @@ export default function AssessmentAuditTrail() {
               {/* Panel footer: "Done" applies the selection and reveals the
                   toolbar Clear - same flow as job-openings. */}
               <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
-                <button
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={() => { search.applyFilters(); setShowFilters(false); }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white bg-brand-blue transition-colors hover:bg-brand-blue-2 shadow-sm shadow-brand-blue/25"
                 >
                   Done
-                </button>
+                </Button>
               </div>
             </div>
             }
@@ -478,7 +526,7 @@ export default function AssessmentAuditTrail() {
                               <h4 className={`text-sm sm:text-base font-medium ${colors.text}`}>
                                 {activity.title}
                               </h4>
-                              <span className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${
+                              <span className={`text-2xs sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${
                                 activity.category === 'assessment_lifecycle'
                                   ? 'bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20'
                                   : 'bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/20'
@@ -486,15 +534,15 @@ export default function AssessmentAuditTrail() {
                                 {getCategoryLabel(activity.category)}
                               </span>
                               {activity.passed !== null && activity.passed !== undefined && (
-                                <span className={`text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${
-                                  activity.passed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                                <span className={`text-2xs sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-full ${
+                                  activity.passed ? 'bg-success-subtle text-success' : 'bg-destructive-subtle text-destructive'
                                 }`}>
                                   {activity.passed ? 'Passed' : 'Failed'}
                                 </span>
                               )}
                             </div>
                             <p className="text-xs sm:text-sm text-gray-600 line-clamp-2">{activity.description}</p>
-                            <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1.5 sm:mt-2 text-[10px] sm:text-xs text-gray-500">
+                            <div className="flex flex-wrap items-center gap-2 sm:gap-4 mt-1.5 sm:mt-2 text-2xs sm:text-xs text-gray-500">
                               {activity.actor_name && (
                                 <span className="flex items-center gap-1">
                                   <User className="w-3 h-3 flex-shrink-0" />
@@ -517,7 +565,7 @@ export default function AssessmentAuditTrail() {
                           </div>
                           <div className="flex sm:flex-col items-center sm:items-end gap-2 sm:gap-0 flex-shrink-0 mt-1 sm:mt-0">
                             <p className="text-xs sm:text-sm text-gray-500">{formatTimestamp(activity.timestamp)}</p>
-                            <button className="sm:mt-1 text-[10px] sm:text-xs text-gray-400 hover:text-brand-blue">
+                            <button className="sm:mt-1 text-2xs sm:text-xs text-gray-400 hover:text-brand-blue">
                               <Eye className="w-3 h-3 inline mr-0.5 sm:mr-1" />
                               {isExpanded ? 'Hide' : 'Details'}
                             </button>
@@ -561,7 +609,7 @@ export default function AssessmentAuditTrail() {
                           {activity.assessment_id && (
                             <div className="break-all">
                               <span className="text-gray-500">Assessment ID:</span>
-                              <span className="ml-1.5 sm:ml-2 text-gray-900 font-mono text-[10px] sm:text-xs">{activity.assessment_id}</span>
+                              <span className="ml-1.5 sm:ml-2 text-gray-900 font-mono text-2xs sm:text-xs">{activity.assessment_id}</span>
                             </div>
                           )}
                         </div>
@@ -623,6 +671,76 @@ export default function AssessmentAuditTrail() {
           )}
         </div>
       </div>
+
+      {/* Export format dialog — the same choice, wording and layout the
+          Assessment Results export opens with. One step, not two: the tab's
+          own filters already decide what goes in the file, so there is no
+          scope question to ask after the format. */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+          <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
+            <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100 bg-gray-50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-base sm:text-lg font-medium text-gray-900 tracking-tight">Export Activity Logs</h3>
+                  <p className="text-xs sm:text-sm text-gray-500 mt-1">Choose format</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="p-1 text-gray-400 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4 sm:w-5 sm:h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 sm:p-5">
+              <p className="text-xs sm:text-sm text-gray-600 mb-3 sm:mb-4">Choose export format:</p>
+
+              <div className="space-y-2.5 sm:space-y-3">
+                <button
+                  onClick={() => handleExportAuditLogs('csv')}
+                  className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border border-gray-200 rounded-xl hover:bg-brand-blue/5 hover:border-brand-blue/30 transition-all group"
+                >
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 flex items-center justify-center transition-colors flex-shrink-0">
+                    <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-green-700" />
+                  </div>
+                  <div className="text-left flex-1 min-w-0">
+                    <div className="text-sm sm:text-base font-medium text-gray-900">CSV Format</div>
+                    <div className="text-xs sm:text-sm text-gray-500">Compatible with Excel, Google Sheets</div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => handleExportAuditLogs('excel')}
+                  className="w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 border border-gray-200 rounded-xl hover:bg-brand-blue/5 hover:border-brand-blue/30 transition-all group"
+                >
+                  <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center transition-colors flex-shrink-0">
+                    <FileText className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
+                  </div>
+                  <div className="text-left flex-1 min-w-0">
+                    <div className="text-sm sm:text-base font-medium text-gray-900">Excel Format (XLSX)</div>
+                    <div className="text-xs sm:text-sm text-gray-500">Native Excel format with better formatting</div>
+                  </div>
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 p-4 sm:p-5 border-t border-gray-100">
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-md transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

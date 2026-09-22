@@ -41,8 +41,8 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
       <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full p-8">
         {/* Success Icon */}
         <div className="flex justify-center mb-6">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center">
-            <CheckCircle className="w-12 h-12 text-green-500" />
+          <div className="w-20 h-20 bg-success-subtle rounded-full flex items-center justify-center">
+            <CheckCircle className="w-12 h-12 text-success" />
           </div>
         </div>
 
@@ -93,9 +93,9 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
         <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 mb-6 text-center">
           <div className="flex items-center justify-center gap-2 mb-1">
             <span className="text-lg">&#x1F44D;</span>
-            <span className="font-semibold text-green-700">Thank You!</span>
+            <span className="font-semibold text-success">Thank You!</span>
           </div>
-          <p className="text-sm text-green-600">
+          <p className="text-sm text-success">
             We appreciate the time and effort you put into this assessment. Good luck with your application!
           </p>
         </div>
@@ -116,7 +116,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
             <CheckSquare className="w-5 h-5 text-gray-400 mx-auto mb-2" />
             <p className="text-sm text-gray-500 mb-1">Status</p>
             <div className="flex items-center justify-center">
-              <CheckCircle className="w-6 h-6 text-green-500" />
+              <CheckCircle className="w-6 h-6 text-success" />
             </div>
           </div>
         </div>

@@ -5,12 +5,15 @@ import {
   Users, Brain, Shield, Globe, Save, ChevronDown, ChevronUp,
   MessageSquare, Info, AlertCircle, Timer, Zap,
   Video, Upload, Layers, ChevronRight, Camera, Play,
-  Lock, ArrowRightLeft, Mic, QrCode,
+  Lock, ArrowRightLeft, Mic, QrCode, Eye, ArrowLeft, ClipboardList,
+  Trash2, Settings2,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import UnsavedChangesModal from '@/components/UnsavedChangesModal';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { Button } from '@/components/ui/button';
 import type {
   PublishedJD,
   AIInterviewRoundConfig,
@@ -29,6 +32,12 @@ import { STT_MODELS, DEFAULT_STT_MODEL } from '@/lib/constants/aiInterviewSttMod
 import { PROXY_INTEGRITY_VERIFICATION_ENABLED } from '@/lib/constants/featureFlags';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
 import AIInterviewFlowLoader from './AIInterviewFlowLoader';
+import { SectionHeader, SummaryLocation, SummaryTips } from './ConfigSummary';
+import WizardDiscardButton from './WizardDiscardButton';
+import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
+import JDFullViewModal from '@/components/jobs/JDFullViewModal';
+import { publishedJdToJob } from '@/lib/utils/publishedJdToJob';
+import { formatEmploymentType, formatIndustryType } from '@/lib/utils/jobOpeningDisplay';
 import {
   closestDuplicate,
   findInvalidSkillPunctuation,
@@ -39,6 +48,21 @@ import {
 /*  Step indicator constants                                               */
 /* ─────────────────────────────────────────────────────────────────────── */
 const CURRENT_STEP = 2 as const;
+
+/* The languages the AI interviewer can run an interview in. English is the
+   only one live today; the list is what a second language gets added to. */
+const CANDIDATE_LANGUAGES = ['English'] as const;
+
+/* The tabs of the Additional Settings card. Proxy verification is behind its
+   feature flag, so the tab only exists where the panel does. */
+type AdditionalSettingTab = 'video' | 'languages' | 'proxy';
+const ADDITIONAL_SETTING_TABS: { key: AdditionalSettingTab; label: string; icon: LucideIcon }[] = [
+  { key: 'video', label: 'Introduction Video', icon: Video },
+  { key: 'languages', label: 'Candidate Languages', icon: Globe },
+  ...(PROXY_INTEGRITY_VERIFICATION_ENABLED
+    ? [{ key: 'proxy' as const, label: 'Proxy Integrity', icon: QrCode }]
+    : []),
+];
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                  */
@@ -343,7 +367,7 @@ const SUPPORTED_LANGUAGES = [
 function PriorityBadge({ p }: { p: number }) {
   const { label, color } = getPriorityLabel(p);
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full border ${color}`}>
+    <span className={`inline-flex items-center px-2 py-0.5 text-2xs font-medium rounded-full border ${color}`}>
       {label}
     </span>
   );
@@ -355,6 +379,8 @@ function PriorityBadge({ p }: { p: number }) {
 
 interface SkillSectionProps {
   title: string;
+  /** One line under the title saying what the bucket is for. */
+  subtitle?: string;
   category: 'mth' | 'nth';
   config: CategoryConfig;
   jdSkillNames: string[];   // original from JD (read-only label)
@@ -381,7 +407,7 @@ interface SkillSectionProps {
   hideClustersView?: boolean;
 }
 
-function SkillSection({ title, category, config, jdSkillNames, mode, questionCount, flexibleMinutes, onChange, otherBucketSkills = [], onMoveSkill, isLocked = false, onResetClusters, hideClustersView = false, jdId }: SkillSectionProps) {
+function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, questionCount, flexibleMinutes, onChange, otherBucketSkills = [], onMoveSkill, isLocked = false, onResetClusters, hideClustersView = false, jdId }: SkillSectionProps) {
   const [commentOpen, setCommentOpen] = useState<string | null>(null);
   const [collapsedClusters, setCollapsedClusters] = useState<Set<string>>(new Set());
   const [skillToDelete, setSkillToDelete] = useState<string | null>(null);
@@ -604,15 +630,15 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
       <div key={skill.name} className="group">
         <div className="flex items-center gap-2">
           <span className={`flex-1 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border ${
-            fromJd ? color.tag : 'bg-green-50 text-green-700 border-green-200'
+            fromJd ? color.tag : 'bg-advice-positive-bg text-advice-positive border-advice-positive/25'
           }`}>
             {skill.name}
-            {fromJd && <span className="text-[10px] opacity-60">JD</span>}
+            {fromJd && <span className="text-2xs opacity-60">JD</span>}
           </span>
           <select
             value={skillType}
             onChange={e => updateSkillType(skill.name, e.target.value as SkillType)}
-            className={`text-[10px] font-medium px-1.5 py-0.5 rounded border cursor-pointer focus:outline-none ${SKILL_TYPE_COLORS[skillType]}`}
+            className={`text-2xs font-medium px-1.5 py-0.5 rounded border cursor-pointer focus:outline-none ${SKILL_TYPE_COLORS[skillType]}`}
           >
             <option value="Skill">Skill</option>
             <option value="Command">Command</option>
@@ -622,18 +648,23 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
             <button
               title={category === 'mth' ? 'Move to Nice-to-Have' : 'Move to Must-Have'}
               onClick={() => onMoveSkill(skill.name)}
-              className="p-1 text-gray-300 hover:text-brand-blue transition-colors opacity-0 group-hover:opacity-100"
+              className="p-1 text-gray-400 hover:text-brand-blue transition-colors flex-shrink-0"
             >
               <ArrowRightLeft className="w-3.5 h-3.5" />
             </button>
           )}
-          {/* Hide delete when locked in flexible mode */}
+          {/* Hide delete when locked in flexible mode.
+              Always drawn, never hover-revealed: a control that appears only
+              once the pointer is over its row is invisible to anyone scanning
+              the list, and on touch there is no hover to reveal it with. */}
           {!(mode === 'flexible' && isLocked) && (
             <button
               onClick={() => setSkillToDelete(skill.name)}
-              className="p-1 text-gray-300 hover:text-red-500 transition-colors opacity-0 group-hover:opacity-100"
-             aria-label="Close">
-              <X className="w-3.5 h-3.5" />
+              className="p-1 text-gray-400 hover:text-destructive transition-colors flex-shrink-0"
+              title={`Remove ${skill.name}`}
+              aria-label={`Remove ${skill.name}`}
+            >
+              <Trash2 className="w-4 h-4" />
             </button>
           )}
         </div>
@@ -649,7 +680,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
             <button
               onClick={() => { updateComment(skill.name, ''); setCommentOpen(null); }}
               aria-label="Clear & close" title="Clear & close"
-              className="p-1 text-gray-400 hover:text-red-500 transition-colors flex-shrink-0"
+              className="p-1 text-gray-400 hover:text-destructive transition-colors flex-shrink-0"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -661,28 +692,38 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
 
   return (
     <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-        <div className="flex items-center gap-2">
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${
-            category === 'mth' ? 'from-brand-blue/10 to-brand-cyan/10 ring-1 ring-brand-blue/15' : 'from-brand-cyan/10 to-brand-teal/10 ring-1 ring-brand-cyan/15'
-          }`}>
-            <Brain className={`w-5 h-5 ${color.accent}`} />
-          </div>
-          <span className="font-semibold text-gray-900 text-sm tracking-tight">{title}</span>
-          {mode === 'fixed' && (
-            <span className="px-2 py-0.5 text-xs rounded-full bg-brand-blue/10 text-brand-blue border border-brand-blue/20">
-              {questionCount} questions
-            </span>
-          )}
-          {mode === 'flexible' && (
-            <span className="px-2 py-0.5 text-xs rounded-full bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20">
-              ~{flexibleMinutes} min
-            </span>
-          )}
-        </div>
+      {/* Header — skipped entirely when a host card draws its own (the
+          Nice-to-Have wrapper does), so the card does not open with an empty
+          bordered strip. */}
+      <div className={`flex items-start justify-between gap-3 px-4 ${
+        title || mode === 'flexible' ? 'py-3 border-b border-gray-100' : 'py-0'
+      }`}>
+        {/* `title` is empty when a host card draws its own heading (the
+            Nice-to-Have wrapper does), and then this row carries only the
+            chips — an icon tile beside a blank line read as a rendering bug. */}
+        {title ? (
+          <SectionHeader
+            icon={Brain}
+            title={title}
+            subtitle={subtitle}
+            tone={category === 'mth' ? 'blue' : 'cyan'}
+            trailing={
+              mode === 'fixed' ? (
+                <span className="px-2 py-0.5 text-xs rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                  {questionCount} questions
+                </span>
+              ) : (
+                <span className="px-2 py-0.5 text-xs rounded-full bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
+                  ~{flexibleMinutes} min
+                </span>
+              )
+            }
+          />
+        ) : (
+          <span />
+        )}
         {mode === 'flexible' && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             <label className="text-xs text-gray-500">Weight</label>
             <div className="flex items-center">
               <input
@@ -701,14 +742,14 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
                 }}
                 onBlur={() => { if (config.percentage < 10) setWeightError(true); }}
                 className={`w-14 text-center text-sm font-semibold border rounded-l-md px-1 py-0.5 focus:outline-none focus:ring-2 ${
-                  weightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
+                  weightError ? 'border-destructive focus:ring-destructive-line' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
                 }`}
               />
               <span className={`px-2 py-0.5 text-sm border border-l-0 rounded-r-md bg-slate-50 ${
-                weightError ? 'border-red-400 text-red-600' : 'border-gray-200 text-gray-600'
+                weightError ? 'border-destructive text-destructive' : 'border-gray-200 text-gray-600'
               }`}>%</span>
             </div>
-            {weightError && <span className="text-[11px] text-red-500 ml-1">Min 10%</span>}
+            {weightError && <span className="text-2xs text-destructive ml-1">Min 10%</span>}
           </div>
         )}
       </div>
@@ -718,9 +759,9 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
         {/* Inline warning when all entries are Command — the
             interview needs at least one type "Skill" to assess as a competency. */}
         {config.skills.length > 0 && !config.skills.some(s => (s.type ?? 'Skill') === 'Skill') && (
-          <div className="flex items-start gap-2 px-3 py-2 bg-red-50 border border-red-200 rounded-lg">
-            <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
-            <p className="text-xs text-red-700">
+          <div className="flex items-start gap-2 px-3 py-2 bg-destructive-subtle border border-destructive-line rounded-lg">
+            <AlertCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-destructive">
               Add at least one entry of type <strong>Skill</strong> here.
               All current entries are Commands, which can&apos;t be assessed as a standalone competency.
             </p>
@@ -771,15 +812,15 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
                 className={`w-full px-3 py-2 text-sm border rounded-lg focus:outline-none focus:ring-2 ${
                   addSkillError
                     ? (pendingOverride
-                        ? 'border-amber-300 focus:ring-amber-400'
-                        : 'border-red-300 focus:ring-red-400')
+                        ? 'border-warning-line focus:ring-warning-line'
+                        : 'border-destructive-line focus:ring-destructive-line')
                     : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
                 }`}
               />
               {addSkillError && (
                 // Amber + an explicit instruction while an override is pending —
                 // the toast vanishes, so the actionable hint has to live here.
-                <p className={`mt-1 text-[11px] ${pendingOverride ? 'text-amber-600' : 'text-red-500'}`}>
+                <p className={`mt-1 text-2xs ${pendingOverride ? 'text-warning' : 'text-destructive'}`}>
                   {addSkillError}
                   {pendingOverride && (
                     <span className="font-medium"> — press Add again to keep both.</span>
@@ -787,15 +828,15 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
                 </p>
               )}
             </div>
-            <button
-              type="button"
+            <Button
+              variant="primary"
+              size="md"
               onClick={addSkill}
               disabled={checkingDuplicate}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-sm font-medium text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors disabled:opacity-60 disabled:cursor-wait"
+              icon={<Plus className="w-4 h-4" />}
             >
-              <Plus className="w-4 h-4" />
               {checkingDuplicate ? 'Checking…' : 'Add'}
-            </button>
+            </Button>
           </div>
         </div>
         )}
@@ -836,14 +877,14 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
                         }
                         <span className="flex-1 text-sm font-medium text-gray-800">{cluster.name || 'Unnamed Topic'}</span>
                         <PriorityBadge p={cluster.priority} />
-                        <span className="text-[11px] text-gray-400">{clusterSkills.length} skill{clusterSkills.length !== 1 ? 's' : ''}</span>
+                        <span className="text-2xs text-gray-400">{clusterSkills.length} skill{clusterSkills.length !== 1 ? 's' : ''}</span>
                       </button>
 
                       {/* Cluster body */}
                       {!isCollapsed && (
                         <div className="px-3 py-2.5 space-y-1.5 border-t border-gray-100">
                           {cluster.reason && (
-                            <p className="text-[11px] text-gray-500 italic mb-1">{cluster.reason}</p>
+                            <p className="text-2xs text-gray-500 italic mb-1">{cluster.reason}</p>
                           )}
                           {clusterSkills.length === 0 && (
                             <p className="text-xs text-gray-400 italic">No matching skills</p>
@@ -861,7 +902,7 @@ function SkillSection({ title, category, config, jdSkillNames, mode, questionCou
                   <div className="flex items-center gap-2 px-3 py-2.5 bg-brand-orange/5">
                     <AlertCircle className="w-3.5 h-3.5 text-brand-orange flex-shrink-0" />
                     <span className="flex-1 text-sm font-medium text-brand-orange-deep">Unassigned Skills</span>
-                    <span className="text-[11px] text-brand-orange">{unclusteredSkills.length} skill{unclusteredSkills.length !== 1 ? 's' : ''}</span>
+                    <span className="text-2xs text-brand-orange">{unclusteredSkills.length} skill{unclusteredSkills.length !== 1 ? 's' : ''}</span>
                   </div>
                   <div className="px-3 py-2.5 space-y-1.5 border-t border-brand-orange/20">
                     {unclusteredSkills.map(skill => renderSkillTag(skill))}
@@ -1018,32 +1059,42 @@ function HRSection({
 
   return (
     <div className={`rounded-xl transition-all ${enabled ? 'bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5' : 'border border-gray-100 bg-slate-50 opacity-60'}`}>
-      <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-        <div className="flex items-center gap-2">
-          <label className="relative inline-flex items-center cursor-pointer">
-            <input type="checkbox" checked={enabled} onChange={onToggle} className="sr-only peer" />
-            <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gradient-to-r peer-checked:from-brand-blue peer-checked:to-brand-blue-2 peer-checked:shadow-sm peer-checked:shadow-brand-blue/25 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
-          </label>
-          <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15">
-            <Users className="w-5 h-5 text-brand-blue" />
-          </div>
-          <span className="font-semibold text-gray-900 text-sm tracking-tight">HR Round</span>
-          <span className="px-2 py-0.5 text-[11px] rounded-full bg-brand-blue/10 text-brand-blue border border-brand-blue/20 font-medium">
-            Qualitative Only — Non-Scoring
-          </span>
-          {enabled && mode === 'fixed' && (
-            <span className="px-2 py-0.5 text-xs rounded-full bg-brand-blue/10 text-brand-blue border border-brand-blue/20">
-              {questionCount} questions
+      <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-gray-100">
+        <SectionHeader
+          icon={Users}
+          title="HR Round"
+          subtitle="Non-technical questions Bina asks alongside the technical rounds."
+          leading={
+            /* The switch's knob is positioned against this label, so the label
+               itself carries no padding — an offset here moved the knob out of
+               its own track. Vertical alignment lives on the wrapper. */
+            <span className="flex items-center h-10 flex-shrink-0">
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input type="checkbox" checked={enabled} onChange={onToggle} className="sr-only peer" />
+                <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gradient-to-r peer-checked:from-brand-blue peer-checked:to-brand-blue-2 peer-checked:shadow-sm peer-checked:shadow-brand-blue/25 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
+              </label>
             </span>
-          )}
-          {enabled && mode === 'flexible' && (
-            <span className="px-2 py-0.5 text-xs rounded-full bg-brand-cyan/10 text-brand-cyan border border-brand-cyan/20">
-              ~{flexibleMinutes} min
-            </span>
-          )}
-        </div>
+          }
+          trailing={
+            <>
+              <span className="px-2 py-0.5 text-2xs rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 font-medium">
+                Qualitative Only — Non-Scoring
+              </span>
+              {enabled && mode === 'fixed' && (
+                <span className="px-2 py-0.5 text-xs rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                  {questionCount} questions
+                </span>
+              )}
+              {enabled && mode === 'flexible' && (
+                <span className="px-2 py-0.5 text-xs rounded-full bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
+                  ~{flexibleMinutes} min
+                </span>
+              )}
+            </>
+          }
+        />
         {enabled && mode === 'flexible' && (
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5 flex-shrink-0">
             <label className="text-xs text-gray-500">Weight</label>
             <div className="flex items-center">
               <input
@@ -1067,14 +1118,14 @@ function HRSection({
                 }}
                 onBlur={() => { setHrWeightError(enabled && mode === 'flexible' && percentage < 10); }}
                 className={`w-14 text-center text-sm font-semibold border rounded-l-md px-1 py-0.5 focus:outline-none focus:ring-2 ${
-                  hrWeightError ? 'border-red-400 focus:ring-red-400' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
+                  hrWeightError ? 'border-destructive focus:ring-destructive-line' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
                 }`}
               />
               <span className={`px-2 py-0.5 text-sm border border-l-0 rounded-r-md bg-slate-50 ${
-                hrWeightError ? 'border-red-400 text-red-600' : 'border-gray-200 text-gray-600'
+                hrWeightError ? 'border-destructive text-destructive' : 'border-gray-200 text-gray-600'
               }`}>%</span>
             </div>
-            {hrWeightError && <span className="text-[11px] text-red-500 ml-1">HR round must be at least 10%</span>}
+            {hrWeightError && <span className="text-2xs text-destructive ml-1">HR round must be at least 10%</span>}
           </div>
         )}
       </div>
@@ -1091,20 +1142,20 @@ function HRSection({
                     ? `Select exactly ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Bina to ask`
                     : `Select at least ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Bina to ask`}
                 </span>
-                <span className="block text-[11px] text-gray-400">
+                <span className="block text-2xs text-gray-400">
                   Closing is the default tag. Mark any question as Opening to ask it before the technical rounds; Closing questions are asked at the end.
                 </span>
               </div>
-              <span className={`text-xs font-semibold ${selectedIds.length >= effectiveCount ? 'text-green-600' : 'text-gray-500'}`}>
+              <span className={`text-xs font-semibold ${selectedIds.length >= effectiveCount ? 'text-advice-positive' : 'text-gray-500'}`}>
                 {selectedIds.length} / {effectiveCount} selected
               </span>
             </div>
 
             {/* Limit reached banner */}
             {atLimit && (
-              <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-green-50 border border-green-200">
-                <AlertCircle className="w-3.5 h-3.5 text-green-500 flex-shrink-0 mt-0.5" />
-                <p className="text-[11px] text-green-700">
+              <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-advice-positive-bg border border-advice-positive/25">
+                <AlertCircle className="w-3.5 h-3.5 text-advice-positive flex-shrink-0 mt-0.5" />
+                <p className="text-2xs text-advice-positive">
                   {effectiveCount} question{effectiveCount !== 1 ? 's' : ''} selected — limit reached. Deselect a question to choose a different one.
                 </p>
               </div>
@@ -1140,7 +1191,7 @@ function HRSection({
                     <div className="flex-1 min-w-0">
                       <p className="text-xs text-gray-800 leading-relaxed">{q.question_text}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
-                        <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Ask As</span>
+                        <span className="text-2xs font-semibold uppercase tracking-wide text-gray-400">Ask As</span>
                         <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white p-1">
                           <button
                             type="button"
@@ -1150,10 +1201,13 @@ function HRSection({
                               e.stopPropagation();
                               setQuestionStage(q.id, 'opening');
                             }}
-                            className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                            className={`px-2.5 py-1 rounded-full text-2xs font-medium transition-colors ${
                               selectedStage === 'opening'
-                                ? 'bg-green-500 text-white shadow-sm'
-                                : 'bg-gray-100 text-gray-500'
+                                /* Dark mode flips --advice-positive to a light
+                                   green, where white text would wash out — the
+                                   label goes dark there instead. */
+                                ? 'bg-advice-positive text-white dark:text-gray-900 shadow-sm ring-1 ring-advice-positive/40'
+                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                             }`}
                           >
                             Opening
@@ -1166,17 +1220,20 @@ function HRSection({
                               e.stopPropagation();
                               setQuestionStage(q.id, 'closing');
                             }}
-                            className={`px-2.5 py-1 rounded-full text-[11px] font-medium transition-colors ${
+                            className={`px-2.5 py-1 rounded-full text-2xs font-medium transition-colors ${
                               selectedStage === 'closing'
-                                ? 'bg-green-500 text-white shadow-sm'
-                                : 'bg-gray-100 text-gray-500'
+                                /* Dark mode flips --advice-positive to a light
+                                   green, where white text would wash out — the
+                                   label goes dark there instead. */
+                                ? 'bg-advice-positive text-white dark:text-gray-900 shadow-sm ring-1 ring-advice-positive/40'
+                                : 'bg-gray-100 text-gray-500 hover:bg-gray-200'
                             }`}
                           >
                             Closing
                           </button>
                         </div>
                         {!isSelected && (
-                          <span className="text-[10px] text-gray-400">Select the question to include it in the interview.</span>
+                          <span className="text-2xs text-gray-400">Select the question to include it in the interview.</span>
                         )}
                       </div>
                     </div>
@@ -1191,7 +1248,7 @@ function HRSection({
             <div className="border border-gray-100 rounded-lg p-3 space-y-2 bg-slate-50 ring-1 ring-black/[0.02]">
               <div className="flex items-center justify-between">
                 <span className="text-xs font-medium text-gray-700">Add Question To HR Question Bank</span>
-                <span className="text-[11px] text-gray-400">Saved to database</span>
+                <span className="text-2xs text-gray-400">Saved to database</span>
               </div>
               <textarea
                 autoFocus
@@ -1203,33 +1260,35 @@ function HRSection({
                 }}
                 placeholder="Enter question text…"
                 className={`w-full text-xs border rounded-md px-2.5 py-1.5 focus:outline-none focus:ring-2 resize-none bg-white ${
-                  questionError ? 'border-red-300 focus:ring-red-400' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
+                  questionError ? 'border-destructive-line focus:ring-destructive-line' : 'border-gray-200 focus:ring-brand-blue/40 focus:border-brand-blue'
                 }`}
               />
               {questionError && (
-                <p className="text-[11px] text-red-500">{questionError}</p>
+                <p className="text-2xs text-destructive">{questionError}</p>
               )}
               <div className="flex items-center gap-2">
                 <div className="flex-1" />
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => {
                     setAddingQuestion(false);
                     setNewQText('');
                     setNewQType('text');
                     setQuestionError('');
                   }}
-                  className="text-xs text-gray-500 hover:text-gray-700 px-2 py-1"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
                   onClick={saveNewQuestion}
                   disabled={savingQ || !newQText.trim()}
-                  className="flex items-center gap-1 text-xs bg-brand-blue hover:bg-brand-blue-2 text-white px-3 py-1.5 rounded-md shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
+                  icon={savingQ ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                 >
-                  {savingQ ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
                   Save
-                </button>
+                </Button>
               </div>
             </div>
           ) : (
@@ -1245,7 +1304,7 @@ function HRSection({
           {/* Info */}
           <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-brand-orange/5 via-white to-brand-orange/5 border border-brand-orange/20 ring-1 ring-brand-orange/10 shadow-sm shadow-brand-orange/5">
             <Info className="w-3.5 h-3.5 text-brand-orange flex-shrink-0 mt-0.5" />
-            <p className="text-[11px] text-brand-orange-deep">
+            <p className="text-2xs text-brand-orange-deep">
               HR responses are stored separately for recruiter review only.
               They do <strong>not</strong> impact the technical evaluation score.
             </p>
@@ -1372,6 +1431,13 @@ export default function AIInterviewConfig() {
   const [introVideoUrl, setIntroVideoUrl] = useState<string>('');
   const [uploadingVideo, setUploadingVideo] = useState(false);
   const [videoMode, setVideoMode] = useState<'upload' | 'record'>('upload');
+  /* Highlights the drop zone while a file is being dragged over it. */
+  const [videoDragActive, setVideoDragActive] = useState(false);
+  /* Which of the Additional Settings panels is open. */
+  const [additionalTab, setAdditionalTab] = useState<AdditionalSettingTab>('video');
+  /* The JD opens in a dialog from its card rather than on its own page:
+     reading it is a check made WHILE configuring, and leaving drops the form. */
+  const [jdViewOpen, setJdViewOpen] = useState(false);
   const [videoDurationError, setVideoDurationError] = useState<string>('');
   const [showVideoPreview, setShowVideoPreview] = useState(false);
   const [videoPreviewSrc, setVideoPreviewSrc] = useState<string>('');
@@ -1468,6 +1534,12 @@ export default function AIInterviewConfig() {
   const [showUnsavedDialog, setShowUnsavedDialog] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<string | null>(null);
   const isNavigatingRef = useRef(false);
+  // True once THIS visit has already written its exit checkpoint (the audit
+  // row that records the recruiter leaving the wizard — "AI Interview Saved
+  // as Draft" / "Draft Updated", chosen server-side). Every exit path sets
+  // it, and the unmount safety net below checks it, so a visit can never
+  // produce two checkpoint rows.
+  const exitCheckpointedRef = useRef(false);
 
   /* ── Load JD + restore draft if one exists ── */
   useEffect(() => {
@@ -2471,6 +2543,9 @@ export default function AIInterviewConfig() {
         const { id, mine } = await ensureDraftId(payload);
         if (!mine) await aiInterviewService.update(id, payload);
       }
+      // This save carried the exit flag, so the server has just written the
+      // visit's checkpoint row — the unmount net must not write a second one.
+      if (isExiting) exitCheckpointedRef.current = true;
       if (!silent) toast.success('Draft saved!');
       return true;
     } catch (err: any) {
@@ -2711,6 +2786,54 @@ export default function AIInterviewConfig() {
     router.push(needsRegeneration ? `${base}&autogen=1` : base);
   };
 
+  /**
+   * Record that the recruiter left this config, WITHOUT sending any of the
+   * page's current state.
+   *
+   * The audit trail is meant to show every visit to a config that ends in
+   * the recruiter walking away — "AI Interview Saved as Draft" when they
+   * changed nothing, "AI Interview Draft Updated" when they did. Only the
+   * dialog's Save button used to produce one, so leaving any other way
+   * (Discard, or an exit that never reaches the unsaved-changes guard at
+   * all — the header's account/notification menus are <button>s driving
+   * router.push, which the capture-phase link guard below cannot see) left
+   * no trace of the visit.
+   *
+   * An empty payload is the point: `save_and_exit` is an audit hint the
+   * server strips before the update, so nothing here overwrites the stored
+   * config. The server snapshots what is already in the database and picks
+   * the label by diffing it against the config's last checkpoint — the one
+   * place that decision is made, for every module.
+   */
+  const checkpointExit = async () => {
+    if (!existingDraftIdRef.current || exitCheckpointedRef.current) return;
+    exitCheckpointedRef.current = true;
+    try {
+      await aiInterviewService.update(existingDraftIdRef.current, { save_and_exit: true });
+    } catch {
+      // Best-effort: an audit checkpoint must never block the recruiter from
+      // leaving the page, and it has no visible result to report.
+      exitCheckpointedRef.current = false;
+    }
+  };
+
+  // The unmount net for exits the guards never see. Kept in a ref because a
+  // cleanup registered once (on mount) would otherwise close over the very
+  // first render's state and ids.
+  const checkpointExitRef = useRef(checkpointExit);
+  checkpointExitRef.current = checkpointExit;
+
+  useEffect(() => {
+    return () => {
+      // `isNavigatingRef` marks a departure some handler is already driving:
+      // Continue → Clusters (staying inside the wizard, where the checkpoint
+      // belongs to the exit from THAT page), or a Save/Discard that has
+      // already settled this visit's checkpoint.
+      if (isNavigatingRef.current) return;
+      void checkpointExitRef.current();
+    };
+  }, []);
+
   const handleSaveAndNavigate = async () => {
     setShowUnsavedDialog(false);
     isNavigatingRef.current = true;
@@ -2723,6 +2846,29 @@ export default function AIInterviewConfig() {
     if (pendingNavigation === '__back__') router.back();
     else if (pendingNavigation) router.push(pendingNavigation);
     setPendingNavigation(null);
+  };
+
+  /* Footer Discard — the same action the Clusters and Preview steps offer:
+     bin the draft this flow is building and leave. Kept identical to theirs so
+     the button does the same thing wherever the recruiter meets it. */
+  const handleDiscardDraft = async () => {
+    isNavigatingRef.current = true;
+    const draftId = existingDraftIdRef.current;
+    if (draftId) {
+      try {
+        await aiInterviewService.delete(draftId);
+        existingDraftIdRef.current = null;
+        toast.success('Draft discarded');
+      } catch {
+        // Silent — leaving is what was asked for; a failed delete leaves the
+        // draft in the list, where it can be removed directly.
+      }
+    }
+    router.push(
+      fromJobDetails && jdId
+        ? `/recruitment/job-details?id=${encodeURIComponent(jdId)}`
+        : '/recruitment/ai-interviews',
+    );
   };
 
   const handleDiscardAndNavigate = async () => {
@@ -2740,6 +2886,15 @@ export default function AIInterviewConfig() {
       } catch {
         // Silent — don't block navigation on delete failure
       }
+    } else {
+      // The draft stays. Record the visit's checkpoint before leaving, so
+      // reopening a config and walking away still appears in its activity
+      // log. Nothing of this page's state is sent — Discard must not push
+      // back anything the recruiter chose not to keep — so the server
+      // snapshots the config exactly as it stands and labels the row
+      // itself: untouched reads "Saved as Draft", edited (the 2s autosave
+      // has already persisted any edit by now) reads "Draft Updated".
+      await checkpointExit();
     }
     if (pendingNavigation === '__back__') router.back();
     else if (pendingNavigation) router.push(pendingNavigation);
@@ -2788,97 +2943,147 @@ export default function AIInterviewConfig() {
             }
           />
 
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-            <Brain className="w-5 h-5 text-brand-blue" />
-          </div>
-          <div>
-            <h1 className="text-gray-900 text-xl font-semibold tracking-tight">AI Interview Configuration</h1>
-            <p className="text-sm text-gray-500">Configure skills, clusters, and weightage for this interview</p>
-          </div>
-        </div>
+        {/* The page used to open with an "AI Interview Configuration" banner.
+            The breadcrumb names the page, the step indicator names the step,
+            and the JD card below names the record — the banner repeated all
+            three and pushed the first real control below the fold. */}
 
         {/* Step indicators */}
-        <AIInterviewStepIndicator
-          currentStep={CURRENT_STEP}
-          // Only step 1 is behind us. Route through the unsaved-changes dialog
-          // rather than pushing directly — this page's click interceptor only
-          // catches <a> elements, so a plain button would slip past the guard.
-          onStepClick={() => {
-            setPendingNavigation('/recruitment/ai-interviews/jd-selection');
-            setShowUnsavedDialog(true);
-          }}
-        />
+        <AIInterviewStepIndicator currentStep={CURRENT_STEP} />
+
+        {/* ── The JD this configuration is being built against ──────────────
+            The same row the JD picker draws, so the recruiter recognises the
+            record they just chose instead of re-reading a bare title: JD id,
+            status, version, then role / location / type and the dates. Full
+            width above the columns, where it reads as the page's subject
+            rather than as the first setting. */}
+        <div className="mb-5 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 px-4 py-3.5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <JobOpeningSummary job={publishedJdToJob(selectedJd)} mergeInfoRows />
+            </div>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-shrink-0">
+              {jdId && (
+                <button
+                  type="button"
+                  onClick={() => setJdViewOpen(true)}
+                  className="inline-flex items-center justify-center gap-1.5 text-sm text-brand-blue border border-brand-blue/40 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg hover:bg-brand-blue/10 hover:border-brand-blue transition-colors whitespace-nowrap"
+                  title="Read this job description"
+                >
+                  <Eye className="w-4 h-4" />
+                  View JD
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingNavigation('/recruitment/ai-interviews/jd-selection');
+                  setShowUnsavedDialog(true);
+                }}
+                className="text-sm text-gray-600 hover:text-brand-blue px-3 py-1.5 rounded-lg hover:bg-brand-blue/5 transition-colors whitespace-nowrap"
+              >
+                Change JD
+              </button>
+            </div>
+          </div>
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 
           {/* ── Left: main config ── */}
           <div className="lg:col-span-2 space-y-5">
 
-            {/* Selected JD */}
-            <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border border-brand-blue/15 ring-1 ring-brand-blue/10 rounded-xl shadow-sm shadow-brand-blue/10">
-              <div>
-                <p className="text-xs text-brand-blue mb-0.5 font-medium">Job Description</p>
-                <p className="font-semibold text-gray-900 tracking-tight">{selectedJd.title}</p>
-                {selectedJd.department && <p className="text-xs text-gray-500">{selectedJd.department}</p>}
-              </div>
-              <button onClick={() => router.push('/recruitment/ai-interviews/jd-selection')} className="text-sm text-gray-600 hover:text-brand-blue px-3 py-1.5 rounded-md hover:bg-brand-blue/5 transition-colors">
-                Change
-              </button>
-            </div>
-
             {/* ── Interview Mode + Make Clusters ── */}
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-4">
               <div>
-                <div className="flex items-center gap-2 mb-3">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15">
-                    <Clock className="w-5 h-5 text-brand-blue" />
-                  </div>
-                  <span className="font-semibold text-gray-900 text-sm tracking-tight">Interview Mode</span>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  {/* Fixed */}
-                  <button
-                    onClick={() => { setMode('fixed'); setBufferEnabled(false); }}
-                    className={`relative flex flex-col gap-1 p-4 rounded-xl border-2 text-left transition-all ${
-                      mode === 'fixed' ? 'border-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 shadow-sm shadow-brand-blue/10' : 'border-gray-200 bg-white hover:border-brand-blue/30 hover:bg-brand-blue/5'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Timer className={`w-4 h-4 ${mode === 'fixed' ? 'text-brand-blue' : 'text-gray-600'}`} />
-                      <span className={`font-semibold text-sm tracking-tight ${mode === 'fixed' ? 'text-brand-blue' : 'text-gray-900'}`}>Timed Mode — 30 min</span>
-                    </div>
-                    <p className={`text-xs ${mode === 'fixed' ? 'text-gray-700' : 'text-gray-500'}`}>
-                      Candidate response time is capped. AI narration excluded.
-                    </p>
-                    <div className={`mt-2 text-[11px] space-y-0.5 ${mode === 'fixed' ? 'text-gray-600' : 'text-gray-400'}`}>
-                      <div>Must-to-Have → {timedQDist.mth} questions</div>
-                      {nth.enabled && <div>Nice-to-Have → {timedQDist.nth} questions</div>}
-                      {hrEnabled && <div>HR Round → {timedQDist.hr} questions</div>}
-                    </div>
-                  </button>
-
-                  {/* Flexible */}
-                  <button
-                    onClick={() => setMode('flexible')}
-                    className={`relative flex flex-col gap-1 p-4 rounded-xl border-2 text-left transition-all ${
-                      mode === 'flexible' ? 'border-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 shadow-sm shadow-brand-blue/10' : 'border-gray-200 bg-white hover:border-brand-blue/30 hover:bg-brand-blue/5'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <Timer className={`w-4 h-4 ${mode === 'flexible' ? 'text-brand-blue' : 'text-gray-600'}`} />
-                      <span className={`font-semibold text-sm tracking-tight ${mode === 'flexible' ? 'text-brand-blue' : 'text-gray-900'}`}>Conversational — 30 min</span>
-                    </div>
-                    <p className={`text-xs ${mode === 'flexible' ? 'text-gray-700' : 'text-gray-500'}`}>
-                      No per-question timer. AI adapts based on candidate responses.
-                    </p>
-                    <div className={`mt-2 text-[11px] space-y-0.5 ${mode === 'flexible' ? 'text-gray-600' : 'text-gray-400'}`}>
-                      <div>Must-to-Have → {mth.percentage}% weight</div>
-                      {nth.enabled && <div>Nice-to-Have → {nth.percentage}% weight</div>}
-                      {hrEnabled && <div>HR Round → {hrPct}% weight</div>}
-                    </div>
-                  </button>
+                <SectionHeader
+                  icon={Clock}
+                  title="Interview Mode"
+                  subtitle="Choose how the interview will be conducted"
+                />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                  {/* The two modes read as one choice: a radio dot, the mode's
+                      name, what it does, then the per-round breakdown that
+                      mode actually produces — so the split is visible before
+                      it is picked rather than only in the sidebar after. */}
+                  {([
+                    {
+                      value: 'fixed' as const,
+                      label: 'Timed Mode — 30 min',
+                      recommended: true,
+                      description: 'Candidate responds within the allotted time. AI narration excluded.',
+                      lines: [
+                        `Must-to-Have — ${timedQDist.mth} questions`,
+                        ...(nth.enabled ? [`Nice-to-Have — ${timedQDist.nth} questions`] : []),
+                        ...(hrEnabled ? [`HR Round — ${timedQDist.hr} questions`] : []),
+                      ],
+                    },
+                    {
+                      value: 'flexible' as const,
+                      label: 'Conversational — 30 min',
+                      recommended: false,
+                      description: 'No per-question timer. AI adapts based on candidate responses.',
+                      lines: [
+                        `Must-to-Have — ${mth.percentage}% weight`,
+                        ...(nth.enabled ? [`Nice-to-Have — ${nth.percentage}% weight`] : []),
+                        ...(hrEnabled ? [`HR Round — ${hrPct}% weight`] : []),
+                      ],
+                    },
+                  ]).map(option => {
+                    const selected = mode === option.value;
+                    return (
+                      <button
+                        key={option.value}
+                        type="button"
+                        role="radio"
+                        aria-checked={selected}
+                        onClick={() => {
+                          if (option.value === 'fixed') { setMode('fixed'); setBufferEnabled(false); }
+                          else setMode('flexible');
+                        }}
+                        className={`relative flex flex-col gap-2 p-4 rounded-xl border-2 text-left transition-all ${
+                          selected
+                            ? 'border-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 shadow-sm shadow-brand-blue/10'
+                            : 'border-gray-200 bg-white hover:border-brand-blue/30 hover:bg-brand-blue/5'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span
+                              aria-hidden
+                              className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 transition-colors ${
+                                selected ? 'border-brand-blue bg-brand-blue' : 'border-gray-300 bg-white'
+                              }`}
+                            >
+                              {selected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                            </span>
+                            <span className={`font-semibold text-sm tracking-tight ${selected ? 'text-brand-blue' : 'text-gray-900'}`}>
+                              {option.label}
+                            </span>
+                          </div>
+                          {option.recommended && (
+                            <span className="inline-flex items-center px-2 py-0.5 text-2xs font-medium rounded-full bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25 flex-shrink-0">
+                              Recommended
+                            </span>
+                          )}
+                        </div>
+                        <p className={`text-xs ${selected ? 'text-gray-700' : 'text-gray-500'}`}>
+                          {option.description}
+                        </p>
+                        <div className="space-y-1 mt-0.5">
+                          {option.lines.map(line => (
+                            <div
+                              key={line}
+                              className={`flex items-center gap-1.5 text-2xs ${selected ? 'text-gray-700' : 'text-gray-500'}`}
+                            >
+                              <CheckCircle2 className={`w-3.5 h-3.5 flex-shrink-0 ${selected ? 'text-brand-blue' : 'text-gray-400'}`} />
+                              {line}
+                            </div>
+                          ))}
+                        </div>
+                      </button>
+                    );
+                  })}
                 </div>
 
                 {/* Buffer Time toggle — only in conversational mode */}
@@ -2918,15 +3123,11 @@ export default function AIInterviewConfig() {
 
             {/* ── Speech-to-Text Model ── */}
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-3">
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15">
-                  <Mic className="w-5 h-5 text-brand-blue" />
-                </div>
-                <div>
-                  <span className="font-semibold text-gray-900 text-sm tracking-tight">Speech-to-Text Model</span>
-                  <p className="text-xs text-gray-500">Engine used to transcribe the candidate&apos;s spoken answers.</p>
-                </div>
-              </div>
+              <SectionHeader
+                icon={Mic}
+                title="Speech-to-Text Model"
+                subtitle="Engine used to transcribe the candidate's spoken answers."
+              />
               <div className="flex items-center gap-2.5 flex-wrap">
                 <div className="relative">
                   <select
@@ -2947,7 +3148,7 @@ export default function AIInterviewConfig() {
                   return (
                     <>
                       {sel.recommended && (
-                        <span className="inline-flex items-center px-2 py-0.5 text-[11px] font-medium rounded-full bg-green-50 text-green-700 border border-green-200">
+                        <span className="inline-flex items-center px-2 py-0.5 text-2xs font-medium rounded-full bg-advice-positive-bg text-advice-positive ring-1 ring-advice-positive/25">
                           Recommended
                         </span>
                       )}
@@ -2961,6 +3162,7 @@ export default function AIInterviewConfig() {
             {/* ── MTH ── */}
             <SkillSection
               title="Must-To-Have Skills"
+              subtitle="The required skills for this role — the AI builds its technical questions from these."
               category="mth"
               config={mth}
               jdSkillNames={selectedJd.must_have_skills || []}
@@ -2978,8 +3180,9 @@ export default function AIInterviewConfig() {
 
             {/* ── NTH ── */}
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
-                <div className="flex items-center gap-2">
+              <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-gray-100">
+                <div className="flex items-start gap-2.5">
+                  <span className="flex items-center h-10 flex-shrink-0">
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input type="checkbox" checked={nth.enabled} onChange={() => {
                       const newNthEnabled = !nth.enabled;
@@ -3002,11 +3205,28 @@ export default function AIInterviewConfig() {
                     }} className="sr-only peer" />
                     <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gradient-to-r peer-checked:from-brand-blue peer-checked:to-brand-blue-2 peer-checked:shadow-sm peer-checked:shadow-brand-blue/25 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
                   </label>
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-cyan/10 ring-1 ring-brand-cyan/15">
+                  </span>
+                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex-shrink-0">
                     <Sparkles className="w-5 h-5 text-brand-cyan" />
                   </div>
-                  <span className="font-semibold text-gray-900 text-sm tracking-tight">Nice-To-Have Skills</span>
+                  <div className="min-w-0">
+                    <div className="font-semibold text-gray-900 text-sm tracking-tight">Nice-To-Have Skills</div>
+                    <p className="text-xs text-gray-500 mt-0.5">Optional skills that add value to the role.</p>
+                  </div>
                 </div>
+                {nth.enabled && (
+                  <div className="flex items-center h-10 flex-shrink-0">
+                    {mode === 'fixed' ? (
+                      <span className="px-2 py-0.5 text-xs rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                        {timedQDist.nth} questions
+                      </span>
+                    ) : (
+                      <span className="px-2 py-0.5 text-xs rounded-full bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20">
+                        ~{flexNthMin} min
+                      </span>
+                    )}
+                  </div>
+                )}
               </div>
 
               {nth.enabled && (
@@ -3070,295 +3290,345 @@ export default function AIInterviewConfig() {
             />
 
 
-            {/* Introduction Video (Optional) */}
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15">
-                  <Video className="w-5 h-5 text-brand-blue" />
-                </div>
-                <span className="text-sm font-medium text-gray-900 tracking-tight">Introduction Video</span>
-                <span className="text-xs text-gray-400">(Optional · max 1 min)</span>
+            {/* ── Additional settings ──────────────────────────────────────
+                Three optional extras that each held a card of their own,
+                which pushed the page's actual work further down for settings
+                most interviews never touch. Tabs keep them to one card. */}
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
+              <div className="p-4 pb-0">
+                <SectionHeader
+                  icon={Settings2}
+                  title="Additional Settings"
+                  subtitle="Optional extras: an introduction video, the interview language, and proxy checks."
+                />
               </div>
-              <p className="text-xs text-gray-500">
-                Upload or record a short video introducing the role. Candidates will see this before the interview starts.
-              </p>
 
-              {introVideoFile || introVideoUrl ? (
-                <div className="flex items-center gap-3 p-3 bg-slate-50 border border-gray-100 rounded-lg ring-1 ring-black/[0.02]">
-                  <Video className="w-5 h-5 text-brand-blue flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-gray-900 truncate">{introVideoFile?.name || 'Uploaded video'}</p>
-                    {introVideoFile && (
-                      <p className="text-xs text-gray-400">{(introVideoFile.size / (1024 * 1024)).toFixed(1)} MB</p>
-                    )}
-                  </div>
-                  {uploadingVideo ? (
-                    <Loader2 className="w-4 h-4 animate-spin text-brand-blue" />
-                  ) : (
-                    <div className="flex items-center gap-1">
-                      <button
-                        onClick={async () => {
-                          if (videoPreviewSrc) {
-                            setShowVideoPreview(true);
-                          } else if (introVideoUrl) {
-                            try {
-                              const res = await api.get(`/ai-interview/intro-video/${introVideoUrl}`, { responseType: 'blob' });
-                              const blobUrl = URL.createObjectURL(res.data);
-                              setVideoPreviewSrc(blobUrl);
-                              setShowVideoPreview(true);
-                            } catch {
-                              toast.error('Failed to load video preview');
-                            }
-                          }
-                        }}
-                        className="p-1 text-gray-400 hover:text-brand-blue transition-colors"
-                        title="Preview video"
-                      >
-                        <Play className="w-4 h-4" />
-                      </button>
-                      <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors" aria-label="Remove video" title="Remove video">
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <>
-                  {/* Upload / Record toggle */}
-                  <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+              <div role="tablist" aria-label="Additional settings" className="mt-3 px-4 flex items-center gap-1 border-b border-gray-100 overflow-x-auto scrollbar-hide">
+                {ADDITIONAL_SETTING_TABS.map(tab => {
+                  const active = additionalTab === tab.key;
+                  return (
                     <button
-                      onClick={() => setVideoMode('upload')}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors ${
-                        videoMode === 'upload'
-                          ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                          : 'bg-white text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
+                      key={tab.key}
+                      type="button"
+                      role="tab"
+                      aria-selected={active}
+                      onClick={() => setAdditionalTab(tab.key)}
+                      className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-colors ${
+                        active
+                          ? 'border-brand-blue text-brand-blue'
+                          : 'border-transparent text-gray-500 hover:text-brand-blue hover:border-brand-blue/30'
                       }`}
                     >
-                      <Upload className="w-3.5 h-3.5" />
-                      Upload Video
+                      <tab.icon className="w-4 h-4" />
+                      {tab.label}
                     </button>
-                    <button
-                      onClick={() => setVideoMode('record')}
-                      className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-xs font-medium transition-colors border-l border-gray-200 ${
-                        videoMode === 'record'
-                          ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                          : 'bg-white text-gray-600 hover:bg-brand-blue/5 hover:text-brand-blue'
-                      }`}
-                    >
-                      <Camera className="w-3.5 h-3.5" />
-                      Record Video
-                    </button>
-                  </div>
+                  );
+                })}
+              </div>
 
-                  {videoMode === 'upload' ? (
-                    <div>
-                      <label className="flex items-center justify-center gap-2 p-4 border-2 border-dashed border-gray-300 rounded-lg cursor-pointer hover:border-brand-blue/40 hover:bg-brand-blue/5 transition-colors">
-                        <Upload className="w-4 h-4 text-brand-blue" />
-                        <span className="text-sm text-gray-500">Click to upload a video (max 1 min)</span>
-                        <input
-                          type="file"
-                          accept="video/*"
-                          className="hidden"
-                          onChange={e => {
-                            const file = e.target.files?.[0];
-                            if (file) handleVideoUpload(file);
-                          }}
-                        />
-                      </label>
-                      {videoDurationError && (
-                        <p className="text-[11px] text-red-500 mt-1 flex items-center gap-1">
-                          <AlertCircle className="w-3 h-3" />
-                          {videoDurationError}
-                        </p>
+              {additionalTab === 'video' && (
+                <div role="tabpanel" className="p-4 space-y-2">
+                  <p className="text-xs text-gray-500">
+                    Upload or record a short video introducing the role — candidates see it before the interview starts. Optional, max 1 min.
+                  </p>
+                  {introVideoFile || introVideoUrl ? (
+                    <div className="flex items-center gap-3 p-3 bg-slate-50 border border-gray-100 rounded-lg ring-1 ring-black/[0.02]">
+                    <Video className="w-5 h-5 text-brand-blue flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-gray-900 truncate">{introVideoFile?.name || 'Uploaded video'}</p>
+                      {introVideoFile && (
+                        <p className="text-xs text-gray-400">{(introVideoFile.size / (1024 * 1024)).toFixed(1)} MB</p>
                       )}
                     </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {/* Camera preview */}
-                      <div className="relative rounded-lg overflow-hidden border border-gray-200 bg-black aspect-video">
-                        <video
-                          ref={videoPreviewRef}
-                          autoPlay
-                          muted
-                          playsInline
-                          className={`w-full h-full object-cover ${recordedPreviewUrl ? 'hidden' : ''}`}
-                          style={{ transform: 'scaleX(-1)' }}
-                        />
-                        {recordedPreviewUrl && (
-                          <video
-                            src={recordedPreviewUrl}
-                            controls
-                            className="w-full h-full object-cover"
-                          />
-                        )}
-
-                        {/* Timer overlay */}
-                        {isRecording && (
-                          <div className="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm">
-                            <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                            <span className="text-xs font-mono text-white">
-                              {String(Math.floor(recordingSeconds / 60)).padStart(2, '0')}:{String(recordingSeconds % 60).padStart(2, '0')} / 01:00
-                            </span>
-                          </div>
-                        )}
-
-                        {/* Remaining time bar */}
-                        {isRecording && (
-                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700">
-                            <div
-                              className="h-full bg-red-500 transition-all duration-1000 ease-linear"
-                              style={{ width: `${(recordingSeconds / 60) * 100}%` }}
-                            />
-                          </div>
-                        )}
-
-                        {/* Camera not started overlay */}
-                        {!cameraReady && !recordedPreviewUrl && !cameraError && (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900">
-                            <Camera className="w-8 h-8 text-gray-500 mb-2" />
-                            <p className="text-xs text-gray-400">Camera preview will appear here</p>
-                          </div>
-                        )}
-
-                        {/* Camera error */}
-                        {cameraError && (
-                          <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900">
-                            <AlertCircle className="w-6 h-6 text-red-400 mb-1" />
-                            <p className="text-xs text-red-400 text-center px-4">{cameraError}</p>
-                          </div>
-                        )}
+                    {uploadingVideo ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-brand-blue" />
+                    ) : (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={async () => {
+                            if (videoPreviewSrc) {
+                              setShowVideoPreview(true);
+                            } else if (introVideoUrl) {
+                              try {
+                                const res = await api.get(`/ai-interview/intro-video/${introVideoUrl}`, { responseType: 'blob' });
+                                const blobUrl = URL.createObjectURL(res.data);
+                                setVideoPreviewSrc(blobUrl);
+                                setShowVideoPreview(true);
+                              } catch {
+                                toast.error('Failed to load video preview');
+                              }
+                            }
+                          }}
+                          className="p-1 text-gray-400 hover:text-brand-blue transition-colors"
+                          title="Preview video"
+                        >
+                          <Play className="w-4 h-4" />
+                        </button>
+                        <button onClick={handleRemoveVideo} className="p-1 text-gray-400 hover:text-destructive hover:bg-destructive-subtle rounded transition-colors" aria-label="Remove video" title="Remove video">
+                          <X className="w-4 h-4" />
+                        </button>
                       </div>
-
-                      {/* Controls */}
-                      <div className="flex items-center justify-center gap-2">
-                        {!cameraReady && !isRecording && !recordedPreviewUrl && (
-                          <button
-                            onClick={startCamera}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
-                          >
-                            <Camera className="w-3.5 h-3.5" />
-                            Open Camera
-                          </button>
-                        )}
-                        {cameraReady && !isRecording && (
-                          <button
-                            onClick={startRecording}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                          >
-                            <span className="w-2.5 h-2.5 rounded-full bg-white" />
-                            Start Recording
-                          </button>
-                        )}
-                        {isRecording && (
-                          <button
-                            onClick={stopRecordingAndSave}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
-                          >
-                            <span className="w-2.5 h-2.5 rounded-sm bg-white" />
-                            Stop & Save
-                          </button>
-                        )}
-                        {recordedPreviewUrl && !uploadingVideo && (
-                          <button
-                            onClick={() => {
-                              setRecordedPreviewUrl('');
-                              setRecordingSeconds(0);
-                              startCamera();
-                            }}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                          >
-                            Re-record
-                          </button>
-                        )}
-                        {cameraReady && !isRecording && (
-                          <button
-                            onClick={stopCamera}
-                            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-                      <p className="text-[11px] text-gray-400 text-center">Recording auto-stops at 1 minute</p>
+                    )}
                     </div>
+                  ) : (
+                    <>
+                    {/* Two actions, side by side: the one in play is the filled
+                        button, the other stays outlined — the segmented control
+                        this replaced read as a filter, not as a choice of how to
+                        supply the video. */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      <button
+                        onClick={() => setVideoMode('upload')}
+                        className={`flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                          videoMode === 'upload'
+                            ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                            : 'bg-white text-gray-700 border border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                        }`}
+                      >
+                        <Upload className="w-4 h-4" />
+                        Upload Video
+                      </button>
+                      <button
+                        onClick={() => setVideoMode('record')}
+                        className={`flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-lg transition-colors ${
+                          videoMode === 'record'
+                            ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                            : 'bg-white text-gray-700 border border-gray-200 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                        }`}
+                      >
+                        <Camera className="w-4 h-4" />
+                        Record Video
+                      </button>
+                    </div>
+
+                    {videoMode === 'upload' ? (
+                      <div>
+                        {/* Drop target as well as a file picker: a video is
+                            normally sitting in a folder the recruiter already has
+                            open, and dragging it here is the shorter path. */}
+                        <label
+                          onDragOver={e => { e.preventDefault(); setVideoDragActive(true); }}
+                          onDragLeave={() => setVideoDragActive(false)}
+                          onDrop={e => {
+                            e.preventDefault();
+                            setVideoDragActive(false);
+                            const file = e.dataTransfer.files?.[0];
+                            if (!file) return;
+                            if (!file.type.startsWith('video/')) {
+                              toast.error('Drop a video file (MP4, MOV or WEBM)');
+                              return;
+                            }
+                            handleVideoUpload(file);
+                          }}
+                          className={`flex flex-col items-center justify-center gap-1.5 py-6 px-4 border-2 border-dashed rounded-lg cursor-pointer text-center transition-colors ${
+                            videoDragActive
+                              ? 'border-brand-blue bg-brand-blue/5'
+                              : 'border-gray-300 hover:border-brand-blue/40 hover:bg-brand-blue/5'
+                          }`}
+                        >
+                          <span className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                            <Upload className="w-4 h-4 text-brand-blue" />
+                          </span>
+                          <span className="text-sm text-gray-600">
+                            Drag and drop a video here, or <span className="text-brand-blue font-medium">click to upload</span> (max 1 min)
+                          </span>
+                          <span className="text-xs text-gray-400">MP4, MOV or WEBM</span>
+                          <input
+                            type="file"
+                            accept="video/*"
+                            className="hidden"
+                            onChange={e => {
+                              const file = e.target.files?.[0];
+                              if (file) handleVideoUpload(file);
+                            }}
+                          />
+                        </label>
+                        {videoDurationError && (
+                          <p className="text-2xs text-destructive mt-1 flex items-center gap-1">
+                            <AlertCircle className="w-3 h-3" />
+                            {videoDurationError}
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        {/* Camera preview */}
+                        <div className="relative rounded-lg overflow-hidden border border-gray-200 bg-black aspect-video">
+                          <video
+                            ref={videoPreviewRef}
+                            autoPlay
+                            muted
+                            playsInline
+                            className={`w-full h-full object-cover ${recordedPreviewUrl ? 'hidden' : ''}`}
+                            style={{ transform: 'scaleX(-1)' }}
+                          />
+                          {recordedPreviewUrl && (
+                            <video
+                              src={recordedPreviewUrl}
+                              controls
+                              className="w-full h-full object-cover"
+                            />
+                          )}
+
+                          {/* Timer overlay */}
+                          {isRecording && (
+                            <div className="absolute top-2 right-2 flex items-center gap-1.5 px-2 py-1 rounded-full bg-black/60 backdrop-blur-sm">
+                              <span className="w-2 h-2 rounded-full bg-destructive animate-pulse" />
+                              <span className="text-xs font-mono text-white">
+                                {String(Math.floor(recordingSeconds / 60)).padStart(2, '0')}:{String(recordingSeconds % 60).padStart(2, '0')} / 01:00
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Remaining time bar */}
+                          {isRecording && (
+                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700">
+                              <div
+                                className="h-full bg-destructive transition-all duration-1000 ease-linear"
+                                style={{ width: `${(recordingSeconds / 60) * 100}%` }}
+                              />
+                            </div>
+                          )}
+
+                          {/* Camera not started overlay */}
+                          {!cameraReady && !recordedPreviewUrl && !cameraError && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900">
+                              <Camera className="w-8 h-8 text-gray-500 mb-2" />
+                              <p className="text-xs text-gray-400">Camera preview will appear here</p>
+                            </div>
+                          )}
+
+                          {/* Camera error */}
+                          {cameraError && (
+                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900">
+                              <AlertCircle className="w-6 h-6 text-destructive mb-1" />
+                              <p className="text-xs text-destructive text-center px-4">{cameraError}</p>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Controls */}
+                        <div className="flex items-center justify-center gap-2">
+                          {!cameraReady && !isRecording && !recordedPreviewUrl && (
+                            <button
+                              onClick={startCamera}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                            >
+                              <Camera className="w-3.5 h-3.5" />
+                              Open Camera
+                            </button>
+                          )}
+                          {cameraReady && !isRecording && (
+                            <button
+                              onClick={startRecording}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-destructive text-white rounded-lg hover:bg-destructive transition-colors"
+                            >
+                              <span className="w-2.5 h-2.5 rounded-full bg-white" />
+                              Start Recording
+                            </button>
+                          )}
+                          {isRecording && (
+                            <button
+                              onClick={stopRecordingAndSave}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
+                            >
+                              <span className="w-2.5 h-2.5 rounded-sm bg-white" />
+                              Stop & Save
+                            </button>
+                          )}
+                          {recordedPreviewUrl && !uploadingVideo && (
+                            <button
+                              onClick={() => {
+                                setRecordedPreviewUrl('');
+                                setRecordingSeconds(0);
+                                startCamera();
+                              }}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                            >
+                              Re-record
+                            </button>
+                          )}
+                          {cameraReady && !isRecording && (
+                            <button
+                              onClick={stopCamera}
+                              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                              Cancel
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-2xs text-gray-400 text-center">Recording auto-stops at 1 minute</p>
+                      </div>
+                    )}
+                    </>
                   )}
-                </>
+                </div>
+              )}
+
+              {additionalTab === 'languages' && (
+                <div role="tabpanel" className="p-4 space-y-2">
+                  <p className="text-xs text-gray-500">
+                    The language the AI conducts the interview in.
+                  </p>
+                  {/* One dropdown rather than a row of chips: the interview runs
+                      in a single language, and a chip that could not be removed
+                      read as a status rather than as the setting it is. */}
+                  <div className="relative inline-block">
+                    <select
+                      value={availableLanguages[0] ?? CANDIDATE_LANGUAGES[0]}
+                      onChange={e => setAvailableLanguages([e.target.value])}
+                      aria-label="Interview language"
+                      className="appearance-none text-sm font-medium pl-3 pr-9 py-2 rounded-lg border border-gray-200 bg-white text-gray-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue min-w-[180px]"
+                    >
+                      {CANDIDATE_LANGUAGES.map(lang => (
+                        <option key={lang} value={lang}>{lang}</option>
+                      ))}
+                    </select>
+                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                  </div>
+                </div>
+              )}
+
+              {PROXY_INTEGRITY_VERIFICATION_ENABLED && additionalTab === 'proxy' && (
+                <div role="tabpanel" className="p-4 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                        <QrCode className="w-5 h-5 text-brand-blue" />
+                      </div>
+                      <span className="text-sm font-medium text-gray-900 tracking-tight">Enable Proxy Integrity Verification</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={environmentVerificationEnabled}
+                        onChange={e => setEnvironmentVerificationEnabled(e.target.checked)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gradient-to-r peer-checked:from-brand-blue peer-checked:to-brand-blue-2 peer-checked:shadow-sm peer-checked:shadow-brand-blue/25 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
+                    </label>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    Pause the interview once, after the first must-have-skills question, to verify the candidate&apos;s physical environment via a QR code and their phone&apos;s camera.
+                  </p>
+                </div>
               )}
             </div>
-
-            {/* Candidate Languages */}
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-2">
-              <div className="flex items-center gap-2">
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15">
-                  <Globe className="w-5 h-5 text-brand-blue" />
-                </div>
-                <span className="text-sm font-medium text-gray-900 tracking-tight">Candidate Languages</span>
-              </div>
-              <p className="text-xs text-gray-500">
-                Select which languages the candidate can choose for the interview. The AI will conduct the interview in their chosen language.
-              </p>
-
-              {/* Selected languages */}
-              <div className="flex flex-wrap gap-1.5">
-                {availableLanguages.map(lang => (
-                  <span
-                    key={lang}
-                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-medium rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20"
-                  >
-                    {lang}
-                    {lang !== 'English' && (
-                      <button
-                        onClick={() => setAvailableLanguages(prev => prev.filter(l => l !== lang))}
-                        className="text-brand-blue/60 hover:text-brand-blue"
-                       aria-label="Close">
-                        <X className="w-3 h-3" />
-                      </button>
-                    )}
-                  </span>
-                ))}
-              </div>
-
-              {/* Add language – hidden */}
-            </div>
-
-            {/* Mobile Environment Verification — hidden until the client approves
-                the feature; see PROXY_INTEGRITY_VERIFICATION_ENABLED. Hiding the
-                toggle only stops NEW configs from setting it; the backend's
-                AI_ENVIRONMENT_VERIFICATION_ENABLED is what stops an already-saved
-                `true` from firing mid-interview. */}
-            {PROXY_INTEGRITY_VERIFICATION_ENABLED && (
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 space-y-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15">
-                    <QrCode className="w-5 h-5 text-brand-blue" />
-                  </div>
-                  <span className="text-sm font-medium text-gray-900 tracking-tight">Enable Proxy Integrity Verification</span>
-                </div>
-                <label className="relative inline-flex items-center cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={environmentVerificationEnabled}
-                    onChange={e => setEnvironmentVerificationEnabled(e.target.checked)}
-                    className="sr-only peer"
-                  />
-                  <div className="w-9 h-5 bg-gray-200 rounded-full peer peer-checked:bg-gradient-to-r peer-checked:from-brand-blue peer-checked:to-brand-blue-2 peer-checked:shadow-sm peer-checked:shadow-brand-blue/25 after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:after:translate-x-full" />
-                </label>
-              </div>
-              <p className="text-xs text-gray-500">
-                Pause the interview once, after the first must-have-skills question, to verify the candidate's physical environment via a QR code and their phone's camera.
-              </p>
-            </div>
-            )}
           </div>
 
           {/* ── Right: Summary sidebar ── */}
           <div className="space-y-4">
 
             {/* Weightage distribution */}
-            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 lg:sticky lg:top-6">
-              <h3 className="font-semibold text-gray-900 text-sm mb-4 tracking-tight">Configuration Summary</h3>
+            <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 lg:sticky lg:top-6 lg:max-h-[calc(100dvh-8rem)] lg:overflow-y-auto scrollbar-auto-hide">
+              <div className="mb-4">
+                <SectionHeader
+                  icon={ClipboardList}
+                  title="Configuration Summary"
+                  subtitle="What this interview will look like once published."
+                />
+              </div>
 
               {/* Job Details */}
               <div className="border border-gray-100 rounded-lg overflow-hidden mb-4 ring-1 ring-black/[0.02]">
@@ -3381,7 +3651,25 @@ export default function AIInterviewConfig() {
                   {selectedJd.industry_type && (
                     <div className="px-3 py-2 flex items-start justify-between gap-2">
                       <span className="text-xs text-gray-500 flex-shrink-0">Industry</span>
-                      <span className="text-xs font-semibold text-gray-900 text-right">{selectedJd.industry_type}</span>
+                      <span className="text-xs font-semibold text-gray-900 text-right">{formatIndustryType(selectedJd.industry_type)}</span>
+                    </div>
+                  )}
+                  {selectedJd.location && (
+                    <div className="px-3 py-2 flex items-center justify-between gap-2">
+                      <span className="text-xs text-gray-500 flex-shrink-0">Location</span>
+                      <SummaryLocation value={selectedJd.location} />
+                    </div>
+                  )}
+                  {selectedJd.employment_type && (
+                    <div className="px-3 py-2 flex items-start justify-between gap-2">
+                      <span className="text-xs text-gray-500 flex-shrink-0">Employment Type</span>
+                      <span className="text-xs font-semibold text-gray-900 text-right">{formatEmploymentType(selectedJd.employment_type)}</span>
+                    </div>
+                  )}
+                  {selectedJd.current_version != null && (
+                    <div className="px-3 py-2 flex items-start justify-between gap-2">
+                      <span className="text-xs text-gray-500 flex-shrink-0">JD Version</span>
+                      <span className="text-xs font-semibold text-gray-900 text-right">v{selectedJd.current_version}</span>
                     </div>
                   )}
                   {selectedJd.domain_keywords && selectedJd.domain_keywords.length > 0 && (
@@ -3389,10 +3677,10 @@ export default function AIInterviewConfig() {
                       <span className="text-xs text-gray-500 block mb-1.5">Domain Context</span>
                       <div className="flex flex-wrap gap-1">
                         {selectedJd.domain_keywords.slice(0, 6).map(kw => (
-                          <span key={kw} className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{kw}</span>
+                          <span key={kw} className="inline-block px-1.5 py-0.5 rounded text-2xs bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">{kw}</span>
                         ))}
                         {selectedJd.domain_keywords.length > 6 && (
-                          <span className="inline-block px-1.5 py-0.5 rounded text-[10px] bg-slate-100 text-gray-500 ring-1 ring-gray-200">+{selectedJd.domain_keywords.length - 6}</span>
+                          <span className="inline-block px-1.5 py-0.5 rounded text-2xs bg-slate-100 text-gray-500 ring-1 ring-gray-200">+{selectedJd.domain_keywords.length - 6}</span>
                         )}
                       </div>
                     </div>
@@ -3466,6 +3754,7 @@ export default function AIInterviewConfig() {
                         </tbody>
                       </table>
                     </div>
+                    <SummaryTips />
                   </div>
                 </div>
               )}
@@ -3476,7 +3765,7 @@ export default function AIInterviewConfig() {
                   <div className="space-y-2">
                     <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
                       <span>Scoring Weight Distribution</span>
-                      <span className={`font-semibold ${pctValid ? 'text-green-600' : 'text-red-500'}`}>
+                      <span className={`font-semibold ${pctValid ? 'text-advice-positive' : 'text-red-500'}`}>
                         {totalPct}% / 100%
                       </span>
                     </div>
@@ -3497,9 +3786,9 @@ export default function AIInterviewConfig() {
                     ))}
                   </div>
                   {!pctValid && (
-                    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-red-50 border border-red-100">
-                      <AlertCircle className="w-3.5 h-3.5 text-red-500 flex-shrink-0 mt-0.5" />
-                      <p className="text-[11px] text-red-600">Weights must total 100%. Adjust the percentages above.</p>
+                    <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-destructive-subtle border border-destructive-line">
+                      <AlertCircle className="w-3.5 h-3.5 text-destructive flex-shrink-0 mt-0.5" />
+                      <p className="text-2xs text-destructive">Weights must total 100%. Adjust the percentages above.</p>
                     </div>
                   )}
                   {pctValid && (
@@ -3556,46 +3845,73 @@ export default function AIInterviewConfig() {
                           </tbody>
                         </table>
                       </div>
+                      <SummaryTips />
                     </div>
                   )}
                 </div>
               )}
 
-              {/* Actions */}
-              <div className="space-y-2">
-                {/* No native `title` on the button — the styled bubble below
-                    already shows `continueDisabledReason`, and setting both made
-                    the browser draw a second plain tooltip over it. */}
-                <div className="relative group">
-                  <button
-                    onClick={handleContinueToClusters}
-                    disabled={!canContinueToClusters}
-                    aria-disabled={!canContinueToClusters}
-                    className={`w-full flex items-center justify-center gap-2 py-2.5 text-sm rounded-lg transition-colors ${
-                      canContinueToClusters
-                        ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
-                        : 'bg-slate-200 text-gray-400 cursor-not-allowed'
-                    }`}
-                  >
-                    {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <ChevronRight className="w-4 h-4" />}
-                    {savingDraft ? 'Saving…' : 'Continue to Clusters'}
-                  </button>
-                  {!canContinueToClusters && continueDisabledReason && (
-                    <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-normal w-max max-w-xs z-10">
-                      {continueDisabledReason}
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900" />
-                    </div>
-                  )}
+
+            </div>
+          </div>
+        </div>
+
+        {/* ── Wizard actions ────────────────────────────────────────────────
+            One bar at the foot of the page instead of a stack buried in the
+            sidebar: leaving (left) and advancing (right) are the page's two
+            outcomes, and they now sit where the form ends rather than beside
+            the summary the recruiter is still reading. Sticky, because this
+            form is long enough that the buttons were regularly off-screen. */}
+        <div className="sticky bottom-0 z-10 mt-6 -mx-4 md:-mx-8 px-4 md:px-8 py-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-b-2xl">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setPendingNavigation('/recruitment/ai-interviews/jd-selection');
+                setShowUnsavedDialog(true);
+              }}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Back to JD
+            </button>
+            <WizardDiscardButton onClick={handleDiscardDraft} disabled={savingDraft} />
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+            <button
+              onClick={handleSaveAsDraft}
+              disabled={savingDraft}
+              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              {savingDraft ? 'Saving…' : 'Save as Draft'}
+            </button>
+
+            {/* No native `title` on the button — the styled bubble below
+                already shows `continueDisabledReason`, and setting both made
+                the browser draw a second plain tooltip over it. */}
+            <div className="relative group">
+              <button
+                onClick={handleContinueToClusters}
+                disabled={!canContinueToClusters}
+                aria-disabled={!canContinueToClusters}
+                className={`w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm rounded-lg transition-colors ${
+                  canContinueToClusters
+                    ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                    : 'bg-slate-200 text-gray-400 cursor-not-allowed'
+                }`}
+              >
+                {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
+                {savingDraft ? 'Saving…' : 'Continue to Clusters'}
+                {!savingDraft && <ChevronRight className="w-4 h-4" />}
+              </button>
+              {!canContinueToClusters && continueDisabledReason && (
+                <div className="pointer-events-none absolute bottom-full right-0 mb-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-normal w-max max-w-xs z-10">
+                  {continueDisabledReason}
+                  <div className="absolute top-full right-6 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900" />
                 </div>
-                <button
-                  onClick={handleSaveAsDraft}
-                  disabled={savingDraft}
-                  className="w-full flex items-center justify-center gap-2 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                  {savingDraft ? 'Saving…' : 'Save as Draft'}
-                </button>
-              </div>
+              )}
             </div>
           </div>
         </div>
@@ -3630,6 +3946,15 @@ export default function AIInterviewConfig() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── Job description, in place ── */}
+      {jdViewOpen && jdId && (
+        <JDFullViewModal
+          jdId={jdId}
+          jdTitle={selectedJd?.title}
+          onClose={() => setJdViewOpen(false)}
+        />
+      )}
 
       {/* Unsaved Changes — the shared prompt. Its own wording, because what
           is being saved here is a configuration, not a job description. */}

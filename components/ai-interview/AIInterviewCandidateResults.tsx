@@ -9,11 +9,13 @@ import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { Badge } from '@/components/ui/badge';
 import {
-  getStatusBadge,
+  getStatusVariant,
   getStatusLabel,
   getStatusIcon,
   getProctoringRisk,
@@ -263,13 +265,10 @@ export default function AIInterviewCandidateResults() {
   if (error) {
     return (
       <div className="p-6 text-center">
-        <p className="text-sm text-red-600 mb-3">{error}</p>
-        <button
-          onClick={loadAllSessions}
-          className="px-4 py-2 text-sm bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-colors"
-        >
+        <p className="text-sm text-destructive mb-3">{error}</p>
+        <Button variant="primary" size="md" onClick={loadAllSessions}>
           Retry
-        </button>
+        </Button>
       </div>
     );
   }
@@ -324,13 +323,9 @@ export default function AIInterviewCandidateResults() {
                 onChange={(e) => search.setDraftFilter('scoreMax', e.target.value)}
                 className="w-24 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-white text-black"
               />
-              <button
-                type="button"
-                onClick={() => { search.applyFilters(); setShowFilters(false); }}
-                className="ml-auto px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
-              >
+              <Button variant="secondary" size="md" onClick={() => { search.applyFilters(); setShowFilters(false); }} className="ml-auto">
                 Done
-              </button>
+              </Button>
             </div>
           </div>
         }
@@ -389,7 +384,7 @@ export default function AIInterviewCandidateResults() {
                         </p>
                       </div>
                       {row.candidate_cid && (
-                        <span className="text-[10px] font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-1.5 py-0.5 rounded shrink-0">
+                        <span className="text-2xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-1.5 py-0.5 rounded shrink-0">
                           {row.candidate_cid}
                         </span>
                       )}
@@ -401,11 +396,9 @@ export default function AIInterviewCandidateResults() {
 
                     <div className="flex items-center gap-1.5 flex-wrap">
                       {getStatusIcon(row.status)}
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(row.status)}`}>
-                        {getStatusLabel(row.status)}
-                      </span>
+                      <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
                       {row.status === 'in_progress' && (
-                        <span className="flex items-center gap-1 px-1.5 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full">
+                        <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
                           <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                           LIVE
                         </span>
@@ -422,15 +415,15 @@ export default function AIInterviewCandidateResults() {
                         <div className="flex-1 bg-gray-200 dark:bg-slate-700 rounded-full h-1.5">
                           <div
                             className={`h-1.5 rounded-full ${
-                              row.score >= 70 ? 'bg-green-500' :
-                              row.score >= 50 ? 'bg-brand-orange' : 'bg-red-500'
+                              row.score >= 70 ? 'bg-success' :
+                              row.score >= 50 ? 'bg-brand-orange' : 'bg-destructive'
                             }`}
                             style={{ width: `${Math.min(100, row.score)}%` }}
                           />
                         </div>
                         <span className={`font-medium text-xs shrink-0 ${
-                          row.score >= 70 ? 'text-green-600' :
-                          row.score >= 50 ? 'text-brand-orange-deep' : 'text-red-600'
+                          row.score >= 70 ? 'text-success' :
+                          row.score >= 50 ? 'text-brand-orange-deep' : 'text-destructive'
                         }`}>
                           {Math.round(row.score)}%
                         </span>
@@ -559,11 +552,9 @@ export default function AIInterviewCandidateResults() {
                         <td className="px-4 py-3 whitespace-nowrap">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             {getStatusIcon(row.status)}
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStatusBadge(row.status)}`}>
-                              {getStatusLabel(row.status)}
-                            </span>
+                            <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
                             {row.status === 'in_progress' && (
-                              <span className="flex items-center gap-1 px-1.5 py-0.5 bg-red-500 text-white text-[10px] font-bold rounded-full">
+                              <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
                                 <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
                                 LIVE
                               </span>
@@ -576,15 +567,15 @@ export default function AIInterviewCandidateResults() {
                               <div className="w-16 bg-gray-200 dark:bg-slate-700 rounded-full h-1.5">
                                 <div
                                   className={`h-1.5 rounded-full ${
-                                    row.score >= 70 ? 'bg-green-500' :
-                                    row.score >= 50 ? 'bg-brand-orange' : 'bg-red-500'
+                                    row.score >= 70 ? 'bg-success' :
+                                    row.score >= 50 ? 'bg-brand-orange' : 'bg-destructive'
                                   }`}
                                   style={{ width: `${Math.min(100, row.score)}%` }}
                                 />
                               </div>
                               <span className={`font-medium text-xs ${
-                                row.score >= 70 ? 'text-green-600' :
-                                row.score >= 50 ? 'text-brand-orange-deep' : 'text-red-600'
+                                row.score >= 70 ? 'text-success' :
+                                row.score >= 50 ? 'text-brand-orange-deep' : 'text-destructive'
                               }`}>
                                 {Math.round(row.score)}%
                               </span>
@@ -612,13 +603,14 @@ export default function AIInterviewCandidateResults() {
                           )}
                         </td>
                         <td className="px-4 py-3 text-right whitespace-nowrap tf-sticky-col">
-                          <button
+                          <Button
+                            variant="secondary"
+                            size="sm"
                             onClick={(e) => { e.stopPropagation(); openSession(row); }}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
+                            icon={<Eye className="w-3.5 h-3.5" />}
                           >
-                            <Eye className="w-3.5 h-3.5" />
                             View Details
-                          </button>
+                          </Button>
                         </td>
                       </tr>
                     );

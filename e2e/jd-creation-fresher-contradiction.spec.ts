@@ -8,7 +8,7 @@
  *     but we also welcome freshers with relevant internship experience...
  *
  * Extraction handled it correctly - "Required field" was left unticked, because Required
- * means Essential and an Essential rating below 7 is an automatic No Match, so every
+ * means Essential and an Essential rating below 6 is an automatic No Match, so every
  * fresher the JD invited would have been rejected by the sentence that invited them.
  *
  * It just never said so. "now it is nothing asked, silently moved with same contradiction":

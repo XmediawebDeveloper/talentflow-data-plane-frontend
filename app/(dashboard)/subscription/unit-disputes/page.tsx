@@ -9,6 +9,7 @@ import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { useAuth } from '@/lib/hooks/useAuth';
 import ListPagination from '@/components/ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8001/api/v1';
@@ -364,19 +365,20 @@ export default function UnitDisputesPage() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'APPROVED': return <CheckCircle2 className="h-3.5 w-3.5 text-brand-teal" />;
-      case 'PENDING_REVIEW': return <Clock className="h-3.5 w-3.5 text-amber-600" />;
-      case 'REJECTED': return <XCircle className="h-3.5 w-3.5 text-red-600" />;
-      default: return <AlertCircle className="h-3.5 w-3.5 text-gray-500" />;
+      case 'APPROVED': return <CheckCircle2 className="h-3.5 w-3.5" />;
+      case 'PENDING_REVIEW': return <Clock className="h-3.5 w-3.5" />;
+      case 'REJECTED': return <XCircle className="h-3.5 w-3.5" />;
+      default: return <AlertCircle className="h-3.5 w-3.5" />;
     }
   };
 
-  const getStatusStyles = (status: string) => {
+  // Canonical status → shared Badge variant (same status looks the same everywhere).
+  const getStatusVariant = (status: string): 'success' | 'warning' | 'destructive' | 'muted' => {
     switch (status) {
-      case 'APPROVED': return 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20';
-      case 'PENDING_REVIEW': return 'bg-amber-100 text-amber-700 ring-1 ring-amber-200';
-      case 'REJECTED': return 'bg-red-100 text-red-700 ring-1 ring-red-200';
-      default: return 'bg-gray-100 text-gray-700 ring-1 ring-gray-200';
+      case 'APPROVED': return 'success';
+      case 'PENDING_REVIEW': return 'warning';
+      case 'REJECTED': return 'destructive';
+      default: return 'muted';
     }
   };
 
@@ -398,7 +400,7 @@ export default function UnitDisputesPage() {
       max_seats: 'bg-gray-100 text-gray-700 ring-1 ring-gray-200',
     };
     return (
-      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${styles[unitType] || 'bg-gray-100 text-gray-700 ring-1 ring-gray-200'}`}>
+      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-2xs font-semibold ${styles[unitType] || 'bg-gray-100 text-gray-700 ring-1 ring-gray-200'}`}>
         {unitType}
       </span>
     );
@@ -620,11 +622,11 @@ export default function UnitDisputesPage() {
 
         {/* Error */}
         {error && (
-          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50/80 p-4 ring-1 ring-red-100">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive-subtle text-destructive">
               <AlertCircle className="h-5 w-5" />
             </span>
-            <p className="text-sm font-medium text-red-700">{error}</p>
+            <p className="text-sm font-medium text-destructive">{error}</p>
           </div>
         )}
 
@@ -755,10 +757,10 @@ export default function UnitDisputesPage() {
                         </span>
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${getStatusStyles(dispute.status)}`}>
+                        <Badge variant={getStatusVariant(dispute.status)}>
                           {getStatusIcon(dispute.status)}
                           {getStatusLabel(dispute.status)}
-                        </span>
+                        </Badge>
                       </td>
                       <td className="px-4 py-4 text-right tf-sticky-col">
                         <button
@@ -821,22 +823,22 @@ export default function UnitDisputesPage() {
                 {/* Top info */}
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4">
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Created</p>
+                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Created</p>
                     <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatDateTime(selectedDispute.created_at)}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Unit Type</p>
+                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Unit Type</p>
                     <div className="mt-1">{getUnitTypeBadge(selectedDispute.unit_type)}</div>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Status</p>
-                    <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${getStatusStyles(selectedDispute.status)}`}>
+                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Status</p>
+                    <Badge variant={getStatusVariant(selectedDispute.status)} className="mt-1">
                       {getStatusIcon(selectedDispute.status)}
                       {getStatusLabel(selectedDispute.status)}
-                    </span>
+                    </Badge>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Consumption Log ID</p>
+                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Consumption Log ID</p>
                     <div className="mt-1 flex items-center gap-1.5">
                       <p className="break-all font-mono text-sm font-semibold text-gray-900 dark:text-slate-50">{truncateId(selectedDispute.consumption_log_id)}</p>
                       <button onClick={() => copyToClipboard(selectedDispute.consumption_log_id ?? '')} className="inline-flex h-5 w-5 items-center justify-center rounded text-gray-400 dark:text-slate-500 hover:bg-brand-blue/[0.06] hover:text-brand-blue">
@@ -849,7 +851,7 @@ export default function UnitDisputesPage() {
                 {/* Reason & Description */}
                 <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                   <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-2.5">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Dispute Information</p>
+                    <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Dispute Information</p>
                   </div>
                   <div className="space-y-3 p-4">
                     <div className="flex items-start justify-between gap-4">
@@ -885,7 +887,7 @@ export default function UnitDisputesPage() {
                 {(selectedDispute.resolution_notes || selectedDispute.resolved_by_email || selectedDispute.resolved_at) && (
                   <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                     <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-2.5">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Resolution</p>
+                      <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Resolution</p>
                     </div>
                     <div className="space-y-3 p-4">
                       {selectedDispute.resolution_notes && (
@@ -912,7 +914,7 @@ export default function UnitDisputesPage() {
 
                 {/* Requested By */}
                 <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50 p-4">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Requested By</p>
+                  <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Requested By</p>
                   <p className="mt-1 text-sm text-gray-900 dark:text-slate-50">{selectedDispute.requested_by_name} <span className="text-gray-500 dark:text-slate-500">({selectedDispute.requested_by_email})</span></p>
                 </div>
 
@@ -1023,7 +1025,7 @@ export default function UnitDisputesPage() {
                                 {log.user_name && <span className="text-gray-400 dark:text-slate-500">·</span>}
                                 {log.user_name && <span>{log.user_name}</span>}
                               </div>
-                              <div className="mt-1 font-mono text-[11px] text-gray-400 dark:text-slate-500">{truncateId(log.id)}</div>
+                              <div className="mt-1 font-mono text-2xs text-gray-400 dark:text-slate-500">{truncateId(log.id)}</div>
                             </button>
                           ))}
                         </div>
@@ -1083,7 +1085,7 @@ export default function UnitDisputesPage() {
                     {/* Selected log summary */}
                     <div className="mb-5 rounded-xl border border-brand-blue/20 bg-brand-blue/[0.04] p-4">
                       <div className="mb-2 flex items-center justify-between">
-                        <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-blue">Selected Record</span>
+                        <span className="text-2xs font-semibold uppercase tracking-[0.16em] text-brand-blue">Selected Record</span>
                         <button
                           onClick={() => setFileStep(1)}
                           className="inline-flex items-center gap-1 rounded-full bg-white px-2.5 py-1 text-xs font-medium text-brand-blue ring-1 ring-brand-blue/15 transition-colors hover:bg-brand-blue/[0.06]"

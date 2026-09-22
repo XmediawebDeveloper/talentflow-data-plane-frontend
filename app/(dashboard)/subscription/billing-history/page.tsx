@@ -9,6 +9,7 @@ import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ListPagination from '@/components/ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 
 interface LineItem {
@@ -247,20 +248,21 @@ export default function BillingHistoryPage() {
 
   const getStatusIcon = (status: string) => {
     switch (status.toLowerCase()) {
-      case 'paid': case 'success': return <CheckCircle2 className="h-3.5 w-3.5 text-brand-teal" />;
-      case 'pending': return <Clock className="h-3.5 w-3.5 text-amber-600" />;
-      case 'failed': case 'refunded': return <XCircle className="h-3.5 w-3.5 text-red-600" />;
-      default: return <CheckCircle2 className="h-3.5 w-3.5 text-gray-500" />;
+      case 'paid': case 'success': return <CheckCircle2 className="h-3.5 w-3.5" />;
+      case 'pending': return <Clock className="h-3.5 w-3.5" />;
+      case 'failed': case 'refunded': return <XCircle className="h-3.5 w-3.5" />;
+      default: return <CheckCircle2 className="h-3.5 w-3.5" />;
     }
   };
 
-  const getStatusStyles = (status: string) => {
+  // Canonical status → shared Badge variant (same status looks the same everywhere).
+  const getStatusVariant = (status: string): 'success' | 'warning' | 'destructive' | 'info' | 'muted' => {
     switch (status.toLowerCase()) {
-      case 'paid': case 'success': return 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20';
-      case 'pending': return 'bg-amber-100 text-amber-700 ring-1 ring-amber-200';
-      case 'failed': case 'refunded': return 'bg-red-100 text-red-700 ring-1 ring-red-200';
-      case 'open': return 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20';
-      default: return 'bg-gray-100 text-gray-700 ring-1 ring-gray-200';
+      case 'paid': case 'success': return 'success';
+      case 'pending': return 'warning';
+      case 'failed': case 'refunded': return 'destructive';
+      case 'open': return 'info';
+      default: return 'muted';
     }
   };
 
@@ -401,11 +403,11 @@ export default function BillingHistoryPage() {
 
         {/* Error State */}
         {error && (
-          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50/80 p-4 ring-1 ring-red-100">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive-subtle text-destructive">
               <AlertCircle className="h-5 w-5" />
             </span>
-            <p className="text-sm font-medium text-red-700">{error}</p>
+            <p className="text-sm font-medium text-destructive">{error}</p>
           </div>
         )}
 
@@ -542,10 +544,10 @@ export default function BillingHistoryPage() {
                         )}
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${getStatusStyles(inv.status)}`}>
+                        <Badge variant={getStatusVariant(inv.status)} className="capitalize">
                           {getStatusIcon(inv.status)}
                           {inv.status}
-                        </span>
+                        </Badge>
                       </td>
                       <td className="px-4 py-4 text-right tf-sticky-col">
                         <div className="flex items-center justify-end gap-1.5">
@@ -641,19 +643,19 @@ export default function BillingHistoryPage() {
                       </td>
                       <td className="px-4 py-3 text-center">
                         {txn.activation_status === 'activated' && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-brand-teal/10 px-2.5 py-1 text-[11px] font-medium text-brand-teal ring-1 ring-brand-teal/20">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-brand-teal/10 px-2.5 py-1 text-2xs font-medium text-brand-teal ring-1 ring-brand-teal/20">
                             <CheckCircle2 className="h-3 w-3" />
                             Activated
                           </span>
                         )}
                         {txn.activation_status === 'failed' && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2.5 py-1 text-[11px] font-medium text-red-700 ring-1 ring-red-200">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-destructive-subtle px-2.5 py-1 text-2xs font-medium text-destructive ring-1 ring-destructive-line">
                             <XCircle className="h-3 w-3" />
                             Failed
                           </span>
                         )}
                         {txn.activation_status === 'processing' && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2.5 py-1 text-[11px] font-medium text-amber-700 ring-1 ring-amber-200">
+                          <span className="inline-flex items-center gap-1 rounded-full bg-warning-subtle px-2.5 py-1 text-2xs font-medium text-warning ring-1 ring-warning-line">
                             <Clock className="h-3 w-3" />
                             Processing
                           </span>
@@ -726,35 +728,35 @@ export default function BillingHistoryPage() {
                 {/* Key Info Grid */}
                 <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Issue Date</p>
+                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Issue Date</p>
                     <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedInvoice.issue_date)}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Due Date</p>
+                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Due Date</p>
                     <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedInvoice.due_date)}</p>
                   </div>
                   <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                    <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Status</p>
-                    <span className={`mt-1 inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium ${getStatusStyles(selectedInvoice.status)}`}>
+                    <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Status</p>
+                    <Badge variant={getStatusVariant(selectedInvoice.status)} className="mt-1 capitalize">
                       {getStatusIcon(selectedInvoice.status)}
                       {selectedInvoice.status}
-                    </span>
+                    </Badge>
                   </div>
                   {selectedInvoice.paid_at && (
                     <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Paid At</p>
+                      <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Paid At</p>
                       <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedInvoice.paid_at)}</p>
                     </div>
                   )}
                   {selectedInvoice.billing_interval && (
                     <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Billing Interval</p>
+                      <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Billing Interval</p>
                       <p className="mt-1 text-sm font-semibold capitalize text-gray-900 dark:text-slate-50">{selectedInvoice.billing_interval.toLowerCase()}</p>
                     </div>
                   )}
                   {(selectedInvoice.payment_method || selectedInvoice.metadata?.payment_method) && (
                     <div className="rounded-xl bg-slate-50 dark:bg-slate-800/50 px-4 py-3 ring-1 ring-gray-100 dark:ring-slate-700/60">
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Payment</p>
+                      <p className="text-2xs uppercase tracking-[0.16em] text-gray-400 dark:text-slate-500">Payment</p>
                       <p className="mt-1 text-sm font-semibold text-gray-900 dark:text-slate-50">{getPaymentLabel(selectedInvoice)}</p>
                     </div>
                   )}
@@ -764,11 +766,11 @@ export default function BillingHistoryPage() {
                 {(selectedInvoice.plan_name || selectedInvoice.plan_type) && (
                   <div className="flex items-center justify-between gap-3 rounded-xl border border-brand-blue/15 bg-brand-blue/[0.04] px-4 py-3">
                     <div>
-                      <p className="text-[11px] uppercase tracking-[0.16em] text-brand-blue/70">Plan</p>
+                      <p className="text-2xs uppercase tracking-[0.16em] text-brand-blue/70">Plan</p>
                       <p className="mt-0.5 text-sm font-semibold text-brand-blue">{selectedInvoice.plan_name?.trim()}</p>
                     </div>
                     {selectedInvoice.plan_type && (
-                      <span className="rounded-full bg-brand-blue/10 px-2.5 py-1 text-[11px] font-medium text-brand-blue ring-1 ring-brand-blue/15">
+                      <span className="rounded-full bg-brand-blue/10 px-2.5 py-1 text-2xs font-medium text-brand-blue ring-1 ring-brand-blue/15">
                         {selectedInvoice.plan_type}
                       </span>
                     )}
@@ -779,20 +781,20 @@ export default function BillingHistoryPage() {
                 {selectedInvoice.subscription_start_date && (
                   <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                     <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-2.5">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Subscription Period</p>
+                      <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Subscription Period</p>
                     </div>
                     <div className="grid grid-cols-2 gap-4 p-4">
                       <div>
-                        <p className="text-[11px] text-gray-400 dark:text-slate-500">Start</p>
+                        <p className="text-2xs text-gray-400 dark:text-slate-500">Start</p>
                         <p className="mt-0.5 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedInvoice.subscription_start_date)}</p>
                       </div>
                       <div>
-                        <p className="text-[11px] text-gray-400 dark:text-slate-500">End</p>
+                        <p className="text-2xs text-gray-400 dark:text-slate-500">End</p>
                         <p className="mt-0.5 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedInvoice.subscription_end_date)}</p>
                       </div>
                       {selectedInvoice.next_billing_date && (
                         <div>
-                          <p className="text-[11px] text-gray-400 dark:text-slate-500">Next Billing</p>
+                          <p className="text-2xs text-gray-400 dark:text-slate-500">Next Billing</p>
                           <p className="mt-0.5 text-sm font-semibold text-gray-900 dark:text-slate-50">{formatISTDate(selectedInvoice.next_billing_date)}</p>
                         </div>
                       )}
@@ -804,7 +806,7 @@ export default function BillingHistoryPage() {
                 {selectedInvoice.line_items?.length > 0 && (
                   <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                     <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 py-2.5">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Line Items</p>
+                      <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Line Items</p>
                     </div>
                     <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
                       {selectedInvoice.line_items.map((item, idx) => (
@@ -852,13 +854,13 @@ export default function BillingHistoryPage() {
                   <div className="space-y-2 rounded-xl border border-brand-cyan/20 bg-brand-cyan/[0.05] p-4">
                     {selectedInvoice.razorpay_payment_id && (
                       <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-cyan">Payment ID</p>
+                        <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-brand-cyan">Payment ID</p>
                         <p className="mt-0.5 break-all font-mono text-sm text-gray-900 dark:text-slate-50">{selectedInvoice.razorpay_payment_id}</p>
                       </div>
                     )}
                     {selectedInvoice.razorpay_order_id && (
                       <div>
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-brand-cyan">Order ID</p>
+                        <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-brand-cyan">Order ID</p>
                         <p className="mt-0.5 break-all font-mono text-sm text-gray-900 dark:text-slate-50">{selectedInvoice.razorpay_order_id}</p>
                       </div>
                     )}
@@ -868,7 +870,7 @@ export default function BillingHistoryPage() {
                 {/* Reason */}
                 {(selectedInvoice.reason || selectedInvoice.metadata?.reason) && (
                   <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50 p-4">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Reason</p>
+                    <p className="text-2xs font-semibold uppercase tracking-[0.16em] text-gray-500 dark:text-slate-500">Reason</p>
                     <p className="mt-1 text-sm text-gray-800 dark:text-slate-100">{selectedInvoice.reason || selectedInvoice.metadata?.reason}</p>
                   </div>
                 )}

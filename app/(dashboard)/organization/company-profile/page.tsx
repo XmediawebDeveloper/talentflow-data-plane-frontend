@@ -386,10 +386,10 @@ export default function CompanyProfilePage() {
         }}
         disabled={!isEditing}
         className={`w-full rounded-xl border px-4 py-2.5 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue disabled:bg-gray-50 disabled:text-gray-600
-          ${validationErrors[key as keyof ValidationErrors] ? 'border-red-300 bg-red-50/60 focus:ring-red-200 focus:border-red-400' : 'border-gray-200'}`}
+          ${validationErrors[key as keyof ValidationErrors] ? 'border-destructive-line bg-destructive-subtle/60 focus:ring-destructive-line focus:border-destructive-line' : 'border-gray-200'}`}
       />
       {validationErrors[key as keyof ValidationErrors] && (
-        <p className="mt-1 text-xs font-medium text-red-600">{validationErrors[key as keyof ValidationErrors]}</p>
+        <p className="mt-1 text-xs font-medium text-destructive">{validationErrors[key as keyof ValidationErrors]}</p>
       )}
     </div>
   );
@@ -464,11 +464,11 @@ export default function CompanyProfilePage() {
           </div>
         )}
         {error && (
-          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-red-200 bg-red-50/80 p-4 ring-1 ring-red-100">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-red-100 text-red-600">
+          <div className="mb-6 flex items-center gap-3 rounded-2xl border border-destructive-line bg-destructive-subtle/80 p-4 ring-1 ring-destructive-line">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-destructive-subtle text-destructive">
               <AlertCircle className="h-5 w-5" />
             </span>
-            <p className="text-sm font-medium text-red-700">{error}</p>
+            <p className="text-sm font-medium text-destructive">{error}</p>
           </div>
         )}
 
@@ -523,11 +523,11 @@ export default function CompanyProfilePage() {
                         onChange={(e) => setCompanyData({ ...companyData, industry: e.target.value || '__other__' })}
                         placeholder="Specify your industry"
                         autoFocus
-                        className={`w-full rounded-xl border px-4 py-2.5 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue ${validationErrors.industry ? 'border-red-300 bg-red-50/60 focus:ring-red-200 focus:border-red-400' : 'border-gray-200'}`}
+                        className={`w-full rounded-xl border px-4 py-2.5 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue ${validationErrors.industry ? 'border-destructive-line bg-destructive-subtle/60 focus:ring-destructive-line focus:border-destructive-line' : 'border-gray-200'}`}
                       />
                     )}
                     {validationErrors.industry && (
-                      <p className="text-xs font-medium text-red-600">{validationErrors.industry}</p>
+                      <p className="text-xs font-medium text-destructive">{validationErrors.industry}</p>
                     )}
                   </div>
                 );
@@ -605,11 +605,11 @@ export default function CompanyProfilePage() {
               placeholder={isEditing ? 'Describe your company...' : ''}
               maxLength={2000}
               className={`w-full rounded-xl border px-4 py-2.5 text-sm transition focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue disabled:bg-gray-50 disabled:text-gray-600
-                ${validationErrors.description ? 'border-red-300 bg-red-50/60 focus:ring-red-200 focus:border-red-400' : 'border-gray-200'}`}
+                ${validationErrors.description ? 'border-destructive-line bg-destructive-subtle/60 focus:ring-destructive-line focus:border-destructive-line' : 'border-gray-200'}`}
             />
             <div className="flex justify-between mt-1.5">
               {validationErrors.description
-                ? <p className="text-xs font-medium text-red-600">{validationErrors.description}</p>
+                ? <p className="text-xs font-medium text-destructive">{validationErrors.description}</p>
                 : <span />}
               {isEditing && (
                 <p className="text-xs text-gray-400 text-right">{companyData.description.length}/2000</p>

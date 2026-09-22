@@ -255,7 +255,7 @@ function UnifiedFolderResumeSearch({
                       className="w-full border-b border-gray-50 px-4 py-2.5 text-left transition-colors last:border-b-0 hover:bg-brand-blue/5"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-[11px] font-medium text-brand-blue ring-1 ring-brand-blue/15">
+                        <span className="inline-flex items-center rounded-full bg-brand-blue/10 px-2 py-0.5 text-2xs font-medium text-brand-blue ring-1 ring-brand-blue/15">
                           Folder
                         </span>
                         <span className="min-w-0 truncate text-sm font-medium text-gray-900">{folder.name}</span>
@@ -283,7 +283,7 @@ function UnifiedFolderResumeSearch({
                       className="w-full border-b border-gray-50 px-4 py-2.5 text-left transition-colors last:border-b-0 hover:bg-brand-blue/5"
                     >
                       <div className="flex items-center gap-2">
-                        <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-[11px] font-medium text-green-700 ring-1 ring-green-200">
+                        <span className="inline-flex items-center rounded-full bg-green-50 px-2 py-0.5 text-2xs font-medium text-green-700 ring-1 ring-green-200">
                           Resume
                         </span>
                         <span className="min-w-0 truncate text-sm font-medium text-gray-900">
@@ -736,7 +736,7 @@ function DroppableFolderCard({
                 <span className={`flex-1 min-w-0 truncate text-xs ${
                   peekChild?.id === child.id ? 'font-medium text-brand-blue' : 'text-gray-700'
                 }`}>{child.name}</span>
-                <span className="text-[11px] text-gray-500 flex-shrink-0">
+                <span className="text-2xs text-gray-500 flex-shrink-0">
                   {childSubfolders > 0 && `${childSubfolders} sub • `}
                   {child.count || 0}
                 </span>
@@ -761,7 +761,7 @@ function DroppableFolderCard({
           style={{ width: `${SUBFOLDER_PEEK_PANEL_WIDTH}px`, maxHeight: `${SUBFOLDER_PEEK_MAX_HEIGHT}px` }}
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="px-3 py-1.5 text-[11px] font-medium text-gray-500 bg-slate-50 border-b border-gray-100 truncate">
+          <div className="px-3 py-1.5 text-2xs font-medium text-gray-500 bg-slate-50 border-b border-gray-100 truncate">
             {peekChild.name}
           </div>
           {(peekChild.children ?? []).map((grandChild) => (
@@ -779,7 +779,7 @@ function DroppableFolderCard({
             >
               <Folder className="w-3.5 h-3.5 text-brand-orange flex-shrink-0" />
               <span className="flex-1 min-w-0 truncate text-xs text-gray-700">{grandChild.name}</span>
-              <span className="text-[11px] text-gray-500 flex-shrink-0">{grandChild.count || 0}</span>
+              <span className="text-2xs text-gray-500 flex-shrink-0">{grandChild.count || 0}</span>
               <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
             </button>
           ))}
@@ -3924,7 +3924,7 @@ export default function MyResumesPage() {
               {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length > 0 && (
                 <span className="absolute -top-1 -right-1 flex h-4 w-4">
                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-brand-cyan/60 opacity-75"></span>
-                  <span className="relative inline-flex rounded-full h-4 w-4 bg-brand-cyan text-white text-[10px] items-center justify-center">
+                  <span className="relative inline-flex rounded-full h-4 w-4 bg-brand-cyan text-white text-2xs items-center justify-center">
                     {uploadHistory.filter(r => r.source === 'my-resumes' && (r.status === 'processing' || r.pending > 0)).length}
                   </span>
                 </span>
@@ -4535,8 +4535,8 @@ export default function MyResumesPage() {
                                     }}
                                   >
                                     <div className="flex h-full items-center gap-3 p-3">
-                                      <div className="w-9 h-9 bg-[#155dfc]/10 ring-1 ring-[#155dfc]/15 rounded-lg flex items-center justify-center flex-shrink-0">
-                                        <LayoutGrid className="w-4 h-4 text-[#155dfc]" />
+                                      <div className="w-9 h-9 bg-[var(--raw-155dfc)]/10 ring-1 ring-[var(--raw-155dfc)]/15 rounded-lg flex items-center justify-center flex-shrink-0">
+                                        <LayoutGrid className="w-4 h-4 text-[var(--raw-155dfc)]" />
                                       </div>
                                       <div className="flex-1 min-w-0">
                                         <h3 className="font-semibold text-sm text-gray-900 truncate">All Resumes</h3>
@@ -5260,7 +5260,7 @@ export default function MyResumesPage() {
                           <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${activeRecords.length > 0 && uploadHistoryTab !== 'current' ? 'text-brand-blue animate-spin' : ''}`} />
                           Currently Processing
                           {activeRecords.length > 0 && (
-                            <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] sm:text-xs font-semibold ${
+                            <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-2xs sm:text-xs font-semibold ${
                               uploadHistoryTab === 'current' ? 'bg-white text-brand-blue' : 'bg-brand-blue/10 text-brand-blue'
                             }`}>
                               {activeRecords.length}
@@ -5278,7 +5278,7 @@ export default function MyResumesPage() {
                           <CheckCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                           Completed
                           {completedRecords.length > 0 && (
-                            <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-[10px] sm:text-xs font-semibold ${
+                            <span className={`inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full text-2xs sm:text-xs font-semibold ${
                               uploadHistoryTab === 'completed' ? 'bg-white text-brand-blue' : 'bg-gray-100 text-gray-700'
                             }`}>
                               {completedRecords.length}
@@ -5406,7 +5406,7 @@ export default function MyResumesPage() {
                                     <div className={`w-6 h-6 sm:w-8 sm:h-8 ${t.tile} rounded-lg flex items-center justify-center flex-shrink-0`}>
                                       <Icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                                     </div>
-                                    <span className="text-[10px] sm:text-xs text-gray-700 truncate">{label}</span>
+                                    <span className="text-2xs sm:text-xs text-gray-700 truncate">{label}</span>
                                   </div>
                                   <div className={`text-lg sm:text-xl lg:text-2xl font-bold tracking-tight ${t.value}`}>{value}</div>
                                 </div>
@@ -5422,7 +5422,7 @@ export default function MyResumesPage() {
                                 <div className="w-6 h-6 sm:w-8 sm:h-8 bg-brand-cyan rounded-lg flex items-center justify-center flex-shrink-0">
                                   <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-white" />
                                 </div>
-                                <span className="text-[10px] sm:text-xs text-gray-700 truncate">Success Rate</span>
+                                <span className="text-2xs sm:text-xs text-gray-700 truncate">Success Rate</span>
                               </div>
                               <div className="text-lg sm:text-xl lg:text-2xl font-bold text-brand-cyan tracking-tight">{successRate}%</div>
                             </div>
@@ -5494,7 +5494,7 @@ export default function MyResumesPage() {
                               <Clock className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-brand-blue flex-shrink-0" />
                               <span className="text-xs sm:text-sm font-medium text-brand-blue">{etaText}</span>
                             </div>
-                            <span className="text-[10px] sm:text-xs text-brand-blue/60 sm:ml-auto">{totalPending} resume{totalPending !== 1 ? 's' : ''} left across {activeBatches.length} batch{activeBatches.length !== 1 ? 'es' : ''}</span>
+                            <span className="text-2xs sm:text-xs text-brand-blue/60 sm:ml-auto">{totalPending} resume{totalPending !== 1 ? 's' : ''} left across {activeBatches.length} batch{activeBatches.length !== 1 ? 'es' : ''}</span>
                           </div>
                         );
                       })()}
@@ -5597,7 +5597,7 @@ export default function MyResumesPage() {
                                       <div className="min-w-0">
                                         <span className="font-medium text-gray-900 text-xs sm:text-sm block truncate">{record.fileName}</span>
                                         {record.date && (
-                                          <span className="text-[10px] sm:text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                          <span className="text-2xs sm:text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                                             <Calendar className="w-3 h-3 flex-shrink-0" />
                                             <span className="truncate">Started {formatDateTimeIST(record.date)}</span>
                                           </span>
@@ -5616,7 +5616,7 @@ export default function MyResumesPage() {
                                               ? `${m}m ${s}s`
                                               : `${s}s`;
                                           return (
-                                            <span className="text-[10px] sm:text-xs text-gray-500 flex items-center gap-1 mt-0.5">
+                                            <span className="text-2xs sm:text-xs text-gray-500 flex items-center gap-1 mt-0.5">
                                               <CheckCircle className="w-3 h-3 flex-shrink-0 text-brand-blue" />
                                               <span className="truncate">
                                                 Finished {formatDateTimeIST(record.completedAt)}
@@ -5630,13 +5630,13 @@ export default function MyResumesPage() {
                                     </div>
                                     <div className="flex items-center gap-2 sm:gap-3 ml-10 sm:ml-0">
                                       {isUploading && (
-                                        <span className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-blue/10 text-brand-blue text-[10px] sm:text-xs rounded-full border border-brand-blue/20 animate-pulse">
+                                        <span className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-blue/10 text-brand-blue text-2xs sm:text-xs rounded-full border border-brand-blue/20 animate-pulse">
                                           <Loader2 className="w-3 h-3 animate-spin" />
                                           Uploading...
                                         </span>
                                       )}
                                       {!isUploading && hasIssues && (
-                                        <span className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-orange/15 text-brand-orange-deep text-[10px] sm:text-xs rounded-full border border-brand-orange/30">
+                                        <span className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 bg-brand-orange/15 text-brand-orange-deep text-2xs sm:text-xs rounded-full border border-brand-orange/30">
                                           <AlertCircle className="w-3 h-3 flex-shrink-0" />
                                           <span className="hidden sm:inline">Needs Review</span>
                                           <span className="sm:hidden">Review</span>
@@ -5652,7 +5652,7 @@ export default function MyResumesPage() {
                                           }`}>
                                             {percentage}%
                                           </div>
-                                          <div className="text-[10px] sm:text-xs text-gray-500">Success</div>
+                                          <div className="text-2xs sm:text-xs text-gray-500">Success</div>
                                         </div>
                                       )}
                                       <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
@@ -5664,33 +5664,33 @@ export default function MyResumesPage() {
                                     {/* Mini stats use the same brand tones as the summary cards above */}
                                     <div className="text-center p-1.5 sm:p-2 bg-brand-blue/[0.06] rounded-lg border border-brand-blue/15">
                                       <div className="text-xs sm:text-sm font-semibold text-brand-blue">{record.completed}</div>
-                                      <div className="text-[10px] sm:text-xs text-gray-600">Done</div>
+                                      <div className="text-2xs sm:text-xs text-gray-600">Done</div>
                                     </div>
                                     <div className="text-center p-1.5 sm:p-2 bg-brand-orange/[0.08] rounded-lg border border-brand-orange/20">
                                       <div className="text-xs sm:text-sm font-semibold text-brand-orange-deep">{record.duplicated}</div>
-                                      <div className="text-[10px] sm:text-xs text-gray-600">Duplicates</div>
+                                      <div className="text-2xs sm:text-xs text-gray-600">Duplicates</div>
                                     </div>
                                     <div className="text-center p-1.5 sm:p-2 bg-brand-blue-2/[0.07] rounded-lg border border-brand-blue-2/20">
                                       <div className="text-xs sm:text-sm font-semibold text-brand-blue-2">{record.versioned || 0}</div>
-                                      <div className="text-[10px] sm:text-xs text-gray-600">Version</div>
+                                      <div className="text-2xs sm:text-xs text-gray-600">Version</div>
                                     </div>
                                     <div className="text-center p-1.5 sm:p-2 bg-brand-orange-deep/[0.08] rounded-lg border border-brand-orange-deep/20">
                                       <div className="text-xs sm:text-sm font-semibold text-brand-orange-deep">{record.errors}</div>
-                                      <div className="text-[10px] sm:text-xs text-gray-600">Failed</div>
+                                      <div className="text-2xs sm:text-xs text-gray-600">Failed</div>
                                     </div>
                                     <div className="text-center p-1.5 sm:p-2 bg-brand-teal/[0.08] rounded-lg border border-brand-teal/20">
                                       <div className="text-xs sm:text-sm font-semibold text-brand-teal">{record.pending}</div>
-                                      <div className="text-[10px] sm:text-xs text-gray-600">Pending</div>
+                                      <div className="text-2xs sm:text-xs text-gray-600">Pending</div>
                                     </div>
                                     {/* Cancelled — previously had no tile, so cancelled files simply
                                         disappeared from the batch summary (23 of 100, nothing failed). */}
                                     <div className="text-center p-1.5 sm:p-2 bg-gray-100 rounded-lg border border-gray-300">
                                       <div className="text-xs sm:text-sm font-semibold text-gray-700">{cancelledCount}</div>
-                                      <div className="text-[10px] sm:text-xs text-gray-600">Cancelled</div>
+                                      <div className="text-2xs sm:text-xs text-gray-600">Cancelled</div>
                                     </div>
                                   </div>
                                   {unaccountedCount > 0 && (
-                                    <div className="mb-3 flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-[10px] sm:text-xs text-amber-800">
+                                    <div className="mb-3 flex items-start gap-1.5 rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1.5 text-2xs sm:text-xs text-amber-800">
                                       <AlertCircle className="mt-px h-3.5 w-3.5 flex-shrink-0" />
                                       <span>
                                         {unaccountedCount} file{unaccountedCount !== 1 ? 's' : ''} in this batch {unaccountedCount !== 1 ? 'are' : 'is'} not
@@ -5701,7 +5701,7 @@ export default function MyResumesPage() {
 
                                   {/* Progress Bar */}
                                   <div className="mb-3 sm:mb-4">
-                                    <div className="flex items-center justify-between text-[10px] sm:text-xs text-gray-600 mb-1 sm:mb-1.5">
+                                    <div className="flex items-center justify-between text-2xs sm:text-xs text-gray-600 mb-1 sm:mb-1.5">
                                       <span>Progress</span>
                                       <span>{processed} of {record.totalFiles}</span>
                                     </div>
@@ -5727,7 +5727,7 @@ export default function MyResumesPage() {
                                     const elapsed = Math.min(Date.now() - new Date(record.date).getTime(), 10 * 60 * 1000);
                                     if (processed <= 0 || elapsed <= 0) {
                                       return (
-                                        <div className="flex items-center gap-1.5 mb-3 sm:mb-4 text-[10px] sm:text-xs text-blue-600">
+                                        <div className="flex items-center gap-1.5 mb-3 sm:mb-4 text-2xs sm:text-xs text-blue-600">
                                           <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                                           <span>Estimating time remaining...</span>
                                         </div>
@@ -5741,7 +5741,7 @@ export default function MyResumesPage() {
                                       ? `Approx. ${lowMins} min${lowMins !== 1 ? 's' : ''} remaining`
                                       : `Approx. ${lowMins}\u2013${highMins} mins remaining`;
                                     return (
-                                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-0.5 sm:gap-1.5 mb-3 sm:mb-4 text-[10px] sm:text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-2.5 sm:px-3 py-1.5">
+                                      <div className="flex flex-col sm:flex-row items-start sm:items-center gap-0.5 sm:gap-1.5 mb-3 sm:mb-4 text-2xs sm:text-xs text-blue-600 bg-blue-50 border border-blue-100 rounded-lg px-2.5 sm:px-3 py-1.5">
                                         <div className="flex items-center gap-1.5">
                                           <Clock className="w-3 h-3 sm:w-3.5 sm:h-3.5 flex-shrink-0" />
                                           <span>{etaText}</span>
@@ -5879,7 +5879,7 @@ export default function MyResumesPage() {
                                       </div>
                                       {/* Short note: cancel only for queued items */}
                                       {record.statuses.some((f: any) => f.status === 'pending' || f.status === 'error' || f.status === 'cancelled') && (
-                                        <p className="text-[10px] text-gray-400 mb-2">
+                                        <p className="text-2xs text-gray-400 mb-2">
                                           ℹ️ Retry is available for queued, failed &amp; cancelled files. Cancel is only available for queued files.
                                         </p>
                                       )}
@@ -5977,8 +5977,8 @@ export default function MyResumesPage() {
                                             </div>
                                             {/* File Info */}
                                             <div className="flex-1 min-w-0">
-                                              <div className="font-medium text-gray-900 text-[11px] sm:text-sm truncate">{file.fileName}</div>
-                                              <div className="text-[10px] sm:text-xs text-gray-500 mt-0.5 truncate">
+                                              <div className="font-medium text-gray-900 text-2xs sm:text-sm truncate">{file.fileName}</div>
+                                              <div className="text-2xs sm:text-xs text-gray-500 mt-0.5 truncate">
                                                 {file.status === 'completed' && (file.candidateName ? `✓ ${file.candidateName}` : '✓ Uploaded successfully')}
                                                 {file.status === 'versioned' && (file.candidateName ? `↑ ${file.candidateName} - Version update detected` : '↑ Version update detected - Pending resolution')}
                                                 {file.status === 'processing' && '⚡ Processing...'}
@@ -5990,7 +5990,7 @@ export default function MyResumesPage() {
                                               </div>
                                             </div>
                                             {/* Status Badge */}
-                                            <span className={`hidden sm:inline px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-[10px] sm:text-xs font-semibold flex-shrink-0 ${
+                                            <span className={`hidden sm:inline px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-full text-2xs sm:text-xs font-semibold flex-shrink-0 ${
                                               file.status === 'completed' ? 'bg-green-100 text-green-700' :
                                               file.status === 'versioned' ? 'bg-brand-blue-2/15 text-brand-blue-2' :
                                               file.status === 'processing' ? 'bg-brand-blue/10 text-brand-blue' :
@@ -6021,7 +6021,7 @@ export default function MyResumesPage() {
                                                 <button
                                                   disabled={retryingItems.has(file.id)}
                                                   onClick={(e) => handleRetryItem(record.id, file.id, e)}
-                                                  className={`p-1 rounded text-[10px] font-medium transition-colors ${retryingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-brand-blue hover:bg-brand-blue/10'}`}
+                                                  className={`p-1 rounded text-2xs font-medium transition-colors ${retryingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-brand-blue hover:bg-brand-blue/10'}`}
                                                   aria-label="Retry this file" title={file.status === 'cancelled' ? 'Re-queue this cancelled file' : 'Retry this file'}
                                                 >
                                                   <RefreshCw className={`w-3 h-3 ${retryingItems.has(file.id) ? 'animate-spin' : ''}`} />
@@ -6030,7 +6030,7 @@ export default function MyResumesPage() {
                                                   <button
                                                     disabled={cancellingItems.has(file.id)}
                                                     onClick={(e) => handleCancelItem(record.id, file.id, file.fileName, e)}
-                                                    className={`p-1 rounded text-[10px] font-medium transition-colors ${cancellingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-red-500 hover:bg-red-50'}`}
+                                                    className={`p-1 rounded text-2xs font-medium transition-colors ${cancellingItems.has(file.id) ? 'text-gray-400 cursor-not-allowed' : 'text-red-500 hover:bg-red-50'}`}
                                                     aria-label="Cancel this file (queued only)" title="Cancel this file (queued only)"
                                                   >
                                                     <X className="w-3 h-3" />
@@ -6077,7 +6077,7 @@ export default function MyResumesPage() {
                       <span className="text-xs sm:text-sm font-semibold text-brand-blue-2">
                         {selectedVersionedItems.size} versioned resume{selectedVersionedItems.size !== 1 ? 's' : ''} selected
                       </span>
-                      <p className="text-[10px] sm:text-xs text-brand-blue-2/80">Choose how to resolve these version conflicts</p>
+                      <p className="text-2xs sm:text-xs text-brand-blue-2/80">Choose how to resolve these version conflicts</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">

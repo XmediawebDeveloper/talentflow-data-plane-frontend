@@ -871,19 +871,19 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                       />
                     </div>
                     <div className="flex items-center justify-between gap-2 mt-1.5">
-                      <span className="text-[11px] sm:text-xs text-gray-600 dark:text-slate-400 tabular-nums">
+                      <span className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 tabular-nums">
                         {quotaUsed.toLocaleString()} used ({quotaPercent.toFixed(1)}%)
                       </span>
                       {quotaInfo.status === 'EXCEEDED' ? (
-                        <span className="text-[11px] sm:text-xs font-medium text-red-700 bg-red-50 ring-1 ring-red-200 rounded-full px-2 py-0.5">
+                        <span className="text-2xs sm:text-xs font-medium text-red-700 bg-red-50 ring-1 ring-red-200 rounded-full px-2 py-0.5">
                           Quota exhausted
                         </span>
                       ) : (quotaInfo.status === 'APPROACHING' || quotaInfo.status === 'WARNING' || quotaInfo.status === 'CRITICAL') ? (
-                        <span className="text-[11px] sm:text-xs font-medium text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20 rounded-full px-2 py-0.5">
+                        <span className="text-2xs sm:text-xs font-medium text-brand-orange-deep bg-brand-orange/10 ring-1 ring-brand-orange/20 rounded-full px-2 py-0.5">
                           Low quota
                         </span>
                       ) : (
-                        <span className="text-[11px] sm:text-xs font-medium text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 rounded-full px-2 py-0.5 tabular-nums">
+                        <span className="text-2xs sm:text-xs font-medium text-emerald-700 bg-emerald-50 ring-1 ring-emerald-200 rounded-full px-2 py-0.5 tabular-nums">
                           {quotaFreePercent.toFixed(0)}% free
                         </span>
                       )}
@@ -963,7 +963,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
             <p className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-slate-50">
               {activeTab === 'single' ? 'Drag & drop your resume here' : 'Drag & drop your resumes here'}
             </p>
-            <p className="text-[11px] sm:text-xs text-gray-600 dark:text-slate-400 mt-1 mb-3">
+            <p className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mt-1 mb-3">
               or <span className="text-brand-blue font-medium underline-offset-2 hover:underline">click to browse</span> from your device
             </p>
             {/* The accepted formats as chips — quicker to scan than a sentence. */}
@@ -971,7 +971,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               {['PDF', 'DOCX', 'DOC'].map(format => (
                 <span
                   key={format}
-                  className="inline-flex items-center gap-1.5 rounded-full border border-brand-cyan/20 bg-white px-2.5 py-1 text-[11px] font-medium text-gray-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
+                  className="inline-flex items-center gap-1.5 rounded-full border border-brand-cyan/20 bg-white px-2.5 py-1 text-2xs font-medium text-gray-700 shadow-sm dark:border-slate-700 dark:bg-slate-800 dark:text-slate-200"
                 >
                   {format === 'PDF' ? (
                     <FileFormatIcon color="var(--raw-dc2626)" accent="var(--raw-f87171)" label="PDF" />
@@ -982,7 +982,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                 </span>
               ))}
             </div>
-            <div className="flex flex-col items-center justify-center gap-1 text-[10px] text-gray-500 dark:text-slate-400 sm:flex-row sm:gap-3 sm:text-[11px]">
+            <div className="flex flex-col items-center justify-center gap-1 text-2xs text-gray-500 dark:text-slate-400 sm:flex-row sm:gap-3 sm:text-2xs">
               <span className="flex items-center gap-1">
                 <FileText className="h-3 w-3" />
                 Max file size: {maxFileSizeMB} MB
@@ -1041,7 +1041,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                     <CheckCircle className="w-4 h-4 sm:w-5 sm:h-5 text-brand-teal flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <div className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 truncate">{file.name}</div>
-                      <div className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500">{formatFileSize(file.size)}</div>
+                      <div className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500">{formatFileSize(file.size)}</div>
                     </div>
                     <button
                       onClick={(e) => {
@@ -1101,14 +1101,14 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                       {/* Show existing resume details for duplicates */}
                       {error.type === 'duplicate' && error.existingResume && (
                         <div className="mt-2 sm:mt-3 p-2 sm:p-3 bg-white dark:bg-slate-900 rounded-lg border border-brand-orange/20">
-                          <div className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500 mb-1">Existing Resume</div>
+                          <div className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500 mb-1">Existing Resume</div>
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                             <div className="min-w-0">
                               <div className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50 truncate">
                                 {error.existingResume.candidateName}
                               </div>
                               {error.existingResume.uploadedAt && (
-                                <div className="text-[10px] sm:text-xs text-gray-500 dark:text-slate-500">
+                                <div className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500">
                                   Uploaded: {formatISTDate(error.existingResume.uploadedAt)}
                                 </div>
                               )}
@@ -1192,7 +1192,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                       >
                         {systemPickerFolders.length > 0 && (
                           <>
-                            <div className="px-3 pt-1 pb-1 text-[11px] font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide">
+                            <div className="px-3 pt-1 pb-1 text-2xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide">
                               System Folders
                             </div>
                             {systemPickerFolders.map(folder => (
@@ -1228,7 +1228,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                         )}
                         {myPickerFolders.length > 0 && (
                           <>
-                            <div className="px-3 pt-1 pb-1 text-[11px] font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide">
+                            <div className="px-3 pt-1 pb-1 text-2xs font-semibold text-gray-400 dark:text-slate-500 uppercase tracking-wide">
                               My Folders
                             </div>
                             {myPickerFolders.map(folder => renderFolderPickerRow(folder, 0, []))}
@@ -1335,7 +1335,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
               <XCircle className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 flex-shrink-0" />
               <div className="flex-1 min-w-0">
                 <p className="text-xs sm:text-sm font-medium text-red-900">No files selected!</p>
-                <p className="text-[10px] sm:text-xs text-red-700">Please select at least one resume file to upload.</p>
+                <p className="text-2xs sm:text-xs text-red-700">Please select at least one resume file to upload.</p>
               </div>
               <button
                 onClick={() => setShowNoFilesError(false)}

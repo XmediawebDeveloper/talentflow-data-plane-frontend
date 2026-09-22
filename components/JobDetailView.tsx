@@ -13,7 +13,8 @@ import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { formatJobVersionLabel } from '@/lib/utils/jobOpeningDisplay';
 import SkillsList from '@/components/ui/SkillsList';
 import { Tooltip } from '@/components/ui/tooltip';
-import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
+import { Button } from '@/components/ui/button';
+import TabEmptyState from '@/components/ui/tab-empty-state';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import AITalentMatchConfirmModal from './AITalentMatchConfirmModal';
 import ResumeUploadModal from './ResumeUploadModal';
@@ -54,6 +55,7 @@ import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
 import { Skeleton } from '@/components/ui/skeleton';
+import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 
 // Legacy aliases — both now use the centralized IST formatter
 const formatToIST = formatIST;
@@ -248,7 +250,7 @@ function QuickActionPanel({ id, open, className = '', children }: {
  */
 function QuickActionTooltip({ text, align = 'left' }: { text: string; align?: 'left' | 'center' }) {
   return (
-    <div className={`absolute top-full mt-1.5 z-40 w-max max-w-[min(14rem,calc(100vw-2rem))] px-2.5 py-1.5 bg-gray-900 dark:bg-slate-700 text-white text-[11px] font-medium leading-snug rounded-md shadow-lg ring-1 ring-black/10 opacity-0 group-hover:opacity-100 transition-opacity ${QUICK_ACTION_HOVER_EASE} pointer-events-none whitespace-normal break-words ${
+    <div className={`absolute top-full mt-1.5 z-40 w-max max-w-[min(14rem,calc(100vw-2rem))] px-2.5 py-1.5 bg-gray-900 dark:bg-slate-700 text-white text-2xs font-medium leading-snug rounded-md shadow-lg ring-1 ring-black/10 opacity-0 group-hover:opacity-100 transition-opacity ${QUICK_ACTION_HOVER_EASE} pointer-events-none whitespace-normal break-words ${
       align === 'center' ? 'left-1/2 -translate-x-1/2 text-center' : 'left-0'
     }`}>
       {text}
@@ -353,7 +355,7 @@ function QuickActionTile({
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : icon}
         </span>
-        <span className={`text-[11px] font-medium leading-none transition-colors ${QUICK_ACTION_HOVER_EASE} ${
+        <span className={`text-2xs font-medium leading-none transition-colors ${QUICK_ACTION_HOVER_EASE} ${
           disabled ? 'text-gray-400 dark:text-slate-500' : `text-gray-700 dark:text-slate-300 ${colors.labelHover}`
         }`}>
           {label}
@@ -512,7 +514,7 @@ const JOB_ICON_ACTION_BASE =
 const JOB_ICON_ACTION_EDIT =
   'text-brand-blue hover:bg-brand-blue/10 hover:border-brand-blue/40';
 const JOB_ICON_ACTION_DISABLE =
-  'text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:border-red-300 dark:hover:border-red-500/40';
+  'text-destructive hover:bg-destructive-subtle hover:border-destructive-line';
 const JOB_ICON_ACTION_ARCHIVE =
   'text-menu-icon-archive hover:bg-brand-orange/10 hover:border-brand-orange/40';
 
@@ -584,7 +586,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
    * published JD reads back the same way it was configured.
    *
    * "Required" means Resume Scoring treats the criterion as Essential: it shares
-   * the 60% block, and a rating below 7 on it fails the whole Essential section.
+   * the 60% block, and a rating below 6 on it fails the whole Essential section.
    * "Preferred" criteria share the 40% block and never fail a candidate on their own.
    */
   const requirementLabel = requirementBadge;
@@ -1899,15 +1901,15 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case 'Published':
-        return 'bg-green-100 text-green-700 border-green-200';
+        return 'bg-success-subtle text-success border-success-line';
       case 'Republished':
-        return 'bg-blue-100 text-blue-700 border-blue-200';
+        return 'bg-success-subtle text-success border-success-line';
       case 'Draft':
-        return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+        return 'bg-warning-subtle text-warning border-warning-line';
       case 'Closed':
         return 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700';
       case 'Disabled':  // JD15: Disabled status styling
-        return 'bg-red-100 text-red-700 border-red-200';
+        return 'bg-destructive-subtle text-destructive border-destructive-line';
       case 'Archived':
         return 'bg-purple-100 text-purple-700 border-purple-200';
       default:
@@ -2338,12 +2340,16 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           { label: viewingAssessmentResult.candidateName || 'Candidate Details' },
         ]}
         assessmentId={aId}
-        assessmentShortId={viewingAssessmentResult.assessmentShortId}
         candidateId={viewingAssessmentResult.id}
         candidateDisplayId={viewingAssessmentResult.candidateDisplayId}
         assessmentTitle={viewingAssessmentResult.assessmentName || job.title}
-        jdTitle={job.title}
         jdId={job.id}
+        /* This page IS one job version, so its own title and the version number
+           it already displays are what the result's Job Title row should name:
+           `job.versionNumber`, the same value the header's version selector
+           reads. */
+        jdTitle={job.title}
+        jdVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
         assessmentVersion={viewingAssessmentResult.assessmentVersion}
         currentIndex={_arIdx >= 0 ? _arIdx : undefined}
         totalCount={_nonPendingResults.length}
@@ -2370,7 +2376,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // the set that suits them, without the markup existing twice.
   const assessmentCreateAction =
     permissions.canCreateAssessments && hasPlanFeature('assessment') ? (
-      <button
+      <Button
+        variant="primary"
         onClick={handleCreateAssessment}
         disabled={
           !features.assessment
@@ -2379,18 +2386,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           || blockAssessmentCreate
         }
         title={assessmentCreateBlockedReason ?? undefined}
-        className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
       >
         {resolvingAssessmentTarget
           ? <Loader2 className="w-4 h-4 animate-spin" />
           : <Sparkles className="w-4 h-4" />}
         Create
-      </button>
+      </Button>
     ) : null;
 
   const assessmentInviteAction =
     permissions.canCreateAssessments && hasPlanFeature('assessment') ? (
-      <button
+      <Button
+        variant="primary"
         onClick={handleOpenShareAssessment}
         disabled={!canInviteToAssessment || isLoadingShareAssessments}
         title={
@@ -2404,13 +2411,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   ? 'Publish the assessment first'
                   : undefined
         }
-        className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
       >
         {isLoadingShareAssessments
           ? <Loader2 className="w-4 h-4 animate-spin" />
           : <UserPlus className="w-4 h-4" />}
         Send Invite
-      </button>
+      </Button>
     ) : null;
 
   const assessmentTabActions =
@@ -2437,7 +2443,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
   const aiInterviewCreateAction =
     permissions.canCreateAIInterviews && hasPlanFeature('ai_interview') ? (
-      <button
+      <Button
+        variant="primary"
         onClick={handleCreateAIInterview}
         disabled={
           !features.ai_interview
@@ -2446,18 +2453,18 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           || blockAIInterviewCreate
         }
         title={aiInterviewCreateBlockedReason ?? undefined}
-        className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
       >
         {resolvingAIInterviewTarget
           ? <Loader2 className="w-4 h-4 animate-spin" />
           : <Sparkles className="w-4 h-4" />}
         Create
-      </button>
+      </Button>
     ) : null;
 
   const aiInterviewInviteAction =
     permissions.canShareAIInterviews && hasPlanFeature('ai_interview') ? (
-      <button
+      <Button
+        variant="primary"
         /* Wrapped so the click event isn't passed through as the candidate
            seed — this entry point opens the form empty. */
         onClick={() => handleInviteAIInterview()}
@@ -2473,13 +2480,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   ? 'Publish the AI interview first'
                   : undefined
         }
-        className="px-3 sm:px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
       >
         {resolvingInviteConfig
           ? <Loader2 className="w-4 h-4 animate-spin" />
           : <UserPlus className="w-4 h-4" />}
         Send Invite
-      </button>
+      </Button>
     ) : null;
 
   // Same swap as the assessment pair — and it matters more here: a JD can only
@@ -2632,7 +2638,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
                 {/* Salary */}
                 {(job.salaryMin || job.salaryMax) && (
-                  <span className="inline-flex items-center px-2.5 py-1 bg-green-50 text-green-700 rounded-md text-xs font-medium">
+                  <span className="inline-flex items-center px-2.5 py-1 bg-success-subtle text-success rounded-md text-xs font-medium">
                     {formatSalaryRange({
                       min: job.salaryMin,
                       max: job.salaryMax,
@@ -2684,7 +2690,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                             Loading versions...
                           </div>
                         ) : versionMenuError ? (
-                          <div className="px-3 py-3 text-xs text-red-600 dark:text-red-400">
+                          <div className="px-3 py-3 text-xs text-destructive">
                             {versionMenuError}
                           </div>
                         ) : sortedLineageVersions.length === 0 ? (
@@ -2708,21 +2714,21 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                                     v{version.version_number ?? 1}.0
                                   </span>
                                   <div className="flex items-center gap-1">
-                                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300 capitalize">
+                                    <span className="text-2xs px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-slate-800 dark:text-slate-300 capitalize">
                                       {version.status}
                                     </span>
                                     {isCurrentVersion ? (
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
+                                      <span className="text-2xs px-1.5 py-0.5 rounded-full bg-purple-100 text-purple-700">
                                         Selected
                                       </span>
                                     ) : version.is_latest_version ? (
-                                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
+                                      <span className="text-2xs px-1.5 py-0.5 rounded-full bg-success-subtle text-success">
                                         Latest
                                       </span>
                                     ) : null}
                                   </div>
                                 </div>
-                                <div className="text-[11px] text-gray-500 dark:text-slate-400 truncate">
+                                <div className="text-2xs text-gray-500 dark:text-slate-400 truncate">
                                   {version.job_id || version.title}
                                   {version.published_at ? ` • ${formatToIST(version.published_at)}` : ''}
                                 </div>
@@ -2766,7 +2772,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             {/* <div className="relative" ref={menuRef}>
               <button
                 onClick={() => setShowAddApplicantsMenu(!showAddApplicantsMenu)}
-                className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-success text-white rounded-md hover:bg-success transition-colors"
               >
                 <UserPlus className="w-4 h-4" />
                 Add Applicants
@@ -2802,7 +2808,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
             {/* JD13: Usage Status Info Banner - COMMENTED OUT */}
             {false && job.status === 'Published' && job.usageStatus?.is_used && (
-              <div className="bg-amber-50 border border-amber-200 text-amber-800 px-3 py-2 rounded-lg text-sm flex items-center gap-2">
+              <div className="bg-warning-subtle border border-warning-line text-warning-strong px-3 py-2 rounded-lg text-sm flex items-center gap-2">
                 <Ban className="w-4 h-4 flex-shrink-0" />
                 <span>
                   This JD is in use ({job.usageStatus.usage.total_usage_count} {job.usageStatus.usage.total_usage_count === 1 ? 'usage' : 'usages'}) and cannot be edited.
@@ -2888,14 +2894,14 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             {job.status === 'Disabled' && (
               <div className="flex items-center gap-2">
                 {onEnable && (
-                  <button
+                  <Button
+                    variant="primary"
                     onClick={() => onEnable(job)}
-                    className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all flex items-center gap-2"
+                    icon={<CheckCircle className="w-4 h-4" />}
                     aria-label="Re-enable this JD" title="Re-enable this JD"
                   >
-                    <CheckCircle className="w-4 h-4" />
-                    <span className="font-medium">Re-enable JD</span>
-                  </button>
+                    Re-enable JD
+                  </Button>
                 )}
               </div>
             )}
@@ -2904,19 +2910,19 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             {job.status === 'Archived' && (
               <div className="flex items-center gap-2">
                 {onUnarchive && (
-                  <button
+                  <Button
+                    variant="primary"
                     onClick={() => onUnarchive(job)}
-                    className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-800 transition-all flex items-center gap-2"
+                    icon={<ArchiveRestore className="w-4 h-4" />}
                   >
-                    <ArchiveRestore className="w-4 h-4" />
-                    <span className="font-medium">Unarchive</span>
-                  </button>
+                    Unarchive
+                  </Button>
                 )}
                 {/* Delete button - COMMENTED OUT */}
                 {false && onDelete && (
                   <button
                     onClick={handleDelete}
-                    className="p-2 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-all"
+                    className="p-2 text-destructive hover:text-destructive hover:bg-destructive-subtle rounded-lg transition-all"
                     aria-label="Delete Job" title="Delete Job"
                   >
                     <Trash2 className="w-5 h-5" />
@@ -3202,7 +3208,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-4">
               <div className="flex items-center gap-2 mb-3">
                 <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50">Additional Details</h3>
-                <span className="text-xs text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded">
+                <span className="text-xs text-success bg-success-subtle border border-success-line px-2 py-0.5 rounded">
                   Visible to candidates
                 </span>
               </div>
@@ -3277,7 +3283,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                             <div className="space-y-2">
                               {mustHaveSkills.map((skill, index) => (
                                 <div key={index} className="flex items-center gap-2 text-sm text-gray-700 dark:text-slate-300">
-                                  <CheckCircle className="w-4 h-4 text-red-600 flex-shrink-0" />
+                                  <CheckCircle className="w-4 h-4 text-destructive flex-shrink-0" />
                                   {skill}
                                 </div>
                               ))}
@@ -3733,7 +3739,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   </button>
                 </div>
                 <div className="bg-gray-200 dark:bg-slate-800 rounded-full h-2">
-                  <div className="bg-green-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.exactMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
+                  <div className="bg-success h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.exactMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
                 </div>
               </div>
               <div>
@@ -3767,7 +3773,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   </button>
                 </div>
                 <div className="bg-gray-200 dark:bg-slate-800 rounded-full h-2">
-                  <div className="bg-red-600 h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.noMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
+                  <div className="bg-destructive h-2 rounded-full" style={{ width: `${scoredResumesStats.total > 0 ? (scoredResumesStats.noMatch / scoredResumesStats.total * 100) : 0}%` }}></div>
                 </div>
               </div>
             </div>
@@ -3820,7 +3826,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   jdVersionHistory.forEach((v) => {
                     events.push({
                       key: `jd-v${v.version_number}`,
-                      dot: v.version_number === 1 ? 'bg-green-500' : 'bg-purple-500',
+                      dot: v.version_number === 1 ? 'bg-success' : 'bg-purple-500',
                       title: v.version_number === 1 ? 'Job Published' : 'Job Republished',
                       date: v.published_at,
                       by: v.published_by_name,
@@ -3831,7 +3837,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   // JD's own creator/updated fields so Published/Republished
                   // still show something rather than vanishing entirely.
                   if (job.status === 'Published' && job.postedDate) {
-                    events.push({ key: 'jd-published', dot: 'bg-green-500', title: 'Job Published', date: job.postedDate, by: job.postedBy });
+                    events.push({ key: 'jd-published', dot: 'bg-success', title: 'Job Published', date: job.postedDate, by: job.postedBy });
                   }
                   if (job.currentVersion && job.currentVersion > 1) {
                     events.push({ key: 'jd-republished', dot: 'bg-purple-500', title: 'Job Republished', date: job.updated_at, by: job.postedBy });
@@ -3841,7 +3847,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   events.push({ key: 'archived', dot: 'bg-brand-orange', title: 'Job Archived', date: job.updated_at });
                 }
                 if (job.status === 'Disabled') {
-                  events.push({ key: 'disabled', dot: 'bg-red-500', title: 'Job Disabled', date: job.updated_at });
+                  events.push({ key: 'disabled', dot: 'bg-destructive', title: 'Job Disabled', date: job.updated_at });
                 }
                 scoredResumes.forEach((r: any, i: number) => {
                   events.push({
@@ -3975,13 +3981,13 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               title="No Scored Resumes"
               description="Score resumes against this job description to see the candidates here."
               action={canScoreResumesFromTab ? (
-                <button
+                <Button
+                  variant="primary"
                   onClick={() => setShowSelectSourceModal(true)}
-                  className={TAB_EMPTY_ACTION_CLASS}
+                  icon={<ClipboardList className="w-4 h-4" />}
                 >
-                  <ClipboardList className="w-4 h-4" />
                   Score Resumes
-                </button>
+                </Button>
               ) : undefined}
             />
           ) : (
@@ -4105,12 +4111,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           ) : aiInterviewConfigError ? (
             <div className="text-center py-16">
               <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">{aiInterviewConfigError}</p>
-              <button
+              <Button
+                variant="primary"
                 onClick={loadAIInterviewConfig}
-                className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
               >
                 Retry
-              </button>
+              </Button>
             </div>
           ) : aiInterviewConfig ? (
             <AIInterviewResults
@@ -4213,8 +4219,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-7 pt-5 sm:pt-7 pb-5 sm:pb-6">
               {/* Header */}
               <div className="flex items-start gap-3 sm:gap-4">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-amber-100 flex items-center justify-center flex-shrink-0">
-                  <AlertCircle className="w-6 h-6 sm:w-7 sm:h-7 text-amber-600" />
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-warning-subtle flex items-center justify-center flex-shrink-0">
+                  <AlertCircle className="w-6 h-6 sm:w-7 sm:h-7 text-warning" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <h3 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight leading-tight">
@@ -4254,8 +4260,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         {draftAssessment.duration_minutes || 30} min
                       </span>
                       <span aria-hidden="true" className="text-gray-300 dark:text-slate-600">|</span>
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-medium">
-                        <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-warning-subtle text-warning-strong font-medium">
+                        <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-warning" />
                         Draft
                       </span>
                     </div>
@@ -4268,19 +4274,19 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   brand's own blue once there is nothing left to finish. */}
               <div
                 className={`mt-3 sm:mt-4 rounded-xl p-3 sm:p-5 ${
-                  readyToPublish ? 'bg-brand-blue/5 ring-1 ring-brand-blue/15' : 'bg-amber-50'
+                  readyToPublish ? 'bg-brand-blue/5 ring-1 ring-brand-blue/15' : 'bg-warning-subtle'
                 }`}
               >
                 <div className="flex items-start gap-3 sm:gap-4">
                   <div
                     className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                      readyToPublish ? 'bg-brand-blue/10' : 'bg-amber-100'
+                      readyToPublish ? 'bg-brand-blue/10' : 'bg-warning-subtle'
                     }`}
                   >
                     {readyToPublish ? (
                       <CheckCircle className="w-5 h-5 text-brand-blue" />
                     ) : (
-                      <Info className="w-5 h-5 text-amber-600" />
+                      <Info className="w-5 h-5 text-warning" />
                     )}
                   </div>
                   <div className="min-w-0">
@@ -4303,30 +4309,33 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 — same rule as the AI interview prompt below. Cancel is the
                 close button's twin, kept where a decision is actually made. */}
             <div className="flex-shrink-0 border-t border-gray-200 dark:border-slate-700 px-5 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
-              <button
+              <Button
+                variant="secondary"
                 onClick={() => setDraftAssessment(null)}
                 disabled={publishingDraft}
-                className="px-5 sm:px-8 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-5 sm:px-8"
               >
                 Cancel
-              </button>
+              </Button>
               {readyToPublish ? (
-                <button
+                <Button
+                  variant="primary"
                   onClick={handlePublishDraftAssessment}
                   disabled={publishingDraft}
-                  className="px-5 sm:px-8 py-2.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                  className="px-5 sm:px-8"
                 >
                   {publishingDraft && <Loader2 className="w-4 h-4 animate-spin" />}
                   {publishingDraft ? 'Publishing…' : 'Publish'}
-                </button>
+                </Button>
               ) : (
-                <button
+                <Button
+                  variant="primary"
                   onClick={handleEditDraftAssessment}
-                  className="px-5 sm:px-8 py-2.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2"
+                  className="px-5 sm:px-8"
                 >
                   Continue editing
                   <ArrowRight className="w-4 h-4" />
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -4360,8 +4369,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-7 pt-5 sm:pt-7 pb-5 sm:pb-6">
               {/* Header */}
               <div className="flex items-start gap-3 sm:gap-4">
-                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-amber-100 flex items-center justify-center flex-shrink-0">
-                  <AlertCircle className="w-6 h-6 sm:w-7 sm:h-7 text-amber-600" />
+                <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-2xl bg-warning-subtle flex items-center justify-center flex-shrink-0">
+                  <AlertCircle className="w-6 h-6 sm:w-7 sm:h-7 text-warning" />
                 </div>
                 <div className="min-w-0 flex-1">
                   <h3 className="text-lg sm:text-2xl font-bold text-gray-900 dark:text-slate-50 tracking-tight leading-tight">
@@ -4402,8 +4411,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         {draftAIInterview.duration_minutes || 30} min
                       </span>
                       <span aria-hidden="true" className="text-gray-300 dark:text-slate-600">|</span>
-                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 font-medium">
-                        <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+                      <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-warning-subtle text-warning-strong font-medium">
+                        <span aria-hidden="true" className="w-1.5 h-1.5 rounded-full bg-warning" />
                         Draft
                       </span>
                     </div>
@@ -4416,19 +4425,19 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   which is the difference between resuming and re-deriving. */}
               <div
                 className={`mt-3 sm:mt-4 rounded-xl p-3 sm:p-5 ${
-                  readyToPublish ? 'bg-brand-blue/5 ring-1 ring-brand-blue/15' : 'bg-amber-50'
+                  readyToPublish ? 'bg-brand-blue/5 ring-1 ring-brand-blue/15' : 'bg-warning-subtle'
                 }`}
               >
                 <div className="flex items-start gap-3 sm:gap-4">
                   <div
                     className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${
-                      readyToPublish ? 'bg-brand-blue/10' : 'bg-amber-100'
+                      readyToPublish ? 'bg-brand-blue/10' : 'bg-warning-subtle'
                     }`}
                   >
                     {readyToPublish ? (
                       <CheckCircle className="w-5 h-5 text-brand-blue" />
                     ) : (
-                      <Info className="w-5 h-5 text-amber-600" />
+                      <Info className="w-5 h-5 text-warning" />
                     )}
                   </div>
                   <div className="min-w-0">
@@ -4451,30 +4460,33 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
             {/* Actions */}
             <div className="flex-shrink-0 border-t border-gray-200 dark:border-slate-700 px-5 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
-              <button
+              <Button
+                variant="secondary"
                 onClick={() => setDraftAIInterview(null)}
                 disabled={publishingAIDraft}
-                className="px-5 sm:px-8 py-2.5 text-sm font-semibold text-gray-700 dark:text-slate-200 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-5 sm:px-8"
               >
                 Cancel
-              </button>
+              </Button>
               {readyToPublish ? (
-                <button
+                <Button
+                  variant="primary"
                   onClick={handlePublishDraftAIInterview}
                   disabled={publishingAIDraft}
-                  className="px-5 sm:px-8 py-2.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:shadow-none"
+                  className="px-5 sm:px-8"
                 >
                   {publishingAIDraft && <Loader2 className="w-4 h-4 animate-spin" />}
                   {publishingAIDraft ? 'Publishing…' : 'Publish'}
-                </button>
+                </Button>
               ) : (
-                <button
+                <Button
+                  variant="primary"
                   onClick={handleEditDraftAIInterview}
-                  className="px-5 sm:px-8 py-2.5 text-sm font-semibold bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center justify-center gap-2"
+                  className="px-5 sm:px-8"
                 >
                   Continue editing
                   <ArrowRight className="w-4 h-4" />
-                </button>
+                </Button>
               )}
             </div>
           </div>
@@ -4549,19 +4561,19 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 {pickerSelectedIds.length} of {pickerAssessments.length} selected
               </span>
               <div className="flex gap-2">
-                <button
+                <Button
+                  variant="secondary"
                   onClick={() => setShowAssessmentPicker(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 border border-gray-300 dark:border-slate-700 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800"
                 >
                   Cancel
-                </button>
-                <button
+                </Button>
+                <Button
+                  variant="primary"
                   onClick={handleConfirmAssessmentPick}
                   disabled={pickerSelectedIds.length === 0}
-                  className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
                 >
                   Continue
-                </button>
+                </Button>
               </div>
             </div>
           </div>
@@ -4957,13 +4969,13 @@ function AIMatchTabContent({
         title="No AI Talent Match Results"
         description="Run an AI Talent Match session to find the best candidates for this role."
         action={canRunAiMatch ? (
-          <button
+          <Button
+            variant="primary"
             onClick={onRunMatch}
-            className={TAB_EMPTY_ACTION_CLASS}
+            icon={<Sparkles className="w-4 h-4" />}
           >
-            <Sparkles className="w-4 h-4" />
             Run AI Match
-          </button>
+          </Button>
         ) : undefined}
       />
     );
@@ -4999,22 +5011,24 @@ function AIMatchTabContent({
             {filteredCandidates.length} candidates
           </div>
           {selectedIds.size > 0 && (
-            <button
+            <Button
+              variant="secondary"
+              size="sm"
               onClick={() => onScoreSelected(selectedCandidates)}
-              className="px-3 sm:px-4 py-2 bg-brand-orange hover:bg-brand-orange-deep text-white rounded-lg text-xs sm:text-sm shadow-md shadow-brand-orange/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 font-medium"
+              icon={<ClipboardList className="w-3 h-3 sm:w-4 sm:h-4" />}
             >
-              <ClipboardList className="w-3 h-3 sm:w-4 sm:h-4" />
               Score ({selectedIds.size})
-            </button>
+            </Button>
           )}
           {canRunAiMatch && (
-            <button
+            <Button
+              variant="primary"
+              size="sm"
               onClick={onRunMatch}
-              className="px-3 sm:px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-xs sm:text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors flex items-center gap-2 font-medium"
+              icon={<Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />}
             >
-              <Sparkles className="w-3 h-3 sm:w-4 sm:h-4" />
               Run AI Match
-            </button>
+            </Button>
           )}
         </div>
 
@@ -5119,8 +5133,8 @@ function AIMatchTabContent({
                           )}
                         </div>
                         <div className={`inline-flex items-center justify-center px-2 py-0.5 rounded-md font-bold text-xs shrink-0 ${
-                          (candidate.rank || 0) >= 7 ? 'bg-green-100 text-green-800 border border-green-300' :
-                          (candidate.rank || 0) >= 4 ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' :
+                          (candidate.rank || 0) >= 7 ? 'bg-success-subtle text-success-strong border border-success-line' :
+                          (candidate.rank || 0) >= 4 ? 'bg-warning-subtle text-warning-strong border border-warning-line' :
                           (candidate.rank || 0) >= 1 ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-300 dark:border-slate-700' :
                           'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 border border-gray-200 dark:border-slate-700'
                         }`}>
@@ -5134,7 +5148,7 @@ function AIMatchTabContent({
 
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {isScored ? (
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 bg-success-subtle text-success rounded-full text-xs font-medium">
                             <CheckCircle className="w-3 h-3" />
                             Scored
                           </span>
@@ -5155,8 +5169,8 @@ function AIMatchTabContent({
                         <div className="flex-1 bg-gray-200 dark:bg-slate-700 rounded-full h-1.5">
                           <div
                             className={`h-1.5 rounded-full ${
-                              candidate.matchScore >= 70 ? 'bg-green-500' :
-                              candidate.matchScore >= 45 ? 'bg-yellow-500' : 'bg-red-400'
+                              candidate.matchScore >= 70 ? 'bg-success' :
+                              candidate.matchScore >= 45 ? 'bg-warning' : 'bg-destructive'
                             }`}
                             style={{ width: `${Math.min(100, candidate.matchScore)}%` }}
                           />
@@ -5184,7 +5198,12 @@ function AIMatchTabContent({
             header stays pinned. Header background/border live on the cells so the
             pinned row paints solid over the rows sliding underneath. */
         <div className="min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell">
-          <table className="w-full min-w-[1450px] table-auto">
+          {/* With no rows the width floor and the header come off — see
+              `TABLE_EMPTY_PANEL_CLASS`. A 1450px table centres its one empty cell across
+              1450px, which put the message off the side of the shell behind a
+              scrollbar that existed only to reach it. */}
+          <table className={`w-full table-auto ${filteredCandidates.length === 0 ? '' : 'min-w-[1450px]'}`}>
+            {filteredCandidates.length > 0 && (
             <thead className="sticky top-0 z-10 [&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
               <tr>
                 <th className="px-4 py-3 w-10 align-middle tf-sticky-col-left">
@@ -5208,18 +5227,21 @@ function AIMatchTabContent({
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap align-middle tf-sticky-col">Attachments</th>
               </tr>
             </thead>
+            )}
             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {filteredCandidates.length === 0 ? (
                 <tr>
-                  <td colSpan={12} className="px-4 py-12 text-center text-gray-500 dark:text-slate-500 text-sm">
-                    No candidates match the current filters.
+                  <td colSpan={12} className="p-0">
+                    <div className={`${TABLE_EMPTY_PANEL_CLASS} text-sm text-gray-500 dark:text-slate-500`}>
+                      No candidates match the current filters.
+                    </div>
                   </td>
                 </tr>
               ) : (
                 paginatedCandidates.map((candidate, idx) => {
                   const isScored = scoredResumeIds.has(candidate.resumeId);
                   const score = candidate.matchScore;
-                  const scoreColor = score >= 70 ? 'bg-green-500' : score >= 45 ? 'bg-yellow-500' : 'bg-red-400';
+                  const scoreColor = score >= 70 ? 'bg-success' : score >= 45 ? 'bg-warning' : 'bg-destructive';
                   const uploadDate = candidate.uploadDate ? formatISTDate(candidate.uploadDate) : '—';
 
                   return (
@@ -5247,8 +5269,8 @@ function AIMatchTabContent({
                       </td>
                       <td className="px-4 py-3">
                         <div className={`inline-flex items-center justify-center px-3 py-1 rounded-md font-bold text-sm ${
-                          (candidate.rank || 0) >= 7 ? 'bg-green-100 text-green-800 border border-green-300' :
-                          (candidate.rank || 0) >= 4 ? 'bg-yellow-100 text-yellow-800 border border-yellow-300' :
+                          (candidate.rank || 0) >= 7 ? 'bg-success-subtle text-success-strong border border-success-line' :
+                          (candidate.rank || 0) >= 4 ? 'bg-warning-subtle text-warning-strong border border-warning-line' :
                           (candidate.rank || 0) >= 1 ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border border-gray-300 dark:border-slate-700' :
                           'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 border border-gray-200 dark:border-slate-700'
                         }`}>
@@ -5293,7 +5315,7 @@ function AIMatchTabContent({
                       <td className="px-4 py-3 text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">{uploadDate}</td>
                       <td className="px-4 py-3">
                         {isScored ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-success-subtle text-success rounded-full text-xs font-medium">
                             <CheckCircle className="w-3 h-3" />
                             Scored
                           </span>
@@ -5305,13 +5327,14 @@ function AIMatchTabContent({
                         )}
                       </td>
                       <td className="px-4 py-3 tf-sticky-col" onClick={(e) => e.stopPropagation()}>
-                        <button
+                        <Button
+                          variant="secondary"
+                          size="sm"
                           onClick={() => handleAttachmentsClick(candidate)}
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 bg-gray-50 dark:bg-slate-800/50 text-gray-900 dark:text-slate-50 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors border border-gray-200 dark:border-slate-700 text-xs font-medium"
+                          icon={<Paperclip className="w-3.5 h-3.5" />}
                         >
-                          <Paperclip className="w-3.5 h-3.5" />
                           {candidate.attachmentCount ?? 1}
-                        </button>
+                        </Button>
                       </td>
                     </tr>
                   );
