@@ -1285,10 +1285,24 @@ export default function CandidateResultDetails({
             is first opened. */}
         {currentDetailTab === 'jd-summary' && assessmentMeta && (
           <div className="mb-4 sm:mb-6 space-y-3 sm:space-y-4">
+            {/* PILL TAB STRIP. The pills live inside a track with `p-1` of its
+                own rather than sitting flush in the row: the active pill is
+                drawn with `ring-1`, which paints OUTSIDE its border box, and
+                the row is a direct child of an `overflow-x-auto` container —
+                flush against that edge the ring fell outside the scroll box and
+                the leading pill's corners came back visibly shaved. The 4px
+                track padding keeps the whole ring inside, so nothing is clipped.
+
+                `rounded-full` on both the track and the pills is what makes the
+                shape read as a pill rather than the `rounded-lg` chip it was;
+                `w-fit` keeps the track hugging the two tabs instead of spanning
+                the column, and `flex-wrap` lets it reflow on narrow screens
+                rather than overflowing (the track scales with it, so the
+                rounded ends stay intact either way). */}
             <div
               role="tablist"
               aria-label="Job and assessment views"
-              className="flex flex-wrap items-center gap-1.5"
+              className="flex w-fit max-w-full flex-wrap items-center gap-1.5 rounded-full bg-slate-100 dark:bg-slate-800/60 p-1"
             >
               {([
                 { id: 'viewjd' as const, label: 'View JD', icon: Briefcase },
@@ -1302,10 +1316,10 @@ export default function CandidateResultDetails({
                     role="tab"
                     aria-selected={isActive}
                     onClick={() => setJdSummaryTab(tab.id)}
-                    className={`rounded-lg px-3 py-2 text-xs sm:text-sm transition-colors flex items-center gap-2 ${
+                    className={`rounded-full px-3.5 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm whitespace-nowrap transition-colors flex items-center gap-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 ${
                       isActive
-                        ? 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
-                        : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
+                        ? 'bg-white dark:bg-slate-900 text-brand-blue font-medium shadow-sm ring-1 ring-brand-blue/20'
+                        : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue hover:bg-white/70 dark:hover:bg-slate-900/50'
                     }`}
                   >
                     <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
