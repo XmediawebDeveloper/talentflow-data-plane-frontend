@@ -384,13 +384,21 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               resume_id: c.resumeId,
             }));
 
-            await assessmentService.bulkInvite(assessmentToInvite.id, {
+            const results = await assessmentService.bulkInvite(assessmentToInvite.id, {
               candidates: candidateData,
               custom_message: customMessage,
               expiry_days: expiryDays,
             });
 
-            sentCount += validCandidates.length;
+            // The request not throwing only means the API call itself went
+            // through — a per-candidate send can still have failed (bad
+            // domain, SMTP rejection) while the response is still 200, with
+            // that row's own status set to 'failed'. Counting every row here
+            // as sent is what let this screen say "Successfully sent" for an
+            // invite the backend had already marked failed.
+            const failedHere = results.filter((r) => r.status === 'failed').length;
+            sentCount += validCandidates.length - failedHere;
+            failedCount += failedHere;
             toast.loading(`Sent ${sentCount}/${totalInvites} invitations...`, { id: 'bulk-invite-multi' });
           } catch (error: any) {
             console.error(`Failed to send invitations for assessment ${assessmentToInvite.title}:`, error);
@@ -417,9 +425,18 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
       }
 
       // Single assessment invite (existing logic)
+      // The API call not throwing only means the request itself succeeded —
+      // a candidate's own send can still fail (bad domain, SMTP rejection)
+      // with the response still 200 and that invitation's status set to
+      // 'failed'. Reading each result's own status, rather than treating
+      // "no exception" as "delivered", is what stops this screen from
+      // showing "Successfully sent!" for an invite the backend already
+      // marked as failed — the recruiter would only find out later, back on
+      // the tracker.
+      let failedHere = 0;
       if (validCandidates.length === 1) {
         // Single invite
-        await assessmentService.invite(assessment.id, {
+        const result = await assessmentService.invite(assessment.id, {
           candidate_name: validCandidates[0].name,
           candidate_email: validCandidates[0].email,
           candidate_phone: validCandidates[0].phone,
@@ -428,6 +445,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
           custom_message: customMessage,
           expiry_days: expiryDays,
         });
+        if (result.status === 'failed') failedHere = 1;
       } else {
         // Bulk invite
         const candidateData = validCandidates.map(c => ({
@@ -437,16 +455,33 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
           invite_source: inviteSource || (c.source === 'database' ? 'Internal DB' : 'Manual'),
           resume_id: c.resumeId,
         }));
-        await assessmentService.bulkInvite(assessment.id, {
+        const results = await assessmentService.bulkInvite(assessment.id, {
           candidates: candidateData,
           custom_message: customMessage,
           expiry_days: expiryDays,
         });
+        failedHere = results.filter((r) => r.status === 'failed').length;
       }
 
-      setSentCount(validCandidates.length);
-      onInviteSent?.(validCandidates.length);
       setIsSubmitting(false);
+      const successCount = validCandidates.length - failedHere;
+      onInviteSent?.(successCount);
+
+      if (failedHere === validCandidates.length) {
+        // Every candidate failed — never show the success screen for a batch
+        // that fully failed.
+        toast.error(
+          validCandidates.length === 1
+            ? `Invite Failed: ${validCandidates[0].email} could not be delivered — check the email address and domain, then edit and resend it from Invite Status Tracking.`
+            : `All ${validCandidates.length} invitations failed to deliver — check the email addresses, then edit and resend them from Invite Status Tracking.`
+        );
+        return;
+      }
+      if (failedHere > 0) {
+        toast.warning(`Sent ${successCount} invitation${successCount > 1 ? 's' : ''} successfully. ${failedHere} failed to deliver — check Invite Status Tracking.`);
+      }
+
+      setSentCount(successCount);
       setShowSuccess(true);
       setTimeout(() => {
         setShowSuccess(false);

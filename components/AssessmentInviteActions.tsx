@@ -143,6 +143,8 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
       return { label: 'Completed', Icon: CheckCircle, tone: 'text-green-600' };
     case 'assessment_invitation_expired':
       return { label: 'Expired at', Icon: Clock, tone: 'text-brand-orange-deep' };
+    case 'assessment_invite_failed':
+      return { label: 'Invite Failed', Icon: X, tone: 'text-red-600' };
     default:
       return { label: action.replace(/_/g, ' '), Icon: Clock, tone: 'text-gray-500' };
   }
@@ -177,7 +179,7 @@ const inferMissingExpiries = (
   expiredAction: string
 ): TimelineEntry[] => {
   if (!(spanMs > 0)) return events;
-  const sorted = [...events].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  const sorted = [...events].sort(compareTimelineEntries);
   const inferred: TimelineEntry[] = [];
   for (let i = 0; i < sorted.length; i++) {
     if (sorted[i].label !== 'Invited') continue;
@@ -215,6 +217,42 @@ const collapseRepeatedExpiries = (sorted: TimelineEntry[]): TimelineEntry[] => {
 };
 
 const FALLBACK_MATCH_WINDOW_MS = 2 * 60 * 1000;
+
+/** Chronological order isn't quite the same as raw timestamp order: the
+ *  backend can log two events for the same click a beat apart (e.g. the
+ *  invitation row is written, THEN the send is attempted and, on failure,
+ *  logged — but "Invited" itself is written by a caller further up the
+ *  stack, after that), so a millisecond-accurate sort can show "Invite
+ *  Failed" a second before the "Invited" it belongs to. Within a small
+ *  window, break ties by lifecycle order instead of raw clock time; genuinely
+ *  separate events (seconds apart is normal for a deliberate recruiter
+ *  action, this window is for near-simultaneous logging only) still sort by
+ *  their real timestamps. */
+const EVENT_ORDER_RANK: Record<string, number> = {
+  Invited: 0,
+  Edited: 1,
+  'Email Changed': 1,
+  'System Check': 2,
+  'Email Read': 2,
+  Started: 3,
+  Completed: 4,
+  Revoked: 5,
+  Terminated: 5,
+  'Expired at': 5,
+  'Invite Failed': 6,
+};
+const ORDER_TIE_WINDOW_MS = 10 * 1000;
+const compareTimelineEntries = (a: TimelineEntry, b: TimelineEntry): number => {
+  const ta = new Date(a.at).getTime();
+  const tb = new Date(b.at).getTime();
+  if (Math.abs(ta - tb) <= ORDER_TIE_WINDOW_MS) {
+    const ra = EVENT_ORDER_RANK[a.label] ?? 99;
+    const rb = EVENT_ORDER_RANK[b.label] ?? 99;
+    if (ra !== rb) return ra - rb;
+  }
+  return ta - tb;
+};
+
 const buildFullTimeline = (
   inv: any,
   auditLogs: Array<{ action: string; created_at: string | null }>
@@ -287,7 +325,7 @@ const buildFullTimeline = (
   if (inv.opened_at) out.push({ label: 'System Check', at: inv.opened_at, Icon: Monitor, tone: 'text-brand-cyan' });
 
   const merged = inferMissingExpiries(out, inv.expires_at && inv.sent_at ? new Date(inv.expires_at).getTime() - new Date(inv.sent_at).getTime() : 0, 'assessment_invitation_expired').sort(
-    (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
+    compareTimelineEntries
   );
   return collapseRepeatedExpiries(merged);
 };
