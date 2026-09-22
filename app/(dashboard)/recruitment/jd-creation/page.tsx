@@ -6,7 +6,6 @@ import { ArrowLeft, AlertTriangle, XCircle, CreditCard, ShieldX, LogIn } from 'l
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import JDCreation from '@/components/JDCreation';
-import { PageSkeleton } from '@/components/ui/skeleton';
 import { jdService, JDResponse, JDAccessCheckResponse } from '@/lib/services/jdService';
 import { getJDUsageModules } from '@/lib/utils/jdUsageModules';
 
@@ -200,6 +199,183 @@ function AccessBlockedError({
             <ArrowLeft className="w-4 h-4" />
             Go Back
           </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Loading skeleton for JD Creation — mirrors the JDCreation shell: the white
+// rounded card, breadcrumb, the bordered 4-step indicator box (Create → Extract
+// → Review → Publish) and a content area (heading + section cards + footer
+// actions). Kept inline (no separate file) so it can't drift from the layout.
+function JDCreationSkeleton({ stage }: { stage?: string | null }) {
+  // Resolve the current stage from the prop (the loading gate passes it) or,
+  // for the Suspense fallback which sits outside useSearchParams, straight off
+  // the URL. Each of the four stages (create/extract/review/publish) has a
+  // DIFFERENT content layout, so the skeleton below the shared shell (breadcrumb
+  // + 4-step indicator) is rendered to match that specific stage — not generic.
+  const resolved =
+    stage ??
+    (typeof window !== 'undefined'
+      ? new URLSearchParams(window.location.search).get('stage')
+      : null) ??
+    'create';
+
+  let content;
+  if (resolved === 'extract') {
+    // Extract: Pro-tips banner → Must-Have / Nice-to-Have skill lists →
+    // experience / industry field cards → footer nav.
+    content = (
+      <div className="space-y-4 sm:space-y-6">
+        <div className="rounded-xl bg-brand-blue/5 ring-1 ring-brand-blue/15 p-3 sm:p-5">
+          <div className="flex items-start gap-3 sm:gap-4">
+            <div className="hidden sm:block h-10 w-10 shrink-0 rounded-lg bg-gray-200 animate-pulse" />
+            <div className="grid flex-1 grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              {[0, 1, 2].map((i) => (
+                <div key={i} className="h-4 w-full rounded bg-gray-100 animate-pulse" />
+              ))}
+            </div>
+          </div>
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {[0, 1].map((i) => (
+            <div key={i} className="rounded-xl border border-gray-200 p-4 space-y-3">
+              <div className="h-5 w-40 rounded bg-gray-200 animate-pulse" />
+              <div className="flex flex-wrap gap-2">
+                {Array.from({ length: 6 }).map((_, j) => (
+                  <div key={j} className="h-7 w-20 rounded-full bg-gray-100 animate-pulse" />
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {[0, 1].map((i) => (
+            <div key={i} className="rounded-xl border border-gray-200 p-4 space-y-2">
+              <div className="h-4 w-28 rounded bg-gray-200 animate-pulse" />
+              <div className="h-10 w-full rounded-lg bg-gray-100 animate-pulse" />
+            </div>
+          ))}
+        </div>
+        <div className="flex items-center justify-between pt-2">
+          <div className="h-10 w-28 rounded-lg bg-gray-100 animate-pulse" />
+          <div className="h-10 w-36 rounded-lg bg-gray-200 animate-pulse" />
+        </div>
+      </div>
+    );
+  } else if (resolved === 'review') {
+    // Review: gradient "Review & Publish" header → Final JD document card
+    // (header bar + long body) → footer nav.
+    content = (
+      <div className="space-y-4 sm:space-y-6">
+        <div className="rounded-xl bg-brand-blue/10 p-4 sm:p-6 space-y-2">
+          <div className="h-7 w-56 max-w-full rounded bg-gray-200 animate-pulse" />
+          <div className="h-4 w-96 max-w-full rounded bg-gray-100 animate-pulse" />
+        </div>
+        <div className="rounded-xl border border-gray-100 shadow-sm">
+          <div className="flex items-center justify-between gap-3 border-b border-gray-100 bg-gray-50 px-4 sm:px-6 py-3 sm:py-4">
+            <div className="h-5 w-48 rounded bg-gray-200 animate-pulse" />
+            <div className="flex gap-2">
+              <div className="h-8 w-20 rounded-md bg-gray-100 animate-pulse" />
+              <div className="h-8 w-20 rounded-md bg-gray-100 animate-pulse" />
+            </div>
+          </div>
+          <div className="p-4 sm:p-6 space-y-2.5">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div
+                key={i}
+                className={`h-4 rounded bg-gray-100 animate-pulse ${
+                  i % 3 === 0 ? 'w-1/3' : i % 4 === 0 ? 'w-2/3' : 'w-full'
+                }`}
+              />
+            ))}
+          </div>
+        </div>
+        <div className="flex items-center justify-between pt-2">
+          <div className="h-10 w-28 rounded-lg bg-gray-100 animate-pulse" />
+          <div className="h-10 w-40 rounded-lg bg-gray-200 animate-pulse" />
+        </div>
+      </div>
+    );
+  } else if (resolved === 'publish') {
+    // Publish: published-success banner → published document body.
+    content = (
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex items-center gap-4 rounded-xl bg-brand-cyan/10 p-4 sm:p-6">
+          <div className="h-12 w-12 shrink-0 rounded-full bg-gray-200 animate-pulse" />
+          <div className="flex-1 space-y-2">
+            <div className="h-6 w-48 rounded bg-gray-200 animate-pulse" />
+            <div className="h-4 w-80 max-w-full rounded bg-gray-100 animate-pulse" />
+          </div>
+          <div className="hidden sm:block h-10 w-32 rounded-lg bg-gray-200 animate-pulse" />
+        </div>
+        <div className="rounded-xl border border-gray-100 shadow-sm p-4 sm:p-6 space-y-2.5">
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div
+              key={i}
+              className={`h-4 rounded bg-gray-100 animate-pulse ${i % 3 === 0 ? 'w-1/3' : 'w-full'}`}
+            />
+          ))}
+        </div>
+      </div>
+    );
+  } else {
+    // Create (default): two mode-selection cards (AI-Generated / Manual) →
+    // input + generate area.
+    content = (
+      <div className="space-y-4 sm:space-y-6">
+        <div className="flex flex-col sm:flex-row gap-3 sm:gap-4">
+          {[0, 1].map((i) => (
+            <div key={i} className="flex-1 rounded-xl border-2 border-gray-200 p-4 sm:p-6 space-y-3">
+              <div className="flex items-center gap-2 sm:gap-3">
+                <div className="h-6 w-6 rounded bg-gray-200 animate-pulse" />
+                <div className="h-5 w-40 rounded bg-gray-200 animate-pulse" />
+              </div>
+              <div className="h-3.5 w-full rounded bg-gray-100 animate-pulse" />
+              <div className="h-3.5 w-4/5 rounded bg-gray-100 animate-pulse" />
+            </div>
+          ))}
+        </div>
+        <div className="rounded-xl border border-gray-200 p-4 sm:p-6 space-y-3">
+          <div className="h-4 w-32 rounded bg-gray-200 animate-pulse" />
+          <div className="h-11 w-full rounded-lg bg-gray-100 animate-pulse" />
+          <div className="h-4 w-40 rounded bg-gray-200 animate-pulse" />
+          <div className="h-28 w-full rounded-lg bg-gray-100 animate-pulse" />
+          <div className="flex justify-end">
+            <div className="h-10 w-36 rounded-lg bg-gray-200 animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="h-full overflow-x-hidden overflow-y-auto bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px] space-y-4 md:space-y-5">
+        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          {/* Breadcrumb */}
+          <div className="mb-4 sm:mb-5 h-4 w-64 max-w-full rounded bg-gray-200 animate-pulse" />
+
+          {/* 4-step indicator block (shared across all stages) */}
+          <div className="mb-4 sm:mb-6 rounded-xl border border-gray-100 bg-gradient-to-br from-slate-50 to-white px-3 py-3 sm:px-5 sm:py-4">
+            <div className="overflow-x-auto">
+              <div className="flex w-fit min-w-max mx-auto items-center gap-3 sm:gap-4 px-1">
+                {[0, 1, 2, 3].map((i) => (
+                  <div key={i} className="flex items-center gap-3 sm:gap-4">
+                    {i > 0 && <div className="w-6 sm:w-12 lg:w-24 h-0.5 rounded-full bg-gray-200" />}
+                    <div className="flex items-center gap-2.5">
+                      <div className="h-9 w-9 sm:h-10 sm:w-10 shrink-0 rounded-full bg-gray-200 animate-pulse" />
+                      <div className="hidden sm:block h-4 w-16 rounded bg-gray-200 animate-pulse" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Stage-specific content */}
+          {content}
         </div>
       </div>
     </div>
@@ -556,7 +732,7 @@ function JDCreationContent() {
   }, [editingJD, stageFromUrl]);
 
   if (loading) {
-    return <PageSkeleton variant="form" showStats={false} />;
+    return <JDCreationSkeleton stage={stageFromUrl || 'create'} />;
   }
 
   // Show error screen if access is blocked
@@ -615,7 +791,7 @@ function JDCreationContent() {
 
 export default function JDCreationPage() {
   return (
-    <Suspense fallback={<PageSkeleton variant="form" showStats={false} />}>
+    <Suspense fallback={<JDCreationSkeleton />}>
       <JDCreationContent />
     </Suspense>
   );

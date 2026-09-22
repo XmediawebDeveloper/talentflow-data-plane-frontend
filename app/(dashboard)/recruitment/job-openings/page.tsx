@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import { Loader2, AlertTriangle, X, Clock, GraduationCap, Factory, FolderOpen, FileSearch, ClipboardCheck, Users, Video, Info, ShieldCheck } from 'lucide-react';
 import JobsListing from '@/components/JobsListing';
-import { PageSkeleton } from '@/components/ui/skeleton';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
 import DisableJobModal from '@/components/DisableJobModal';
@@ -47,6 +46,60 @@ const usageModuleIcon = (label: string) => {
 
 
 const JD_BATCH_SIZE = 100;
+
+// Loading skeleton for Job Openings — mirrors the real overview JobsListing
+// renders: the white rounded card shell, breadcrumb, header (icon + title +
+// subtitle + Config/Create buttons) and the 4-up stat-card grid (Total Jobs /
+// Published / Drafts / Archived). Kept inline (no separate file) so it sits
+// beside the layout it shadows and can't drift from it.
+function JobOpeningsSkeleton() {
+  return (
+    <main className="flex-1 overflow-x-clip bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          {/* Breadcrumb */}
+          <div className="mb-4 md:mb-6 h-4 w-56 rounded bg-gray-200 animate-pulse" />
+
+          {/* Header */}
+          <div className="mb-5">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-5">
+              <div className="flex items-start gap-3">
+                <div className="hidden sm:block h-9 w-9 rounded-lg bg-gray-200 animate-pulse" />
+                <div className="space-y-2">
+                  <div className="h-6 w-40 rounded bg-gray-200 animate-pulse" />
+                  <div className="h-4 w-56 rounded bg-gray-100 animate-pulse" />
+                </div>
+              </div>
+              <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center sm:justify-end">
+                <div className="h-9 w-full sm:w-28 rounded-lg bg-gray-100 animate-pulse" />
+                <div className="h-9 w-full sm:w-36 rounded-lg bg-gray-200 animate-pulse" />
+              </div>
+            </div>
+
+            {/* Stat cards — 4-up grid (matches StatsCardGrid columns=4) */}
+            <div className="grid gap-2.5 sm:gap-3 grid-cols-1 sm:grid-cols-2 xl:grid-cols-4">
+              {Array.from({ length: 4 }).map((_, i) => (
+                <div key={i} className="relative overflow-hidden rounded-xl border border-gray-200 bg-white px-3.5 py-3.5 sm:px-4 sm:py-4">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-2.5">
+                      <div className="h-9 w-9 shrink-0 rounded-lg bg-gray-200 animate-pulse" />
+                      <div className="space-y-2 pt-0.5">
+                        <div className="h-3.5 w-20 rounded bg-gray-200 animate-pulse" />
+                        <div className="h-6 w-12 rounded bg-gray-200 animate-pulse" />
+                      </div>
+                    </div>
+                    <div className="h-7 w-7 shrink-0 rounded-lg bg-gray-100 animate-pulse" />
+                  </div>
+                  <div className="mt-3 h-5 w-20 rounded-full bg-gray-100 animate-pulse" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
 
 export default function JobOpeningsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
@@ -173,48 +226,57 @@ export default function JobOpeningsPage() {
 
   const fetchJobs = async () => {
     setLoading(true);
+    // Pull "my JDs" in smaller pages. The previous page_size=total request
+    // produced oversized responses and browser transport failures upstream.
+    let firstPage;
     try {
-      // Pull "my JDs" in smaller pages. The previous page_size=total request
-      // produced oversized responses and browser transport failures upstream.
-      const firstPage = await jdService.list({
+      firstPage = await jdService.list({
         page: 1,
         page_size: JD_BATCH_SIZE,
         source: 'my-jds',
       });
-      const items = [...firstPage.items];
-      const totalPages = Math.max(
-        firstPage.total_pages || Math.ceil(firstPage.total / JD_BATCH_SIZE),
-        1
-      );
 
-      for (let page = 2; page <= totalPages; page += 1) {
-        const nextPage = await jdService.list({
-          page,
-          page_size: JD_BATCH_SIZE,
-          source: 'my-jds',
-        });
-        items.push(...nextPage.items);
-      }
-
-      const response = {
-        ...firstPage,
-        items,
-        page: 1,
-        page_size: JD_BATCH_SIZE,
-      };
-
-      /* One mapping for every surface that lists JDs — this page and the
-         Apply to Job dialog both build their rows with it, so neither can end
-         up missing a field the other shows (publish count, lineage version,
-         experience). */
-      const convertedJobs: Job[] = response.items.map(mapJDToJob);
-
-      setJobs(convertedJobs);
+      /* One mapping for every surface that lists JDs — this page and the Apply
+         to Job dialog both build their rows with it, so neither can end up
+         missing a field the other shows (publish count, lineage version,
+         experience). Paint the first page IMMEDIATELY so the user sees jobs
+         instead of waiting for every remaining page to load sequentially.
+         `?? []` guards a backend response without an `items` array — otherwise
+         `.map` would throw and (crucially) leave the page stuck on the skeleton. */
+      setJobs((firstPage.items ?? []).map(mapJDToJob));
     } catch (error) {
+      // First-page failure (or a bad shape) is a real load failure — surface it.
+      // The `finally` below still clears the skeleton so the page never hangs.
       console.error('Failed to fetch jobs:', error);
       toast.error('Failed to load job openings');
+      return;
     } finally {
+      // ALWAYS drop the skeleton after the first page attempt, success or not —
+      // this is the guarantee that the page can never be stuck showing only the
+      // skeleton with no data.
       setLoading(false);
+    }
+
+    // Fetch any remaining pages in PARALLEL (not one after another) so the full
+    // list — and the accurate overview counts — arrive as fast as possible. A
+    // page that fails is skipped rather than wiping the jobs already on screen.
+    const totalPages = Math.max(
+      firstPage.total_pages || Math.ceil(firstPage.total / JD_BATCH_SIZE),
+      1
+    );
+    if (totalPages <= 1) return;
+
+    const restPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
+    const results = await Promise.allSettled(
+      restPages.map((page) =>
+        jdService.list({ page, page_size: JD_BATCH_SIZE, source: 'my-jds' })
+      )
+    );
+    const restJobs = results.flatMap((r) =>
+      r.status === 'fulfilled' ? (r.value.items ?? []).map(mapJDToJob) : []
+    );
+    if (restJobs.length) {
+      setJobs((prev) => [...prev, ...restJobs]);
     }
   };
 
@@ -558,7 +620,7 @@ export default function JobOpeningsPage() {
   if (loading) {
     // Skeleton instead of a spinner during the initial fetch, matching the
     // route-level loading.tsx so the load reads as one continuous skeleton.
-    return <PageSkeleton variant="cards" showStats={false} />;
+    return <JobOpeningsSkeleton />;
   }
 
   return (

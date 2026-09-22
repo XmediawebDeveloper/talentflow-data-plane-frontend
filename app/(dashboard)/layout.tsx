@@ -398,52 +398,30 @@ export default function DashboardLayout({
     console.log('[DASHBOARD] Still loading...');
     // FIX-002: Skeleton loader instead of spinner
     return (
-      <div className="flex h-[100dvh] bg-gray-50">
-        {/* Main content area (no sidebar) */}
+      <div className="flex h-[100dvh] bg-gray-50 dark:bg-slate-950">
+        {/* Main content area (no sidebar — dashboard is the nav hub) */}
         <div className="flex-1 flex flex-col">
-          {/* Header Skeleton */}
-          <div className="h-16 bg-white border-b border-gray-200 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
-            <div className="h-10 w-40 sm:w-60 lg:w-80 bg-gray-100 rounded-lg animate-pulse" />
+          {/* Header Skeleton — matches the real <Header> */}
+          <div className="h-16 bg-white dark:bg-slate-900 border-b border-gray-200 dark:border-slate-700 px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+            <div className="h-10 w-40 sm:w-60 lg:w-80 bg-gray-100 dark:bg-slate-800 rounded-lg animate-pulse" />
             <div className="flex items-center gap-4">
-              <div className="h-8 w-8 bg-gray-200 rounded-lg animate-pulse" />
-              <div className="h-8 w-8 bg-gray-200 rounded-lg animate-pulse hidden sm:block" />
-              <div className="h-8 w-24 bg-gray-200 rounded-lg animate-pulse hidden sm:block" />
-              <div className="h-9 w-9 bg-gray-300 rounded-full animate-pulse" />
+              <div className="h-8 w-8 bg-gray-200 dark:bg-slate-800 rounded-lg animate-pulse" />
+              <div className="h-8 w-8 bg-gray-200 dark:bg-slate-800 rounded-lg animate-pulse hidden sm:block" />
+              <div className="h-8 w-24 bg-gray-200 dark:bg-slate-800 rounded-lg animate-pulse hidden sm:block" />
+              <div className="h-9 w-9 bg-gray-300 dark:bg-slate-700 rounded-full animate-pulse" />
             </div>
           </div>
 
-          {/* Content Skeleton */}
-          <div className="flex-1 p-4 sm:p-6 lg:p-8 space-y-4 sm:space-y-6">
-            {/* Page title */}
-            <div className="h-8 w-48 bg-gray-200 rounded animate-pulse" />
-
-            {/* Stats cards skeleton */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-6">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className="bg-white rounded-xl border border-gray-200 p-6">
-                  <div className="h-4 w-20 bg-gray-200 rounded animate-pulse mb-3" />
-                  <div className="h-8 w-16 bg-gray-200 rounded animate-pulse" />
-                </div>
-              ))}
-            </div>
-
-            {/* Table skeleton */}
-            <div className="bg-white rounded-xl border border-gray-200">
-              <div className="p-4 border-b border-gray-100">
-                <div className="h-6 w-32 bg-gray-200 rounded animate-pulse" />
-              </div>
-              <div className="divide-y divide-gray-100">
-                {[...Array(5)].map((_, i) => (
-                  <div key={i} className="p-4 flex items-center gap-4">
-                    <div className="h-4 w-4 bg-gray-200 rounded animate-pulse" />
-                    <div className="h-4 bg-gray-200 rounded animate-pulse flex-1" />
-                    <div className="h-4 w-24 bg-gray-200 rounded animate-pulse" />
-                    <div className="h-4 w-20 bg-gray-200 rounded animate-pulse" />
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          {/* Body: intentionally EMPTY during the auth gate — NO content skeleton.
+              This skeleton is server-rendered (isLoading starts true on the server),
+              so on a hard refresh it necessarily paints BEFORE the page hydrates and
+              shows its own skeleton. If we drew any body skeleton here it would read
+              as a first, different skeleton that then swaps for the page's — the
+              "two skeletons on refresh" bug. By rendering only the header chrome over
+              an empty body, the page's own skeleton is the single content skeleton
+              the user ever sees; an empty body for the brief auth window is not a
+              skeleton, so there is nothing to double. */}
+          <div className="flex-1 overflow-y-auto" />
         </div>
 
       </div>
