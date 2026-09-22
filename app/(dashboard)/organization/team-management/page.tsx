@@ -41,6 +41,12 @@ import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useLi
 
 const ITEMS_PER_PAGE = 6;
 
+const EMPTY_TEAM_STATS = {
+  total_teams: 0,
+  total_members: 0,
+  avg_members_per_team: 0,
+};
+
 const getErrorDetail = (error: unknown): string | undefined => {
   if (typeof error !== 'object' || error === null || !('response' in error)) {
     return undefined;
@@ -406,7 +412,7 @@ export default function TeamManagementPage() {
               </div>
             </section>
 
-            <TeamStatsCards stats={stats} isLoading={true} />
+            <TeamStatsCards stats={EMPTY_TEAM_STATS} isLoading={true} />
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {[1, 2, 3, 4].map((index) => (
                 <TeamCardSkeleton key={index} />

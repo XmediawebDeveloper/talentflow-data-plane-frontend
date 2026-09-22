@@ -6,8 +6,8 @@ import { integrationsApi, Integration } from '@/lib/services/settingsService';
 import { toast } from 'sonner';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function IntegrationsPage() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);

@@ -3947,7 +3947,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               </div>
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 overflow-hidden">
                 <div className="overflow-x-auto">
-                  <table className="w-full min-w-[900px] table-auto">
+                  <table className="w-full md:min-w-[900px] table-auto">
                     <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                       <tr>
                         <th className="w-10 px-4 py-3 align-middle"><Skeleton className="h-4 w-4 rounded" /></th>
@@ -4080,7 +4080,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
               </div>
               <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 overflow-hidden">
                 <div className="overflow-x-auto tf-table-shell">
-                  <table className="w-full min-w-[1000px] text-sm">
+                  <table className="w-full md:min-w-[1000px] text-sm">
                     <thead className="bg-slate-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700">
                       <tr>
                         {['CID', 'Candidate', 'Email', 'Status', 'Score', 'Duration', 'Started At', 'Completed At', 'Proctoring Risk', 'Actions'].map((h) => (
@@ -4920,7 +4920,7 @@ function AIMatchTabContent({
         </div>
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px] table-auto">
+            <table className="w-full md:min-w-[1100px] table-auto">
               <thead className="[&_th]:bg-gray-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                 <tr>
                   <th className="px-4 py-3 w-10 align-middle"><Skeleton className="h-4 w-4 rounded" /></th>
@@ -5197,7 +5197,8 @@ function AIMatchTabContent({
         /* Bounded viewport: rows scroll vertically (and horizontally) while the
             header stays pinned. Header background/border live on the cells so the
             pinned row paints solid over the rows sliding underneath. */
-        <div className="min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell">
+        <>
+        <div className="hidden md:block min-h-[400px] max-h-[calc(100dvh-20rem)] overflow-auto tf-table-shell">
           {/* With no rows the width floor and the header come off — see
               `TABLE_EMPTY_PANEL_CLASS`. A 1450px table centres its one empty cell across
               1450px, which put the message off the side of the shell behind a
@@ -5343,6 +5344,93 @@ function AIMatchTabContent({
             </tbody>
           </table>
         </div>
+        {/* Mobile: candidates render as cards instead of a 1450px-wide horizontal-scroll table (§10). */}
+        <div className="md:hidden space-y-3">
+          {filteredCandidates.length === 0 ? (
+            <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-8 text-center text-sm text-gray-500 dark:text-slate-500">
+              No candidates match the current filters.
+            </div>
+          ) : (
+            paginatedCandidates.map((candidate) => {
+              const isScored = scoredResumeIds.has(candidate.resumeId);
+              const uploadDate = candidate.uploadDate ? formatISTDate(candidate.uploadDate) : '—';
+              const rank = candidate.rank || 0;
+              const rankCls = rank >= 7
+                ? 'bg-success-subtle text-success-strong border-success-line'
+                : rank >= 4
+                ? 'bg-warning-subtle text-warning-strong border-warning-line'
+                : rank >= 1
+                ? 'bg-gray-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 border-gray-300 dark:border-slate-700'
+                : 'bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 border-gray-200 dark:border-slate-700';
+              return (
+                <div
+                  key={candidate.resumeId}
+                  onClick={() => {
+                    if (onViewCandidate) {
+                      try {
+                        sessionStorage.setItem('resumeNavList', JSON.stringify(filteredCandidates.map((c) => c.resumeId)));
+                        sessionStorage.setItem('resumeNavSource', 'job-details');
+                      } catch { /* ignore */ }
+                      onViewCandidate(candidate);
+                    }
+                  }}
+                  className={`rounded-xl border p-4 space-y-3 cursor-pointer ${selectedIds.has(candidate.resumeId) ? 'border-brand-blue/40 bg-blue-50 dark:bg-slate-800/50' : 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900'}`}
+                >
+                  <div className="flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.has(candidate.resumeId)}
+                      onChange={() => toggleSelect(candidate.resumeId)}
+                      onClick={(e) => e.stopPropagation()}
+                      className="mt-1 rounded border-gray-300 flex-shrink-0"
+                    />
+                    <div className="w-10 h-10 rounded-full bg-gray-200 dark:bg-slate-800 flex items-center justify-center text-sm font-medium text-gray-700 dark:text-slate-300 flex-shrink-0">
+                      {(candidate.name || 'U').split(' ').map((n) => n[0]).join('').toUpperCase().slice(0, 2)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-semibold text-gray-900 dark:text-slate-50 truncate">{candidate.name}</p>
+                      {candidate.title && <p className="text-xs text-gray-500 dark:text-slate-500 truncate">{candidate.title}</p>}
+                      <p className="text-xs text-gray-600 dark:text-slate-400 truncate">{candidate.email || '—'}</p>
+                    </div>
+                    <div className={`inline-flex items-center justify-center px-2.5 py-1 rounded-md font-bold text-sm border flex-shrink-0 ${rankCls}`}>
+                      {candidate.rank || '-'}
+                    </div>
+                  </div>
+                  {candidate.skills && candidate.skills.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-1">
+                      <SkillsList
+                        skills={candidate.skills}
+                        chipClassName="px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full border border-blue-200 whitespace-nowrap"
+                        moreClassName="px-2 py-0.5 text-xs text-blue-600 font-medium rounded-full hover:bg-blue-50 transition-colors cursor-pointer whitespace-nowrap"
+                      />
+                    </div>
+                  )}
+                  <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+                    <div><span className="text-gray-500 dark:text-slate-500">Experience: </span><span className="text-gray-700 dark:text-slate-300">{candidate.experience || '—'}</span></div>
+                    <div className="truncate"><span className="text-gray-500 dark:text-slate-500">Location: </span><span className="text-gray-700 dark:text-slate-300">{candidate.location || '—'}</span></div>
+                    <div className="truncate"><span className="text-gray-500 dark:text-slate-500">Phone: </span><span className="text-gray-700 dark:text-slate-300">{splitPhoneNumbers(candidate.phone, 1)[0] || '—'}</span></div>
+                    <div><span className="text-gray-500 dark:text-slate-500">Uploaded: </span><span className="text-gray-700 dark:text-slate-300">{uploadDate}</span></div>
+                  </div>
+                  <div className="flex items-center justify-between gap-2 pt-1">
+                    {isScored ? (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-success-subtle text-success rounded-full text-xs font-medium">
+                        <CheckCircle className="w-3 h-3" />Scored
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-gray-100 dark:bg-slate-800 text-gray-500 dark:text-slate-500 rounded-full text-xs font-medium">
+                        <XCircle className="w-3 h-3" />Not Scored
+                      </span>
+                    )}
+                    <Button variant="secondary" size="sm" onClick={(e) => { e.stopPropagation(); handleAttachmentsClick(candidate); }} icon={<Paperclip className="w-3.5 h-3.5" />}>
+                      {candidate.attachmentCount ?? 1}
+                    </Button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+        </>
         )}
         {filteredCandidates.length > 0 && (
           <Pagination

@@ -368,6 +368,63 @@ function KpiCard({ label, value, note, icon: Icon, accent, bar, loading, trendVa
   );
 }
 
+// Loading skeleton for the dashboard — mirrors the only two live blocks the page
+// renders: the profile banner and the Quick Access grid (all the data-driven
+// sections below them are currently commented out). Kept inline (no separate
+// file) so it sits beside the layout it shadows and can't drift from it. This is
+// the single skeleton shown on refresh — the shared layout no longer draws one.
+function DashboardSkeleton() {
+  return (
+    <div className="relative flex-1">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-3 sm:p-4 md:p-8 w-full space-y-4 md:space-y-6">
+          {/* Profile banner */}
+          <section className="rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-5 shadow-sm md:px-8 md:py-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+              <div className="flex items-start gap-3 sm:gap-4">
+                <div className="h-11 w-11 sm:h-14 sm:w-14 shrink-0 rounded-xl sm:rounded-2xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+                <div className="space-y-2">
+                  <div className="h-3 w-24 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+                  <div className="h-7 w-52 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+                  <div className="h-3.5 w-72 max-w-full rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                </div>
+              </div>
+              <div className="flex flex-col sm:flex-row gap-2">
+                <div className="h-10 w-full sm:w-36 rounded-xl bg-slate-200 dark:bg-slate-800 animate-pulse" />
+                <div className="h-10 w-full sm:w-32 rounded-xl bg-slate-100 dark:bg-slate-800 animate-pulse" />
+              </div>
+            </div>
+          </section>
+
+          {/* Quick Access */}
+          <section className="overflow-hidden rounded-2xl border border-slate-200/80 dark:border-slate-700 bg-white dark:bg-slate-900 shadow-sm">
+            <div className="flex items-center justify-between gap-3 px-3 py-3 sm:px-4 sm:py-4 md:px-8">
+              <div className="flex items-center gap-2.5">
+                <div className="h-5 w-5 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+                <div className="h-5 w-32 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+              </div>
+              <div className="h-6 w-36 rounded-full bg-slate-100 dark:bg-slate-800 animate-pulse hidden sm:block" />
+            </div>
+            <div className="px-3 pb-4 sm:px-4 sm:pb-5 md:px-8 md:pb-6">
+              <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2 sm:gap-3 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+                {Array.from({ length: 10 }).map((_, i) => (
+                  <div key={i} className="flex items-center gap-3 rounded-[14px] border border-slate-200/80 dark:border-slate-700 p-3">
+                    <div className="h-9 w-9 shrink-0 rounded-[10px] bg-slate-200 dark:bg-slate-800 animate-pulse" />
+                    <div className="min-w-0 flex-1 space-y-1.5">
+                      <div className="h-3.5 w-24 rounded bg-slate-200 dark:bg-slate-800 animate-pulse" />
+                      <div className="h-3 w-32 max-w-full rounded bg-slate-100 dark:bg-slate-800 animate-pulse" />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function DashboardPage() {
   const { user, tenant, hasPermission, isTenantAdmin } = useAuth();
   const [loading, setLoading] = useState(true);
@@ -616,6 +673,13 @@ export default function DashboardPage() {
   const featuredActions = [
     { label: 'Create Job', href: '/recruitment/jd-creation', visible: isTenantAdmin || hasPermission('canCreateJD'), primary: true, icon: Plus },
   ].filter((item) => item.visible);
+
+  // Single loading skeleton for the dashboard (banner + Quick Access), shown
+  // while /dashboard resolves. The shared layout no longer draws a skeleton, so
+  // without this the page would jump from an empty body straight to content.
+  if (loading) {
+    return <DashboardSkeleton />;
+  }
 
   return (
     // NOTE: no `overflow-hidden` here — on a `flex-1` item it zeroes the

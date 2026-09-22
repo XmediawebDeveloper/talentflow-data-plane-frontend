@@ -9996,7 +9996,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
               {/* Certifications & Domain Keywords - HIDDEN as per requirement */}
               {/*
-              <div className="mt-6 grid grid-cols-2 gap-6">
+              <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
                 <div>
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-gray-900">Certifications</h3>
