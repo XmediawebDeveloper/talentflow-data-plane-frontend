@@ -5,6 +5,7 @@ import { ArrowRight, Building2, Clock, Briefcase, Sliders, Plus, X, Share2, Spar
 import type { AssessmentResponse, HRTopic } from '@/lib/services/assessmentService';
 import { Button } from '@/components/ui/button';
 import { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Job } from '@/lib/types/types';
 import { formatISTDate } from '@/lib/utils/dateUtils';

@@ -3432,43 +3432,6 @@ export default function AIInterview() {
         </div>
       )}
 
-      {showPublishedModal && (
-        <div className="fixed inset-0 z-[60] bg-gray-900/50 backdrop-blur-sm flex items-center justify-center p-4 sm:p-6">
-          <div className="w-full max-w-[95vw] sm:max-w-md rounded-2xl bg-white dark:bg-slate-900 shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
-            <div className="px-6 pt-5 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
-              <h2 className="text-lg font-bold text-gray-900 dark:text-slate-50 tracking-tight">AI Interview Published</h2>
-              <Button variant="secondary" size="sm" onClick={() => setShowPublishedModal(false)} aria-label="Close" className="px-2 flex-shrink-0">
-                <X className="w-5 h-5" />
-              </Button>
-            </div>
-            <div className="px-6 py-5 text-center flex-1 overflow-y-auto">
-              <div className="relative inline-flex items-center justify-center mb-4">
-                <span className="absolute w-2 h-2 rounded-full bg-success animate-ping" style={{ top: -4, left: 10 }} />
-                <span className="absolute w-1.5 h-1.5 rounded-full bg-brand-blue/60 animate-ping" style={{ top: 8, right: -2, animationDelay: '0.2s' }} />
-                <span className="absolute w-2 h-2 rounded-full bg-brand-cyan/60 animate-ping" style={{ bottom: 0, left: -2, animationDelay: '0.4s' }} />
-                <div className="w-16 h-16 bg-success-subtle ring-1 ring-success-line rounded-full flex items-center justify-center">
-                  <CheckCircle className="w-8 h-8 text-success" />
-                </div>
-              </div>
-              <p className="text-sm text-gray-500 dark:text-slate-500 mb-4">
-                Redirected successfully. This message will close in 3 seconds.
-              </p>
-              <div className="bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5 dark:bg-none dark:bg-white/[0.04] rounded-xl border border-brand-blue/15 dark:border-brand-blue/25 ring-1 ring-brand-blue/10 dark:ring-brand-blue/15 px-4 py-3 text-left">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-sm text-gray-500 dark:text-slate-500">Position</span>
-                  <span className="text-sm font-medium text-brand-blue text-right">{publishedTitle}</span>
-                </div>
-              </div>
-            </div>
-            <div className="px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/50 flex items-center justify-end shrink-0">
-              <Button variant="secondary" size="md" onClick={() => setShowPublishedModal(false)}>
-                Close
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Resend confirmation — regenerates interview_token, invalidates old link */}
       <ConfirmationDialog
         isOpen={!!resendInviteTarget}
