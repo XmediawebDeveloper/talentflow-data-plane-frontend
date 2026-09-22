@@ -722,7 +722,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
    * Summary, worded exactly as the JD view and the Step 3 review show it.
    *
    * "Required" means Resume Scoring treated the criterion as Essential: it shares
-   * the 60% block and a rating below 7 on it fails the whole Essential section.
+   * the 60% block and a rating below 6 on it fails the whole Essential section.
    * "Preferred" criteria share the 40% block and never fail a candidate alone.
    */
   const jdRequirementLabel = requirementBadge;

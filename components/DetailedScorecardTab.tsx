@@ -5,6 +5,7 @@ import { Clock, Calendar, User, BarChart3, CheckSquare, CheckCircle, XCircle, Br
 import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { Tooltip } from '@/components/ui/tooltip';
+import { RATING_PASS_THRESHOLD } from '@/lib/utils/matchStatus';
 
 interface DetailedScores {
   titleMatch: number;
@@ -31,7 +32,7 @@ interface ScoreBreakdownItem {
   raw_percentage?: number;
   // Summary rows only (Required Total / Preferred Total / Final Score). The
   // weighted credit is what the Score Table header shows: `passed` of `total`
-  // criteria scored 7+, each worth `weight_each`, earning `weighted_percentage`
+  // criteria scored 6+, each worth `weight_each`, earning `weighted_percentage`
   // of `max_weight` (60 for Required, 40 for Preferred). `raw_percentage` is
   // the plain rating average and is no longer displayed.
   weighted_percentage?: number;
@@ -39,7 +40,7 @@ interface ScoreBreakdownItem {
   total?: number;
   weight_each?: number;
   max_weight?: number;
-  // Preferred Total only: false when a Required criterion scored below 7, in
+  // Preferred Total only: false when a Required criterion scored below 6, in
   // which case the Preferred credit is computed but not added to the total.
   added?: boolean;
   key?: string;
@@ -260,7 +261,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     preferredPassed: number;
     preferredCount: number;
     preferredWeightEach: number;
-    // False when a Required criterion scored below 7: Preferred is shown but
+    // False when a Required criterion scored below 6: Preferred is shown but
     // not added to the Overall Score.
     preferredAdded: boolean;
   } | null = null;
@@ -297,17 +298,18 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     });
 
     // Worked-through Overall Score derivation: how many Required/Preferred
-    // criteria exist, what each is worth, how many cleared the 7-point cliff,
-    // and what that earns - computed from the same per-criterion data the
-    // table below renders, so it can never disagree with what's on screen.
+    // criteria exist, what each is worth, how many cleared the pass cliff
+    // (RATING_PASS_THRESHOLD, 6 or higher), and what that earns - computed
+    // from the same per-criterion data the table below renders, so it can
+    // never disagree with what's on screen.
     {
       const _reqItems = regularItems.filter(item => item.requirement === 'Required' || item.is_essential);
       const _prefItems = regularItems.filter(item => item.requirement === 'Preferred' || !item.is_essential);
       const _numReq = _reqItems.length;
       const _numPref = _prefItems.length;
       if (_numReq > 0 || _numPref > 0) {
-        const _reqPassed = _reqItems.filter(item => (item.rating ?? 0) >= 7).length;
-        const _prefPassed = _prefItems.filter(item => (item.rating ?? 0) >= 7).length;
+        const _reqPassed = _reqItems.filter(item => (item.rating ?? 0) >= RATING_PASS_THRESHOLD).length;
+        const _prefPassed = _prefItems.filter(item => (item.rating ?? 0) >= RATING_PASS_THRESHOLD).length;
         const _perReq = _numReq > 0 ? 60 / _numReq : 0;
         const _perPref = _numPref > 0 ? 40 / _numPref : 0;
         const _reqEarned = Math.min(Math.round(_reqPassed * _perReq * 100) / 100, 60);
@@ -318,14 +320,14 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
 
         weightedScoreExplanation = (
           <div className="space-y-1.5">
-            <p>Required criteria share 60% of the total, Preferred criteria share 40%. Each side's budget splits evenly across its own criteria, and a criterion only earns its share if it scored 7 or higher - no partial credit below that.</p>
+            <p>Required criteria share 60% of the total, Preferred criteria share 40%. Each side's budget splits evenly across its own criteria, and a criterion only earns its share if it scored {RATING_PASS_THRESHOLD} or higher - no partial credit below that.</p>
             {_numReq > 0 && (
-              <p>Required: {_numReq} criteria → each worth 60% ÷ {_numReq} = {_perReq.toFixed(1)}%. {_reqPassed} of {_numReq} scored 7+ → {_reqPassed} × {_perReq.toFixed(1)}% = {_reqEarned.toFixed(1)}%.</p>
+              <p>Required: {_numReq} criteria → each worth 60% ÷ {_numReq} = {_perReq.toFixed(1)}%. {_reqPassed} of {_numReq} scored {RATING_PASS_THRESHOLD}+ → {_reqPassed} × {_perReq.toFixed(1)}% = {_reqEarned.toFixed(1)}%.</p>
             )}
             {_numPref > 0 && (
               <p>
-                Preferred: {_numPref} criteria → each worth 40% ÷ {_numPref} = {_perPref.toFixed(1)}%. {_prefPassed} of {_numPref} scored 7+ → {_prefPassed} × {_perPref.toFixed(1)}% = {_prefEarned.toFixed(1)}%.
-                {_reqEarned < 60 && _numReq > 0 && ' Not added - a Required criterion scored below 7, so only the Required credit counts.'}
+                Preferred: {_numPref} criteria → each worth 40% ÷ {_numPref} = {_perPref.toFixed(1)}%. {_prefPassed} of {_numPref} scored {RATING_PASS_THRESHOLD}+ → {_prefPassed} × {_perPref.toFixed(1)}% = {_prefEarned.toFixed(1)}%.
+                {_reqEarned < 60 && _numReq > 0 && ` Not added - a Required criterion scored below ${RATING_PASS_THRESHOLD}, so only the Required credit counts.`}
               </p>
             )}
             <p className="font-semibold">Total: {_reqEarned.toFixed(1)}% + {_prefEarned.toFixed(1)}% = {resume.scorePercentage}%</p>
@@ -359,16 +361,16 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     } else {
       // Fallback: derive the same weighted credits from the per-criterion rows.
       // Required shares 60% equally, Preferred shares 40%; a criterion earns its
-      // share at 7 or higher and nothing below. Preferred is only added once
-      // every Required criterion has passed.
+      // share at RATING_PASS_THRESHOLD or higher and nothing below. Preferred
+      // is only added once every Required criterion has passed.
       const requiredItems = regularItems.filter(item => item.requirement === 'Required' || item.is_essential);
       const preferredItems = regularItems.filter(item => item.requirement === 'Preferred' || !item.is_essential);
       const requiredTotal = requiredItems.reduce((sum, item) => sum + (item.rating || 0), 0);
       const preferredTotal = preferredItems.reduce((sum, item) => sum + (item.rating || 0), 0);
       const reqCount = requiredItems.length;
       const prefCount = preferredItems.length;
-      const reqPassed = requiredItems.filter(item => (item.rating ?? 0) >= 7).length;
-      const prefPassed = preferredItems.filter(item => (item.rating ?? 0) >= 7).length;
+      const reqPassed = requiredItems.filter(item => (item.rating ?? 0) >= RATING_PASS_THRESHOLD).length;
+      const prefPassed = preferredItems.filter(item => (item.rating ?? 0) >= RATING_PASS_THRESHOLD).length;
       const reqEarned = reqCount > 0 ? Math.round((60 * reqPassed / reqCount) * 100) / 100 : 0;
       const prefEarned = prefCount > 0 ? Math.round((40 * prefPassed / prefCount) * 100) / 100 : 0;
       summaryData = {
@@ -426,12 +428,12 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     const requiredItems = criteriaScores.filter(item => item.criteriaType === 'Required');
     const preferredItems = criteriaScores.filter(item => item.criteriaType === 'Preferred');
     // Same weighted credits as the summary-row path: 60% / 40% split equally,
-    // full share at 7+ and nothing below, Preferred added only once every
-    // Required criterion has passed.
+    // full share at RATING_PASS_THRESHOLD+ and nothing below, Preferred added
+    // only once every Required criterion has passed.
     const reqCount = requiredItems.length;
     const prefCount = preferredItems.length;
-    const reqPassed = requiredItems.filter(item => item.rating >= 7).length;
-    const prefPassed = preferredItems.filter(item => item.rating >= 7).length;
+    const reqPassed = requiredItems.filter(item => item.rating >= RATING_PASS_THRESHOLD).length;
+    const prefPassed = preferredItems.filter(item => item.rating >= RATING_PASS_THRESHOLD).length;
     summaryData = {
       requiredPercentage: reqCount > 0 ? Math.round((60 * reqPassed / reqCount) * 100) / 100 : 0,
       preferredPercentage: prefCount > 0 ? Math.round((40 * prefPassed / prefCount) * 100) / 100 : 0,
@@ -452,11 +454,13 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     criteriaScores = [];
   }
 
+  // 10 Excellent / 9 Very Good / 8 Good / 6-7 Average (a pass, RATING_PASS_THRESHOLD)
+  // / below that Below Average. Matches PDFScorecardService._get_rating_colors exactly.
   const getRatingRange = (rating: number): string => {
     if (rating === 10) return 'Excellent';
     if (rating === 9) return 'Very Good';
     if (rating === 8) return 'Good';
-    if (rating === 7) return 'Average';
+    if (rating >= RATING_PASS_THRESHOLD) return 'Average';
     return 'Below Average';
   };
 
@@ -464,14 +468,14 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     if (rating === 10) return 'bg-success-subtle border-success-line text-success';
     if (rating === 9) return 'bg-success-subtle border-success-line text-success';
     if (rating === 8) return 'bg-gray-100 border-gray-300 text-gray-900';
-    if (rating === 7) return 'bg-warning-subtle border-warning-line text-warning';
+    if (rating >= RATING_PASS_THRESHOLD) return 'bg-warning-subtle border-warning-line text-warning';
     return 'bg-destructive-subtle border-destructive-line text-destructive';
   };
 
   // React 19 moved the JSX namespace under React (@types/react 19 no longer declares a
   // global one), so bare `JSX.Element` no longer resolves.
   const getEligibleStatus = (rating: number): { status: string; icon: React.JSX.Element; color: string } => {
-    if (rating >= 7) {
+    if (rating >= RATING_PASS_THRESHOLD) {
       return {
         status: 'Eligible',
         icon: <CheckCircle className="w-5 h-5 text-success" />,
@@ -505,10 +509,10 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
   // Shown only for the two PASSING classifications, which is what the spec asks
   // for and the only place it means anything. The average is computed over every
   // Required rating including the failing ones, so a No Match can carry a high
-  // average - one criterion at 6 among eight 9s averages 8.56 while still failing
-  // outright. Printed beside a "No Match" chip that reads as a contradiction, so
-  // for a failed candidate the Required % (below 60) is the number that explains
-  // the outcome, not this one.
+  // average - one criterion at 5 (below RATING_PASS_THRESHOLD) among several 9s
+  // can still average high while failing outright. Printed beside a "No Match"
+  // chip that reads as a contradiction, so for a failed candidate the Required %
+  // (below 60) is the number that explains the outcome, not this one.
   const isPassingMatch = (() => {
     const normalized = resume.matchStatus?.toLowerCase().replace(/[_\s]/g, '');
     return normalized === 'exactmatch' || normalized === 'excellentmatch' || normalized === 'partialmatch';
@@ -520,23 +524,6 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     if (normalized === 'exactmatch' || normalized === 'excellentmatch') return 'text-success';
     if (normalized === 'partialmatch') return 'text-brand-orange-deep';
     return 'text-destructive';
-  };
-
-  // Combined Average, formatted to the same one-decimal style as Must-Have /
-  // Nice-to-Have / Overall Rating (client doc section 9), WITHOUT letting
-  // ordinary rounding push a below-8.00 value up to a displayed "8.0". The
-  // backend's own cap logic treats 8.00 as the Partial/Exact cap boundary
-  // (Partial: "never shown at 8.00 or above"; Exact: "capped when Combined
-  // Average is 8.00 or below") - a true value like 7.96 rounding up to "8.0"
-  // here would read as having crossed that boundary when it hasn't, directly
-  // contradicting the cap explanation shown right below it. Mirrors the same
-  // floor already applied server-side to overall_rating_10.
-  const formatCombinedAverage = (value: number): string => {
-    const rounded = value.toFixed(1);
-    if (value < 8.0 && parseFloat(rounded) >= 8.0) {
-      return '7.9';
-    }
-    return rounded;
   };
 
   // Worked-through explanation for the Overall Rating tooltip, per the
@@ -554,11 +541,11 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
 
     overallRatingExplanation = (
       <div className="space-y-1.5">
-        <p>Must-Have Average: {resume.essentialRating10.toFixed(1)}/10 - the average of every Must-Have criterion (a rating below 7 counts as 0 but still counts toward the average).</p>
+        <p>Must-Have Average: {resume.essentialRating10.toFixed(1)}/10 - the average of every Must-Have criterion (a rating below {RATING_PASS_THRESHOLD} counts as 0 but still counts toward the average).</p>
         {isNoMatch ? (
           <p>
             One or more Must-Have requirements failed, so the Overall Rating is the Must-Have Average. Nice-to-Have criteria are not used.
-            {resume.ratingCapApplied && ' A No Match is never shown above 6.9, so it is capped down to 6.9.'}
+            {resume.ratingCapApplied && ' A No Match is never shown above 5.9, so it is capped down to 5.9.'}
           </p>
         ) : resume.nonEssentialRating10 == null ? (
           <p>This job has no Nice-to-Have criteria, so the Overall Rating is the Must-Have Average.</p>
@@ -567,27 +554,27 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             <p>
               Nice-to-Have Average: {resume.nonEssentialRating10.toFixed(1)}/10.
               {resume.combinedAverage10 != null && (
-                <> Combined Average: ({resume.essentialRating10.toFixed(1)} + {resume.nonEssentialRating10.toFixed(1)}) / 2 = {formatCombinedAverage(resume.combinedAverage10)}.</>
+                <> Combined Average: ({resume.essentialRating10.toFixed(1)} + {resume.nonEssentialRating10.toFixed(1)}) / 2 = {resume.combinedAverage10.toFixed(1)}.</>
               )}
             </p>
             {resume.combinedAverage10 != null && (
               <p>
                 {/* Spelled out the same way the document's own worked
-                    examples state it - "Starting Overall Rating: MAX(8.17,
-                    8.59) = 8.59" - rather than only describing the rule in
+                    examples state it - "Starting Overall Rating: MAX(8.1,
+                    8.5) = 8.5" - rather than only describing the rule in
                     words, so a recruiter can see which side actually won.
-                    Deliberately kept at the RAW, unrounded Combined Average
-                    here (unlike the "Combined Average: ... = X" line above,
-                    which uses formatCombinedAverage) - this line's whole job
-                    is to show the pre-cap arithmetic that the very next
-                    sentence says gets capped down; flooring it too would
-                    make "MAX(7.5, 7.9) = 7.9 ... capped down to 7.9" read as
-                    if nothing was capped at all. */}
-                Starting Overall Rating: MAX({resume.essentialRating10.toFixed(1)}, {resume.combinedAverage10.toFixed(2)}) = {Math.max(resume.essentialRating10, resume.combinedAverage10).toFixed(2)}.
+                    Every value here (essentialRating10, combinedAverage10)
+                    is already truncated to one decimal server-side (v3: no
+                    rounding anywhere in the pipeline), so there is no
+                    remaining raw/rounded distinction to preserve - unlike the
+                    pre-v3 version of this tooltip, which had to keep a
+                    separate unrounded copy of Combined Average for this line
+                    specifically. */}
+                Starting Overall Rating: MAX({resume.essentialRating10.toFixed(1)}, {resume.combinedAverage10.toFixed(1)}) = {Math.max(resume.essentialRating10, resume.combinedAverage10).toFixed(1)}.
                 {resume.ratingCapApplied && (
                   isPartial
-                    ? ' A Partial Match is never shown at 8.00 or above, so it is capped down to 7.9.'
-                    : ' The Combined Average was 8.00 or below, so an Exact Match here is capped down to 9.00.'
+                    ? ' A Partial Match is never shown at 8.0 or above, so it is capped down to 7.9.'
+                    : ' The Combined Average was 8.0 or below, so an Exact Match here is capped down to 9.0.'
                 )}
               </p>
             )}
@@ -601,7 +588,7 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     if (rating === 10) return 'text-success font-semibold';
     if (rating === 9) return 'text-success font-semibold';
     if (rating === 8) return 'text-gray-900 font-semibold';
-    if (rating === 7) return 'text-warning font-semibold';
+    if (rating >= RATING_PASS_THRESHOLD) return 'text-warning font-semibold';
     return 'text-destructive font-semibold';
   };
 
@@ -650,15 +637,15 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
             doesn't list this as one of the numbers to show (section 9), but
             showing it lets a recruiter verify the Overall Rating's own
             arithmetic instead of taking it on faith. Shown at one decimal,
-            matching Must-Have/Nice-to-Have/Overall Rating, via
-            formatCombinedAverage - a plain toFixed(1) here could round a
-            true sub-8.00 value (e.g. 7.96) up to a displayed "8.0", which
-            would contradict the cap explanation right below it. */}
+            matching Must-Have/Nice-to-Have/Overall Rating - a plain
+            toFixed(1) is safe here (v3: the backend already truncates this
+            value to one decimal before sending it, so there is no remaining
+            sub-8.0 value that could round up to a misleading "8.0"). */}
         {resume.combinedAverage10 != null && (
           <>
             <span className="text-gray-400">|</span>
             <span className="text-gray-700 flex items-center gap-1">
-              Combined Average: <span className="font-semibold text-gray-900">{formatCombinedAverage(resume.combinedAverage10)}</span>
+              Combined Average: <span className="font-semibold text-gray-900">{resume.combinedAverage10.toFixed(1)}</span>
               <span className="text-gray-500">/10</span>
             </span>
           </>
@@ -814,13 +801,13 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
         <div className="grid grid-cols-4 gap-4">
           <div className="bg-success-subtle border border-success-line rounded-lg p-4">
             <div className="text-2xl font-bold text-success">
-              {criteriaScores.filter(c => c.rating >= 7).length}
+              {criteriaScores.filter(c => c.rating >= RATING_PASS_THRESHOLD).length}
             </div>
             <div className="text-sm font-medium text-gray-800 mt-1">Eligible Criteria</div>
           </div>
           <div className="bg-destructive-subtle border border-destructive-line rounded-lg p-4">
             <div className="text-2xl font-bold text-destructive">
-              {criteriaScores.filter(c => c.rating < 7).length}
+              {criteriaScores.filter(c => c.rating < RATING_PASS_THRESHOLD).length}
             </div>
             <div className="text-sm font-medium text-gray-800 mt-1">Not Eligible Criteria</div>
           </div>
