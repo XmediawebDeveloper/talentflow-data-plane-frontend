@@ -468,6 +468,14 @@ export interface AIInterviewInviteTableProps {
    */
   showJobColumn?: boolean;
 
+  /**
+   * Adds a "JD ID" column (desktop) / line (mobile) showing this job's short
+   * id next to every row — for a single-config tracker (the Track popup),
+   * where every invite shares the same job and `showJobColumn`'s per-row
+   * `_jd_short_id` is never populated.
+   */
+  jdShortId?: string;
+
   /** Bulk selection. Omit both to render no checkbox column at all. */
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
@@ -493,6 +501,7 @@ export default function AIInterviewInviteTable({
   hasActiveFilters,
   emptyHint,
   showJobColumn = false,
+  jdShortId,
   selectedIds,
   onToggleSelect,
   isSelectable,
@@ -686,6 +695,7 @@ export default function AIInterviewInviteTable({
                   {inv.candidate_cid && (
                     <p className="text-2xs font-medium text-gray-600 dark:text-slate-400 truncate">
                       {inv.candidate_cid}
+                      {jdShortId && <span className="text-gray-400 dark:text-slate-500"> &middot; {jdShortId}</span>}
                     </p>
                   )}
                   {showJobColumn && inv._config_title && (
@@ -782,6 +792,9 @@ export default function AIInterviewInviteTable({
             <tr className="border-b border-gray-200 dark:border-slate-700">
               {selectable && <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left" aria-label="Select" />}
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">CID</th>
+              {jdShortId && (
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">JD ID</th>
+              )}
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Candidate</th>
               {showJobColumn && (
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Job / Interview</th>
@@ -825,6 +838,12 @@ export default function AIInterviewInviteTable({
                   <td className="py-3 px-4 align-middle whitespace-nowrap text-xs font-medium text-gray-600 dark:text-slate-400">
                     {inv.candidate_cid || <span className="text-gray-400 dark:text-slate-500">—</span>}
                   </td>
+
+                  {jdShortId && (
+                    <td className="py-3 px-4 align-middle whitespace-nowrap text-xs font-medium text-gray-600 dark:text-slate-400">
+                      {jdShortId}
+                    </td>
+                  )}
 
                   <td className="py-3 px-4 align-middle whitespace-nowrap">
                     <div className="flex items-center gap-3">
