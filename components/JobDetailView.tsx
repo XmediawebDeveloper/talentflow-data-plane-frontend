@@ -4632,11 +4632,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           jobTitle={job.title}
           jobId={job.id}
           onClose={() => setShowSelectSourceModal(false)}
-          onScoringComplete={() => {
-            setShowSelectSourceModal(false);
+          onScoringFinished={() => {
+            // Run settled, popup still up: bring Scored Resumes in behind it.
             fetchScoredResumes();
             setActiveTab('scored-resumes');
           }}
+          onScoringComplete={() => setShowSelectSourceModal(false)}
         />
       )}
 
