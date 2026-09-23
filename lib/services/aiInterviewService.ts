@@ -60,6 +60,9 @@ export interface AIInterviewCreate {
   // explicitly leaving the wizard right after creating (no autosave fired
   // first). See routers/ai_interview.py's create_interview.
   save_and_exit?: boolean;
+  // false = word-level duplicate check only on this save, no LLM call. The
+  // Configure page sends false; the gpt-4o dedup runs at /generate-clusters.
+  semantic_skill_check?: boolean;
   introduction_video_url?: string;
 }
 
@@ -87,6 +90,9 @@ export interface AIInterviewUpdate {
   // a "Continue" save that stays mid-wizard. See update_interview in
   // routers/ai_interview.py.
   save_and_exit?: boolean;
+  // false = word-level duplicate check only on this save, no LLM call. The
+  // Configure page sends false; the gpt-4o dedup runs at /generate-clusters.
+  semantic_skill_check?: boolean;
   introduction_video_url?: string;
 }
 
@@ -1040,6 +1046,8 @@ export const aiInterviewService = {
     interactive?: boolean;
     /** Give up and allow the add after this long (ms). */
     timeoutMs?: number;
+    /** false = word-level checks only, no LLM call. */
+    semantic?: boolean;
   }): Promise<SkillDuplicateFinding[] | null> {
     if (!args.candidates?.length) return [];
     try {
@@ -1053,6 +1061,7 @@ export const aiInterviewService = {
           jd_id: args.jdId,
           industry_type: args.industryType,
           interactive: args.interactive ?? false,
+          use_llm: args.semantic ?? true,
         },
         // The interactive question costs a second model call (the finding, then
         // the substitution test that gates every rejection), so it gets longer

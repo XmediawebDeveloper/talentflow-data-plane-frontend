@@ -1227,6 +1227,25 @@ export default function ResumeScoringPage({
     }
   }, [pendingAutoSelectJdId, scoredHistory]);
 
+  // A row clicked in the finished progress popup: open that candidate's scoring
+  // detail as soon as scoredHistory carries it (normally already, since the
+  // popup refreshed history the moment the run settled). Same layout-effect
+  // shape as pendingAutoSelectJdId, for the same no-intermediate-paint reason.
+  const [pendingViewResult, setPendingViewResult] = useState<{ jobId: string; resumeId: string } | null>(null);
+  useLayoutEffect(() => {
+    if (!pendingViewResult) return;
+    const historyItem = scoredHistory.find(h => h.jobId === pendingViewResult.jobId);
+    const candidate = historyItem?.scoredResumes?.find((r: any) =>
+      r.resumeId === pendingViewResult.resumeId || r.resume_id === pendingViewResult.resumeId || r.id === pendingViewResult.resumeId
+    );
+    if (!historyItem || !candidate) return;
+    setPendingViewResult(null);
+    setSelectedHistoryItem(historyItem);
+    setSelectedCandidateForView(candidate);
+    setViewMode('candidateView');
+    router.push(`/recruitment/resume-scoring?jd_id=${historyItem.jobId}&score_id=${candidate.id}`, { scroll: false });
+  }, [pendingViewResult, scoredHistory]);
+
   // Sync selectedHistoryItem when scoredHistory is updated (e.g. after loadJdScores completes)
   useEffect(() => {
     if (!selectedHistoryItem) return;
@@ -1872,6 +1891,48 @@ export default function ResumeScoringPage({
   // Show loading when waiting for initial JD's history to load — same skeleton
   // the route page uses, so only ONE consistent skeleton ever shows (no flash
   // between two different skeletons).
+  /* Hoisted above the per-view returns so it keeps ONE tree position while
+     `viewMode` changes underneath it. It used to sit inside the "new scoring"
+     view's JSX, so moving the page to the results view mid-popup unmounted it
+     — the finished popup vanished and the corner widget was left holding a
+     "minimised" run nobody had minimised. */
+  const goToResultsFor = async (jobId: string) => {
+    invalidateGlobalScoredResumes();
+    await onRefreshHistory?.();
+    // Once scoredHistory carries this job's fresh scores, the layout effect on
+    // pendingAutoSelectJdId opens its details view — behind the popup.
+    setPendingAutoSelectJdId(jobId);
+    router.push(`/recruitment/resume-scoring?jd_id=${jobId}`, { scroll: false });
+  };
+  const resumeSelectionModal = showResumeSelectionModal && selectedJobData ? (
+    <SelectSourceModal
+      jobId={selectedJob}
+      jobTitle={selectedJobData.title}
+      onClose={() => setShowResumeSelectionModal(false)}
+      onScoringFinished={() => goToResultsFor(selectedJob)}
+      onScoringComplete={async () => {
+        // The results view is normally already behind the popup; only a
+        // Close that beats that refresh still has to fetch it first.
+        if (!(viewMode === 'details' && selectedHistoryItem?.jobId === selectedJob)) {
+          await goToResultsFor(selectedJob);
+        }
+        setShowResumeSelectionModal(false);
+      }}
+      onViewResult={(item) => {
+        setShowResumeSelectionModal(false);
+        setPendingViewResult({ jobId: selectedJob, resumeId: item.resumeId });
+        const known = scoredHistory
+          .find(h => h.jobId === selectedJob)?.scoredResumes
+          ?.some((r: any) => r.resumeId === item.resumeId || r.resume_id === item.resumeId || r.id === item.resumeId);
+        if (!known) {
+          invalidateGlobalScoredResumes();
+          onRefreshHistory?.();
+        }
+      }}
+    />
+  ) : null;
+
+  const view = (() => {
   if (isWaitingForInitialJd) {
     return <ResumeScoringSkeleton />;
   }
@@ -4246,31 +4307,9 @@ export default function ResumeScoringPage({
       </div>
 
       {/* Resume Selection Modal — the same self-contained "Select Applicants to
-          Score" popup the Job Details page uses (tabs, folder tree, search,
-          upload, table with per-row actions). It handles fetching its own
-          resumes/folders, the existing-scores check, submitting the batch and
-          showing its own progress modal, so none of that needs re-implementing
-          here — only what happens once it reports scoring is done. */}
-      {showResumeSelectionModal && selectedJobData && (
-        <SelectSourceModal
-          jobId={selectedJob}
-          jobTitle={selectedJobData.title}
-          onClose={() => setShowResumeSelectionModal(false)}
-          onScoringComplete={async () => {
-            invalidateGlobalScoredResumes();
-            // The popup stays up while the history refreshes. Closing it first
-            // exposed the "Choose JD" view underneath for the whole fetch.
-            await onRefreshHistory?.();
-            // Same hand-off the async Celery flow above uses: once
-            // scoredHistory carries this job's fresh scores, the sync effect
-            // opens its details view automatically. Closing the popup in the
-            // same batch means the next paint is already the details view.
-            setPendingAutoSelectJdId(selectedJob);
-            setShowResumeSelectionModal(false);
-            router.push(`/recruitment/resume-scoring?jd_id=${selectedJob}`, { scroll: false });
-          }}
-        />
-      )}
+          Score" popup the Job Details page uses. Rendered as
+          `resumeSelectionModal` above the per-view returns, not here, so it
+          survives the switch to the results view behind its popup. */}
 
       {/* Real-Time Scoring Status Panel - COMMENTED OUT: Now redirects to resume-scoring page with progress view instead */}
       {/* {showScoringPanel && selectedJobData && (
@@ -4406,5 +4445,13 @@ export default function ResumeScoringPage({
 
     </div>
     </main>
+  );
+  })();
+
+  return (
+    <>
+      {resumeSelectionModal}
+      {view}
+    </>
   );
 }

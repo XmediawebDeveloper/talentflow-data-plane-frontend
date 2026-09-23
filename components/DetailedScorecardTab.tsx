@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Clock, Calendar, User, BarChart3, CheckSquare, CheckCircle, XCircle, Briefcase, Award, Target, GraduationCap, MapPin, Building2, MessageSquare, TrendingUp, Info, Copy, Check } from 'lucide-react';
+import { Clock, Calendar, User, BarChart3, CheckSquare, CheckCircle, XCircle, Briefcase, Award, Target, GraduationCap, MapPin, Building2, MessageSquare, TrendingUp, Info, Copy, Check, ChevronsUpDown, ChevronsDownUp } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { Tooltip } from '@/components/ui/tooltip';
@@ -149,6 +149,19 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
     hideReasoningTimeoutRef.current = setTimeout(() => setReasoningTooltip(null), 150);
   };
   useEffect(() => () => cancelHideReasoningTooltip(), []);
+
+  // One switch for the whole column, toggled from the AI Reasoning header.
+  // Collapsed (default) keeps the compact 4-word pill with the hover box;
+  // expanded lays every criterion's full reasoning out inline so all of them
+  // can be read and compared at once without hovering row by row. Any hover
+  // box still open when the column expands is dropped — the text it would
+  // show is already on the page.
+  const [reasoningExpanded, setReasoningExpanded] = useState(false);
+  const toggleReasoningExpanded = () => {
+    cancelHideReasoningTooltip();
+    setReasoningTooltip(null);
+    setReasoningExpanded(current => !current);
+  };
 
   // Briefly swaps the copy icon for a checkmark on the row just copied —
   // cleared after a beat rather than left to the next click, so it always
@@ -721,7 +734,24 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                     Criteria
                   </th>
                   <th className="w-[32%] px-3 py-2.5 text-left text-xs font-medium text-gray-700 uppercase tracking-wider">
-                    AI Reasoning
+                    <div className="flex items-center justify-between gap-2">
+                      <span>AI Reasoning</span>
+                      {criteriaScores.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={toggleReasoningExpanded}
+                          aria-pressed={reasoningExpanded}
+                          aria-label={reasoningExpanded ? 'Collapse all AI reasoning' : 'Expand all AI reasoning'}
+                          title={reasoningExpanded ? 'Collapse all reasoning' : 'Expand all reasoning'}
+                          className="inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[11px] font-medium normal-case tracking-normal text-brand-blue hover:bg-brand-blue/10 transition-colors"
+                        >
+                          {reasoningExpanded
+                            ? <ChevronsDownUp className="w-3.5 h-3.5" />
+                            : <ChevronsUpDown className="w-3.5 h-3.5" />}
+                          {reasoningExpanded ? 'Collapse all' : 'Expand all'}
+                        </button>
+                      )}
+                    </div>
                   </th>
                 </tr>
               </thead>
@@ -765,15 +795,21 @@ export default function DetailedScorecardTab({ resume, jobTitle, aiReasoning, ge
                         </span>
                       </td>
                       <td className="px-3 py-3">
-                        <div className="flex items-center gap-1.5">
-                          <span
-                            onMouseEnter={(e) => showReasoningTooltip(e, criteria.aiReasoning)}
-                            onMouseLeave={hideReasoningTooltip}
-                            className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 whitespace-nowrap cursor-default"
-                          >
-                            {criteria.aiReasoning.split(' ').slice(0, 4).join(' ')}
-                            {criteria.aiReasoning.split(' ').length > 4 ? '…' : ''}
-                          </span>
+                        <div className={`flex gap-1.5 ${reasoningExpanded ? 'items-start' : 'items-center'}`}>
+                          {reasoningExpanded ? (
+                            <p className="flex-1 min-w-0 text-sm text-gray-700 leading-relaxed whitespace-pre-line break-words">
+                              {criteria.aiReasoning}
+                            </p>
+                          ) : (
+                            <span
+                              onMouseEnter={(e) => showReasoningTooltip(e, criteria.aiReasoning)}
+                              onMouseLeave={hideReasoningTooltip}
+                              className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700 border border-gray-300 whitespace-nowrap cursor-default"
+                            >
+                              {criteria.aiReasoning.split(' ').slice(0, 4).join(' ')}
+                              {criteria.aiReasoning.split(' ').length > 4 ? '…' : ''}
+                            </span>
+                          )}
                           <button
                             type="button"
                             onClick={() => copyReasoning(index, criteria.aiReasoning)}
