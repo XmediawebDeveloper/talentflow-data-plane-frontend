@@ -163,12 +163,12 @@ type TimelineEntry = { label: string; at: string; Icon: LucideIcon; tone: string
  *  silently collapsed a row's history down to just its latest state. The
  *  fallback inside buildFullTimeline still covers rows from before this
  *  field existed. */
-/** Compact view caps at the 4 most recent events (still oldest-first among
- *  themselves) — older ones drop off the table cell but stay reachable via
+/** Compact view caps at the 4 most recent events (newest first, matching the
+ *  full history) — older ones drop off the table cell but stay reachable via
  *  "View full history", which reads the uncapped trail separately. */
 const COMPACT_TIMELINE_LIMIT = 4;
 const timelineEvents = (inv: any): TimelineEntry[] =>
-  buildFullTimeline(inv, inv.timeline || []).slice(-COMPACT_TIMELINE_LIMIT);
+  buildFullTimeline(inv, inv.timeline || []).slice(0, COMPACT_TIMELINE_LIMIT);
 
 /** "View full history" only earns its place once something is actually
  *  hidden by the cap above — at 4 events or fewer the compact list already
@@ -227,13 +227,31 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
  *  a real Expired row...) sits in between, the gap isn't an expiry.
  *  Real audit rows never reach this: it only fills a hole they left. */
 const INFERENCE_SAFE_LABELS = new Set(['System Check', 'Email Read']);
+/** See the identical comment in AssessmentInviteActions.tsx: only the
+ *  Invite-Failed-before-Invited pair is a known backwards write; every other
+ *  pair (Edited -> its resend's Invited, Revoked -> a later Edited, etc.) is
+ *  already written in true chronological order, so this is intentionally
+ *  narrow rather than a generic rank table. */
+const ORDER_TIE_WINDOW_MS = 10 * 1000;
+const compareTimelineEntries = (a: TimelineEntry, b: TimelineEntry): number => {
+  const ta = new Date(a.at).getTime();
+  const tb = new Date(b.at).getTime();
+  if (Math.abs(ta - tb) <= ORDER_TIE_WINDOW_MS) {
+    const aFailed = a.label === 'Invite Failed';
+    const bFailed = b.label === 'Invite Failed';
+    if (aFailed && b.label === 'Invited') return 1;
+    if (bFailed && a.label === 'Invited') return -1;
+  }
+  return ta - tb;
+};
+
 const inferMissingExpiries = (
   events: TimelineEntry[],
   spanMs: number,
   expiredAction: string
 ): TimelineEntry[] => {
   if (!(spanMs > 0)) return events;
-  const sorted = [...events].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  const sorted = [...events].sort(compareTimelineEntries);
   const inferred: TimelineEntry[] = [];
   for (let i = 0; i < sorted.length; i++) {
     if (sorted[i].label !== 'Invited') continue;
@@ -342,9 +360,12 @@ const buildFullTimeline = (
   }
 
   const merged = inferMissingExpiries(out, inv.expires_at && inv.invitation_sent_at ? new Date(inv.expires_at).getTime() - new Date(inv.invitation_sent_at).getTime() : 0, 'ai_interview_invite_expired').sort(
-    (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
+    compareTimelineEntries
   );
-  return collapseRepeatedExpiries(merged);
+  // Every derivation above (inference, dedup, collapse) assumes ascending
+  // input, so the reverse — most recent event first — happens only here, on
+  // the way out.
+  return collapseRepeatedExpiries(merged).reverse();
 };
 
 /** Badge wording and colours kept in one place so a recruiter reads the same

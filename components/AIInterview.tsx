@@ -3074,6 +3074,16 @@ export default function AIInterview() {
           config={shareConfig}
           onInviteSent={() => {
             loadData();
+            // loadData() only refreshes the config list's own counters — the
+            // Candidate Invitations popup (if it's the one Share was opened
+            // from) reads a separate list + stat-card fetch that this never
+            // touched, so a newly-sent invite's row sat on stale/no data
+            // until some OTHER action (Resend/Revoke/Edit) happened to
+            // trigger refreshInvitationsView. Refresh it here too, whichever
+            // config is currently open in that popup.
+            if (viewInvitationsConfig) {
+              refreshInvitationsView(viewInvitationsConfig.id);
+            }
           }}
         />
       )}
