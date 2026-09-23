@@ -8,12 +8,14 @@ import {
   XCircle, Copy, Trash2, Archive, ArchiveRestore, GitBranch,
   Loader2, RefreshCw, Briefcase, Globe, ChevronRight, ChevronDown, Check, Brain, Sparkles,
   Layers, Pencil, Zap, Timer, FileText, Settings, CheckCircle2, Download,
-  TrendingUp, QrCode,
+  TrendingUp, QrCode, AlertCircle, ExternalLink,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
-import { jdService, type JDLineageVersion } from '@/lib/services/jdService';
+import { jdService, type JDLineageVersion, type JDResponse } from '@/lib/services/jdService';
+import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
+import JDOverviewSections from '@/components/jobs/JDOverviewSections';
 import { Button } from '@/components/ui/button';
 import type {
   AIInterviewResponse,
@@ -139,7 +141,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   const canArchiveAIInterviews = isTenantAdmin || !!user?.permissions?.canArchiveAIInterviews;
   const canDeleteAIInterviews = isTenantAdmin || !!user?.permissions?.canDeleteAIInterviews;
   const canShareAIInterviews = isTenantAdmin || !!user?.permissions?.canShareAIInterviews;
-  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'versions' | 'info' | 'results' | 'invites'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'versions' | 'viewjd' | 'results' | 'invites'>('overview');
+  /* Interview Details' own sub-tabs — Configure Details (what the tab used to
+     show outright) and Interview Info (the former standalone "AI Interview
+     Info" sidebar item, folded in here since it's the same JD-derived
+     metadata about the same interview, just read-only). */
+  const [detailsSubTab, setDetailsSubTab] = useState<'configure' | 'info'>('configure');
   const [actionLoading, setActionLoading] = useState(false);
   // Share — a dialog off the header's Share button (Assessment Details'
   // pattern) rather than a tab of its own; ShareAIInterviewModal already
@@ -191,16 +198,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
   // Confirmation dialog
   const [confirmAction, setConfirmAction] = useState<{ type: string; title: string; message: string; onConfirm: () => void } | null>(null);
-  // Controls "Show more / less" toggle on the published JD description card
-  // inside the AI Interview Info tab. Default collapsed so long JDs don't push
-  // metadata cards below the fold.
-  const [jdDescExpanded, setJdDescExpanded] = useState(false);
-  // Fallback JD description: fixed-mode configs don't snapshot jd_description
-  // at creation time (see AIInterviewConfig.tsx — only flexible mode does).
-  // For those, fetch the live JD on demand when the Info tab is opened so the
-  // recruiter still sees the description.
-  const [fetchedJdDesc, setFetchedJdDesc] = useState<string | null>(null);
-  const [fetchedJdLoading, setFetchedJdLoading] = useState(false);
+
+  // The full JD record for the View JD tab — same lazy-on-open, cache-per-JD
+  // fetch as the Assessment Details page's own View JD tab.
+  const [jdFullData, setJdFullData] = useState<JDResponse | null>(null);
+  const [jdFullLoading, setJdFullLoading] = useState(false);
+  const [jdFullError, setJdFullError] = useState<string | null>(null);
 
   const enabledRounds = useMemo(() => {
     return config.rounds_config?.filter((r) => r.enabled !== false) || [];
@@ -234,8 +237,6 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   // Preview-style derived values
   const mode = interviewMode as 'fixed' | 'flexible';
   const duration = config.duration_minutes;
-  const position = config.position ?? config.jd_title ?? 'Untitled Position';
-  const experienceLevel = config.jd_experience_level ?? '—';
   const mthRound = enabledRounds.find(r => r.type === 'must_have_skills' || r.type === 'must_to_have' || r.type === 'technical');
   const nthRound = enabledRounds.find(r => r.type === 'nice_to_have_skills' || r.type === 'nice_to_have');
   const hrRound = enabledRounds.find(r => r.type === 'hr');
@@ -383,32 +384,31 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     return idx >= 0 ? idx + 1 : 1;
   }, [siblingConfigsByJdId, config.jd_id, config.id]);
 
-  // Preload the live JD description on mount when the config's snapshot is
-  // empty (fixed-mode case). Firing on mount instead of on Info-tab activation
-  // means the description is almost always ready by the time the recruiter
-  // navigates to the tab — no visible loading state.
+  // Lazy-fetch the full JD record when the View JD tab is opened — cached
+  // per config.jd_id so switching tabs (or back to it) doesn't re-fetch.
   useEffect(() => {
-    if (config.jd_description && config.jd_description.trim()) return;
-    if (!config.jd_id) return;
-    if (fetchedJdDesc !== null || fetchedJdLoading) return;
+    if (activeTab !== 'viewjd' || !config.jd_id) return;
+    if (jdFullData) return;
 
     let cancelled = false;
-    setFetchedJdLoading(true);
+    setJdFullLoading(true);
+    setJdFullError(null);
     jdService.getById(config.jd_id)
-      .then(jd => {
+      .then((jd) => {
         if (cancelled) return;
-        setFetchedJdDesc((jd?.description ?? '').trim() || '');
+        setJdFullData(jd);
       })
-      .catch(() => {
+      .catch((error: any) => {
         if (cancelled) return;
-        setFetchedJdDesc(''); // mark attempted so we don't retry on every render
+        console.error('Failed to fetch JD:', error);
+        setJdFullError(error?.message || 'Failed to load job description');
       })
       .finally(() => {
-        if (!cancelled) setFetchedJdLoading(false);
+        if (!cancelled) setJdFullLoading(false);
       });
 
     return () => { cancelled = true; };
-  }, [config.jd_id, config.jd_description, fetchedJdDesc, fetchedJdLoading]);
+  }, [config.jd_id, activeTab, jdFullData]);
 
   // Quick actions
   const handleCopyLink = async () => {
@@ -911,7 +911,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 { key: 'overview', label: 'Interview Details', icon: FileText },
                 { key: 'activity', label: 'Recent Activity', icon: Clock },
                 { key: 'versions', label: 'Version History', icon: Layers },
-                { key: 'info', label: 'AI Interview Info', icon: Brain },
+                { key: 'viewjd', label: 'View JD', icon: Briefcase },
                 { key: 'results', label: 'Results', icon: TrendingUp },
                 { key: 'invites', label: 'Track', icon: Mail },
               ] as { key: typeof activeTab; label: string; icon: typeof FileText }[]).map((t) => {
@@ -984,37 +984,35 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           {activeTab === 'overview' && (
             <div className="space-y-5">
 
-              {/* JD Info Card */}
-              <div className="rounded-xl overflow-hidden border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white">
-                <div className="bg-brand-blue px-5 py-4 ring-1 ring-white/10">
-                  <div className="flex items-center gap-2 mb-1">
-                    <FileText className="w-4 h-4 text-white/90" />
-                    <span className="text-xs font-medium text-white/90 uppercase tracking-wide">Job Description</span>
-                  </div>
-                  <h2 className="text-lg font-bold text-white tracking-tight">{position}</h2>
-                </div>
-                <div className="bg-white px-5 py-4">
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                    <div>
-                      <p className="text-xs text-gray-500 mb-0.5">JD ID</p>
-                      <p className="text-sm font-medium text-gray-900">{config.jd_short_id ?? '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 mb-0.5">JD Title</p>
-                      <p className="text-sm font-medium text-gray-900">{config.jd_title ?? '—'}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 mb-0.5">Experience Level</p>
-                      <p className="text-sm font-medium text-gray-900">{experienceLevel}</p>
-                    </div>
-                    <div>
-                      <p className="text-xs text-gray-500 mb-0.5">Industry</p>
-                      <p className="text-sm font-medium text-gray-900">{(config as any).jd_industry_type ?? '—'}</p>
-                    </div>
-                  </div>
-                </div>
+              {/* Interview Details' own sub-tabs — Configure Details (this
+                  tab's original content) and Interview Info (folded in from
+                  the sidebar's former "AI Interview Info" item). */}
+              <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                {([
+                  { key: 'configure', label: 'Configure Details' },
+                  { key: 'info', label: 'Interview Info' },
+                ] as const).map((tab) => {
+                  const isActive = detailsSubTab === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      aria-pressed={isActive}
+                      onClick={() => setDetailsSubTab(tab.key)}
+                      className={`px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                        isActive
+                          ? 'bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue'
+                          : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
               </div>
 
+              {detailsSubTab === 'configure' && (
+              <>
               {/* Interview Mode */}
               <SectionCard title="Interview Mode" icon={Zap}>
                 <div className="flex items-center gap-3">
@@ -1071,7 +1069,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               {/* Time Allocation Table (fixed mode only) */}
               {mode === 'fixed' && enabledRounds.length > 0 && (
                 <SectionCard title="Time Allocation" icon={Clock}>
-                  <div className="overflow-hidden rounded-lg border border-gray-100 ring-1 ring-black/[0.02] tf-table-shell">
+                  {/* No .tf-table-shell — a fixed, at-most-3-row table that
+                      should size to its content, not the shell's 400px min-height. */}
+                  <div className="overflow-hidden rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="bg-slate-50 text-left border-b border-gray-100">
@@ -1461,23 +1461,179 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 </div>
               </SectionCard>
 
-              {/* Invitation Stats */}
-              <SectionCard title="Invitation Stats" icon={Users}>
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-gradient-to-br from-brand-blue/5 to-brand-cyan/5 ring-1 ring-brand-blue/15 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-semibold text-brand-blue tracking-tight">{invitationStats.total}</div>
-                    <div className="text-xs text-gray-500 mt-1">Total Invited</div>
+              </>
+              )}
+
+              {/* Interview Info sub-tab — formerly the sidebar's own "AI
+                  Interview Info" item. */}
+              {detailsSubTab === 'info' && (() => {
+                const expLabel = (val: string | null | undefined) => {
+                  const map: Record<string, string> = { junior: 'Junior', mid: 'Mid-Level', senior: 'Senior', lead: 'Lead', expert: 'Expert' };
+                  return val ? (map[val] || val) : null;
+                };
+                const expColor = (val: string | null | undefined) => {
+                  const map: Record<string, string> = {
+                    junior: 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20',
+                    mid: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20',
+                    senior: 'bg-brand-blue/10 text-brand-blue-2 ring-1 ring-brand-blue/20',
+                    lead: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
+                    expert: 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line',
+                  };
+                  return val ? (map[val] || 'bg-gray-100 text-gray-700 ring-1 ring-gray-200') : 'bg-gray-100 text-gray-700 ring-1 ring-gray-200';
+                };
+                const mthSkills: string[] = config.jd_must_have_skills || [];
+                const nthSkills: string[] = config.jd_nice_to_have_skills || [];
+                return (
+                  <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
+                    <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50">
+                      <div className="flex items-center gap-2.5 mb-1">
+                        <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                          <Briefcase className="w-4 h-4 text-brand-blue" />
+                        </div>
+                        <h3 className="text-sm sm:text-base font-semibold text-gray-900 tracking-tight">AI Interview Info</h3>
+                      </div>
+                      <p className="text-xs sm:text-sm text-gray-600">Metadata from the job description used to configure this interview</p>
+                    </div>
+                    <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
+                      {/* Key Metadata Cards */}
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        {/* Experience Level */}
+                        <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                              <Layers className="w-4 h-4 text-brand-blue" />
+                            </div>
+                            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Experience Level</span>
+                          </div>
+                          {config.jd_experience_level ? (
+                            <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${expColor(config.jd_experience_level)}`}>
+                              {expLabel(config.jd_experience_level) || config.jd_experience_level}
+                            </span>
+                          ) : (
+                            <span className="text-sm text-gray-400">Not available</span>
+                          )}
+                        </div>
+
+                        {/* Interview Mode */}
+                        <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
+                              <Timer className="w-4 h-4 text-brand-orange-deep" />
+                            </div>
+                            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Interview Mode</span>
+                          </div>
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 ${interviewMode === 'fixed' ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20' : 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'}`}>
+                            {interviewMode === 'fixed' ? `Timed — ${config.duration_minutes} min` : 'Flexible'}
+                          </span>
+                        </div>
+
+                        {/* Industry */}
+                        <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
+                              <Globe className="w-4 h-4 text-brand-cyan" />
+                            </div>
+                            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Industry</span>
+                          </div>
+                          {(config as any).jd_industry_type ? (
+                            <span className="text-sm font-medium text-gray-900">{(config as any).jd_industry_type}</span>
+                          ) : (
+                            <span className="text-sm text-gray-400">Not available</span>
+                          )}
+                        </div>
+
+                        {/* Recording */}
+                        <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                              <Video className="w-4 h-4 text-brand-blue" />
+                            </div>
+                            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Recording</span>
+                          </div>
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 ${config.recording_enabled ? 'bg-success-subtle text-success ring-success-line' : 'bg-gray-100 text-gray-600 ring-gray-200'}`}>
+                            {config.recording_enabled ? 'Enabled' : 'Disabled'}
+                          </span>
+                        </div>
+
+                        {/* Mobile Environment Verification */}
+                        <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                              <QrCode className="w-4 h-4 text-brand-blue" />
+                            </div>
+                            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Mobile Environment Verification</span>
+                          </div>
+                          <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 ${config.environment_verification_enabled ? 'bg-success-subtle text-success ring-success-line' : 'bg-gray-100 text-gray-600 ring-gray-200'}`}>
+                            {config.environment_verification_enabled ? 'Enabled' : 'Disabled'}
+                          </span>
+                        </div>
+
+                        {/* AI Voice Language */}
+                        <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
+                              <Globe className="w-4 h-4 text-brand-cyan" />
+                            </div>
+                            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">AI Voice Language</span>
+                          </div>
+                          <span className="text-sm font-medium text-gray-900">{config.ai_voice_language || 'English (US)'}</span>
+                        </div>
+
+                        {/* Candidate Languages */}
+                        <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
+                          <div className="flex items-center gap-2 mb-2">
+                            <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                              <Globe className="w-4 h-4 text-brand-blue" />
+                            </div>
+                            <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Candidate Languages</span>
+                          </div>
+                          {languages.length > 0 ? (
+                            <div className="flex flex-wrap gap-1.5">
+                              {languages.map((lang, i) => (
+                                <span key={i} className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20">{lang}</span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-sm text-gray-400">Not specified</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Must-Have Skills */}
+                      {mthSkills.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-3">
+                            <Brain className="w-4 h-4 text-brand-blue" />
+                            <h4 className="text-sm font-semibold text-gray-900 tracking-tight">Must-Have Skills</h4>
+                            <span className="text-xs text-gray-500">({mthSkills.length})</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {mthSkills.map((skill: string) => (
+                              <span key={skill} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20">{skill}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Nice-to-Have Skills */}
+                      {nthSkills.length > 0 && (
+                        <div>
+                          <div className="flex items-center gap-2 mb-3">
+                            <Sparkles className="w-4 h-4 text-brand-cyan" />
+                            <h4 className="text-sm font-semibold text-gray-900 tracking-tight">Nice-to-Have Skills</h4>
+                            <span className="text-xs text-gray-500">({nthSkills.length})</span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {nthSkills.map((skill: string) => (
+                              <span key={skill} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/20">{skill}</span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
-                  <div className="bg-gradient-to-br from-green-50 to-green-50 ring-1 ring-success-line rounded-lg p-4 text-center">
-                    <div className="text-2xl font-semibold text-success tracking-tight">{invitationStats.completed}</div>
-                    <div className="text-xs text-gray-500 mt-1">Completed</div>
-                  </div>
-                  <div className="bg-gradient-to-br from-brand-orange/5 to-brand-orange-deep/5 ring-1 ring-brand-orange/20 rounded-lg p-4 text-center">
-                    <div className="text-2xl font-semibold text-brand-orange-deep tracking-tight">{invitationStats.inProgress}</div>
-                    <div className="text-xs text-gray-500 mt-1">In Progress</div>
-                  </div>
-                </div>
-              </SectionCard>
+                );
+              })()}
 
             </div>
           )}
@@ -1671,266 +1827,46 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             </div>
           )}
 
-          {/* AI Interview Info Tab */}
-          {activeTab === 'info' && (() => {
-            const expLabel = (val: string | null | undefined) => {
-              const map: Record<string, string> = { junior: 'Junior', mid: 'Mid-Level', senior: 'Senior', lead: 'Lead', expert: 'Expert' };
-              return val ? (map[val] || val) : null;
-            };
-            const expColor = (val: string | null | undefined) => {
-              const map: Record<string, string> = {
-                junior: 'bg-brand-cyan/10 text-brand-cyan ring-1 ring-brand-cyan/20',
-                mid: 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20',
-                senior: 'bg-brand-blue/10 text-brand-blue-2 ring-1 ring-brand-blue/20',
-                lead: 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
-                expert: 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line',
-              };
-              return val ? (map[val] || 'bg-gray-100 text-gray-700 ring-1 ring-gray-200') : 'bg-gray-100 text-gray-700 ring-1 ring-gray-200';
-            };
-            const mthSkills: string[] = config.jd_must_have_skills || [];
-            const nthSkills: string[] = config.jd_nice_to_have_skills || [];
-            // Render the published-JD card only when the interview was actually
-            // wired to a JD (jd_id is the FK; short_id/title may be backfilled
-            // even for ad-hoc configs, so we anchor on jd_id).
-            const hasPublishedJd = Boolean(config.jd_id);
-            // Prefer the snapshot (what the interview was actually configured
-            // against), fall back to the live JD description we fetched on
-            // demand for fixed-mode configs that didn't snapshot it.
-            const jdDesc = ((config.jd_description ?? '').trim()
-              || (fetchedJdDesc ?? '').trim());
-            // ~280 chars ≈ 4 lines at the rendered font size; long enough to
-            // show a useful summary but short enough that we don't dominate the
-            // tab when descriptions are huge.
-            const DESC_PREVIEW_CHARS = 280;
-            const descTruncated = jdDesc.length > DESC_PREVIEW_CHARS;
-            return (
-              <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 tf-round-edges">
-                <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50">
-                  <div className="flex items-center gap-2.5 mb-1">
-                    <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-                      <Briefcase className="w-4 h-4 text-brand-blue" />
-                    </div>
-                    <h3 className="text-sm sm:text-base font-semibold text-gray-900 tracking-tight">AI Interview Info</h3>
-                  </div>
-                  <p className="text-xs sm:text-sm text-gray-600">Metadata from the job description used to configure this interview</p>
+          {/* View JD Tab — the linked job description, read-only, the same
+              components (and so the same reading) the Job Details page and
+              the Assessment Details page's own View JD tab use. */}
+          {activeTab === 'viewjd' && (
+            <div className="space-y-4 sm:space-y-5">
+              {!config.jd_id ? (
+                <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-3 sm:px-4 lg:px-6 py-8 text-center">
+                  <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+                  <p className="text-sm text-gray-500">No linked job description found</p>
                 </div>
-                <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
-                  {/* Published JD card — anchored on jd_id so ad-hoc configs
-                      (no linked JD) don't show an empty stub. */}
-                  {hasPublishedJd && (
-                    <div className="rounded-xl overflow-hidden border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 bg-white">
-                      <div className="bg-gradient-to-br from-brand-blue to-brand-blue-2 px-4 sm:px-5 py-3 sm:py-4 ring-1 ring-white/10">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <FileText className="w-4 h-4 text-white/90 flex-shrink-0" />
-                            <span className="text-xs font-medium text-white/90 uppercase tracking-wide">Job Description</span>
-                            {config.jd_short_id && (
-                              <span className="px-2 py-0.5 rounded-full bg-white/15 text-white text-2xs font-medium ring-1 ring-white/20">
-                                {config.jd_short_id}
-                              </span>
-                            )}
-                            {config.jd_version != null && (
-                              <span className="px-2 py-0.5 rounded-full bg-white/10 text-white/90 text-2xs font-medium ring-1 ring-white/15">
-                                v{config.jd_version}
-                              </span>
-                            )}
-                          </div>
-                          <h4 className="text-base sm:text-lg font-bold text-white tracking-tight truncate">
-                            {config.jd_title ?? 'Untitled Job Description'}
-                          </h4>
-                        </div>
-                      </div>
-                      <div className="px-4 sm:px-5 py-3 sm:py-4 space-y-3">
-                        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                          <div>
-                            <p className="text-2xs text-gray-500 uppercase tracking-wide mb-0.5">Experience</p>
-                            <p className="text-sm font-medium text-gray-900">
-                              {expLabel(config.jd_experience_level) || config.jd_experience_level || '—'}
-                            </p>
-                          </div>
-                          <div>
-                            <p className="text-2xs text-gray-500 uppercase tracking-wide mb-0.5">Industry</p>
-                            <p className="text-sm font-medium text-gray-900">{(config as any).jd_industry_type ?? '—'}</p>
-                          </div>
-                          <div>
-                            <p className="text-2xs text-gray-500 uppercase tracking-wide mb-0.5">Skills</p>
-                            <p className="text-sm font-medium text-gray-900">
-                              {mthSkills.length + nthSkills.length}
-                              <span className="text-xs text-gray-500 ml-1">({mthSkills.length} must / {nthSkills.length} nice)</span>
-                            </p>
-                          </div>
-                        </div>
-                        {jdDesc ? (
-                          <div className="border-t border-gray-100 pt-3">
-                            <p className="text-2xs text-gray-500 uppercase tracking-wide mb-1.5">Description</p>
-                            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-                              {descTruncated && !jdDescExpanded
-                                ? `${jdDesc.slice(0, DESC_PREVIEW_CHARS).trimEnd()}…`
-                                : jdDesc}
-                            </p>
-                            {descTruncated && (
-                              <button
-                                type="button"
-                                onClick={() => setJdDescExpanded(v => !v)}
-                                className="mt-2 text-xs font-medium text-brand-blue hover:text-brand-blue-2 transition-colors"
-                              >
-                                {jdDescExpanded ? 'Show less' : 'Show more'}
-                              </button>
-                            )}
-                          </div>
-                        ) : fetchedJdLoading ? (
-                          // Brief no-op while the on-mount preload finishes —
-                          // render an empty spacer so the card height doesn't
-                          // visibly jump when the description arrives.
-                          <div className="border-t border-gray-100 pt-3 h-6" />
-                        ) : (
-                          <div className="border-t border-gray-100 pt-3">
-                            <p className="text-xs text-gray-400 italic">This JD has no description text.</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Key Metadata Cards */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {/* Experience Level */}
-                    <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-                          <Layers className="w-4 h-4 text-brand-blue" />
-                        </div>
-                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Experience Level</span>
-                      </div>
-                      {config.jd_experience_level ? (
-                        <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${expColor(config.jd_experience_level)}`}>
-                          {expLabel(config.jd_experience_level) || config.jd_experience_level}
-                        </span>
-                      ) : (
-                        <span className="text-sm text-gray-400">Not available</span>
-                      )}
-                    </div>
-
-                    {/* Interview Mode */}
-                    <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
-                          <Timer className="w-4 h-4 text-brand-orange-deep" />
-                        </div>
-                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Interview Mode</span>
-                      </div>
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 ${interviewMode === 'fixed' ? 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20' : 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'}`}>
-                        {interviewMode === 'fixed' ? `Timed — ${config.duration_minutes} min` : 'Flexible'}
-                      </span>
-                    </div>
-
-                    {/* Industry */}
-                    <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
-                          <Globe className="w-4 h-4 text-brand-cyan" />
-                        </div>
-                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Industry</span>
-                      </div>
-                      {(config as any).jd_industry_type ? (
-                        <span className="text-sm font-medium text-gray-900">{(config as any).jd_industry_type}</span>
-                      ) : (
-                        <span className="text-sm text-gray-400">Not available</span>
-                      )}
-                    </div>
-
-                    {/* Recording */}
-                    <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-                          <Video className="w-4 h-4 text-brand-blue" />
-                        </div>
-                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Recording</span>
-                      </div>
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 ${config.recording_enabled ? 'bg-success-subtle text-success ring-success-line' : 'bg-gray-100 text-gray-600 ring-gray-200'}`}>
-                        {config.recording_enabled ? 'Enabled' : 'Disabled'}
-                      </span>
-                    </div>
-
-                    {/* Mobile Environment Verification */}
-                    <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-                          <QrCode className="w-4 h-4 text-brand-blue" />
-                        </div>
-                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Mobile Environment Verification</span>
-                      </div>
-                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ring-1 ${config.environment_verification_enabled ? 'bg-success-subtle text-success ring-success-line' : 'bg-gray-100 text-gray-600 ring-gray-200'}`}>
-                        {config.environment_verification_enabled ? 'Enabled' : 'Disabled'}
-                      </span>
-                    </div>
-
-                    {/* AI Voice Language */}
-                    <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
-                          <Globe className="w-4 h-4 text-brand-cyan" />
-                        </div>
-                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">AI Voice Language</span>
-                      </div>
-                      <span className="text-sm font-medium text-gray-900">{config.ai_voice_language || 'English (US)'}</span>
-                    </div>
-
-                    {/* Candidate Languages */}
-                    <div className="rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4 bg-white">
-                      <div className="flex items-center gap-2 mb-2">
-                        <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-                          <Globe className="w-4 h-4 text-brand-blue" />
-                        </div>
-                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Candidate Languages</span>
-                      </div>
-                      {languages.length > 0 ? (
-                        <div className="flex flex-wrap gap-1.5">
-                          {languages.map((lang, i) => (
-                            <span key={i} className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20">{lang}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="text-sm text-gray-400">Not specified</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Must-Have Skills */}
-                  {mthSkills.length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <Brain className="w-4 h-4 text-brand-blue" />
-                        <h4 className="text-sm font-semibold text-gray-900 tracking-tight">Must-Have Skills</h4>
-                        <span className="text-xs text-gray-500">({mthSkills.length})</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {mthSkills.map((skill: string) => (
-                          <span key={skill} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20">{skill}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Nice-to-Have Skills */}
-                  {nthSkills.length > 0 && (
-                    <div>
-                      <div className="flex items-center gap-2 mb-3">
-                        <Sparkles className="w-4 h-4 text-brand-cyan" />
-                        <h4 className="text-sm font-semibold text-gray-900 tracking-tight">Nice-to-Have Skills</h4>
-                        <span className="text-xs text-gray-500">({nthSkills.length})</span>
-                      </div>
-                      <div className="flex flex-wrap gap-2">
-                        {nthSkills.map((skill: string) => (
-                          <span key={skill} className="inline-flex items-center px-3 py-1 rounded-full text-sm bg-brand-cyan/5 text-brand-cyan ring-1 ring-brand-cyan/20">{skill}</span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+              ) : jdFullError ? (
+                <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-3 sm:px-4 lg:px-6 py-8 text-center">
+                  <AlertCircle className="w-8 h-8 text-destructive mx-auto mb-2" />
+                  <p className="text-sm text-destructive">{jdFullError}</p>
                 </div>
-              </div>
-            );
-          })()}
+              ) : jdFullLoading || !jdFullData ? (
+                <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-3 sm:px-4 lg:px-6 py-12 flex items-center justify-center tf-loader-center">
+                  <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
+                </div>
+              ) : (
+                <>
+                  <JDIdentityHeader jd={jdFullData} versionNumber={config.jd_version ?? undefined} />
+
+                  <JDOverviewSections jd={jdFullData} />
+
+                  {/* The way through to the JD's own page, where everything
+                      here is editable. */}
+                  <div className="flex justify-end">
+                    <button
+                      onClick={() => router.push(`/recruitment/job-details?id=${jdFullData.id}`)}
+                      className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-brand-blue hover:text-brand-blue-2 transition-colors"
+                    >
+                      Open full JD page
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Results Tab — embedded candidate results (stats + filters + table) */}
           {activeTab === 'results' && (

@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search, X, Video, MoreVertical, Eye, Pencil,
@@ -226,7 +227,33 @@ const STATUS_OPTIONS: SearchableSelectOption[] = [
   { value: 'archived', label: 'Archived' },
 ];
 
-export default function AllInterviewsTable() {
+export interface AllInterviewsTableProps {
+  /**
+   * DOM node the search/filter toolbar portals into, so it renders in the
+   * shared slot above the tab pills (AIInterview.tsx) instead of its own
+   * default spot inline above the table — every tab's toolbar then sits in
+   * the same place regardless of which tab owns the fields. Falls back to
+   * rendering inline when unset (e.g. a future standalone use).
+   */
+  toolbarSlot?: HTMLDivElement | null;
+  /**
+   * Bumped by the host's Refresh button (AIInterview.tsx) to force a
+   * reload — this table otherwise only refetches on mount or its own Retry.
+   */
+  refreshSignal?: number;
+  /**
+   * Locks the table to one status — the Active/Draft/Archived tabs'
+   * "Ungrouped" view, each showing only its own status rather than every
+   * version whatever its state. The Status filter (redundant once the whole
+   * table is one status) is hidden in this mode. Omitted for the real "All
+   * Interviews" tab, which spans every status.
+   */
+  fixedStatus?: 'published' | 'draft' | 'archived';
+  /** Heading shown above the search bar. Defaults to "All Interviews". */
+  titleLabel?: string;
+}
+
+export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedStatus, titleLabel = 'All Interviews' }: AllInterviewsTableProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isTenantAdmin, user } = useAuth();
@@ -295,7 +322,10 @@ export default function AllInterviewsTable() {
     fetchAll()
       .then((next) => {
         if (!alive) return;
-        setRows(next);
+        // Ordinals are computed above over the WHOLE set before this filter
+        // runs, so a version's number still reflects its true position in
+        // the lineage rather than shifting once other statuses are hidden.
+        setRows(fixedStatus ? next.filter((r) => r.rawStatus === fixedStatus) : next);
         setError(null);
       })
       .catch((err) => {
@@ -310,13 +340,26 @@ export default function AllInterviewsTable() {
     return () => {
       alive = false;
     };
-  }, [fetchAll, reloadToken]);
+  }, [fetchAll, reloadToken, fixedStatus]);
 
   const retry = () => {
     setIsLoading(true);
     setError(null);
     setReloadToken((t) => t + 1);
   };
+
+  /* Host's Refresh button — skips the mount value (undefined -> 0) so this
+     doesn't double-fetch alongside the initial load effect above. */
+  const skippedFirstRefreshSignal = useRef(false);
+  useEffect(() => {
+    if (refreshSignal === undefined) return;
+    if (!skippedFirstRefreshSignal.current) {
+      skippedFirstRefreshSignal.current = true;
+      return;
+    }
+    retry();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
 
   const jobOptions: SearchableSelectOption[] = useMemo(() => {
     const byId = new Map<string, { label: string; count: number }>();
@@ -536,8 +579,14 @@ export default function AllInterviewsTable() {
      See `TABLE_EMPTY_PANEL_CLASS`. */
   const hasBodyRows = isLoading || (!error && pageRows.length > 0);
 
-  return (
-    <div className="p-3 sm:p-6">
+  const toolbar = (
+    <>
+      {/* Same heading treatment as every other tab's — title + count, right
+          above the search/filter bar. */}
+      <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3">
+        {titleLabel} ({rows.length})
+      </h2>
+
       {/* ── Search & filter toolbar ── */}
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
@@ -617,16 +666,19 @@ export default function AllInterviewsTable() {
                 allLabel="All versions"
                 emptyMessage="No versions match"
               />
-              <SearchableSelect
-                label="Status"
-                value={draftFilters.status}
-                onChange={(v) => setDraftFilters((f) => ({ ...f, status: v }))}
-                options={STATUS_OPTIONS}
-                placeholder="All statuses"
-                searchPlaceholder="Search status..."
-                allLabel="All statuses"
-                emptyMessage="No statuses match"
-              />
+              {/* Redundant once the whole table is locked to one status. */}
+              {!fixedStatus && (
+                <SearchableSelect
+                  label="Status"
+                  value={draftFilters.status}
+                  onChange={(v) => setDraftFilters((f) => ({ ...f, status: v }))}
+                  options={STATUS_OPTIONS}
+                  placeholder="All statuses"
+                  searchPlaceholder="Search status..."
+                  allLabel="All statuses"
+                  emptyMessage="No statuses match"
+                />
+              )}
 
               <div className="sm:col-span-2">
                 <label
@@ -671,6 +723,12 @@ export default function AllInterviewsTable() {
       </div>
 
       <FilterChips chips={chips} onClearAll={clearAll} className="mb-3" />
+    </>
+  );
+
+  return (
+    <div className="p-3 sm:p-6">
+      {toolbarSlot ? createPortal(toolbar, toolbarSlot) : toolbar}
 
       {/* ── The table ── */}
       <div className="rounded-xl border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
