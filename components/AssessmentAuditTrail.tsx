@@ -9,6 +9,11 @@ import { assessmentService, CombinedAuditActivity, CombinedAuditTrailResponse } 
 import { formatIST } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import ListToolbar from '@/components/ui/list-toolbar';
+/* Puts the row below into the host page's one toolbar position — on the
+   Assessments page, above the tab pills, where every other tab's search sits.
+   Without a host slot it renders in place, as it did before. */
+import { ListToolbarPortal } from '@/components/ui/list-toolbar-slot';
+import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -371,7 +376,10 @@ export default function AssessmentAuditTrail() {
       <div className="bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] tf-round-edges">
         {/* Header */}
         <div className="p-3 sm:p-6 border-b border-gray-100">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+          {/* No bottom margin: the search row that used to follow this line
+              is portalled to the page's toolbar slot, so the header is now the
+              whole of this block. */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div>
               <h2 className="text-base sm:text-lg font-semibold text-gray-900 tracking-tight">Activity Log</h2>
               <p className="text-xs sm:text-sm text-gray-600 mt-0.5 sm:mt-1">
@@ -395,7 +403,14 @@ export default function AssessmentAuditTrail() {
             </Button>
           </div>
 
-          {/* Search + filters in the job-openings format. */}
+          {/* Search + filters in the job-openings format.
+
+              Portalled out of this card header and up to the page's toolbar
+              slot: this tab used to draw the same row inside its own card,
+              which put the search box a card-header lower than it sits on
+              every other tab. The controls, the hook behind them and the
+              request they build are untouched. */}
+          <ListToolbarPortal>
           <ListToolbar
             searchValue={search.query}
             onSearchChange={search.setQuery}
@@ -408,6 +423,19 @@ export default function AssessmentAuditTrail() {
             filtersApplied={search.filtersApplied}
             onClearFilters={search.reset}
             className="mb-0"
+            /* The count badge every other tab's toolbar closes with. `filtered`
+               is the total for the CURRENT query, which is what the request
+               returns; `total` is every event this tenant has, the sum of the
+               two category figures the segments above already show. So it
+               reads "18 of 412 events" and both numbers come from the same
+               response. */
+            countBadge={
+              <ListCountBadge
+                filtered={total}
+                total={stats.total_lifecycle_events + stats.total_candidate_events}
+                noun="event"
+              />
+            }
             filterPanel={
             <div>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
@@ -449,6 +477,7 @@ export default function AssessmentAuditTrail() {
             </div>
             }
           />
+          </ListToolbarPortal>
         </div>
 
         {/* Timeline View */}

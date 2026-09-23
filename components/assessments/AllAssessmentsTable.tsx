@@ -24,6 +24,11 @@ import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
    behaviour, in the shared shell, so All / Active / Draft and Total Jobs read
    as one page rather than as two designs of the same thing. */
 import ListToolbar from '@/components/ui/list-toolbar';
+/* Renders the toolbar above into whatever position the HOST page reserves for
+   it — on the Assessments page that is the one row above the tab pills, shared
+   with every other tab. On this screen's own route there is no slot, and it
+   renders in place exactly as before. */
+import { ListToolbarPortal } from '@/components/ui/list-toolbar-slot';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import { assessmentService, type AssessmentResponse } from '@/lib/services/assessmentService';
@@ -244,7 +249,14 @@ const EMPTY_FILTERS: Filters = {
 
 const hasAnyFilter = (f: Filters) => Object.values(f).some((v) => v !== '');
 
-type FixedAssessmentStatus = 'published' | 'draft';
+/* The status a host can pin this table to, one per flat tab on the Assessments
+   page. `archived` joins the two that were here because the Archived tab now
+   lists ASSESSMENTS in this table, the way Draft always has, instead of the
+   job-grouped list it used to draw — and the table already knew the status in
+   every other respect: `STATUS_LABEL` names it, `STATUS_BADGE` has its slate
+   pill, the Status sort puts it last in lifecycle order, and `rowActions`
+   offers an archived row View and View History but not Edit. */
+type FixedAssessmentStatus = 'published' | 'draft' | 'archived';
 
 interface AllAssessmentsTableProps {
   embedded?: boolean;
@@ -254,20 +266,30 @@ interface AllAssessmentsTableProps {
 }
 
 const fixedStatusLabel = (status?: FixedAssessmentStatus) =>
-  status === 'published' ? 'Active' : status === 'draft' ? 'Draft' : undefined;
+  status === 'published' ? 'Active'
+    : status === 'draft' ? 'Draft'
+      : status === 'archived' ? 'Archived'
+        : undefined;
 
 export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description }: AllAssessmentsTableProps = {}) {
   const router = useRouter();
   const { isTenantAdmin, user } = useAuth();
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
   const fixedLabel = fixedStatusLabel(fixedStatus);
+  /* Both lines of the page header. Read only when this table is on its OWN
+     route — see the header block below, which `embedded` drops whole. On the
+     Assessments page the tab pill directly above the list already names it,
+     and a heading repeating the pill over a paragraph repeating the heading
+     was two lines of furniture between the toolbar and the rows. */
   const heading = title || (fixedLabel ? `${fixedLabel} Assessments` : 'All Assessments');
   const subheading = description || (
     fixedStatus === 'published'
       ? 'View and manage published assessments ready for candidate invites.'
       : fixedStatus === 'draft'
         ? 'View and manage draft assessments that are still being prepared.'
-        : 'View and manage all assessments across jobs and job versions.'
+        : fixedStatus === 'archived'
+          ? 'Assessments taken out of circulation. Archived assessments cannot be edited or sent.'
+          : 'View and manage all assessments across jobs and job versions.'
   );
 
   const [rows, setRows] = useState<AssessmentRow[]>([]);
@@ -630,7 +652,16 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
           {/* ── 1. Page header ──────────────────────────────────────────────
               Title and subtitle only. No stat cards: the dashboard this screen
               is opened FROM owns those figures, and repeating them here would
-              be two places to disagree about the same number. */}
+              be two places to disagree about the same number.
+
+              Its own route only. Embedded, this table is a TAB, and the tab
+              pill above it has already said "All Assessments" / "Active" /
+              "Draft" — so the heading only repeated the pill and the paragraph
+              only repeated the heading, both of them sitting between the
+              toolbar and the rows the tab exists to show. The breadcrumb-led
+              route keeps the pair, because there is no pill there to name the
+              list. */}
+          {!embedded && (
           <div className="flex items-start gap-3 mb-5">
             <div className="hidden sm:flex w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 items-center justify-center shrink-0">
               <ClipboardList className="w-4 h-4 text-brand-blue" />
@@ -644,6 +675,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               </p>
             </div>
           </div>
+          )}
 
           {/* ── 2. Search & filter toolbar ────────────────────────────────
               `ListToolbar` + `ListFilterPanel`, the same pair and the same
@@ -657,7 +689,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               same handler the chips row and the panel's Clear All already
               call, so there is one way to empty this list however it is
               reached. */}
-          <div className="mb-4">
+          <ListToolbarPortal>
             <ListToolbar
               searchValue={search}
               /* This screen debounces the query itself (`appliedSearch`, 300ms)
@@ -775,10 +807,14 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                 </div>
               </ListFilterPanel>
             )}
-          </div>
 
-          {/* ── 3. Active filter chips ─────────────────────────────────────── */}
-          <FilterChips chips={chips} onClearAll={clearAll} className="mb-3" />
+            {/* ── 3. Active filter chips ─────────────────────────────────────
+                Inside the portal, with the row they summarise: the toolbar now
+                sits in the host page's slot, and chips left behind in the card
+                would be a list of applied filters nowhere near the control that
+                applied them. */}
+            <FilterChips chips={chips} onClearAll={clearAll} className="mt-3 mb-0" />
+          </ListToolbarPortal>
 
           {/* ── 4. The table ───────────────────────────────────────────────
               `tf-table-shell` is the house table shell: sticky header, its own
@@ -889,13 +925,29 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
                           <ClipboardList className="w-7 h-7 text-brand-blue" />
                         </div>
+                        {/* The "nothing here yet" wording is the one place the
+                            pinned status shows through. Archived is the reason:
+                            the shared line, "Assessments you create will be
+                            listed here", is true of Draft and of All, and false
+                            of Archived — a new assessment lands in Draft, never
+                            in Archived, so on that tab it described something
+                            that cannot happen. Both archived strings are
+                            carried over verbatim from the empty state the
+                            Archived tab used before it moved into this table,
+                            so the tab reads exactly as it did. */}
                         <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
-                          {isNarrowed ? 'No assessments found' : 'No assessments yet'}
+                          {isNarrowed
+                            ? 'No assessments found'
+                            : fixedStatus === 'archived'
+                              ? 'No archived assessments found.'
+                              : 'No assessments yet'}
                         </h3>
                         <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
                           {isNarrowed
                             ? 'No assessments match your current search or filter criteria.'
-                            : 'Assessments you create will be listed here.'}
+                            : fixedStatus === 'archived'
+                              ? 'Assessments you archive will appear here.'
+                              : 'Assessments you create will be listed here.'}
                         </p>
                         {isNarrowed && (
                           <Button variant="secondary" size="sm" onClick={clearAll} icon={<X className="w-4 h-4" />}>

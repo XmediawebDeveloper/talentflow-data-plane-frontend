@@ -1568,10 +1568,12 @@ export function AssessmentInterface({
 
   const getRoundColor = (roundType: string) => {
     switch (roundType) {
+      /* The same three tones the round tiles on Assessment Details use, so a
+         round is one colour from the first screen to the last. */
       case 'hr':
-        return 'bg-purple-500';
+        return 'bg-brand-cyan';
       case 'technical':
-        return 'bg-blue-500';
+        return 'bg-brand-blue';
       case 'coding':
         return 'bg-success';
       default:
@@ -1751,7 +1753,7 @@ export function AssessmentInterface({
 
         {/* Connection Restored Banner */}
         {isOnline && queueSize > 0 && isProcessing && (
-          <div className="bg-blue-500 text-white px-4 py-2 flex items-center gap-2">
+          <div className="bg-brand-blue text-white px-4 py-2 flex items-center gap-2">
             <RefreshCw className="w-4 h-4 animate-spin" />
             <span className="text-sm font-medium">
               Connection restored. Syncing {queueSize} pending {queueSize === 1 ? 'save' : 'saves'}...
@@ -1835,8 +1837,8 @@ export function AssessmentInterface({
                   )}
                   {autoSaveStatus === 'retrying' && (
                     <>
-                      <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />
-                      <span className="text-xs text-blue-600">Retrying ({queueSize})...</span>
+                      <RefreshCw className="w-3.5 h-3.5 text-brand-blue animate-spin" />
+                      <span className="text-xs text-brand-blue">Retrying ({queueSize})...</span>
                     </>
                   )}
                   {autoSaveStatus === 'error' && (
@@ -1858,7 +1860,7 @@ export function AssessmentInterface({
                   className="w-full h-full object-cover"
                   style={{ transform: 'scaleX(-1)' }}
                 />
-                <div className="absolute bottom-1 right-1 w-2 h-2 bg-red-500 rounded-full animate-pulse" />
+                <div className="absolute bottom-1 right-1 w-2 h-2 bg-destructive rounded-full animate-pulse" />
               </div>
             </div>
           </div>
@@ -1875,7 +1877,7 @@ export function AssessmentInterface({
                       step.completed
                         ? 'bg-success text-white'
                         : step.active
-                          ? 'bg-blue-600 text-white'
+                          ? 'bg-brand-blue text-white'
                           : 'bg-gray-300 text-gray-600'
                     }`}>
                       {step.completed ? <Check className="w-3 h-3" /> : index + 1}
@@ -2077,7 +2079,7 @@ export function AssessmentInterface({
                   Unanswered
                 </span>
                 <span className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded bg-orange-100 border border-orange-300"></div>
+                  <div className="w-3 h-3 rounded bg-warning-subtle border border-warning-line" />
                   Draft
                 </span>
                 <span className="flex items-center gap-1">
@@ -2106,7 +2108,7 @@ export function AssessmentInterface({
                   icon = <Lock className="w-4 h-4" />;
                   titleText = `Question ${num} - Submitted`;
                 } else if (hasDraft) {
-                  colorClass = 'bg-orange-100 text-orange-700';
+                  colorClass = 'bg-warning-subtle text-warning-strong';
                   icon = <Save className="w-4 h-4" />;
                   titleText = `Question ${num} - Draft saved`;
                 }
@@ -2223,7 +2225,7 @@ export function AssessmentInterface({
                   <div className="text-xs text-gray-500">Unanswered</div>
                 </div>
                 <div>
-                  <div className="text-lg font-bold text-orange-600">
+                  <div className="text-lg font-bold text-warning">
                     {draftCount}
                   </div>
                   <div className="text-xs text-gray-500">Draft</div>
@@ -2237,9 +2239,9 @@ export function AssessmentInterface({
               </div>
             </div>
 
-            <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-xl mb-3 border border-blue-200">
-              <Save className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
-              <p className="text-sm text-blue-700">
+            <div className="flex items-start gap-3 p-4 rounded-xl mb-3 border border-brand-blue/20 bg-brand-blue/5">
+              <Save className="w-5 h-5 text-brand-blue shrink-0 mt-0.5" />
+              <p className="text-sm text-gray-700">
                 All your saved drafts and the current answer will be automatically locked in
                 and submitted as your final responses.
               </p>

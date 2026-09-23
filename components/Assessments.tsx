@@ -39,6 +39,15 @@ import AssessmentInviteTable, {
 } from '@/components/assessments/AssessmentInviteTable';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
+/* The one position every tab's search row lands in. See the note on the
+   component: the toolbar itself was already shared, but each tab drew it
+   somewhere else, so switching tabs moved the search box. */
+import {
+  ListToolbarSlot,
+  ListToolbarSlotProvider,
+  ListToolbarPortal,
+  useListToolbarSlot,
+} from '@/components/ui/list-toolbar-slot';
 import { Skeleton } from '@/components/ui/skeleton';
 import ListCountBadge from '@/components/ui/list-count-badge';
 /* The two shared empty states. ListEmptyState covers a LIST in its two
@@ -346,51 +355,74 @@ type AssessmentPageTab =
   | 'archived'
   | 'settings';
 
-type FlatAssessmentTab = Extract<AssessmentPageTab, 'all' | 'active' | 'draft'>;
+/* The tabs that list ASSESSMENTS, one row each, in `AllAssessmentsTable`.
 
-const FLAT_ASSESSMENT_TABS = ['all', 'active', 'draft'] as const;
+   Archived joins them. It used to be the odd one out: it drew the page's own
+   job-grouped list — one row per JOB, versions folded in behind View Versions
+   — while Draft, the tab it sits next to and is read against, drew a flat
+   table of assessments. Same page, same kind of question ("what is in this
+   state?"), two different answers with different rows, different columns,
+   different actions and a count in a different noun.
+
+   Nothing about archiving changes here, and no new list is introduced: the
+   Archived tab now asks `AllAssessmentsTable` for `status: 'archived'`
+   exactly as Draft asks it for `status: 'draft'`. */
+type FlatAssessmentTab = Extract<AssessmentPageTab, 'all' | 'active' | 'draft' | 'archived'>;
+
+const FLAT_ASSESSMENT_TABS = ['all', 'active', 'draft', 'archived'] as const;
 
 const isFlatAssessmentTab = (tab: AssessmentPageTab): tab is FlatAssessmentTab =>
   (FLAT_ASSESSMENT_TABS as readonly AssessmentPageTab[]).includes(tab);
 
+/* Which cut of the assessment list each flat tab asks for — and nothing else.
+   It used to carry a title and a description per tab too, which
+   `AllAssessmentsTable` drew as a heading over a paragraph. Both are gone:
+   embedded, that table is a tab, and the pill above it already says "All
+   Assessments" / "Active" / "Draft", so the heading repeated the pill and the
+   paragraph repeated the heading. The table's own route still draws the pair
+   from its own defaults, where there is no pill to have named the list. */
 const FLAT_ASSESSMENT_TABLE_CONFIG = {
-  all: {
-    title: 'All Assessments',
-    description: 'View and manage all assessments across jobs and job versions.',
-    fixedStatus: undefined,
-  },
-  active: {
-    title: 'Active Assessments',
-    description: 'View and manage published assessments ready for candidate invites.',
-    fixedStatus: 'published',
-  },
-  draft: {
-    title: 'Draft Assessments',
-    description: 'View and manage draft assessments that are still being prepared.',
-    fixedStatus: 'draft',
-  },
-} satisfies Record<FlatAssessmentTab, { title: string; description: string; fixedStatus?: 'published' | 'draft' }>;
+  all: { fixedStatus: undefined },
+  active: { fixedStatus: 'published' },
+  draft: { fixedStatus: 'draft' },
+  archived: { fixedStatus: 'archived' },
+} satisfies Record<FlatAssessmentTab, { fixedStatus?: 'published' | 'draft' | 'archived' }>;
 
 /** A completed attempt, tagged with the assessment it belongs to. */
 type CandidateResultRow = AssessmentAttemptResponse & {
   _assessment_id: string;
   _assessment_short_id?: string;
   _assessment_title?: string;
-  /* The two version columns. Neither is on AssessmentAttemptResponse - an
+  /* The three version columns. None is on AssessmentAttemptResponse - an
      attempt records the candidate and the scores, not the job version it was
-     built against nor which resume got them the invite - so both are joined on
-     during the load and carried here.
+     built against, nor which version of the assessment they sat, nor which
+     resume got them the invite - so all three are joined on during the load
+     and carried here.
 
-       _jd_version     the JOB VERSION the parent assessment was authored
-                       against (`AssessmentResponse.jd_version`). Free: the
-                       load already walks those assessments.
-       _resume_version the RESUME VERSION scored for this candidate against
-                       that same job (`ScoringResponse.resume_version`).
-                       Undefined when the candidate has no scoring record for
-                       the job - a manually invited candidate has none - and
-                       the column shows a dash rather than inventing a v1. */
+       _jd_version         the JOB VERSION the parent assessment was authored
+                           against (`AssessmentResponse.jd_version`). Free: the
+                           load already walks those assessments.
+       _assessment_version the version of the ASSESSMENT ITSELF that this
+                           attempt was sat against, which increments on each
+                           edit/publish. Free for the same reason - it is
+                           `AssessmentResponse.version`, already on the record
+                           the fan-out holds - and named to match the identical
+                           field the Invitation Status rows carry, so one
+                           reading of "assessment version" serves both tabs.
+       _resume_version     the RESUME VERSION scored for this candidate against
+                           that same job (`ScoringResponse.resume_version`).
+                           Undefined when the candidate has no scoring record
+                           for the job - a manually invited candidate has none -
+                           and the column shows a dash rather than inventing a
+                           v1. */
+  /* The human-readable Job ID, e.g. JD-014 — the identifier the Job ID column
+     shows. Not on the attempt either (it records the candidate, not the job's
+     id), so it is joined from the parent assessment during the load, under the
+     same name the Invitation Status rows give it. */
+  _jd_short_id?: string;
   _jd_id?: string;
   _jd_version?: number;
+  _assessment_version?: number;
   _resume_version?: number;
 };
 
@@ -430,6 +462,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [pageView, setPageView] = useState<'cards' | 'list'>(initialListTab ? 'list' : 'cards');
   const listSectionRef = useRef<HTMLDivElement | null>(null);
   const [listScrollRequest, setListScrollRequest] = useState(0);
+  /* The single slot every tab's search / More Filters / count badge row is
+     drawn in — directly above the tab pills, where the Total Jobs tab has
+     always put it. Tabs whose content is a component of its own (All / Active /
+     Draft, Activity Logs, Consent Logs) portal their existing toolbar up into
+     it; nothing about what those toolbars filter or how moves with them. */
+  const toolbarSlot = useListToolbarSlot();
   // Proctoring settings are a staging-only testing menu — in production it's
   // hidden, so land on Topics instead.
   const [settingsSubTab, setSettingsSubTab] = useState<'proctoring' | 'topics'>(IS_PRODUCTION_ENV ? 'topics' : 'proctoring');
@@ -1300,6 +1338,29 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [isLoadingCompletedCandidates, setIsLoadingCompletedCandidates] = useState(false);
   const [completedCandidatesError, setCompletedCandidatesError] = useState<string | null>(null);
   const [completedCandidatesPage, setCompletedCandidatesPage] = useState(1);
+  /* Candidate Results' own search and filters, in the shared hook every other
+     tab on this page already uses. The tab had neither: it listed every
+     completed attempt across every assessment with no way to narrow them, so
+     the only tool for finding one candidate among hundreds was the browser's
+     own Find. Both are client-side, because the rows are already merged here
+     (see the fan-out in `loadAllCompletedCandidates`) — a server-side filter
+     would have to be re-fanned out to be correct.
+
+     Four controls, matching the Total Jobs panel's shape: the widest cut of
+     the list first, then the outcome, then the date range. */
+  const [showCompletedCandidateFilters, setShowCompletedCandidateFilters] = useState(false);
+  const completedCandidatesSearch = useListSearch({
+    initialFilters: {
+      /* '' rather than 'all' — SearchableSelect's contract for "nothing
+         picked", same as the Position filter on Total Jobs. */
+      job: '',
+      outcome: 'all' as 'all' | 'pass' | 'fail',
+      completedFrom: '',
+      completedTo: '',
+    },
+    debounceMs: 350,
+    onChange: () => setCompletedCandidatesPage(1),
+  });
 
   const COMPLETED_PAGE_SIZE = 20;
 
@@ -1315,6 +1376,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [inviteStatusError, setInviteStatusError] = useState<string | null>(null);
   const [inviteStatusPage, setInviteStatusPage] = useState(1);
   const [inviteStatusFilters, setInviteStatusFilters] = useState<InviteFilterState>(EMPTY_INVITE_FILTERS);
+  /* Whether this tab's More Filters panel is open. The FILTER VALUES stay in
+     `inviteStatusFilters` above and are read by exactly the same code as
+     before — what changed is only which controls write them: the toolbar's
+     search box and the panel's status/date fields, in place of the
+     `InviteFilterBar` row that used to sit inside the card. Same four fields,
+     same commit-as-you-change behaviour, same `EMPTY_INVITE_FILTERS` reset. */
+  const [showInviteStatusFilters, setShowInviteStatusFilters] = useState(false);
 
   const INVITE_STATUS_PAGE_SIZE = 20;
 
@@ -2540,7 +2608,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                  creation-time snapshot that reads 1 for assessments authored
                  against later versions, so it is the fallback only. */
               _jd_id: a.jd_id,
+              /* Job ID, from the same record and for the same reason as the
+                 version below: already in hand, so the column costs no
+                 request and cannot disagree with the assessment it came
+                 from. */
+              _jd_short_id: a.jd_short_id,
               _jd_version: jobVersionOfAssessment(a, jobVersionByJdId),
+              /* The assessment's OWN version, straight off the record this
+                 fan-out already holds — no extra request, and it cannot
+                 disagree with the assessment it came from. Same field, same
+                 name, as the Invitation Status rows use. */
+              _assessment_version: a.version,
             }));
           } catch {
             return [];
@@ -4945,18 +5023,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     isFlatAssessmentTab(activeTab) ||
     ['completed-candidates', 'audit', 'consent', 'invitation-status', 'settings'].includes(activeTab);
 
-  /* No rows on screen for a tab that lists assessments — whether the tenant
-     has none of that kind or a search narrowed them away. The "Job List (0)"
-     heading and the list/grid toggle then have nothing to count or switch
-     between, so the tab drops both and shows only its empty state. The search
-     toolbar stays: it lives above the card and is the way out of a narrowed
-     zero, alongside the Reset in the empty state itself.
-
-     `!isLoading` so the heading does not blink out and back while the first
-     page is still arriving. */
-  const assessmentListEmpty = !activeTabOwnsListContent
-    && !isLoading
-    && filteredAssessments.length === 0;
+  /* `assessmentListEmpty` stood here — the "this tab has no rows on screen"
+     test. Its only reader was the "Job List (N)" heading, which it hid so the
+     tab would not draw "Job List (0)" over its own empty state. The heading is
+     gone (the count is in the tab pill now), and with it the last thing that
+     needed the flag. The empty state itself picks its own wording from
+     `assessmentListNarrowed` and `assessmentEmptyCopy` below, as it always
+     did. */
 
   /* What the empty state says, per tab. One place, because the message is the
      only thing that differs between them — every tab renders the same shared
@@ -5716,16 +5789,98 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         </div>
 
         {pageView === 'list' && (
-        <>
+        <ListToolbarSlotProvider value={toolbarSlot.node}>
         <div ref={listSectionRef} className="scroll-mt-4" aria-hidden="true" />
 
-        {/* Search + filters, ABOVE the tabs. Still gated to the tabs that
-            list assessments — the log, consent and settings tabs bring their
-            own controls, and Candidate Results has its own table — so on
-            those the toolbar is absent rather than inert. Same ListToolbar,
-            same panel, same handlers; only its position moved. */}
+        {/* ── Section heading — the active tab's name and the size of the list
+            under it, on one line directly above the search row.
+
+            Lifted from /recruitment/resume-scoring, which is where this shape
+            comes from: that page heads its list with `All Candidates (73)` —
+            `${section.title} (${count})` in an <h2> above the same ListToolbar
+            — and keeps the toolbar's own "24 of 56" badge below it. The two
+            are not a duplicate pair, they answer different questions: the
+            heading is how big this list IS, the badge is how much of it you
+            are currently seeing. Only the badge moves as you type.
+
+            Which count each tab states is decided by what that tab actually
+            lists, so a heading can never disagree with its own rows:
+
+              Total Jobs / Archived   the page lists these itself, as JOB rows
+                                      — `assessmentResultCount`, the same
+                                      figure the "Job List (N)" heading this
+                                      replaces always used.
+              All / Active / Draft    the rows live in `AllAssessmentsTable`,
+                                      so the count comes from /assessments/stats
+                                      instead — the same fields the summary
+                                      cards above read, so the heading and the
+                                      card that opened it always match.
+              Candidate Results       the loaded fan-out, before this tab's own
+                                      search narrows it.
+
+            An em dash while the figure is still loading rather than a 0: "(0)"
+            is a claim, and a heading that reads 0 and then 25 has moved the
+            search row under it.
+
+            The four tabs with no entry are the ones that are not a cut of the
+            assessment list — Invitation Status, the two log tabs and Settings
+            — and each already carries its own card header. */}
+        {(() => {
+          const sectionHeading: Partial<Record<AssessmentPageTab, { title: string; count: number; loading: boolean }>> = {
+            jobs: { title: 'Job List', count: assessmentResultCount, loading: isLoading },
+            all: { title: 'All Assessments', count: stats.total_assessments, loading: isLoadingStats },
+            active: { title: 'Active Assessments', count: stats.active_assessments, loading: isLoadingStats },
+            draft: { title: 'Draft Assessments', count: stats.draft_assessments, loading: isLoadingStats },
+            /* Stats, not `assessmentResultCount`, now that Archived lists
+               assessments in `AllAssessmentsTable` alongside Draft rather than
+               the page's own job rows — the count has to be of the same thing
+               the rows are. */
+            archived: { title: 'Archived', count: stats.archived_assessments, loading: isLoadingStats },
+            'completed-candidates': {
+              title: 'Candidate Results',
+              count: completedCandidates.length,
+              loading: isLoadingCompletedCandidates,
+            },
+          };
+          const section = sectionHeading[activeTab];
+          if (!section) return null;
+          return (
+            /* The page's own heading treatment, unchanged — it is the one the
+               "Job List (N)" header wore, down to the lighter weight on the
+               figure so the line reads as a name first and a number second. */
+            <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3">
+              {section.title}{' '}
+              <span className="font-normal text-gray-500 dark:text-slate-500 tabular-nums">
+                ({section.loading ? '—' : section.count.toLocaleString()})
+              </span>
+            </h2>
+          );
+        })()}
+
+        {/* THE search position for this page: one row, directly above the tab
+            pills, for every tab.
+
+            It used to be this block alone — gated to Total Jobs and Archived,
+            the two tabs the page lists itself — and each remaining tab drew its
+            own search somewhere else: All/Active/Draft inside
+            `AllAssessmentsTable`, Activity Logs inside its card's header,
+            Invitation Status inside the card as an `InviteFilterBar`, Consent
+            Logs as a hand-built filter row, Candidate Results not at all. Same
+            search box, five different places, so changing tab moved it.
+
+            Now the slot is the page's and every tab renders THROUGH it (see
+            `ListToolbarPortal`), including the tabs whose content is a
+            component of its own. Each toolbar keeps its own state, its own
+            placeholder and its own filter fields — what is shared is the row,
+            its position and its order: search, More Filters, Reset, count
+            badge. */}
+        <ListToolbarSlot ref={toolbarSlot.ref} />
+
+        {/* Total Jobs and Archived — the two tabs the page lists itself. Same
+            ListToolbar, same panel, same handlers as before; the only change is
+            that the wrapper div is now the shared slot above. */}
           {!activeTabOwnsListContent && (
-            <div className="mb-4">
+            <ListToolbarPortal>
               <ListToolbar
                 searchValue={assessmentListSearch.query}
                 // The hook debounces (350ms) into `appliedQuery` before the
@@ -5853,7 +6008,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   {assessmentSearch.trim() ? ` "${assessmentSearch.trim()}"` : ' your filters'}
                 </p>
               )}
-            </div>
+            </ListToolbarPortal>
           )}
 
         {/* ── Tabs, BELOW the filters, in the Job Openings status-pill
@@ -5910,6 +6065,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
              already draws the glyph conditionally (`'icon' in tab`), which is
              what let All Assessments, Active and Draft go without one from the
              start. */
+          /* Labels only — no counts in the pills.
+
+             The count for whatever is on screen lives in the search row above,
+             as the `ListCountBadge` that closes it. That is the arrangement on
+             /recruitment/resume-scoring, this row's reference page: its search
+             row ends with "24 of 56 candidates" and its "Show:" pills below
+             carry nothing but their names.
+
+             A number in the pill as well would be a second count a few pixels
+             from the first, and a worse one: the badge states the narrowing
+             ("18 of 42"), which is the figure that actually moves as you search,
+             while a pill can only ever show a fixed total. It also widened
+             every pill enough to wrap the row onto a third line. */
           const TABS = ([
             { key: 'jobs', label: 'Total Jobs', short: 'Jobs' },
             { key: 'all', label: 'All Assessments', short: 'All' },
@@ -5974,18 +6142,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           {/* Assessment List */}
           <div className="p-3 sm:p-6">
 
-            {/* Job List header — just the section title now that the view
-                toggle is gone. It only renders for the tabs that actually
-                list jobs, so Settings and the log tabs no longer carry a
-                heading that does nothing for them. */}
-            {!activeTabOwnsListContent && !assessmentListEmpty && (
-              <div className="flex items-center justify-between gap-3 mb-3 sm:mb-4">
-                <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
-                  Job List{' '}
-                  <span className="font-normal text-gray-500 dark:text-slate-500">({assessmentResultCount})</span>
-                </h2>
-              </div>
-            )}
+            {/* The "Job List (25)" header stood here. Its treatment is what
+                the tab pills now wear — label, then the figure in parentheses
+                a shade lighter — and with the count in the pill this heading
+                said the same number twice on the same screen, a few pixels
+                apart: the lit pill reads "Total Jobs (25)" and this read "Job
+                List (25)".
+
+                So the pill keeps the count and the card starts at its rows,
+                which is where All / Active / Draft already start since their
+                own headings came off. */}
 
             {isFlatAssessmentTab(activeTab) ? (() => {
               const config = FLAT_ASSESSMENT_TABLE_CONFIG[activeTab];
@@ -5994,32 +6160,211 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   key={`assessment-list-${activeTab}`}
                   embedded
                   fixedStatus={config.fixedStatus}
-                  title={config.title}
-                  description={config.description}
                 />
               );
             })() : activeTab === 'completed-candidates' ? (() => {
               /* Candidate Results tab - every completed attempt across all assessments */
-              const total = completedCandidates.length;
+              const resultsTotal = completedCandidates.length;
+
+              /* Search + filters, applied here rather than in the request: the
+                 rows are a client-side merge of one listResults() call per
+                 assessment (see `loadAllCompletedCandidates`), so there is no
+                 single endpoint to hand a query to.
+
+                 The haystack is every identifier the row actually shows, plus
+                 the assessment title — the table has no column for it, but it
+                 is still how a recruiter names what someone sat. Same rule the
+                 Invitation Status search below already follows. */
+              const resultQuery = completedCandidatesSearch.appliedQuery.trim().toLowerCase();
+              const {
+                job: filterResultJob,
+                outcome: filterResultOutcome,
+                completedFrom: filterResultFrom,
+                completedTo: filterResultTo,
+              } = completedCandidatesSearch.filters;
+              /* Inclusive of the whole `to` day — a recruiter picking today
+                 expects today's results, not those finished at exactly 00:00.
+                 The same pair of lines the Invitation Status tab uses. */
+              const resultFromTime = filterResultFrom ? new Date(`${filterResultFrom}T00:00:00`).getTime() : null;
+              const resultToTime = filterResultTo ? new Date(`${filterResultTo}T23:59:59.999`).getTime() : null;
+
+              /* Pass/Fail for the whole attempt, read the same way the two
+                 score cells below read it: a round counts as passed at
+                 RESULT_PASS_MARK, and an attempt passes when every round it
+                 has a score for did. An attempt with no score at all is
+                 neither, so it falls out of both filters rather than being
+                 quietly counted as a fail. */
+              const resultOutcomeOf = (row: CandidateResultRow): 'pass' | 'fail' | null => {
+                const scores = [row.technical_score, row.coding_score]
+                  .filter((value): value is number => typeof value === 'number');
+                if (scores.length === 0) return null;
+                return scores.every((value) => value >= RESULT_PASS_MARK) ? 'pass' : 'fail';
+              };
+
+              const filteredResults = completedCandidates.filter((row) => {
+                if (resultQuery) {
+                  const haystack = [
+                    row.candidate_name,
+                    row.candidate_email,
+                    row.candidate_display_id,
+                    row.candidate_phone,
+                    /* The Job ID joins the haystack with its column: every
+                       other identifier this table SHOWS is searchable, and a
+                       JD-014 on screen that the search box cannot find reads
+                       as broken. It is also what the Invitation Status search
+                       beside it already matches on. */
+                    row._jd_short_id,
+                    row.jd_title,
+                    row._assessment_title,
+                    row._assessment_short_id,
+                  ].filter(Boolean).join(' ').toLowerCase();
+                  if (!haystack.includes(resultQuery)) return false;
+                }
+                if (filterResultJob && (row.jd_title || row._assessment_title || '') !== filterResultJob) return false;
+                if (filterResultOutcome !== 'all' && resultOutcomeOf(row) !== filterResultOutcome) return false;
+                if (resultFromTime !== null || resultToTime !== null) {
+                  const completedAt = new Date(row.completed_at || 0).getTime();
+                  if (!completedAt) return false;
+                  if (resultFromTime !== null && completedAt < resultFromTime) return false;
+                  if (resultToTime !== null && completedAt > resultToTime) return false;
+                }
+                return true;
+              });
+
+              /* The Job filter's options — the jobs actually present in the
+                 loaded rows, so the control can never offer a value that
+                 selects nothing. */
+              const resultJobOptions: SearchableSelectOption[] = [...new Set(
+                completedCandidates
+                  .map((row) => row.jd_title || row._assessment_title || '')
+                  .filter(Boolean),
+              )].sort((a, b) => a.localeCompare(b)).map((title) => ({ value: title, label: title }));
+
+              const total = filteredResults.length;
               const totalPages = Math.max(1, Math.ceil(total / COMPLETED_PAGE_SIZE));
               const safePage = Math.min(Math.max(1, completedCandidatesPage), totalPages);
-              const pageItems = completedCandidates.slice((safePage - 1) * COMPLETED_PAGE_SIZE, safePage * COMPLETED_PAGE_SIZE);
+              const pageItems = filteredResults.slice((safePage - 1) * COMPLETED_PAGE_SIZE, safePage * COMPLETED_PAGE_SIZE);
               return (
                 <div>
+                  {/* This tab's row in the page's one toolbar position — the
+                      same ListToolbar, in the same place, as every other tab.
+
+                      Absent on an error and on a tab with no results at all:
+                      both show their own state, with nothing to search — the
+                      rule the empty states below already followed. A zero
+                      caused by the search itself keeps the toolbar, because it
+                      is the way back. A refresh does too: the gate is on the
+                      rows already loaded, not on `isLoading`, so the row does
+                      not blink out and back under the cursor. */}
+                  {!completedCandidatesError && resultsTotal > 0 && (
+                    <ListToolbarPortal>
+                      <ListToolbar
+                        searchValue={completedCandidatesSearch.query}
+                        // The hook debounces (350ms) into `appliedQuery`, so the
+                        // toolbar hands keystrokes straight through.
+                        searchDebounceMs={0}
+                        onSearchChange={completedCandidatesSearch.setQuery}
+                        searchPlaceholder="Search by candidate, email, CID, job or assessment..."
+                        onToggleFilters={() => setShowCompletedCandidateFilters(!showCompletedCandidateFilters)}
+                        filtersOpen={showCompletedCandidateFilters}
+                        activeFilterCount={completedCandidatesSearch.activeFilterCount}
+                        filtersApplied={completedCandidatesSearch.filtersApplied}
+                        onClearFilters={completedCandidatesSearch.reset}
+                        className="mb-0"
+                        countBadge={
+                          <ListCountBadge filtered={total} total={resultsTotal} noun="result" />
+                        }
+                      />
+
+                      {showCompletedCandidateFilters && (
+                        /* Controls commit as they change, so Done just closes —
+                           the same panel contract the Total Jobs tab uses. */
+                        <ListFilterPanel
+                          footer={
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setShowCompletedCandidateFilters(false)}
+                            >
+                              Done
+                            </Button>
+                          }
+                        >
+                          <SearchableSelect
+                            label="Job"
+                            value={filterResultJob}
+                            onChange={(value) => completedCandidatesSearch.setFilter('job', value)}
+                            options={resultJobOptions}
+                            placeholder="All jobs"
+                            searchPlaceholder="Search job..."
+                            allLabel="All jobs"
+                            emptyMessage="No jobs match"
+                          />
+
+                          <div>
+                            <label htmlFor="result-outcome" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                              Outcome
+                            </label>
+                            <select
+                              id="result-outcome"
+                              value={filterResultOutcome}
+                              onChange={(e) => completedCandidatesSearch.setFilter('outcome', e.target.value as typeof filterResultOutcome)}
+                              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                            >
+                              <option value="all">All outcomes</option>
+                              <option value="pass">Passed</option>
+                              <option value="fail">Failed</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <label htmlFor="result-completed-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                              Completed from
+                            </label>
+                            <input
+                              id="result-completed-from"
+                              type="date"
+                              value={filterResultFrom}
+                              max={filterResultTo || undefined}
+                              onChange={(e) => completedCandidatesSearch.setFilter('completedFrom', e.target.value)}
+                              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                            />
+                          </div>
+
+                          <div>
+                            <label htmlFor="result-completed-to" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                              Completed to
+                            </label>
+                            <input
+                              id="result-completed-to"
+                              type="date"
+                              value={filterResultTo}
+                              min={filterResultFrom || undefined}
+                              onChange={(e) => completedCandidatesSearch.setFilter('completedTo', e.target.value)}
+                              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                            />
+                          </div>
+                        </ListFilterPanel>
+                      )}
+                    </ListToolbarPortal>
+                  )}
                   {isLoadingCompletedCandidates ? (
                     <>
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                        <Skeleton className="h-4 w-64" />
-                      </div>
+                      {/* No skeleton line above the card any more: it stood in
+                          for the "N results across all assessments" text, and
+                          that count is now the toolbar's badge, which lives
+                          outside this card. */}
+                      {/* No title-strip skeleton either — the loaded card has
+                          no title strip to stand in for. */}
                       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm overflow-hidden">
-                        <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60">
-                          <Skeleton className="h-5 w-40" />
-                        </div>
                         <div className="min-h-[400px] overflow-auto tf-table-shell">
-                          <table className="w-full min-w-[1720px] table-auto">
+                          {/* Same floor as the loaded table below, so the rows
+                              do not shift sideways when the skeleton swaps
+                              out. */}
+                          <table className="w-full min-w-[1930px] table-auto">
                             <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                               <tr>
-                                {['CID', 'Candidate', 'Email', 'JD Title', 'Job Version', 'Resume Version', 'Phone', 'Invite Source', 'Tech Score', 'Coding Score', 'Result Status', 'Timeline', 'Completed', 'Duration', 'Actions'].map((c) => (
+                                {['CID', 'Candidate', 'Email', 'Job ID', 'JD Title', 'Job Version', 'Assessment Version', 'Resume Version', 'Phone', 'Invite Source', 'Tech Score', 'Coding Score', 'Result Status', 'Timeline', 'Completed', 'Duration', 'Actions'].map((c) => (
                                   <th key={c} className="px-4 py-3"><Skeleton className="h-3 w-20" /></th>
                                 ))}
                               </tr>
@@ -6035,7 +6380,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     </div>
                                   </td>
                                   <td className="px-4 py-4"><Skeleton className="h-4 w-40" /></td>
+                                  {/* Job ID — badge-shaped, like the CID chip
+                                      in the first column. */}
+                                  <td className="px-4 py-4"><Skeleton className="h-5 w-16 rounded" /></td>
                                   <td className="px-4 py-4"><Skeleton className="h-4 w-36" /></td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-10" /></td>
+                                  {/* Assessment Version — same width as the Job
+                                      Version cell above it, since both settle
+                                      into the same short `v3`. */}
                                   <td className="px-4 py-4"><Skeleton className="h-4 w-10" /></td>
                                   <td className="px-4 py-4"><Skeleton className="h-5 w-10 rounded-full" /></td>
                                   <td className="px-4 py-4"><Skeleton className="h-4 w-28" /></td>
@@ -6061,45 +6413,81 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         Retry
                       </Button>
                     </div>
-                  ) : total === 0 ? (
-                    /* The shared tab empty state — this tab has no search or
-                       filter of its own, so there is no narrowed flavour to
-                       distinguish and nothing to reset. */
+                  ) : resultsTotal === 0 ? (
+                    /* No results anywhere: the shared tab empty state, and with
+                       it none of the tab's own chrome — the toolbar above is
+                       gated on the same count, because there is nothing to
+                       search. */
                     <TabEmptyState
                       icon={Users}
                       title="No Candidate Results Yet"
                       description="Results appear here once candidates complete an assessment."
                     />
+                  ) : total === 0 ? (
+                    /* A zero this tab's OWN search or filters caused. Different
+                       case, different state: the toolbar stays (it is the way
+                       out) and the message offers the same Reset it does. */
+                    <ListEmptyState
+                      icon={Users}
+                      isNarrowed
+                      query={completedCandidatesSearch.appliedQuery}
+                      entityLabel="result"
+                      emptyTitle="No Candidate Results Yet"
+                      onReset={completedCandidatesSearch.reset}
+                    />
                   ) : (
                     <>
-                      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-                        <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
-                          <span className="font-semibold text-gray-900 dark:text-slate-50">{total.toLocaleString()}</span> result{total === 1 ? '' : 's'} across all assessments
-                        </span>
-                      </div>
-                      {/* Same card + title as the per-assessment results view. */}
+                      {/* The count that used to sit here — "N results across
+                          all assessments" — is now the toolbar's count badge,
+                          in the same corner as every other tab's. */}
+                      {/* Same card as the per-assessment results view, minus
+                          its title strip: "Candidate Results" is now the
+                          section heading above the search row, and repeating it
+                          on the card meant the same two words twice down the
+                          page with the search and the tabs in between. */}
                       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-                        <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60">
-                          <h2 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 tracking-tight">Candidate Results</h2>
-                        </div>
                         <div className="min-h-[400px] max-h-[calc(100dvh-24rem)] overflow-auto tf-table-shell">
-                        {/* 1500 -> 1720 for the two added columns. The shell
+                        {/* 1500 -> 1720 for the two version columns, then
+                            1720 -> 1830 for Assessment Version, then
+                            1830 -> 1930 for Job ID. The shell
                             already scrolls horizontally (tf-table-shell), so
-                            the widening changes nothing but which point the
-                            scroll starts at; leaving it at 1500 would have
-                            squeezed the existing columns instead. */}
-                        <table className="w-full min-w-[1720px] table-auto">
+                            each widening changes nothing but which point the
+                            scroll starts at; leaving the floor where it was
+                            would squeeze the existing columns instead, which is
+                            the one way adding a column could change the others.
+                            110px is what an "Assessment Version" heading needs
+                            — the widest thing in the column, since the cells
+                            under it are a three-character `v3` — and 100px is
+                            what a JD-014 badge needs beside its heading. */}
+                        <table className="w-full min-w-[1930px] table-auto">
                           <thead className="sticky top-0 z-10 [&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                             <tr>
                               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">CID</th>
                               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Candidate</th>
                               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Email</th>
+                              {/* Job ID leads the job group — the id first,
+                                  then the name, then the versions — which is
+                                  the order the Invitation Status rows and the
+                                  All Assessments table both put them in. */}
+                              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Job ID</th>
                               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">JD Title</th>
-                              {/* The two version columns sit next to JD Title
-                                  so the job, the version of it, and the resume
-                                  version scored against it read as one group.
-                                  Same th classes as every other column. */}
+                              {/* The three version columns sit next to JD
+                                  Title so the job, the version of it, the
+                                  version of the assessment sat against it and
+                                  the resume version scored for it read as one
+                                  group. Same th classes as every other column.
+
+                                  Assessment Version goes directly after Job
+                                  Version, which is the pairing and the order
+                                  the Track Invites table already uses: a job
+                                  version and an assessment version are
+                                  separate facts about the row — the job was
+                                  republished, the assessment was re-authored —
+                                  and side by side in this order they read as
+                                  the relationship they are, this assessment
+                                  version on that job version. */}
                               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Job Version</th>
+                              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Assessment Version</th>
                               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Resume Version</th>
                               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Phone</th>
                               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Invite Source</th>
@@ -6144,6 +6532,26 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <td className="px-4 py-4 align-middle text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
                                     {result.candidate_email || '-'}
                                   </td>
+                                  {/* Job ID — the shared `JobIdBadge`, which is
+                                      the one definition of this identifier in
+                                      the app (nine hand-rolled variants were
+                                      collapsed into it). Used here rather than
+                                      the CID chip beside it so a JD-014 reads
+                                      the same on this table as on the
+                                      Invitation Status rows, the job list and
+                                      the All Assessments table.
+
+                                      A dash when the assessment has no job —
+                                      a general assessment is not tied to one,
+                                      which is the same case `jd_title` already
+                                      falls back for. */}
+                                  <td className="px-4 py-4 align-middle whitespace-nowrap">
+                                    {result._jd_short_id ? (
+                                      <JobIdBadge className="inline-flex items-center">{result._jd_short_id}</JobIdBadge>
+                                    ) : (
+                                      <span className="text-gray-400 text-sm">-</span>
+                                    )}
+                                  </td>
                                   <td className="px-4 py-4 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
                                     {result.jd_title || result._assessment_title || '-'}
                                   </td>
@@ -6153,6 +6561,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       version reads identically in both. */}
                                   <td className="px-4 py-4 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
                                     {result._jd_version ? `v${result._jd_version}` : '-'}
+                                  </td>
+                                  {/* Assessment Version — plain `v3` in the
+                                      same cell classes as Job Version beside
+                                      it. Two readings of "which version" that
+                                      sit together have to look alike, and it
+                                      is also how this page already writes an
+                                      assessment version everywhere else it
+                                      shows one (the Invitation Status rows and
+                                      the invite export both render `v${n}`).
+
+                                      A dash when the record carries no version
+                                      — same rule as Job Version, rather than
+                                      defaulting to v1, which would state
+                                      something the row does not know. */}
+                                  <td className="px-4 py-4 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                                    {result._assessment_version ? `v${result._assessment_version}` : '-'}
                                   </td>
                                   {/* Resume Version — the blue pill that
                                       table uses for the same field. A dash
@@ -6356,8 +6780,141 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               const showInviteBulkResend = inviteStatusFilters.status === 'expired'
                 && resendableSelectedRows.length > 0;
 
+              /* What the More Filters button reports. The date range is one
+                 logical filter, not two, so From + To count as 1 — the same
+                 rule `useListSearch`'s `countFilters` applies on the tabs that
+                 use the hook. Status counts only when it is off 'all'.
+
+                 The status select and the segmented control above write the
+                 same field, so picking Completed either way lights the button
+                 and the segment together; that was already true of the filter
+                 bar this replaces. */
+              const inviteStatusFilterCount =
+                (inviteStatusFilters.status !== 'all' ? 1 : 0)
+                + (inviteStatusFilters.dateFrom || inviteStatusFilters.dateTo ? 1 : 0);
+              const clearInviteStatusFilters = () => {
+                setInviteStatusFilters(EMPTY_INVITE_FILTERS);
+                setInviteStatusPage(1);
+              };
+
               return (
                 <div>
+                  {/* This tab's row in the page's one toolbar position.
+
+                      It is the same four fields the `InviteFilterBar` inside
+                      the card used to carry — search, status, invited-from,
+                      invited-to — writing the same `inviteStatusFilters`
+                      state, read by the same filter above. What changed is the
+                      row they are drawn as and where it sits: the shared
+                      ListToolbar, above the tab pills, with the count badge in
+                      the same corner as every other tab's.
+
+                      Gated on having invitations at all, because the "nothing
+                      invited yet" state below deliberately shows none of this
+                      tab's chrome. */}
+                  {!inviteStatusError && totalInvites > 0 && (
+                    <ListToolbarPortal>
+                      <ListToolbar
+                        searchValue={inviteStatusFilters.search}
+                        /* 300ms in the toolbar, which is the debounce the
+                           filter bar applied to the same box. */
+                        onSearchChange={(value) => {
+                          setInviteStatusFilters({ ...inviteStatusFilters, search: value });
+                          setInviteStatusPage(1);
+                        }}
+                        searchPlaceholder="Search by candidate, email, CID, job or assessment..."
+                        onToggleFilters={() => setShowInviteStatusFilters(!showInviteStatusFilters)}
+                        filtersOpen={showInviteStatusFilters}
+                        activeFilterCount={inviteStatusFilterCount}
+                        filtersApplied={inviteStatusFilterCount > 0}
+                        onClearFilters={clearInviteStatusFilters}
+                        className="mb-0"
+                        countBadge={
+                          <ListCountBadge
+                            filtered={total}
+                            total={totalInvites}
+                            noun="invitation"
+                            selected={selectedInviteRows.length}
+                          />
+                        }
+                      />
+
+                      {showInviteStatusFilters && (
+                        /* Commit-as-you-change, Done just closes — the Total
+                           Jobs panel's contract, and the behaviour the filter
+                           bar already had. */
+                        <ListFilterPanel
+                          footer={
+                            <Button
+                              variant="secondary"
+                              size="sm"
+                              onClick={() => setShowInviteStatusFilters(false)}
+                            >
+                              Done
+                            </Button>
+                          }
+                        >
+                          <div>
+                            <label htmlFor="invite-status-filter" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                              Status
+                            </label>
+                            <select
+                              id="invite-status-filter"
+                              value={inviteStatusFilters.status}
+                              onChange={(e) => {
+                                setInviteStatusFilters({ ...inviteStatusFilters, status: e.target.value });
+                                setInviteStatusPage(1);
+                              }}
+                              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                            >
+                              {/* Same trimmed list as before — one option per
+                                  segment above, so a pick here can never
+                                  return rows the segments cannot explain. */}
+                              {ASSESSMENT_INVITE_STATUS_OPTIONS
+                                .filter((option) => !['failed', 'abandoned'].includes(option.value))
+                                .map((option) => (
+                                  <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label htmlFor="invite-sent-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                              Invited from
+                            </label>
+                            <input
+                              id="invite-sent-from"
+                              type="date"
+                              value={inviteStatusFilters.dateFrom}
+                              max={inviteStatusFilters.dateTo || undefined}
+                              onChange={(e) => {
+                                setInviteStatusFilters({ ...inviteStatusFilters, dateFrom: e.target.value });
+                                setInviteStatusPage(1);
+                              }}
+                              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                            />
+                          </div>
+
+                          <div>
+                            <label htmlFor="invite-sent-to" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                              Invited to
+                            </label>
+                            <input
+                              id="invite-sent-to"
+                              type="date"
+                              value={inviteStatusFilters.dateTo}
+                              min={inviteStatusFilters.dateFrom || undefined}
+                              onChange={(e) => {
+                                setInviteStatusFilters({ ...inviteStatusFilters, dateTo: e.target.value });
+                                setInviteStatusPage(1);
+                              }}
+                              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
+                            />
+                          </div>
+                        </ListFilterPanel>
+                      )}
+                    </ListToolbarPortal>
+                  )}
                   {isLoadingInviteStatus ? (
                     <>
                       {/* Summary + status filter row */}
@@ -6587,24 +7144,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       </div>
 
                       {/* The list card, same treatment as the Candidate Results
-                          tab's. The filter bar carries its own padding and
-                          divider, so it sits inside the card under the header
-                          rather than loose on the page. */}
+                          tab's. */}
                       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
                         {/* Header — the Candidate Results card's title row, with
-                            the house count badge (which states the narrowing:
-                            "12 of 40 invitations") and the popup's Refresh
-                            control, since invite statuses move while the tab
-                            sits open. */}
+                            the popup's Refresh control, since invite statuses
+                            move while the tab sits open.
+
+                            The count badge that stood beside the title has
+                            moved to the toolbar above the tab pills, where
+                            every other tab keeps its own — two badges for one
+                            list, in two different sizes, was exactly the drift
+                            being straightened out. */}
                         <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
                           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                             <h2 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 tracking-tight">Invitations</h2>
-                            <ListCountBadge
-                              filtered={total}
-                              total={totalInvites}
-                              noun="invitation"
-                              className="text-xs px-2 py-1"
-                            />
                           </div>
                           <div className="flex items-center gap-2">
                             {/* Export — the Resume Scoring page's control:
@@ -6654,19 +7207,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </div>
                         </div>
 
-                        <InviteFilterBar
-                          filters={inviteStatusFilters}
-                          onChange={(nextFilters) => {
-                            setInviteStatusFilters(nextFilters);
-                            setInviteStatusPage(1);
-                          }}
-                          /* Same trimmed status list as the assessment popup —
-                             one option per stat card above. */
-                          statusOptions={ASSESSMENT_INVITE_STATUS_OPTIONS.filter(
-                            (option) => !['failed', 'abandoned'].includes(option.value)
-                          )}
-                          searchPlaceholder="Search by candidate, email, CID, job, or assessment..."
-                        />
+                        {/* The `InviteFilterBar` that sat here is gone: its
+                            four fields are the page toolbar above the tab
+                            pills now, so this tab's search is where every
+                            other tab's is instead of inside the card. Nothing
+                            it filtered by changed — same state, same fields,
+                            same reset. */}
 
                         <div className="min-h-[320px] max-h-[calc(100dvh-28rem)] overflow-auto tf-table-shell">
                           {/* 1200 -> 1400 for the two score columns. The shell
@@ -7764,7 +8310,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               const copy = assessmentEmptyCopy();
               return (
                 <ListEmptyState
-                  icon={activeTab === 'archived' ? Archive : FileText}
+                  /* Always FileText now. The Archive glyph was for the
+                     Archived tab, which no longer reaches this list — it draws
+                     `AllAssessmentsTable`, with that table's own empty state,
+                     the same as Draft. TypeScript says as much: `activeTab` is
+                     narrowed to 'jobs' here, so the other branch could not be
+                     taken. */
+                  icon={FileText}
                   isNarrowed={assessmentListNarrowed}
                   query={assessmentSearchQuery}
                   entityLabel="assessment"
@@ -7824,7 +8376,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             )}
           </div>
         </div>
-        </>
+        </ListToolbarSlotProvider>
         )}
 
       </div>
@@ -8332,11 +8884,24 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 setTrackingFilters({ ...trackingFilters, status });
                 setTrackingCurrentPage(1);
               }}
+              /* Lifecycle order: invited, then sitting it, then finished, and
+                 the lapsed ones last. Expired used to sit second, directly
+                 after Total Invited, which put the one terminal failure state
+                 ahead of the two states a live invite actually passes through.
+
+                 It is also the order `AssessmentDetailsView` already lays the
+                 same five cards out in — same component, same keys, same tones
+                 — so the per-assessment tracker and this page-level one now
+                 read identically instead of differing by one position.
+
+                 Order only. Every key, label, icon, value and tone is the one
+                 it already had, so which card filters to what, and the counts
+                 behind them, are untouched. */
               cards={[
                 { key: 'all', label: 'Total Invited', Icon: Users, value: invitationStats.total, ...INVITE_CARD_TONES.blue },
-                { key: 'expired', label: 'Expired', Icon: Clock, value: invitationStats.expired, ...INVITE_CARD_TONES.orange },
                 { key: 'started', label: 'In Progress', Icon: Play, value: invitationStats.started, ...INVITE_CARD_TONES.cyan },
                 { key: 'completed', label: 'Completed', Icon: CheckCircle, value: invitationStats.completed, ...INVITE_CARD_TONES.green },
+                { key: 'expired', label: 'Expired', Icon: Clock, value: invitationStats.expired, ...INVITE_CARD_TONES.orange },
                 {
                   key: 'completion-rate',
                   label: 'Completion Rate',

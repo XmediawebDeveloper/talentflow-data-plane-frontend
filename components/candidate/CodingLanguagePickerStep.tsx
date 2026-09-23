@@ -90,8 +90,8 @@ export default function CodingLanguagePickerStep({
   return (
     <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-[95vw] sm:max-w-2xl w-full p-6 sm:p-8 max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
-        <div className="flex-shrink-0 w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-4">
-          <Code className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+        <div className="shrink-0 w-12 h-12 bg-brand-blue/10 text-brand-blue rounded-full flex items-center justify-center mb-4">
+          <Code className="w-6 h-6" />
         </div>
         <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-1">
           Choose your coding language
@@ -120,7 +120,7 @@ export default function CodingLanguagePickerStep({
                 disabled={isPicking}
                 className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border-2 text-left transition-colors ${
                   selected
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
+                    ? 'border-brand-blue bg-brand-blue/5'
                     : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
                 } disabled:opacity-60`}
               >
@@ -128,14 +128,14 @@ export default function CodingLanguagePickerStep({
                   <Code
                     className={`w-4 h-4 ${
                       selected
-                        ? 'text-blue-600 dark:text-blue-400'
+                        ? 'text-brand-blue'
                         : 'text-gray-400'
                     }`}
                   />
                   <span
                     className={`text-sm font-medium ${
                       selected
-                        ? 'text-blue-700 dark:text-blue-300'
+                        ? 'text-brand-blue'
                         : 'text-gray-800 dark:text-gray-200'
                     }`}
                   >
@@ -145,7 +145,7 @@ export default function CodingLanguagePickerStep({
                 <div
                   className={`w-4 h-4 rounded-full border-2 ${
                     selected
-                      ? 'border-blue-500 bg-blue-500'
+                      ? 'border-brand-blue bg-brand-blue'
                       : 'border-gray-300 dark:border-gray-600'
                   }`}
                 >

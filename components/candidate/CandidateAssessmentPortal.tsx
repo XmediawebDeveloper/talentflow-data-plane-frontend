@@ -17,6 +17,21 @@ import { AssessmentInterface } from './AssessmentInterface';
 import { AssessmentErrorBoundary } from './AssessmentErrorBoundary';
 import { ResultsScreen } from './ResultsScreen';
 import { LoadingScreen } from './LoadingScreen';
+/* The candidate flow's container — see the note on the constant. The HR
+   Questions step below is the one assessment screen that already constrained
+   itself, but at max-w-4xl/3xl, i.e. a third width in a five-step flow. */
+import {
+  CANDIDATE_PAGE,
+  RECRUITER_SHELL,
+  RECRUITER_WRAP,
+  RECRUITER_CARD,
+  PAGE_ICON_TILE,
+  ICON,
+  T_PAGE_TITLE,
+  T_PAGE_SUBTITLE,
+} from '@/lib/constants/candidateLayout';
+import CandidateHeader from './CandidateHeader';
+import CandidateStepper from './CandidateStepper';
 import { ErrorScreen } from './ErrorScreen';
 import { CompletedScreen } from './CompletedScreen';
 import InterviewFeedbackModal, { ASSESSMENT_RATING_PROMPTS } from './InterviewFeedbackModal';
@@ -26,7 +41,7 @@ import { useAssessmentFaceBaseline } from '@/hooks/useAssessmentFaceBaseline';
 import { useRefreshPrevention } from '@/hooks/useRefreshPrevention';
 import { useProctoringMonitor } from '@/hooks/useProctoringMonitor';
 import { ProctoringWarningModal } from './ProctoringWarningModal';
-import { Monitor, Loader2, AlertCircle, Maximize2 } from 'lucide-react';
+import { Monitor, Loader2, AlertCircle, Maximize2, ClipboardList } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { getUserMedia, getErrorMessage, detectBrowser, requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen, playVideo, shouldUseAdaptiveAssessmentMode, lockKeyboardShortcuts, unlockKeyboardShortcuts } from '@/lib/utils/browserCompat';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
@@ -60,10 +75,10 @@ function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenPro
   };
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-br from-blue-50 via-white to-indigo-50 flex items-center justify-center p-4">
+    <div className="min-h-[100dvh] bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 md:p-12">
-        <div className="w-24 h-24 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
-          <Monitor className="w-12 h-12 text-blue-600" />
+        <div className="w-16 h-16 bg-brand-blue/10 text-brand-blue rounded-full flex items-center justify-center mx-auto mb-5">
+          <Monitor className="w-8 h-8" />
         </div>
 
         <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 text-center">
@@ -75,19 +90,19 @@ function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenPro
           Click the button below to enter fullscreen and begin your assessment.
         </p>
 
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-6 mb-8">
-          <p className="font-semibold text-blue-900 mb-3">Fullscreen Assessment Rules:</p>
-          <ul className="space-y-2 text-blue-800">
+        <div className="rounded-xl border border-brand-blue/20 bg-brand-blue/5 p-4 sm:p-5 mb-6">
+          <p className="text-sm sm:text-base font-semibold text-brand-blue mb-3">Fullscreen Assessment Rules:</p>
+          <ul className="space-y-2 text-sm sm:text-base text-gray-700">
             <li className="flex items-start gap-2">
-              <span className="text-blue-600 mt-1">✓</span>
+              <span className="text-brand-blue mt-1">✓</span>
               <span>Browser tabs &amp; navigation will be hidden</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-blue-600 mt-1">✓</span>
+              <span className="text-brand-blue mt-1">✓</span>
               <span>Exiting fullscreen will be recorded as a violation</span>
             </li>
             <li className="flex items-start gap-2">
-              <span className="text-blue-600 mt-1">✓</span>
+              <span className="text-brand-blue mt-1">✓</span>
               <span>Keep the window focused throughout the assessment</span>
             </li>
           </ul>
@@ -96,7 +111,11 @@ function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenPro
         <Button
           onClick={enterFullscreenAndStart}
           disabled={isEnteringFullscreen}
-          className="w-full bg-blue-600 hover:bg-blue-700 text-white py-6 text-xl font-semibold rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+          /* The house primary Button, rather than a hand-painted blue-600 block
+             at `py-6 text-xl` — the largest control anywhere in the flow. */
+          variant="primary"
+          size="lg"
+          className="w-full"
         >
           {isEnteringFullscreen ? (
             <>
@@ -1691,47 +1710,37 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     case 'hr_questions':
       const hrQuestions = getHRQuestions();
       return (
-        <div className="min-h-[100dvh] bg-gray-50 flex flex-col">
-          {/* Header */}
-          <header className="w-full bg-white border-b border-gray-200">
-            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3 flex items-center justify-between">
-              <h1 className="text-lg font-semibold text-gray-900">HR Questions</h1>
-              <span className="text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded">No Timer</span>
-            </div>
-          </header>
+        <div className={CANDIDATE_PAGE}>
+          {/* Header + stepper: the shared pair. This step used to draw a bare
+              "HR Questions" title with no logo at all, so the product name
+              vanished in the middle of the flow, and its own stepper used 24px
+              dots and a literal "checkmark" character where every other screen
+              used 32px dots and the Check glyph. The "No Timer" badge moves
+              into the header's slot beside the help link. */}
+          <CandidateHeader>
+            <span className="text-xs font-medium text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-1 rounded whitespace-nowrap">
+              No Timer
+            </span>
+          </CandidateHeader>
+          <CandidateStepper current={4} />
 
-          {/* Progress Steps */}
-          <div className="w-full bg-white border-b border-gray-100">
-            <div className="max-w-4xl mx-auto px-4 sm:px-6 py-3">
-              <div className="flex items-center justify-center gap-2 sm:gap-4">
-                {[
-                  { label: 'Terms & Consent', completed: true },
-                  { label: 'Assessment Details', completed: true },
-                  { label: 'System Check', completed: true },
-                  { label: 'HR Questions', active: true },
-                  { label: 'Assessment', completed: false },
-                ].map((s, i) => (
-                  <div key={i} className="flex items-center gap-1 sm:gap-2">
-                    {i > 0 && <div className={`w-6 sm:w-12 h-0.5 ${s.completed || (s as any).active ? 'bg-success' : 'bg-gray-200'}`} />}
-                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-medium ${
-                      s.completed ? 'bg-success text-white' : (s as any).active ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-500'
-                    }`}>{s.completed ? '✓' : i + 1}</div>
-                    <span className={`hidden sm:block text-xs ${(s as any).active ? 'text-blue-700 font-medium' : s.completed ? 'text-success' : 'text-gray-400'}`}>{s.label}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          {/* The recruiter page shell. */}
+          <main className={RECRUITER_SHELL}>
+            <div className={RECRUITER_WRAP}>
+              <div className={RECRUITER_CARD}>
 
-          {/* HR Questions Content */}
-          <div className="flex-1 max-w-3xl mx-auto px-4 sm:px-6 py-6 w-full">
-            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6 mb-6">
-              <div className="mb-4">
-                <h2 className="text-lg font-semibold text-gray-900 mb-1">HR Questions</h2>
-                <p className="text-sm text-gray-500">
-                  Please answer the following questions. These are optional and not timed.
-                  Your responses will be shared with the recruiter.
-                </p>
+              {/* Page header — the recruiter pattern. */}
+              <div className="flex items-start gap-3 mb-5">
+                <div className={PAGE_ICON_TILE}>
+                  <ClipboardList className={`${ICON} text-brand-blue`} />
+                </div>
+                <div className="min-w-0">
+                  <h1 className={T_PAGE_TITLE}>HR Questions</h1>
+                  <p className={T_PAGE_SUBTITLE}>
+                    Please answer the following questions. These are optional and not timed.
+                    Your responses will be shared with the recruiter.
+                  </p>
+                </div>
               </div>
 
 
@@ -1791,10 +1800,9 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                   );
                 })}
               </div>
-            </div>
 
-            {/* Action Buttons */}
-            <div className="flex justify-end gap-3">
+            {/* Action row — the recruiter footer rule. */}
+            <div className="flex justify-end gap-3 pt-4 mt-5 border-t border-gray-100">
               <Button
                 type="button"
                 variant="primary"
@@ -1805,7 +1813,10 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                 {isSavingHRAnswers ? 'Saving Answers...' : 'Continue to Assessment'}
               </Button>
             </div>
-          </div>
+
+              </div>
+            </div>
+          </main>
         </div>
       );
 
