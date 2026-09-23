@@ -2183,12 +2183,12 @@ export function AssessmentInterface({
               <p className="text-sm font-medium text-gray-700">Progress</p>
               <div className="flex items-center gap-3 text-xs flex-wrap">
                 <span className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded bg-warning-subtle border border-warning-line"></div>
-                  Unanswered
+                  <div className="w-3 h-3 rounded bg-purple-100 border border-purple-300"></div>
+                  Not answered
                 </span>
                 <span className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded bg-warning-subtle border border-warning-line" />
-                  Draft
+                  <div className="w-3 h-3 rounded bg-orange-100 border border-orange-300" />
+                  Answered
                 </span>
                 <span className="flex items-center gap-1">
                   <div className="w-3 h-3 rounded bg-success-subtle border border-success-line"></div>
@@ -2204,9 +2204,9 @@ export function AssessmentInterface({
                 const questionStatus = answerStatuses.get(`question_${num}`);
                 const isLocked = questionStatus?.isLocked || false;
                 const hasDraft = questionStatus?.hasDraft || false;
-                let colorClass = 'bg-warning-subtle text-warning'; // Unanswered
+                let colorClass = 'bg-purple-100 text-purple-700'; // Not answered (violet)
                 let icon = null;
-                let titleText = `Question ${num} - Unanswered`;
+                let titleText = `Question ${num} - Not answered`;
 
                 if (isCurrent) {
                   colorClass = 'bg-gray-800 text-white ring-2 ring-gray-800 ring-offset-2';
@@ -2216,9 +2216,9 @@ export function AssessmentInterface({
                   icon = <Lock className="w-4 h-4" />;
                   titleText = `Question ${num} - Submitted`;
                 } else if (hasDraft) {
-                  colorClass = 'bg-warning-subtle text-warning-strong';
+                  colorClass = 'bg-orange-100 text-orange-700'; // Answered, not yet submitted (orange)
                   icon = <Save className="w-4 h-4" />;
-                  titleText = `Question ${num} - Draft saved`;
+                  titleText = `Question ${num} - Answered (not submitted)`;
                 }
 
                 return (

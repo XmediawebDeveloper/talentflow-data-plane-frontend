@@ -30,6 +30,7 @@
 
 import { loadFaceApiWithCpuBackend, type FaceApiModule } from '@/lib/face-api-loader';
 import { loadFaceApiNetWithFallback, FACE_API_MODEL_URLS } from '@/lib/proctoring/faceDetection';
+import { createFaceIdentityWorker, type FaceIdentityWorker } from '@/lib/proctoring/faceIdentityWorker';
 
 export type GazeDirection = 'left' | 'right' | 'up' | 'left_up' | 'right_up' | 'center';
 
@@ -78,6 +79,9 @@ const MIN_DETECTION_CONFIDENCE = 0.6;
 const FRAMES_GAZE_AWAY = 3;
 const FRAMES_GAZE_RESTORED = 2;
 const FALLBACK_FACE_INTERVAL_MS = 3000;
+// When the identity worker cannot start, the main-thread descriptor (5–8 s on
+// slow CPUs) runs only this often so the page is never blocked for long.
+const IDENTITY_MAIN_THREAD_FALLBACK_INTERVAL_MS = 60000;
 
 const MP_FACE_DETECTION_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_detection';
 const MP_FACE_MESH_URL = 'https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh';
@@ -150,6 +154,8 @@ export function createAssessmentFaceMonitor(
   let faceApi: FaceApiModule | null = null;
   let faceApiLoad: Promise<FaceApiModule | null> | null = null;
   let usingFallbackDetector = false;
+  let identityWorker: FaceIdentityWorker | null = null;
+  let identityWorkerReady: boolean | null = null; // null = still starting
 
   let lastFaceAt = 0;
   let lastGazeAt = 0;
@@ -329,18 +335,7 @@ export function createAssessmentFaceMonitor(
     }
   };
 
-  const runIdentityPass = async () => {
-    if (!enableIdentity || lastFaceCount !== 1) return;
-    const api = await ensureFaceApi();
-    if (!api || !running) return;
-    const t0 = performance.now();
-    try {
-      const det = await api
-        .detectSingleFace(video, new api.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
-        .withFaceLandmarks()
-        .withFaceDescriptor();
-      const descriptor = (det as { descriptor?: Float32Array } | undefined)?.descriptor;
-      if (!descriptor) return;
+  const applyDescriptor = (descriptor: Float32Array) => {
       if (identityBaseline) {
         const distance = euclidean(identityBaseline, descriptor);
         if (distance > identityThreshold) {
@@ -360,10 +355,38 @@ export function createAssessmentFaceMonitor(
           callbacks.onIdentityBaselineCaptured?.(identityBaseline);
         }
       }
+  };
+
+  const runIdentityPass = async () => {
+    if (!enableIdentity || lastFaceCount !== 1) return;
+    // Preferred path: descriptor computed in the Web Worker. The main thread
+    // only pays for a 320 px frame grab (~1–3 ms); the 5–8 s inference that
+    // used to freeze the page runs off-thread.
+    if (identityWorker && identityWorkerReady) {
+      const t0 = performance.now();
+      const result = await identityWorker.describe(video, 320);
+      perf.record('identity-grab(main)', performance.now() - t0);
+      if (!result) return;
+      perf.record('identity-infer(worker, off-thread)', result.workerMs);
+      if (result.descriptor) applyDescriptor(result.descriptor);
+      return;
+    }
+    if (identityWorkerReady === null) return; // worker still starting — wait
+    // Fallback (worker failed to start): main thread, but rarely.
+    const api = await ensureFaceApi();
+    if (!api || !running) return;
+    const t0 = performance.now();
+    try {
+      const det = await api
+        .detectSingleFace(video, new api.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.5 }))
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+      const descriptor = (det as { descriptor?: Float32Array } | undefined)?.descriptor;
+      if (descriptor) applyDescriptor(descriptor);
     } catch (err) {
       console.warn('[FACE-MONITOR] identity pass skipped:', err);
     } finally {
-      perf.record('identity', performance.now() - t0);
+      perf.record('identity(main-thread fallback)', performance.now() - t0);
     }
   };
 
@@ -379,7 +402,8 @@ export function createAssessmentFaceMonitor(
         const faceEvery = usingFallbackDetector ? FALLBACK_FACE_INTERVAL_MS : faceIntervalMs;
         if (now - lastFaceAt >= faceEvery) { lastFaceAt = now; await runFacePass(); }
         if (running && faceMesh && now - lastGazeAt >= gazeIntervalMs) { lastGazeAt = now; await runGazePass(); }
-        if (running && now - lastIdentityAt >= identityIntervalMs) { lastIdentityAt = now; await runIdentityPass(); }
+        const identityEvery = (identityWorker && identityWorkerReady) ? identityIntervalMs : IDENTITY_MAIN_THREAD_FALLBACK_INTERVAL_MS;
+        if (running && now - lastIdentityAt >= identityEvery) { lastIdentityAt = now; await runIdentityPass(); }
       } finally {
         busy = false;
       }
@@ -397,12 +421,19 @@ export function createAssessmentFaceMonitor(
       if (!ok) {
         usingFallbackDetector = true;
         await ensureFaceApi();
-      } else if (enableIdentity) {
-        // Warm the identity models off the critical path; first pass at +10 s.
-        void ensureFaceApi();
+      }
+      if (enableIdentity) {
+        identityWorker = createFaceIdentityWorker({ modelUrls: FACE_API_MODEL_URLS, inputSize: 224 });
+        void identityWorker.ready.then((ok) => {
+          identityWorkerReady = ok;
+          if (!ok) {
+            console.warn(`[FACE-MONITOR] identity worker unavailable — falling back to main-thread descriptor every ${IDENTITY_MAIN_THREAD_FALLBACK_INTERVAL_MS / 1000}s`);
+            void ensureFaceApi();
+          }
+        });
       }
       lastIdentityAt = performance.now(); // first identity pass after one interval, not immediately
-      console.log(`[FACE-MONITOR] started (detector=${faceDetector ? 'mediapipe' : 'face-api-fallback'}, gaze=${faceMesh ? 'on' : 'off'}, identity=${enableIdentity ? `${identityIntervalMs / 1000}s` : 'off'})`);
+      console.log(`[FACE-MONITOR] started (detector=${faceDetector ? 'mediapipe' : 'face-api-fallback'}, gaze=${faceMesh ? 'on' : 'off'}, identity=${enableIdentity ? `${identityIntervalMs / 1000}s via worker` : 'off'})`);
       timer = setTimeout(tick, pollMs);
     },
     stop() {
@@ -414,6 +445,9 @@ export function createAssessmentFaceMonitor(
       try { faceMesh?.close?.(); } catch { /* ignore */ }
       faceDetector = null;
       faceMesh = null;
+      identityWorker?.terminate();
+      identityWorker = null;
+      identityWorkerReady = null;
     },
     setIdentityBaseline(descriptor) {
       identityBaseline = descriptor;
