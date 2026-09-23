@@ -1218,6 +1218,25 @@ export default function ResumeScoringPage({
     }
   }, [pendingAutoSelectJdId, scoredHistory]);
 
+  // A row clicked in the finished progress popup: open that candidate's scoring
+  // detail as soon as scoredHistory carries it (normally already, since the
+  // popup refreshed history the moment the run settled). Same layout-effect
+  // shape as pendingAutoSelectJdId, for the same no-intermediate-paint reason.
+  const [pendingViewResult, setPendingViewResult] = useState<{ jobId: string; resumeId: string } | null>(null);
+  useLayoutEffect(() => {
+    if (!pendingViewResult) return;
+    const historyItem = scoredHistory.find(h => h.jobId === pendingViewResult.jobId);
+    const candidate = historyItem?.scoredResumes?.find((r: any) =>
+      r.resumeId === pendingViewResult.resumeId || r.resume_id === pendingViewResult.resumeId || r.id === pendingViewResult.resumeId
+    );
+    if (!historyItem || !candidate) return;
+    setPendingViewResult(null);
+    setSelectedHistoryItem(historyItem);
+    setSelectedCandidateForView(candidate);
+    setViewMode('candidateView');
+    router.push(`/recruitment/resume-scoring?jd_id=${historyItem.jobId}&score_id=${candidate.id}`, { scroll: false });
+  }, [pendingViewResult, scoredHistory]);
+
   // Sync selectedHistoryItem when scoredHistory is updated (e.g. after loadJdScores completes)
   useEffect(() => {
     if (!selectedHistoryItem) return;
@@ -1889,6 +1908,17 @@ export default function ResumeScoringPage({
           await goToResultsFor(selectedJob);
         }
         setShowResumeSelectionModal(false);
+      }}
+      onViewResult={(item) => {
+        setShowResumeSelectionModal(false);
+        setPendingViewResult({ jobId: selectedJob, resumeId: item.resumeId });
+        const known = scoredHistory
+          .find(h => h.jobId === selectedJob)?.scoredResumes
+          ?.some((r: any) => r.resumeId === item.resumeId || r.resume_id === item.resumeId || r.id === item.resumeId);
+        if (!known) {
+          invalidateGlobalScoredResumes();
+          onRefreshHistory?.();
+        }
       }}
     />
   ) : null;

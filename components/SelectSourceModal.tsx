@@ -87,6 +87,10 @@ interface SelectSourceModalProps {
   /** The recruiter closed the finished popup: unmount this modal (and make
    *  sure the results are on screen, if `onScoringFinished` had not yet). */
   onScoringComplete?: () => void;
+  /** A settled row (or its View) was clicked: open that candidate's scoring
+   *  result. The run is dismissed first, exactly like Close; the page then
+   *  unmounts this modal and shows the result. */
+  onViewResult?: (item: ScoringProgressItem) => void;
 }
 
 export default function SelectSourceModal({
@@ -94,7 +98,8 @@ export default function SelectSourceModal({
   jobTitle,
   jobId,
   onScoringFinished,
-  onScoringComplete
+  onScoringComplete,
+  onViewResult
 }: SelectSourceModalProps) {
   const router = useRouter();
   const { user, tenant, isTenantAdmin, hasPermissionCode } = useAuth();
@@ -1361,6 +1366,10 @@ export default function SelectSourceModal({
             await handleRetryFailed(scoringItem.resumeId);
           }}
           minimized={isBulkProgressMinimized}
+          onViewResult={onViewResult ? (item) => {
+            activeScoringJobs.forEach(job => clearJob(job.jobId));
+            onViewResult(item);
+          } : undefined}
           onMinimize={() => {
             // Hide the overlay so the user can navigate freely, but stay mounted:
             // this component owns progressItems, so unmounting here is what used
