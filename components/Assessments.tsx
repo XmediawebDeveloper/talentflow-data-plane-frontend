@@ -3819,6 +3819,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               // badges reflect the just-sent invites.
               reloadAssessments();
             }}
+            // reloadAssessments() above only refreshes the assessment cards'
+            // own counters, not the Track Invites / Invitation Status row
+            // data — that row sat stale (or on whatever it last loaded)
+            // until some OTHER action (Resend/Revoke/Edit) happened to
+            // trigger refreshInviteSurfaces. Fire it as soon as the send
+            // actually completes, not just on modal close.
+            onInviteSent={refreshInviteSurfaces}
             assessment={selectedAssessmentForShare}
             inviteSource="Assessment"
           />
@@ -8127,6 +8134,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             // badges reflect the just-sent invites.
             reloadAssessments();
           }}
+          // See the other ShareAssessmentModal above — onClose's
+          // reloadAssessments() doesn't touch the Track Invites /
+          // Invitation Status row data, so fire the dedicated refetch as
+          // soon as the send itself completes.
+          onInviteSent={refreshInviteSurfaces}
           assessment={selectedAssessmentForShare}
           inviteSource="Assessment"
         />
