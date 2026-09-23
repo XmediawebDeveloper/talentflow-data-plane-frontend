@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search, X, Video, MoreVertical, Eye, Pencil,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, RefreshCw, SlidersHorizontal,
@@ -228,6 +228,7 @@ const STATUS_OPTIONS: SearchableSelectOption[] = [
 
 export default function AllInterviewsTable() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isTenantAdmin, user } = useAuth();
   const canUpdateAIInterviews = isTenantAdmin || !!user?.permissions?.canUpdateAIInterviews;
 
@@ -249,6 +250,15 @@ export default function AllInterviewsTable() {
   const [pageSize, setPageSize] = useState(20);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  /* Deep-linked from the "AI Interview Published" screen (and its Back
+     redirect): `?highlight=<config id>` scrolls that row into view and
+     flashes it once the list has loaded, rather than leaving the recruiter
+     to hunt for it across pages and sort orders. */
+  const highlightId = searchParams.get('highlight');
+  const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
+  const highlightHandledRef = useRef(false);
+  const [flashedRowId, setFlashedRowId] = useState<string | null>(null);
 
   /* Two requests, not one: `listConfigs` with no status filter excludes
      archived configs (AIInterview.tsx loads them separately for the same
@@ -381,6 +391,39 @@ export default function AllInterviewsTable() {
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
   const pageRows = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    if (!highlightId || highlightHandledRef.current || isLoading) return;
+
+    const index = sorted.findIndex((row) => row.id === highlightId);
+    if (index === -1) {
+      // Not in the loaded set under the current (empty, on arrival) filters —
+      // nothing to scroll to. Stop looking so this doesn't re-check forever.
+      highlightHandledRef.current = true;
+      return;
+    }
+
+    const targetPage = Math.floor(index / pageSize) + 1;
+    if (targetPage !== safePage) {
+      setPage(targetPage);
+      return; // effect re-runs once `page`/`safePage` catch up
+    }
+
+    highlightHandledRef.current = true;
+    setFlashedRowId(highlightId);
+    const frame = window.requestAnimationFrame(() => {
+      rowRefs.current.get(highlightId)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+    const clearFlash = window.setTimeout(() => setFlashedRowId(null), 2500);
+    // Drop the deep-link params once handled so a later back/forward or
+    // refresh on this URL doesn't keep re-triggering the scroll.
+    router.replace('/recruitment/ai-interviews?tab=all-interviews', { scroll: false });
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.clearTimeout(clearFlash);
+    };
+  }, [highlightId, isLoading, sorted, pageSize, safePage, router]);
 
   const isNarrowed = !!appliedSearch.trim() || hasAnyFilter(filters);
 
@@ -747,8 +790,14 @@ export default function AllInterviewsTable() {
                 pageRows.map((row) => (
                   <tr
                     key={row.id}
+                    ref={(el) => {
+                      if (el) rowRefs.current.set(row.id, el);
+                      else rowRefs.current.delete(row.id);
+                    }}
                     onClick={() => router.push(`/recruitment/ai-interviews/${row.id}`)}
-                    className="border-b border-gray-100 dark:border-slate-700/60 last:border-b-0 cursor-pointer transition-colors hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10"
+                    className={`border-b border-gray-100 dark:border-slate-700/60 last:border-b-0 cursor-pointer transition-colors duration-700 hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10 ${
+                      flashedRowId === row.id ? 'bg-brand-blue/10 dark:bg-brand-blue/15' : ''
+                    }`}
                   >
                     <td className="px-3 py-2.5 align-middle">
                       {row.jobId ? (

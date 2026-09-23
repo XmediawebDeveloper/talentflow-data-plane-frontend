@@ -1,59 +1,103 @@
 import { Skeleton } from '@/components/ui/skeleton';
 
-// Neutral-gray skeleton mirroring the Usage & Quotas dashboard: a Current
-// Subscription summary card + a Quota Overview section with a responsive grid
-// of quota cards.
+// Route-level Suspense fallback. Renders the SAME skeleton as UsageDashboard's
+// own `if (loading)` branch so refresh/navigation does not flash a different
+// layout ("double skeleton" bug).
 export default function Loading() {
   return (
-    <main className="flex-1 bg-white">
+    <main className="flex-1 bg-white dark:bg-slate-950">
       <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          {/* Breadcrumb */}
+          <div className="mb-4 md:mb-6 flex items-center gap-2">
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-3 w-3" />
+            <Skeleton className="h-3 w-24" />
+            <Skeleton className="h-3 w-3" />
+            <Skeleton className="h-3 w-28" />
+          </div>
+
           <div className="space-y-6">
-            {/* Subscription summary card */}
-            <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
-              <div className="border-b border-gray-100 bg-gray-50 px-4 py-3 sm:px-6 sm:py-4">
+            {/* Subscription Summary Card */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+              <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
                 <Skeleton className="h-4 w-40" />
               </div>
               <div className="p-4 sm:p-6">
-                <div className="flex flex-col justify-between gap-4 sm:flex-row sm:items-start sm:gap-6">
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4 sm:gap-6">
                   <div className="flex items-start gap-3 sm:gap-5">
-                    <Skeleton className="h-10 w-10 shrink-0 rounded-xl sm:h-14 sm:w-14 sm:rounded-2xl" />
+                    <Skeleton className="w-10 h-10 sm:w-14 sm:h-14 rounded-xl sm:rounded-2xl flex-shrink-0" />
                     <div className="space-y-2">
-                      <Skeleton className="h-7 w-40" />
-                      <div className="flex gap-2">
-                        <Skeleton className="h-6 w-20 rounded-full" />
-                        <Skeleton className="h-6 w-28 rounded-full" />
-                      </div>
-                      <Skeleton className="h-3.5 w-64" />
+                      <Skeleton className="h-6 sm:h-7 w-40" />
+                      <Skeleton className="h-5 w-24 rounded-full" />
+                      <Skeleton className="h-4 w-56" />
                     </div>
                   </div>
-                  <Skeleton className="h-20 w-full rounded-xl sm:w-52" />
+                  <div className="bg-gray-50 dark:bg-slate-800/50 rounded-xl p-3 sm:p-4 sm:min-w-[200px] w-full sm:w-auto space-y-2">
+                    <Skeleton className="h-7 w-28" />
+                    <Skeleton className="h-3 w-40" />
+                  </div>
                 </div>
               </div>
             </div>
 
             {/* Quota Overview */}
-            <div className="overflow-hidden rounded-2xl border border-gray-100 bg-white">
-              <div className="flex items-center gap-2 border-b border-gray-100 bg-gray-50 px-4 py-3 sm:px-6 sm:py-4">
-                <Skeleton className="h-5 w-5 rounded-md" />
-                <Skeleton className="h-4 w-32" />
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+              <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
+                <div className="flex items-center gap-2.5">
+                  <Skeleton className="w-8 h-8 rounded-lg" />
+                  <div className="space-y-1.5">
+                    <Skeleton className="h-4 w-32" />
+                    <Skeleton className="h-3 w-44" />
+                  </div>
+                </div>
               </div>
               <div className="p-4 sm:p-6">
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-                  {Array.from({ length: 8 }).map((_, i) => (
-                    <div key={i} className="flex flex-col rounded-xl border border-gray-100 bg-white p-4">
-                      <div className="mb-3 flex items-center gap-3">
-                        <Skeleton className="h-9 w-9 rounded-lg" />
-                        <div className="flex-1 space-y-2">
-                          <Skeleton className="h-4 w-24" />
-                          <Skeleton className="h-3 w-16" />
-                        </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex flex-col rounded-xl border border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3 shadow-sm">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
+                        <Skeleton className="h-3.5 w-20 flex-1" />
+                        <Skeleton className="h-4 w-12 rounded-full" />
                       </div>
-                      <Skeleton className="mb-2 h-2 w-full rounded-full" />
-                      <div className="mt-auto grid grid-cols-2 gap-2 border-t border-gray-100 pt-2">
-                        <Skeleton className="h-3 w-12" />
-                        <Skeleton className="ml-auto h-3 w-12" />
+                      <div className="flex items-baseline justify-between gap-2 mb-2">
+                        <Skeleton className="h-5 w-16" />
+                        <Skeleton className="h-3 w-10" />
                       </div>
+                      <Skeleton className="h-1.5 w-full rounded-full mb-2" />
+                      <Skeleton className="h-3 w-24 mb-2" />
+                      <div className="mt-auto pt-2 border-t border-gray-100 dark:border-slate-700/60 grid grid-cols-2 gap-2">
+                        <Skeleton className="h-3 w-full" />
+                        <Skeleton className="h-3 w-full" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Add-ons */}
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-lg shadow-gray-200/50 border border-gray-100 dark:border-slate-700/60 overflow-hidden">
+              <div className="border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 sm:py-4">
+                <div className="flex items-center gap-2.5">
+                  <Skeleton className="w-8 h-8 rounded-lg" />
+                  <Skeleton className="h-4 w-28" />
+                </div>
+              </div>
+              <div className="p-3 sm:p-4 md:p-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                  {Array.from({ length: 4 }).map((_, i) => (
+                    <div key={i} className="flex flex-col rounded-xl border border-gray-200 dark:border-slate-700/60 bg-white dark:bg-slate-900 p-3 shadow-sm">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Skeleton className="w-8 h-8 rounded-lg flex-shrink-0" />
+                        <Skeleton className="h-3.5 w-24 flex-1" />
+                      </div>
+                      <div className="flex items-baseline justify-between gap-2 mb-3">
+                        <Skeleton className="h-4 w-16" />
+                        <Skeleton className="h-4 w-14" />
+                      </div>
+                      <Skeleton className="mt-auto h-8 w-full rounded-lg" />
                     </div>
                   ))}
                 </div>

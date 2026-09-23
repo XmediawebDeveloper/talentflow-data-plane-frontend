@@ -2299,10 +2299,13 @@ export default function MyResumesPage() {
         // will just default to Root for these ids.
       }
 
-      // Archive and move each resume
+      // Archive and move each resume. skipAudit on the move: the archive
+      // endpoint itself now logs "Resume archived", so this filing move (a
+      // side effect of the toggle, not a folder move the recruiter asked
+      // for) must not log its own "Resume moved" row over it.
       await Promise.all(resumeIds.map(async (id) => {
         await resumeService.archive(id, true);
-        await resumeService.move(id, archivedFolder.id);
+        await resumeService.move(id, archivedFolder.id, true);
       }));
 
       /* Archiving moves the resume into Archived Resumes, so it has left
@@ -2389,9 +2392,13 @@ export default function MyResumesPage() {
 
       const restorations = resumeIds.map(id => ({ id, target: targetFolderFor(id) }));
 
+      // skipAudit on the move — same reason as handleArchiveResumes: the
+      // restore-to-original-folder move is a side effect of unarchiving, not
+      // a folder move in its own right, and `archive_resume` already logs
+      // "Resume unarchived" for this click.
       await Promise.all(restorations.map(async ({ id, target }) => {
         await resumeService.archive(id, false);
-        await resumeService.move(id, target);
+        await resumeService.move(id, target, true);
       }));
 
       // Drop the consumed stash entries so they don't grow unbounded.

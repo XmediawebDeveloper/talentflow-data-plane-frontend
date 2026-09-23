@@ -38,6 +38,13 @@ interface AIInterviewTrackInvitesModalProps {
    *  inline (Job Details does), pass this; the table only offers View Details
    *  on completed rows when it is present. */
   onViewResult?: (inv: any) => void;
+  /** Renders as a plain in-page panel instead of a fixed, backdropped dialog —
+   *  the AI Interview Details page's Track tab, which is this same tracker
+   *  living at a destination rather than a popup over one. Drops the backdrop,
+   *  the dialog's width/height caps, and the header/footer Close controls
+   *  (there is nothing to close back to); everything else — stats, filters,
+   *  bulk resend, the table, pagination — is unchanged. */
+  embedded?: boolean;
 }
 
 const PAGE_SIZE = 10;
@@ -59,6 +66,7 @@ export default function AIInterviewTrackInvitesModal({
   configId,
   jdTitle,
   onViewResult,
+  embedded = false,
 }: AIInterviewTrackInvitesModalProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [invitations, setInvitations] = useState<any[]>([]);
@@ -238,14 +246,10 @@ export default function AIInterviewTrackInvitesModal({
     'bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ' +
     'hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors';
 
-  return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4 md:p-6">
-      {/* Height is content-driven with a viewport cap, not a fixed dvh: a
-          three-invite list on a large monitor used to stretch the dialog the full
-          screen with empty space under the rows. The list absorbs the overflow
-          once the cap engages, so a long list still scrolls inside the dialog on
-          a 320px phone. */}
-      <div className={TRACKER_DIALOG_PANEL_CLASS}>
+  const panel = (
+      <div className={embedded
+        ? 'bg-white dark:bg-slate-900 w-full flex flex-col'
+        : TRACKER_DIALOG_PANEL_CLASS}>
         {/* Header */}
         <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0">
           <div className="min-w-0 flex-1">
@@ -262,15 +266,17 @@ export default function AIInterviewTrackInvitesModal({
               </div>
             </div>
           </div>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={onClose}
-            className="px-2"
-            aria-label="Close"
-          >
-            <X className="w-4 h-4 sm:w-5 sm:h-5" />
-          </Button>
+          {!embedded && (
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={onClose}
+              className="px-2"
+              aria-label="Close"
+            >
+              <X className="w-4 h-4 sm:w-5 sm:h-5" />
+            </Button>
+          )}
         </div>
 
         {/* Stat row doubles as the status filter — same buckets and wording as the
@@ -457,16 +463,30 @@ export default function AIInterviewTrackInvitesModal({
                 </button>
               </>
             )}
-            <Button
-              variant="primary"
-              size="sm"
-              onClick={onClose}
-            >
-              Close
-            </Button>
+            {!embedded && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={onClose}
+              >
+                Close
+              </Button>
+            )}
           </div>
         </div>
       </div>
+  );
+
+  if (embedded) return panel;
+
+  return (
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4 md:p-6">
+      {/* Height is content-driven with a viewport cap, not a fixed dvh: a
+          three-invite list on a large monitor used to stretch the dialog the full
+          screen with empty space under the rows. The list absorbs the overflow
+          once the cap engages, so a long list still scrolls inside the dialog on
+          a 320px phone. */}
+      {panel}
     </div>
   );
 }
