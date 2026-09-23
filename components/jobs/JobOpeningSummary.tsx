@@ -119,10 +119,15 @@ function JobOpeningPrimaryItems({ job }: { job: Job }) {
   );
 }
 
-/* [&>span]:flex-shrink-0 matters: a flex item can shrink below its own content
-   width even under flex-nowrap, which with nowrap text would push the label out
-   of its box instead of scrolling the row. */
-const SINGLE_LINE_ROW = 'flex-nowrap gap-x-3 whitespace-nowrap overflow-x-auto scrollbar-hide [&>span]:flex-shrink-0';
+/* On small mobile the meta WRAPS (flex-wrap) — forcing it onto one nowrap row
+   there made the row wider than the phone screen, which pushed the whole card
+   past the viewport (clipping the title/status too, not just the meta). From
+   sm: up it returns to the intended single scrollable line.
+   [&>span]:flex-shrink-0 matters at sm+: a flex item can shrink below its own
+   content width even under flex-nowrap, which with nowrap text would push the
+   label out of its box instead of scrolling the row. */
+const SINGLE_LINE_ROW =
+  'flex-wrap gap-x-3 gap-y-1.5 sm:flex-nowrap sm:gap-y-0 sm:whitespace-nowrap sm:overflow-x-auto sm:scrollbar-hide sm:[&>span]:flex-shrink-0';
 
 export function JobOpeningMeta({ job, singleLine = false }: { job: Job; singleLine?: boolean }) {
   return (
@@ -199,7 +204,13 @@ export default function JobOpeningSummary({
             wherever a job name is drawn - see the Job Name cell in
             components/assessments/AllAssessmentsTable, where they were settled. */}
         <h3
-          className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0"
+          /* basis-full on mobile so the name takes its OWN line and TRUNCATES to
+             the card width — in a flex-wrap row a lone long title otherwise has
+             no width to clip against and its nowrap content forces the whole card
+             wider than the screen (clipping the title AND the meta below), while
+             the status/method/version badges wrap cleanly onto the next line.
+             sm:basis-auto restores the inline behaviour on wider screens. */
+          className="basis-full sm:basis-auto text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 truncate min-w-0"
           title={job.title}
         >
           {job.title}

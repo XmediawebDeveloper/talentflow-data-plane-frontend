@@ -1862,9 +1862,11 @@ export default function ResumeScoringPage({
 
   // Show loading when waiting for initial JD's history to load — same skeleton
   // the route page uses, so only ONE consistent skeleton ever shows (no flash
-  // between two different skeletons).
+  // between two different skeletons). This gate only fires with an initialJdId,
+  // i.e. the LIST view, so use the list variant (stats + filter pills + table)
+  // to match what renders next.
   if (isWaitingForInitialJd) {
-    return <ResumeScoringSkeleton />;
+    return <ResumeScoringSkeleton variant={initialJdId ? 'list' : 'overview'} />;
   }
 
   // View Candidate Scoring Detail Page

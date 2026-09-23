@@ -26,6 +26,7 @@ import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
+import SearchableSelect from '@/components/ui/searchable-select';
 import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
@@ -611,11 +612,14 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
   }, [activeDropdown]);
 
 
-  // Get unique values for filters
-  const uniqueLocations = Array.from(new Set(jobs.map(job => job.location)));
-  const uniqueDepartments = Array.from(new Set(jobs.map(job => job.department).filter(Boolean)));
-  const uniqueEmploymentTypes = Array.from(new Set(jobs.map(job => job.employmentType).filter(Boolean)));
-  const uniqueIndustries = Array.from(new Set(jobs.map(job => job.industry_type).filter(Boolean)));
+  // Get unique values for filters — drop empty/blank values (so the dropdowns
+  // don't show a blank option) and sort alphabetically so the lists are ordered
+  // rather than appearing in random job-fetch order.
+  const byName = (a: unknown, b: unknown) => String(a).localeCompare(String(b));
+  const uniqueLocations = Array.from(new Set(jobs.map(job => job.location).filter(Boolean))).sort(byName);
+  const uniqueDepartments = Array.from(new Set(jobs.map(job => job.department).filter(Boolean))).sort(byName);
+  const uniqueEmploymentTypes = Array.from(new Set(jobs.map(job => job.employmentType).filter(Boolean))).sort(byName);
+  const uniqueIndustries = Array.from(new Set(jobs.map(job => job.industry_type).filter(Boolean))).sort(byName);
 
   // Calculate stats
   /* Every tile carries TWO numbers about ONE set of jobs:
@@ -874,82 +878,90 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
           {/* More Filters Panel (collapsible) */}
           {showAdvancedFilters && (
             <div className="mb-3 pt-3 border-t border-brand-blue/10">
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
+              {/* [&>div]:min-w-0 — grid items default to min-width:auto, so a long
+                  <select> option (e.g. a full "City, State, Country" location) would
+                  force its cell wider than the screen and overflow. min-w-0 lets the
+                  cells (and the w-full selects inside) shrink to the grid track. */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 [&>div]:min-w-0">
                 {uniqueLocations.length > 1 && (
                   <div>
                     <label className="block text-sm text-gray-700 mb-1.5 font-medium">Location</label>
-                    <select
-                      value={locationFilter}
-                      onChange={(e) => search.setFilter('location', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
-                    >
-                      <option value="all">All Locations</option>
-                      {uniqueLocations.map(loc => (
-                        <option key={loc} value={loc}>{loc}</option>
-                      ))}
-                    </select>
+                    {/* SearchableSelect (not native <select>): the browser draws a
+                        native option popup sized to the LONGEST option, which runs
+                        off small screens for full "City, State, Country" values.
+                        This custom control truncates and keeps its menu within the
+                        trigger's width, so it never overlaps the screen. */}
+                    <SearchableSelect
+                      value={locationFilter === 'all' ? '' : locationFilter}
+                      onChange={(v) => search.setFilter('location', v || 'all')}
+                      options={uniqueLocations.map((loc) => ({ value: String(loc), label: String(loc) }))}
+                      allLabel="All Locations"
+                      placeholder="All Locations"
+                      searchPlaceholder="Search location..."
+                      ariaLabel="Filter by location"
+                    />
                   </div>
                 )}
                 {uniqueDepartments.length > 0 && (
                   <div>
                     <label className="block text-sm text-gray-700 mb-1.5 font-medium">Department</label>
-                    <select
-                      value={departmentFilter}
-                      onChange={(e) => search.setFilter('department', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
-                    >
-                      <option value="all">All Departments</option>
-                      {uniqueDepartments.map(dept => (
-                        <option key={dept} value={dept}>{dept}</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      value={departmentFilter === 'all' ? '' : departmentFilter}
+                      onChange={(v) => search.setFilter('department', v || 'all')}
+                      options={uniqueDepartments.map((dept) => ({ value: String(dept), label: String(dept) }))}
+                      allLabel="All Departments"
+                      placeholder="All Departments"
+                      searchPlaceholder="Search department..."
+                      ariaLabel="Filter by department"
+                    />
                   </div>
                 )}
                 {uniqueEmploymentTypes.length > 0 && (
                   <div>
                     <label className="block text-sm text-gray-700 mb-1.5 font-medium">Job Type</label>
-                    <select
-                      value={employmentTypeFilter}
-                      onChange={(e) => search.setFilter('employmentType', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
-                    >
-                      <option value="all">All Types</option>
-                      {uniqueEmploymentTypes.map(type => (
-                        <option key={type} value={type}>{formatEmploymentType(type)}</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      value={employmentTypeFilter === 'all' ? '' : employmentTypeFilter}
+                      onChange={(v) => search.setFilter('employmentType', v || 'all')}
+                      options={uniqueEmploymentTypes.map((type) => ({ value: String(type), label: formatEmploymentType(type) }))}
+                      allLabel="All Types"
+                      placeholder="All Types"
+                      searchPlaceholder="Search type..."
+                      ariaLabel="Filter by job type"
+                    />
                   </div>
                 )}
                 {uniqueIndustries.length > 0 && (
                   <div>
                     <label className="block text-sm text-gray-700 mb-1.5 font-medium">Industry</label>
-                    <select
-                      value={industryFilter}
-                      onChange={(e) => search.setFilter('industry', e.target.value)}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
-                    >
-                      <option value="all">All Industries</option>
-                      {uniqueIndustries.map(industry => (
-                        <option key={industry} value={industry}>{formatIndustryType(industry)}</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      value={industryFilter === 'all' ? '' : industryFilter}
+                      onChange={(v) => search.setFilter('industry', v || 'all')}
+                      options={uniqueIndustries.map((industry) => ({ value: String(industry), label: formatIndustryType(industry) }))}
+                      allLabel="All Industries"
+                      placeholder="All Industries"
+                      searchPlaceholder="Search industry..."
+                      ariaLabel="Filter by industry"
+                    />
                   </div>
                 )}
                 <div>
                   <label className="block text-sm text-gray-700 mb-1.5 font-medium">Experience</label>
-                  <select
-                    value={experienceFilter}
-                    onChange={(e) => search.setFilter('experience', e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40 text-sm text-black"
-                  >
-                    <option value="all">All Levels</option>
-                    <option value="entry">Entry Level (0-2 years)</option>
-                    <option value="junior">Junior Level (2-4 years)</option>
-                    <option value="mid">Mid Level (5-7 years)</option>
-                    <option value="senior">Senior Level (8-10 years)</option>
-                    <option value="architect">Architect Level (10+ years)</option>
-                    <option value="management">Management Level (10+ years)</option>
-                  </select>
+                  <SearchableSelect
+                    value={experienceFilter === 'all' ? '' : experienceFilter}
+                    onChange={(v) => search.setFilter('experience', v || 'all')}
+                    options={[
+                      { value: 'entry', label: 'Entry Level (0-2 years)' },
+                      { value: 'junior', label: 'Junior Level (2-4 years)' },
+                      { value: 'mid', label: 'Mid Level (5-7 years)' },
+                      { value: 'senior', label: 'Senior Level (8-10 years)' },
+                      { value: 'architect', label: 'Architect Level (10+ years)' },
+                      { value: 'management', label: 'Management Level (10+ years)' },
+                    ]}
+                    allLabel="All Levels"
+                    placeholder="All Levels"
+                    searchPlaceholder="Search level..."
+                    ariaLabel="Filter by experience level"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm text-gray-700 mb-1.5 font-medium">Posted From</label>
@@ -1030,7 +1042,9 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                     </Button>
 
                     {showBulkActions && (
-                      <div className="absolute top-full left-0 mt-2 w-64 bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
+                      // Right-aligned + width clamped to the viewport so the menu
+                      // never runs off the right edge on narrow/mobile screens.
+                      <div className="absolute top-full right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
                         {canUpdateJd && (
                           <button
                             onClick={handleBulkPublish}
@@ -1218,7 +1232,7 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
                             <MoreVertical className="w-4 h-4 text-gray-600" />
                           </button>
                           {activeDropdown === job.id && (
-                            <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-40">
+                            <div className="absolute right-0 top-full mt-1 w-52 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-40">
                               {/* View Applicants - Hide for Draft */}
                               {job.status.toLowerCase() !== 'draft' && (
                                 <button
