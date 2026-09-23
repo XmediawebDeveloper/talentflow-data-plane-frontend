@@ -669,7 +669,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                           </span>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="flex items-center gap-1.5 flex-wrap">
+                          <div className="flex items-center gap-1.5">
                             {getStatusIcon(session.status)}
                             <Badge variant={getStatusVariant(session.status)}>
                               {getStatusLabel(session.status)}

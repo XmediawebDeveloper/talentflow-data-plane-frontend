@@ -15,6 +15,7 @@ import { formatIST } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import RecordPager from '@/components/RecordPager';
 import AssessmentConfigureModal from '@/components/AssessmentConfigureModal';
+import AssessmentResults from '@/components/AssessmentResults';
 import JDOverviewSections from '@/components/jobs/JDOverviewSections';
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
 import AssessmentInfoPanel from '@/components/assessments/AssessmentInfoPanel';
@@ -217,13 +218,19 @@ export default function AssessmentDetailsView({
   const router = useRouter();
   const searchParams = useSearchParams();
   const dialog = useGlobalDialog();
-  const { isTenantAdmin, user } = useAuth();
+  const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
   const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
+  /* Read the same way the results ROUTE reads them, so a recruiter who can
+     download a report from that page can download it from this tab — the tab
+     renders that page's own component, and a permission that disagreed between
+     the two would put the same button on one and not the other. */
+  const canDownloadResultPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
+  const canBatchDownloadResults = isTenantAdmin || hasPermissionCode('assessments:batch_download') || canExport;
   /* 'info' is gone from this union: Assessment Info is a horizontal view
      inside Assessment Details now (`DetailsSubTab`), not a destination the
      vertical nav can select. */
-  type DetailsTab = 'overview' | 'sections' | 'analytics' | 'invitations' | 'activity' | 'versions' | 'newversions' | 'viewjd';
+  type DetailsTab = 'overview' | 'sections' | 'analytics' | 'invitations' | 'results' | 'activity' | 'versions' | 'newversions' | 'viewjd';
   /* `?tab=` lets another screen deep-link to one of these tabs — the All
      Assessments table's "View History" action lands on `versions` directly,
      rather than dropping the reader on Overview to hunt for it. Read once as
@@ -242,7 +249,7 @@ export default function AssessmentDetailsView({
      so a deep link to a tab this host does not render cannot strand the reader
      on an empty content column. */
   const deepLinkableTabs: DetailsTab[] = [
-    'overview', 'sections', 'analytics', 'invitations', 'activity', 'newversions', 'viewjd',
+    'overview', 'sections', 'analytics', 'invitations', 'results', 'activity', 'newversions', 'viewjd',
     ...(showVersionHistory ? (['versions'] as DetailsTab[]) : []),
   ];
   const initialTab: DetailsTab = deepLinkableTabs.includes(requestedTab as DetailsTab)
@@ -681,6 +688,11 @@ export default function AssessmentDetailsView({
        per-candidate list its "View Full Tracking" button opens. `Mail` is the
        glyph the card itself already carried. */
     { id: 'invitations', label: 'Invitation Status', icon: Mail },
+    /* Results, directly after the invitations they come from — invite, then
+       what came back. It is the results page itself, embedded, opening on this
+       assessment's job version and revision; see the panel below. `BarChart` is
+       the glyph Results carries everywhere else in the app. */
+    { id: 'results', label: 'Results', icon: BarChart },
     { id: 'activity', label: 'Recent Activity', icon: Clock },
     /* Version History is dropped entirely on hosts that pass
        `showVersionHistory={false}` — filtered out of the list rather than
@@ -2665,6 +2677,51 @@ export default function AssessmentDetailsView({
               </div>
             </div>
           </div>
+        )}
+
+        {/* RESULTS TAB — the results PAGE, in this page's card.
+         *
+         * `AssessmentResults` itself, with `embedded` so it drops the frame this
+         * card has already drawn (its own breadcrumb, record pager and white
+         * panel) and keeps everything that is the results: the four stat cards,
+         * the two version scopes, the filters, the candidate table and the
+         * exports. Not a summary written for the tab — the tab and
+         * `/recruitment/assessments/<id>/results` are one component, so a change
+         * to how results read lands on both.
+         *
+         * It opens on THIS record's coordinates, which is what the tab is for:
+         * `jobVersionScope` is the JD row this assessment was authored against
+         * (that row IS its job version) and `assessmentVersionScope` is its own
+         * revision, the number the header badge prints — the same pair the
+         * Assessment Versions table's Results icon names. Both selectors are
+         * still there, so the job-wide reading is one widening away.
+         *
+         * `onBack` is a no-op: nothing embedded renders it, and the host's own
+         * Back is on the header above.
+         *
+         * Mounted only while the tab is open, so its fan-out over the job's
+         * versions costs nothing on a page opened to read the configuration —
+         * the same rule the invitations and version tabs are loaded under. */}
+        {activeTab === 'results' && (
+          <AssessmentResults
+            embedded
+            onBack={() => {}}
+            assessmentId={assessment.id}
+            /* The same title the breadcrumb above prints — the stored "Version
+               N" suffix stripped, since the version is a badge of its own. */
+            assessmentTitle={stripVersionFromTitle(assessment.title) || ''}
+            assessmentVersion={assessment.version ?? null}
+            jdTitle={assessment.jd_title || assessment.job?.title}
+            jdId={assessment.jd_id}
+            jdShortId={assessment.jd_short_id}
+            jdVersion={assessment.jd_version ?? null}
+            jobVersionScope={assessment.jd_id ?? null}
+            assessmentVersionScope={
+              typeof assessment.version === 'number' ? String(assessment.version) : null
+            }
+            canDownloadPDF={canDownloadResultPDF}
+            canBatchDownload={canBatchDownloadResults}
+          />
         )}
 
         {/* Activity Tab */}

@@ -548,14 +548,14 @@ export default function JDListPage() {
         )}
 
         {/* Header */}
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-0 mb-6">
           <div>
-            <h1 className="text-2xl font-semibold text-gray-900">Job Descriptions</h1>
+            <h1 className="text-xl sm:text-2xl font-semibold text-gray-900">Job Descriptions</h1>
             <p className="text-sm text-gray-600 mt-1">
               Manage your job descriptions ({total} total)
             </p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant="secondary"
               onClick={handleExportJDs}
@@ -584,12 +584,12 @@ export default function JDListPage() {
         </div>
 
         {/* JD03: Status Tabs */}
-        <div className="flex items-center gap-1 mb-6 bg-white rounded-lg border border-gray-200 p-1">
+        <div className="flex items-center gap-1 mb-6 bg-white rounded-lg border border-gray-200 p-1 overflow-x-auto scrollbar-hide">
           {STATUS_TABS.map((tab) => (
             <button
               key={tab.id}
               onClick={() => { setStatusFilter(tab.id); setCurrentPage(1); }}
-              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-colors whitespace-nowrap shrink-0 ${
                 statusFilter === tab.id
                   ? 'bg-gray-800 text-white'
                   : 'text-gray-600 hover:bg-gray-100'
@@ -602,7 +602,7 @@ export default function JDListPage() {
 
         {/* Bulk Actions Bar */}
         {selectedJds.length > 0 && (
-          <div className="bg-gray-800 text-white rounded-lg p-4 mb-6 flex items-center justify-between">
+          <div className="bg-gray-800 text-white rounded-lg p-4 mb-6 flex items-center justify-between gap-3 flex-wrap">
             <div className="flex items-center gap-4">
               <span className="font-medium">{selectedJds.length} selected</span>
               <button
@@ -654,7 +654,7 @@ export default function JDListPage() {
 
         {/* Search Bar */}
         <div className="bg-white rounded-xl border border-gray-200 p-4 mb-6">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-3 sm:gap-4">
             {/* Select All Checkbox */}
             {jds.length > 0 && (
               <div className="flex items-center">
@@ -666,7 +666,7 @@ export default function JDListPage() {
                 />
               </div>
             )}
-            <div className="flex-1 relative">
+            <div className="flex-1 relative min-w-[180px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <input
                 type="text"
@@ -751,7 +751,7 @@ export default function JDListPage() {
             ))}
           </div>
         ) : jds.length === 0 ? (
-          <div className="bg-white rounded-xl border border-gray-200 p-12 text-center">
+          <div className="bg-white rounded-xl border border-gray-200 p-8 sm:p-12 text-center">
             <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
             <h3 className="text-lg font-medium text-gray-900 mb-2">No job descriptions found</h3>
             <p className="text-gray-500 mb-6">
@@ -778,9 +778,9 @@ export default function JDListPage() {
             {jds.map((jd) => (
               <div
                 key={jd.id}
-                className={`bg-white rounded-xl border ${selectedJds.includes(jd.id) ? 'border-gray-400 ring-1 ring-gray-400' : 'border-gray-200'} p-6 hover:shadow-md transition-shadow`}
+                className={`bg-white rounded-xl border ${selectedJds.includes(jd.id) ? 'border-gray-400 ring-1 ring-gray-400' : 'border-gray-200'} p-4 sm:p-6 hover:shadow-md transition-shadow`}
               >
-                <div className="flex items-start gap-4">
+                <div className="flex items-start gap-3 sm:gap-4">
                   {/* Checkbox */}
                   <div className="flex items-start gap-4 flex-1 min-w-0 overflow-hidden">
                     <input
@@ -790,13 +790,13 @@ export default function JDListPage() {
                       className="w-4 h-4 mt-1 text-gray-800 border-gray-300 rounded focus:ring-gray-500"
                     />
                     <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
+                      <div className="flex items-center gap-2 sm:gap-3 mb-2 flex-wrap">
                         {jd.job_id && (
-                          <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-md text-sm font-medium border border-blue-200">
+                          <span className="px-2.5 py-1 bg-blue-100 text-blue-700 rounded-md text-sm font-medium border border-blue-200 shrink-0">
                             {jd.job_id}
                           </span>
                         )}
-                        <h3 className="text-lg font-semibold text-gray-900">{jd.title}</h3>
+                        <h3 className="text-base sm:text-lg font-semibold text-gray-900 break-words min-w-0">{jd.title}</h3>
                         {getStatusBadge(jd.status, jd.current_version)}
                         {jd.creation_method && getCreationMethodBadge(jd.creation_method)}
                       </div>
@@ -846,7 +846,7 @@ export default function JDListPage() {
                         {jd.description?.substring(0, 200)}...
                       </p>
                       {/* Stats */}
-                      <div className="flex items-center gap-6 mt-4 pt-4 border-t border-gray-100">
+                      <div className="flex items-center gap-x-6 gap-y-2 flex-wrap mt-4 pt-4 border-t border-gray-100">
                         <div className="flex items-center gap-2 text-sm">
                           <Users className="w-4 h-4 text-gray-400" />
                           <span className="text-gray-600">{jd.applicants_count || 0} applicants</span>
@@ -1029,7 +1029,7 @@ export default function JDListPage() {
 
         {/* Pagination */}
         {totalPages > 1 && (
-          <div className="flex items-center justify-between mt-6">
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mt-6">
             <p className="text-sm text-gray-600">
               Showing {(currentPage - 1) * 20 + 1} to {Math.min(currentPage * 20, total)} of {total}
             </p>

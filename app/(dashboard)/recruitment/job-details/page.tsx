@@ -4,7 +4,6 @@ import { useState, useEffect } from 'react';
 import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import JobDetailView from '@/components/JobDetailView';
-import { DetailPageSkeleton } from '@/components/ui/skeleton-loader';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
 import DisableJobModal from '@/components/DisableJobModal';
@@ -62,6 +61,103 @@ interface ExtendedJob extends Job {
   jobHoppingEnabled?: boolean | null;
   // JD13: Usage status for edit/republish logic
   usageStatus?: JDUsageStatus;
+}
+
+// Loading skeleton for Job Details — mirrors JobDetailView's real layout: white
+// card shell, breadcrumb + Prev/Next pager, the brand-blue header card (JD-ID
+// badge + title + status + meta pills + action icons), the tab strip, and the
+// two-column content (left detail cards, right Quick Actions / Assessment / AI
+// Interview panels). Kept inline (no separate file) so it can't drift.
+function JobDetailsSkeleton() {
+  return (
+    <main className="flex-1 overflow-x-clip bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          {/* Breadcrumb + pager */}
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="h-4 w-72 max-w-[60%] rounded bg-gray-200 animate-pulse" />
+            <div className="flex items-center gap-2">
+              <div className="h-8 w-20 rounded-lg bg-gray-100 animate-pulse" />
+              <div className="h-8 w-16 rounded-lg bg-gray-100 animate-pulse" />
+            </div>
+          </div>
+
+          {/* Header card */}
+          <div className="mb-5">
+            <div className="rounded-xl border border-brand-blue/30 ring-1 ring-brand-blue/10 shadow-sm p-4 sm:p-5">
+              <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
+                <div className="flex-1 min-w-0 space-y-3">
+                  {/* Row 1: badge + title + status */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    <div className="h-5 w-14 rounded-md bg-gray-200 animate-pulse" />
+                    <div className="h-6 w-52 max-w-full rounded bg-gray-200 animate-pulse" />
+                    <div className="h-5 w-20 rounded-full bg-gray-100 animate-pulse" />
+                  </div>
+                  {/* Row 2: meta pills */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {Array.from({ length: 6 }).map((_, i) => (
+                      <div key={i} className="h-4 w-20 rounded bg-gray-100 animate-pulse" />
+                    ))}
+                  </div>
+                </div>
+                {/* Action icons */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="h-9 w-9 rounded-lg bg-gray-100 animate-pulse" />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Tab strip */}
+          <div className="mb-5 flex flex-wrap gap-4 sm:gap-6 border-b border-gray-200 pb-3">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <div key={i} className="h-5 w-28 rounded bg-gray-200 animate-pulse" />
+            ))}
+          </div>
+
+          {/* Content — two columns */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-5">
+            {/* Left (2/3): description + two half-cards + summary bar */}
+            <div className="lg:col-span-2 space-y-4 sm:space-y-5">
+              <div className="rounded-xl border border-gray-200 p-4 sm:p-5 space-y-3">
+                <div className="h-5 w-40 rounded bg-gray-200 animate-pulse" />
+                <div className="h-4 w-full rounded bg-gray-100 animate-pulse" />
+                <div className="h-4 w-5/6 rounded bg-gray-100 animate-pulse" />
+                <div className="h-4 w-2/3 rounded bg-gray-100 animate-pulse" />
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                {Array.from({ length: 2 }).map((_, i) => (
+                  <div key={i} className="rounded-xl border border-gray-200 p-4 sm:p-5 space-y-2">
+                    <div className="h-4 w-32 rounded bg-gray-200 animate-pulse" />
+                    <div className="h-3.5 w-full rounded bg-gray-100 animate-pulse" />
+                    <div className="h-3.5 w-4/5 rounded bg-gray-100 animate-pulse" />
+                  </div>
+                ))}
+              </div>
+              <div className="rounded-xl border border-gray-200 p-4 sm:p-5">
+                <div className="h-5 w-48 rounded bg-gray-200 animate-pulse" />
+              </div>
+            </div>
+            {/* Right (1/3): Quick Actions / Assessment / AI Interview panels */}
+            <div className="space-y-4 sm:space-y-5">
+              {Array.from({ length: 3 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-gray-200 p-4 sm:p-5 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="h-8 w-8 rounded-lg bg-gray-200 animate-pulse" />
+                    <div className="h-4 w-28 rounded bg-gray-200 animate-pulse" />
+                  </div>
+                  <div className="h-9 w-full rounded-lg bg-gray-100 animate-pulse" />
+                  <div className="h-9 w-full rounded-lg bg-gray-100 animate-pulse" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
 }
 
 function JobDetailsContent() {
@@ -497,7 +593,7 @@ function JobDetailsContent() {
   };
 
   if (loading) {
-    return <DetailPageSkeleton />;
+    return <JobDetailsSkeleton />;
   }
 
   if (!job) {
@@ -630,7 +726,7 @@ function JobDetailsContent() {
 
 export default function JobDetailsRoute() {
   return (
-    <Suspense fallback={<DetailPageSkeleton />}>
+    <Suspense fallback={<JobDetailsSkeleton />}>
       <JobDetailsContent />
     </Suspense>
   );

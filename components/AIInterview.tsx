@@ -1039,6 +1039,18 @@ export default function AIInterview() {
     router,
   ]);
 
+  // Deep-link from the "AI Interview Published" screen (and its Back-button
+  // redirect): `?tab=all-interviews` lands directly on the flat interview
+  // list instead of whatever tab/view was last persisted, so the
+  // `?highlight=<id>` AllInterviewsTable reads next actually has a table
+  // visible to scroll within.
+  useEffect(() => {
+    if (searchParams.get('tab') !== 'all-interviews') return;
+    setPageView('list');
+    setActiveTab('all-interviews');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchParams]);
+
   // List of unique creators across configs + archivedConfigs — drives the creator dropdown.
   const creatorOptions = (() => {
     const set = new Set<string>();
@@ -2104,7 +2116,7 @@ export default function AIInterview() {
                       { key: 'job-versions', icon: Layers, iconClass: 'text-brand-blue', value: getJobVersionCount(config), label: 'Job Versions' },
                       { key: 'interviews', icon: Video, iconClass: 'text-brand-cyan', value: totals.interviews, label: 'Interviews' },
                       { key: 'invitations', icon: Send, iconClass: 'text-brand-orange', value: totals.invitations, label: 'Invitations Sent' },
-                      { key: 'active', icon: CheckCircle, iconClass: 'text-menu-icon-activate', value: totals.active, label: 'Active Interviews' },
+                      { key: 'active', icon: CheckCircle, iconClass: 'text-menu-icon-activate', value: totals.active, label: 'Completed' },
                     ];
                     const hasVersionHistory = !!config.jd_id;
                     const toggleVersions = () => {
