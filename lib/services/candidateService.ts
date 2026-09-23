@@ -14,6 +14,12 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/a
 let currentSessionToken: string | null = null;
 let currentAssessmentToken: string | null = null;
 let lastNetworkFailureEventAt = 0;
+// Consecutive "no response" failures. A single timed-out or aborted request
+// (e.g. the page was busy, a tab switch cancelled an XHR) is NOT an outage:
+// the timer must only pause and the offline banner only show after the
+// browser says it is offline or two requests in a row got no response.
+let consecutiveNoResponseFailures = 0;
+const NETWORK_FAILURE_CONFIRMATIONS = 2;
 
 function dispatchCandidateNetworkEvent(name: 'candidate-network-failure' | 'candidate-network-restored', detail?: Record<string, unknown>) {
   if (typeof window === 'undefined') return;
@@ -136,6 +142,7 @@ candidateApi.interceptors.request.use((config) => {
 // Add response interceptor for better cross-browser error handling
 candidateApi.interceptors.response.use(
   (response) => {
+    consecutiveNoResponseFailures = 0;
     dispatchCandidateNetworkEvent('candidate-network-restored', {
       url: response.config?.url,
       method: response.config?.method,
@@ -150,16 +157,26 @@ candidateApi.interceptors.response.use(
       console.error('[CANDIDATE API] Server error:', error.response.status, error.response.data);
     } else if (error.request) {
       // Request was made but no response received (network issues)
-      console.error('[CANDIDATE API] Network error - no response received:', error.message);
+      console.error('[CANDIDATE API] Network error - no response received:', error.message, error.code);
+      const code = String(error.code || '');
+      const cancelled = code === 'ERR_CANCELED' || axios.isCancel?.(error) === true;
+      const browserOffline = typeof navigator !== 'undefined' && navigator.onLine === false;
+      if (!cancelled) consecutiveNoResponseFailures += 1;
+      const confirmed = browserOffline || consecutiveNoResponseFailures >= NETWORK_FAILURE_CONFIRMATIONS;
       const now = Date.now();
-      if (now - lastNetworkFailureEventAt > 1500) {
+      if (confirmed && now - lastNetworkFailureEventAt > 1500) {
         lastNetworkFailureEventAt = now;
         dispatchCandidateNetworkEvent('candidate-network-failure', {
           url: error.config?.url,
           method: error.config?.method,
           message: error.message,
+          code,
+          consecutive_failures: consecutiveNoResponseFailures,
+          browser_offline: browserOffline,
           timestamp: now,
         });
+      } else if (!confirmed) {
+        console.warn(`[CANDIDATE API] Single no-response failure (${code || 'unknown'}) ignored — waiting for confirmation before pausing the timer`);
       }
     } else {
       // Something else happened (browser security, CORS, etc.)
@@ -1147,6 +1164,87 @@ export const candidateService = {
       }
       throw error;
     }
+  },
+
+  /**
+   * Record a proctoring termination: the attempt is closed as interrupted
+   * (exited_at + termination_code) so the recruiter list shows "Terminated"
+   * with the reason, and no further answers are accepted.
+   */
+  async exitAssessment(
+    token: string,
+    terminationCode: string,
+    exitReason: string,
+  ): Promise<{ success: boolean; message?: string; already_completed?: boolean }> {
+    try {
+      const response = await candidateApi.post(
+        `/candidate/assessment/${token}/exit`,
+        null,
+        { params: { termination_code: terminationCode, exit_reason: exitReason } },
+      );
+      return response.data;
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        throw new Error(error.response?.data?.detail || 'Failed to record assessment exit');
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Upload one webcam-recording segment (S3 multipart part = segmentIndex + 1).
+   * Native fetch, not axios: no Content-Type override, no interceptor size caps.
+   */
+  async uploadRecording(token: string, blob: Blob, segmentIndex = 0, isFinal = false): Promise<{ message: string; path: string | null; completed?: boolean }> {
+    const formData = new FormData();
+    formData.append('file', blob, 'recording.webm');
+    formData.append('segment_index', String(segmentIndex));
+    formData.append('is_final', isFinal ? 'true' : 'false');
+    const headers: Record<string, string> = {};
+    const sessionToken = sessionTokenManager.getToken?.();
+    if (sessionToken) headers['X-Session-Token'] = sessionToken;
+    const response = await fetch(`${API_BASE_URL}/candidate/assessment/${token}/upload-recording`, { method: 'POST', body: formData, headers });
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => response.statusText);
+      throw new Error(`Recording upload failed (${response.status}): ${errorText}`);
+    }
+    return response.json();
+  },
+
+  /** Upload one entire-screen recording segment (same contract as uploadRecording). */
+  async uploadScreenRecording(token: string, blob: Blob, segmentIndex = 0, isFinal = false): Promise<{ message: string; path: string | null; completed?: boolean }> {
+    const formData = new FormData();
+    formData.append('file', blob, 'screen.webm');
+    formData.append('segment_index', String(segmentIndex));
+    formData.append('is_final', isFinal ? 'true' : 'false');
+    const headers: Record<string, string> = {};
+    const sessionToken = sessionTokenManager.getToken?.();
+    if (sessionToken) headers['X-Session-Token'] = sessionToken;
+    const response = await fetch(`${API_BASE_URL}/candidate/assessment/${token}/upload-screen-recording`, { method: 'POST', body: formData, headers });
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => response.statusText);
+      throw new Error(`Screen recording upload failed (${response.status}): ${errorText}`);
+    }
+    return response.json();
+  },
+
+  /** Hide-share-bar vision gate (same verdict shape as the AI interview). */
+  async verifyShareBarHidden(token: string, frame: Blob): Promise<{
+    enabled: boolean; hidden: boolean; pip_detected: boolean; recorder_overlay_detected: boolean;
+    foreign_app_detected: boolean; foreign_app_label?: string; interview_screen_present?: boolean;
+    check_unavailable?: boolean; reason?: string;
+  }> {
+    const formData = new FormData();
+    formData.append('file', frame, 'screen.jpg');
+    const headers: Record<string, string> = {};
+    const sessionToken = sessionTokenManager.getToken?.();
+    if (sessionToken) headers['X-Session-Token'] = sessionToken;
+    const response = await fetch(`${API_BASE_URL}/candidate/assessment/${token}/verify-share-bar`, { method: 'POST', body: formData, headers });
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => response.statusText);
+      throw new Error(`Share-bar verification failed (${response.status}): ${errorText}`);
+    }
+    return response.json();
   },
 
   /**

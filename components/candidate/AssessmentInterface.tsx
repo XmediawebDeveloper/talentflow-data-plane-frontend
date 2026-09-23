@@ -41,6 +41,7 @@ import { CodingQuestionView } from './questions/CodingQuestionView';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useRetryQueue } from '@/hooks/useRetryQueue';
 import { getFullscreenChangeEvent, isFullscreen as getIsFullscreen, exitFullscreen as compatExitFullscreen, requestFullscreen as compatRequestFullscreen, playVideo } from '@/lib/utils/browserCompat';
+import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 
 interface Round {
   round_type: string;
@@ -79,6 +80,8 @@ interface AssessmentInterfaceProps {
     }
   ) => Promise<SubmitAnswerResponse>;
   onComplete: () => void;
+  /** Production-only proctoring termination (tab hidden, Esc/F11, Alt+Tab, Meta, PiP). */
+  onTerminated?: (reason: string, message: string) => void;
   onNavigate: (questionNumber: number) => void;
   onSetQuestion?: (question: CurrentQuestion) => void;
   onTimeUpdate?: (remainingSeconds: number) => void;
@@ -101,6 +104,7 @@ export function AssessmentInterface({
   initialTimeRemainingSeconds,
   onAnswerSubmit,
   onComplete,
+  onTerminated,
   onNavigate,
   onSetQuestion,
   onTimeUpdate,
@@ -728,7 +732,12 @@ export function AssessmentInterface({
   ]);
 
   // 🛡️ PROCTORING: Exit Fullscreen on Complete
+  // Set by every app-initiated fullscreen exit / completion so the
+  // termination watcher below never mistakes our own exit for the candidate leaving.
+  const terminationDisarmedRef = useRef(false);
+
   const exitAssessmentFullscreen = async () => {
+    terminationDisarmedRef.current = true;
     try {
       if (getIsFullscreen()) {
         await compatExitFullscreen();
@@ -804,6 +813,105 @@ export function AssessmentInterface({
       document.removeEventListener(eventName, handleFullscreenChange);
     };
   }, [token, isDisqualified, showCompleteConfirm, enforceFullscreen]);
+
+  // ── "Stay on the page" — TERMINATE on leaving (PRODUCTION ONLY) ────────────
+  // Same policy as the AI interview (CandidateAIInterviewPortal.tsx): switching
+  // tabs / minimising, Alt+Tab, Esc or F11 out of fullscreen, the Windows/⌘ key,
+  // or Picture-in-Picture ends the assessment immediately. The rules step tells
+  // the candidate before they start. Staging (NEXT_PUBLIC_ENVIRONMENT !==
+  // 'production') only logs these as violations so testers are not thrown out.
+  // A window blur on its own is NOT a termination (OS notifications and the
+  // share bar steal focus without the candidate leaving) — it just re-checks
+  // the two hard signals: tab hidden or fullscreen dropped.
+  useEffect(() => {
+    if (!IS_PRODUCTION_ENV || !onTerminated) return;
+    if (isDisqualified) return;
+
+    const fsEvent = getFullscreenChangeEvent();
+    let done = false;
+    let armed = false;
+    let sawFullscreen = false;
+
+    const MESSAGES: Record<string, string> = {
+      key_f11: 'Pressed F11 to exit fullscreen',
+      key_escape: 'Pressed the Esc key to exit fullscreen',
+      key_alt_tab: 'Used Alt + Tab to switch away from the assessment',
+      key_meta: 'Pressed the Windows / ⌘ (Meta) key',
+      left_screen_fullscreen_exit: 'Exited fullscreen mode',
+      left_screen_tab_hidden: 'Switched to another tab or minimized the window',
+      picture_in_picture: 'Opened a video in Picture-in-Picture',
+    };
+    const isMetaKey = (e: KeyboardEvent) =>
+      e.key === 'Meta' || e.key === 'OS' || e.code === 'MetaLeft' || e.code === 'MetaRight' || e.code === 'OSLeft' || e.code === 'OSRight';
+
+    const terminateNow = (reason: string) => {
+      if (done || !armed || terminationDisarmedRef.current || showCompleteConfirm) return;
+      done = true;
+      console.error(`[PROCTORING] TERMINATED: ${reason}`);
+      onTerminated(reason, MESSAGES[reason] || 'Left the assessment screen');
+    };
+
+    const fullscreenSignalsActive = () => enforceFullscreen && sawFullscreen;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F11' && enforceFullscreen) {
+        try { e.preventDefault(); } catch { /* ignore */ }
+        terminateNow('key_f11');
+      } else if (e.key === 'Escape' && enforceFullscreen) {
+        terminateNow('key_escape');
+      } else if (e.key === 'Tab' && e.altKey) {
+        terminateNow('key_alt_tab');
+      } else if (isMetaKey(e)) {
+        terminateNow('key_meta');
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => { if (isMetaKey(e)) terminateNow('key_meta'); };
+    const onVisibility = () => { if (document.hidden) terminateNow('left_screen_tab_hidden'); };
+    const onEnterPiP = () => { terminateNow('picture_in_picture'); };
+
+    let blurTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearBlurTimer = () => { if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; } };
+    const onBlur = () => {
+      clearBlurTimer();
+      blurTimer = setTimeout(() => {
+        blurTimer = null;
+        if (document.hidden) terminateNow('left_screen_tab_hidden');
+        else if (fullscreenSignalsActive() && !getIsFullscreen()) terminateNow('left_screen_fullscreen_exit');
+        // still visible & fullscreen → focus-only loss, logged elsewhere as window_blur
+      }, 500);
+    };
+    const onFocus = () => clearBlurTimer();
+    const onFsChange = () => {
+      if (getIsFullscreen()) { sawFullscreen = true; return; }
+      if (fullscreenSignalsActive()) terminateNow('left_screen_fullscreen_exit');
+    };
+
+    document.addEventListener(fsEvent, onFsChange);
+    const armTimer = window.setTimeout(() => {
+      armed = true;
+      if (getIsFullscreen()) sawFullscreen = true;
+      document.addEventListener('visibilitychange', onVisibility);
+      window.addEventListener('blur', onBlur);
+      window.addEventListener('focus', onFocus);
+      window.addEventListener('keydown', onKeyDown, true);
+      window.addEventListener('keyup', onKeyUp, true);
+      document.addEventListener('enterpictureinpicture', onEnterPiP, true);
+      if (document.hidden) terminateNow('left_screen_tab_hidden');
+      if (document.pictureInPictureElement) terminateNow('picture_in_picture');
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(armTimer);
+      clearBlurTimer();
+      document.removeEventListener(fsEvent, onFsChange);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('keyup', onKeyUp, true);
+      document.removeEventListener('enterpictureinpicture', onEnterPiP, true);
+    };
+  }, [token, onTerminated, isDisqualified, showCompleteConfirm, enforceFullscreen]);
 
   // Exit fullscreen only on unmount (separate effect so it doesn't run on every re-render)
   useEffect(() => {

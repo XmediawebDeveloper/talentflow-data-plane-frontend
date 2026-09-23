@@ -18,21 +18,11 @@ import { useEffect, useRef, useCallback, useState } from 'react';
 import { ProctoringEventBus, ProctoringEventType } from '@/lib/ProctoringEventBus';
 // Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
 import '@/lib/tfjs-rejection-guard';
-import { loadFaceApiWithCpuBackend, type FaceApiModule } from '@/lib/face-api-loader';
-import {
-  assessCandidateFaceVisibility,
-  createVideoFrameCanvas,
-  FACE_API_MODEL_URLS,
-  filterAdditionalFaceCandidates,
-  filterMultipleFaceCandidates,
-  loadFaceApiNetWithFallback,
-  MIN_CONFIDENT_FACE_SCORE,
-  pickPrimaryFace,
-} from '@/lib/proctoring/faceDetection';
 import {
   readAssessmentFaceBaseline,
   writeAssessmentFaceBaseline,
 } from '@/lib/proctoring/assessmentFaceBaseline';
+import { createAssessmentFaceMonitor, type AssessmentFaceMonitor } from '@/hooks/assessmentFaceMonitor';
 
 // Re-export for consumers that import from here
 export type { ProctoringEventType } from '@/lib/ProctoringEventBus';
@@ -68,15 +58,34 @@ const isFullscreenActive = (): boolean => {
 // ── Constants ────────────────────────────────────────────────────────────────
 const BACKEND_FLUSH_INTERVAL = 5000; // ms — batch-flush proctoring events to backend
 const VIDEO_CHECK_INTERVAL = 500;    // ms — sample video frames at 2 FPS for obstruction detection
-const FACE_DETECTION_INTERVAL = 3000; // ms — sample face visibility every 3 seconds
+// Face cadence (1.5 s detect / 2 s gaze / 10 s identity) lives in hooks/assessmentFaceMonitor.ts.
 const IDENTITY_BOOTSTRAP_CAPTURES = 3;
 const IDENTITY_MISMATCH_THRESHOLD = 0.8;
 const IDENTITY_MISMATCH_CONFIRMATIONS = 2;
 const IDENTITY_EVENT_COOLDOWN_MS = 15000;
-const GAZE_AWAY_CONFIRMATIONS = 3;
-const GAZE_RESTORED_CONFIRMATIONS = 2;
+// Gaze confirmations now live in hooks/assessmentFaceMonitor.ts (3 away / 2 restored at 2 s).
+
+// Minimum gap between two backend rows / candidate warnings of the same type.
+// Mirrors components/ai-interview/proctoring/InterviewProctoringMonitor.ts.
+const EVENT_COOLDOWN_MS: Partial<Record<ProctoringEventType, number>> = {
+  tab_switch: 5000,
+  window_blur: 5000,
+  mouse_movement: 5000,
+  fullscreen_exit: 5000,
+  voice_detected: 5000,
+  multiple_voices: 8000,
+  camera_disabled: 5000,
+  microphone_disabled: 5000,
+  camera_obstructed: 10000,
+  camera_frozen: 10000,
+  screenshot_attempt: 2000,
+  screen_recording_attempt: 5000,
+  face_missing: 8000,
+  multiple_faces: 8000,
+  gaze_away: 8000,
+  identity_mismatch: 15000,
+};
 const CONTINUOUS_WARNING_INTERVAL_MS = 3000;
-const MULTI_FACE_MIN_CONFIDENT_SCORE = 0.45;
 // ─────────────────────────────────────────────────────────────────────────────
 
 // Legacy type kept for compatibility with existing imports
@@ -571,12 +580,11 @@ export function useProctoringMonitor({
   const videoIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const voiceIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const batchFlushIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const faceIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const faceAnalysisIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const faceDetectionCancelledRef = useRef(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const faceVideoRef = useRef<HTMLVideoElement | null>(null);
+  const faceMonitorRef = useRef<AssessmentFaceMonitor | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
 
@@ -606,6 +614,7 @@ export function useProctoringMonitor({
   const screenshotSuppressionUntilRef = useRef(0);
   const lastScreenshotEventAtRef = useRef(0);
   const lastIdentityMismatchEventAtRef = useRef(0);
+  const lastEmitAtRef = useRef<Partial<Record<ProctoringEventType, number>>>({});
   const lastMetaKeyAtRef = useRef(0);
   const lastShiftKeyAtRef = useRef(0);
   const lastSKeyAtRef = useRef(0);
@@ -624,6 +633,17 @@ export function useProctoringMonitor({
     details?: Record<string, any>,
   ) => {
     if (!enabledRef.current) return;
+
+    // Per-type cooldown (same idea as InterviewProctoringMonitor's table): a
+    // condition that persists must not become hundreds of identical rows.
+    // 0 = never throttled (discrete candidate actions).
+    const cooldownMs = EVENT_COOLDOWN_MS[eventType] ?? 0;
+    if (cooldownMs > 0) {
+      const now = Date.now();
+      const last = lastEmitAtRef.current[eventType] ?? 0;
+      if (now - last < cooldownMs) return;
+      lastEmitAtRef.current[eventType] = now;
+    }
 
     const timestamp = new Date().toISOString();
 
@@ -1059,733 +1079,112 @@ export function useProctoringMonitor({
   // ==================== MULTIPLE FACES DETECTION ====================
 
   const setupFaceDetection = useCallback(() => {
+    // 2026-09-23: face presence / multiple faces / gaze / identity now run in
+    // hooks/assessmentFaceMonitor.ts (MediaPipe on a 250 ms scheduler, identity
+    // every 10 s) — the same stack the AI interview uses. The previous face-api
+    // CPU pipeline (two passes + descriptors every 3 s) froze the page and
+    // produced the "Can't reach the server" false offline banner.
     const currentStream = streamRef.current;
     if (!currentStream) return;
+    if (currentStream.getVideoTracks().length === 0) return;
 
-    const videoTracks = currentStream.getVideoTracks();
-    if (videoTracks.length === 0) return;
-
-    // Reset cancellation flag for this setup attempt
     faceDetectionCancelledRef.current = false;
+    faceMonitorRef.current?.stop();
+    faceMonitorRef.current = null;
 
     const video = document.createElement('video');
     video.srcObject = currentStream;
     video.muted = true;
+    video.playsInline = true;
     faceVideoRef.current = video;
 
     video.play().then(async () => {
-      try {
-        let consecutiveNoFace = 0;
-        let consecutiveDetectionFailures = 0;
-        let consecutiveGazeAway = 0;
-        let consecutiveGazeRestored = 0;
-        let consecutiveIdentityMismatch = 0;
-        let faceApiBusy = false;
-        let lastKnownFaceCount = 0;
-        let lastSimpleFaceCount = 0;
-        let lastAdvancedFaceOverride: { count: number; observedAt: number } | null = null;
-        let identityBaseline = readAssessmentFaceBaseline(tokenRef.current);
-        const bootstrapDescriptors: Float32Array[] = [];
-        const NO_FACE_THRESHOLD = 1; // 1 × 3 s = 3 s before emitting face_missing
-        const DETECTION_FAILURE_THRESHOLD = 2; // Treat repeated detector failures as face missing
-        const ADVANCED_FACE_OVERRIDE_WINDOW_MS = (FACE_DETECTION_INTERVAL * 2) + 500;
-        let advancedFaceApi: FaceApiModule | null = null;
-        let advancedLoadPromise: Promise<FaceApiModule | null> | null = null;
+      if (faceDetectionCancelledRef.current) return;
 
-        const resetFaceMissingState = () => {
+      const NO_FACE_THRESHOLD = 2;          // 2 x 1.5 s = 3 s without a face before face_missing
+      const DETECTION_FAILURE_THRESHOLD = 2;
+      let consecutiveNoFace = 0;
+      let consecutiveDetectionFailures = 0;
+      const baseline = readAssessmentFaceBaseline(tokenRef.current);
+
+      const handleFaceCount = (count: number, details: Record<string, unknown>) => {
+        if (isCameraObstructedRef.current) {
+          clearContinuousViolation('face_missing');
+          clearContinuousViolation('multiple_faces');
+          return;
+        }
+        consecutiveDetectionFailures = 0;
+        if (count >= 2) {
           consecutiveNoFace = 0;
-          consecutiveDetectionFailures = 0;
-        };
-
-        const resetAdvancedStates = () => {
-          consecutiveGazeAway = 0;
-          consecutiveGazeRestored = 0;
-          consecutiveIdentityMismatch = 0;
-        };
-
-        const rememberAdvancedFaceOverride = (count: number) => {
-          if (count === 1) {
-            lastAdvancedFaceOverride = null;
-            return;
-          }
-          lastAdvancedFaceOverride = {
-            count,
-            observedAt: Date.now(),
-          };
-        };
-
-        const getEffectiveFaceCount = (simpleCount: number) => {
-          if (isCameraObstructedRef.current) {
-            return simpleCount;
-          }
-
-          if (!lastAdvancedFaceOverride) {
-            return simpleCount;
-          }
-
-          if ((Date.now() - lastAdvancedFaceOverride.observedAt) > ADVANCED_FACE_OVERRIDE_WINDOW_MS) {
-            lastAdvancedFaceOverride = null;
-            return simpleCount;
-          }
-
-          if (lastAdvancedFaceOverride.count >= 2 && simpleCount < lastAdvancedFaceOverride.count) {
-            return lastAdvancedFaceOverride.count;
-          }
-
-          if (lastAdvancedFaceOverride.count === 0 && simpleCount === 1) {
-            return 0;
-          }
-
-          return simpleCount;
-        };
-
-        const maybeEmitFaceMissing = (method: string, reason: string, extraDetails?: Record<string, unknown>) => {
-          if (isCameraObstructedRef.current) {
-            clearContinuousViolation('face_missing');
-            return;
-          }
-
-          consecutiveNoFace++;
-          consecutiveDetectionFailures = 0;
+          clearContinuousViolation('face_missing');
+          syncContinuousViolation('multiple_faces', true, { face_count: count, ...details });
+        } else if (count === 0) {
+          clearContinuousViolation('multiple_faces');
+          consecutiveNoFace += 1;
           if (consecutiveNoFace >= NO_FACE_THRESHOLD) {
-            consecutiveNoFace = 0;
-            resetAdvancedStates();
-            syncContinuousViolation('face_missing', true, {
-              method,
-              reason,
-              camera_obstructed: isCameraObstructedRef.current,
-              ...extraDetails,
-            });
-            console.log(`[PROCTORING] Face missing (${method}, ${reason})`);
+            syncContinuousViolation('face_missing', true, { reason: 'no_face_detected', ...details });
           }
-        };
+        } else {
+          consecutiveNoFace = 0;
+          clearContinuousViolation('multiple_faces');
+          clearContinuousViolation('face_missing');
+        }
+      };
 
-        const handleFaceCount = (
-          count: number,
-          method: string,
-          extraDetails?: Record<string, unknown>,
-        ) => {
-          lastKnownFaceCount = count;
-          if (count >= 2) {
-            resetFaceMissingState();
-            resetAdvancedStates();
-            syncContinuousViolation('multiple_faces', true, {
-              face_count: count,
-              method,
-              ...extraDetails,
-            });
-            if (extraDetails?.candidate_visible === false) {
-              const reason = typeof extraDetails?.reason === 'string'
-                ? extraDetails.reason
-                : 'candidate_not_visible';
-              maybeEmitFaceMissing(method, reason, extraDetails);
-            } else {
-              clearContinuousViolation('face_missing');
-            }
-            console.log(`[PROCTORING] Multiple faces: ${count} (${method})`);
-          } else if (count === 0) {
-            clearContinuousViolation('multiple_faces');
-            const reason = typeof extraDetails?.reason === 'string'
-              ? extraDetails.reason
-              : 'no_face_detected';
-            maybeEmitFaceMissing(method, reason, {
-              camera_obstructed: isCameraObstructedRef.current,
-              ...extraDetails,
-            });
-          } else {
-            resetFaceMissingState();
-            clearContinuousViolation('multiple_faces');
-            clearContinuousViolation('face_missing');
-          }
-        };
-
-        const handleDetectionFailure = (method: string, error: unknown) => {
-          lastKnownFaceCount = 0;
-          lastSimpleFaceCount = 0;
-          consecutiveDetectionFailures++;
+      const monitor = createAssessmentFaceMonitor(video, {
+        onFaceCount: handleFaceCount,
+        onDetectionFailure: (error) => {
+          consecutiveDetectionFailures += 1;
           if (consecutiveDetectionFailures >= DETECTION_FAILURE_THRESHOLD) {
             clearContinuousViolation('multiple_faces');
-            maybeEmitFaceMissing(method, 'detection_failed', {
-              camera_obstructed: isCameraObstructedRef.current,
+            syncContinuousViolation('face_missing', true, {
+              reason: 'detection_failed',
               error: error instanceof Error ? error.message : String(error),
             });
           }
-        };
+        },
+        onGazeAway: (direction, offsets) => {
+          // One event per episode (monitor gates re-entry on a restored state);
+          // emitEvent adds the per-type cooldown on top.
+          emitEventRef.current('gaze_away', {
+            direction,
+            noseOffsetX: offsets.x,
+            noseOffsetY: offsets.y,
+            method: 'mediapipe_face_mesh',
+          });
+        },
+        onGazeRestored: (episodeMs) => {
+          console.log(`[PROCTORING] Gaze restored after ${Math.round(episodeMs / 1000)}s`);
+        },
+        onIdentityMismatch: (distance) => {
+          if (Date.now() - lastIdentityMismatchEventAtRef.current < IDENTITY_EVENT_COOLDOWN_MS) return;
+          lastIdentityMismatchEventAtRef.current = Date.now();
+          emitEventRef.current('identity_mismatch', {
+            distance,
+            baseline_source: baseline?.source ?? 'assessment_bootstrap',
+            baseline_created_at: baseline?.createdAt,
+          });
+        },
+        onIdentityBaselineCaptured: (descriptor) => {
+          writeAssessmentFaceBaseline(tokenRef.current, descriptor, 'assessment_bootstrap');
+        },
+        shouldSkip: () =>
+          !isMonitoringRef.current || faceDetectionCancelledRef.current || isCameraObstructedRef.current,
+      }, {
+        identityBaseline: baseline?.descriptor ?? null,
+        identityMismatchThreshold: IDENTITY_MISMATCH_THRESHOLD,
+        identityConfirmations: IDENTITY_MISMATCH_CONFIRMATIONS,
+        identityBootstrapCaptures: IDENTITY_BOOTSTRAP_CAPTURES,
+      });
 
-        const ensureAdvancedFaceApi = async (): Promise<FaceApiModule | null> => {
-          if (advancedFaceApi) return advancedFaceApi;
-          if (advancedLoadPromise) return advancedLoadPromise;
-
-          advancedLoadPromise = (async () => {
-            try {
-              const faceapi = await loadFaceApiWithCpuBackend();
-              await Promise.all([
-                loadFaceApiNetWithFallback(faceapi.nets.tinyFaceDetector, FACE_API_MODEL_URLS),
-                loadFaceApiNetWithFallback(faceapi.nets.faceLandmark68Net, FACE_API_MODEL_URLS),
-                loadFaceApiNetWithFallback(faceapi.nets.faceRecognitionNet, FACE_API_MODEL_URLS),
-              ]);
-
-              advancedFaceApi = faceapi;
-              return faceapi;
-            } catch (error) {
-              console.warn('[PROCTORING] Advanced face analysis models unavailable:', error);
-              return null;
-            } finally {
-              advancedLoadPromise = null;
-            }
-          })();
-
-          return advancedLoadPromise;
-        };
-
-        const averageDescriptors = (descriptors: Float32Array[]): Float32Array => {
-          const average = new Float32Array(descriptors[0].length);
-          for (const descriptor of descriptors) {
-            for (let i = 0; i < descriptor.length; i += 1) {
-              average[i] += descriptor[i];
-            }
-          }
-          for (let i = 0; i < average.length; i += 1) {
-            average[i] /= descriptors.length;
-          }
-          return average;
-        };
-
-        const classifyGazeDirection = (
-          landmarkPositions: Array<{ x: number; y: number }>,
-        ): { lookingAway: boolean; direction: string; noseOffsetX: number; noseOffsetY: number } | null => {
-          const noseTip = landmarkPositions[30];
-          const leftEyeOuter = landmarkPositions[36];
-          const rightEyeOuter = landmarkPositions[45];
-          const bridgeTop = landmarkPositions[27];
-          const chin = landmarkPositions[8];
-          if (!noseTip || !leftEyeOuter || !rightEyeOuter || !bridgeTop || !chin) return null;
-
-          const faceWidth = Math.max(Math.abs(rightEyeOuter.x - leftEyeOuter.x), 1);
-          const faceHeight = Math.max(Math.abs(chin.y - bridgeTop.y), 1);
-          const eyeMidX = (leftEyeOuter.x + rightEyeOuter.x) / 2;
-          const faceMidY = (bridgeTop.y + chin.y) / 2;
-          const noseOffsetX = (noseTip.x - eyeMidX) / faceWidth;
-          const noseOffsetY = (noseTip.y - faceMidY) / faceHeight;
-
-          const horizontalAway = Math.abs(noseOffsetX) > 0.16;
-          const upwardAway = noseOffsetY < -0.12;
-          const downwardAway = noseOffsetY > 0.2;
-          const lookingAway = horizontalAway || upwardAway || downwardAway;
-
-          let direction = 'center';
-          if (horizontalAway) {
-            direction = noseOffsetX > 0 ? 'right' : 'left';
-          }
-          if (upwardAway) {
-            direction = direction === 'center' ? 'up' : `${direction}_up`;
-          } else if (downwardAway) {
-            direction = direction === 'center' ? 'down' : `${direction}_down`;
-          }
-
-          return { lookingAway, direction, noseOffsetX, noseOffsetY };
-        };
-
-        const runAdvancedFaceAnalysis = async () => {
-          if (
-            !isMonitoringRef.current ||
-            !faceVideoRef.current ||
-            faceDetectionCancelledRef.current ||
-            document.hidden ||
-            document.visibilityState === 'hidden' ||
-            isCameraObstructedRef.current ||
-            lastSimpleFaceCount !== 1
-          ) {
-            resetAdvancedStates();
-            return;
-          }
-
-          if (faceApiBusy) return;
-          faceApiBusy = true;
-
-          try {
-            if (!identityBaseline) {
-              identityBaseline = readAssessmentFaceBaseline(tokenRef.current);
-            }
-
-            const faceapi = await ensureAdvancedFaceApi();
-            if (!faceapi || !faceVideoRef.current || faceDetectionCancelledRef.current) {
-              return;
-            }
-
-            const options = new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 });
-            let frameWidth = faceVideoRef.current.videoWidth;
-            let frameHeight = faceVideoRef.current.videoHeight;
-            let usedSnapshot = false;
-            let detections;
-
-            try {
-              detections = await faceapi
-                .detectAllFaces(faceVideoRef.current, options)
-                .withFaceLandmarks()
-                .withFaceDescriptors();
-            } catch (videoError) {
-              const snapshot = createVideoFrameCanvas(faceVideoRef.current);
-              if (!snapshot) {
-                throw videoError;
-              }
-              detections = await faceapi
-                .detectAllFaces(snapshot, options)
-                .withFaceLandmarks()
-                .withFaceDescriptors();
-              frameWidth = snapshot.width;
-              frameHeight = snapshot.height;
-              usedSnapshot = true;
-            }
-
-            if (!detections.length && !usedSnapshot) {
-              const snapshot = createVideoFrameCanvas(faceVideoRef.current);
-              if (snapshot) {
-                detections = await faceapi
-                  .detectAllFaces(snapshot, options)
-                  .withFaceLandmarks()
-                  .withFaceDescriptors();
-                frameWidth = snapshot.width;
-                frameHeight = snapshot.height;
-              }
-            }
-
-            const typedDetections = detections as Array<{
-              detection: {
-                box: { x: number; y: number; width: number; height: number };
-                score?: number;
-              };
-              descriptor: Float32Array;
-              landmarks: { positions: Array<{ x: number; y: number }> };
-            }>;
-            const confidentDetections = typedDetections.filter((candidate) => {
-              const score = candidate.detection?.score;
-              return typeof score !== 'number' || score >= MIN_CONFIDENT_FACE_SCORE;
-            });
-            const multiFaceDetectionCandidates = typedDetections.filter((candidate) => {
-              const score = candidate.detection?.score;
-              return typeof score !== 'number' || score >= MULTI_FACE_MIN_CONFIDENT_SCORE;
-            });
-            const detection = pickPrimaryFace(
-              confidentDetections,
-              (candidate) => {
-                const box = candidate.detection?.box;
-                return box
-                  ? {
-                      x: box.x,
-                      y: box.y,
-                      width: box.width,
-                      height: box.height,
-                      score: candidate.detection?.score,
-                    }
-                  : null;
-              },
-              frameWidth,
-              frameHeight,
-            );
-            const primaryVisibility = assessCandidateFaceVisibility(
-              detection
-                ? {
-                    x: detection.detection.box.x,
-                    y: detection.detection.box.y,
-                    width: detection.detection.box.width,
-                    height: detection.detection.box.height,
-                    score: detection.detection.score,
-                  }
-                : null,
-              frameWidth,
-              frameHeight,
-            );
-            const multipleFaceDetections = filterMultipleFaceCandidates(
-              multiFaceDetectionCandidates,
-              (candidate) => {
-                const box = candidate.detection?.box;
-                return box
-                  ? {
-                      x: box.x,
-                      y: box.y,
-                      width: box.width,
-                      height: box.height,
-                      score: candidate.detection?.score,
-                    }
-                  : null;
-              },
-              frameWidth,
-              frameHeight,
-            );
-            const additionalFaceDetections = filterAdditionalFaceCandidates(
-              multiFaceDetectionCandidates,
-              (candidate) => {
-                const box = candidate.detection?.box;
-                return box
-                  ? {
-                      x: box.x,
-                      y: box.y,
-                      width: box.width,
-                      height: box.height,
-                      score: candidate.detection?.score,
-                    }
-                  : null;
-              },
-              detection,
-              frameWidth,
-              frameHeight,
-            );
-            const advancedVisibleCount =
-              multipleFaceDetections.length > 1
-                ? multipleFaceDetections.length
-                : ((primaryVisibility.visible || additionalFaceDetections.length > 0) && detection ? (1 + additionalFaceDetections.length) : 0);
-            rememberAdvancedFaceOverride(advancedVisibleCount);
-
-            if (advancedVisibleCount !== 1) {
-              handleFaceCount(advancedVisibleCount, 'face-api.js-advanced', {
-                reason: multipleFaceDetections.length === 0 && typedDetections.length > 0
-                  ? (primaryVisibility.visible ? 'low_confidence_face' : primaryVisibility.reason)
-                  : (primaryVisibility.visible ? 'ok' : primaryVisibility.reason),
-                candidate_visible: primaryVisibility.visible,
-                raw_face_count: typedDetections.length,
-                confident_face_count: confidentDetections.length,
-                multi_face_confident_count: multiFaceDetectionCandidates.length,
-                significant_face_count: multipleFaceDetections.length,
-                additional_face_count: additionalFaceDetections.length,
-                primary_face_metrics: primaryVisibility.metrics,
-              });
-              resetAdvancedStates();
-              return;
-            }
-
-            if (!primaryVisibility.visible) {
-              resetAdvancedStates();
-              return;
-            }
-
-            if (!detection?.descriptor || !detection.landmarks) {
-              resetAdvancedStates();
-              return;
-            }
-
-            const gaze = classifyGazeDirection(detection.landmarks.positions);
-            if (gaze?.lookingAway) {
-              consecutiveGazeAway += 1;
-              consecutiveGazeRestored = 0;
-              if (consecutiveGazeAway >= GAZE_AWAY_CONFIRMATIONS) {
-                consecutiveGazeAway = 0;
-                emitEventRef.current('gaze_away', {
-                  direction: gaze.direction,
-                  noseOffsetX: Number(gaze.noseOffsetX.toFixed(3)),
-                  noseOffsetY: Number(gaze.noseOffsetY.toFixed(3)),
-                });
-              }
-            } else {
-              consecutiveGazeRestored += 1;
-              if (consecutiveGazeRestored >= GAZE_RESTORED_CONFIRMATIONS) {
-                consecutiveGazeAway = 0;
-                consecutiveGazeRestored = 0;
-              }
-            }
-
-            if (identityBaseline?.descriptor) {
-              const distance = faceapi.euclideanDistance(
-                Array.from(identityBaseline.descriptor),
-                Array.from(detection.descriptor),
-              );
-
-              if (distance > IDENTITY_MISMATCH_THRESHOLD) {
-                consecutiveIdentityMismatch += 1;
-                if (
-                  consecutiveIdentityMismatch >= IDENTITY_MISMATCH_CONFIRMATIONS &&
-                  Date.now() - lastIdentityMismatchEventAtRef.current > IDENTITY_EVENT_COOLDOWN_MS
-                ) {
-                  consecutiveIdentityMismatch = 0;
-                  lastIdentityMismatchEventAtRef.current = Date.now();
-                  emitEventRef.current('identity_mismatch', {
-                    distance: Number(distance.toFixed(3)),
-                    baseline_source: identityBaseline.source,
-                    baseline_created_at: identityBaseline.createdAt,
-                  });
-                }
-              } else {
-                consecutiveIdentityMismatch = 0;
-              }
-            } else {
-              bootstrapDescriptors.push(detection.descriptor);
-              if (bootstrapDescriptors.length >= IDENTITY_BOOTSTRAP_CAPTURES) {
-                const baselineDescriptor = averageDescriptors(
-                  bootstrapDescriptors.slice(0, IDENTITY_BOOTSTRAP_CAPTURES),
-                );
-                writeAssessmentFaceBaseline(tokenRef.current, baselineDescriptor, 'assessment_bootstrap');
-                identityBaseline = {
-                  descriptor: baselineDescriptor,
-                  source: 'assessment_bootstrap',
-                  createdAt: new Date().toISOString(),
-                };
-                bootstrapDescriptors.length = 0;
-              }
-            }
-          } catch (error) {
-            console.warn('[PROCTORING] Advanced face analysis skipped:', error);
-          } finally {
-            faceApiBusy = false;
-          }
-        };
-
-        const startAdvancedFaceAnalysis = () => {
-          if (faceAnalysisIntervalRef.current) {
-            clearInterval(faceAnalysisIntervalRef.current);
-            faceAnalysisIntervalRef.current = null;
-          }
-
-          const startTimer = window.setTimeout(() => {
-            void runAdvancedFaceAnalysis();
-            faceAnalysisIntervalRef.current = setInterval(() => {
-              void runAdvancedFaceAnalysis();
-            }, FACE_DETECTION_INTERVAL);
-          }, Math.floor(FACE_DETECTION_INTERVAL / 2));
-
-          faceAnalysisIntervalRef.current = startTimer as unknown as NodeJS.Timeout;
-          console.log('[PROCTORING] Advanced face analysis started');
-        };
-
-        // ── Path A: Native FaceDetector (Chrome/Edge, no model download) ──
-        if ('FaceDetector' in window) {
-          type NativeFaceDetector = {
-            detect: (input: HTMLVideoElement) => Promise<ArrayLike<unknown>>;
-          };
-          type NativeFaceDetectorCtor = new (options: {
-            fastMode?: boolean;
-            maxDetectedFaces?: number;
-          }) => NativeFaceDetector;
-
-          const FaceDetectorAPI = (window as Window & {
-            FaceDetector?: NativeFaceDetectorCtor;
-          }).FaceDetector;
-          if (!FaceDetectorAPI) return;
-
-          const detector = new FaceDetectorAPI({ fastMode: false, maxDetectedFaces: 8 });
-
-          // Guard: component may have unmounted while video was preparing
-          if (faceDetectionCancelledRef.current) return;
-
-          faceIntervalRef.current = setInterval(async () => {
-            if (!isMonitoringRef.current || !faceVideoRef.current) return;
-            try {
-              const faces = await detector.detect(faceVideoRef.current);
-              const detectedFaces = Array.from(faces);
-              const multipleFaceCandidates = filterMultipleFaceCandidates(
-                detectedFaces,
-                (face) => {
-                  const box = (face as { boundingBox?: DOMRectReadOnly | DOMRect }).boundingBox;
-                  return box
-                    ? { x: box.x, y: box.y, width: box.width, height: box.height }
-                    : null;
-                },
-                faceVideoRef.current.videoWidth,
-                faceVideoRef.current.videoHeight,
-              );
-              const primaryFace = pickPrimaryFace(
-                detectedFaces,
-                (face) => {
-                  const box = (face as { boundingBox?: DOMRectReadOnly | DOMRect }).boundingBox;
-                  return box
-                    ? { x: box.x, y: box.y, width: box.width, height: box.height }
-                    : null;
-                },
-                faceVideoRef.current.videoWidth,
-                faceVideoRef.current.videoHeight,
-              );
-              const primaryVisibility = assessCandidateFaceVisibility(
-                primaryFace
-                  ? (() => {
-                      const box = (primaryFace as { boundingBox?: DOMRectReadOnly | DOMRect }).boundingBox;
-                      return box ? { x: box.x, y: box.y, width: box.width, height: box.height } : null;
-                    })()
-                  : null,
-                faceVideoRef.current.videoWidth,
-                faceVideoRef.current.videoHeight,
-              );
-              const additionalFaces = filterAdditionalFaceCandidates(
-                detectedFaces,
-                (face) => {
-                  const box = (face as { boundingBox?: DOMRectReadOnly | DOMRect }).boundingBox;
-                  return box
-                    ? { x: box.x, y: box.y, width: box.width, height: box.height }
-                    : null;
-                },
-                primaryFace,
-                faceVideoRef.current.videoWidth,
-                faceVideoRef.current.videoHeight,
-              );
-              const visibleCount =
-                multipleFaceCandidates.length > 1
-                  ? multipleFaceCandidates.length
-                  : ((primaryVisibility.visible || additionalFaces.length > 0) && primaryFace ? (1 + additionalFaces.length) : 0);
-              lastSimpleFaceCount = visibleCount;
-              const effectiveVisibleCount = getEffectiveFaceCount(visibleCount);
-              handleFaceCount(effectiveVisibleCount, 'native', {
-                reason: primaryVisibility.visible ? 'ok' : primaryVisibility.reason,
-                candidate_visible: primaryVisibility.visible,
-                raw_face_count: detectedFaces.length,
-                simple_visible_count: visibleCount,
-                effective_visible_count: effectiveVisibleCount,
-                significant_face_count: multipleFaceCandidates.length,
-                additional_face_count: additionalFaces.length,
-                primary_face_metrics: primaryVisibility.metrics,
-              });
-            } catch (error) {
-              handleDetectionFailure('native', error);
-            }
-          }, FACE_DETECTION_INTERVAL);
-
-          startAdvancedFaceAnalysis();
-
-          console.log('[PROCTORING] Face detection started (native FaceDetector — Chrome/Edge)');
-          return;
-        }
-
-        // ── Path B: face-api.js with TinyFaceDetector (Firefox / Safari / all others) ──
-        const faceapi = await loadFaceApiWithCpuBackend();
-
-        try {
-          await loadFaceApiNetWithFallback(faceapi.nets.tinyFaceDetector, FACE_API_MODEL_URLS);
-        } catch (loadErr) {
-          console.error('[PROCTORING] TinyFaceDetector model could not be loaded from any source — face detection unavailable on this browser', loadErr);
-          return;
-        }
-
-        // Guard: component may have unmounted during model download (~190 KB fetch)
-        if (faceDetectionCancelledRef.current) {
-          console.log('[PROCTORING] Face detection cancelled after model load — component unmounted');
-          return;
-        }
-
-        const detectorOptions = new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.5 });
-
-        faceIntervalRef.current = setInterval(async () => {
-          if (!isMonitoringRef.current || !faceVideoRef.current || faceApiBusy) return;
-          faceApiBusy = true;
-          try {
-            let frameWidth = faceVideoRef.current.videoWidth;
-            let frameHeight = faceVideoRef.current.videoHeight;
-            let usedSnapshot = false;
-            let detections;
-
-            try {
-              detections = await faceapi.detectAllFaces(faceVideoRef.current, detectorOptions);
-            } catch (videoError) {
-              const snapshot = createVideoFrameCanvas(faceVideoRef.current);
-              if (!snapshot) {
-                throw videoError;
-              }
-              detections = await faceapi.detectAllFaces(snapshot, detectorOptions);
-              frameWidth = snapshot.width;
-              frameHeight = snapshot.height;
-              usedSnapshot = true;
-            }
-
-            if (!detections.length && !usedSnapshot) {
-              const snapshot = createVideoFrameCanvas(faceVideoRef.current);
-              if (snapshot) {
-                detections = await faceapi.detectAllFaces(snapshot, detectorOptions);
-                frameWidth = snapshot.width;
-                frameHeight = snapshot.height;
-              }
-            }
-
-            const typedDetections = detections as Array<{
-              box: { x: number; y: number; width: number; height: number };
-              score?: number;
-            }>;
-            const confidentDetections = typedDetections.filter(
-              detection => (typeof detection.score === 'number' ? detection.score >= MIN_CONFIDENT_FACE_SCORE : true),
-            );
-            const multiFaceDetectionCandidates = typedDetections.filter(
-              detection => (typeof detection.score === 'number' ? detection.score >= MULTI_FACE_MIN_CONFIDENT_SCORE : true),
-            );
-            const multipleFaceDetections = filterMultipleFaceCandidates(
-              multiFaceDetectionCandidates,
-              (detection) => ({
-                x: detection.box.x,
-                y: detection.box.y,
-                width: detection.box.width,
-                height: detection.box.height,
-                score: detection.score,
-              }),
-              frameWidth,
-              frameHeight,
-            );
-            const primaryDetection = pickPrimaryFace(
-              confidentDetections,
-              (detection) => ({
-                x: detection.box.x,
-                y: detection.box.y,
-                width: detection.box.width,
-                height: detection.box.height,
-                score: detection.score,
-              }),
-              frameWidth,
-              frameHeight,
-            );
-            const primaryVisibility = assessCandidateFaceVisibility(
-              primaryDetection
-                ? {
-                    x: primaryDetection.box.x,
-                    y: primaryDetection.box.y,
-                    width: primaryDetection.box.width,
-                    height: primaryDetection.box.height,
-                    score: primaryDetection.score,
-                  }
-                : null,
-              frameWidth,
-              frameHeight,
-            );
-            const additionalFaceDetections = filterAdditionalFaceCandidates(
-              multiFaceDetectionCandidates,
-              (detection) => ({
-                x: detection.box.x,
-                y: detection.box.y,
-                width: detection.box.width,
-                height: detection.box.height,
-                score: detection.score,
-              }),
-              primaryDetection,
-              frameWidth,
-              frameHeight,
-            );
-            const visibleCount =
-              multipleFaceDetections.length > 1
-                ? multipleFaceDetections.length
-                : ((primaryVisibility.visible || additionalFaceDetections.length > 0) && primaryDetection ? (1 + additionalFaceDetections.length) : 0);
-            lastSimpleFaceCount = visibleCount;
-            const effectiveVisibleCount = getEffectiveFaceCount(visibleCount);
-
-            handleFaceCount(effectiveVisibleCount, 'face-api.js', {
-              reason: multipleFaceDetections.length === 0 && detections.length > 0
-                ? 'low_confidence_face'
-                : (primaryVisibility.visible ? 'ok' : primaryVisibility.reason),
-              candidate_visible: primaryVisibility.visible,
-              raw_face_count: detections.length,
-              confident_face_count: confidentDetections.length,
-              simple_visible_count: visibleCount,
-              effective_visible_count: effectiveVisibleCount,
-              multi_face_confident_count: multiFaceDetectionCandidates.length,
-              significant_face_count: multipleFaceDetections.length,
-              additional_face_count: additionalFaceDetections.length,
-              primary_face_metrics: primaryVisibility.metrics,
-            });
-          } catch (error) {
-            handleDetectionFailure('face-api.js', error);
-          } finally {
-            faceApiBusy = false;
-          }
-        }, FACE_DETECTION_INTERVAL);
-
-        advancedFaceApi = faceapi;
-        startAdvancedFaceAnalysis();
-
-        console.log('[PROCTORING] Face detection started (face-api.js — Firefox/Safari/Opera compatible)');
-      } catch (err) {
-        console.error('[PROCTORING] Face detection setup failed:', err);
+      faceMonitorRef.current = monitor;
+      await monitor.start();
+      if (faceDetectionCancelledRef.current) {
+        monitor.stop();
+        if (faceMonitorRef.current === monitor) faceMonitorRef.current = null;
+        return;
       }
+      console.log('[PROCTORING] Face detection started (assessmentFaceMonitor / MediaPipe)');
     }).catch(err => {
       console.error('[PROCTORING] Face detection video failed to play:', err);
     });
@@ -2582,10 +1981,10 @@ export function useProctoringMonitor({
       // Cancel any in-flight async face detection setup (model download / video.play)
       faceDetectionCancelledRef.current = true;
       clearAllContinuousViolations();
+      faceMonitorRef.current?.stop();
+      faceMonitorRef.current = null;
       if (videoIntervalRef.current) { clearInterval(videoIntervalRef.current); videoIntervalRef.current = null; }
       if (voiceIntervalRef.current) { clearInterval(voiceIntervalRef.current); voiceIntervalRef.current = null; }
-      if (faceIntervalRef.current) { clearInterval(faceIntervalRef.current); faceIntervalRef.current = null; }
-      if (faceAnalysisIntervalRef.current) { clearInterval(faceAnalysisIntervalRef.current); faceAnalysisIntervalRef.current = null; }
       if (batchFlushIntervalRef.current) { clearInterval(batchFlushIntervalRef.current); batchFlushIntervalRef.current = null; }
 
       // Final flush — send remaining events to backend
@@ -2640,6 +2039,7 @@ function getSeverity(type: ProctoringEventType): string {
     multiple_faces: 'high',
     gaze_away: 'medium',
     identity_mismatch: 'high',
+    assessment_terminated: 'high',
   };
   return map[type] || 'low';
 }

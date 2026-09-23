@@ -45,6 +45,12 @@ import { Monitor, Loader2, AlertCircle, Maximize2, ClipboardList } from 'lucide-
 import { Button } from '@/components/ui/button';
 import { getUserMedia, getErrorMessage, detectBrowser, requestFullscreen, isFullscreen, getFullscreenChangeEvent, exitFullscreen, playVideo, shouldUseAdaptiveAssessmentMode, lockKeyboardShortcuts, unlockKeyboardShortcuts } from '@/lib/utils/browserCompat';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
+import { SegmentedRecorder, createCanvasRelayTrack, resetRecorderSegments } from '@/lib/proctoring/segmentedRecorder';
+import { beginLegitimateShare, endLegitimateShare, registerAppOwnedStream, unregisterAppOwnedStream } from '@/components/ai-interview/proctoring/ScreenRecordingGuard';
+import { ShareBarGateScreen } from './ShareBarGateScreen';
+
+const ENTIRE_SCREEN_REQUIRED_MESSAGE = 'Please select Entire Screen. Window and Current Tab sharing are not allowed.';
+const SCREEN_SHARE_REQUIRED_MESSAGE = 'Entire Screen sharing is mandatory to continue the assessment.';
 
 // ============================================
 // FULLSCREEN PROMPT SCREEN COMPONENT
@@ -55,14 +61,21 @@ import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 
 interface FullscreenPromptScreenProps {
   onFullscreenReady: () => void;
+  /** Runs on the click BEFORE requestFullscreen (screen-share picker). Return false to stay on this screen. */
+  beforeFullscreen?: () => Promise<boolean>;
+  notice?: string | null;
 }
 
-function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenProps) {
+function FullscreenPromptScreen({ onFullscreenReady, beforeFullscreen, notice }: FullscreenPromptScreenProps) {
   const [isEnteringFullscreen, setIsEnteringFullscreen] = useState(false);
 
   // This handler is directly attached to a button onClick — guaranteed user gesture context.
   const enterFullscreenAndStart = async () => {
     setIsEnteringFullscreen(true);
+    if (beforeFullscreen) {
+      const ok = await beforeFullscreen();
+      if (!ok) { setIsEnteringFullscreen(false); return; }
+    }
     try {
       await requestFullscreen();
       await lockKeyboardShortcuts(['F11']);
@@ -84,6 +97,11 @@ function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenPro
         <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 text-center">
           Enter Fullscreen Mode
         </h1>
+        {notice && (
+          <div className="rounded-lg border border-destructive/30 bg-destructive-subtle text-destructive text-sm p-3 mb-5 text-center" role="alert">
+            {notice}
+          </div>
+        )}
 
         <p className="text-lg text-gray-600 mb-8 text-center">
           This assessment requires fullscreen mode to prevent distractions and ensure a fair testing environment.
@@ -104,6 +122,14 @@ function FullscreenPromptScreen({ onFullscreenReady }: FullscreenPromptScreenPro
             <li className="flex items-start gap-2">
               <span className="text-brand-blue mt-1">✓</span>
               <span>Keep the window focused throughout the assessment</span>
+            </li>
+            <li className="flex items-start gap-2">
+              <span className="text-destructive mt-1">!</span>
+              <span>
+                {IS_PRODUCTION_ENV
+                  ? 'Switching tabs, minimising the window, Alt+Tab, pressing Esc or F11, the Windows/⌘ key, or opening Picture-in-Picture ends the assessment immediately with no resume.'
+                  : 'Switching tabs, minimising the window, Alt+Tab, pressing Esc or F11 or opening Picture-in-Picture is recorded as a violation for the recruiter.'}
+              </span>
             </li>
           </ul>
         </div>
@@ -144,11 +170,13 @@ type AssessmentStep =
   | 'hr_questions'
   | 'choose_coding_language'  // Pre-assessment language pick when 2+ compilable languages
   | 'fullscreen_prompt'
+  | 'hide_share_bar'        // entire-screen share granted; vision gate before start
   | 'generating_questions'
   | 'assessment'
   | 'completing'
   | 'completed'  // NEW: Shows completion message immediately
-  | 'results';
+  | 'results'
+  | 'terminated'; // proctoring termination (production): persisted per token, no resume
 
 interface CandidateAssessmentPortalProps {
   token: string;
@@ -158,6 +186,10 @@ interface CandidateAssessmentPortalProps {
 
 /** How often the assessment session heartbeat is sent — see startHeartbeatWorker. */
 const HEARTBEAT_INTERVAL_MS = 10000;
+
+// A proctoring termination is persisted per token so reopening the link keeps
+// showing the terminated page — the candidate cannot restart by reloading.
+const assessmentTerminatedStorageKey = (token: string) => `tf_as_terminated_${token}`;
 
 const getHRCompletedKey = (token: string) => `assessment_hr_completed_${token}`;
 
@@ -186,6 +218,21 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   const [step, setStep] = useState<AssessmentStep>('loading');
   const [error, setError] = useState<string | null>(null);
   const [isExpiredLink, setIsExpiredLink] = useState(false);
+  const [terminatedReason, setTerminatedReason] = useState<{ reason: string; message: string } | null>(null);
+  // ── Recording (port of the AI interview pipeline) ──────────────────────────
+  const screenStreamRef = useRef<MediaStream | null>(null);
+  const screenRecorderRef = useRef<SegmentedRecorder | null>(null);
+  const cameraRecorderRef = useRef<SegmentedRecorder | null>(null);
+  const cameraRelayStopRef = useRef<(() => void) | null>(null);
+  const cameraRelayVideoRef = useRef<HTMLVideoElement | null>(null);
+  const pendingResumeAfterShareRef = useRef(false);
+  const shareBarPageRef = useRef<HTMLDivElement | null>(null);
+  const shareBarCardRef = useRef<HTMLDivElement | null>(null);
+  const [screenShareNotice, setScreenShareNotice] = useState<string | null>(null);
+  const [screenShareStopped, setScreenShareStopped] = useState(false);
+  const [reshareBusy, setReshareBusy] = useState(false);
+  const [shareBarError, setShareBarError] = useState<string | null>(null);
+  const [shareBarChecking, setShareBarChecking] = useState(false);
   // Distinct from isExpiredLink — set when the recruiter explicitly revoked
   // the invitation. Drives a different icon + title on the error screen so
   // the candidate knows to contact the recruiter rather than wait.
@@ -273,7 +320,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     // Persist resumable steps; clear when past the flow or on terminal states
     if (ASSESS_PERSIST_STEPS.includes(newStep)) {
       sessionStorage.setItem(ASSESS_SESSION_KEY, newStep);
-    } else if (['assessment', 'completing', 'completed', 'results', 'error'].includes(newStep)) {
+    } else if (['assessment', 'completing', 'completed', 'results', 'error', 'terminated'].includes(newStep)) {
       sessionStorage.removeItem(ASSESS_SESSION_KEY);
     }
 
@@ -400,6 +447,13 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     });
   }, [token]);
 
+  const recordingSettings = (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings) ?? null;
+  // Screen recording is a HARD gate (product decision 2026-09-23) unless the
+  // tenant switched it off in proctoring settings. Webcam recording follows
+  // webcam_monitoring. Adaptive mode (browsers without fullscreen/share) skips both.
+  const screenRecordingRequired = !useAdaptiveAssessmentMode && recordingSettings?.screen_recording !== false;
+  const cameraRecordingEnabled = !useAdaptiveAssessmentMode && recordingSettings?.webcam_monitoring !== false;
+
   useRefreshPrevention({
     enabled: isAssessmentActive,
     message: 'You have an ongoing assessment. Leaving this page will end your session.',
@@ -482,7 +536,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     }
 
     // Mark flow as inactive when reaching terminal states
-    if (step === 'completed' || step === 'results' || step === 'error') {
+    if (step === 'completed' || step === 'results' || step === 'error' || step === 'terminated') {
       console.log('[DEBUG] Reached terminal state - resetting isFlowActiveRef');
       isFlowActiveRef.current = false;
     }
@@ -521,7 +575,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   }, [token]);
 
   useEffect(() => {
-    if (step === 'completed' || step === 'results' || step === 'error') {
+    if (step === 'completed' || step === 'results' || step === 'error' || step === 'terminated') {
       clearHRCompleted(token);
     }
   }, [step, token]);
@@ -530,7 +584,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   useEffect(() => {
     if (step === 'assessment') {
       startProctoring();
-    } else if (step === 'completing' || step === 'completed' || step === 'results') {
+    } else if (step === 'completing' || step === 'completed' || step === 'results' || step === 'terminated') {
       // Explicitly stop proctoring when assessment ends
       stopProctoring();
       console.log('[PROCTORING] Stopped - assessment ended');
@@ -539,6 +593,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       stopProctoring();
     };
   }, [step]);
+
 
   // Fullscreen enforcement — listen on ALL steps so entering fullscreen
   // during 'fullscreen_prompt' is captured before assessment step starts.
@@ -708,6 +763,17 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         return;
       }
 
+      // A persisted proctoring termination wins over every other status.
+      try {
+        const persisted = localStorage.getItem(assessmentTerminatedStorageKey(token));
+        if (persisted) {
+          const parsed = (() => { try { return JSON.parse(persisted); } catch { return { reason: persisted, message: '' }; } })();
+          setTerminatedReason(parsed);
+          setStepSafe('terminated');
+          return;
+        }
+      } catch { /* storage unavailable */ }
+
       // Determine initial step based on status
 
       // Pre-assessment language picker. When the candidate returns to a
@@ -794,6 +860,17 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
             total: question.total_questions,
             percent: Math.round(((question.question_number - 1) / question.total_questions) * 100)
           });
+          // Screen recording is mandatory: a reload lost the share, so route
+          // through the fullscreen prompt (share picker) + hide-share-bar gate
+          // before the assessment screen mounts again.
+          const _resumeSettings = info.proctoring_settings ?? null;
+          const _needsShare = !shouldUseAdaptiveAssessmentMode(detectBrowser()) && _resumeSettings?.screen_recording !== false;
+          if (_needsShare && !screenStreamRef.current) {
+            pendingResumeAfterShareRef.current = true;
+            setScreenShareNotice('Your assessment is still in progress. Share your entire screen again to continue.');
+            setStepSafe('fullscreen_prompt');
+            return;
+          }
           setStepSafe('assessment');
         } catch (resumeError: any) {
           console.log('[DEBUG] Error resuming assessment:', resumeError);
@@ -1126,6 +1203,320 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   }
 
   // NEW: Handler for when user enters fullscreen and is ready to start
+  // ── Entire-screen share (hard gate) ────────────────────────────────────────
+  const stopScreenShare = useCallback(() => {
+    unregisterAppOwnedStream(screenStreamRef.current);
+    screenStreamRef.current?.getTracks().forEach((t) => { t.onended = null; t.stop(); });
+    screenStreamRef.current = null;
+  }, []);
+
+  const startScreenRecorder = useCallback(() => {
+    const stream = screenStreamRef.current;
+    if (!stream || screenRecorderRef.current) return;
+    const track = stream.getVideoTracks()[0];
+    if (!track || track.readyState !== 'live') return;
+    const recorder = new SegmentedRecorder({
+      stream: new MediaStream([track]),
+      upload: (blob, idx, isFinal) => candidateService.uploadScreenRecording(token, blob, idx, isFinal),
+      storageKey: `tf_as_rec_seg_screen_${token}`,
+      label: 'AS-ScreenRecording',
+      videoBitsPerSecond: 300_000,
+      onError: (name) => {
+        void candidateService.reportProctorEvent(token, {
+          event_type: 'screen_recording_failed', timestamp: new Date().toISOString(),
+          details: { error: name, severity: 'high' },
+        }).catch(() => {});
+      },
+    });
+    screenRecorderRef.current = recorder;
+    recorder.start();
+  }, [token]);
+
+  const requestEntireScreenShare = useCallback(async (): Promise<MediaStream> => {
+    const displayMediaOptions: any = {
+      video: { frameRate: 15, width: { ideal: 1920 }, height: { ideal: 1080 }, displaySurface: 'monitor' },
+      audio: false,
+      preferCurrentTab: false,
+      selfBrowserSurface: 'exclude',
+      surfaceSwitching: 'exclude',
+      monitorTypeSurfaces: 'include',
+    };
+    // Our own share must pass the proctoring getDisplayMedia guard
+    // (useProctoringMonitor blocks candidate-initiated capture).
+    let stream: MediaStream;
+    beginLegitimateShare();
+    try {
+      stream = await (navigator.mediaDevices as any).getDisplayMedia(displayMediaOptions);
+    } finally {
+      endLegitimateShare();
+    }
+    const track = stream.getVideoTracks()[0];
+    const surface = (track?.getSettings?.() as any)?.displaySurface;
+    if (surface && surface !== 'monitor') {
+      stream.getTracks().forEach((t) => t.stop());
+      const err = new Error(ENTIRE_SCREEN_REQUIRED_MESSAGE);
+      (err as any).name = 'InvalidScreenSelectionError';
+      throw err;
+    }
+    registerAppOwnedStream(stream);
+    stopScreenShare();
+    screenStreamRef.current = stream;
+    track.addEventListener('ended', () => {
+      if (screenStreamRef.current !== stream) return;
+      unregisterAppOwnedStream(stream);
+      screenStreamRef.current = null;
+      const current = stepRef.current;
+      if (current === 'assessment') {
+        // Candidate pressed "Stop sharing": flush what we have, log it as a
+        // high-severity violation and block until they re-share.
+        const rec = screenRecorderRef.current;
+        screenRecorderRef.current = null;
+        void rec?.stop();
+        setScreenShareStopped(true);
+        void candidateService.reportProctorEvent(token, {
+          event_type: 'screen_share_stopped', timestamp: new Date().toISOString(),
+          details: { reason: 'candidate_stopped_sharing', severity: 'high' },
+        }).catch(() => {});
+      } else if (current === 'hide_share_bar') {
+        setShareBarChecking(false);
+        setScreenShareNotice(SCREEN_SHARE_REQUIRED_MESSAGE);
+        setStepSafe('fullscreen_prompt');
+      }
+    });
+    return stream;
+  }, [token, stopScreenShare, setStepSafe]);
+
+  /** Fullscreen-prompt click: request the share first (the picker leaves fullscreen). */
+  const handleBeforeFullscreen = useCallback(async (): Promise<boolean> => {
+    if (!screenRecordingRequired) return true;
+    setScreenShareNotice(null);
+    try {
+      await requestEntireScreenShare();
+      return true;
+    } catch (e: any) {
+      const name = e?.name || '';
+      if (name === 'InvalidScreenSelectionError') setScreenShareNotice(ENTIRE_SCREEN_REQUIRED_MESSAGE);
+      else if (name === 'NotAllowedError' || name === 'AbortError') setScreenShareNotice(SCREEN_SHARE_REQUIRED_MESSAGE + ' Please click the button again and choose "Entire Screen".');
+      else setScreenShareNotice('Screen sharing is not available in this browser. Please use the latest Chrome or Edge on a desktop computer.');
+      return false;
+    }
+  }, [screenRecordingRequired, requestEntireScreenShare]);
+
+  const captureScreenFrame = useCallback(async (): Promise<Blob | null> => {
+    const stream = screenStreamRef.current;
+    const track = stream?.getVideoTracks?.()[0];
+    if (!stream || !track || track.readyState !== 'live') return null;
+    const card = shareBarCardRef.current;
+    const page = shareBarPageRef.current;
+    const prevVis = card?.style.visibility;
+    const prevBg = page?.style.background;
+    if (card) card.style.visibility = 'hidden';
+    if (page) page.style.background = '#ffffff';
+    const video = document.createElement('video');
+    video.muted = true; video.playsInline = true;
+    video.style.position = 'fixed'; video.style.left = '-99999px'; video.style.top = '0';
+    video.style.width = '2px'; video.style.height = '2px';
+    document.body.appendChild(video);
+    try {
+      video.srcObject = stream;
+      try { await video.play(); } catch { /* ignore */ }
+      await new Promise<void>((resolve) => {
+        if (video.videoWidth && video.readyState >= 2) return resolve();
+        const on = () => { video.removeEventListener('loadeddata', on); resolve(); };
+        video.addEventListener('loadeddata', on);
+        window.setTimeout(resolve, 1500);
+      });
+      const vw = video.videoWidth || 1280, vh = video.videoHeight || 720;
+      const targetW = Math.min(2048, Math.max(vw, 1920));
+      const scale = targetW / vw;
+      const cw = Math.max(1, Math.round(vw * scale)), ch = Math.max(1, Math.round(vh * scale));
+      const grab = () => {
+        const canvas = document.createElement('canvas');
+        canvas.width = cw; canvas.height = ch;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+        ctx.imageSmoothingEnabled = true;
+        try { ctx.imageSmoothingQuality = 'high'; } catch { /* ignore */ }
+        ctx.drawImage(video, 0, 0, cw, ch);
+        return canvas;
+      };
+      const looksBlank = (canvas: HTMLCanvasElement) => {
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return true;
+        const sy = Math.round(ch * 0.03), sh = Math.max(1, Math.round(ch * 0.03));
+        const sx = Math.round(cw * 0.1), sw = Math.round(cw * 0.8);
+        let data: Uint8ClampedArray;
+        try { data = ctx.getImageData(sx, sy, sw, sh).data; } catch { return true; }
+        let sum = 0;
+        for (let i = 0; i < data.length; i += 4) sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
+        return data.length > 0 && sum / (data.length / 4) > 235;
+      };
+      // Wait (bounded) for the white background to actually land in the capture.
+      let canvas: HTMLCanvasElement | null = null;
+      for (let i = 0; i < 6; i += 1) {
+        await new Promise((r) => setTimeout(r, i === 0 ? 400 : 300));
+        canvas = grab();
+        if (canvas && looksBlank(canvas)) break;
+      }
+      if (!canvas) return null;
+      return await new Promise<Blob | null>((resolve) => canvas!.toBlob((b) => resolve(b), 'image/jpeg', 0.9));
+    } finally {
+      try { video.pause(); } catch { /* ignore */ }
+      video.srcObject = null;
+      video.remove();
+      if (card) card.style.visibility = prevVis || '';
+      if (page) page.style.background = prevBg || '';
+    }
+  }, []);
+
+  /** Hide-share-bar gate Continue: capture → vision verdict → proceed only when clean. */
+  const handleShareBarContinue = useCallback(async () => {
+    if (shareBarChecking) return;
+    const track = screenStreamRef.current?.getVideoTracks?.()[0];
+    if (!screenStreamRef.current || !track || track.readyState !== 'live') {
+      setScreenShareNotice(SCREEN_SHARE_REQUIRED_MESSAGE);
+      setStepSafe('fullscreen_prompt');
+      return;
+    }
+    if (document.pictureInPictureElement) {
+      setShareBarError('We detected a Picture-in-Picture window floating over this page. Please close it, then press Continue again.');
+      return;
+    }
+    if (!isFullscreen()) { try { await requestFullscreen(); } catch { /* verified later */ } }
+    const dpr = window.devicePixelRatio || 1;
+    if (dpr < 0.6) {
+      setShareBarError('Your browser is zoomed out too far. Please set the zoom to at least 75% (Ctrl+0 resets to 100%), then click Continue again.');
+      return;
+    }
+    setShareBarError(null);
+    setShareBarChecking(true);
+    try {
+      const frame = await captureScreenFrame();
+      if (!frame) {
+        setShareBarError('We could not verify the screen-sharing bar. Make sure you are sharing your ENTIRE screen, click "Hide" on that bar, then press Continue again.');
+        return;
+      }
+      const res = await candidateService.verifyShareBarHidden(token, frame);
+      if (res.pip_detected) {
+        setShareBarError('We detected a floating Picture-in-Picture / mini video window on your screen. Please close it, then press Continue again.');
+      } else if (res.recorder_overlay_detected) {
+        setShareBarError('We detected a screen-recording application running on your screen. Please close it completely, then press Continue again.');
+      } else if (res.foreign_app_detected) {
+        const label = (res.foreign_app_label || '').trim();
+        setShareBarError(`We detected another application open on your screen${label ? ` (${label})` : ''}. Please close all other apps, windows and tabs so ONLY this assessment is open, then press Continue again.`);
+      } else if (res.interview_screen_present === false) {
+        setShareBarError('We can\u2019t see this assessment on the screen you shared. Please stop sharing and share the monitor that is showing THIS assessment, then press Continue again.');
+      } else if (res.check_unavailable) {
+        setShareBarError('We could not verify your screen just now \u2014 this looks like a temporary connection issue. Please wait a moment and press Continue again.');
+      } else if (res.hidden) {
+        if (pendingResumeAfterShareRef.current) {
+          pendingResumeAfterShareRef.current = false;
+          setStepSafe('assessment');
+        } else {
+          await handleFullscreenReady();
+        }
+      } else {
+        setShareBarError('We can still see the screen-sharing bar. Please click "Hide" on that bar, then press Continue again \u2014 the assessment cannot start until it is hidden.');
+      }
+    } catch (e) {
+      console.warn('[AS-ShareBar] verify threw \u2014 re-prompting:', e);
+      setShareBarError('We could not verify the screen-sharing bar just now. Please click "Hide" on that bar, then press Continue again.');
+    } finally {
+      setShareBarChecking(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shareBarChecking, token, captureScreenFrame, setStepSafe]);
+
+  /** "Re-share Entire Screen" after the candidate stopped sharing mid-assessment. */
+  const handleReshareScreen = useCallback(async () => {
+    if (reshareBusy) return;
+    setReshareBusy(true);
+    try {
+      await requestEntireScreenShare();
+      setScreenShareStopped(false);
+      if (stepRef.current === 'assessment') startScreenRecorder();
+      if (!isFullscreen()) { try { await requestFullscreen(); } catch { /* ignore */ } }
+    } catch (e: any) {
+      console.warn('[AS-ScreenRecording] re-share failed:', e?.name || e);
+    } finally {
+      setReshareBusy(false);
+    }
+  }, [reshareBusy, requestEntireScreenShare, startScreenRecorder]);
+
+  const stopRecorders = useCallback(async () => {
+    const cam = cameraRecorderRef.current; cameraRecorderRef.current = null;
+    const scr = screenRecorderRef.current; screenRecorderRef.current = null;
+    await Promise.all([cam?.stop(), scr?.stop()]);
+    cameraRelayStopRef.current?.(); cameraRelayStopRef.current = null;
+    if (cameraRelayVideoRef.current) { cameraRelayVideoRef.current.srcObject = null; cameraRelayVideoRef.current = null; }
+  }, []);
+
+  // ── Recorders: start with the assessment screen, final-flush when it ends ──
+  useEffect(() => {
+    if (step !== 'assessment') return;
+    const attemptId = assessmentInfo?.attempt_id || assessmentData?.attempt_id || '';
+    try {
+      const markerKey = `tf_as_rec_attempt_${token}`;
+      const prev = sessionStorage.getItem(markerKey);
+      if (attemptId && prev !== attemptId) {
+        // A NEW attempt in this tab: segment numbering restarts at 0.
+        resetRecorderSegments(`tf_as_rec_seg_cam_${token}`, `tf_as_rec_seg_screen_${token}`);
+        sessionStorage.setItem(markerKey, attemptId);
+      }
+    } catch { /* storage unavailable */ }
+
+    if (cameraRecordingEnabled && cameraStream && !cameraRecorderRef.current) {
+      try {
+        const relayVideo = document.createElement('video');
+        relayVideo.muted = true; relayVideo.playsInline = true;
+        relayVideo.srcObject = cameraStream;
+        void relayVideo.play().catch(() => {});
+        cameraRelayVideoRef.current = relayVideo;
+        const relay = createCanvasRelayTrack(
+          () => cameraRelayVideoRef.current,
+          () => cameraStream.getVideoTracks().some((t) => t.readyState === 'live'),
+          15,
+        );
+        cameraRelayStopRef.current = relay.stop;
+        const tracks: MediaStreamTrack[] = [];
+        if (relay.track) tracks.push(relay.track); else tracks.push(...cameraStream.getVideoTracks());
+        tracks.push(...cameraStream.getAudioTracks());
+        const recorder = new SegmentedRecorder({
+          stream: new MediaStream(tracks),
+          upload: (blob, idx, isFinal) => candidateService.uploadRecording(token, blob, idx, isFinal),
+          storageKey: `tf_as_rec_seg_cam_${token}`,
+          label: 'AS-CameraRecording',
+          videoBitsPerSecond: 200_000,
+          audioBitsPerSecond: 64_000,
+          onError: (name) => {
+            void candidateService.reportProctorEvent(token, {
+              event_type: 'recording_failed', timestamp: new Date().toISOString(),
+              details: { error: name, severity: 'high' },
+            }).catch(() => {});
+          },
+        });
+        cameraRecorderRef.current = recorder;
+        recorder.start();
+      } catch (e) {
+        console.error('[AS-CameraRecording] failed to start:', e);
+      }
+    }
+    if (screenRecordingRequired) startScreenRecorder();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, cameraStream, cameraRecordingEnabled, screenRecordingRequired, token]);
+
+  useEffect(() => {
+    if (step === 'completing' || step === 'completed' || step === 'results' || step === 'error' || step === 'terminated') {
+      void stopRecorders().finally(() => stopScreenShare());
+    }
+  }, [step, stopRecorders, stopScreenShare]);
+
+  // Unmount: final-flush and release the share.
+  useEffect(() => () => {
+    void stopRecorders();
+    stopScreenShare();
+  }, [stopRecorders, stopScreenShare]);
+
   const handleFullscreenReady = async () => {
     console.log('[DEBUG] handleFullscreenReady started - user is in fullscreen');
 
@@ -1512,6 +1903,30 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     }
   };
 
+  // Proctoring termination (production only — see the watcher in
+  // AssessmentInterface). Mirrors performTermination in the AI interview portal:
+  // persist, log the event with the exact reason for the recruiter, close the
+  // attempt as interrupted (TENANT_MANUAL_TERMINATION), leave fullscreen, and
+  // show the terminated page. The attempt is NOT scored (same as any exit).
+  const handleAssessmentTerminated = useCallback((reason: string, message: string) => {
+    if (stepRef.current === 'terminated' || stepRef.current === 'completing' || stepRef.current === 'completed') return;
+    setTerminatedReason({ reason, message });
+    try { localStorage.setItem(assessmentTerminatedStorageKey(token), JSON.stringify({ reason, message, at: new Date().toISOString() })); } catch { /* ignore */ }
+    try {
+      void candidateService.reportProctorEvent(token, {
+        event_type: 'assessment_terminated',
+        timestamp: new Date().toISOString(),
+        details: { reason, message, action: 'assessment_terminated', severity: 'high' },
+      });
+    } catch { /* non-blocking */ }
+    void candidateService.exitAssessment(token, 'TENANT_MANUAL_TERMINATION', reason).catch((err) => {
+      console.error('[PORTAL] Failed to record termination exit:', err);
+    });
+    if (isFullscreen()) exitFullscreen().catch(() => {});
+    isFlowActiveRef.current = false;
+    setStepSafe('terminated');
+  }, [token, setStepSafe]);
+
   const handleNavigateToQuestion = async (questionNumber: number) => {
     try {
       const question = await candidateService.getCurrentQuestion(token, questionNumber);
@@ -1624,6 +2039,27 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     switch (step) {
       case 'loading':
         return <LoadingScreen message="Loading assessment..." />;
+
+      case 'terminated':
+        return (
+          <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+            <div className="max-w-xl w-full bg-white rounded-2xl shadow-sm border border-destructive/30 p-8 text-center">
+              <div className="w-16 h-16 rounded-full bg-destructive-subtle flex items-center justify-center mx-auto mb-5">
+                <AlertCircle className="w-8 h-8 text-destructive" />
+              </div>
+              <h1 className="text-2xl font-bold text-gray-900 mb-2">Assessment terminated</h1>
+              <p className="text-gray-600 mb-4">
+                Your assessment was ended because you left the assessment screen.
+              </p>
+              {terminatedReason?.message && (
+                <p className="text-sm text-destructive font-medium mb-6">Reason: {terminatedReason.message}</p>
+              )}
+              <p className="text-sm text-gray-500">
+                This link can no longer be used. Please contact the recruiter if you believe this was a mistake.
+              </p>
+            </div>
+          </div>
+        );
 
       case 'error':
         return (
@@ -1821,7 +2257,24 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       );
 
     case 'fullscreen_prompt':
-      return <FullscreenPromptScreen onFullscreenReady={handleFullscreenReady} />;
+      return (
+        <FullscreenPromptScreen
+          onFullscreenReady={screenRecordingRequired ? () => { setShareBarError(null); setStepSafe('hide_share_bar'); } : handleFullscreenReady}
+          beforeFullscreen={handleBeforeFullscreen}
+          notice={screenShareNotice}
+        />
+      );
+
+    case 'hide_share_bar':
+      return (
+        <ShareBarGateScreen
+          ref={shareBarCardRef}
+          pageRef={shareBarPageRef}
+          onContinue={handleShareBarContinue}
+          checking={shareBarChecking}
+          error={shareBarError}
+        />
+      );
 
     case 'generating_questions':
       return (
@@ -1841,6 +2294,23 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         );
       }
       return (
+        <>
+        {screenShareStopped && (
+          <div className="fixed inset-0 z-[9999] bg-gray-900/85 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-8 text-center">
+              <div className="w-14 h-14 rounded-full bg-destructive-subtle flex items-center justify-center mx-auto mb-4">
+                <Monitor className="w-7 h-7 text-destructive" />
+              </div>
+              <h2 className="text-xl font-bold text-gray-900 mb-2">Screen sharing stopped</h2>
+              <p className="text-sm text-gray-600 mb-6">
+                Entire-screen sharing is mandatory for this assessment. This has been recorded. Share your entire screen again to continue; your timer keeps running.
+              </p>
+              <Button onClick={handleReshareScreen} disabled={reshareBusy} className="w-full h-11">
+                {reshareBusy ? <span className="inline-flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Opening share picker…</span> : 'Re-share Entire Screen'}
+              </Button>
+            </div>
+          </div>
+        )}
         <AssessmentErrorBoundary token={token}>
           <AssessmentInterface
             token={token}
@@ -1853,6 +2323,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
             initialTimeRemainingSeconds={assessmentInfo?.time_remaining_seconds ?? overlayTimeRemaining ?? assessmentData?.time_remaining_seconds ?? undefined}
             onAnswerSubmit={handleAnswerSubmit}
             onComplete={handleCompleteAssessment}
+            onTerminated={handleAssessmentTerminated}
             onNavigate={handleNavigateToQuestion}
             onSetQuestion={setCurrentQuestion}
             onTimeUpdate={setOverlayTimeRemaining}
@@ -1864,6 +2335,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
             enforceFullscreen={!useAdaptiveAssessmentMode}
           />
         </AssessmentErrorBoundary>
+        </>
       );
 
     case 'completing':
