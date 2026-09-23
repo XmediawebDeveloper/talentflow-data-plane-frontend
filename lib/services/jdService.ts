@@ -262,6 +262,13 @@ export interface JDExtractedParams {
    *  follows an edit to the text. With a stated minimum it is a contradiction: Step 2
    *  explains why Required was left unticked, and asks before it is ticked back on. */
   experience_welcomes_freshers?: boolean;
+  /** WHERE experience_level came from. 'title' / 'text': the JD's own words name the
+   *  grade and that grade is the level whatever the years say. 'years': derived from
+   *  the stated range because no grade word exists. 'model': only the model offered
+   *  one. Step 2 keeps a word-derived level across the recruiter's edits to the years;
+   *  a years-derived one follows the years. Decided by the backend
+   *  (app/utils/experience_level_words.py), never re-derived here. */
+  experience_level_source?: 'title' | 'text' | 'years' | 'model' | null;
   // Surfaced by extraction for legacy single-field display before the structured
   // employment_type / remote_type forms were introduced.
   job_type?: string;
