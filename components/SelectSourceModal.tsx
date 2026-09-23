@@ -1,7 +1,7 @@
 'use client';
 
 import { X, Users, Database, Search, CheckSquare, Square, MinusSquare, Loader2, ClipboardList, Upload, Trash2, ShieldAlert, Lock, AlertCircle, HelpCircle } from 'lucide-react';
-import { useState, useEffect, useRef, useMemo, useId } from 'react';
+import { useState, useEffect, useMemo, useId } from 'react';
 import { useRouter } from 'next/navigation';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
@@ -80,14 +80,26 @@ interface SelectSourceModalProps {
   onClose: () => void;
   jobTitle: string;
   jobId: string;
+  /** The run has settled and the progress popup is still up: bring the
+   *  results in BEHIND it (refresh, switch view/tab) without unmounting this
+   *  modal, so Close only dismisses and Minimise lands on the results. */
+  onScoringFinished?: () => void;
+  /** The recruiter closed the finished popup: unmount this modal (and make
+   *  sure the results are on screen, if `onScoringFinished` had not yet). */
   onScoringComplete?: () => void;
+  /** A settled row (or its View) was clicked: open that candidate's scoring
+   *  result. The run is dismissed first, exactly like Close; the page then
+   *  unmounts this modal and shows the result. */
+  onViewResult?: (item: ScoringProgressItem) => void;
 }
 
 export default function SelectSourceModal({
   onClose,
   jobTitle,
   jobId,
-  onScoringComplete
+  onScoringFinished,
+  onScoringComplete,
+  onViewResult
 }: SelectSourceModalProps) {
   const router = useRouter();
   const { user, tenant, isTenantAdmin, hasPermissionCode } = useAuth();
@@ -165,10 +177,6 @@ export default function SelectSourceModal({
   // BulkScoringProgressModal) so "expand" from the floating indicator can bring
   // the popup back — see the restore-callback effect below.
   const [isBulkProgressMinimized, setIsBulkProgressMinimized] = useState(false);
-  // Mirror into a ref so the long-lived polling closure below reads the current
-  // value instead of the one captured when scoring started.
-  const isBulkProgressMinimizedRef = useRef(false);
-  useEffect(() => { isBulkProgressMinimizedRef.current = isBulkProgressMinimized; }, [isBulkProgressMinimized]);
 
   // Hide the global floating widget only while the progress popup is actually
   // on screen. Once minimized we must release it, otherwise
@@ -629,29 +637,16 @@ export default function SelectSourceModal({
             setSubmitting(false);
             // Refresh header quota dropdown — RS deductions landed on CP
             dispatchUnitsConsumed();
-            // Redirect to Scored Resumes tab after a short delay so user sees final state.
-            // If the user minimised the popup they are working elsewhere — tearing
-            // this component down would destroy the popup's owner (and its restore
-            // callback), so "expand" would have nothing to reopen. Stay mounted and
-            // let them come back to the finished result.
-            //
-            // This used to fire on ANY completion, failed or not. A permanent
-            // config failure (e.g. missing scoring API key) resolves in ~1s
-            // instead of retrying for ~90s, so the 1.5s auto-close routinely
-            // fired before anyone could read the failed row's error message.
-            // Only auto-advance on a clean run; leave the popup up on any
-            // failure so the reason stays visible and Retry is reachable.
-            if ((batchStatus.failed || 0) === 0) {
-              setTimeout(() => {
-                if (isBulkProgressMinimizedRef.current) return;
-                setShowProgressModal(false);
-                if (onScoringComplete) {
-                  onScoringComplete();
-                } else {
-                  onClose();
-                }
-              }, 1500);
-            }
+            /* The popup stays up, finished, until the recruiter closes it; the
+               page brings the results in behind it meanwhile. It used to close
+               ITSELF here after 1.5s and only then hand off to the page. On the
+               Resume Scoring page that hand-off awaits a history refresh before
+               unmounting this modal, so the whole fetch showed this modal's own
+               resume-selection tabs. And a popup closing on its own reads to
+               the corner widget as "minimised" — with the run already older
+               than its 3s card, it dropped straight to the round button nobody
+               had asked for. */
+            onScoringFinished?.();
           } else {
             setTimeout(poll, 3000);
           }
@@ -692,7 +687,8 @@ export default function SelectSourceModal({
       ));
       setScoringStats(prev => ({ ...prev, processing: prev.processing - 1, completed: prev.completed + 1 }));
       toast.success('Retry successful');
-      if (onScoringComplete) onScoringComplete();
+      // Refresh the results behind the popup; the popup itself stays up.
+      (onScoringFinished ?? onScoringComplete)?.();
     } catch (error: any) {
       setProgressItems(prev => prev.map(i =>
         i.resumeId === resumeId
@@ -706,15 +702,22 @@ export default function SelectSourceModal({
 
   // Close progress modal
   const handleCloseProgress = () => {
-    if (!submitting) {
-      setShowProgressModal(false);
-      /* Closing is a dismissal: take the corner widget with it, or the X looks
-         like it did nothing. Every job goes, not just the settled ones —
-         keeping a running one behind left the floating button on screen after
-         the X that was meant to remove it. */
-      activeScoringJobs.forEach(job => clearJob(job.jobId));
-      onClose();
+    if (submitting) return;
+    /* Closing is a dismissal: take the corner widget with it, or the X looks
+       like it did nothing. Every job goes, not just the settled ones —
+       keeping a running one behind left the floating button on screen after
+       the X that was meant to remove it. */
+    activeScoringJobs.forEach(job => clearJob(job.jobId));
+    if (onScoringComplete) {
+      /* The page unmounts this modal once it has the results view ready. The
+         popup is deliberately NOT hidden first: on the Resume Scoring page the
+         hand-off awaits a history refresh, and hiding the popup ahead of that
+         exposed the selection tabs underneath for the whole fetch. */
+      onScoringComplete();
+      return;
     }
+    setShowProgressModal(false);
+    onClose();
   };
 
   // Handle resume upload
@@ -1363,6 +1366,10 @@ export default function SelectSourceModal({
             await handleRetryFailed(scoringItem.resumeId);
           }}
           minimized={isBulkProgressMinimized}
+          onViewResult={onViewResult ? (item) => {
+            activeScoringJobs.forEach(job => clearJob(job.jobId));
+            onViewResult(item);
+          } : undefined}
           onMinimize={() => {
             // Hide the overlay so the user can navigate freely, but stay mounted:
             // this component owns progressItems, so unmounting here is what used
