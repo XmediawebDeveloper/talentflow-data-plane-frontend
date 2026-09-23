@@ -11,13 +11,13 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import readXlsxFile from 'read-excel-file/browser';
 import { useQuota } from '@/contexts/QuotaContext';
 import { Button } from '@/components/ui/button';
+import { isValidEmailFormat } from '@/lib/utils/email';
 import SuccessAnimation from '@/components/ui/success-animation';
 
-// Email validation regex
-const isValidEmail = (email: string): boolean => {
-  const emailRegex = /^[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}$/;
-  return emailRegex.test(email.trim());
-};
+// Delegates to the one shared, comprehensive format rule (lib/utils/email)
+// rather than this file's own regex, which didn't catch consecutive/
+// leading/trailing dots, bad domain-hyphen placement, or padding whitespace.
+const isValidEmail = (email: string): boolean => isValidEmailFormat(email);
 
 interface CandidateEmail {
   id: string;

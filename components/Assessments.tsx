@@ -32,7 +32,6 @@ import InviteFilterBar, { EMPTY_INVITE_FILTERS, ASSESSMENT_INVITE_STATUS_OPTIONS
 import InviteStatCards, { INVITE_CARD_TONES } from './InviteStatCards';
 import AssessmentInviteTable, {
   InviteStatusBadge,
-  isBulkResendable,
   isTrackedInviteCompleted,
   isValidInviteEmail,
   inviteStatusBucket,
@@ -76,7 +75,20 @@ import {
   RevokeInvitationDialog,
   InvitationHistoryDialog,
   timelineEvents,
+  isRevocableInvitation,
+  canResendInvite,
 } from '@/components/AssessmentInviteActions';
+
+/* Bulk-selection eligibility for the Invite Tracking popup and the
+   Invitation Status tab — the two surfaces whose per-row menu comes from
+   AssessmentInviteActions (buildInvitationRowActions), so their bulk rule has
+   to match ITS status split, not the simpler Invited-is-directly-resendable
+   rule the Assessment Details page's own invite table uses (Scenario 4:
+   bulk action must match the row action, and a mixed-status selection gets
+   neither). */
+const isBulkRevocable = isRevocableInvitation;
+const isBulkResendable = canResendInvite;
+const isBulkActionable = (inv: any): boolean => isBulkRevocable(inv) || isBulkResendable(inv);
 /* Resume versions live on the scoring records — see the join in
    loadAllCompletedCandidates. */
 import { scoringService } from '@/lib/services/scoringService';
@@ -1983,11 +1995,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const isInviteResendable = (inv: any): boolean =>
     inviteStatusBucket(inv) === 'expired' && !inv.started_at && !inv.completed_at;
 
+  /* Eligibility for a bulk revoke: Invited ('sent'), same rule as the per-row
+     Revoke action (isRevocableInvitation). Scenario 4's "all selected are
+     Invited -> Revoke" case, mirrored for this tab. */
+  const isInviteRevocable = (inv: any): boolean => isRevocableInvitation(inv);
+
   /* The count the confirm dialog shows. Derived here rather than in the tab's
      render scope, because the dialog is a page-level sibling of it — same
      filter-and-tick rule the button applies. */
   const inviteBulkResendCount = inviteStatusRows.filter(
     (inv: any) => selectedInviteIds.has(inv.id) && isInviteResendable(inv)
+  ).length;
+  const inviteBulkRevokeCount = inviteStatusRows.filter(
+    (inv: any) => selectedInviteIds.has(inv.id) && isInviteRevocable(inv)
   ).length;
 
   const handleInviteBulkResend = async () => {
@@ -2005,6 +2025,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     setSelectedInviteIds(new Set());
     setShowInviteBulkResendConfirm(false);
     setIsBulkResending(false);
+    await loadAllInviteStatuses();
+  };
+
+  const handleInviteBulkRevoke = async () => {
+    const targets = inviteStatusRows.filter(
+      (inv: any) => selectedInviteIds.has(inv.id) && isInviteRevocable(inv)
+    );
+    if (targets.length === 0) {
+      setShowInviteBulkRevokeConfirm(false);
+      return;
+    }
+    setIsBulkRevoking(true);
+    await revokeInvitationsSequentially(targets);
+    setSelectedInviteIds(new Set());
+    setShowInviteBulkRevokeConfirm(false);
+    setIsBulkRevoking(false);
     await loadAllInviteStatuses();
   };
 
@@ -2192,13 +2228,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
   /* Bulk selection for the tracking popup — same control and semantics as the
      AI Interviews tracker's Select All bar, targeting the rows on the CURRENT
-     page. Only candidates a bulk Resend can act on are selectable: Invited
-     ('sent') and Expired rows that haven't started or completed. In Progress
-     ('started'), System Check ('opened'), Completed, failed and bounced rows
-     get no checkbox — their per-row actions (or lack of one) already say what
-     can be done with them. */
+     page. Any row a bulk Revoke OR a bulk Resend can act on gets a checkbox:
+     Invited ('sent'), and Expired/Failed rows that haven't started or
+     completed. In Progress ('started'), System Check ('opened'), Completed,
+     bounced and Revoked rows get no checkbox — their per-row actions (or lack
+     of one) already say what can be done with them.
+
+     Which bulk BUTTON appears depends on the selection being uniformly one
+     status-class or the other — see allTrackingRevocable/allTrackingResendable
+     below. A mixed Invited+Expired selection shows neither: an action valid
+     for one status must never be applied to the other (Scenario 4). */
   const [trackingSelectedIds, setTrackingSelectedIds] = useState<Set<string>>(new Set());
-  const trackingSelectableIds = trackingInvitations.filter(isBulkResendable).map((inv: any) => inv.id);
+  const trackingSelectableIds = trackingInvitations.filter(isBulkActionable).map((inv: any) => inv.id);
+  const trackingSelectedRows = trackingInvitations.filter((inv: any) => trackingSelectedIds.has(inv.id));
+  const allTrackingRevocable = trackingSelectedRows.length > 0 && trackingSelectedRows.every(isBulkRevocable);
+  const allTrackingResendable = trackingSelectedRows.length > 0 && trackingSelectedRows.every(isBulkResendable);
   const allTrackingSelected =
     trackingSelectableIds.length > 0 && trackingSelectableIds.every((id: string) => trackingSelectedIds.has(id));
   const toggleTrackingSelectAll = () =>
@@ -2210,13 +2254,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       else next.add(id);
       return next;
     });
-  /* Reloads (paging, filtering, a resend flipping a status) can leave selected
-     ids pointing at rows that are gone or no longer eligible — drop those so
-     the bulk button's count always matches what a resend would actually do. */
+  /* Reloads (paging, filtering, a resend/revoke flipping a status) can leave
+     selected ids pointing at rows that are gone or no longer eligible — drop
+     those so the bulk button's count always matches what an action would
+     actually do. */
   useEffect(() => {
     setTrackingSelectedIds((prev) => {
       if (prev.size === 0) return prev;
-      const valid = new Set(trackingInvitations.filter(isBulkResendable).map((inv: any) => inv.id));
+      const valid = new Set(trackingInvitations.filter(isBulkActionable).map((inv: any) => inv.id));
       const next = new Set([...prev].filter((id) => valid.has(id)));
       return next.size === prev.size ? prev : next;
     });
@@ -3781,12 +3826,53 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     return { sent, failedCount };
   };
 
+  /* The revoke loop itself, shared by both bulk callers (Scenario 4's "all
+     selected are Invited -> Revoke" case) — same shape as
+     resendInvitationsSequentially, calling the existing single-row revoke
+     endpoint (assessmentService.revokeInvitation) per invitation. Revoking
+     carries no send-rate concern, but it stays sequential anyway so a
+     mid-batch failure is attributable to one row rather than lost in a
+     Promise.allSettled fan-out. */
+  const revokeInvitationsSequentially = async (targets: any[]): Promise<{ revoked: number; failedCount: number }> => {
+    let revoked = 0;
+    let failedCount = 0;
+    for (const inv of targets) {
+      const assessmentId = getInviteAssessmentId(inv);
+      if (!assessmentId) {
+        console.error(`No assessment for invitation ${inv.id}; skipped.`);
+        failedCount++;
+        continue;
+      }
+      try {
+        await assessmentService.revokeInvitation(assessmentId, inv.id);
+        revoked++;
+      } catch (error) {
+        console.error(`Failed to revoke invitation ${inv.id}:`, error);
+        failedCount++;
+      }
+    }
+    if (revoked > 0) {
+      toast.success(`Revoked ${revoked} invitation${revoked === 1 ? '' : 's'}.`);
+    }
+    if (failedCount > 0) {
+      toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be revoked.`);
+    }
+    return { revoked, failedCount };
+  };
+
   // Bulk resend for the selected Invited/Expired candidates — same endpoint as
   // the single-row Resend, called per invitation. Sequential on purpose: the
   // selection is at most one page of rows, and a burst of parallel resends is
   // exactly the kind of thing mail rate-limiters punish.
   const [showBulkResendConfirm, setShowBulkResendConfirm] = useState(false);
   const [isBulkResending, setIsBulkResending] = useState(false);
+
+  // Bulk revoke — shown only when every selected row is currently Invited
+  // ('sent'); shares its loading flag across both surfaces the same way the
+  // resend confirms already do.
+  const [showTrackingBulkRevokeConfirm, setShowTrackingBulkRevokeConfirm] = useState(false);
+  const [showInviteBulkRevokeConfirm, setShowInviteBulkRevokeConfirm] = useState(false);
+  const [isBulkRevoking, setIsBulkRevoking] = useState(false);
 
   const handleBulkResend = async () => {
     if (!selectedAssessmentForTracking) return;
@@ -3804,6 +3890,25 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     setTrackingSelectedIds(new Set());
     setShowBulkResendConfirm(false);
     setIsBulkResending(false);
+    await refreshInviteSurfaces();
+  };
+
+  // Bulk revoke for the Track Invites popup — mirrors handleBulkResend, only
+  // for the selected candidates that are all still Invited ('sent').
+  const handleTrackingBulkRevoke = async () => {
+    if (!selectedAssessmentForTracking) return;
+    const targets = trackingInvitations.filter(
+      (inv: any) => trackingSelectedIds.has(inv.id) && isBulkRevocable(inv)
+    );
+    if (targets.length === 0) {
+      setShowTrackingBulkRevokeConfirm(false);
+      return;
+    }
+    setIsBulkRevoking(true);
+    await revokeInvitationsSequentially(targets);
+    setTrackingSelectedIds(new Set());
+    setShowTrackingBulkRevokeConfirm(false);
+    setIsBulkRevoking(false);
     await refreshInviteSurfaces();
   };
 
@@ -6780,6 +6885,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               const showInviteBulkResend = inviteStatusFilters.status === 'expired'
                 && resendableSelectedRows.length > 0;
 
+              /* Bulk Revoke — same gate, on the Invited ('sent') bucket
+                 (Scenario 4: all selected Invited -> Revoke, never Resend). */
+              const revocableSelectedRows = selectedInviteRows.filter(isInviteRevocable);
+              const showInviteBulkRevoke = inviteStatusFilters.status === 'sent'
+                && revocableSelectedRows.length > 0;
               /* What the More Filters button reports. The date range is one
                  logical filter, not two, so From + To count as 1 — the same
                  rule `useListSearch`'s `countFilters` applies on the tabs that
@@ -7181,6 +7291,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 icon={isBulkResending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
                               >
                                 {isBulkResending ? 'Sending…' : `Resend (${resendableSelectedRows.length})`}
+                              </Button>
+                            )}
+                            {/* Bulk Revoke — the Invited bucket's own action.
+                                Never shown alongside Resend: the two buttons'
+                                gates are on disjoint status filters. */}
+                            {showInviteBulkRevoke && (
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => setShowInviteBulkRevokeConfirm(true)}
+                                disabled={isBulkRevoking}
+                                title="Revoke the selected invited candidates' links"
+                                icon={isBulkRevoking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
+                              >
+                                {isBulkRevoking ? 'Revoking…' : `Revoke (${revocableSelectedRows.length})`}
                               </Button>
                             )}
                             {showInviteExport && (
@@ -8970,9 +9095,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </span>
                   Select All ({trackingSelectableIds.length})
                 </button>
-                {/* Bulk Resend — appears once something is ticked. Count and
-                    targets are the still-eligible selection only. */}
-                {trackingSelectedIds.size > 0 && (
+                {/* Bulk Resend/Revoke — only once the ticked selection is
+                    uniformly one status-class. A mixed Invited+Expired
+                    selection shows neither button (Scenario 4). */}
+                {allTrackingResendable && (
                   <Button
                     variant="primary"
                     size="sm"
@@ -8981,6 +9107,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     icon={isBulkResending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
                   >
                     {isBulkResending ? 'Sending…' : `Resend (${trackingSelectedIds.size})`}
+                  </Button>
+                )}
+                {allTrackingRevocable && (
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    onClick={() => setShowTrackingBulkRevokeConfirm(true)}
+                    disabled={isBulkRevoking}
+                    icon={isBulkRevoking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
+                  >
+                    {isBulkRevoking ? 'Revoking…' : `Revoke (${trackingSelectedIds.size})`}
                   </Button>
                 )}
               </div>
@@ -9138,11 +9275,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           >
                             {/* stopPropagation: Complete rows navigate on click —
                                 ticking a checkbox must never also open the row.
-                                Only bulk-resendable rows (Invited/Expired) get a
+                                Only bulk-actionable rows (Invited/Expired) get a
                                 checkbox; the rest keep a fixed-width slot so the
                                 columns stay aligned. */}
                             <td className="py-3 pl-4 pr-0 align-top tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
-                              {isBulkResendable(invitation) ? (
+                              {isBulkActionable(invitation) ? (
                                 <button
                                   type="button"
                                   role="checkbox"
@@ -9479,6 +9616,31 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         confirmText={isBulkResending ? 'Sending…' : `Yes, resend to ${trackingSelectedIds.size}`}
         cancelText="Cancel"
         variant="warning"
+      />
+
+      {/* Bulk revoke confirmation for the Invitation Status tab. */}
+      <ConfirmationDialog
+        isOpen={showInviteBulkRevokeConfirm}
+        onClose={() => { if (!isBulkRevoking) setShowInviteBulkRevokeConfirm(false); }}
+        onConfirm={handleInviteBulkRevoke}
+        title="Revoke selected invitations?"
+        description={`This will immediately expire the invitation link${inviteBulkRevokeCount === 1 ? '' : 's'} for ${inviteBulkRevokeCount} selected candidate${inviteBulkRevokeCount === 1 ? '' : 's'}. You'll be able to edit their details and send a new invitation afterwards.`}
+        confirmText={isBulkRevoking ? 'Revoking…' : `Yes, revoke ${inviteBulkRevokeCount}`}
+        cancelText="Cancel"
+        variant="danger"
+      />
+
+      {/* Bulk revoke confirmation for the Track Invites popup — selected
+          Invited candidates only. */}
+      <ConfirmationDialog
+        isOpen={showTrackingBulkRevokeConfirm}
+        onClose={() => { if (!isBulkRevoking) setShowTrackingBulkRevokeConfirm(false); }}
+        onConfirm={handleTrackingBulkRevoke}
+        title="Revoke selected invitations?"
+        description={`This will immediately expire the invitation link${trackingSelectedIds.size === 1 ? '' : 's'} for ${trackingSelectedIds.size} selected candidate${trackingSelectedIds.size === 1 ? '' : 's'}. You'll be able to edit their details and send a new invitation afterwards.`}
+        confirmText={isBulkRevoking ? 'Revoking…' : `Yes, revoke ${trackingSelectedIds.size}`}
+        cancelText="Cancel"
+        variant="danger"
       />
 
       {/* Duplicate confirmation — creates a DRAFT copy as the lineage's next
