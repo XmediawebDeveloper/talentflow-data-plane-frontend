@@ -130,9 +130,13 @@ export default function TeamManagementPage() {
 
         if (!isMounted) return;
 
+        // Mirrors routeAccess.ts's rule for this prefix (canViewTeams OR
+        // canCreateTeams) — a create-only user must not be let in by the
+        // route guard/menu and then bounced back out by this re-check.
         const hasPermission =
           userData.role === 'tenant_admin' ||
           userData.permissions?.can_view_teams ||
+          userData.permissions?.can_create_teams ||
           userData.permissions?.can_manage_users;
 
         if (!hasPermission) {

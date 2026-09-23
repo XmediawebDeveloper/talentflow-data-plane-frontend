@@ -246,7 +246,14 @@ export default function CompanyProfilePage() {
     const checkPermission = async () => {
       try {
         const currentUser = await authService.getCurrentUser();
-        const hasPermission = currentUser.role === 'tenant_admin' || currentUser.permissions?.can_manage_settings;
+        // Mirrors AuthProvider's canManageSettings mapping (which the route
+        // guard/menu use): can_view_settings / can_update_settings also
+        // unlock this page, not just the full can_manage_settings flag.
+        const hasPermission =
+          currentUser.role === 'tenant_admin' ||
+          !!currentUser.permissions?.can_manage_settings ||
+          !!(currentUser.permissions as any)?.can_view_settings ||
+          !!(currentUser.permissions as any)?.can_update_settings;
         if (!hasPermission) {
           toast.error('You do not have permission to access Company Profile');
           router.push('/dashboard');

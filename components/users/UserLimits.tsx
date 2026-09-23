@@ -329,7 +329,11 @@ export function useUserLimits() {
   useEffect(() => {
     featurePermissionService.getUserLimits()
       .then(setLimits)
-      .catch(console.error)
+      // Expected for view-only users: /users/limits/status requires
+      // can_manage_users (seat/quota limits are an admin-only concern).
+      // console.warn (not console.error) avoids tripping Next's dev overlay
+      // for this already-handled, non-fatal case.
+      .catch((error) => console.warn('Failed to load user limits:', error))
       .finally(() => setIsLoading(false));
   }, []);
 
@@ -343,7 +347,8 @@ export function useUserLimits() {
       const data = await featurePermissionService.getUserLimits();
       setLimits(data);
     } catch (error) {
-      console.error('Failed to refresh user limits:', error);
+      // See note above: expected 403 for view-only users, not fatal.
+      console.warn('Failed to refresh user limits:', error);
     }
   };
 

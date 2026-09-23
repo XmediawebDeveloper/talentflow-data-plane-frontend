@@ -27,41 +27,7 @@ import { AdminAssignedPlanProvider } from '@/components/providers/AdminAssignedP
 import AdminAssignedPlanBanner from '@/components/admin-assigned-plan/AdminAssignedPlanBanner';
 import AdminAssignedPlanModal from '@/components/admin-assigned-plan/AdminAssignedPlanModal';
 import GlobalScoringProgressIndicator from '@/components/GlobalScoringProgressIndicator';
-
-// Admin-only routes that require tenant_admin role
-const adminRoutes = [
-  '/organization',
-  '/subscription',
-  '/settings',
-  '/analytics/team-usage',
-  '/analytics/activity-logs',
-];
-
-const routePermissionRules: Array<{
-  prefix: string;
-  permissions?: string[];
-  allowAll?: boolean;
-}> = [
-  { prefix: '/recruitment/hr-question-bank', permissions: ['canViewHRQuestionBank', 'canCreateHRQuestionBank', 'canUpdateHRQuestionBank', 'canDeleteHRQuestionBank'] },
-  { prefix: '/organization/team-chat', allowAll: true },
-  { prefix: '/organization/team-management', permissions: ['canViewTeams', 'canCreateTeams'] },
-  { prefix: '/organization/user-management', permissions: ['canManageUsers'] },
-  { prefix: '/organization/company-profile', permissions: ['canManageSettings'] },
-  { prefix: '/subscription/current-plan', permissions: ['canViewCurrentPlan'] },
-  { prefix: '/subscription/usage-quotas', permissions: ['canViewUsage'] },
-  { prefix: '/subscription/payment-methods', permissions: ['canViewPaymentMethods'] },
-  { prefix: '/subscription/billing-history', permissions: ['canViewBillingHistory'] },
-  { prefix: '/subscription/refund-history', permissions: ['canViewRefundHistory'] },
-  { prefix: '/subscription/dispute-history', permissions: ['canViewDisputeHistory'] },
-  { prefix: '/subscription/unit-disputes', permissions: ['canViewUsage'] },
-  { prefix: '/settings/general-settings', allowAll: true },
-  { prefix: '/settings/permissions', permissions: ['canViewRoles'] },
-  { prefix: '/settings/api-management', permissions: ['canViewApiManagement'] },
-  { prefix: '/settings/branding', permissions: ['canViewBranding'] },
-  { prefix: '/settings/security', permissions: ['canViewSecuritySettings'] },
-  { prefix: '/settings/legal', permissions: ['canManageSettings'] },
-  { prefix: '/support-tickets', permissions: ['canViewSupport'] },
-];
+import RouteGuard from '@/components/RouteGuard';
 
 // Paths allowed when subscription is expired/inactive
 const SUBSCRIPTION_ALLOWED_PATHS = [
@@ -311,33 +277,6 @@ export default function DashboardLayout({
     }
   }, [isAuthenticated, isLoading, router, sessionExpiredVisible]);
 
-  // Client-side authorization check for admin routes
-  useEffect(() => {
-    if (!isLoading && isAuthenticated && user) {
-      const matchingRule = routePermissionRules.find(rule =>
-        pathname === rule.prefix || pathname.startsWith(`${rule.prefix}/`)
-      );
-
-      if (matchingRule) {
-        if (matchingRule.allowAll) return;
-
-        if ((matchingRule.permissions || []).some(hasRoutePermission)) {
-          return;
-        }
-      }
-
-      const isAdminRoute = adminRoutes.some(route =>
-        pathname === route || pathname.startsWith(`${route}/`)
-      );
-
-      if (isAdminRoute && !isTenantAdmin) {
-        console.log('[DASHBOARD] Unauthorized access to admin route:', pathname);
-        toast.error('Access Denied: Only Tenant Admins can access this page.');
-        router.push('/dashboard');
-      }
-    }
-  }, [hasRoutePermission, isLoading, isAuthenticated, user, pathname, isTenantAdmin, router]);
-
   // Check for pending scoring batches on login and show notification
   useEffect(() => {
     if (!isAuthenticated || isLoading) return;
@@ -465,7 +404,7 @@ export default function DashboardLayout({
               <PlanChangeReviewBanner />
               <AdminAssignedPlanBanner />
               <div className="flex-1 overflow-y-auto flex flex-col">
-                {children}
+                <RouteGuard>{children}</RouteGuard>
               </div>
             </div>
 

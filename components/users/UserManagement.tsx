@@ -650,8 +650,14 @@ export default function UserManagement() {
         // Store current user ID for hiding Edit/Delete buttons on self
         setCurrentUserId(currentUser.id);
 
-        // Check if user has permission to access User Management
-        const hasPermission = currentUser.role === 'tenant_admin' || currentUser.permissions?.can_manage_users;
+        // Check if user has permission to access User Management. Mirrors the
+        // canManageUsers mapping in AuthProvider (which the route guard/menu use):
+        // view-only users (can_view_users) are allowed to land on this page too,
+        // just with reduced capabilities gated further down (canDisableUser, etc).
+        const hasPermission =
+          currentUser.role === 'tenant_admin' ||
+          !!currentUser.permissions?.can_manage_users ||
+          !!(currentUser.permissions as any)?.can_view_users;
 
         if (!hasPermission) {
           toast.error('You do not have permission to access User Management');
@@ -740,7 +746,11 @@ export default function UserManagement() {
       console.log('[LOAD PERMISSIONS] ✓ allPermissions state updated successfully');
       return data.permissions;
     } catch (error) {
-      console.error('[LOAD PERMISSIONS] ✗ Failed to load permissions:', error);
+      // Expected for view-only users: GET /rbac/permissions requires the
+      // admin-level "roles:read" RBAC permission, not just users:read. Mirrors
+      // the console.warn fallback in loadRoles() below (same endpoint gating),
+      // so a view-only user's page doesn't trip Next's console.error overlay.
+      console.warn('[LOAD PERMISSIONS] Failed to load permissions (likely lacks roles:read):', error);
       return [];
     }
   };
