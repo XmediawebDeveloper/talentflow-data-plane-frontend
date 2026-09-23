@@ -1205,7 +1205,26 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       if (!targets.has(key)) targets.set(key, row.jd_id);
     }
     if (targets.size === 0) return;
-    ensureJobLineages([...targets].map(([key, jobId]) => ({ key, jobId })));
+
+    // Deferred by one tick, deliberately. This effect is declared earlier in
+    // the component than the one that loads the four stat cards
+    // (`loadAllData`, further down) and React fires mount effects in
+    // declaration order — so on a tenant with dozens of jobs, this used to
+    // dispatch a LINEAGE REQUEST PER JOB (real traffic: ~90 concurrent
+    // `GET /jd/{id}/lineage` calls, one per distinct job behind this page's
+    // assessments) before the three small, critical stats/quota/topics
+    // requests had even been sent. The browser's own per-host connection cap
+    // then queued those critical calls behind the lineage flood, which is
+    // what actually made the stat cards "take too long to load" — the stats
+    // endpoint itself answers in well under a second once it's allowed to
+    // run. Nothing here needs to be first paint: the LATEST-version badges
+    // these lineages feed are below the fold and unaffected by a ~0-tick
+    // delay, so yielding once is enough to let whatever the mount phase
+    // already queued (the stats call) claim a connection slot first.
+    const timer = setTimeout(() => {
+      ensureJobLineages([...targets].map(([key, jobId]) => ({ key, jobId })));
+    }, 0);
+    return () => clearTimeout(timer);
   }, [apiAssessments, ensureJobLineages]);
 
   /**
@@ -2720,112 +2739,142 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     const loadAllData = async () => {
       setIsLoadingStats(true);
 
-      // Run all API calls in parallel for faster loading
-      const [statsResult, quotaResult, topicsResult] = await Promise.allSettled([
-        assessmentService.getStats(),
-        api.get('/usage/quota-status'),
-        api.get('/assessments/settings/topics'),
-      ]);
+      // Everything below reads `.value` off three settled results and writes
+      // several pieces of state, ending in `setIsLoadingStats(false)`. That
+      // final call used to sit bare at the end of the function: an unexpected
+      // shape from any one of the three responses (e.g. `getStats()`
+      // resolving with an empty body) threw synchronously, and since nothing
+      // called this with a `.catch()`, the throw silently aborted the whole
+      // function — leaving the four stat cards on "..." and the quota pill on
+      // "Loading..." forever, with only an "Uncaught (in promise)" console
+      // warning to show for it. try/finally guarantees the loading state
+      // always clears, however any individual branch below behaves.
+      try {
+        // Run all API calls in parallel for faster loading. `Promise.allSettled`
+        // only ever resolves once every one of these has settled — the shared
+        // axios client (lib/services/api.ts) carries no default timeout, so a
+        // single leg that stalls on the server (a slow DB session, a stuck
+        // external quota lookup) left the whole page waiting forever with no
+        // way to recover short of a manual reload. A bounded timeout on each
+        // call turns "hangs forever" into "fails after 20s", which the
+        // existing per-branch fallbacks below already handle correctly.
+        const STATS_TIMEOUT_MS = 20000;
+        const [statsResult, quotaResult, topicsResult] = await Promise.allSettled([
+          assessmentService.getStats({ timeout: STATS_TIMEOUT_MS }),
+          api.get('/usage/quota-status', { timeout: STATS_TIMEOUT_MS }),
+          api.get('/assessments/settings/topics', { timeout: STATS_TIMEOUT_MS }),
+        ]);
 
-      // Process stats
-      if (statsResult.status === 'fulfilled') {
-        const response = statsResult.value;
-        setStats({
-          total_assessments: response.total_assessments,
-          total_jobs_with_assessments: response.total_jobs_with_assessments || 0,
-          total_ever_created: response.total_ever_created || response.total_assessments,
-          total_deleted: response.total_deleted || 0,
-          active_assessments: response.active_assessments,
-          draft_assessments: response.draft_assessments || 0,
-          archived_assessments: response.archived_assessments || 0,
-          total_candidates_tested: response.total_candidates_tested || 0,
-          total_candidates_completed: response.total_candidates_completed || 0,
-          average_pass_rate: response.average_pass_rate,
-          average_score: response.average_score,
-          units_consumed: response.units_consumed || 0,
-        });
-        console.log('[TalentFlow] Loaded assessment stats from API');
-      } else {
-        console.log('[TalentFlow] Failed to load stats:', statsResult.reason);
-      }
+        // Process stats. Guarded against a fulfilled-but-empty/malformed body
+        // (`response` falsy) — the fields below used to be read off it
+        // unconditionally, which crashed this function before it ever reached
+        // the quota block or the final `setIsLoadingStats(false)`.
+        if (statsResult.status === 'fulfilled' && statsResult.value) {
+          const response = statsResult.value;
+          setStats({
+            total_assessments: response.total_assessments,
+            total_jobs_with_assessments: response.total_jobs_with_assessments || 0,
+            total_ever_created: response.total_ever_created || response.total_assessments,
+            total_deleted: response.total_deleted || 0,
+            active_assessments: response.active_assessments,
+            draft_assessments: response.draft_assessments || 0,
+            archived_assessments: response.archived_assessments || 0,
+            total_candidates_tested: response.total_candidates_tested || 0,
+            total_candidates_completed: response.total_candidates_completed || 0,
+            average_pass_rate: response.average_pass_rate,
+            average_score: response.average_score,
+            units_consumed: response.units_consumed || 0,
+          });
+          console.log('[TalentFlow] Loaded assessment stats from API');
+        } else {
+          console.log(
+            '[TalentFlow] Failed to load stats:',
+            statsResult.status === 'rejected' ? statsResult.reason : 'empty response'
+          );
+        }
 
-      // Process quota
-      if (quotaResult.status === 'fulfilled') {
-        const apiData = quotaResult.value.data?.data;
-        const quotas = apiData?.quotas;
-        const subscriptionStatus = (apiData?.subscription_status || '').toLowerCase();
-        const isTrial = apiData?.is_trial;
-        const quotaSource = apiData?.quota_source;
+        // Process quota
+        if (quotaResult.status === 'fulfilled') {
+          const apiData = quotaResult.value.data?.data;
+          const quotas = apiData?.quotas;
+          const subscriptionStatus = (apiData?.subscription_status || '').toLowerCase();
+          const isTrial = apiData?.is_trial;
+          const quotaSource = apiData?.quota_source;
 
-        console.log('[TalentFlow] Quota API response:', { subscriptionStatus, isTrial, quotaSource, hasAS: !!quotas?.AS, asData: quotas?.AS });
+          console.log('[TalentFlow] Quota API response:', { subscriptionStatus, isTrial, quotaSource, hasAS: !!quotas?.AS, asData: quotas?.AS });
 
-        // Determine if plan is inactive/expired — don't show "quota exhausted" for these
-        const isActivePlan = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
+          // Determine if plan is inactive/expired — don't show "quota exhausted" for these
+          const isActivePlan = subscriptionStatus === 'active' || subscriptionStatus === 'trial';
 
-        if (quotas?.AS) {
-          const sub = quotas.AS.subscription || {};
-          const addon = quotas.AS.addon || {};
-          const subLimit = sub.limit;
-          const used = sub.used || 0;
-          // addon.remaining removed from API — derive from total_purchased - total_consumed
-          const addonPurchased = typeof addon.total_purchased === 'number' ? addon.total_purchased : 0;
-          const addonConsumed = typeof addon.total_consumed === 'number' ? addon.total_consumed : 0;
-          const addonRemaining = Math.max(0, addonPurchased - addonConsumed);
+          if (quotas?.AS) {
+            const sub = quotas.AS.subscription || {};
+            const addon = quotas.AS.addon || {};
+            const subLimit = sub.limit;
+            const used = sub.used || 0;
+            // addon.remaining removed from API — derive from total_purchased - total_consumed
+            const addonPurchased = typeof addon.total_purchased === 'number' ? addon.total_purchased : 0;
+            const addonConsumed = typeof addon.total_consumed === 'number' ? addon.total_consumed : 0;
+            const addonRemaining = Math.max(0, addonPurchased - addonConsumed);
 
-          // Check if unlimited
-          const unlimited = subLimit === -1 || subLimit === 'unlimited';
-          setIsUnlimited(unlimited);
+            // Check if unlimited
+            const unlimited = subLimit === -1 || subLimit === 'unlimited';
+            setIsUnlimited(unlimited);
 
-          if (unlimited) {
-            setTotalUnits(-1);
-            setAvailableUnits(-1);
-            setQuotaPercentage(0);
-          } else if (typeof subLimit === 'number' && subLimit > 0) {
-            // Valid quota limit from API — totalLimit includes all purchased addon credits
-            const totalLimit = subLimit + addonPurchased;
-            setTotalUnits(totalLimit);
+            if (unlimited) {
+              setTotalUnits(-1);
+              setAvailableUnits(-1);
+              setQuotaPercentage(0);
+            } else if (typeof subLimit === 'number' && subLimit > 0) {
+              // Valid quota limit from API — totalLimit includes all purchased addon credits
+              const totalLimit = subLimit + addonPurchased;
+              setTotalUnits(totalLimit);
 
-            const subRemaining = Math.max(0, subLimit - used);
-            const remaining = typeof quotas.AS.total_remaining === 'number'
-              ? Math.max(0, quotas.AS.total_remaining)
-              : Math.max(0, subRemaining + addonRemaining);
-            setAvailableUnits(remaining);
+              const subRemaining = Math.max(0, subLimit - used);
+              const remaining = typeof quotas.AS.total_remaining === 'number'
+                ? Math.max(0, quotas.AS.total_remaining)
+                : Math.max(0, subRemaining + addonRemaining);
+              setAvailableUnits(remaining);
 
-            const percentage = totalLimit > 0 ? (used / totalLimit) * 100 : 0;
-            setQuotaPercentage(percentage);
-          } else if (isActivePlan) {
-            // Active plan but limit is 0/null — use fallback
-            const totalLimit = 10 + addonPurchased;
-            setTotalUnits(totalLimit);
-            const subRemaining = Math.max(0, 10 - used);
-            const remaining = typeof quotas.AS.total_remaining === 'number'
-              ? Math.max(0, quotas.AS.total_remaining)
-              : Math.max(0, subRemaining + addonRemaining);
-            setAvailableUnits(remaining);
-          } else {
-            // Inactive/expired plan with 0 or null limit — don't set quota values
-            // Leave availableUnits as null so the "exhausted" banner never shows
-            console.log('[TalentFlow] Inactive plan — skipping quota display');
+              const percentage = totalLimit > 0 ? (used / totalLimit) * 100 : 0;
+              setQuotaPercentage(percentage);
+            } else if (isActivePlan) {
+              // Active plan but limit is 0/null — use fallback
+              const totalLimit = 10 + addonPurchased;
+              setTotalUnits(totalLimit);
+              const subRemaining = Math.max(0, 10 - used);
+              const remaining = typeof quotas.AS.total_remaining === 'number'
+                ? Math.max(0, quotas.AS.total_remaining)
+                : Math.max(0, subRemaining + addonRemaining);
+              setAvailableUnits(remaining);
+            } else {
+              // Inactive/expired plan with 0 or null limit — don't set quota values
+              // Leave availableUnits as null so the "exhausted" banner never shows
+              console.log('[TalentFlow] Inactive plan — skipping quota display');
+            }
+
+            console.log('[TalentFlow] Quota loaded: limit=', subLimit, 'used=', used, 'remaining=', quotas.AS.total_remaining, 'unlimited=', unlimited, 'isActivePlan=', isActivePlan);
           }
-
-          console.log('[TalentFlow] Quota loaded: limit=', subLimit, 'used=', used, 'remaining=', quotas.AS.total_remaining, 'unlimited=', unlimited, 'isActivePlan=', isActivePlan);
+        } else {
+          console.log('[TalentFlow] Failed to load quota:', quotaResult.reason);
         }
-      } else {
-        console.log('[TalentFlow] Failed to load quota:', quotaResult.reason);
-      }
 
-      // Process topic settings (for assessment creation)
-      if (topicsResult.status === 'fulfilled') {
-        const topicsData = topicsResult.value.data;
-        if (topicsData) {
-          setTopicSettings(topicsData);
-          console.log('[TalentFlow] Loaded topic settings from API');
+        // Process topic settings (for assessment creation)
+        if (topicsResult.status === 'fulfilled') {
+          const topicsData = topicsResult.value.data;
+          if (topicsData) {
+            setTopicSettings(topicsData);
+            console.log('[TalentFlow] Loaded topic settings from API');
+          }
+        } else {
+          console.log('[TalentFlow] Failed to load topic settings:', topicsResult.reason);
         }
-      } else {
-        console.log('[TalentFlow] Failed to load topic settings:', topicsResult.reason);
+      } catch (error) {
+        console.error('[TalentFlow] loadAllData failed unexpectedly:', error);
+      } finally {
+        // Always clears, whatever happened above — see the comment at the top
+        // of this function for why that used to not be guaranteed.
+        setIsLoadingStats(false);
       }
-
-      setIsLoadingStats(false);
     };
 
     loadAllData();
@@ -5577,22 +5626,25 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             with them.) */}
         <div className="space-y-3 sm:space-y-4 mb-4 sm:mb-6">
           <StatsCardGrid columns={5}>
-            {/* Total Jobs — the count of jobs this tenant has, opening the
-                job-grouped Total Jobs tab, which is the list those jobs are
-                the rows of. Same shared StatsCard as the four beside it, on the
-                same neutral tone with `sparkline={false}` and `showClickArrow`,
-                so it is the row's fifth card rather than a card of its own
-                kind. `isLoadingStats` is deliberately NOT read here: this value
-                does not come from the stats request, and the route holds its
-                own spinner until `jobs` has landed, so the number is real on
-                first paint. */}
+            {/* Total Jobs — the count of jobs (that have an assessment) this
+                tenant has, opening the job-grouped Total Jobs tab, which is
+                the list those jobs are the rows of. Same shared StatsCard as
+                the four beside it, on the same neutral tone with
+                `sparkline={false}` and `showClickArrow`, so it is the row's
+                fifth card rather than a card of its own kind.
+                `totalJobs` (`stats.total_jobs_with_assessments`) comes off
+                the SAME `/assessments/stats` response the other four read —
+                see the note above — so it gates on `isLoadingStats` the same
+                way they do; showing its 0-until-loaded default instead used
+                to read as "this tenant has zero jobs" while the real request
+                was still in flight (or had failed silently). */}
             <StatsCard
               tone="neutral"
               active={isOverviewCardActive('jobs')}
               showClickArrow
               icon={Briefcase}
               label="Total Jobs"
-              value={totalJobs.toLocaleString()}
+              value={isLoadingStats ? '...' : totalJobs.toLocaleString()}
               sparkline={false}
               onClick={() => openAssessmentsList('jobs')}
             />
