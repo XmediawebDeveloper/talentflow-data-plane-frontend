@@ -22,6 +22,7 @@ import ScoreTableModal from './ScoreTableModal';
 import ListPagination from './ListPagination';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import SearchableSelect from '@/components/ui/searchable-select';
 import { useAuth } from '@/components/providers/AuthProvider';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
 import { useAllJobInviteTargets } from '@/lib/hooks/useAllJobInviteTargets';
@@ -1671,16 +1672,19 @@ Best regards`);
               {/* 1. Scored By */}
               <div className={FILTER_FIELD_CLASS}>
                 <label className={FILTER_LABEL_CLASS}>Scored By</label>
-                <select
-                  value={filterRecruiter}
-                  onChange={(e) => search.setFilter('recruiter', e.target.value)}
-                  className={FILTER_CONTROL_CLASS}
-                >
-                  <option value="all">All Recruiters</option>
-                  {uniqueRecruiters.map(recruiter => (
-                    <option key={recruiter} value={recruiter}>{recruiter}</option>
-                  ))}
-                </select>
+                {/* SearchableSelect, not native <select>: a native option popup
+                    is sized to its longest option by the browser and overflows
+                    small screens (recruiter names can be long). This keeps the
+                    menu within the field width and truncates. */}
+                <SearchableSelect
+                  value={filterRecruiter === 'all' ? '' : filterRecruiter}
+                  onChange={(v) => search.setFilter('recruiter', v || 'all')}
+                  options={uniqueRecruiters.map((recruiter) => ({ value: String(recruiter), label: String(recruiter) }))}
+                  allLabel="All Recruiters"
+                  placeholder="All Recruiters"
+                  searchPlaceholder="Search recruiter..."
+                  ariaLabel="Filter by recruiter"
+                />
               </div>
 
               {/* 2. Date From */}
@@ -1779,19 +1783,20 @@ Best regards`);
                   single recruiter; these now match it. */}
               <div className={FILTER_FIELD_CLASS}>
                 <label className={FILTER_LABEL_CLASS}>Job Title</label>
-                <select
-                  value={filterJobTitle}
-                  onChange={(e) => search.setFilter('jobTitle', e.target.value)}
-                  className={FILTER_CONTROL_CLASS}
-                >
-                  <option value="all">All Job Titles</option>
-                  {uniqueJobTitles.map(title => (
-                    /* Full title in the option — the field is narrow, but the
-                       open dropdown sizes to its content, so the picker stays
-                       unambiguous even when the closed control truncates. */
-                    <option key={title} value={title}>{title}</option>
-                  ))}
-                </select>
+                {/* SearchableSelect, not native <select>: job titles are long and
+                    a native option popup sizes to the longest one, overflowing far
+                    past the screen on mobile. This keeps the menu within the field
+                    width, truncates long titles, and adds a search box for the
+                    (often long) list. */}
+                <SearchableSelect
+                  value={filterJobTitle === 'all' ? '' : filterJobTitle}
+                  onChange={(v) => search.setFilter('jobTitle', v || 'all')}
+                  options={uniqueJobTitles.map((title) => ({ value: String(title), label: String(title) }))}
+                  allLabel="All Job Titles"
+                  placeholder="All Job Titles"
+                  searchPlaceholder="Search job title..."
+                  ariaLabel="Filter by job title"
+                />
               </div>
 
               <div className={FILTER_FIELD_CLASS}>
@@ -2508,10 +2513,10 @@ Best regards`);
           >
             {/* Card Header */}
             <div className="flex items-start justify-between mb-3">
-              <div className="flex items-start gap-3 flex-1">
+              <div className="flex items-start gap-3 flex-1 min-w-0">
                 <button
                   onClick={() => handleSelectResume(resume.id)}
-                  className="p-1 hover:bg-gray-200 rounded mt-1"
+                  className="p-1 hover:bg-gray-200 rounded mt-1 shrink-0"
                 >
                   {selectedResumes.includes(resume.id) ? (
                     <CheckSquare className="w-5 h-5 text-gray-800" />
@@ -2519,11 +2524,11 @@ Best regards`);
                     <Square className="w-5 h-5 text-gray-400" />
                   )}
                 </button>
-                <div className="flex-1">
-                  <h3 className="text-gray-900 mb-1">{resume.candidateName}</h3>
+                <div className="flex-1 min-w-0">
+                  <h3 className="text-gray-900 mb-1 break-words">{resume.candidateName}</h3>
                   {/* Show job title in global view */}
                   {isGlobalView && resume.jobTitle && (
-                    <div className="text-xs text-gray-500 mb-1">
+                    <div className="text-xs text-gray-500 mb-1 truncate">
                       Applied for: <span className="font-medium text-gray-700" title={resume.jobTitle || undefined}>{truncateJobTitle(resume.jobTitle)}</span>
                     </div>
                   )}
@@ -2549,9 +2554,9 @@ Best regards`);
             {/* Card Content */}
             <div className="space-y-2 text-sm mb-3">
               {enabledColumns.find(c => c.id === 'email') && (
-                <div className="flex items-center gap-2 text-gray-600">
-                  <Mail className="w-4 h-4" />
-                  {resume.email}
+                <div className="flex items-start gap-2 text-gray-600 min-w-0">
+                  <Mail className="w-4 h-4 mt-0.5 shrink-0" />
+                  <span className="min-w-0 break-all">{resume.email}</span>
                 </div>
               )}
               {enabledColumns.find(c => c.id === 'phone') && (

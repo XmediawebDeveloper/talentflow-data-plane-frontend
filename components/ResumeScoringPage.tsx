@@ -1890,7 +1890,9 @@ export default function ResumeScoringPage({
 
   // Show loading when waiting for initial JD's history to load — same skeleton
   // the route page uses, so only ONE consistent skeleton ever shows (no flash
-  // between two different skeletons).
+  // between two different skeletons). This gate only fires with an initialJdId,
+  // i.e. the LIST view, so use the list variant (stats + filter pills + table)
+  // to match what renders next.
   /* Hoisted above the per-view returns so it keeps ONE tree position while
      `viewMode` changes underneath it. It used to sit inside the "new scoring"
      view's JSX, so moving the page to the results view mid-popup unmounted it
@@ -1934,7 +1936,7 @@ export default function ResumeScoringPage({
 
   const view = (() => {
   if (isWaitingForInitialJd) {
-    return <ResumeScoringSkeleton />;
+    return <ResumeScoringSkeleton variant={initialJdId ? 'list' : 'overview'} />;
   }
 
   // View Candidate Scoring Detail Page

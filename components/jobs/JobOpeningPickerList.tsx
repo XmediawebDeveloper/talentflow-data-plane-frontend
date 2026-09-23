@@ -496,7 +496,13 @@ export default function JobOpeningPickerList({
                       <span className="sr-only">Select {job.title}</span>
                     </label>
 
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 w-full sm:w-auto">
+                      {/* w-full sm:w-auto: the parent stacks (flex-col items-start)
+                          on mobile, so without an explicit full width this column
+                          is sized to its content — a long job title then pushes the
+                          whole card past the screen edge, clipping the title and the
+                          meta. Full width on mobile lets the title/meta truncate and
+                          wrap within the card instead. */}
                       {/* The job opening exactly as the Job Openings list
                           renders it — same fields in the same places.
 

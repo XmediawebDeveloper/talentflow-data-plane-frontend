@@ -847,7 +847,11 @@ export default function ResumeScoringRoute() {
   };
 
   if (loading) {
-    return <ResumeScoringSkeleton />;
+    // A ?jd_id in the URL means we're landing on the scored-resumes LIST view,
+    // so show the list-shaped skeleton (stats + filter pills + table) rather than
+    // the stats-only overview — otherwise the overview skeleton flashes first and
+    // the table skeleton appears second, reading as two skeletons on refresh.
+    return <ResumeScoringSkeleton variant={searchParams.get('jd_id') ? 'list' : 'overview'} />;
   }
 
   return (
