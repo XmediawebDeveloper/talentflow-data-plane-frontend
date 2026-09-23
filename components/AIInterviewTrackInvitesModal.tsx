@@ -101,6 +101,7 @@ export default function AIInterviewTrackInvitesModal({
     inProgress: 0,
     terminated: 0,
     cancelled: 0,
+    revoked: 0,
   });
   const refreshRef = useRef<NodeJS.Timeout | null>(null);
   // Resend flow — confirm first (the old link stops working), then send.
@@ -176,13 +177,13 @@ export default function AIInterviewTrackInvitesModal({
   const loadInvitations = useCallback(async (silent = false) => {
     if (!silent) setIsLoading(true);
     try {
-      /* Three page_size-1-or-N calls in parallel: the filtered page itself, the
-         unfiltered overview, and the invited bucket. The list endpoint reports
-         completed/in_progress/terminated/cancelled but not `invited`, and
-         deriving it as "total minus the rest" would leave that card disagreeing
-         with the rows it filters to — the remainder also holds revoked, expired
-         and system_check sessions. */
-      const [result, summary, invitedOnly] = await Promise.all([
+      /* Four page_size-1-or-N calls in parallel: the filtered page itself, the
+         unfiltered overview, and the invited and revoked buckets. The list
+         endpoint reports completed/in_progress/terminated/cancelled but not
+         `invited` or `revoked`, and deriving either as "total minus the rest"
+         would leave that card disagreeing with the rows it filters to — the
+         remainder also holds expired and system_check sessions. */
+      const [result, summary, invitedOnly, revokedOnly] = await Promise.all([
         aiInterviewService.getConfigInvitations(configId, {
           search: filters.search.trim() || undefined,
           status: filters.status !== 'all' ? filters.status : undefined,
@@ -193,6 +194,7 @@ export default function AIInterviewTrackInvitesModal({
         }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1 }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, status: 'invited' }),
+        aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, status: 'revoked' }),
       ]);
 
       setInvitations(result.items || []);
@@ -205,6 +207,7 @@ export default function AIInterviewTrackInvitesModal({
         inProgress: summary.in_progress || 0,
         terminated: summary.terminated || 0,
         cancelled: summary.cancelled || 0,
+        revoked: revokedOnly.total || 0,
       });
 
       /* Filtering can empty the page you were on — drop back rather than showing
@@ -282,7 +285,7 @@ export default function AIInterviewTrackInvitesModal({
         {/* Stat row doubles as the status filter — same buckets and wording as the
             AI Interviews page tracker. */}
         <InviteStatCards
-          gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-3"
+          gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1 sm:gap-2 lg:gap-3"
           activeStatus={filters.status}
           onSelect={(status) => {
             setFilters({ ...filters, status });
@@ -294,8 +297,7 @@ export default function AIInterviewTrackInvitesModal({
             { key: 'in_progress', label: 'In Progress', Icon: Play, value: overview.inProgress, ...INVITE_CARD_TONES.orange },
             { key: 'completed', label: 'Completed', Icon: CheckCircle, value: overview.completed, ...INVITE_CARD_TONES.green },
             { key: 'terminated', label: 'Terminated', Icon: Ban, value: overview.terminated, ...INVITE_CARD_TONES.red },
-            { key: 'cancelled', label: 'Cancelled', Icon: X, value: overview.cancelled, ...INVITE_CARD_TONES.red },
-            { key: 'completion-rate', label: 'Completion', Icon: TrendingUp, value: `${completionRate}%`, filterable: false, ...INVITE_CARD_TONES.cyan },
+            { key: 'revoked', label: 'Revoked', Icon: Ban, value: overview.revoked, ...INVITE_CARD_TONES.indigo },
           ]}
         />
 
@@ -311,43 +313,56 @@ export default function AIInterviewTrackInvitesModal({
         />
 
         {/* Select All — same control, wording and placement as the assessment
-            tracker's bulk-select bar. Only Expired rows count. */}
-        {!isLoading && selectableIds.length > 0 && (
+            tracker's bulk-select bar. Only Expired rows count. The
+            completion-rate badge (previously its own card in the stat row
+            above) sits on this same row, straight across from Select All. */}
+        {!isLoading && (
           <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
-            <button
-              type="button"
-              onClick={toggleSelectAll}
-              className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
-            >
-              <span
-                role="checkbox"
-                aria-checked={allSelected}
-                className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
-                  allSelected
-                    ? 'bg-brand-blue border-brand-blue'
-                    : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600'
-                }`}
-              >
-                {allSelected && <Check className="w-3 h-3 text-white" />}
-              </span>
-              Select All ({selectableIds.length})
-            </button>
-            {/* Bulk Resend — appears once something is ticked. */}
-            {selectedIds.size > 0 && (
-              <Button
-                variant="primary"
-                size="sm"
+            {selectableIds.length > 0 ? (
+              <button
                 type="button"
-                onClick={() => setShowBulkResendConfirm(true)}
-                disabled={isBulkResending}
-                className="whitespace-nowrap"
+                onClick={toggleSelectAll}
+                className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
               >
-                {isBulkResending
-                  ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  : <Mail className="w-3.5 h-3.5" />}
-                {isBulkResending ? 'Sending…' : `Resend (${selectedIds.size})`}
-              </Button>
+                <span
+                  role="checkbox"
+                  aria-checked={allSelected}
+                  className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
+                    allSelected
+                      ? 'bg-brand-blue border-brand-blue'
+                      : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600'
+                  }`}
+                >
+                  {allSelected && <Check className="w-3 h-3 text-white" />}
+                </span>
+                Select All ({selectableIds.length})
+              </button>
+            ) : (
+              <span />
             )}
+
+            <div className="flex items-center gap-2">
+              {/* Bulk Resend — appears once something is ticked. */}
+              {selectedIds.size > 0 && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  type="button"
+                  onClick={() => setShowBulkResendConfirm(true)}
+                  disabled={isBulkResending}
+                  className="whitespace-nowrap"
+                >
+                  {isBulkResending
+                    ? <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    : <Mail className="w-3.5 h-3.5" />}
+                  {isBulkResending ? 'Sending…' : `Resend (${selectedIds.size})`}
+                </Button>
+              )}
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                <TrendingUp className="w-3.5 h-3.5" />
+                {completionRate}% Completion
+              </span>
+            </div>
           </div>
         )}
 

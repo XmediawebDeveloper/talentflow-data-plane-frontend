@@ -461,6 +461,13 @@ export interface AIInterviewInviteTableProps {
   /** Extra line under the empty state when nothing is filtered. */
   emptyHint?: string;
 
+  /**
+   * Adds a "Job / Interview" column (desktop) / line (mobile) reading each
+   * row's `_config_title` (and `_jd_short_id` badge, when present) — for a
+   * list that spans every interview rather than one config's own tracker.
+   */
+  showJobColumn?: boolean;
+
   /** Bulk selection. Omit both to render no checkbox column at all. */
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
@@ -485,6 +492,7 @@ export default function AIInterviewInviteTable({
   isLoading,
   hasActiveFilters,
   emptyHint,
+  showJobColumn = false,
   selectedIds,
   onToggleSelect,
   isSelectable,
@@ -680,6 +688,12 @@ export default function AIInterviewInviteTable({
                       {inv.candidate_cid}
                     </p>
                   )}
+                  {showJobColumn && inv._config_title && (
+                    <p className="text-2xs text-gray-500 dark:text-slate-500 truncate">
+                      {inv._jd_short_id && <span className="font-medium text-gray-600 dark:text-slate-400">{inv._jd_short_id} · </span>}
+                      {inv._config_title}
+                    </p>
+                  )}
                 </div>
                 <AIInviteStatusBadge inv={inv} />
               </div>
@@ -769,6 +783,9 @@ export default function AIInterviewInviteTable({
               {selectable && <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left" aria-label="Select" />}
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">CID</th>
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Candidate</th>
+              {showJobColumn && (
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Job / Interview</th>
+              )}
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Status</th>
               <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Score</th>
               {/* hidden md:table-cell mirrors this column's <td> — without it the
@@ -826,6 +843,17 @@ export default function AIInterviewInviteTable({
                       </div>
                     </div>
                   </td>
+
+                  {showJobColumn && (
+                    <td className="py-3 px-4 align-middle max-w-[200px]">
+                      <p className="text-sm text-gray-700 dark:text-slate-300 truncate" title={inv._config_title || ''}>
+                        {inv._config_title || <span className="text-gray-400 dark:text-slate-500">—</span>}
+                      </p>
+                      {inv._jd_short_id && (
+                        <p className="text-xs text-gray-400 dark:text-slate-500 truncate">{inv._jd_short_id}</p>
+                      )}
+                    </td>
+                  )}
 
                   <td className="py-3 px-4 align-middle whitespace-nowrap">
                     <div className="flex items-center gap-1.5 flex-nowrap">

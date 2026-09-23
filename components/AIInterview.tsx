@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, GitBranch, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Check, Info, RefreshCw, Layers, Radar, Sparkles } from 'lucide-react';
+import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, GitBranch, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Check, Info, RefreshCw, Layers, Radar } from 'lucide-react';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef, useCallback, useMemo, type ComponentType } from 'react';
 import { createPortal } from 'react-dom';
@@ -19,12 +19,15 @@ import type { AIInterviewResponse, AIInterviewStatsResponse, AIInterviewSettings
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
 import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
+import ArchiveAIInterviewModal from '@/components/ai-interview/ArchiveAIInterviewModal';
+import DeleteAIInterviewModal from '@/components/ai-interview/DeleteAIInterviewModal';
+import AIInterviewReviewPreviewModal from '@/components/ai-interview/AIInterviewReviewPreviewModal';
 import CandidateResultsView from '@/components/ai-interview/CandidateResultsView';
 import AIInterviewAuditTrail from '@/components/AIInterviewAuditTrail';
 import AIInterviewCandidateResults from '@/components/ai-interview/AIInterviewCandidateResults';
-import InviteFilterBar, { EMPTY_INVITE_FILTERS, AI_INTERVIEW_INVITE_STATUS_OPTIONS, hasActiveInviteFilters, type InviteFilterState } from '@/components/InviteFilterBar';
+import InviteFilterBar, { EMPTY_INVITE_FILTERS, AI_INTERVIEW_INVITE_STATUS_OPTIONS, hasActiveInviteFilters, type InviteFilterState, type InviteStatusOption } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
-import AIInterviewInviteTable, { isRevocableInvite } from '@/components/AIInterviewInviteTable';
+import AIInterviewInviteTable, { isRevocableInvite, resolveInviteStatus } from '@/components/AIInterviewInviteTable';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
@@ -94,12 +97,25 @@ const ROUND_SHORT_LABELS: Record<string, string> = {
   nice_to_have_skills: 'NHS',
 };
 
-type TabKey = 'all' | 'all-interviews' | 'published' | 'draft' | 'completed' | 'archived' | 'candidate-results' | 'processing' | 'audit' | 'consent' | 'settings';
+type TabKey = 'all' | 'all-interviews' | 'published' | 'draft' | 'completed' | 'archived' | 'candidate-results' | 'invitation-status' | 'processing' | 'audit' | 'consent' | 'settings';
 type OverviewCardKey = 'jobs' | 'interviews' | 'active' | 'draft' | 'interviewed';
 const CONFIG_PAGE_SIZE = 10;
 const AI_FILTER_FIELD_CLASS = 'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40';
 const PROCESSING_PAGE_SIZE = 10;
 const INVITATION_PAGE_SIZE = 10;
+/* The Invitation Status tab's filter-bar dropdown needs 'expired' as its own
+ * option — the segmented pills above it use resolveInviteStatus(), which can
+ * bucket a still-'invited' row as expired, so the dropdown must offer the
+ * same value or picking a pill would leave it showing nothing selected. */
+const INVITATION_STATUS_TAB_OPTIONS: InviteStatusOption[] = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'invited', label: 'Invited' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'expired', label: 'Expired' },
+  { value: 'revoked', label: 'Revoked' },
+  { value: 'terminated', label: 'Terminated' },
+];
 const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
 const CONFIG_FETCH_PAGE_SIZE = 20;
 
@@ -121,6 +137,12 @@ export default function AIInterview() {
   const { quotaData } = useQuota();
 
   const [activeTab, setActiveTab] = useState<TabKey>('all');
+  /* Active/Draft/Archived list view — 'ungrouped' (default) is a flat table,
+     one row per version, in the same shape as the All Interviews tab;
+     'grouped' is the one-card-per-job view with each job's other versions
+     behind its own View Versions button. Total Jobs and Completed have no
+     toggle and always render grouped. */
+  const [configListViewMode, setConfigListViewMode] = useState<'grouped' | 'ungrouped'>('ungrouped');
   // "AI Interview Published" success modal (was referenced in JSX but never
   // declared — pre-existing build error). Defaults hidden; no behavior change.
   const [showPublishedModal, setShowPublishedModal] = useState(false);
@@ -239,6 +261,7 @@ export default function AIInterview() {
     inProgress: 0,
     terminated: 0,
     cancelled: 0,
+    revoked: 0,
   });
   const [configListPage, setConfigListPage] = useState(1);
   const [configListItemsPerPage, setConfigListItemsPerPage] = useState(10);
@@ -263,6 +286,18 @@ export default function AIInterview() {
   // Candidate detail view (from Track Invites modal)
   const [candidateDetailFromModal, setCandidateDetailFromModal] = useState<AIInterviewResponse | null>(null);
   const [candidateDetailLoading, setCandidateDetailLoading] = useState(false);
+
+  /* Invitation Status tab — every invitation across every AI interview, the
+     Assessments page's Invitation Status tab applied to interviews. Loaded by
+     fanning out one getConfigInvitations() per config (below), not a single
+     cross-config endpoint — the backend has none — the same approach the
+     Assessments page's own cross-assessment tab uses. */
+  const [inviteStatusRows, setInviteStatusRows] = useState<any[]>([]);
+  const [isLoadingInviteStatus, setIsLoadingInviteStatus] = useState(false);
+  const [inviteStatusError, setInviteStatusError] = useState<string | null>(null);
+  const [inviteStatusFilters, setInviteStatusFilters] = useState<InviteFilterState>(EMPTY_INVITE_FILTERS);
+  const [inviteStatusPage, setInviteStatusPage] = useState(1);
+  const [inviteStatusItemsPerPage, setInviteStatusItemsPerPage] = useState(20);
 
   // 3-dot menu
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -340,8 +375,55 @@ export default function AIInterview() {
   const [processingSessions, setProcessingSessions] = useState<AIInterviewResponse[]>([]);
   const [processingLoading, setProcessingLoading] = useState(false);
 
-  // Confirmation dialog
-  const [confirmAction, setConfirmAction] = useState<{ title: string; message: string; onConfirm: () => void; destructive?: boolean } | null>(null);
+  // Archive / delete confirms — each its own dedicated dialog so the
+  // warning gets the richer, purpose-built treatment rather than a generic
+  // title+message box.
+  const [archiveTarget, setArchiveTarget] = useState<AIInterviewResponse | null>(null);
+  const [archiveLoading, setArchiveLoading] = useState(false);
+  const [deleteTarget, setDeleteTarget] = useState<AIInterviewResponse | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
+  /* Version History's eye icon — a read-only "Review & Publish" peek at that
+     one version, not a navigation away from the list. `version` is display-
+     only, carried along since the panel already derived it for the row. */
+  const [reviewPreviewTarget, setReviewPreviewTarget] = useState<{ id: string; version?: number } | null>(null);
+
+  /* Shared search/filter toolbar slot, above the tab pills. All-Interviews,
+     Candidate Results and Activity Logs each own their own search fields, but
+     portal their toolbar into this one DOM node instead of rendering it
+     inline in their own body — so every tab's toolbar sits in the exact same
+     spot (title → search/filter → tab pills), matching the Resume Scoring
+     page's layout, rather than drifting per tab. State, not a plain ref: a
+     portal needs the node to already be mounted to target it, and a ref alone
+     doesn't re-render this component when it first attaches. */
+  const [toolbarSlotEl, setToolbarSlotEl] = useState<HTMLDivElement | null>(null);
+
+  /* Refresh button in the tab-pills row. Bumped on every click; the three
+     tabs that manage their own data (AllInterviewsTable, AIInterviewCandidateResults,
+     AIInterviewAuditTrail) each watch it via their own `refreshSignal` prop,
+     while the tabs this component itself owns are refetched directly below. */
+  const [refreshSignal, setRefreshSignal] = useState(0);
+  const [isRefreshingTab, setIsRefreshingTab] = useState(false);
+  const handleRefreshCurrentTab = async () => {
+    if (isRefreshingTab) return;
+    setIsRefreshingTab(true);
+    try {
+      if (isConfigListTab) {
+        await Promise.all([loadData(), loadArchivedConfigs()]);
+      } else if (activeTab === 'processing') {
+        await loadProcessingSessions();
+      } else if (activeTab === 'invitation-status') {
+        await loadAllInviteStatuses();
+      } else if (activeTab === 'settings') {
+        await loadSettings();
+        if (settingsSubTab === 'proctoring') await loadProctoringSettings();
+      }
+      // All Interviews / Candidate Results / Activity Logs own their own
+      // data — this is their cue to refetch.
+      setRefreshSignal((n) => n + 1);
+    } finally {
+      setIsRefreshingTab(false);
+    }
+  };
 
   // Sync quota from shared QuotaContext (AIU = AI Interview Units)
   useEffect(() => {
@@ -497,15 +579,16 @@ export default function AIInterview() {
 
   const loadInvitationOverview = useCallback(async (configId: string) => {
     try {
-      /* Two calls, both page_size 1 — the list endpoint returns aggregate counts
-         for completed/in_progress/terminated/cancelled but not for `invited`.
-         Deriving Invited as "total minus the rest" would have made that card
-         disagree with the rows it filters to: the remainder also holds revoked,
-         expired and system_check sessions. Asking the endpoint for the invited
-         bucket directly keeps the number and the filtered table in step. */
-      const [result, invitedOnly] = await Promise.all([
+      /* Three calls, all page_size 1 — the list endpoint returns aggregate counts
+         for completed/in_progress/terminated/cancelled but not for `invited` or
+         `revoked`. Deriving either as "total minus the rest" would have made that
+         card disagree with the rows it filters to: the remainder also holds
+         expired and system_check sessions. Asking the endpoint for each bucket
+         directly keeps the numbers and the filtered table in step. */
+      const [result, invitedOnly, revokedOnly] = await Promise.all([
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, compact: true }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, compact: true, status: 'invited' }),
+        aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, compact: true, status: 'revoked' }),
       ]);
       setInvitationOverview({
         total: result.total || 0,
@@ -514,6 +597,7 @@ export default function AIInterview() {
         inProgress: result.in_progress || 0,
         terminated: result.terminated || 0,
         cancelled: result.cancelled || 0,
+        revoked: revokedOnly.total || 0,
       });
     } catch (error) {
       console.error('Failed to load invitation overview:', error);
@@ -524,6 +608,7 @@ export default function AIInterview() {
         inProgress: 0,
         terminated: 0,
         cancelled: 0,
+        revoked: 0,
       });
     }
   }, []);
@@ -569,6 +654,77 @@ export default function AIInterview() {
       loadInvitationOverview(configId),
     ]);
   }, [loadInvitations, loadInvitationOverview, invitationPage, inviteFilters]);
+
+  /* Invitation Status tab — one getConfigInvitations() per config (draft,
+     published and archived alike, so nothing invited from an archived
+     interview silently drops out), fanned out in parallel and merged with
+     each row stamped with the config it came from. Unfiltered on the
+     request: the stat cards must keep counting the whole set while the
+     table is narrowed, so narrowing happens client-side over these rows —
+     same rule the Assessments page's own cross-assessment tab follows. */
+  const loadAllInviteStatuses = useCallback(async () => {
+    setIsLoadingInviteStatus(true);
+    setInviteStatusError(null);
+    try {
+      const allConfigs = [...configs, ...archivedConfigs];
+      if (allConfigs.length === 0) {
+        setInviteStatusRows([]);
+        return;
+      }
+      const perConfig = await Promise.all(
+        allConfigs.map(async (config) => {
+          try {
+            const probe = await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: 1 });
+            if (!probe.total) return [];
+            const full = probe.total > probe.items.length
+              ? await aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: probe.total })
+              : probe;
+            return full.items.map((inv) => ({
+              ...inv,
+              _config_id: config.id,
+              _config_title: config.jd_title || config.position || 'Untitled',
+              _jd_id: config.jd_id,
+              _jd_short_id: config.jd_short_id,
+            }));
+          } catch {
+            // One config's invitations being unavailable must not empty the tab.
+            return [];
+          }
+        }),
+      );
+      const merged = perConfig.flat();
+      // Newest invite first: invitation_sent_at is the moment a recruiter cares
+      // about; created_at covers a row that never made it out of the queue.
+      merged.sort((a, b) =>
+        new Date(b.invitation_sent_at || b.created_at || 0).getTime() -
+        new Date(a.invitation_sent_at || a.created_at || 0).getTime(),
+      );
+      setInviteStatusRows(merged);
+      setInviteStatusPage(1);
+    } catch (err: any) {
+      console.error('Failed to load invitation statuses:', err);
+      setInviteStatusError(err?.message || 'Failed to load invitation statuses');
+      setInviteStatusRows([]);
+    } finally {
+      setIsLoadingInviteStatus(false);
+    }
+  }, [configs, archivedConfigs]);
+
+  useEffect(() => {
+    // Also re-fires as `configs`/`archivedConfigs` finish loading (both
+    // change `loadAllInviteStatuses`'s identity) — archived configs load on
+    // their own delayed fetch, so without this an invite from an archived
+    // interview could be missing until the tab was left and reopened.
+    if (activeTab === 'invitation-status') loadAllInviteStatuses();
+  }, [activeTab, loadAllInviteStatuses]);
+
+  /* Shared by the Resend/Revoke/Edit confirms below: both the single-config
+     popup (viewInvitationsConfig) and this tab can be the thing on screen
+     when one of those actions completes, and each refreshes its own view. */
+  const refreshAfterInviteAction = useCallback(async (configId?: string) => {
+    if (viewInvitationsConfig && configId) await refreshInvitationsView(configId);
+    if (activeTab === 'invitation-status') await loadAllInviteStatuses();
+  }, [viewInvitationsConfig, refreshInvitationsView, activeTab, loadAllInviteStatuses]);
 
   /* Manual Refresh in the tracking popup — same refetch the row actions use,
      in place with no page reload. Guarded so rapid clicks (or a click while
@@ -627,7 +783,7 @@ export default function AIInterview() {
     { activeTab, invitedOnly, modeFilter, searchQuery, sortBy,
       creatorFilter, dateFilter, customDateFrom, customDateTo,
       configListPage, configListItemsPerPage, processingPage, processingItemsPerPage,
-      openVersionsFor,
+      openVersionsFor, configListViewMode,
       // The cards<->list drill-in. Without it the tab, filters and page were
       // all restored but pageView fell back to 'cards', so returning from an
       // interview page showed only the stat tiles — the list looked gone.
@@ -649,6 +805,7 @@ export default function AIInterview() {
       if (typeof s.configListItemsPerPage === 'number') setConfigListItemsPerPage(s.configListItemsPerPage);
       if (typeof s.processingPage === 'number') setProcessingPage(s.processingPage);
       if (typeof s.processingItemsPerPage === 'number') setProcessingItemsPerPage(s.processingItemsPerPage);
+      if (s.configListViewMode === 'grouped' || s.configListViewMode === 'ungrouped') setConfigListViewMode(s.configListViewMode);
     },
   );
 
@@ -692,7 +849,9 @@ export default function AIInterview() {
       if (settingsSubTab === 'proctoring') loadProctoringSettings();
     }
     // 'all' now includes archived configs too, so load them for that tab as well.
-    if (activeTab === 'archived' || activeTab === 'all') loadArchivedConfigs();
+    // Invitation Status spans every config too — an invite sent before its
+    // interview was archived must not silently drop out of the aggregate.
+    if (activeTab === 'archived' || activeTab === 'all' || activeTab === 'invitation-status') loadArchivedConfigs();
     if (activeTab === 'audit') loadAuditTrail();
     if (activeTab === 'processing') loadProcessingSessions();
   }, [activeTab, loadSettings, loadArchivedConfigs, loadAuditTrail, loadProcessingSessions, settingsSubTab, loadProctoringSettings, auditCategory, auditPage]);
@@ -743,30 +902,34 @@ export default function AIInterview() {
     };
   }, [openMenuId]);
 
-  const handleDeleteConfig = async (config: AIInterviewResponse) => {
+  const handleDeleteConfig = (config: AIInterviewResponse) => {
     // Prevent deletion if candidates have started
     if (config.invitations_count && config.invitations_count > 0) {
       toast.error('Cannot delete — candidates have already started this interview');
       setOpenMenuId(null);
       return;
     }
-    setConfirmAction({
-      title: 'Delete Configuration',
-      message: 'Delete this AI interview configuration? This cannot be undone.',
-      destructive: true,
-      onConfirm: async () => {
-        try {
-          await aiInterviewService.delete(config.id);
-          toast.success('Configuration deleted');
-          loadData();
-        } catch (error) {
-          console.error('Failed to delete:', error);
-          toast.error(error instanceof Error ? error.message : 'Failed to delete configuration');
-        }
-        setConfirmAction(null);
-        setOpenMenuId(null);
-      },
-    });
+    // Close the 3-dot menu the instant the confirm opens — otherwise both sit
+    // on screen at once until the delete call resolves.
+    setOpenMenuId(null);
+    if (config.jd_id) jdLineage.ensureLoaded(config.jd_id, config.jd_id);
+    setDeleteTarget(config);
+  };
+
+  const confirmDeleteConfig = async () => {
+    if (!deleteTarget) return;
+    setDeleteLoading(true);
+    try {
+      await aiInterviewService.delete(deleteTarget.id);
+      toast.success('Configuration deleted');
+      loadData();
+      setDeleteTarget(null);
+    } catch (error) {
+      console.error('Failed to delete:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to delete configuration');
+    } finally {
+      setDeleteLoading(false);
+    }
   };
 
   const handlePublishConfig = async (config: AIInterviewResponse) => {
@@ -813,22 +976,26 @@ export default function AIInterview() {
     }
   };
 
-  const handleArchiveConfig = async (config: AIInterviewResponse) => {
-    setConfirmAction({
-      title: 'Archive Configuration',
-      message: 'Archive this configuration? It will be moved to the Archived tab.',
-      onConfirm: async () => {
-        try {
-          await aiInterviewService.archive(config.id);
-          toast.success('Configuration archived');
-          await Promise.all([loadData(), loadArchivedConfigs()]);
-        } catch (error: any) {
-          toast.error(error.message || 'Failed to archive');
-        }
-        setConfirmAction(null);
-        setOpenMenuId(null);
-      },
-    });
+  const handleArchiveConfig = (config: AIInterviewResponse) => {
+    // Close the 3-dot menu the instant the confirm opens — otherwise both sit
+    // on screen at once until the archive call resolves.
+    setOpenMenuId(null);
+    setArchiveTarget(config);
+  };
+
+  const confirmArchiveConfig = async () => {
+    if (!archiveTarget) return;
+    setArchiveLoading(true);
+    try {
+      await aiInterviewService.archive(archiveTarget.id);
+      toast.success('Configuration archived');
+      await Promise.all([loadData(), loadArchivedConfigs()]);
+      setArchiveTarget(null);
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to archive');
+    } finally {
+      setArchiveLoading(false);
+    }
   };
 
   const handleUnarchiveConfig = async (config: AIInterviewResponse) => {
@@ -1302,17 +1469,27 @@ export default function AIInterview() {
     jd_version: config.jd_version,
   });
 
-  /** Every interview in one job's lineage, numbered per job version. */
-  const interviewVersionRows = (jdId?: string): AssessmentVersionRow[] => {
+  /**
+   * Every interview in one job's lineage, numbered per job version.
+   *
+   * `statusFilter`, when given, drops every row NOT in that status — applied
+   * AFTER the ordinal is assigned, so a version's number still reflects its
+   * true position in the full lineage rather than shifting once other
+   * versions are hidden. Used by the Active/Draft/Archived tabs' "View
+   * Versions" panel so it shows only that tab's own status, not every
+   * version whatever its state.
+   */
+  const interviewVersionRows = (jdId?: string, statusFilter?: 'published' | 'draft' | 'archived'): AssessmentVersionRow[] => {
     if (!jdId) return [];
     const lineage = jdLineage.lineages[jdId];
     if (!lineage) return [];
-    return lineage.flatMap((jobVersion) =>
+    const rows = lineage.flatMap((jobVersion) =>
       (configsByJobVersionId.get(jobVersion.id) ?? [])
         .slice()
         .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
         .map((config, index) => toInterviewVersionRow(config, index + 1)),
     );
+    return statusFilter ? rows.filter((row) => row.status === statusFilter) : rows;
   };
 
   /* A row restored open by list-state persistence was never clicked, so the
@@ -1577,6 +1754,27 @@ export default function AIInterview() {
 
   const isConfigListTab = ['all', 'published', 'draft', 'completed', 'archived'].includes(activeTab);
 
+  /** The heading shown above the search/filter bar for each config-list tab —
+   *  same spot and treatment as Resume Scoring's "All Resumes (299)". */
+  const CONFIG_LIST_TAB_TITLES: Record<string, string> = {
+    all: 'Total Jobs',
+    published: 'Active Interviews',
+    draft: 'Draft Interviews',
+    archived: 'Archived Interviews',
+    completed: 'Completed Interviews',
+  };
+
+  /** The three tabs the Grouped/Ungrouped toggle applies to — each a single,
+   *  unambiguous status, unlike Total Jobs (every status) or Completed. */
+  const isStatusTab = activeTab === 'published' || activeTab === 'draft' || activeTab === 'archived';
+  /** Ungrouped renders the flat, one-row-per-version table instead of this
+   *  component's own card list below. */
+  const showUngroupedList = isStatusTab && configListViewMode === 'ungrouped';
+  /** Status a version must match to appear under this tab's "View Versions"
+   *  panel (Grouped mode) — undefined on Total Jobs/Completed, which show
+   *  every version's status as before. */
+  const versionStatusFilterForTab = isStatusTab ? (activeTab as 'published' | 'draft' | 'archived') : undefined;
+
   useEffect(() => {
     setConfigListPage(1);
   }, [activeTab, invitedOnly, modeFilter, searchQuery, sortBy, creatorFilter, dateFilter, customDateFrom, customDateTo]);
@@ -1690,13 +1888,6 @@ export default function AIInterview() {
               <Video className="w-4 h-4 text-brand-blue" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-brand-blue text-white text-2xs font-medium tracking-wide shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                  <Sparkles className="w-3 h-3" />
-                  AI Interview
-                </span>
-                <span className="text-2xs text-gray-400 dark:text-slate-500 font-medium uppercase tracking-wider">Platform</span>
-              </div>
               <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight break-words">
                 AI Interview Management
               </h1>
@@ -1844,9 +2035,15 @@ export default function AIInterview() {
 
         {/* Search + filters, ABOVE the tabs — the Assessments page's order.
             Only on the tabs that list interview configs; the others bring
-            their own controls. */}
-        {isConfigListTab && (
+            their own controls. The Ungrouped view is one of those "own
+            controls" tabs too — AllInterviewsTable portals its own toolbar
+            into the same slot, so this one steps aside rather than the two
+            fighting over one spot. */}
+        {isConfigListTab && !showUngroupedList && (
           <div className="mb-4">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3">
+              {CONFIG_LIST_TAB_TITLES[activeTab] ?? 'Jobs'} ({collapsedConfigs.length})
+            </h2>
             <ListToolbar
               searchValue={searchQuery}
               searchDebounceMs={0}
@@ -1975,8 +2172,16 @@ export default function AIInterview() {
           </div>
         )}
 
+        {/* Shared toolbar slot — All Interviews / Candidate Results / Activity
+            Logs each portal their own search/filter bar in here (see their
+            `toolbarSlot` prop below), so it renders in this one spot above
+            the tab pills no matter which tab is active. Empty (and so
+            collapsed) on the tabs whose toolbar renders inline above instead. */}
+        <div ref={setToolbarSlotEl} className="empty:hidden mb-4" />
+
         {/* Tabs — outside the list card, in the Assessments page's pill row. */}
-        <div className="flex items-center gap-2 flex-wrap mb-3">
+        <div className="flex items-start justify-between gap-2 flex-wrap mb-3">
+        <div className="flex items-center gap-2 flex-wrap">
           <span className="text-sm text-gray-600 dark:text-slate-400">Show:</span>
           {([
             { key: 'all', label: 'Total Jobs' },
@@ -1987,12 +2192,15 @@ export default function AIInterview() {
             // Candidate sessions across every interview — the Assessments
             // page's tab of the same name, for AI interviews.
             { key: 'candidate-results', label: 'Candidate Results' },
+            // Every invitation across every interview — the Assessments
+            // page's Invitation Status tab, for AI interviews.
+            { key: 'invitation-status', label: 'Invitation Status' },
           ] as const).map(tab => {
             const isActive = activeTab === tab.key;
             return (
               <button
                 key={tab.key}
-                onClick={() => setActiveTab(tab.key as TabKey)}
+                onClick={() => openListView(tab.key as TabKey)}
                 aria-current={isActive ? 'page' : undefined}
                 className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all whitespace-nowrap ${
                   isActive
@@ -2013,7 +2221,7 @@ export default function AIInterview() {
               return (
                 <button
                   key={tab.key}
-                  onClick={() => setActiveTab(tab.key as TabKey)}
+                  onClick={() => openListView(tab.key as TabKey)}
                   aria-current={isActive ? 'page' : undefined}
                   className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all whitespace-nowrap ${
                     isActive
@@ -2028,16 +2236,80 @@ export default function AIInterview() {
           </div>
         </div>
 
+          {/* Refresh — right corner of the pill row. Refetches whichever tab
+              is on screen: the config-list/processing/invitation-status/
+              settings tabs this component owns directly, plus a bump of
+              `refreshSignal` for the three that manage their own data. */}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={handleRefreshCurrentTab}
+            disabled={isRefreshingTab}
+            title="Refresh"
+            aria-label="Refresh"
+            icon={<RefreshCw className={`w-3.5 h-3.5 ${isRefreshingTab ? 'animate-spin' : ''}`} />}
+            className="flex-shrink-0"
+          >
+            <span className="hidden sm:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
+          </Button>
+        </div>
+
+        {/* Grouped/Ungrouped — Active/Draft/Archived only. Ungrouped (the
+            default) is a flat table, one row per version; Grouped is the
+            one-card-per-job view below, each job's other versions behind its
+            own View Versions button, same as before this toggle existed. */}
+        {isStatusTab && (
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
+            <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+              {([
+                { key: 'ungrouped', label: 'Ungrouped' },
+                { key: 'grouped', label: 'Grouped' },
+              ] as const).map((mode) => {
+                const isActive = configListViewMode === mode.key;
+                return (
+                  <button
+                    key={mode.key}
+                    type="button"
+                    aria-pressed={isActive}
+                    onClick={() => setConfigListViewMode(mode.key)}
+                    className={`px-2.5 sm:px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                      isActive
+                        ? 'bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue'
+                        : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
+                    }`}
+                  >
+                    {mode.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Main Content */}
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
           {/* All Interviews — flat, one row per interview config/version,
               the same shape as the Assessments page's "All Assessments"
               table, as opposed to the Total Jobs tab's one-card-per-job
               (collapsed lineage) list below. */}
-          {activeTab === 'all-interviews' && <AllInterviewsTable />}
+          {activeTab === 'all-interviews' && <AllInterviewsTable toolbarSlot={toolbarSlotEl} refreshSignal={refreshSignal} />}
+
+          {/* Active/Draft/Archived, Ungrouped — the same flat table as All
+              Interviews, locked to this tab's own status so no other status's
+              jobs or versions show up in it. */}
+          {showUngroupedList && (
+            <AllInterviewsTable
+              key={activeTab}
+              toolbarSlot={toolbarSlotEl}
+              refreshSignal={refreshSignal}
+              fixedStatus={activeTab as 'published' | 'draft' | 'archived'}
+              titleLabel={CONFIG_LIST_TAB_TITLES[activeTab]}
+            />
+          )}
 
           {/* Config List (for config-listing tabs) */}
-          {isConfigListTab && (
+          {isConfigListTab && !showUngroupedList && (
             <div className="p-3 sm:p-6">
               {collapsedConfigs.length === 0 ? (
                 <div className="text-center py-16 sm:py-20">
@@ -2078,14 +2350,6 @@ export default function AIInterview() {
                 </div>
               ) : (
                 <>
-                {/* Job List header — the Assessments Total Jobs heading: one
-                    row below is one JOB, so the count is jobs, not configs. */}
-                <div className="flex items-center justify-between gap-3 mb-3 sm:mb-4">
-                  <h2 className="text-sm sm:text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight">
-                    Job List{' '}
-                    <span className="font-normal text-gray-500 dark:text-slate-500">({collapsedConfigs.length})</span>
-                  </h2>
-                </div>
                 <div className="space-y-3">
                   {paginatedConfigs.map((config) => {
                     const normalizedStatus = normalizeConfigStatus(config.status);
@@ -2201,9 +2465,12 @@ export default function AIInterview() {
                             ))}
                           </div>
 
-                          {/* Actions — View Versions, Track, Result */}
+                          {/* Actions — View Versions, Track, Result. flex-wrap so
+                              three buttons never overflow a narrow phone card;
+                              their own labels also collapse to icon-only below
+                              sm: for the same reason. */}
                           <div
-                            className="flex items-center gap-2 flex-shrink-0 self-start @4xl/ai-row:self-auto @4xl/ai-row:ml-auto"
+                            className="flex items-center flex-wrap gap-2 flex-shrink-0 self-start @4xl/ai-row:self-auto @4xl/ai-row:ml-auto"
                             onClick={(e) => e.stopPropagation()}
                           >
                             {hasVersionHistory && (
@@ -2218,7 +2485,7 @@ export default function AIInterview() {
                                     : 'bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5'
                                 }`}
                               >
-                                {openVersionsFor === config.id ? 'Hide' : 'View'} Versions
+                                <span className="hidden sm:inline">{openVersionsFor === config.id ? 'Hide' : 'View'} Versions</span>
                                 <ChevronDown
                                   className={`w-3.5 h-3.5 transition-transform ${
                                     openVersionsFor === config.id ? 'rotate-180' : ''
@@ -2245,7 +2512,7 @@ export default function AIInterview() {
                                 title={trackReason}
                               >
                                 <Radar className="w-3.5 h-3.5" />
-                                Track
+                                <span className="hidden sm:inline">Track</span>
                               </button>
                             )}
 
@@ -2266,7 +2533,7 @@ export default function AIInterview() {
                               title={resultReason}
                             >
                               <BarChart2 className="w-3.5 h-3.5" />
-                              Result
+                              <span className="hidden sm:inline">Result</span>
                             </button>
                           </div>
                         </div>
@@ -2279,7 +2546,7 @@ export default function AIInterview() {
                             <AssessmentVersionHistoryPanel
                               jobVersions={jdLineage.lineages[config.jd_id]}
                               jobVersionDetails={jdLineage.versionDetails}
-                              assessments={interviewVersionRows(config.jd_id)}
+                              assessments={interviewVersionRows(config.jd_id, versionStatusFilterForTab)}
                               loading={jdLineage.isLoading(config.jd_id)}
                               currentAssessmentId={config.id}
                               vocabulary={INTERVIEW_VOCABULARY}
@@ -2343,11 +2610,12 @@ export default function AIInterview() {
                                  page's: the leading square eye comes from
                                  `onViewAssessment`, then this page's own quick
                                  actions and compact menu from `renderAction`.
-                                 The child row is mapped back to its real config
-                                 the same way `renderChildDetail` does — by JD row
-                                 id, then the row's own id. */
+                                 Opens the read-only Review & Publish peek
+                                 rather than navigating away — that's what
+                                 clicking the row itself (`onRowClick` below)
+                                 already does. */
                               onViewAssessment={(child) =>
-                                router.push(`/recruitment/ai-interviews/${child.id}`)
+                                setReviewPreviewTarget({ id: child.id, version: child.version })
                               }
                               renderAction={(child) => {
                                 const source = configsByJobVersionId.get(child.jd_id || '')
@@ -2438,14 +2706,198 @@ export default function AIInterview() {
               interview, the same table the per-interview results view shows. */}
           {activeTab === 'candidate-results' && (
             <div className="p-3 sm:p-6">
-              <AIInterviewCandidateResults />
+              <AIInterviewCandidateResults toolbarSlot={toolbarSlotEl} refreshSignal={refreshSignal} />
+            </div>
+          )}
+
+          {/* Invitation Status Tab — every invitation across every AI
+              interview (draft, published and archived alike), placed right
+              under the tab pills — the segmented status filter, the search
+              bar and the list all live in this one card, the same layout
+              the Assessments page's own Invitation Status tab uses. */}
+          {activeTab === 'invitation-status' && (
+            <div className="p-3 sm:p-6">
+              {isLoadingInviteStatus ? (
+                <div className="flex items-center justify-center py-16">
+                  <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
+                </div>
+              ) : inviteStatusError ? (
+                <div className="text-center py-12">
+                  <p className="text-sm text-destructive mb-3">{inviteStatusError}</p>
+                  <Button variant="primary" size="sm" onClick={loadAllInviteStatuses}>
+                    Retry
+                  </Button>
+                </div>
+              ) : inviteStatusRows.length === 0 ? (
+                <div className="text-center py-16 sm:py-20">
+                  <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
+                    <Mail className="w-7 h-7 text-brand-blue" />
+                  </div>
+                  <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">No invitations sent yet</h3>
+                  <p className="text-sm text-gray-500 dark:text-slate-500 max-w-md mx-auto">
+                    Invite candidates to an AI interview and their status appears here.
+                  </p>
+                </div>
+              ) : (() => {
+                const totalInvites = inviteStatusRows.length;
+                const bucketCount = (predicate: (inv: any) => boolean) => inviteStatusRows.filter(predicate).length;
+                const expiredCount = bucketCount((inv) => resolveInviteStatus(inv) === 'expired');
+                const inProgressCount = bucketCount((inv) => inv.status === 'in_progress');
+                const completedCount = bucketCount((inv) => inv.status === 'completed');
+                const terminatedCount = bucketCount((inv) => inv.status === 'terminated');
+                const revokedCount = bucketCount((inv) => inv.status === 'revoked');
+                const completionRate = totalInvites > 0 ? Math.round((completedCount / totalInvites) * 100) : 0;
+
+                const search = inviteStatusFilters.search.trim().toLowerCase();
+                /* Date range is inclusive of the whole `to` day — a recruiter
+                   picking today expects today's invites, not those sent at
+                   exactly 00:00. */
+                const fromTime = inviteStatusFilters.dateFrom ? new Date(`${inviteStatusFilters.dateFrom}T00:00:00`).getTime() : null;
+                const toTime = inviteStatusFilters.dateTo ? new Date(`${inviteStatusFilters.dateTo}T23:59:59.999`).getTime() : null;
+                const filtered = inviteStatusRows.filter((inv) => {
+                  if (inviteStatusFilters.status !== 'all' && resolveInviteStatus(inv) !== inviteStatusFilters.status) return false;
+                  if (search) {
+                    const haystack = [inv.candidate_name, inv.candidate_email, inv.candidate_cid, inv._config_title, inv._jd_short_id]
+                      .filter(Boolean).join(' ').toLowerCase();
+                    if (!haystack.includes(search)) return false;
+                  }
+                  if (fromTime !== null || toTime !== null) {
+                    const sentAt = new Date(inv.invitation_sent_at || inv.created_at || 0).getTime();
+                    if (!sentAt) return false;
+                    if (fromTime !== null && sentAt < fromTime) return false;
+                    if (toTime !== null && sentAt > toTime) return false;
+                  }
+                  return true;
+                });
+                const total = filtered.length;
+                const totalPages = Math.max(1, Math.ceil(total / inviteStatusItemsPerPage));
+                const safePage = Math.min(Math.max(1, inviteStatusPage), totalPages);
+                const pageItems = filtered.slice((safePage - 1) * inviteStatusItemsPerPage, safePage * inviteStatusItemsPerPage);
+                const filtersActive = hasActiveInviteFilters(inviteStatusFilters);
+
+                /* Segmented status filter — same shape as the Assessments
+                   page's Invitation Status tab: a raised-white selected pill
+                   in its status colour, a count badge tinted the same way,
+                   and a completion-rate meter beside it rather than a fifth
+                   segment (nothing to filter to). */
+                const segments = ([
+                  { key: 'all', label: 'Total Invited', Icon: Users, value: totalInvites,
+                    text: 'text-status-invited', hover: 'hover:text-status-invited', tint: 'bg-status-invited/10', ring: 'ring-status-invited/20' },
+                  { key: 'in_progress', label: 'In Progress', Icon: Play, value: inProgressCount,
+                    text: 'text-status-progress', hover: 'hover:text-status-progress', tint: 'bg-status-progress/10', ring: 'ring-status-progress/20' },
+                  { key: 'completed', label: 'Completed', Icon: CheckCircle, value: completedCount,
+                    text: 'text-status-completed', hover: 'hover:text-status-completed', tint: 'bg-status-completed/10', ring: 'ring-status-completed/20' },
+                  { key: 'expired', label: 'Expired', Icon: Clock, value: expiredCount,
+                    text: 'text-status-expired', hover: 'hover:text-status-expired', tint: 'bg-status-expired/10', ring: 'ring-status-expired/20' },
+                  { key: 'terminated', label: 'Terminated', Icon: Ban, value: terminatedCount,
+                    text: 'text-destructive', hover: 'hover:text-destructive', tint: 'bg-destructive-subtle', ring: 'ring-destructive-line' },
+                  { key: 'revoked', label: 'Revoked', Icon: Ban, value: revokedCount,
+                    text: 'text-indigo-700', hover: 'hover:text-indigo-700', tint: 'bg-indigo-50', ring: 'ring-indigo-200' },
+                ] as const);
+
+                return (
+                  <>
+                    <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4 sm:mb-5">
+                      <div
+                        role="group"
+                        aria-label="Filter invitations by status"
+                        className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] self-start overflow-x-auto scrollbar-hide max-w-full"
+                      >
+                        {segments.map((segment) => {
+                          const isActive = inviteStatusFilters.status === segment.key;
+                          return (
+                            <button
+                              key={segment.key}
+                              type="button"
+                              aria-pressed={isActive}
+                              title={segment.key === 'all'
+                                ? 'Show all invitations'
+                                : isActive
+                                  ? `Stop filtering by ${segment.label.toLowerCase()}`
+                                  : `Show only ${segment.label.toLowerCase()} invitations`}
+                              onClick={() => {
+                                setInviteStatusFilters({
+                                  ...inviteStatusFilters,
+                                  status: isActive && segment.key !== 'all' ? 'all' : segment.key,
+                                });
+                                setInviteStatusPage(1);
+                              }}
+                              className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[36px] rounded-lg text-xs font-medium transition-all duration-200 whitespace-nowrap ${
+                                isActive
+                                  ? `bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ${segment.text} ${segment.ring}`
+                                  : `text-gray-600 dark:text-slate-400 ${segment.hover}`
+                              }`}
+                            >
+                              <segment.Icon className={`w-3.5 h-3.5 flex-shrink-0 ${segment.text}`} />
+                              {segment.label}
+                              <span className={`inline-flex items-center justify-center min-w-[20px] h-[18px] px-1.5 rounded-full text-2xs font-semibold tabular-nums ring-1 transition-colors ${segment.text} ${segment.tint} ${segment.ring}`}>
+                                {segment.value.toLocaleString()}
+                              </span>
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="flex items-center gap-2.5 sm:gap-3 lg:justify-end flex-shrink-0">
+                        <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Completion rate</span>
+                        <div className="h-1.5 w-20 sm:w-28 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden flex-shrink-0">
+                          <div className="h-full rounded-full bg-brand-blue transition-all" style={{ width: `${completionRate}%` }} />
+                        </div>
+                        <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">{completionRate}%</span>
+                        <span className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden sm:inline">
+                          {completedCount.toLocaleString()} of {totalInvites.toLocaleString()} completed
+                        </span>
+                      </div>
+                    </div>
+
+                    <InviteFilterBar
+                      filters={inviteStatusFilters}
+                      onChange={(next) => {
+                        setInviteStatusFilters(next);
+                        setInviteStatusPage(1);
+                      }}
+                      statusOptions={INVITATION_STATUS_TAB_OPTIONS}
+                      searchPlaceholder="Search by candidate name, email, or job..."
+                    />
+
+                    <div className="mt-4">
+                      <AIInterviewInviteTable
+                        invitations={pageItems}
+                        isLoading={false}
+                        hasActiveFilters={filtersActive}
+                        showJobColumn
+                        onResend={(inv) => setResendInviteTarget(inv)}
+                        onEdit={(inv) => {
+                          setEditInviteForm({
+                            candidate_name: inv.candidate_name || '',
+                            candidate_email: inv.candidate_email || '',
+                          });
+                          setEditInviteTarget(inv);
+                        }}
+                        onRevoke={(inv) => setRevokeInviteTarget(inv)}
+                        onViewDetails={(inv) => handleViewCandidateDetail(inv.id)}
+                        resendingId={resendingEmailFor}
+                        revokingId={revokingInviteFor}
+                      />
+                      <ListPagination
+                        currentPage={safePage}
+                        itemsPerPage={inviteStatusItemsPerPage}
+                        totalItems={total}
+                        onPageChange={setInviteStatusPage}
+                        onItemsPerPageChange={(size) => { setInviteStatusItemsPerPage(size); setInviteStatusPage(1); }}
+                        itemLabel="invitations"
+                      />
+                    </div>
+                  </>
+                );
+              })()}
             </div>
           )}
 
           {/* Activity Logs Tab */}
           {activeTab === 'audit' && (
             <div className="p-3 sm:p-6">
-              <AIInterviewAuditTrail />
+              <AIInterviewAuditTrail toolbarSlot={toolbarSlotEl} refreshSignal={refreshSignal} />
             </div>
           )}
 
@@ -2942,7 +3394,7 @@ export default function AIInterview() {
                             </div>
 
                             {/* View Versions toggle */}
-                            <div className="flex items-center gap-2 flex-shrink-0 self-start @4xl/ai-row:self-auto @4xl/ai-row:ml-auto">
+                            <div className="flex items-center flex-wrap gap-2 flex-shrink-0 self-start @4xl/ai-row:self-auto @4xl/ai-row:ml-auto">
                               {jdId ? (
                                 <button
                                   type="button"
@@ -2958,7 +3410,7 @@ export default function AIInterview() {
                                       : 'bg-white dark:bg-slate-900 text-brand-blue border-brand-blue/30 hover:bg-brand-blue/5'
                                   }`}
                                 >
-                                  {expanded ? 'Hide' : 'View'} Versions
+                                  <span className="hidden sm:inline">{expanded ? 'Hide' : 'View'} Versions</span>
                                   <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expanded ? 'rotate-180' : ''}`} />
                                 </button>
                               ) : (
@@ -3015,6 +3467,13 @@ export default function AIInterview() {
                                     </div>
                                   );
                                 }}
+                                /* Same read-only peek the job list's own
+                                   version panel offers — picking an interview
+                                   to invite to shouldn't require leaving this
+                                   dialog just to check what's in it. */
+                                onViewAssessment={(child) =>
+                                  setReviewPreviewTarget({ id: child.id, version: child.version })
+                                }
                               />
                             </div>
                           )}
@@ -3230,7 +3689,7 @@ export default function AIInterview() {
                   { key: 'in_progress', label: 'In Progress', Icon: Play, value: invitationOverview.inProgress, ...INVITE_CARD_TONES.orange },
                   { key: 'completed', label: 'Completed', Icon: CheckCircle, value: invitationOverview.completed, ...INVITE_CARD_TONES.green },
                   { key: 'terminated', label: 'Terminated', Icon: Ban, value: invitationOverview.terminated, ...INVITE_CARD_TONES.red },
-                  { key: 'completion-rate', label: 'Completion', Icon: TrendingUp, value: `${completionRate}%`, filterable: false, ...INVITE_CARD_TONES.cyan },
+                  { key: 'revoked', label: 'Revoked', Icon: Ban, value: invitationOverview.revoked, ...INVITE_CARD_TONES.indigo },
                 ]}
               />
 
@@ -3253,52 +3712,59 @@ export default function AIInterview() {
                   setInviteFilters(nextFilters);
                   setInvitationPage(1);
                 }}
-                statusOptions={AI_INTERVIEW_INVITE_STATUS_OPTIONS.filter(
-                  // Cancelled is dropped from this popup's dropdown only; the
-                  // shared list is filtered here so the Job Details tracker
-                  // keeps its full set.
-                  (option) => option.value !== 'cancelled'
-                )}
+                statusOptions={AI_INTERVIEW_INVITE_STATUS_OPTIONS}
                 searchPlaceholder="Search by candidate name or email..."
               />
 
-              {/* Bulk selection bar — only once there's a revocable invite on this page.
-                  Gated on the FIRST load, not on every load: this bar
-                  disappearing and reappearing during a Refresh was one more
-                  height change in the stack of them, and its contents come
-                  from `invitations`, which a refresh keeps. */}
-              {!invitesInitialLoading && selectableIds.length > 0 && (
+              {/* Bulk selection bar, and — on the same row, straight across
+                  from Select All — the completion-rate badge that used to be
+                  its own card in the stat row above. Gated on the FIRST load,
+                  not on every load: this bar disappearing and reappearing
+                  during a Refresh was one more height change in the stack of
+                  them, and its contents come from `invitations`, which a
+                  refresh keeps. */}
+              {!invitesInitialLoading && (
                 <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
-                  <button
-                    type="button"
-                    onClick={toggleSelectAll}
-                    className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
-                  >
-                    <span
-                      role="checkbox"
-                      aria-checked={allSelectableOnPageSelected}
-                      className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
-                        allSelectableOnPageSelected
-                          ? 'bg-brand-blue border-brand-blue'
-                          : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600'
-                      }`}
-                    >
-                      {allSelectableOnPageSelected && <Check className="w-3 h-3 text-white" />}
-                    </span>
-                    Select All ({selectableIds.length})
-                  </button>
-
-                  {selectedInviteIds.size > 0 && (
+                  {selectableIds.length > 0 ? (
                     <button
                       type="button"
-                      onClick={() => setBulkRevokeConfirmOpen(true)}
-                      disabled={isBulkRevoking}
-                      className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-destructive bg-destructive-subtle ring-1 ring-destructive-line rounded-lg hover:bg-destructive-subtle dark:hover:bg-destructive/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      onClick={toggleSelectAll}
+                      className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
                     >
-                      <Ban className="w-3.5 h-3.5" />
-                      Revoke Selected ({selectedInviteIds.size})
+                      <span
+                        role="checkbox"
+                        aria-checked={allSelectableOnPageSelected}
+                        className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
+                          allSelectableOnPageSelected
+                            ? 'bg-brand-blue border-brand-blue'
+                            : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600'
+                        }`}
+                      >
+                        {allSelectableOnPageSelected && <Check className="w-3 h-3 text-white" />}
+                      </span>
+                      Select All ({selectableIds.length})
                     </button>
+                  ) : (
+                    <span />
                   )}
+
+                  <div className="flex items-center gap-2">
+                    {selectedInviteIds.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setBulkRevokeConfirmOpen(true)}
+                        disabled={isBulkRevoking}
+                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-destructive bg-destructive-subtle ring-1 ring-destructive-line rounded-lg hover:bg-destructive-subtle dark:hover:bg-destructive/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        <Ban className="w-3.5 h-3.5" />
+                        Revoke Selected ({selectedInviteIds.size})
+                      </button>
+                    )}
+                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                      <TrendingUp className="w-3.5 h-3.5" />
+                      {completionRate}% Completion
+                    </span>
+                  </div>
                 </div>
               )}
 
@@ -3416,30 +3882,40 @@ export default function AIInterview() {
         );
       })()}
 
-      {/* Confirmation Dialog */}
-      {confirmAction && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col tf-round-edges">
-            <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
-              <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">{confirmAction.title}</h3>
-              <Button variant="secondary" size="sm" onClick={() => setConfirmAction(null)} aria-label="Close" className="px-2 flex-shrink-0">
-                <X className="w-5 h-5" />
-              </Button>
-            </div>
-            <div className="px-5 sm:px-6 py-4 flex-1 overflow-y-auto">
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">{confirmAction.message}</p>
-            </div>
-            <div className="px-5 sm:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/50 flex items-center justify-end gap-2 sm:gap-3 shrink-0">
-              <Button variant="secondary" size="sm" onClick={() => setConfirmAction(null)}>
-                Cancel
-              </Button>
-              <Button variant={confirmAction.destructive ? 'destructive' : 'primary'} size="sm" onClick={confirmAction.onConfirm}>
-                Confirm
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      {/* Archive confirm — same dedicated component for the card list and the
+          per-version rows, so the warning cannot drift between the two. */}
+      <ArchiveAIInterviewModal
+        isOpen={!!archiveTarget}
+        title={archiveTarget ? `${archiveTarget.jd_title || archiveTarget.position || 'Untitled'} - AI Interview` : ''}
+        version={archiveTarget?.jd_id ? interviewVersionRows(archiveTarget.jd_id).find((r) => r.id === archiveTarget.id)?.version : undefined}
+        createdAt={archiveTarget?.created_at}
+        totalQuestions={archiveTarget?.total_questions}
+        durationMinutes={archiveTarget?.duration_minutes}
+        isLoading={archiveLoading}
+        onConfirm={confirmArchiveConfig}
+        onCancel={() => setArchiveTarget(null)}
+      />
+
+      {/* Delete confirm — same dedicated component for the card list and the
+          per-version rows, so the warning cannot drift between the two. */}
+      <DeleteAIInterviewModal
+        isOpen={!!deleteTarget}
+        title={deleteTarget ? `${deleteTarget.jd_title || deleteTarget.position || 'Untitled'} - AI Interview` : ''}
+        version={deleteTarget?.jd_id ? interviewVersionRows(deleteTarget.jd_id).find((r) => r.id === deleteTarget.id)?.version : undefined}
+        createdAt={deleteTarget?.created_at}
+        totalQuestions={deleteTarget?.total_questions}
+        durationMinutes={deleteTarget?.duration_minutes}
+        isLoading={deleteLoading}
+        onConfirm={confirmDeleteConfig}
+        onCancel={() => setDeleteTarget(null)}
+      />
+
+      {/* Version History's eye icon — read-only Review & Publish peek. */}
+      <AIInterviewReviewPreviewModal
+        configId={reviewPreviewTarget?.id}
+        versionNumber={reviewPreviewTarget?.version}
+        onClose={() => setReviewPreviewTarget(null)}
+      />
 
       {/* Resend confirmation — regenerates interview_token, invalidates old link */}
       <ConfirmationDialog
@@ -3453,9 +3929,7 @@ export default function AIInterview() {
             await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
             toast.success(`New invitation link sent to ${inv.candidate_email}`);
             // refresh invitations list so the new expires_at/status is reflected
-            if (viewInvitationsConfig) {
-              await refreshInvitationsView(viewInvitationsConfig.id);
-            }
+            await refreshAfterInviteAction(viewInvitationsConfig?.id);
           } catch (err: any) {
             const detail = err?.response?.data?.detail;
             const msg =
@@ -3528,9 +4002,7 @@ export default function AIInterview() {
           try {
             await aiInterviewService.revokeInvitation(inv.id);
             toast.success(`Invitation for ${inv.candidate_email} has been revoked`);
-            if (viewInvitationsConfig) {
-              await refreshInvitationsView(viewInvitationsConfig.id);
-            }
+            await refreshAfterInviteAction(viewInvitationsConfig?.id);
           } catch (err: any) {
             toast.error(err?.message || 'Failed to revoke invitation');
           } finally {
@@ -3666,9 +4138,7 @@ export default function AIInterview() {
                         'Details saved, but the invitation could not be sent — try Edit again.';
                       toast.error(msg);
                     }
-                    if (viewInvitationsConfig) {
-                      await refreshInvitationsView(viewInvitationsConfig.id);
-                    }
+                    await refreshAfterInviteAction(viewInvitationsConfig?.id);
                     setEditInviteTarget(null);
                   } catch (err: any) {
                     toast.error(err?.message || 'Failed to update invitation');

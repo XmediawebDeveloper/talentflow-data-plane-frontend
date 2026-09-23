@@ -1,10 +1,11 @@
 'use client';
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Eye, Users } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Eye, Users, CheckCircle, XCircle } from 'lucide-react';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
@@ -14,10 +15,10 @@ import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { Badge } from '@/components/ui/badge';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
 import {
   getStatusVariant,
   getStatusLabel,
-  getStatusIcon,
   getProctoringRisk,
   formatDuration,
 } from './AIInterviewResults';
@@ -36,43 +37,85 @@ import {
 type CandidateSessionRow = AIInterviewResponse & {
   _config_id: string;
   _config_title: string;
+  _job_id: string;
+  _job_version: number;
+  _interview_version: number;
 };
 
-const STATUS_OPTIONS = [
-  { value: 'all', label: 'All Statuses' },
-  { value: 'invited', label: 'Invited' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'terminated', label: 'Terminated' },
-  { value: 'expired', label: 'Expired' },
-  { value: 'cancelled', label: 'Cancelled' },
-];
+/* Job versions blue, interview versions cyan — same two colours the All
+ * Interviews table and the Interview/Assessment Version History panels use
+ * for the same roles, so a V3 means the same thing wherever it's read. */
+function VersionPill({ kind, version }: { kind: 'job' | 'interview'; version: number }) {
+  return (
+    <span
+      className={`inline-flex items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 ${
+        kind === 'job'
+          ? 'text-brand-blue bg-brand-blue/10 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35'
+          : 'text-brand-cyan bg-brand-cyan/10 ring-brand-cyan/20 dark:bg-brand-cyan/20 dark:text-cyan-200 dark:ring-brand-cyan/35'
+      }`}
+    >
+      V{version}
+    </span>
+  );
+}
 
 const PAGE_SIZE = 15;
 
-export default function AIInterviewCandidateResults() {
+/** 60% — the same pass mark the invite tracker's own Score column uses
+ *  (see AIInterviewInviteTable's ScoreCell). */
+const PASS_MARK = 60;
+
+function PassFailBadge({ score }: { score: number }) {
+  const passed = score >= PASS_MARK;
+  return (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium ring-1 ${
+        passed
+          ? 'bg-success-subtle text-success ring-success-line'
+          : 'bg-destructive-subtle text-destructive ring-destructive-line'
+      }`}
+    >
+      {passed ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+      {passed ? 'Pass' : 'Fail'}
+    </span>
+  );
+}
+
+export interface AIInterviewCandidateResultsProps {
+  /**
+   * DOM node the search/filter toolbar portals into, so it renders in the
+   * shared slot above the tab pills (AIInterview.tsx) instead of its own
+   * default spot inline above the table — every tab's toolbar then sits in
+   * the same place regardless of which tab owns the fields. Falls back to
+   * rendering inline when unset.
+   */
+  toolbarSlot?: HTMLDivElement | null;
+  /**
+   * Bumped by the host's Refresh button (AIInterview.tsx) to force a
+   * reload — this table otherwise only refetches on mount.
+   */
+  refreshSignal?: number;
+}
+
+export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal }: AIInterviewCandidateResultsProps = {}) {
   const router = useRouter();
 
   const [rows, setRows] = useState<CandidateSessionRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
 
-  // Search + filter state lives in the shared hook: typed vs applied query,
-  // staged vs committed filters, the active count, and a reset that clears
-  // everything. `onChange` returns to page 1 — narrowing from page 3 would
-  // otherwise strand the user on a page that no longer exists.
+  // Search state lives in the shared hook: typed vs applied query, plus a
+  // reset. No status filter — the fetch itself is scoped to Completed only
+  // (see loadAllSessions), so there is nothing left to filter by. `onChange`
+  // returns to page 1 — narrowing from page 3 would otherwise strand the
+  // user on a page that no longer exists.
   const search = useListSearch({
-    initialFilters: { status: 'all', scoreMin: '', scoreMax: '' },
+    initialFilters: {},
     onChange: () => setCurrentPage(1),
-    // Min and max are one score range, so they read as a single filter.
-    countFilters: (filters) =>
-      (filters.status !== 'all' ? 1 : 0) + (filters.scoreMin || filters.scoreMax ? 1 : 0),
   });
-  const { status: statusFilter, scoreMin, scoreMax } = search.filters;
 
   /**
    * One request per config, fanned out in parallel. There is no cross-config
@@ -80,6 +123,11 @@ export default function AIInterviewCandidateResults() {
    * config id — so this is the aggregation the Assessments tab does too. A
    * config whose sessions fail to load contributes nothing rather than sinking
    * the whole tab.
+   *
+   * `status: 'completed'` — Candidate Results only has a result to show once
+   * an interview is actually finished, so the fetch itself is scoped to
+   * that, rather than pulling every invite/in-progress/expired row across
+   * every config just to filter them back out client-side.
    */
   const loadAllSessions = useCallback(async () => {
     setIsLoading(true);
@@ -92,6 +140,26 @@ export default function AIInterviewCandidateResults() {
         return;
       }
 
+      /* Interview version — the Nth config created against a given job
+       * version (jd_id), oldest first. Same derivation as the All Interviews
+       * table's own column, computed once over the WHOLE fetched set so a
+       * version's number doesn't shift depending on which configs happen to
+       * have completed sessions. */
+      const ordinalByConfigId = new Map<string, number>();
+      const byJobVersion = new Map<string, AIInterviewResponse[]>();
+      for (const config of configs) {
+        if (!config.jd_id) continue;
+        const bucket = byJobVersion.get(config.jd_id);
+        if (bucket) bucket.push(config);
+        else byJobVersion.set(config.jd_id, [config]);
+      }
+      for (const bucket of byJobVersion.values()) {
+        bucket
+          .slice()
+          .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
+          .forEach((config, index) => ordinalByConfigId.set(config.id, index + 1));
+      }
+
       const perConfig = await Promise.all(
         configs.map(async (config) => {
           try {
@@ -99,6 +167,7 @@ export default function AIInterviewCandidateResults() {
               page: 1,
               page_size: 1000,
               compact: true,
+              status: 'completed',
             });
             return (result.items ?? []).map((session): CandidateSessionRow => ({
               ...session,
@@ -106,6 +175,9 @@ export default function AIInterviewCandidateResults() {
               // jd_title first, matching how the interview cards on this page
               // are labelled, so the column reads the same as the list above it.
               _config_title: config.jd_title || config.position || 'Untitled',
+              _job_id: config.jd_short_id || '',
+              _job_version: config.jd_version ?? 1,
+              _interview_version: ordinalByConfigId.get(config.id) ?? 1,
             }));
           } catch {
             return [];
@@ -135,28 +207,31 @@ export default function AIInterviewCandidateResults() {
     loadAllSessions();
   }, [loadAllSessions]);
 
+  /* Host's Refresh button — skips the mount value so this doesn't
+     double-fetch alongside the effect above. */
+  const skippedFirstRefreshSignal = useRef(false);
+  useEffect(() => {
+    if (refreshSignal === undefined) return;
+    if (!skippedFirstRefreshSignal.current) {
+      skippedFirstRefreshSignal.current = true;
+      return;
+    }
+    loadAllSessions();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
+
   // Filtering is client-side: the rows are already all in memory, and the
   // per-config endpoint can't filter across configs anyway. Keyed off the
   // APPLIED query so the list doesn't rebuild on every keystroke.
   const filteredRows = useMemo(() => {
     const query = search.appliedQuery.trim().toLowerCase();
-    const min = scoreMin !== '' ? parseFloat(scoreMin) : null;
-    const max = scoreMax !== '' ? parseFloat(scoreMax) : null;
+    if (!query) return rows;
 
-    return rows.filter((row) => {
-      if (statusFilter !== 'all' && row.status !== statusFilter) return false;
-
-      if (min !== null || max !== null) {
-        if (row.score == null) return false;
-        if (min !== null && row.score < min) return false;
-        if (max !== null && row.score > max) return false;
-      }
-
-      if (!query) return true;
-      return [row.candidate_name, row.candidate_email, row.candidate_cid, row._config_title]
-        .some((field) => (field || '').toLowerCase().includes(query));
-    });
-  }, [rows, search.appliedQuery, statusFilter, scoreMin, scoreMax]);
+    return rows.filter((row) =>
+      [row.candidate_name, row.candidate_email, row.candidate_cid, row._config_title, row._job_id]
+        .some((field) => (field || '').toLowerCase().includes(query)),
+    );
+  }, [rows, search.appliedQuery]);
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const safePage = Math.min(currentPage, totalPages);
@@ -220,8 +295,9 @@ export default function AIInterviewCandidateResults() {
                   <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
                   <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
                   <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
-                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3"><Skeleton className="h-3 w-20" /></th>
                   <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
                   <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
                   <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
@@ -239,7 +315,10 @@ export default function AIInterviewCandidateResults() {
                       </div>
                     </td>
                     <td className="px-4 py-3"><Skeleton className="h-4 w-32" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-5 w-16 rounded" /></td>
                     <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-5 w-9 rounded-md" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-5 w-9 rounded-md" /></td>
                     <td className="px-4 py-3"><Skeleton className="h-5 w-20 rounded-full" /></td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -247,9 +326,13 @@ export default function AIInterviewCandidateResults() {
                         <Skeleton className="h-4 w-8" />
                       </div>
                     </td>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-14" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
-                    <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
+                    <td className="px-4 py-3">
+                      <div className="flex flex-col gap-1">
+                        <Skeleton className="h-3 w-28" />
+                        <Skeleton className="h-3 w-28" />
+                        <Skeleton className="h-3 w-16" />
+                      </div>
+                    </td>
                     <td className="px-4 py-3"><Skeleton className="h-5 w-16 rounded-full" /></td>
                     <td className="px-4 py-3 text-right"><Skeleton className="h-7 w-24 rounded-md ml-auto" /></td>
                   </tr>
@@ -280,13 +363,19 @@ export default function AIInterviewCandidateResults() {
         isNarrowed={false}
         entityLabel="candidate result"
         emptyTitle="No candidate results yet"
-        emptyDescription="Results appear here once candidates are invited to an AI interview."
+        emptyDescription="Results appear here once a candidate completes an AI interview."
       />
     );
   }
 
-  return (
-    <div>
+  const toolbar = (
+    <>
+      {/* Same heading treatment as every other tab's — title + count, right
+          above the search/filter bar. */}
+      <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3">
+        Candidate Results ({rows.length})
+      </h2>
+
       {/* Search + Filter bar — same toolbar as the per-interview results view. */}
       <ListToolbar
         searchValue={search.query}
@@ -295,40 +384,9 @@ export default function AIInterviewCandidateResults() {
         // keystrokes straight through.
         searchDebounceMs={0}
         searchPlaceholder="Search by name, email, CID, or interview..."
-        onToggleFilters={() => setShowFilters((v) => !v)}
-        filtersOpen={showFilters}
         activeFilterCount={search.activeFilterCount}
         filtersApplied={search.filtersApplied}
         onClearFilters={search.reset}
-        filterPanel={
-          <div>
-            <label className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1.5">Score Range (%)</label>
-            <div className="flex flex-wrap items-center gap-2">
-              <input
-                type="number"
-                placeholder="Min"
-                min={0}
-                max={100}
-                value={search.draftFilters.scoreMin}
-                onChange={(e) => search.setDraftFilter('scoreMin', e.target.value)}
-                className="w-24 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-white text-black"
-              />
-              <span className="text-gray-400">–</span>
-              <input
-                type="number"
-                placeholder="Max"
-                min={0}
-                max={100}
-                value={search.draftFilters.scoreMax}
-                onChange={(e) => search.setDraftFilter('scoreMax', e.target.value)}
-                className="w-24 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 bg-white text-black"
-              />
-              <Button variant="secondary" size="md" onClick={() => { search.applyFilters(); setShowFilters(false); }} className="ml-auto">
-                Done
-              </Button>
-            </div>
-          </div>
-        }
         countBadge={
           <ListCountBadge
             filtered={filteredRows.length}
@@ -337,18 +395,14 @@ export default function AIInterviewCandidateResults() {
           />
         }
       >
-        <select
-          value={statusFilter}
-          onChange={(e) => search.setFilter('status', e.target.value)}
-          aria-label="Interview status"
-          className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"
-        >
-          {STATUS_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>{opt.label}</option>
-          ))}
-        </select>
         <ListViewToggle value={displayMode} onChange={setDisplayMode} />
       </ListToolbar>
+    </>
+  );
+
+  return (
+    <div>
+      {toolbarSlot ? createPortal(toolbar, toolbarSlot) : toolbar}
 
       <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
         {filteredRows.length === 0 ? (
@@ -395,7 +449,6 @@ export default function AIInterviewCandidateResults() {
                     </p>
 
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      {getStatusIcon(row.status)}
                       <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
                       {row.status === 'in_progress' && (
                         <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
@@ -411,22 +464,14 @@ export default function AIInterviewCandidateResults() {
                     </div>
 
                     {row.score != null && (
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 bg-gray-200 dark:bg-slate-700 rounded-full h-1.5">
-                          <div
-                            className={`h-1.5 rounded-full ${
-                              row.score >= 70 ? 'bg-success' :
-                              row.score >= 50 ? 'bg-brand-orange' : 'bg-destructive'
-                            }`}
-                            style={{ width: `${Math.min(100, row.score)}%` }}
-                          />
-                        </div>
-                        <span className={`font-medium text-xs shrink-0 ${
+                      <div className="flex items-center gap-1.5">
+                        <span className={`font-medium text-xs ${
                           row.score >= 70 ? 'text-success' :
                           row.score >= 50 ? 'text-brand-orange-deep' : 'text-destructive'
                         }`}>
                           {Math.round(row.score)}%
                         </span>
+                        <PassFailBadge score={row.score} />
                       </div>
                     )}
 
@@ -437,10 +482,11 @@ export default function AIInterviewCandidateResults() {
 
                     <div
                       onClick={(e) => { e.stopPropagation(); openSession(row); }}
-                      className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
+                      title="View Details"
+                      className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
                     >
                       <Eye className="w-3.5 h-3.5" />
-                      View Details
+                      <span className="hidden sm:inline">View Details</span>
                     </div>
                   </button>
                 );
@@ -501,12 +547,13 @@ export default function AIInterviewCandidateResults() {
                     <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">CID</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Candidate</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Email</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Interview</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job ID</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Job Title</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Status</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Duration</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Started At</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Completed At</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>
                     <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide tf-sticky-col">Actions</th>
                   </tr>
@@ -544,14 +591,26 @@ export default function AIInterviewCandidateResults() {
                             {row.candidate_email || '—'}
                           </span>
                         </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {row._job_id ? (
+                            <JobIdBadge>{row._job_id}</JobIdBadge>
+                          ) : (
+                            <span className="text-gray-400">—</span>
+                          )}
+                        </td>
                         <td className="px-4 py-3">
                           <span className="text-gray-700 dark:text-slate-300 truncate max-w-[180px] block">
                             {row._config_title}
                           </span>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
+                          <VersionPill kind="job" version={row._job_version} />
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          <VersionPill kind="interview" version={row._interview_version} />
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
                           <div className="flex items-center gap-1.5 flex-wrap">
-                            {getStatusIcon(row.status)}
                             <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
                             {row.status === 'in_progress' && (
                               <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
@@ -563,35 +622,25 @@ export default function AIInterviewCandidateResults() {
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           {row.score != null ? (
-                            <div className="flex items-center gap-2">
-                              <div className="w-16 bg-gray-200 dark:bg-slate-700 rounded-full h-1.5">
-                                <div
-                                  className={`h-1.5 rounded-full ${
-                                    row.score >= 70 ? 'bg-success' :
-                                    row.score >= 50 ? 'bg-brand-orange' : 'bg-destructive'
-                                  }`}
-                                  style={{ width: `${Math.min(100, row.score)}%` }}
-                                />
-                              </div>
+                            <div className="flex items-center gap-1.5">
                               <span className={`font-medium text-xs ${
                                 row.score >= 70 ? 'text-success' :
                                 row.score >= 50 ? 'text-brand-orange-deep' : 'text-destructive'
                               }`}>
                                 {Math.round(row.score)}%
                               </span>
+                              <PassFailBadge score={row.score} />
                             </div>
                           ) : (
                             <span className="text-gray-400">—</span>
                           )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-slate-400">
-                          {formatDuration(row)}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-slate-400">
-                          {row.started_at ? formatIST(row.started_at) : '—'}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-slate-400">
-                          {row.completed_at ? formatIST(row.completed_at) : '—'}
+                          <div className="flex flex-col gap-0.5 text-xs">
+                            <span><span className="text-gray-400 dark:text-slate-500">Started at:</span> {row.started_at ? formatIST(row.started_at) : '—'}</span>
+                            <span><span className="text-gray-400 dark:text-slate-500">Completed at:</span> {row.completed_at ? formatIST(row.completed_at) : '—'}</span>
+                            <span><span className="text-gray-400 dark:text-slate-500">Duration:</span> {formatDuration(row)}</span>
+                          </div>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           {row.status === 'completed' ? (
@@ -608,8 +657,10 @@ export default function AIInterviewCandidateResults() {
                             size="sm"
                             onClick={(e) => { e.stopPropagation(); openSession(row); }}
                             icon={<Eye className="w-3.5 h-3.5" />}
+                            title="View Details"
+                            aria-label="View Details"
                           >
-                            View Details
+                            <span className="hidden sm:inline">View Details</span>
                           </Button>
                         </td>
                       </tr>
