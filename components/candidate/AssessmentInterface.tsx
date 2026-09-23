@@ -1603,23 +1603,23 @@ export function AssessmentInterface({
       {/* DISQUALIFICATION Modal - Shows when fullscreen is exited */}
       {showDisqualificationModal && (
         <div className="fixed inset-0 bg-black/98 backdrop-blur-lg flex items-center justify-center z-[10000]">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full mx-4 p-10 text-center border-8 border-destructive">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full mx-4 p-5 sm:p-8 text-center border-4 sm:border-8 border-destructive max-h-[calc(100dvh-2rem)] overflow-y-auto">
             {/* Disqualification Icon */}
-            <div className="w-32 h-32 bg-destructive rounded-full flex items-center justify-center mx-auto mb-8">
-              <ShieldAlert className="w-20 h-20 text-white" />
+            <div className="w-20 h-20 sm:w-28 sm:h-28 bg-destructive rounded-full flex items-center justify-center mx-auto mb-5 sm:mb-6">
+              <ShieldAlert className="w-10 h-10 sm:w-14 sm:h-14 text-white" />
             </div>
 
             {/* Title */}
-            <h2 className="text-4xl font-bold text-destructive mb-6 uppercase tracking-wider">
+            <h2 className="text-2xl sm:text-4xl font-bold text-destructive mb-4 sm:mb-6 uppercase tracking-wide sm:tracking-wider break-words">
               DISQUALIFIED
             </h2>
 
             {/* Main Message */}
-            <div className="bg-destructive-subtle border-4 border-destructive rounded-xl p-6 mb-6">
-              <p className="text-xl font-bold text-destructive-strong mb-4">
+            <div className="bg-destructive-subtle border-2 sm:border-4 border-destructive rounded-xl p-4 sm:p-6 mb-4 sm:mb-6">
+              <p className="text-base sm:text-xl font-bold text-destructive-strong mb-3 sm:mb-4">
                 Critical Assessment Violation
               </p>
-              <p className="text-base text-destructive-strong font-semibold">
+              <p className="text-sm sm:text-base text-destructive-strong font-semibold">
                 You have been disqualified for violating assessment security rules.
               </p>
               <p className="text-sm text-destructive mt-3">
@@ -1628,8 +1628,8 @@ export function AssessmentInterface({
             </div>
 
             {/* Consequence Notice */}
-            <div className="bg-gray-100 border-2 border-gray-400 rounded-xl p-6 mb-8">
-              <p className="text-lg font-bold text-gray-900 mb-3">
+            <div className="bg-gray-100 border border-gray-400 rounded-xl p-4 sm:p-6 mb-5 sm:mb-6">
+              <p className="text-base sm:text-lg font-bold text-gray-900 mb-2 sm:mb-3">
                 Your assessment has been terminated
               </p>
               <p className="text-sm text-gray-700">
@@ -1641,13 +1641,13 @@ export function AssessmentInterface({
             <Button
               variant="primary"
               onClick={handleDisqualificationAcknowledgment}
-              className="w-full bg-destructive hover:bg-destructive text-white py-5 text-xl font-bold uppercase tracking-wider"
+              className="w-full bg-destructive hover:bg-destructive text-white py-3 sm:py-4 text-base sm:text-lg font-bold uppercase tracking-wide"
             >
               I UNDERSTAND
             </Button>
 
             {/* Footer Notice */}
-            <p className="text-xs text-gray-500 mt-6">
+            <p className="text-xs text-gray-500 mt-4 sm:mt-6">
               Click "I Understand" to submit your assessment and view your completion status.
             </p>
           </div>
@@ -1657,14 +1657,14 @@ export function AssessmentInterface({
       {/* Auto-Submit Modal - Shows on 3rd violation (NO CONTINUE BUTTON) */}
       {showViolationWarning && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center z-[9999]">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-md w-full mx-4 p-8 text-center border-4 border-destructive">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-md w-full mx-4 p-5 sm:p-8 text-center border-2 sm:border-4 border-destructive max-h-[calc(100dvh-2rem)] overflow-y-auto">
             {/* Skull/Warning Icon */}
             <div className="w-24 h-24 bg-destructive rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
               <ShieldAlert className="w-16 h-16 text-white" />
             </div>
 
             {/* Title - AUTO-SUBMITTING */}
-            <h2 className="text-3xl font-bold text-destructive mb-4 uppercase">
+            <h2 className="text-xl sm:text-3xl font-bold text-destructive mb-3 sm:mb-4 uppercase break-words">
               💀 3 VIOLATIONS - AUTO-SUBMITTING 💀
             </h2>
 
@@ -1679,7 +1679,7 @@ export function AssessmentInterface({
               <p className="text-xl font-bold text-destructive-strong mb-3">
                 Maximum Violations Reached
               </p>
-              <p className="text-base text-destructive-strong font-semibold">
+              <p className="text-sm sm:text-base text-destructive-strong font-semibold">
                 You have violated assessment security rules 3 times.
               </p>
             </div>
@@ -1698,11 +1698,11 @@ export function AssessmentInterface({
             </div>
 
             {/* Countdown Timer - NO CONTINUE BUTTON */}
-            <div className="bg-destructive text-white rounded-xl p-8 mb-6">
-              <p className="text-5xl font-bold mb-4 tabular-nums">
+            <div className="bg-destructive text-white rounded-xl p-5 sm:p-8 mb-5 sm:mb-6">
+              <p className="text-3xl sm:text-5xl font-bold mb-3 sm:mb-4 tabular-nums">
                 {autoSubmitCountdown}
               </p>
-              <p className="text-xl font-bold uppercase tracking-wider">
+              <p className="text-sm sm:text-xl font-bold uppercase tracking-wide break-words">
                 AUTO-SUBMITTING IN {autoSubmitCountdown} SECOND{autoSubmitCountdown !== 1 ? 'S' : ''}...
               </p>
             </div>
@@ -1734,7 +1734,7 @@ export function AssessmentInterface({
             wrong, in the middle of a timed assessment. `offlineReason` is
             'browser' only when the device itself reports being offline. */}
         {!isOnline && (
-          <div className="bg-warning text-white px-4 py-2 flex items-center justify-between">
+          <div className="bg-warning text-white px-4 py-2 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <WifiOff className="w-4 h-4" />
               <span className="text-sm font-medium">
@@ -1763,7 +1763,7 @@ export function AssessmentInterface({
 
         {/* Main Header */}
         <header className="bg-white border-b border-gray-200 px-4 py-3">
-          <div className="w-full px-2 sm:px-4 lg:px-6 flex items-center justify-between">
+          <div className="w-full px-2 sm:px-4 lg:px-6 flex items-center justify-between gap-2">
             {/* Logo & Title */}
             <div className="flex items-center gap-3">
               {/* TalentFlow Logo - Always Visible */}
@@ -1948,7 +1948,7 @@ export function AssessmentInterface({
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
             {/* Question Header */}
             <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50/50">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-lg ${getRoundColor(currentQuestion.round_type)} flex items-center justify-center`}>
                     {(() => {

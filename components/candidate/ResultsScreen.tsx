@@ -38,7 +38,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
 
   return (
     <div className="min-h-[100dvh] bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full p-8">
+      <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full p-5 sm:p-8">
         {/* Success Icon */}
         <div className="flex justify-center mb-6">
           <div className="w-20 h-20 bg-success-subtle rounded-full flex items-center justify-center">
@@ -47,7 +47,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
         </div>
 
         {/* Title */}
-        <h1 className="text-3xl font-bold text-gray-800 text-center mb-4">
+        <h1 className="text-xl sm:text-3xl font-bold text-gray-800 text-center mb-4">
           Assessment Completed!
         </h1>
 
