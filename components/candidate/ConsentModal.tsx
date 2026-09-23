@@ -40,6 +40,7 @@ import {
   TILE_ACCENT,
 } from '@/lib/constants/candidateLayout';
 import { AssessmentInfo } from '@/lib/services/candidateService';
+import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 /* This screen is reached before the HR round is known, so its stepper shows
    four steps rather than five — the same list it already displayed. */
 const CONSENT_STEPS = ['Terms & Consent', 'Assessment Details', 'System Check', 'Assessment'] as const;
@@ -105,11 +106,18 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
     { icon: RefreshCcw, text: 'You cannot return to previous sections once submitted.' },
     { icon: Wifi, text: 'Ensure you have a stable internet connection throughout the test.' },
     { icon: AlertCircle, text: 'Do not refresh the page or navigate away during the assessment.' },
+    { icon: AlertCircle, text: IS_PRODUCTION_ENV
+        ? 'Switching to another tab, minimising the window, Alt+Tab, the Windows/⌘ key, Esc or F11, or opening a Picture-in-Picture video ends the assessment immediately. There is no resume.'
+        : 'Switching to another tab, minimising the window, Alt+Tab, the Windows/⌘ key, Esc or F11, or opening a Picture-in-Picture video is recorded as a violation for the recruiter.' },
+    { icon: Monitor, text: 'You will be asked to share your ENTIRE screen. Your screen and webcam are recorded for the whole assessment and stored with your result.' },
     { icon: Coffee, text: 'Complete the assessment in one sitting without interruption.' }
   ];
 
   const proctoringFeatures = [
-    { icon: Monitor, label: 'Tab switching detection', description: 'Navigating away from the test tab will be recorded.' },
+    { icon: Monitor, label: 'Tab switching detection', description: IS_PRODUCTION_ENV
+        ? 'Leaving the test tab (switching tabs, minimising, Alt+Tab, Windows/⌘ key) terminates the assessment immediately.'
+        : 'Leaving the test tab (switching tabs, minimising, Alt+Tab, Windows/⌘ key) is recorded as a violation.' },
+    { icon: Monitor, label: 'Screen & webcam recording', description: 'Your entire screen and webcam are recorded during the assessment for recruiter review.' },
     { icon: Copy, label: 'Copy-paste monitoring', description: 'Attempts to copy questions or paste answers will be flagged.' },
     { icon: BarChart3, label: 'Pattern analysis', description: 'AI will analyze answer patterns for irregularities.' },
     { icon: Clock, label: 'Time tracking', description: 'Time spent on each question will be monitored.' }
