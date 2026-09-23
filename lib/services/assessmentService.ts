@@ -769,6 +769,25 @@ export const assessmentService = {
   /**
    * Get detailed results for a specific candidate
    */
+  /** Presigned stream/download URL for the candidate (webcam) recording; null url when none. */
+  async getRecordingUrl(assessmentId: string, resultId: string, kind: 'candidate' | 'screen'): Promise<{ url: string | null; download_url: string | null; size: number | null } | null> {
+    try {
+      const path = kind === 'screen' ? 'screen-recording-url' : 'recording-url';
+      const response = await api.get(`/assessments/${assessmentId}/results/${resultId}/${path}`);
+      return response.data;
+    } catch (error: any) {
+      if (error?.response?.status === 404) return null;
+      throw error;
+    }
+  },
+
+  /** Audit the Download button click (the presigned URL bypasses this API). */
+  async logRecordingDownload(assessmentId: string, resultId: string, kind: 'candidate' | 'screen'): Promise<void> {
+    try {
+      await api.post(`/assessments/${assessmentId}/results/${resultId}/recording/log-download?recording_type=${kind}`);
+    } catch { /* best-effort audit */ }
+  },
+
   async getResultDetails(assessmentId: string, resultId: string): Promise<DetailedResultResponse> {
     try {
       const response = await api.get<DetailedResultResponse>(
@@ -822,9 +841,11 @@ export const assessmentService = {
   /**
    * 1. Get assessment stats for dashboard
    */
-  async getStats(): Promise<AssessmentStatsResponse> {
+  async getStats(options?: { timeout?: number }): Promise<AssessmentStatsResponse> {
     try {
-      const response = await api.get<AssessmentStatsResponse>('/assessments/stats');
+      const response = await api.get<AssessmentStatsResponse>('/assessments/stats', {
+        timeout: options?.timeout,
+      });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
-import Image from 'next/image';
 // Side-effect import: global guard for face-api.js / TF.js WebGL backend crashes.
 import '@/lib/tfjs-rejection-guard';
 import {
@@ -16,11 +15,27 @@ import {
   RefreshCw,
   ArrowLeft,
   ArrowRight,
-  Check,
-  HelpCircle,
   Loader2
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import CandidateHeader from './CandidateHeader';
+import CandidateStepper from './CandidateStepper';
+/* The candidate flow's container — see the note on the constant. The header
+   bar and the blue hero band stay full-bleed; their CONTENTS sit in here. */
+import {
+  CANDIDATE_PAGE,
+  RECRUITER_SHELL,
+  RECRUITER_WRAP,
+  RECRUITER_CARD,
+  PAGE_ICON_TILE,
+  T_PAGE_TITLE,
+  T_PAGE_SUBTITLE,
+  T_SECTION,
+  T_CARD_TITLE,
+  ICON_TILE,
+  ICON,
+  ICON_INLINE,
+} from '@/lib/constants/candidateLayout';
 import { loadFaceApiWithCpuBackend } from '@/lib/face-api-loader';
 import {
   assessCandidateFaceVisibility,
@@ -1167,7 +1182,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
         return <div className="w-6 h-6 rounded-full bg-gray-200" />;
       case 'checking':
         return (
-          <Loader2 className="w-6 h-6 text-blue-500 animate-spin" />
+          <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
         );
       case 'success':
         return <CheckCircle className="w-6 h-6 text-success" />;
@@ -1179,95 +1194,38 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
   };
 
   // Progress steps
-  const steps = [
-    { label: 'Terms & Consent', active: false, completed: true },
-    { label: 'Assessment Details', active: false, completed: true },
-    { label: 'System Check', active: true, completed: false },
-    { label: 'HR Questions', active: false, completed: false },
-    { label: 'Assessment', active: false, completed: false }
-  ];
-
   return (
-    <div className="min-h-[100dvh] bg-gray-50 flex flex-col">
+    <div className={CANDIDATE_PAGE}>
       {/* Sticky Header Container */}
+      {/* Header + stepper: the shared pair. */}
       <div className="sticky top-0 z-50">
-        {/* Header */}
-        <header className="w-full bg-white border-b border-gray-200">
-          <div className="w-full px-6 lg:px-12 py-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Image
-                  src="/logos/talent_flow_logo.png"
-                  alt="TalentFlow"
-                  width={160}
-                  height={40}
-                  className="h-10 w-auto"
-                  priority
-                  unoptimized
-                />
+        <CandidateHeader />
+        <CandidateStepper current={3} />
+      </div>
+
+      {/* The recruiter page shell. */}
+      <main className={RECRUITER_SHELL}>
+        <div className={RECRUITER_WRAP}>
+          <div className={RECRUITER_CARD}>
+
+            {/* Page header — the recruiter pattern, in place of the centred
+                blue hero band. */}
+            <div className="flex items-start gap-3 mb-5">
+              <div className={PAGE_ICON_TILE}>
+                <Monitor className={`${ICON} text-brand-blue`} />
               </div>
-              <a
-                href="mailto:support@talentflow.com"
-                className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 transition-colors"
-              >
-                <HelpCircle className="w-4 h-4" />
-                Need help?
-              </a>
+              <div className="min-w-0">
+                <h1 className={T_PAGE_TITLE}>System Check</h1>
+                <p className={T_PAGE_SUBTITLE}>
+                  Let&apos;s make sure your system is ready for the assessment
+                </p>
+              </div>
             </div>
-          </div>
-        </header>
 
-        {/* Progress Stepper */}
-        <div className="w-full bg-white border-b border-gray-200">
-          <div className="w-full px-6 lg:px-12 py-4">
-            <div className="flex items-center justify-center gap-2">
-              {steps.map((step, index) => (
-                <div key={index} className="flex items-center">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-all ${
-                      step.completed
-                        ? 'bg-success text-white'
-                        : step.active
-                          ? 'bg-blue-600 text-white'
-                          : 'bg-gray-300 text-gray-600'
-                    }`}>
-                      {step.completed ? <Check className="w-4 h-4" /> : index + 1}
-                    </div>
-                    <span className={`text-sm font-medium hidden sm:block ${
-                      step.active ? 'text-gray-900' : step.completed ? 'text-success' : 'text-gray-500'
-                    }`}>
-                      {step.label}
-                    </span>
-                  </div>
-                  {index < steps.length - 1 && (
-                    <div className={`w-8 sm:w-16 h-0.5 mx-2 ${
-                      step.completed ? 'bg-success' : 'bg-gray-300'
-                    }`} />
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Hero Section */}
-      <div className="w-full bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-700 py-10">
-        <div className="w-full px-6 lg:px-12 text-center">
-          <h1 className="text-3xl lg:text-4xl font-bold text-white mb-2">System Check</h1>
-          <p className="text-blue-100 text-lg">
-            Let&apos;s make sure your system is ready for the assessment
-          </p>
-        </div>
-      </div>
-
-      {/* Main Content */}
-      <main className="flex-1 w-full bg-white">
-        <div className="w-full px-6 lg:px-12 py-10">
-          <div className="grid lg:grid-cols-2 gap-10">
+          <div className="grid lg:grid-cols-2 gap-5">
             {/* Camera Preview */}
             <div>
-              <h3 className="font-semibold text-gray-900 text-xl mb-4">Camera Preview</h3>
+              <h2 className={`${T_SECTION} mb-3`}>Camera Preview</h2>
               <div className="aspect-video bg-gray-900 rounded-2xl overflow-hidden relative">
                 <video
                   ref={videoRef}
@@ -1287,8 +1245,8 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
 
             {/* Checks */}
             <div>
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="font-semibold text-gray-900 text-xl">System Requirements</h3>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <h2 className={T_SECTION}>System Requirements</h2>
                 <Button
                   variant="outline"
                   onClick={runAllChecks}
@@ -1301,13 +1259,13 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
 
               <div className="space-y-4">
                 {/* Browser */}
-                <div className="flex items-center justify-between p-5 bg-gray-50 rounded-xl">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                      <Monitor className="w-6 h-6 text-blue-600" />
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`${ICON_TILE} bg-brand-blue/10 text-brand-blue`}>
+                      <Monitor className={ICON} />
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-900">Browser</p>
+                      <p className={T_CARD_TITLE}>Browser</p>
                       <p className="text-sm text-gray-500">{browserCheck.message}</p>
                     </div>
                   </div>
@@ -1315,13 +1273,13 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
                 </div>
 
                 {/* Internet */}
-                <div className="flex items-center justify-between p-5 bg-gray-50 rounded-xl">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-success-subtle rounded-xl flex items-center justify-center">
-                      <Wifi className="w-6 h-6 text-success" />
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`${ICON_TILE} bg-success-subtle text-success`}>
+                      <Wifi className={ICON} />
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-900">Internet Connection</p>
+                      <p className={T_CARD_TITLE}>Internet Connection</p>
                       <p className="text-sm text-gray-500">{internetCheck.message}</p>
                     </div>
                   </div>
@@ -1329,13 +1287,13 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
                 </div>
 
                 {/* Camera */}
-                <div className="flex items-center justify-between p-5 bg-gray-50 rounded-xl">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-purple-100 rounded-xl flex items-center justify-center">
-                      <Camera className="w-6 h-6 text-purple-600" />
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className={`${ICON_TILE} bg-brand-cyan/10 text-brand-cyan`}>
+                      <Camera className={ICON} />
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-900">Camera</p>
+                      <p className={T_CARD_TITLE}>Camera</p>
                       <p className="text-sm text-gray-500">{cameraCheck.message}</p>
                     </div>
                   </div>
@@ -1343,7 +1301,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
                 </div>
 
                 {/* Microphone */}
-                <div className="flex items-center justify-between p-5 bg-gray-50 rounded-xl">
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
                   <div className="flex items-center gap-4">
                     <div className="w-12 h-12 bg-warning-subtle rounded-xl flex items-center justify-center">
                       <Mic className="w-6 h-6 text-warning" />
@@ -1385,9 +1343,9 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
               })()}
 
               {browserWarning && browserCheck.status === 'success' && (
-                <div className="mt-6 p-5 bg-blue-50 rounded-xl flex items-start gap-4">
-                  <AlertTriangle className="w-6 h-6 text-blue-600 mt-0.5" />
-                  <p className="text-blue-800 font-medium">{browserWarning}</p>
+                <div className="mt-4 rounded-xl border border-brand-blue/20 bg-brand-blue/5 p-4 flex items-start gap-3">
+                  <AlertTriangle className={`${ICON_INLINE} text-brand-blue mt-0.5`} />
+                  <p className={`${T_CARD_TITLE} text-brand-blue`}>{browserWarning}</p>
                 </div>
               )}
 
@@ -1425,14 +1383,13 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
               )}
             </div>
           </div>
-        </div>
-      </main>
 
-      {/* Actions Footer */}
-      <div className="w-full bg-gray-50 border-t border-gray-200 py-6">
-        <div className="w-full px-6 lg:px-12 flex items-center justify-between">
-          <Button variant="ghost" onClick={onBack} className="text-gray-600">
-            <ArrowLeft className="w-4 h-4 mr-2" />
+            {/* Action row — inside the page card, on the recruiter's footer
+                rule. `flex-wrap` so the two buttons drop to two lines rather
+                than colliding on a small phone. */}
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-4 mt-5 border-t border-gray-100">
+          <Button variant="secondary" size="md" onClick={onBack}>
+            <ArrowLeft className={`${ICON_INLINE} mr-2`} />
             Go Back
           </Button>
           <Button
@@ -1440,13 +1397,16 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
             onClick={handleProceed}
             disabled={!allChecksComplete || isSubmitting}
             loading={isSubmitting}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-10 py-6 text-lg font-semibold rounded-xl"
+            size="md"
           >
             Start Assessment
-            <ArrowRight className="w-4 h-4 ml-2" />
+            <ArrowRight className={`${ICON_INLINE} ml-2`} />
           </Button>
+            </div>
+
+          </div>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

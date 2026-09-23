@@ -7,7 +7,7 @@ import JDEditBlockedModal from '@/components/JDEditBlockedModal';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
 import DisableJobModal from '@/components/DisableJobModal';
 import { Job } from '@/lib/types/types';
-import { jdService } from '@/lib/services/jdService';
+import { jdService, JDListResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -104,6 +104,17 @@ function JobOpeningsSkeleton() {
 export default function JobOpeningsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  // Total/Published/Draft/Archived, precomputed server-side (page 1 of the same
+  // `/jd` call) so the stat cards can show the right number immediately. `jobs`
+  // itself still fills in two steps below (page 1, then the rest in parallel) —
+  // without this, the cards read page 1's partial tally first and then jump to
+  // the correct one once every page has landed. `jobsFullyLoaded` marks the
+  // point where `jobs` itself is complete and can take over as the live source
+  // (so a publish/archive/delete action keeps updating the cards instantly,
+  // the way it did before this existed) — the handover is silent because by
+  // then the two sources agree.
+  const [statusCounts, setStatusCounts] = useState<JDListResponse['status_counts']>(null);
+  const [jobsFullyLoaded, setJobsFullyLoaded] = useState(false);
   const [quotaInfo, setQuotaInfo] = useState<{ remaining: number; limit: number; used: number } | undefined>();
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   /* The modules holding the JD, not pre-formatted strings: the dialog draws
@@ -226,6 +237,7 @@ export default function JobOpeningsPage() {
 
   const fetchJobs = async () => {
     setLoading(true);
+    setJobsFullyLoaded(false);
     // Pull "my JDs" in smaller pages. The previous page_size=total request
     // produced oversized responses and browser transport failures upstream.
     let firstPage;
@@ -244,6 +256,8 @@ export default function JobOpeningsPage() {
          `?? []` guards a backend response without an `items` array — otherwise
          `.map` would throw and (crucially) leave the page stuck on the skeleton. */
       setJobs((firstPage.items ?? []).map(mapJDToJob));
+      // Precomputed on this same call — see fetchJobs' jobsFullyLoaded comment.
+      setStatusCounts(firstPage.status_counts ?? null);
     } catch (error) {
       // First-page failure (or a bad shape) is a real load failure — surface it.
       // The `finally` below still clears the skeleton so the page never hangs.
@@ -264,7 +278,10 @@ export default function JobOpeningsPage() {
       firstPage.total_pages || Math.ceil(firstPage.total / JD_BATCH_SIZE),
       1
     );
-    if (totalPages <= 1) return;
+    if (totalPages <= 1) {
+      setJobsFullyLoaded(true);
+      return;
+    }
 
     const restPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
     const results = await Promise.allSettled(
@@ -278,6 +295,9 @@ export default function JobOpeningsPage() {
     if (restJobs.length) {
       setJobs((prev) => [...prev, ...restJobs]);
     }
+    // `jobs` now has every page (or every page that didn't fail) — the stat
+    // cards can safely switch from `statusCounts` to their own live tally.
+    setJobsFullyLoaded(true);
   };
 
   const mapStatus = (status: string): 'Published' | 'Draft' | 'Closed' | 'Archived' | 'Disabled' => {
@@ -627,6 +647,8 @@ export default function JobOpeningsPage() {
     <div ref={rootRef} className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
       <JobsListing
         jobs={jobs}
+        statusCounts={statusCounts}
+        jobsFullyLoaded={jobsFullyLoaded}
         onCreateNew={hasPermission('canCreateJD') || isTenantAdmin ? handleCreateNew : undefined}
         onViewJob={handleViewJob}
         onViewApplicants={handleViewApplicants}

@@ -13,7 +13,7 @@ import { useRouter } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
-  BarChart3, Ban,
+  Ban,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -53,6 +53,34 @@ interface AIInterviewResultsProps {
    * only includes it once an interview exists to invite people to.
    */
   emptyStateAction?: React.ReactNode;
+  /**
+   * The linked job's version and this interview config's own ordinal among
+   * every config authored against that job (oldest first) — the same two
+   * numbers the All Interviews table and Version History panel show. Every
+   * row here belongs to the same config, so the value is constant down the
+   * column. Pass these when the host already has them (the interview
+   * details page's embedded Results tab does); omitted, this component
+   * resolves them itself.
+   */
+  jobVersion?: number;
+  interviewVersion?: number;
+}
+
+/* Job versions blue, interview versions cyan — same two colours the All
+ * Interviews table and the Interview/Assessment Version History panels use
+ * for the same roles, so a V3 means the same thing wherever it's read. */
+function VersionPill({ kind, version }: { kind: 'job' | 'interview'; version: number }) {
+  return (
+    <span
+      className={`inline-flex items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 ${
+        kind === 'job'
+          ? 'text-brand-blue bg-brand-blue/10 ring-brand-blue/20'
+          : 'text-brand-cyan bg-brand-cyan/10 ring-brand-cyan/20'
+      }`}
+    >
+      V{version}
+    </span>
+  );
 }
 
 const STATUS_OPTIONS = [
@@ -62,7 +90,7 @@ const STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
   { value: 'terminated', label: 'Terminated' },
   { value: 'expired', label: 'Expired' },
-  { value: 'cancelled', label: 'Cancelled' },
+  { value: 'revoked', label: 'Revoked' },
 ];
 
 export function getStatusBadge(status: string) {
@@ -149,7 +177,7 @@ export function formatDuration(session: AIInterviewResponse): string {
   return `${mins}m ${secs}s`;
 }
 
-export default function AIInterviewResults({ configId, configTitle, jdTitle, embedded = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction }: AIInterviewResultsProps) {
+export default function AIInterviewResults({ configId, configTitle, jdTitle, embedded = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp }: AIInterviewResultsProps) {
   const router = useRouter();
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -158,8 +186,58 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
   const [summary, setSummary] = useState({
     completed: 0,
     inProgress: 0,
-    avgScore: null as number | null,
+    terminated: 0,
+    expired: 0,
+    revoked: 0,
   });
+
+  // Only resolved here when the host didn't already have them (the
+  // standalone /results route) — see `resolveVersions` below.
+  const [resolvedJobVersion, setResolvedJobVersion] = useState<number | undefined>(undefined);
+  const [resolvedInterviewVersion, setResolvedInterviewVersion] = useState<number | undefined>(undefined);
+  const jobVersion = jobVersionProp ?? resolvedJobVersion;
+  const interviewVersion = interviewVersionProp ?? resolvedInterviewVersion;
+
+  useEffect(() => {
+    if (jobVersionProp !== undefined && interviewVersionProp !== undefined) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const own = await aiInterviewService.get(configId);
+        if (cancelled) return;
+        setResolvedJobVersion(own.jd_version ?? undefined);
+        if (!own.jd_id) {
+          setResolvedInterviewVersion(1);
+          return;
+        }
+        // Same "fetch every config, bucket by jd_id, sort oldest first" the
+        // All Interviews table and the interview details page's own
+        // sibling lookup use — there is no list-by-jd_id endpoint.
+        const live: AIInterviewResponse[] = [];
+        let apiPage = 1;
+        for (;;) {
+          const batch = await aiInterviewService.listConfigs({ page: apiPage, page_size: 100, compact: true });
+          const items = batch.items || [];
+          live.push(...items);
+          const total = batch.total ?? live.length;
+          if (items.length < 100 || live.length >= total) break;
+          apiPage += 1;
+        }
+        const archivedProbe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
+        const archived = archivedProbe.total > archivedProbe.items.length
+          ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
+          : archivedProbe.items;
+        if (cancelled) return;
+        const siblings = [...live, ...archived].filter((c) => c.jd_id === own.jd_id);
+        const sorted = siblings.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+        const idx = sorted.findIndex((c) => c.id === own.id);
+        setResolvedInterviewVersion(idx >= 0 ? idx + 1 : 1);
+      } catch {
+        if (!cancelled) setResolvedInterviewVersion(1);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [configId, jobVersionProp, interviewVersionProp]);
 
   const [showFilters, setShowFilters] = useState(false);
   const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
@@ -215,14 +293,25 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
   const loadSessions = useCallback(async () => {
     setIsLoading(true);
     try {
-      const result: AIInterviewInvitationListResponse = await aiInterviewService.getConfigInvitations(configId, requestParams);
+      // The aggregate response reports completed/in_progress/terminated but
+      // not expired/revoked — same gap the AI Interviews page's own tracker
+      // has, filled the same way: a dedicated page_size-1 probe per status,
+      // scoped by the same search/date params so the cards stay in step with
+      // an active search rather than always reading the whole config.
+      const [result, expiredProbe, revokedProbe]: [AIInterviewInvitationListResponse, AIInterviewInvitationListResponse, AIInterviewInvitationListResponse] = await Promise.all([
+        aiInterviewService.getConfigInvitations(configId, requestParams),
+        aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'expired', page: 1, page_size: 1 }),
+        aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'revoked', page: 1, page_size: 1 }),
+      ]);
       setSessions(result.items);
       setTotalSessions(result.total);
       setTotalPages(Math.max(1, result.total_pages || 1));
       setSummary({
         completed: result.completed || 0,
         inProgress: result.in_progress || 0,
-        avgScore: result.average_score != null ? Math.round(result.average_score) : null,
+        terminated: result.terminated || 0,
+        expired: expiredProbe.total || 0,
+        revoked: revokedProbe.total || 0,
       });
     } catch (error: any) {
       toast.error(error.message || 'Failed to load candidate sessions');
@@ -240,15 +329,21 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
     const hasLive = sessions.some((s) => s.status === 'in_progress');
     if (!hasLive) return;
     const id = setInterval(() => {
-      aiInterviewService.getConfigInvitations(configId, requestParams)
-        .then((r) => {
+      Promise.all([
+        aiInterviewService.getConfigInvitations(configId, requestParams),
+        aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'expired', page: 1, page_size: 1 }),
+        aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'revoked', page: 1, page_size: 1 }),
+      ])
+        .then(([r, expiredProbe, revokedProbe]) => {
           setSessions(r.items);
           setTotalSessions(r.total);
           setTotalPages(Math.max(1, r.total_pages || 1));
           setSummary({
             completed: r.completed || 0,
             inProgress: r.in_progress || 0,
-            avgScore: r.average_score != null ? Math.round(r.average_score) : null,
+            terminated: r.terminated || 0,
+            expired: expiredProbe.total || 0,
+            revoked: revokedProbe.total || 0,
           });
         })
         .catch(() => {});
@@ -305,45 +400,49 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
           its own counts and Quick Actions, and the tab leads with the candidate
           table instead. */}
       {!embedded && (
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-                <Users className="w-4 h-4 text-brand-blue" />
-              </div>
-              <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Invited</span>
-            </div>
-            <div className="text-2xl font-bold text-gray-900 tracking-tight">{totalSessions}</div>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-success-line flex items-center justify-center">
-                <CheckCircle className="w-4 h-4 text-success" />
-              </div>
-              <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Completed</span>
-            </div>
-            <div className="text-2xl font-bold text-gray-900 tracking-tight">{summary.completed}</div>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
-                <Clock className="w-4 h-4 text-brand-orange-deep" />
-              </div>
-              <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">In Progress</span>
-            </div>
-            <div className="text-2xl font-bold text-gray-900 tracking-tight">{summary.inProgress}</div>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
-                <BarChart3 className="w-4 h-4 text-brand-cyan" />
-              </div>
-              <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Avg Score</span>
-            </div>
-            <div className="text-2xl font-bold text-gray-900 tracking-tight">
-              {summary.avgScore !== null ? `${summary.avgScore}%` : '—'}
-            </div>
-          </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+          {([
+            { key: 'all', label: 'Total Invited', value: totalSessions, Icon: Users,
+              iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15', iconColor: 'text-brand-blue', activeRing: 'ring-brand-blue/50 border-brand-blue/40' },
+            { key: 'completed', label: 'Completed', value: summary.completed, Icon: CheckCircle,
+              iconBg: 'bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-success-line', iconColor: 'text-success', activeRing: 'ring-success/50 border-success-line' },
+            { key: 'in_progress', label: 'In Progress', value: summary.inProgress, Icon: Clock,
+              iconBg: 'bg-brand-orange/10 ring-1 ring-brand-orange/20', iconColor: 'text-brand-orange-deep', activeRing: 'ring-brand-orange-deep/50 border-brand-orange/40' },
+            { key: 'expired', label: 'Expired', value: summary.expired, Icon: XCircle,
+              iconBg: 'bg-brand-orange/10 ring-1 ring-brand-orange/20', iconColor: 'text-brand-orange-deep', activeRing: 'ring-brand-orange-deep/50 border-brand-orange/40' },
+            { key: 'terminated', label: 'Terminated', value: summary.terminated, Icon: Ban,
+              iconBg: 'bg-destructive-subtle ring-1 ring-destructive-line', iconColor: 'text-destructive', activeRing: 'ring-destructive/50 border-destructive-line' },
+            { key: 'revoked', label: 'Revoked', value: summary.revoked, Icon: Ban,
+              iconBg: 'bg-indigo-50 ring-1 ring-indigo-200', iconColor: 'text-indigo-700', activeRing: 'ring-indigo-500/50 border-indigo-200' },
+          ] as const).map(({ key, label, value, Icon, iconBg, iconColor, activeRing }) => {
+            const isActive = statusFilter === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={isActive}
+                title={
+                  key === 'all'
+                    ? 'Show all candidates'
+                    : isActive
+                      ? `Stop filtering by ${label.toLowerCase()}`
+                      : `Show only ${label.toLowerCase()} candidates`
+                }
+                onClick={() => search.setFilter('status', key === 'all' ? 'all' : isActive ? 'all' : key)}
+                className={`text-left bg-white rounded-xl border p-4 shadow-sm shadow-brand-blue/5 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 ${
+                  isActive ? `ring-2 ${activeRing}` : 'border-gray-100 ring-1 ring-black/[0.02] hover:border-brand-blue/20'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 mb-2">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${iconBg}`}>
+                    <Icon className={`w-4 h-4 ${iconColor}`} />
+                  </div>
+                  <span className="text-xs text-gray-500 font-medium uppercase tracking-wide truncate">{label}</span>
+                </div>
+                <div className="text-2xl font-bold text-gray-900 tracking-tight">{value}</div>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -560,10 +659,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
 
                     <div
                       onClick={(e) => { e.stopPropagation(); handleViewDetails(session); }}
-                      className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
+                      title="View Details"
+                      className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
                     >
                       <Eye className="w-3.5 h-3.5" />
-                      View Details
+                      <span className="hidden sm:inline">View Details</span>
                     </div>
                   </button>
                 );
@@ -626,11 +726,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">CID</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Candidate</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Email</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Status</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Duration</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Started At</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Completed At</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>
                     <th className="text-right px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide tf-sticky-col">Actions</th>
                   </tr>
@@ -667,6 +767,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                           <span className="text-gray-600 truncate max-w-[180px] block">
                             {session.candidate_email || '—'}
                           </span>
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {jobVersion != null ? <VersionPill kind="job" version={jobVersion} /> : <span className="text-gray-400">—</span>}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
+                          {interviewVersion != null ? <VersionPill kind="interview" version={interviewVersion} /> : <span className="text-gray-400">—</span>}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
@@ -725,13 +831,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                           )}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap text-gray-600">
-                          {formatDuration(session)}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-600">
-                          {session.started_at ? formatIST(session.started_at) : '—'}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-600">
-                          {session.completed_at ? formatIST(session.completed_at) : '—'}
+                          <div className="flex flex-col gap-0.5 text-xs">
+                            <span><span className="text-gray-400">Started at:</span> {session.started_at ? formatIST(session.started_at) : '—'}</span>
+                            <span><span className="text-gray-400">Completed at:</span> {session.completed_at ? formatIST(session.completed_at) : '—'}</span>
+                            <span><span className="text-gray-400">Duration:</span> {formatDuration(session)}</span>
+                          </div>
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           {session.status === 'completed' ? (
@@ -748,8 +852,10 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                             size="sm"
                             onClick={(e) => { e.stopPropagation(); handleViewDetails(session); }}
                             icon={<Eye className="w-3.5 h-3.5" />}
+                            title="View Details"
+                            aria-label="View Details"
                           >
-                            View Details
+                            <span className="hidden sm:inline">View Details</span>
                           </Button>
                         </td>
                       </tr>

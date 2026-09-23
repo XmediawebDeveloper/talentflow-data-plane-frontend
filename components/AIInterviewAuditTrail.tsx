@@ -1,4 +1,5 @@
-import { useState, useEffect, Fragment } from 'react';
+import { useState, useEffect, useRef, Fragment } from 'react';
+import { createPortal } from 'react-dom';
 import {
   Download, CheckCircle, Clock,
   FileText, Eye, Mail, User, Activity,
@@ -42,7 +43,24 @@ const ACTIVITY_COLORS: Record<string, { bg: string; text: string; icon: string; 
   candidate_expired: { bg: 'bg-orange-50', text: 'text-orange-700', icon: 'text-orange-500', border: 'border-orange-200' },
 };
 
-export default function AIInterviewAuditTrail() {
+export interface AIInterviewAuditTrailProps {
+  /**
+   * DOM node the search/filter toolbar portals into, so it renders in the
+   * shared slot above the tab pills (AIInterview.tsx) instead of its own
+   * default spot inline in this component's own header — every tab's
+   * toolbar then sits in the same place regardless of which tab owns the
+   * fields. Falls back to rendering inline when unset.
+   */
+  toolbarSlot?: HTMLDivElement | null;
+  /**
+   * Bumped by the host's Refresh button (AIInterview.tsx) to force a
+   * reload — this trail otherwise only refetches on mount, page/category
+   * change or a search/date edit.
+   */
+  refreshSignal?: number;
+}
+
+export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AIInterviewAuditTrailProps = {}) {
   const [activities, setActivities] = useState<AIInterviewAuditActivity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -113,6 +131,19 @@ export default function AIInterviewAuditTrail() {
     loadAuditTrail();
   }, [categoryFilter, page]);
 
+  /* Host's Refresh button — skips the mount value so this doesn't
+     double-fetch alongside the effect above. */
+  const skippedFirstRefreshSignal = useRef(false);
+  useEffect(() => {
+    if (refreshSignal === undefined) return;
+    if (!skippedFirstRefreshSignal.current) {
+      skippedFirstRefreshSignal.current = true;
+      return;
+    }
+    loadAuditTrail();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshSignal]);
+
   // `searchTerm` is the hook's debounced value, so this refetches once per pause
   // instead of per keystroke; the hook's page reset covers the page > 1 case.
   useEffect(() => {
@@ -151,10 +182,74 @@ export default function AIInterviewAuditTrail() {
     return category === 'config_lifecycle' ? 'Lifecycle' : 'Candidate';
   };
 
+  const toolbarEl = (
+    <>
+      {/* Same heading treatment as every other tab's — title + count, right
+          above the search/filter bar. */}
+      <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3">
+        Activity Log ({total})
+      </h2>
+
+      <ListToolbar
+      searchValue={search.query}
+      onSearchChange={search.setQuery}
+      // The hook debounces into `appliedQuery`, so keystrokes pass through.
+      searchDebounceMs={0}
+      searchPlaceholder="Search by config, candidate, or user..."
+      onToggleFilters={() => setShowFilters(!showFilters)}
+      filtersOpen={showFilters}
+      activeFilterCount={search.activeFilterCount}
+      filtersApplied={search.filtersApplied}
+      onClearFilters={search.reset}
+      className="mb-0"
+      filterPanel={
+      <div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+          <div>
+            <label htmlFor="audit-date-from" className="block text-sm text-gray-700 mb-1.5 font-medium">Date From</label>
+            <input
+              id="audit-date-from"
+              type="date"
+              value={search.draftFilters.dateFrom}
+              max={search.draftFilters.dateTo || undefined}
+              onChange={(e) => search.setDraftFilter('dateFrom', e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
+            />
+          </div>
+          <div>
+            <label htmlFor="audit-date-to" className="block text-sm text-gray-700 mb-1.5 font-medium">Date To</label>
+            <input
+              id="audit-date-to"
+              type="date"
+              value={search.draftFilters.dateTo}
+              min={search.draftFilters.dateFrom || undefined}
+              onChange={(e) => search.setDraftFilter('dateTo', e.target.value)}
+              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
+            />
+          </div>
+        </div>
+
+        {/* Panel footer: "Done" applies the selection and reveals the
+            toolbar Clear - same flow as job-openings. */}
+        <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={() => { search.applyFilters(); setShowFilters(false); }}
+          >
+            Done
+          </Button>
+        </div>
+      </div>
+      }
+    />
+    </>
+  );
+
   return (
     <div className="space-y-6">
       {/* Header Stats */}
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Total Events</span>
@@ -236,60 +331,11 @@ export default function AIInterviewAuditTrail() {
             </button>
           </div>
 
-          {/* Search + filters in the job-openings format. */}
-          <ListToolbar
-            searchValue={search.query}
-            onSearchChange={search.setQuery}
-            // The hook debounces into `appliedQuery`, so keystrokes pass through.
-            searchDebounceMs={0}
-            searchPlaceholder="Search by config, candidate, or user..."
-            onToggleFilters={() => setShowFilters(!showFilters)}
-            filtersOpen={showFilters}
-            activeFilterCount={search.activeFilterCount}
-            filtersApplied={search.filtersApplied}
-            onClearFilters={search.reset}
-            className="mb-0"
-            filterPanel={
-            <div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-                <div>
-                  <label htmlFor="audit-date-from" className="block text-sm text-gray-700 mb-1.5 font-medium">Date From</label>
-                  <input
-                    id="audit-date-from"
-                    type="date"
-                    value={search.draftFilters.dateFrom}
-                    max={search.draftFilters.dateTo || undefined}
-                    onChange={(e) => search.setDraftFilter('dateFrom', e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
-                  />
-                </div>
-                <div>
-                  <label htmlFor="audit-date-to" className="block text-sm text-gray-700 mb-1.5 font-medium">Date To</label>
-                  <input
-                    id="audit-date-to"
-                    type="date"
-                    value={search.draftFilters.dateTo}
-                    min={search.draftFilters.dateFrom || undefined}
-                    onChange={(e) => search.setDraftFilter('dateTo', e.target.value)}
-                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-gray-600"
-                  />
-                </div>
-              </div>
-
-              {/* Panel footer: "Done" applies the selection and reveals the
-                  toolbar Clear - same flow as job-openings. */}
-              <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => { search.applyFilters(); setShowFilters(false); }}
-                >
-                  Done
-                </Button>
-              </div>
-            </div>
-            }
-          />
+          {/* Search + filters in the job-openings format — portalled to the
+              shared slot above the tab pills when hosted from AIInterview.tsx,
+              so this tab's toolbar sits in the same spot every other tab's
+              does, rather than inside this component's own header. */}
+          {toolbarSlot ? createPortal(toolbarEl, toolbarSlot) : toolbarEl}
         </div>
 
         {/* Timeline View */}
@@ -413,8 +459,8 @@ export default function AIInterviewAuditTrail() {
                     </div>
 
                     {isExpanded && (
-                      <div className="ml-14 p-4 bg-gray-50 rounded-lg border border-gray-200 text-sm">
-                        <div className="grid grid-cols-2 gap-4">
+                      <div className="ml-0 sm:ml-14 mt-2 sm:mt-0 p-4 bg-gray-50 rounded-lg border border-gray-200 text-sm">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <span className="text-gray-500">Activity Type:</span>
                             <span className="ml-2 text-gray-900">{activity.activity_type.replace(/_/g, ' ')}</span>

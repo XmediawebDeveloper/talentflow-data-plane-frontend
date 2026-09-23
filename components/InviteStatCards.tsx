@@ -24,7 +24,7 @@ export interface InviteStatCardTone {
 /* Active styles are spelled out per tone rather than built from a token at call
    time — Tailwind only keeps classes it can see as literals in the source. */
 export const INVITE_CARD_TONES: Record<
-  'blue' | 'orange' | 'red' | 'green' | 'cyan' | 'slate' | 'purple',
+  'blue' | 'orange' | 'red' | 'green' | 'cyan' | 'slate' | 'purple' | 'indigo',
   InviteStatCardTone
 > = {
   blue: {
@@ -54,6 +54,10 @@ export const INVITE_CARD_TONES: Record<
   purple: {
     tone: 'text-purple-600 dark:text-purple-400',
     activeClass: 'border-purple-500/50 ring-purple-500/30 bg-purple-50 dark:bg-purple-500/10',
+  },
+  indigo: {
+    tone: 'text-indigo-700 dark:text-indigo-400',
+    activeClass: 'border-indigo-500/50 ring-indigo-500/30 bg-indigo-50 dark:bg-indigo-500/10',
   },
 };
 

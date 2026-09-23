@@ -461,6 +461,21 @@ export interface AIInterviewInviteTableProps {
   /** Extra line under the empty state when nothing is filtered. */
   emptyHint?: string;
 
+  /**
+   * Adds a "Job / Interview" column (desktop) / line (mobile) reading each
+   * row's `_config_title` (and `_jd_short_id` badge, when present) — for a
+   * list that spans every interview rather than one config's own tracker.
+   */
+  showJobColumn?: boolean;
+
+  /**
+   * Adds a "JD ID" column (desktop) / line (mobile) showing this job's short
+   * id next to every row — for a single-config tracker (the Track popup),
+   * where every invite shares the same job and `showJobColumn`'s per-row
+   * `_jd_short_id` is never populated.
+   */
+  jdShortId?: string;
+
   /** Bulk selection. Omit both to render no checkbox column at all. */
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
@@ -485,6 +500,8 @@ export default function AIInterviewInviteTable({
   isLoading,
   hasActiveFilters,
   emptyHint,
+  showJobColumn = false,
+  jdShortId,
   selectedIds,
   onToggleSelect,
   isSelectable,
@@ -678,6 +695,13 @@ export default function AIInterviewInviteTable({
                   {inv.candidate_cid && (
                     <p className="text-2xs font-medium text-gray-600 dark:text-slate-400 truncate">
                       {inv.candidate_cid}
+                      {jdShortId && <span className="text-gray-400 dark:text-slate-500"> &middot; {jdShortId}</span>}
+                    </p>
+                  )}
+                  {showJobColumn && inv._config_title && (
+                    <p className="text-2xs text-gray-500 dark:text-slate-500 truncate">
+                      {inv._jd_short_id && <span className="font-medium text-gray-600 dark:text-slate-400">{inv._jd_short_id} · </span>}
+                      {inv._config_title}
                     </p>
                   )}
                 </div>
@@ -768,7 +792,13 @@ export default function AIInterviewInviteTable({
             <tr className="border-b border-gray-200 dark:border-slate-700">
               {selectable && <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left" aria-label="Select" />}
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">CID</th>
+              {jdShortId && (
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">JD ID</th>
+              )}
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Candidate</th>
+              {showJobColumn && (
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Job / Interview</th>
+              )}
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Status</th>
               <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Score</th>
               {/* hidden md:table-cell mirrors this column's <td> — without it the
@@ -809,6 +839,12 @@ export default function AIInterviewInviteTable({
                     {inv.candidate_cid || <span className="text-gray-400 dark:text-slate-500">—</span>}
                   </td>
 
+                  {jdShortId && (
+                    <td className="py-3 px-4 align-middle whitespace-nowrap text-xs font-medium text-gray-600 dark:text-slate-400">
+                      {jdShortId}
+                    </td>
+                  )}
+
                   <td className="py-3 px-4 align-middle whitespace-nowrap">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center text-brand-blue font-medium text-xs flex-shrink-0">
@@ -826,6 +862,17 @@ export default function AIInterviewInviteTable({
                       </div>
                     </div>
                   </td>
+
+                  {showJobColumn && (
+                    <td className="py-3 px-4 align-middle max-w-[200px]">
+                      <p className="text-sm text-gray-700 dark:text-slate-300 truncate" title={inv._config_title || ''}>
+                        {inv._config_title || <span className="text-gray-400 dark:text-slate-500">—</span>}
+                      </p>
+                      {inv._jd_short_id && (
+                        <p className="text-xs text-gray-400 dark:text-slate-500 truncate">{inv._jd_short_id}</p>
+                      )}
+                    </td>
+                  )}
 
                   <td className="py-3 px-4 align-middle whitespace-nowrap">
                     <div className="flex items-center gap-1.5 flex-nowrap">

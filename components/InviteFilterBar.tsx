@@ -60,7 +60,6 @@ export const AI_INTERVIEW_INVITE_STATUS_OPTIONS: InviteStatusOption[] = [
   { value: 'in_progress', label: 'In Progress' },
   { value: 'completed', label: 'Completed' },
   { value: 'terminated', label: 'Terminated' },
-  { value: 'cancelled', label: 'Cancelled' },
 ];
 
 /** True when anything is narrowing the list — drives the "N matching" label

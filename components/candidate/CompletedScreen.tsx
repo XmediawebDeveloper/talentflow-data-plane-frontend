@@ -42,17 +42,17 @@ export function CompletedScreen({ assessmentTitle, candidateName }: CompletedScr
   };
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-br from-green-50 to-teal-50 flex items-center justify-center p-4">
+    <div className="min-h-[100dvh] bg-gray-50 flex items-center justify-center p-4">
       <div className="max-w-lg w-full">
         {/* Success Card */}
-        <div className="bg-white rounded-2xl shadow-xl p-8 text-center">
+        <div className="bg-white rounded-2xl shadow-xl p-5 sm:p-8 text-center">
           {/* Success Icon */}
           <div className="w-20 h-20 bg-success-subtle rounded-full flex items-center justify-center mx-auto mb-6">
             <CheckCircle className="w-12 h-12 text-success" />
           </div>
 
           {/* Title */}
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 mb-2">
             Assessment Completed!
           </h1>
 
@@ -66,8 +66,8 @@ export function CompletedScreen({ assessmentTitle, candidateName }: CompletedScr
             <div className="space-y-4">
               {assessmentTitle && (
                 <div className="flex items-center gap-3 text-left">
-                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                    <FileText className="w-5 h-5 text-blue-600" />
+                  <div className="w-10 h-10 rounded-lg bg-brand-blue/10 text-brand-blue flex items-center justify-center shrink-0">
+                    <FileText className="w-5 h-5" />
                   </div>
                   <div>
                     <p className="text-xs text-gray-500 uppercase tracking-wide">Assessment</p>
@@ -77,8 +77,8 @@ export function CompletedScreen({ assessmentTitle, candidateName }: CompletedScr
               )}
 
               <div className="flex items-center gap-3 text-left">
-                <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center flex-shrink-0">
-                  <Clock className="w-5 h-5 text-purple-600" />
+                <div className="w-10 h-10 rounded-lg bg-brand-cyan/10 text-brand-cyan flex items-center justify-center shrink-0">
+                  <Clock className="w-5 h-5" />
                 </div>
                 <div>
                   <p className="text-xs text-gray-500 uppercase tracking-wide">What happens next?</p>

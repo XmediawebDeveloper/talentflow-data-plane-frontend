@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Code, Loader2, Lock } from 'lucide-react';
+import { ArrowRight, Code, Loader2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { candidateService } from '@/lib/services/candidateService';
 import {
@@ -80,7 +80,7 @@ export default function CodingLanguagePickerStep({
   if (compilable === null) {
     return (
       <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-[95vw] sm:max-w-2xl w-full p-8 flex items-center justify-center min-h-[200px]">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-[95vw] sm:max-w-2xl w-full p-6 sm:p-8 flex items-center justify-center min-h-[200px]">
           <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
         </div>
       </div>
@@ -90,8 +90,8 @@ export default function CodingLanguagePickerStep({
   return (
     <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-[95vw] sm:max-w-2xl w-full p-6 sm:p-8 max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
-        <div className="flex-shrink-0 w-12 h-12 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-4">
-          <Code className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+        <div className="shrink-0 w-12 h-12 bg-brand-blue/10 text-brand-blue rounded-full flex items-center justify-center mb-4">
+          <Code className="w-6 h-6" />
         </div>
         <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-1">
           Choose your coding language
@@ -118,41 +118,41 @@ export default function CodingLanguagePickerStep({
                   setPickError(null);
                 }}
                 disabled={isPicking}
-                className={`w-full flex items-center justify-between px-4 py-3 rounded-lg border-2 text-left transition-colors ${
+                aria-pressed={selected}
+                /* Hairline border, not `border-2`: the reference row reads as a
+                   tinted surface with a soft edge, and a 2px border on an
+                   unselected row was the heaviest line in the dialog. */
+                className={`w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl border text-left transition-colors ${
                   selected
-                    ? 'border-blue-500 bg-blue-50 dark:bg-blue-900/20'
-                    : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
+                    ? 'border-brand-blue/40 bg-brand-blue/5'
+                    : 'border-gray-200 dark:border-gray-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                 } disabled:opacity-60`}
               >
-                <div className="flex items-center gap-3">
-                  <Code
-                    className={`w-4 h-4 ${
-                      selected
-                        ? 'text-blue-600 dark:text-blue-400'
-                        : 'text-gray-400'
-                    }`}
-                  />
+                <span className="flex items-center gap-3 min-w-0">
+                  {/* The circular brand tile from the reference, which the row
+                      did not have — the glyph sat loose against the label. */}
                   <span
-                    className={`text-sm font-medium ${
-                      selected
-                        ? 'text-blue-700 dark:text-blue-300'
-                        : 'text-gray-800 dark:text-gray-200'
+                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${
+                      selected ? 'bg-brand-blue/15 text-brand-blue' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
                     }`}
                   >
+                    <Code className="w-4 h-4" />
+                  </span>
+                  {/* The label stays dark when selected. Turning it brand-blue
+                      as well left the row with no plain text in it. */}
+                  <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
                     {lang.name}
                   </span>
-                </div>
-                <div
-                  className={`w-4 h-4 rounded-full border-2 ${
-                    selected
-                      ? 'border-blue-500 bg-blue-500'
-                      : 'border-gray-300 dark:border-gray-600'
+                </span>
+
+                {/* Radio — filled ring when chosen, as in the reference. */}
+                <span
+                  className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-colors ${
+                    selected ? 'border-brand-blue bg-brand-blue' : 'border-gray-300 dark:border-gray-600'
                   }`}
                 >
-                  {selected && (
-                    <div className="w-full h-full rounded-full bg-white scale-50" />
-                  )}
-                </div>
+                  {selected && <span className="w-1.5 h-1.5 rounded-full bg-white" />}
+                </span>
               </button>
             );
           })}
@@ -162,17 +162,36 @@ export default function CodingLanguagePickerStep({
           <p className="text-sm text-destructive mb-3">{pickError}</p>
         )}
 
-        <div className="flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400 mb-4">
-          <Lock className="w-3.5 h-3.5" />
-          <span>Your choice cannot be changed once confirmed.</span>
+        {/* The lock note as the reference draws it: a tinted panel with its own
+            circular tile and two lines — the warning first, in brand blue, then
+            what it means in grey. It was a single `text-xs` grey row with a
+            14px lock, which read as a caption rather than as the one thing on
+            this dialog the candidate cannot undo. */}
+        <div className="flex items-start gap-3 rounded-xl bg-brand-blue/5 p-3 sm:p-4 mb-5">
+          <span className="w-8 h-8 rounded-full bg-brand-blue/15 text-brand-blue flex items-center justify-center shrink-0">
+            <Lock className="w-4 h-4" />
+          </span>
+          <div className="min-w-0">
+            <p className="text-sm font-semibold text-brand-blue">
+              Your choice cannot be changed once confirmed.
+            </p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">
+              All coding questions will be generated in the selected language for this round.
+            </p>
+          </div>
         </div>
 
+        {/* Right-aligned with a forward arrow, matching the reference and the
+            "Continue" actions on every other screen in this flow. It was a
+            full-width block, which is the only full-width button in the
+            candidate journey. */}
+        <div className="flex justify-end">
         <Button
           type="button"
           variant="primary"
           onClick={handleConfirm}
           disabled={isPicking || compilable.length === 0}
-          className="w-full"
+          className="w-full sm:w-auto"
         >
           {isPicking ? (
             <>
@@ -180,9 +199,13 @@ export default function CodingLanguagePickerStep({
               Saving…
             </>
           ) : (
-            'Confirm language'
+            <>
+              Confirm language
+              <ArrowRight className="w-4 h-4 ml-2" />
+            </>
           )}
         </Button>
+        </div>
       </div>
     </div>
   );
