@@ -89,12 +89,12 @@ function FullscreenPromptScreen({ onFullscreenReady, beforeFullscreen, notice }:
 
   return (
     <div className="min-h-[100dvh] bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-8 md:p-12">
+      <div className="bg-white rounded-2xl shadow-2xl max-w-2xl w-full p-5 sm:p-8 md:p-12">
         <div className="w-16 h-16 bg-brand-blue/10 text-brand-blue rounded-full flex items-center justify-center mx-auto mb-5">
           <Monitor className="w-8 h-8" />
         </div>
 
-        <h1 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4 text-center">
+        <h1 className="text-xl sm:text-3xl md:text-4xl font-bold text-gray-900 mb-3 sm:mb-4 text-center">
           Enter Fullscreen Mode
         </h1>
         {notice && (
@@ -2189,7 +2189,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                     <div className="flex items-start gap-3">
                       <span className="w-6 h-6 flex items-center justify-center bg-gray-800 text-white rounded text-xs font-medium flex-shrink-0 mt-0.5">{idx + 1}</span>
                       <div className="flex-1">
-                        <div className="flex items-center justify-between mb-2">
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                           <p className="text-sm font-medium text-gray-900">{q.text}</p>
                           <span className="px-2 py-0.5 rounded text-2xs font-medium flex-shrink-0 ml-2 bg-gray-100 text-gray-500">
                             {isYesNo ? 'Yes/No' : 'Text'}
@@ -2419,7 +2419,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       {/* Fullscreen exit overlay — mirrors AI Interview enforcement */}
       {step === 'assessment' && !useAdaptiveAssessmentMode && !isFullscreenActive && (
         <div className="fixed inset-0 z-[99] bg-black/90 flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-white border-2 border-warning rounded-2xl p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
+          <div className="bg-white border-2 border-warning rounded-2xl p-5 sm:p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
             <Maximize2 className="w-12 h-12 text-warning mx-auto mb-4" />
             <h2 className="text-xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>
             <p className="text-gray-600 mb-4">
