@@ -7,8 +7,8 @@ import { brandingApi, BrandingSettings, BrandingUpdate } from '@/lib/services/se
 import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
-import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 
 export default function BrandingPage() {
   const { hasPermission } = useAuth();

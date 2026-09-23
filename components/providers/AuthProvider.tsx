@@ -383,14 +383,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const restoreSession = async () => {
 
-      // ✅ HARD REFRESH DETECTION: Clear user cache on hard refresh
-      // This ensures permissions are always fresh from API after Ctrl+Shift+R
+      // HARD REFRESH: force fresh permissions WITHOUT dropping the cached user.
+      //
+      // We intentionally do NOT clearUserFromStorage() here. Clearing it made the
+      // block below skip its synchronous fast-path (which restores the cached user
+      // and flips isLoading=false immediately) and instead fall to the slow path
+      // that awaits /auth/me — so isLoading stayed true for the whole round-trip and
+      // the layout's auth-loading skeleton was shown in full before the page's own
+      // skeleton, i.e. TWO skeletons on every refresh.
+      //
+      // Freshness is already guaranteed: the fast path below re-validates against
+      // /auth/me in the background and setUser()s the latest permissions (~300ms),
+      // so the only thing clearing bought us was the double skeleton. We still drop
+      // permission_version so the interceptor treats the next response as a fresh
+      // baseline.
       if (typeof window !== 'undefined' && typeof performance !== 'undefined') {
         const perfData = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming;
         const isHardRefresh = perfData && perfData.type === 'reload';
 
         if (isHardRefresh) {
-          clearUserFromStorage();
           localStorage.removeItem('permission_version');
         }
       }

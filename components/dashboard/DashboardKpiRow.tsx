@@ -88,31 +88,33 @@ export default function DashboardKpiRow({
   ];
 
   return (
-    <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
+    /* No bottom margin of its own — the dashboard stacks its sections with
+       `space-y`, and a `mb-6` here would add a second gap under this one. */
+    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
       {kpis.map((k) => {
         const Icon = k.icon;
         return (
           <Link
             key={k.id}
             href={k.href}
-            className="group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm ring-1 ring-black/[0.02] transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/30 hover:shadow-md sm:px-5 sm:py-5"
+            className="group flex items-center gap-4 rounded-2xl border border-gray-100 bg-white px-4 py-4 shadow-sm ring-1 ring-black/[0.02] transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/30 hover:shadow-md dark:border-slate-700 dark:bg-slate-900 dark:ring-white/[0.02] sm:px-5 sm:py-5"
           >
             <div className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ring-1 ${k.accent}`}>
               <Icon className="h-5 w-5" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="text-2xs font-medium uppercase tracking-wider text-gray-500">{k.label}</p>
-              <p className="mt-0.5 text-2xl font-semibold tracking-tight text-gray-900 tabular-nums sm:text-[1.875rem]">
+              <p className="text-2xs font-medium uppercase tracking-wider text-gray-500 dark:text-slate-500">{k.label}</p>
+              <p className="mt-0.5 text-2xl font-semibold tracking-tight text-gray-900 tabular-nums dark:text-slate-50 sm:text-[1.875rem]">
                 {loading ? (
-                  <span className="inline-block h-7 w-14 animate-pulse rounded bg-slate-100" />
+                  <span className="inline-block h-7 w-14 animate-pulse rounded bg-slate-100 dark:bg-slate-800" />
                 ) : k.value === null ? (
-                  <span className="text-gray-300">—</span>
+                  <span className="text-gray-300 dark:text-slate-600">—</span>
                 ) : (
                   k.value.toLocaleString()
                 )}
               </p>
               {!loading && k.subtitle && (
-                <p className="mt-0.5 truncate text-2xs text-gray-500">{k.subtitle}</p>
+                <p className="mt-0.5 truncate text-2xs text-gray-500 dark:text-slate-500">{k.subtitle}</p>
               )}
             </div>
           </Link>

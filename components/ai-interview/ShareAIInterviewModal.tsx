@@ -950,7 +950,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             <button
               onClick={onClose}
               aria-label="Close dialog"
-              className="text-white hover:bg-white hover:bg-opacity-20 p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0"
+              className="text-white hover:text-gray-900 hover:bg-white hover:bg-opacity-20 p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0"
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>

@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Search, X, ClipboardList, MoreVertical, Eye, Pencil, History,
-  ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, RefreshCw, SlidersHorizontal,
+  X, ClipboardList, MoreVertical, Eye, Pencil, History,
+  ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, RefreshCw,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -17,6 +17,15 @@ import JobIdBadge from '@/components/jobs/JobIdBadge';
 import ListPagination from '@/components/ListPagination';
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
+/* The app's one list search/filter layout — the same row and the same panel
+   the Assessments page's Total Jobs tab opens. This screen used to draw its
+   own: a white card around a hand-built search input and a hand-built Filters
+   button, then the controls inline beneath them. Same controls now, same
+   behaviour, in the shared shell, so All / Active / Draft and Total Jobs read
+   as one page rather than as two designs of the same thing. */
+import ListToolbar from '@/components/ui/list-toolbar';
+import ListFilterPanel from '@/components/ui/list-filter-panel';
+import ListCountBadge from '@/components/ui/list-count-badge';
 import { assessmentService, type AssessmentResponse } from '@/lib/services/assessmentService';
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
 import { useDebounce } from '@/lib/hooks/useDebounce';
@@ -636,145 +645,135 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
             </div>
           </div>
 
-          {/* ── 2. Search & filter toolbar ──────────────────────────────── */}
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <div className="relative flex-1 min-w-0">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                <input
-                  value={search}
-                  onChange={(e) => searchAndReset(e.target.value)}
-                  placeholder="Search assessment..."
-                  aria-label="Search assessments by name, ID, job name or job ID"
-                  disabled={isLoading && rows.length === 0}
-                  className="w-full h-9 pl-9 pr-9 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue disabled:opacity-50"
-                />
-                {search && (
-                  <button
-                    onClick={() => searchAndReset('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-400 hover:text-gray-600"
-                    aria-label="Clear search"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
+          {/* ── 2. Search & filter toolbar ────────────────────────────────
+              `ListToolbar` + `ListFilterPanel`, the same pair and the same
+              wrapper the Total Jobs tab uses, so every tab on the Assessments
+              page puts its search in the same place at the same size with the
+              same Reset and the same count badge beside it.
 
-              <button
-                type="button"
-                onClick={() => setFiltersOpen((o) => !o)}
-                aria-expanded={filtersOpen}
-                className={`h-9 px-3 inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium border transition-colors flex-shrink-0 ${
-                  activeFilterCount > 0
-                    ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/25'
-                    : filtersOpen
-                      ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30'
-                      : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue'
-                }`}
-              >
-                <SlidersHorizontal className="w-4 h-4" />
-                Filters
-                {activeFilterCount > 0 && (
-                  <span className="ml-0.5 min-w-[1.25rem] h-5 px-1 inline-flex items-center justify-center rounded-full bg-white/25 text-xs font-semibold">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </button>
-            </div>
+              What stayed with this screen is what is about ITS data: which
+              controls the panel holds, and the draft-then-Apply rule they
+              commit under. The toolbar's own Reset is wired to `clearAll`, the
+              same handler the chips row and the panel's Clear All already
+              call, so there is one way to empty this list however it is
+              reached. */}
+          <div className="mb-4">
+            <ListToolbar
+              searchValue={search}
+              /* This screen debounces the query itself (`appliedSearch`, 300ms)
+                 before anything reads it, so the toolbar hands keystrokes
+                 straight through rather than debouncing a second time. Same
+                 arrangement as the Total Jobs tab. */
+              searchDebounceMs={0}
+              onSearchChange={searchAndReset}
+              searchPlaceholder="Search by assessment name, ID, job name or job ID..."
+              onToggleFilters={() => setFiltersOpen((o) => !o)}
+              filtersOpen={filtersOpen}
+              activeFilterCount={activeFilterCount}
+              /* APPLIED, not merely selected: the panel batches, so a picked
+                 filter that has not been applied yet is not narrowing anything
+                 and must not light the button up as though it were. */
+              filtersApplied={hasAnyFilter(filters)}
+              onClearFilters={clearAll}
+              className="mb-0"
+              countBadge={
+                <ListCountBadge filtered={sorted.length} total={rows.length} noun="assessment" />
+              }
+            />
 
             {/* The six filter controls. A panel rather than an always-open row:
                 six controls permanently above the table would push the rows —
                 the thing this screen is for — below the fold on a laptop. */}
             {filtersOpen && (
-              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <ListFilterPanel
+                footer={
+                  <>
+                    <Button variant="secondary" size="sm" onClick={clearAll} icon={<X className="w-4 h-4" />}>
+                      Clear All
+                    </Button>
+                    <Button variant="primary" size="sm" onClick={applyFilters}>
+                      Apply Filters
+                    </Button>
+                  </>
+                }
+              >
+                <SearchableSelect
+                  label="Job"
+                  value={draftFilters.job}
+                  onChange={(v) => setDraftFilters((f) => ({ ...f, job: v }))}
+                  options={jobOptions}
+                  placeholder="All jobs"
+                  searchPlaceholder="Search job or ID..."
+                  allLabel="All jobs"
+                  emptyMessage="No jobs match"
+                />
+                <SearchableSelect
+                  label="Job Version"
+                  value={draftFilters.jobVersion}
+                  onChange={(v) => setDraftFilters((f) => ({ ...f, jobVersion: v }))}
+                  options={jobVersionOptions}
+                  placeholder="All versions"
+                  searchPlaceholder="Search version..."
+                  allLabel="All versions"
+                  emptyMessage="No versions match"
+                />
+                <SearchableSelect
+                  label="Assessment Version"
+                  value={draftFilters.assessmentVersion}
+                  onChange={(v) => setDraftFilters((f) => ({ ...f, assessmentVersion: v }))}
+                  options={assessmentVersionOptions}
+                  placeholder="All versions"
+                  searchPlaceholder="Search version..."
+                  allLabel="All versions"
+                  emptyMessage="No versions match"
+                />
+                {!fixedStatus && (
                   <SearchableSelect
-                    label="Job"
-                    value={draftFilters.job}
-                    onChange={(v) => setDraftFilters((f) => ({ ...f, job: v }))}
-                    options={jobOptions}
-                    placeholder="All jobs"
-                    searchPlaceholder="Search job or ID..."
-                    allLabel="All jobs"
-                    emptyMessage="No jobs match"
+                    label="Status"
+                    value={draftFilters.status}
+                    onChange={(v) => setDraftFilters((f) => ({ ...f, status: v }))}
+                    options={STATUS_OPTIONS}
+                    placeholder="All statuses"
+                    searchPlaceholder="Search status..."
+                    allLabel="All statuses"
+                    emptyMessage="No statuses match"
                   />
-                  <SearchableSelect
-                    label="Job Version"
-                    value={draftFilters.jobVersion}
-                    onChange={(v) => setDraftFilters((f) => ({ ...f, jobVersion: v }))}
-                    options={jobVersionOptions}
-                    placeholder="All versions"
-                    searchPlaceholder="Search version..."
-                    allLabel="All versions"
-                    emptyMessage="No versions match"
-                  />
-                  <SearchableSelect
-                    label="Assessment Version"
-                    value={draftFilters.assessmentVersion}
-                    onChange={(v) => setDraftFilters((f) => ({ ...f, assessmentVersion: v }))}
-                    options={assessmentVersionOptions}
-                    placeholder="All versions"
-                    searchPlaceholder="Search version..."
-                    allLabel="All versions"
-                    emptyMessage="No versions match"
-                  />
-                  {!fixedStatus && (
-                    <SearchableSelect
-                      label="Status"
-                      value={draftFilters.status}
-                      onChange={(v) => setDraftFilters((f) => ({ ...f, status: v }))}
-                      options={STATUS_OPTIONS}
-                      placeholder="All statuses"
-                      searchPlaceholder="Search status..."
-                      allLabel="All statuses"
-                      emptyMessage="No statuses match"
-                    />
-                  )}
+                )}
 
-                  {/* Created On — two native date inputs, the same control the
-                      Assessments dashboard's own Created from/to pair uses, so
-                      a date range is entered the same way across the product.
-                      Each bounds the other, which is what stops a range that
-                      can never match anything. */}
-                  <div className="sm:col-span-2">
-                    <label
-                      htmlFor="all-assessments-created-from"
-                      className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5"
-                    >
-                      Created On
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        id="all-assessments-created-from"
-                        type="date"
-                        aria-label="Created from"
-                        value={draftFilters.createdFrom}
-                        max={draftFilters.createdTo || undefined}
-                        onChange={(e) => setDraftFilters((f) => ({ ...f, createdFrom: e.target.value }))}
-                        className="flex-1 min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
-                      />
-                      <span className="text-xs text-gray-400 flex-shrink-0">to</span>
-                      <input
-                        type="date"
-                        aria-label="Created to"
-                        value={draftFilters.createdTo}
-                        min={draftFilters.createdFrom || undefined}
-                        onChange={(e) => setDraftFilters((f) => ({ ...f, createdTo: e.target.value }))}
-                        className="flex-1 min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
-                      />
-                    </div>
+                {/* Created On — two native date inputs, the same control the
+                    Assessments dashboard's own Created from/to pair uses, so
+                    a date range is entered the same way across the product.
+                    Each bounds the other, which is what stops a range that
+                    can never match anything. */}
+                <div className="sm:col-span-2">
+                  <label
+                    htmlFor="all-assessments-created-from"
+                    className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5"
+                  >
+                    Created On
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="all-assessments-created-from"
+                      type="date"
+                      aria-label="Created from"
+                      value={draftFilters.createdFrom}
+                      max={draftFilters.createdTo || undefined}
+                      onChange={(e) => setDraftFilters((f) => ({ ...f, createdFrom: e.target.value }))}
+                      className="flex-1 min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                    />
+                    <span className="text-xs text-gray-400 flex-shrink-0">to</span>
+                    <input
+                      type="date"
+                      aria-label="Created to"
+                      value={draftFilters.createdTo}
+                      min={draftFilters.createdFrom || undefined}
+                      onChange={(e) => setDraftFilters((f) => ({ ...f, createdTo: e.target.value }))}
+                      className="flex-1 min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                    />
                   </div>
                 </div>
-
-                <div className="flex items-center justify-end gap-2 mt-3">
-                  <Button variant="secondary" size="sm" onClick={clearAll} icon={<X className="w-4 h-4" />}>
-                    Clear All
-                  </Button>
-                  <Button variant="primary" size="sm" onClick={applyFilters}>
-                    Apply Filters
-                  </Button>
-                </div>
-              </div>
+              </ListFilterPanel>
             )}
           </div>
 
