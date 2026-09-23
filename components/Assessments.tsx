@@ -5238,7 +5238,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   }}
                   disabled={buttonDisabled}
                   title={disabledReason || undefined}
-                  className={`group w-full px-4 py-2.5 text-sm flex items-center gap-2 transition-colors ${
+                  className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
                     buttonDisabled
                       ? 'text-gray-400 cursor-not-allowed'
                       : 'text-gray-700 hover:bg-gray-50'
@@ -5272,7 +5272,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   }}
                   disabled={revokeDisabled}
                   title={revokeReason}
-                  className={`group w-full px-4 py-2.5 text-sm flex items-center gap-2 transition-colors ${
+                  className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
                     revokeDisabled
                       ? 'text-gray-400 cursor-not-allowed'
                       : 'text-destructive hover:bg-destructive-subtle'
@@ -5291,7 +5291,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             {canUpdateAssessment && assessment.status !== 'Active' && assessment.status !== 'Draft' && (
               <button
                 onClick={() => handleActivateAssessment(assessment.id)}
-                className="group w-full px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                className="group w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 flex items-center gap-2 transition-colors"
               >
                 <Play className="w-4 h-4 text-menu-icon-activate flex-shrink-0" />
                 <span className={MENU_ITEM_SCALE_CLASS}>Activate</span>
@@ -5308,7 +5308,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               }}
               disabled={!canDeleteAssessment}
               title={!canDeleteAssessment ? 'You do not have permission to archive assessments' : ''}
-              className={`group w-full px-4 py-2.5 text-sm flex items-center gap-2 ${
+              className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 ${
                 !canDeleteAssessment
                   ? 'text-gray-400 cursor-not-allowed opacity-60'
                   : 'text-gray-700 hover:bg-gray-50'
@@ -5340,7 +5340,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   }}
                   disabled={isDisabled}
                   title={disabledReason}
-                  className={`group w-full px-4 py-2.5 text-sm flex items-center gap-2 ${
+                  className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 ${
                     isDisabled
                       ? 'text-gray-400 cursor-not-allowed opacity-60'
                       : 'text-destructive hover:bg-destructive-subtle'

@@ -34,6 +34,10 @@ interface AIInterviewTrackInvitesModalProps {
   /** Published AI interview config whose invitations are being tracked. */
   configId: string;
   jdTitle: string;
+  /** This job's short id (e.g. "JD-014"), shown as its own column next to
+   *  CID — every row in this tracker shares one job, unlike the AI
+   *  Interviews page's all-jobs list which reads it per row instead. */
+  jdShortId?: string;
   /** Opens a completed candidate's result. When the host can render the result
    *  inline (Job Details does), pass this; the table only offers View Details
    *  on completed rows when it is present. */
@@ -65,6 +69,7 @@ export default function AIInterviewTrackInvitesModal({
   onClose,
   configId,
   jdTitle,
+  jdShortId,
   onViewResult,
   embedded = false,
 }: AIInterviewTrackInvitesModalProps) {
@@ -379,6 +384,7 @@ export default function AIInterviewTrackInvitesModal({
             isLoading={isLoading}
             hasActiveFilters={filtersActive}
             emptyHint="Use Send Invite to invite candidates to this job's AI interview."
+            jdShortId={jdShortId}
             onResend={(inv) => setResendTarget(inv)}
             resendingId={resendingId}
             onViewDetails={onViewResult}

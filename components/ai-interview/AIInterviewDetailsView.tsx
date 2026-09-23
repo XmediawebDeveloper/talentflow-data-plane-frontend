@@ -1877,6 +1877,8 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               jdTitle={config.jd_title || ''}
               onBack={onBack}
               onViewCandidate={handleCandidateClick}
+              jobVersion={config.jd_version ?? undefined}
+              interviewVersion={interviewVersionOrdinal}
             />
           )}
 
@@ -1891,6 +1893,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               onClose={() => {}}
               configId={config.id}
               jdTitle={config.jd_title || config.position || 'Untitled'}
+              jdShortId={config.jd_short_id}
               // Completed rows offer View Result — swap the popup for the
               // same inline candidate result view the Results tab opens.
               onViewResult={(inv) => handleCandidateClick(inv.id)}

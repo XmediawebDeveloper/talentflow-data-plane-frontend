@@ -2741,6 +2741,7 @@ export default function AIInterview() {
               ) : (() => {
                 const totalInvites = inviteStatusRows.length;
                 const bucketCount = (predicate: (inv: any) => boolean) => inviteStatusRows.filter(predicate).length;
+                const invitedCount = bucketCount((inv) => inv.status === 'invited');
                 const expiredCount = bucketCount((inv) => resolveInviteStatus(inv) === 'expired');
                 const inProgressCount = bucketCount((inv) => inv.status === 'in_progress');
                 const completedCount = bucketCount((inv) => inv.status === 'completed');
@@ -2781,7 +2782,9 @@ export default function AIInterview() {
                    and a completion-rate meter beside it rather than a fifth
                    segment (nothing to filter to). */
                 const segments = ([
-                  { key: 'all', label: 'Total Invited', Icon: Users, value: totalInvites,
+                  { key: 'all', label: 'Total', Icon: Users, value: totalInvites,
+                    text: 'text-gray-700 dark:text-slate-300', hover: 'hover:text-gray-900 dark:hover:text-slate-100', tint: 'bg-gray-100 dark:bg-slate-700/50', ring: 'ring-gray-300 dark:ring-slate-600' },
+                  { key: 'invited', label: 'Invited', Icon: Mail, value: invitedCount,
                     text: 'text-status-invited', hover: 'hover:text-status-invited', tint: 'bg-status-invited/10', ring: 'ring-status-invited/20' },
                   { key: 'in_progress', label: 'In Progress', Icon: Play, value: inProgressCount,
                     text: 'text-status-progress', hover: 'hover:text-status-progress', tint: 'bg-status-progress/10', ring: 'ring-status-progress/20' },
@@ -2838,13 +2841,15 @@ export default function AIInterview() {
                         })}
                       </div>
 
-                      <div className="flex items-center gap-2.5 sm:gap-3 lg:justify-end flex-shrink-0">
-                        <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Completion rate</span>
-                        <div className="h-1.5 w-20 sm:w-28 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden flex-shrink-0">
-                          <div className="h-full rounded-full bg-brand-blue transition-all" style={{ width: `${completionRate}%` }} />
+                      <div className="flex flex-col gap-1 lg:items-end flex-shrink-0">
+                        <div className="flex items-center gap-2.5 sm:gap-3">
+                          <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Completion rate</span>
+                          <div className="h-1.5 w-20 sm:w-28 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden flex-shrink-0">
+                            <div className="h-full rounded-full bg-brand-blue transition-all" style={{ width: `${completionRate}%` }} />
+                          </div>
+                          <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">{completionRate}%</span>
                         </div>
-                        <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">{completionRate}%</span>
-                        <span className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden sm:inline">
+                        <span className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">
                           {completedCount.toLocaleString()} of {totalInvites.toLocaleString()} completed
                         </span>
                       </div>
@@ -3786,6 +3791,7 @@ export default function AIInterview() {
                   isLoading={invitesInitialLoading}
                   hasActiveFilters={filtersActive}
                   emptyHint={'Use the "Send via Email" button to invite candidates'}
+                  jdShortId={viewInvitationsConfig.jd_short_id}
                   selectedIds={selectedInviteIds}
                   onToggleSelect={toggleSelectOne}
                   onResend={(inv) => setResendInviteTarget(inv)}

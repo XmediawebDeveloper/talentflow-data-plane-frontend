@@ -1172,8 +1172,8 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                             </div>
                           </div>
                         )}
-                        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          <div>
+                        <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div className="min-w-0">
                             <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Full Name *</label>
                             <input
                               type="text"
@@ -1186,16 +1186,16 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                               }`}
                             />
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Email Address *</label>
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
                               <input
                                 type="email"
                                 value={candidate.email}
                                 onChange={(e) => updateCandidate(candidate.id, 'email', e.target.value)}
                                 placeholder="e.g., john.doe@example.com"
                                 readOnly={candidate.source === 'database'}
-                                className={`flex-1 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${
+                                className={`flex-1 min-w-0 px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 ${
                                   candidate.source === 'database'
                                     ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed border-gray-200 dark:border-slate-700'
                                     : candidate.email.trim() && (!isValidEmail(candidate.email) || isDuplicateEmail(candidate.id, candidate.email))

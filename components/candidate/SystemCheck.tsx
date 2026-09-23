@@ -1245,7 +1245,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
 
             {/* Checks */}
             <div>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
                 <h2 className={T_SECTION}>System Requirements</h2>
                 <Button
                   variant="outline"
