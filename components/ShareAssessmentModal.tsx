@@ -9,12 +9,12 @@ import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import VersionBadge from './VersionBadge';
 import { toast } from 'sonner';
 import { useQuota } from '@/contexts/QuotaContext';
+import { isValidEmailFormat } from '@/lib/utils/email';
 
-// Email validation regex - requires valid format with domain containing a period
-const isValidEmail = (email: string): boolean => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email.trim());
-};
+// Delegates to the one shared, comprehensive format rule (lib/utils/email),
+// used everywhere else a candidate email is entered or edited, rather than
+// this file's own looser regex (which passed things like "user@example.c").
+const isValidEmail = (email: string): boolean => isValidEmailFormat(email);
 
 interface ShareAssessmentModalProps {
   isOpen: boolean;
