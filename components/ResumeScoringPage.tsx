@@ -343,6 +343,14 @@ interface ResumeScoringPageProps {
   folders?: Folder[];
   scoredHistory?: ScoredResumeData[];
   historyLoading?: boolean;
+  /** Total Resumes Scored / Exact / Partial / No Match, precomputed
+   *  server-side (a fast `SELECT COUNT()` per bucket that `GET /scoring/all`
+   *  already returns on every call, page_size:1 included) so the stat cards
+   *  render immediately instead of waiting on `scoredHistory` — which fills
+   *  only once the route re-fetches the ENTIRE scored-resume table just to
+   *  re-derive these same four numbers by summing rows client-side. `null`
+   *  while that initial probe is still in flight. */
+  scoreCounts?: { total: number; exact: number; partial: number; none: number } | null;
   onSaveScores?: (data: ScoredResumeData) => void;
   onRefreshHistory?: () => Promise<void>;
   onLoadJdScores?: (jdId: string, jdTitle?: string) => Promise<void>;
@@ -363,6 +371,7 @@ export default function ResumeScoringPage({
   resumes: propResumes = [],
   scoredHistory = [],
   historyLoading = false,
+  scoreCounts = null,
   onSaveScores,
   onRefreshHistory,
   onLoadJdScores,
@@ -2479,7 +2488,14 @@ export default function ResumeScoringPage({
     // scoredHistory already has one entry per JD version, not collapsed to
     // one per job lineage, so this sum already spans every version.
     const allScoredResumeRows = scoredHistory.flatMap(item => item.scoredResumes || []);
-    const totalResumesScored = allScoredResumeRows.length;
+    /* Server-computed-prop-first, same rule as the AI Talent Match and Job
+       Openings stat cards: `scoreCounts` comes from a cheap `page_size:1`
+       probe the route already makes, and (as of this fix) reads straight off
+       that response instead of waiting for the follow-up fetch of every
+       scored resume just to sum/reduce over them again. Falls back to the
+       client-side tally below when the prop isn't available (e.g. an older
+       host of this component, or the probe failing). */
+    const totalResumesScored = scoreCounts ? scoreCounts.total : allScoredResumeRows.length;
     /* How the whole library came out, one bucket per verdict. Counted over
        scoring EVENTS — the same rows `totalResumesScored` counts — so the
        three add up to that first card rather than to some other population.
@@ -2488,16 +2504,18 @@ export default function ResumeScoringPage({
        both spellings ('Partial Match' and 'partial_match') depending on which
        endpoint filled them. A row carrying no verdict at all counts as No
        Match, which is how the per-job breakdown below has always treated it. */
-    const matchCounts = allScoredResumeRows.reduce(
-      (acc, r: any) => {
-        const verdict = normalizeMatchResult(r.matchStatus ?? r.match_status);
-        if (verdict === 'Exact Match') acc.exact += 1;
-        else if (verdict === 'Partial Match') acc.partial += 1;
-        else acc.none += 1;
-        return acc;
-      },
-      { exact: 0, partial: 0, none: 0 },
-    );
+    const matchCounts = scoreCounts
+      ? { exact: scoreCounts.exact, partial: scoreCounts.partial, none: scoreCounts.none }
+      : allScoredResumeRows.reduce(
+          (acc, r: any) => {
+            const verdict = normalizeMatchResult(r.matchStatus ?? r.match_status);
+            if (verdict === 'Exact Match') acc.exact += 1;
+            else if (verdict === 'Partial Match') acc.partial += 1;
+            else acc.none += 1;
+            return acc;
+          },
+          { exact: 0, partial: 0, none: 0 },
+        );
 
     /* The heading over the results table. It read "Scored Resumes" whichever
        pill was selected, so all six lists looked like the same one.

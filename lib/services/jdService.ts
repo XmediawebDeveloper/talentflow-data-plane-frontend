@@ -117,6 +117,16 @@ export interface JDListResponse {
   page: number;
   page_size: number;
   total_pages: number;
+  // Tenant-wide Total/Published/Draft/Archived counts (one per JD lineage, not
+  // per version row), precomputed server-side on page 1 only, so the Job
+  // Openings stat cards can render immediately instead of waiting on every
+  // page of jobs to load and be tallied client-side.
+  status_counts?: {
+    total?: number;
+    published?: number;
+    draft?: number;
+    archived?: number;
+  } | null;
 }
 
 export interface ExtractedLocation {

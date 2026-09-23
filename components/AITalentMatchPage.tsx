@@ -221,6 +221,12 @@ interface AITalentMatchPageProps {
    *  instead of waiting on every session's full candidate detail. `null`
    *  while that initial call is still in flight. */
   ratingBandCounts?: { exact: number; partial: number } | null;
+  /** Tenant-wide distinct-candidate count across every job's latest match
+   *  session, precomputed server-side in the same session-list call so
+   *  "Match by Candidate" renders immediately instead of waiting on
+   *  `buildCandidateRows`'s per-job fetch-and-dedupe. `null` while that
+   *  initial call is still in flight. */
+  totalMatchedCandidatesCount?: number | null;
   /** Every session from the same initial /ai-match/sessions call `matchHistory`
    *  is already built from — kept raw (not collapsed to one-per-job) so "View
    *  Versions" can paint instantly from data already in memory instead of
@@ -239,6 +245,7 @@ export default function AITalentMatchPage({
   matchHistory = [],
   matchSessionCounts = {},
   ratingBandCounts = null,
+  totalMatchedCandidatesCount = null,
   allMatchSessions = [],
   onSaveMatch,
   onMatchComplete,
@@ -1985,9 +1992,17 @@ export default function AITalentMatchPage({
     // matched resume/version, the same inflated total "All Resumes" lists).
     // It's ready once the roll-up has finished building, or immediately if
     // every session has zero matches (nothing to build).
-    const totalMatchedCandidatesReady = !loadingCandidateRows &&
-      (candidateRows.length > 0 || matchHistory.every(item => (item.totalMatches || 0) === 0));
-    const totalMatchedCandidates = candidateRows.length;
+    //
+    // Same server-computed-prop-first rule as the rating-band cards below:
+    // `totalMatchedCandidatesCount` comes from the same fast /ai-match/sessions
+    // call, so the stat card no longer waits on buildCandidateRows's per-job
+    // fetch-and-dedupe (previously the slowest thing on this page). The old
+    // client-side tally stays as a fallback for when that prop isn't
+    // available, and is still what powers the roll-up table itself once
+    // the tab is opened.
+    const totalMatchedCandidatesReady = totalMatchedCandidatesCount !== null || (!loadingCandidateRows &&
+      (candidateRows.length > 0 || matchHistory.every(item => (item.totalMatches || 0) === 0)));
+    const totalMatchedCandidates = totalMatchedCandidatesCount ?? candidateRows.length;
 
     // Every session's candidates load in individually (in the background — see
     // the prefetch effect above), so the rating-band counts below fill in one
