@@ -59,6 +59,13 @@ export default function ResumeScoringRoute() {
   const [resumes, setResumes] = useState<any[]>([]);
   const [folders, setFolders] = useState<any[]>([]);
   const [scoredHistory, setScoredHistory] = useState<ScoredResumeData[]>([]);
+  // Total Resumes Scored / Exact / Partial / No Match, read off the cheap
+  // page_size:1 probe `loadScoredHistory` already makes to GET /scoring/all
+  // (which computes these via three fast COUNT queries on every call) —
+  // set as soon as THAT resolves, well before the much slower follow-up
+  // fetch of the entire scored-resume table `scoredHistory` waits on. See
+  // ResumeScoringPage's `scoreCounts` prop.
+  const [scoreCounts, setScoreCounts] = useState<{ total: number; exact: number; partial: number; none: number } | null>(null);
   const [loading, setLoading] = useState(true);
   const [historyLoading, setHistoryLoading] = useState(true);
   const [initialJdId, setInitialJdId] = useState<string | null>(null);
@@ -249,11 +256,13 @@ export default function ResumeScoringRoute() {
       }
     }
 
-    // Fetch essential data first (fast), then load history in background
-    fetchData().then(() => {
-      // Load scored history after page is rendered (non-blocking)
-      loadScoredHistory();
-    });
+    // Independent fetches — `loadScoredHistory` doesn't read anything
+    // `fetchData` produces, so chaining them with `.then()` used to make the
+    // stat cards (and the rest of the scoring history) wait out the JD/resume/
+    // folder fetch for no reason before even starting. Each manages its own
+    // loading state, so firing both together is safe.
+    fetchData();
+    loadScoredHistory();
   }, []);
 
   // Poll for batch status when we have a pending batch
@@ -390,8 +399,20 @@ export default function ResumeScoringRoute() {
     // Recently scored items always appear on page 1. Full JD scores are loaded on-demand via loadJdScores.
     setHistoryLoading(true);
     try {
-      // Probe for total then pull all scored resumes in a single request
+      // Probe for total then pull all scored resumes in a single request.
+      // The probe alone already carries the four stat-card numbers (GET
+      // /scoring/all computes excellent_count/partial_count/no_match_count
+      // via three COUNT queries on every call, page_size:1 included) — set
+      // them the moment it lands instead of waiting on the full-table fetch
+      // below, which exists only to build the "View by Job"/"View by
+      // Candidates" list bodies, not to answer these counts.
       const probe = await scoringService.getAllScoredResumes({ page_size: 1, page: 1 });
+      setScoreCounts({
+        total: probe.total || 0,
+        exact: probe.excellent_count || 0,
+        partial: probe.partial_count || 0,
+        none: probe.no_match_count || 0,
+      });
       const firstPage = probe.total > (probe.items || []).length
         ? await scoringService.getAllScoredResumes({ page_size: probe.total, page: 1 })
         : probe;
@@ -842,6 +863,7 @@ export default function ResumeScoringRoute() {
         folders={folders}
         scoredHistory={scoredHistory}
         historyLoading={historyLoading}
+        scoreCounts={scoreCounts}
         onSaveScores={saveScoredHistory}
         onRefreshHistory={loadScoredHistory}
         onLoadJdScores={loadJdScores}

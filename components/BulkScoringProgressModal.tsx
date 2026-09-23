@@ -87,6 +87,12 @@ interface BulkScoringProgressModalProps {
    */
   onRefresh?: () => void | Promise<void>;
   minimized?: boolean; // Allow parent to control minimized state (for restore)
+  /**
+   * Open a settled row's SCORING RESULT (the candidate scoring detail). When
+   * given, View and the row itself go there; without it, View opens the
+   * resume document in a new tab, which is not where a finished run leads.
+   */
+  onViewResult?: (item: ScoringProgressItem) => void;
 }
 
 export default function BulkScoringProgressModal({
@@ -101,6 +107,7 @@ export default function BulkScoringProgressModal({
   onMinimize,
   onRefresh,
   minimized = false,
+  onViewResult,
 }: BulkScoringProgressModalProps) {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
@@ -365,6 +372,14 @@ export default function BulkScoringProgressModal({
     if (!resumeId) return;
     window.open(`/recruitment/resume-view/${resumeId}`, '_blank', 'noopener,noreferrer');
   };
+  // Only a row with a result can open one; the rest keep the plain resume link.
+  const canViewResult = (item: ScoringProgressItem) =>
+    !!onViewResult && (item.status === 'Scored successfully' || item.status === 'Already Scored - Skipped');
+  const viewItem = (item: ScoringProgressItem) => {
+    if (canViewResult(item)) onViewResult!(item);
+    else openResume(item.resumeId);
+  };
+  const viewTitle = onViewResult ? 'View scoring result' : 'View resume';
 
   /* Clamped rather than reset in an effect: a filter that shrinks the list
      below the current page just lands the user on the last page that exists. */
@@ -905,9 +920,10 @@ export default function BulkScoringProgressModal({
                     {pagedData.map((item, index) => (
                       <tr
                         key={item.id}
+                        onClick={canViewResult(item) ? () => onViewResult!(item) : undefined}
                         className={`border-b border-gray-100 dark:border-slate-700/60 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors ${
                           index % 2 === 0 ? 'bg-white dark:bg-slate-900' : 'bg-gray-50 dark:bg-slate-800/50'
-                        }`}
+                        } ${canViewResult(item) ? 'cursor-pointer' : ''}`}
                       >
                         {showJobColumns && (
                           <>
@@ -1012,9 +1028,9 @@ export default function BulkScoringProgressModal({
                               <Button
                                 variant="secondary"
                                 size="sm"
-                                onClick={() => openResume(item.resumeId)}
-                                aria-label="View resume"
-                                title="View resume"
+                                onClick={(e) => { e.stopPropagation(); viewItem(item); }}
+                                aria-label={viewTitle}
+                                title={viewTitle}
                                 className="w-8 px-0"
                               >
                                 <Eye className="w-4 h-4" />
@@ -1045,7 +1061,11 @@ export default function BulkScoringProgressModal({
                   shell above is display:none. */}
               <div className="sm:hidden flex-1 min-h-0 overflow-y-auto space-y-2 pt-3 scrollbar-visible">
                 {pagedData.map((item) => (
-                  <div key={item.id} className="bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-3 shadow-sm">
+                  <div
+                    key={item.id}
+                    onClick={canViewResult(item) ? () => onViewResult!(item) : undefined}
+                    className={`bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl p-3 shadow-sm ${canViewResult(item) ? 'cursor-pointer' : ''}`}
+                  >
                     {/* Name + Status */}
                     <div className="flex items-start justify-between gap-2 mb-2">
                       <div className="min-w-0">
@@ -1109,9 +1129,9 @@ export default function BulkScoringProgressModal({
                         <Button
                           variant="secondary"
                           size="sm"
-                          onClick={() => openResume(item.resumeId)}
-                          aria-label="View resume"
-                          title="View resume"
+                          onClick={(e) => { e.stopPropagation(); viewItem(item); }}
+                          aria-label={viewTitle}
+                          title={viewTitle}
                           icon={<Eye className="w-3 h-3" />}
                         >
                           View

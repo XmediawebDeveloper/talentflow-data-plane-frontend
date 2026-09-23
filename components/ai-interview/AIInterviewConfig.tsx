@@ -32,7 +32,7 @@ import { STT_MODELS, DEFAULT_STT_MODEL } from '@/lib/constants/aiInterviewSttMod
 import { PROXY_INTEGRITY_VERIFICATION_ENABLED } from '@/lib/constants/featureFlags';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
 import AIInterviewFlowLoader from './AIInterviewFlowLoader';
-import { SectionHeader, SummaryLocation, SummaryTips } from './ConfigSummary';
+import { SectionHeader, SummaryLocation } from './ConfigSummary';
 import WizardDiscardButton from './WizardDiscardButton';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JDFullViewModal from '@/components/jobs/JDFullViewModal';
@@ -413,9 +413,6 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
   const [skillToDelete, setSkillToDelete] = useState<string | null>(null);
   const [weightError, setWeightError] = useState(false);
   const [newSkillName, setNewSkillName] = useState('');
-  // True while the semantic (LLM) duplicate check is in flight, so Add shows
-  // progress instead of appearing frozen.
-  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
   const [addSkillError, setAddSkillError] = useState('');
   // Skill name the recruiter has been warned about once, on a MEDIUM-confidence
   // duplicate match. Pressing Add again with the same text keeps both skills —
@@ -537,77 +534,16 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
       return;
     }
 
-    // ── SEMANTIC layer, reached only when the structural rules above cleared the
-    // skill. Structural rules cannot see a true synonym — "Data Analytics" vs
-    // "Data Analysis", "Goods Inward" vs "Receiving", "ECG" vs "EKG" share no root
-    // — and each industry has its own set, so this asks the backend (which
-    // resolves the JD's industry) instead of growing a vocabulary list here.
-    //
-    // THREE ANSWERS (2026-09-05), and they are different events:
-    //
-    //   REJECT        the same skill under another name. Not added. Every
-    //                 rejection has already been through a two-way substitution
-    //                 test server-side, which is what makes it safe to be firm.
-    //   ASK_RECRUITER connected, but nobody can tell from the names alone whether
-    //                 it is one interview topic or two. Only the recruiter knows,
-    //                 so the question goes to them and Add again means yes.
-    //   ADD           a different skill. Nothing is said.
-    //
-    // The middle answer is the point of the change. It used to not exist: every
-    // pair the backend could see was related but could not call identical was
-    // added in silence, which is how "Server-Side Programming" and "Backend
-    // Programming" both ended up on one list.
-    //
-    // Fails open, so a slow or unavailable check never blocks the add.
-    if (!overriding) {
-      setCheckingDuplicate(true);
-      // null = the check could not run. [] = it ran and had nothing to say.
-      let findings: SkillDuplicateFinding[] | null = [];
-      try {
-        findings = await aiInterviewService.checkSkillDuplicates({
-          candidates: [trimmed],
-          existing: config.skills.map(s => s.name),
-          otherBucket: otherBucketSkills || [],
-          otherBucketLabel: otherLabel,
-          jdId,
-          interactive: true,
-        });
-      } finally {
-        setCheckingDuplicate(false);
-      }
-      const hit = (findings ?? []).find(
-        f => f.match && (f.duplicate || f.action === 'ASK_RECRUITER'),
-      );
-      if (hit?.duplicate) {
-        const msg = `"${trimmed}" is the same skill as "${hit.match}" already on this list${hit.reason ? ` — ${hit.reason}` : ''}`;
-        setAddSkillError(msg);
-        setPendingOverride(null);
-        toast.error(msg);
-        return;
-      }
-      if (hit) {
-        // The backend writes this sentence, because it is the side that knows WHY
-        // the two are related. The fallback is only for an older response shape.
-        const msg = hit.recruiterMessage
-          ?? `"${trimmed}" is closely related to the existing skill "${hit.match}"${hit.reason ? ` — ${hit.reason}` : ''}. Would you like to add it as a separate skill?`;
-        setAddSkillError(msg);
-        setPendingOverride(trimmed);
-        toast.warning(`${msg} Press Add again to add it.`);
-        return;
-      }
-      if (findings === null && similar) {
-        // The check could not run and the local matcher had a medium-confidence
-        // opinion it deferred rather than acted on. Ask rather than discard it —
-        // this is the one path where the client is the only opinion there is.
-        // Only on an outage: a check that RAN and cleared the skill has seen more
-        // than this matcher can, and second-guessing it would put a question in
-        // front of the recruiter that the backend already answered.
-        const msg = `"${trimmed}" looks like the existing skill "${similar.item.name}" (${similar.reason}). Add it as a separate skill?`;
-        setAddSkillError(msg);
-        setPendingOverride(trimmed);
-        toast.warning(`${msg} Press Add again to keep both.`);
-        return;
-      }
+    // No LLM call on add (2026-09-23). Meaning-level duplicates ("Data Analytics"
+    // vs "Data Analysis") are removed once, on Continue, by /generate-clusters'
+    // gpt-4o dedup pass over the whole list — so adding a skill here costs no
+    // round trip. A MEDIUM-confidence local match is still put to the recruiter.
+    if (similar && !overriding) {
+      const msg = `"${trimmed}" looks like the existing skill "${similar.item.name}" (${similar.reason}). Add it as a separate skill?`;
+      setAddSkillError(msg);
+      setPendingOverride(trimmed);
+      toast.warning(`${msg} Press Add again to keep both.`);
+      return;
     }
     setPendingOverride(null);
 
@@ -832,10 +768,9 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
               variant="primary"
               size="md"
               onClick={addSkill}
-              disabled={checkingDuplicate}
               icon={<Plus className="w-4 h-4" />}
             >
-              {checkingDuplicate ? 'Checking…' : 'Add'}
+              Add
             </Button>
           </div>
         </div>
@@ -1961,8 +1896,9 @@ export default function AIInterviewConfig() {
     (async () => {
       try {
         const [mthFindings, nthFindings] = await Promise.all([
+          // Word-level only: the gpt-4o dedup runs on Continue (/generate-clusters).
           aiInterviewService.checkSkillDuplicates({
-            candidates: mthNames, existing: [], jdId,
+            candidates: mthNames, existing: [], jdId, semantic: false,
           }).then(f => f ?? []),
           nthNames.length
             ? aiInterviewService.checkSkillDuplicates({
@@ -1971,6 +1907,7 @@ export default function AIInterviewConfig() {
                 otherBucket: mthNames,
                 otherBucketLabel: 'Must-Have',
                 jdId,
+                semantic: false,
               }).then(f => f ?? [])
             : Promise.resolve([] as SkillDuplicateFinding[]),
         ]);
@@ -2082,6 +2019,8 @@ export default function AIInterviewConfig() {
           available_languages: availableLanguages,
           title: `${selectedJd.title} - AI Interview`,
           save_as_draft: true,
+          // Word-level duplicate check only; the gpt-4o dedup runs on Continue.
+          semantic_skill_check: false,
           special_instructions: buildClusterJson(),
           introduction_video_url: introVideoUrl || null,
         };
@@ -2533,6 +2472,7 @@ export default function AIInterviewConfig() {
         title: `${selectedJd.title} - AI Interview`,
         save_as_draft: true,
         save_and_exit: isExiting,
+        semantic_skill_check: false,
         special_instructions: buildClusterJson(),
         introduction_video_url: introVideoUrl || undefined,
       };
@@ -3718,7 +3658,7 @@ export default function AIInterviewConfig() {
                       <span className="text-xs font-medium text-brand-blue">Question Budget (Total: 15)</span>
                       <span className="text-xs text-gray-400">{totalFixed} min</span>
                     </div>
-                    <div className="tf-table-shell">
+                    <div>
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="border-b border-gray-100">
@@ -3754,7 +3694,6 @@ export default function AIInterviewConfig() {
                         </tbody>
                       </table>
                     </div>
-                    <SummaryTips />
                   </div>
                 </div>
               )}
@@ -3799,7 +3738,7 @@ export default function AIInterviewConfig() {
                           {bufferEnabled ? '30 min base + 5 min buffer' : '30 min total'}
                         </span>
                       </div>
-                      <div className="tf-table-shell">
+                      <div>
                         <table className="w-full text-xs">
                           <thead>
                             <tr className="border-b border-gray-100">
@@ -3845,7 +3784,6 @@ export default function AIInterviewConfig() {
                           </tbody>
                         </table>
                       </div>
-                      <SummaryTips />
                     </div>
                   )}
                 </div>

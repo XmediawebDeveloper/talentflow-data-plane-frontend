@@ -923,7 +923,14 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
     const jdId = selectedJob?.id || preSelectedJobId || urlJdId;
     if (fromJobDetails && jdId) {
       return [
-        { label: 'Dashboard', href: '/dashboard' },
+        // onClick, not href: a plain Link navigates immediately and skips
+        // PageBreadcrumb's onClick path entirely, so this crumb bypassed the
+        // Unsaved Changes prompt every other exit from Configure goes through
+        // (the "Assessments" crumb below, "Select Job Description" in
+        // buildStepCrumbs). `attemptStepChange` runs the same isDirty check;
+        // Discard performs this navigation, Save routes through
+        // handleGenerateAssessment same as every other guarded exit.
+        { label: 'Dashboard', onClick: () => attemptStepChange(() => router.push('/dashboard')) },
         { label: 'Job Descriptions', href: '/recruitment/job-openings' },
         // urlJdTitle before the fetched title: identical text, but available on
         // the very first paint, so the crumb never changes under the user.
@@ -932,7 +939,12 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
       ];
     }
     return [
-      { label: 'Dashboard', href: '/dashboard' },
+      // onClick, not href — same reason as the fromJobDetails branch above:
+      // a Link navigates straight away and never reaches the guard, so this
+      // was the one crumb in the trail that could walk the recruiter off an
+      // unsaved (or just-saved-as-draft; see `isDirty`) Configure step with
+      // no prompt, while "Assessments" right below it always asked.
+      { label: 'Dashboard', onClick: () => attemptStepChange(() => router.push('/dashboard')) },
       /* NO "Recruitment" crumb. It used to sit here as a grouping label for
          the section this flow lives under, and it was wrong twice over.
 

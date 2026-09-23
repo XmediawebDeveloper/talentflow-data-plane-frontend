@@ -13,7 +13,7 @@ import { useRouter } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
-  BarChart3, Ban,
+  Ban,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -62,7 +62,6 @@ const STATUS_OPTIONS = [
   { value: 'completed', label: 'Completed' },
   { value: 'terminated', label: 'Terminated' },
   { value: 'expired', label: 'Expired' },
-  { value: 'cancelled', label: 'Cancelled' },
 ];
 
 export function getStatusBadge(status: string) {
@@ -158,7 +157,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
   const [summary, setSummary] = useState({
     completed: 0,
     inProgress: 0,
-    avgScore: null as number | null,
+    terminated: 0,
   });
 
   const [showFilters, setShowFilters] = useState(false);
@@ -222,7 +221,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
       setSummary({
         completed: result.completed || 0,
         inProgress: result.in_progress || 0,
-        avgScore: result.average_score != null ? Math.round(result.average_score) : null,
+        terminated: result.terminated || 0,
       });
     } catch (error: any) {
       toast.error(error.message || 'Failed to load candidate sessions');
@@ -248,7 +247,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
           setSummary({
             completed: r.completed || 0,
             inProgress: r.in_progress || 0,
-            avgScore: r.average_score != null ? Math.round(r.average_score) : null,
+            terminated: r.terminated || 0,
           });
         })
         .catch(() => {});
@@ -305,45 +304,45 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
           its own counts and Quick Actions, and the tab leads with the candidate
           table instead. */}
       {!embedded && (
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-                <Users className="w-4 h-4 text-brand-blue" />
-              </div>
-              <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Total Invited</span>
-            </div>
-            <div className="text-2xl font-bold text-gray-900 tracking-tight">{totalSessions}</div>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-success-line flex items-center justify-center">
-                <CheckCircle className="w-4 h-4 text-success" />
-              </div>
-              <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Completed</span>
-            </div>
-            <div className="text-2xl font-bold text-gray-900 tracking-tight">{summary.completed}</div>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-9 h-9 rounded-lg bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
-                <Clock className="w-4 h-4 text-brand-orange-deep" />
-              </div>
-              <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">In Progress</span>
-            </div>
-            <div className="text-2xl font-bold text-gray-900 tracking-tight">{summary.inProgress}</div>
-          </div>
-          <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-4">
-            <div className="flex items-center gap-2.5 mb-2">
-              <div className="w-9 h-9 rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
-                <BarChart3 className="w-4 h-4 text-brand-cyan" />
-              </div>
-              <span className="text-xs text-gray-500 font-medium uppercase tracking-wide">Avg Score</span>
-            </div>
-            <div className="text-2xl font-bold text-gray-900 tracking-tight">
-              {summary.avgScore !== null ? `${summary.avgScore}%` : '—'}
-            </div>
-          </div>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+          {([
+            { key: 'all', label: 'Total Invited', value: totalSessions, Icon: Users,
+              iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15', iconColor: 'text-brand-blue', activeRing: 'ring-brand-blue/50 border-brand-blue/40' },
+            { key: 'completed', label: 'Completed', value: summary.completed, Icon: CheckCircle,
+              iconBg: 'bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-success-line', iconColor: 'text-success', activeRing: 'ring-success/50 border-success-line' },
+            { key: 'in_progress', label: 'In Progress', value: summary.inProgress, Icon: Clock,
+              iconBg: 'bg-brand-orange/10 ring-1 ring-brand-orange/20', iconColor: 'text-brand-orange-deep', activeRing: 'ring-brand-orange-deep/50 border-brand-orange/40' },
+            { key: 'terminated', label: 'Terminated', value: summary.terminated, Icon: Ban,
+              iconBg: 'bg-destructive-subtle ring-1 ring-destructive-line', iconColor: 'text-destructive', activeRing: 'ring-destructive/50 border-destructive-line' },
+          ] as const).map(({ key, label, value, Icon, iconBg, iconColor, activeRing }) => {
+            const isActive = statusFilter === key;
+            return (
+              <button
+                key={key}
+                type="button"
+                aria-pressed={isActive}
+                title={
+                  key === 'all'
+                    ? 'Show all candidates'
+                    : isActive
+                      ? `Stop filtering by ${label.toLowerCase()}`
+                      : `Show only ${label.toLowerCase()} candidates`
+                }
+                onClick={() => search.setFilter('status', key === 'all' ? 'all' : isActive ? 'all' : key)}
+                className={`text-left bg-white rounded-xl border p-4 shadow-sm shadow-brand-blue/5 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 ${
+                  isActive ? `ring-2 ${activeRing}` : 'border-gray-100 ring-1 ring-black/[0.02] hover:border-brand-blue/20'
+                }`}
+              >
+                <div className="flex items-center gap-2.5 mb-2">
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${iconBg}`}>
+                    <Icon className={`w-4 h-4 ${iconColor}`} />
+                  </div>
+                  <span className="text-xs text-gray-500 font-medium uppercase tracking-wide truncate">{label}</span>
+                </div>
+                <div className="text-2xl font-bold text-gray-900 tracking-tight">{value}</div>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -560,10 +559,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
 
                     <div
                       onClick={(e) => { e.stopPropagation(); handleViewDetails(session); }}
-                      className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
+                      title="View Details"
+                      className="inline-flex items-center justify-center gap-1.5 px-2.5 sm:px-3 py-1.5 text-xs font-medium text-brand-blue bg-brand-blue/5 hover:bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-lg transition-colors"
                     >
                       <Eye className="w-3.5 h-3.5" />
-                      View Details
+                      <span className="hidden sm:inline">View Details</span>
                     </div>
                   </button>
                 );
@@ -748,8 +748,10 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                             size="sm"
                             onClick={(e) => { e.stopPropagation(); handleViewDetails(session); }}
                             icon={<Eye className="w-3.5 h-3.5" />}
+                            title="View Details"
+                            aria-label="View Details"
                           >
-                            View Details
+                            <span className="hidden sm:inline">View Details</span>
                           </Button>
                         </td>
                       </tr>

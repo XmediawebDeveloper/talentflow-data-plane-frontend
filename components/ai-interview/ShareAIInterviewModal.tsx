@@ -11,6 +11,7 @@ import { formatISTDate } from '@/lib/utils/dateUtils';
 import readXlsxFile from 'read-excel-file/browser';
 import { useQuota } from '@/contexts/QuotaContext';
 import { Button } from '@/components/ui/button';
+import SuccessAnimation from '@/components/ui/success-animation';
 
 // Email validation regex
 const isValidEmail = (email: string): boolean => {
@@ -818,8 +819,15 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     return (
       <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6" role="dialog" aria-modal="true">
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-md w-full p-6 sm:p-8 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto tf-round-edges">
-          <div className="w-14 h-14 sm:w-16 sm:h-16 bg-success-subtle rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10 text-success" />
+          <div className="flex justify-center mb-4">
+            <SuccessAnimation
+              className="w-14 h-14 sm:w-16 sm:h-16"
+              fallback={
+                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-success-subtle rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10 text-success" />
+                </div>
+              }
+            />
           </div>
           <h3 className="text-gray-900 dark:text-slate-50 text-base sm:text-lg font-semibold tracking-tight mb-2">Invitations Sent!</h3>
           <p className="text-gray-600 dark:text-slate-400 text-sm">
@@ -950,7 +958,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             <button
               onClick={onClose}
               aria-label="Close dialog"
-              className="text-white hover:bg-white hover:bg-opacity-20 p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0"
+              className="text-white hover:text-gray-900 hover:bg-white hover:bg-opacity-20 p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0"
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
@@ -1164,7 +1172,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                             </div>
                           </div>
                         )}
-                        <div className="flex-1 grid grid-cols-2 gap-3">
+                        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3">
                           <div>
                             <label className="text-xs text-gray-600 dark:text-slate-400 mb-1 block">Full Name *</label>
                             <input

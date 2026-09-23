@@ -1971,6 +1971,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     suggestedLanguages: [],
   });
   const [experienceYearsExplicit, setExperienceYearsExplicit] = useState(false);
+  // WORDS FIRST. The level code the JD's own words name - "Senior Backend Developer",
+  // "we are seeking a junior analyst" - as decided by the backend at extraction
+  // (experience_level_source 'title' / 'text'). While set, it IS the persisted
+  // job_level whatever the From/To years say; the years are only mapped to a level
+  // when this is empty. Cleared by an extraction that finds no grade word.
+  const [experienceLevelWord, setExperienceLevelWord] = useState('');
   const [isExtracting, setIsExtracting] = useState(false);
   const [newSkill, setNewSkill] = useState('');
   const [newComment, setNewComment] = useState('');
@@ -3056,6 +3062,31 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [extractedData.experience]);
 
+  // "Allow Overqualified Candidates = No" needs a CEILING to exceed. A floor-only
+  // requirement ("5+ years") has no upper bound, so nothing can significantly
+  // exceed it, yet the scorer's No-branch told the model to penalise "roughly
+  // double the upper bound, or a clearly senior candidate against a mid-level JD"
+  // and the model fell back on the level word alone - a Senior Backend Developer
+  // was rejected as overqualified for a "5+ years" Senior Backend Developer JD.
+  // Recruiter decision 2026-09-23: with no To value the choice is forced to Yes
+  // and No is disabled; with both From and To the recruiter picks. The backend
+  // stores and scores the same way (app/utils/overqualified.py), so a row saved
+  // before this rule is scored as Yes too.
+  const experienceHasCeiling = (() => {
+    const { to } = parseExperienceYearsString(extractedData.experience);
+    const ceiling = Number((to ?? '').replace(/[^0-9.]/g, ''));
+    return to !== '' && Number.isFinite(ceiling) && ceiling > 0;
+  })();
+
+  useEffect(() => {
+    if (experienceHasCeiling) return;
+    setExtractedData(prev =>
+      prev.allowOverqualified === true ? prev : { ...prev, allowOverqualified: true }
+    );
+    setValidationErrors(prev => (prev.allowOverqualified ? { ...prev, allowOverqualified: undefined } : prev));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [experienceHasCeiling]);
+
   const deriveExperienceCodeFromYears = (min?: number | null, max?: number | null): string => {
     const value =
       min !== null && min !== undefined && !Number.isNaN(Number(min))
@@ -3089,12 +3120,6 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     return 'entry';
   };
 
-  // When the JD is completely silent on experience (no years, no level word),
-  // apply the recruiter's fallback rule: a SIMPLE JD (few skills/tools) defaults
-  // to the lowest master level's years; a COMPLEX JD (many skills/tools) is left
-  // BLANK so the recruiter fills From/To manually after extraction.
-  const EXPERIENCE_COMPLEX_SKILL_THRESHOLD = 6;
-
   /**
    * Does the job title name a seniority grade at all?
    *
@@ -3112,17 +3137,15 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
   const TITLE_MENTIONS_SENIORITY =
     /(?:senior|sr\.?|lead|principal|staff|chief|head|director|manager|supervisor|foreman|matron|architect|mid[\s-]?level|intermediate|experienced|junior|jr\.?|associate|assistant|intern|trainee|apprentice|graduate|fresher|entry[\s-]?level|vice\s+president|managing\s+director)/i;
 
-  const applyExperienceFallback = (mapped: string, skillCount: number): string => {
-    if (mapped) return mapped;
-    if (skillCount >= EXPERIENCE_COMPLEX_SKILL_THRESHOLD) return '';
-    // The title states a grade but nothing upstream could settle which one. Leave it
-    // blank for the recruiter rather than defaulting a "Senior ... Manager" to 0-2.
-    if (TITLE_MENTIONS_SENIORITY.test(jobTitle || '')) return '';
-    const levels = experienceLevels || [];
-    if (!levels.length) return '';
-    const lowest = [...levels].sort((a, b) => (a.min_years ?? 0) - (b.min_years ?? 0))[0];
-    return buildExperienceYearsString(lowest.min_years, lowest.max_years);
-  };
+  // NO DEFAULTS (recruiter decision 2026-09-23): a JD that states neither years nor a
+  // grade word gets an EMPTY experience, never the lowest master band. The master
+  // bands exist to map a level word to years, not to stand in for something the JD
+  // never said - a defaulted "Entry Level (0-2)" was persisted as job_level and the
+  // scorer then judged every candidate against a requirement nobody wrote. Experience
+  // is a required Step 2 field, so the recruiter types the real years instead.
+  // `_skillCount` stays in the signature for the callers; it no longer changes the
+  // outcome (the old rule only used it to decide WHEN to default).
+  const applyExperienceFallback = (mapped: string, _skillCount: number): string => mapped;
 
   const resolveExperiencePayload = (value?: string | null) => {
     const normalized = value?.trim() || '';
@@ -3158,14 +3181,43 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     };
   };
 
+  /**
+   * The level code a fresh extraction's WORDS settled, or '' when the level was
+   * derived from the years (or nothing was found). Only the backend decides this -
+   * app/utils/experience_level_words.py is the one copy of the rule - so this reads
+   * its answer and checks the code exists in the tenant's master levels.
+   */
+  const levelWordFromParams = (params: {
+    experience_level?: string | null;
+    experience_level_source?: string | null;
+  }): string => {
+    if (params.experience_level_source !== 'title' && params.experience_level_source !== 'text') return '';
+    const code = (params.experience_level || '').trim();
+    return code && getExperienceLevelByCode(code) ? code : '';
+  };
+
   const resolvePersistedExperiencePayload = (
     value?: string | null,
-    yearsWereExplicit: boolean = experienceYearsExplicit
+    yearsWereExplicit: boolean = experienceYearsExplicit,
+    levelWord: string = experienceLevelWord
   ) => {
     const payload = resolveExperiencePayload(value);
-    const customHasExplicitYears = payload.isCustom
-      && (payload.experienceMin !== undefined || payload.experienceMax !== undefined);
-    const shouldPersistYears = yearsWereExplicit || customHasExplicitYears;
+    // Only years the JD or the recruiter STATED are persisted. This used to also
+    // persist any parsable "custom" years string, which included the From/To that
+    // a level word prefills from the master band ("Senior" -> "7-10 Years"): the
+    // band's numbers reached experience_min/max and the scorer judged candidates
+    // against "Senior Level (7-10 years)" for a JD that only ever said "Senior".
+    // `yearsWereExplicit` is set by every path that knows where the years came
+    // from (extraction, generation, the From/To boxes, reopening a saved JD).
+    const shouldPersistYears = yearsWereExplicit;
+    // WORDS FIRST, then the JD's own years, then NOTHING. A grade the JD names is the
+    // level whatever the boxes say. Without one, the level is mapped from years the
+    // JD (or the recruiter) actually stated. Years that were only prefilled from a
+    // master band - a level word's From/To, shown so the boxes are not blank - are
+    // not the JD's values, so they persist no level either: scoring must run on the
+    // given JD only, never on our defaults.
+    const persistedJobLevel = levelWord
+      || (shouldPersistYears ? payload.jobLevel : undefined);
 
     // Use `null` (never `undefined`) for "no value" here: this is the payload
     // that gets JSON-serialized straight into the save request. A `null` key
@@ -3177,6 +3229,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // survive a refresh after a later extraction correctly found no max.
     return {
       ...payload,
+      jobLevel: persistedJobLevel,
       experienceMin: shouldPersistYears ? (payload.experienceMin ?? null) : null,
       experienceMax: shouldPersistYears ? (payload.experienceMax ?? null) : null,
       yearsWereExplicit: shouldPersistYears,
@@ -3699,6 +3752,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
       setShowCustomExperienceInput(Boolean(nextExperienceValue && !getExperienceLevelByCode(nextExperienceValue)));
       setExperienceYearsExplicit(hasExplicitExperienceYears);
+      // The grade the JD's words name, if any - the backend's answer, not a re-derivation.
+      setExperienceLevelWord(levelWordFromParams(params));
 
       setExtractedData(prev => {
         // Same deterministic first-render dedupe as the extraction path below - the
@@ -4535,6 +4590,11 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       const nextExperienceYearsExplicit = (hasExpMin || hasExpMax)
         || (preserveUserEdits && resolvePersistedExperiencePayload(extractedData.experience).yearsWereExplicit);
       setExperienceYearsExplicit(nextExperienceYearsExplicit);
+      // The grade the JD's words name, if any (backend-decided). Computed here, not
+      // read back from state, because the save right after extraction needs it
+      // before React has re-rendered - same reason nextExperienceYearsExplicit is.
+      const nextExperienceLevelWord = levelWordFromParams(params);
+      setExperienceLevelWord(nextExperienceLevelWord);
 
       const extraction: ExtractedData = {
         mustHaveSkills: preserveUserEdits ? extractedData.mustHaveSkills : mergeExtractedListField(extractedData.mustHaveSkills, params.must_have_skills, isEditMode),
@@ -4690,7 +4750,9 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         setLocationCountry(prev => (prev === 'IN' ? 'US' : prev));
       }
 
-      const extractionExperiencePayload = resolvePersistedExperiencePayload(extraction.experience, nextExperienceYearsExplicit);
+      const extractionExperiencePayload = resolvePersistedExperiencePayload(
+        extraction.experience, nextExperienceYearsExplicit, nextExperienceLevelWord
+      );
       setShowCustomExperienceInput(Boolean(extraction.experience && extractionExperiencePayload.isCustom));
 
       console.log('[TalentFlow] Final extracted data being set:', {
@@ -5775,7 +5837,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
 
     // Allow Overqualified Candidates is a required Yes/No choice - the recruiter must
     // pick one before proceeding. null means not yet answered.
-    if (extractedData.allowOverqualified === null || extractedData.allowOverqualified === undefined) {
+    // A floor-only requirement forces Yes (see experienceHasCeiling), so the choice
+    // is only required when there is a ceiling for No to mean something.
+    if (experienceHasCeiling
+        && (extractedData.allowOverqualified === null || extractedData.allowOverqualified === undefined)) {
       missingFields.push('Allow Overqualified Candidates (Yes/No)');
       errors.allowOverqualified = 'Please select Yes or No for Allow Overqualified Candidates';
     }
@@ -6206,7 +6271,8 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     // Allow Overqualified Candidates is a required Yes/No choice, not a default-off
     // toggle - the recruiter must pick one before Step 2 can be left. null is "not
     // yet answered"; true/false are both valid, complete answers.
-    if (extractedData.allowOverqualified === null || extractedData.allowOverqualified === undefined) {
+    if (experienceHasCeiling
+        && (extractedData.allowOverqualified === null || extractedData.allowOverqualified === undefined)) {
       missingFields.push('Allow Overqualified Candidates (Yes/No)');
     }
 
@@ -7120,7 +7186,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // Restore industry type from saved draft
         const industryValue = effectiveEditingJD.industry_type || '';
         setShowCustomExperienceInput(false);
-        setExperienceYearsExplicit(hasPersistedExperienceYears || Boolean(experienceValue));
+        // Only SAVED years count as explicit. A legacy level-only JD prefills the
+        // boxes from the master band (see experienceValue above), and treating that
+        // prefill as explicit persisted the band's numbers on the next save.
+        setExperienceYearsExplicit(hasPersistedExperienceYears);
 
         console.log('[DEBUG] Loading effectiveEditingJD data:');
         console.log('[DEBUG] - experience_min from API:', effectiveEditingJD.experience_min);
@@ -7205,6 +7274,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
         // Computed server-side on every read, so a JD extracted before this rule
         // existed - or one whose text was edited since - still reports correctly.
         setJdWelcomesFreshers(Boolean(effectiveEditingJD.experience_welcomes_freshers));
+
+        // WORDS FIRST on reopen. The saved level is kept as the word-derived level
+        // when the title names a grade, or when the JD saved no years at all (a
+        // level-only JD - the level can only have come from its words). Otherwise
+        // the level was mapped from the years and must follow them if the recruiter
+        // edits the boxes, so nothing is pinned. The backend re-applies the same rule
+        // on save (reconcile_job_level_with_words), so this only keeps the client's
+        // payload honest - it is not the enforcement.
+        const savedLevel = (effectiveEditingJD.job_level || '').trim();
+        setExperienceLevelWord(
+          savedLevel && getExperienceLevelByCode(savedLevel)
+            && (TITLE_MENTIONS_SENIORITY.test(effectiveEditingJD.title || '') || !hasPersistedExperienceYears)
+            ? savedLevel
+            : ''
+        );
 
         // Sync the standalone country dropdown to the first saved location's country
         const firstCountry = effectiveEditingJD.locations?.[0]?.country;
@@ -9962,14 +10046,21 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       { label: 'No', value: false },
                     ] as const).map((opt) => {
                       const isSelected = extractedData.allowOverqualified === opt.value;
+                      // "No" needs a ceiling to exceed - locked (and Yes forced, see
+                      // experienceHasCeiling) until the recruiter enters a To value.
+                      const lockedNo = opt.value === false && !experienceHasCeiling;
+                      const isDisabled = isRegenerating || lockedNo;
                       return (
                         <button
                           key={opt.label}
                           type="button"
                           role="radio"
                           aria-checked={isSelected}
-                          disabled={isRegenerating}
+                          aria-disabled={isDisabled}
+                          disabled={isDisabled}
+                          title={lockedNo ? 'Enter a To (maximum) years value to allow choosing No' : undefined}
                           onClick={() => {
+                            if (isDisabled) return;
                             setExtractedData(prev => ({ ...prev, allowOverqualified: opt.value }));
                             setValidationErrors(prev => ({ ...prev, allowOverqualified: undefined }));
                             markExtractedDataModified();
@@ -9978,7 +10069,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                             isSelected
                               ? 'bg-brand-blue text-white border-brand-blue'
                               : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border-gray-300 dark:border-slate-700 hover:border-brand-blue/40'
-                          } ${isRegenerating ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+                          } ${isDisabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
                         >
                           {opt.label}
                         </button>
@@ -9986,6 +10077,12 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                     })}
                   </div>
                 </div>
+                {!experienceHasCeiling && (
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mt-2 flex items-center gap-1">
+                    <Info className="w-4 h-4 flex-shrink-0" />
+                    Set to Yes: the experience requirement has no upper limit, so there is no range to exceed. Enter a To (maximum) years value above to choose No.
+                  </p>
+                )}
                 {validationErrors.allowOverqualified && (
                   <p className="text-destructive text-sm mt-2 flex items-center gap-1">
                     <AlertCircle className="w-4 h-4" />
@@ -10955,7 +11052,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
           ------------------------------------------------------------------------------
           Reported 2026-09-21. The JD said "2-4 years of experience ... but we also welcome
           freshers with relevant internship experience". Extraction correctly refused to mark
-          experience Required - Required means Essential, and an Essential rating below 7 is
+          experience Required - Required means Essential, and an Essential rating below 6 is
           an automatic No Match, so every fresher the JD invited would be rejected by the
           sentence that invited them - but it did so SILENTLY, which read as the JD being
           ignored.
@@ -10979,7 +11076,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
               </span>
               <span className="block">
                 Making experience <strong>Required</strong> turns it into an <strong>Essential</strong>{' '}
-                criterion in Resume Scoring: any candidate rated below 7 on experience is a{' '}
+                criterion in Resume Scoring: any candidate rated below 6 on experience is a{' '}
                 <strong>No Match</strong> outright - so the freshers this JD invites will be
                 rejected by it.
               </span>

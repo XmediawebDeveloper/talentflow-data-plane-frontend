@@ -51,6 +51,19 @@ const viewVersionsMenuItemRedClass = 'group text-destructive hover:bg-destructiv
 
 interface JobsListingProps {
   jobs: Job[];
+  /** Tenant-wide Total/Published/Draft/Archived, precomputed server-side so the
+   *  stat cards can show the right number immediately instead of the wrong
+   *  page-1-only tally `jobs` briefly holds while the rest of it loads. Used
+   *  only until `jobsFullyLoaded` — see that prop. `null`/absent falls back to
+   *  computing straight from `jobs`, the previous (flicker-prone) behaviour. */
+  statusCounts?: { total?: number; published?: number; draft?: number; archived?: number } | null;
+  /** Whether `jobs` itself holds every page yet. Once true, the stat cards
+   *  switch from `statusCounts` to their own live tally over `jobs` — by then
+   *  the two agree, so the switch is invisible, and it's what keeps the cards
+   *  updating instantly after a publish/archive/delete action (those mutate
+   *  `jobs` directly, not `statusCounts`). Defaults to true, so a host that
+   *  doesn't pass it just gets the live tally, as before. */
+  jobsFullyLoaded?: boolean;
   onCreateNew: () => void;
   onViewJob: (job: Job) => void;
   onViewApplicants?: (job: Job) => void;
@@ -116,7 +129,7 @@ const StatVersions = ({ count }: { count: number }) => (
   </span>
 );
 
-export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onScoreResumes, onUpdateJobStatus, onEditJob, versionStatusOverrides, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, forceListView, configHref }: JobsListingProps) {
+export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded = true, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onScoreResumes, onUpdateJobStatus, onEditJob, versionStatusOverrides, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, forceListView, configHref }: JobsListingProps) {
   const dialog = useGlobalDialog();
   const router = useRouter();
   const { isTenantAdmin, user } = useAuth();
@@ -666,6 +679,20 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
     archivedVersions: versionsOf(j => j.status === 'Archived'),
   };
 
+  /* The four headline numbers on the stat cards: `statusCounts` (server-
+   * computed, right from first paint) until `jobs` itself is fully loaded and
+   * can take over live — see the prop doc on `jobsFullyLoaded` above. Every
+   * other stat (version pills, applicants, etc.) still reads `stats` directly;
+   * only these four had a server-computed alternative to flicker against. */
+  const headlineStats = (!jobsFullyLoaded && statusCounts)
+    ? {
+        total: statusCounts.total ?? stats.total,
+        published: statusCounts.published ?? stats.published,
+        draft: statusCounts.draft ?? stats.draft,
+        archived: statusCounts.archived ?? stats.archived,
+      }
+    : stats;
+
   const activeFiltersCount = search.activeFilterCount;
   const filtersActive = search.filtersApplied;
 
@@ -784,16 +811,16 @@ export default function JobsListing({ jobs, onCreateNew, onViewJob, onViewApplic
           </div>
 
           <StatsCardGrid>
-            <StatsCard tone="neutral" active={isOverviewCardActive('all')} showClickArrow icon={Briefcase} label="Total Jobs" value={stats.total} sparkline={false} onClick={() => openListView('all')}>
+            <StatsCard tone="neutral" active={isOverviewCardActive('all')} showClickArrow icon={Briefcase} label="Total Jobs" value={headlineStats.total} sparkline={false} onClick={() => openListView('all')}>
               <StatVersions count={stats.totalVersions} />
             </StatsCard>
-            <StatsCard tone="neutral" active={isOverviewCardActive('published')} showClickArrow icon={CheckCircle2} label="Published" value={stats.published} sparkline={false} onClick={() => openListView('published')}>
+            <StatsCard tone="neutral" active={isOverviewCardActive('published')} showClickArrow icon={CheckCircle2} label="Published" value={headlineStats.published} sparkline={false} onClick={() => openListView('published')}>
               <StatVersions count={stats.publishedVersions} />
             </StatsCard>
-            <StatsCard tone="neutral" active={isOverviewCardActive('draft')} showClickArrow icon={FileText} label="Drafts" value={stats.draft} sparkline={false} onClick={() => openListView('draft')}>
+            <StatsCard tone="neutral" active={isOverviewCardActive('draft')} showClickArrow icon={FileText} label="Drafts" value={headlineStats.draft} sparkline={false} onClick={() => openListView('draft')}>
               <StatVersions count={stats.draftVersions} />
             </StatsCard>
-            <StatsCard tone="neutral" active={isOverviewCardActive('archived')} showClickArrow icon={Archive} label="Archived" value={stats.archived} sparkline={false} onClick={() => openListView('archived')}>
+            <StatsCard tone="neutral" active={isOverviewCardActive('archived')} showClickArrow icon={Archive} label="Archived" value={headlineStats.archived} sparkline={false} onClick={() => openListView('archived')}>
               <StatVersions count={stats.archivedVersions} />
             </StatsCard>
           </StatsCardGrid>

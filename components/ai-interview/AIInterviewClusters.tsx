@@ -27,7 +27,7 @@ import {
 } from '@/lib/constants/aiInterviewPriority';
 import type { ClusterPriority } from '@/lib/constants/aiInterviewPriority';
 import { AIInterviewStepIndicator } from './AIInterviewStepIndicator';
-import { SectionHeader, SummaryLocation, SummaryTips } from './ConfigSummary';
+import { SectionHeader, SummaryLocation } from './ConfigSummary';
 import WizardDiscardButton from './WizardDiscardButton';
 import ClusterGeneratingState, { CLUSTER_GENERATING_ID } from './ClusterGeneratingState';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
@@ -810,12 +810,8 @@ function CategorySection({
      section: each bucket is filtered and folded on its own. */
   const [collapsed, setCollapsed] = useState(false);
   const [skillQuery, setSkillQuery] = useState('');
-  const [skillFilter, setSkillFilter] = useState<'all' | 'skill' | 'command' | 'unassigned'>('all');
+  const [skillFilter, setSkillFilter] = useState<'all' | 'skill' | 'command'>('all');
 
-  // Track which skills are assigned to at least one cluster
-  const assignedSkillNames = new Set(
-    clusters.flatMap(c => c.skills.map(s => s.toLowerCase().trim()))
-  );
   const clusterMinuteMap = allocateClusterMinutes(clusters, timeMin);
   const atLimit = maxClusters > 0 && clusters.length >= maxClusters;
 
@@ -930,7 +926,6 @@ function CategorySection({
           if (query && !e.name.toLowerCase().includes(query)) return false;
           if (skillFilter === 'skill') return e.type !== 'Command';
           if (skillFilter === 'command') return e.type === 'Command';
-          if (skillFilter === 'unassigned') return !assignedSkillNames.has(e.name.toLowerCase().trim());
           return true;
         });
         const filtering = query.length > 0 || skillFilter !== 'all';
@@ -994,7 +989,6 @@ function CategorySection({
                       <option value="all">All</option>
                       <option value="skill">Skills only</option>
                       <option value="command">Commands only</option>
-                      <option value="unassigned">Unassigned</option>
                     </select>
                     <ChevronDown className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                   </div>
@@ -2375,6 +2369,8 @@ export default function AIInterviewClusters() {
           const _updated = await aiInterviewService.update(id, {
             special_instructions: JSON.stringify(si),
             rounds_config: rounds,
+            // Skills were already deduped on gpt-4o by /generate-clusters.
+            semantic_skill_check: false,
           });
           // Adopt the BACKEND-CORRECTED special_instructions from the update
           // response. The server-side over-allocation backstop expands a bucket
@@ -2703,6 +2699,7 @@ export default function AIInterviewClusters() {
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
         rounds_config: buildUpdatedRoundsConfig(),
+        semantic_skill_check: false,
       });
       router.push(target);
     } catch {
@@ -2813,6 +2810,7 @@ export default function AIInterviewClusters() {
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
         rounds_config: buildUpdatedRoundsConfig(),
+        semantic_skill_check: false,
         // Audit-log hint: this IS the recruiter explicitly saving and leaving
         // (as opposed to the silent saves elsewhere on this page), so the
         // trail should show "Saved as Draft" / "Draft Updated" once — see
@@ -3986,7 +3984,7 @@ export default function AIInterviewClusters() {
                     <span className="text-xs font-medium text-brand-blue">Question Budget (Total: {timedAllocation.mthQuestions + timedAllocation.nthQuestions + timedAllocation.hrQuestions})</span>
                     <span className="text-xs text-gray-500">{fixedMthMin + fixedNthMin + fixedHrMin} min</span>
                   </div>
-                  <div className="tf-table-shell">
+                  <div>
                     <table className="w-full text-xs">
                       <thead>
                         <tr className="border-b border-gray-100">
@@ -4022,7 +4020,6 @@ export default function AIInterviewClusters() {
                       </tbody>
                     </table>
                   </div>
-                  <SummaryTips />
                 </div>
               )}
 
@@ -4080,10 +4077,10 @@ export default function AIInterviewClusters() {
       <div className="fixed bottom-0 left-0 right-0 z-10">
         <div className="mx-auto w-full max-w-[1400px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 ring-1 ring-black/[0.02] shadow-lg shadow-brand-blue/5 rounded-t-2xl px-4 md:px-8 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <Button variant="secondary" size="md" onClick={handleBack} disabled={saving} icon={<ArrowLeft className="w-4 h-4" />}>
+            <Button variant="secondary" size="md" onClick={handleBack} disabled={saving || generating} icon={<ArrowLeft className="w-4 h-4" />}>
               Back to Configure
             </Button>
-            <WizardDiscardButton onClick={handleDiscard} disabled={saving} />
+            <WizardDiscardButton onClick={handleDiscard} disabled={saving || generating} />
           </div>
           <div className="flex items-center gap-2">
             <Button

@@ -3,8 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Search, X, ClipboardList, MoreVertical, Eye, Pencil, History,
-  ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, RefreshCw, SlidersHorizontal,
+  X, ClipboardList, MoreVertical, Eye, Pencil, History,
+  ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, RefreshCw,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -17,6 +17,20 @@ import JobIdBadge from '@/components/jobs/JobIdBadge';
 import ListPagination from '@/components/ListPagination';
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
+/* The app's one list search/filter layout — the same row and the same panel
+   the Assessments page's Total Jobs tab opens. This screen used to draw its
+   own: a white card around a hand-built search input and a hand-built Filters
+   button, then the controls inline beneath them. Same controls now, same
+   behaviour, in the shared shell, so All / Active / Draft and Total Jobs read
+   as one page rather than as two designs of the same thing. */
+import ListToolbar from '@/components/ui/list-toolbar';
+/* Renders the toolbar above into whatever position the HOST page reserves for
+   it — on the Assessments page that is the one row above the tab pills, shared
+   with every other tab. On this screen's own route there is no slot, and it
+   renders in place exactly as before. */
+import { ListToolbarPortal } from '@/components/ui/list-toolbar-slot';
+import ListFilterPanel from '@/components/ui/list-filter-panel';
+import ListCountBadge from '@/components/ui/list-count-badge';
 import { assessmentService, type AssessmentResponse } from '@/lib/services/assessmentService';
 import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
 import { useDebounce } from '@/lib/hooks/useDebounce';
@@ -235,7 +249,14 @@ const EMPTY_FILTERS: Filters = {
 
 const hasAnyFilter = (f: Filters) => Object.values(f).some((v) => v !== '');
 
-type FixedAssessmentStatus = 'published' | 'draft';
+/* The status a host can pin this table to, one per flat tab on the Assessments
+   page. `archived` joins the two that were here because the Archived tab now
+   lists ASSESSMENTS in this table, the way Draft always has, instead of the
+   job-grouped list it used to draw — and the table already knew the status in
+   every other respect: `STATUS_LABEL` names it, `STATUS_BADGE` has its slate
+   pill, the Status sort puts it last in lifecycle order, and `rowActions`
+   offers an archived row View and View History but not Edit. */
+type FixedAssessmentStatus = 'published' | 'draft' | 'archived';
 
 interface AllAssessmentsTableProps {
   embedded?: boolean;
@@ -245,20 +266,30 @@ interface AllAssessmentsTableProps {
 }
 
 const fixedStatusLabel = (status?: FixedAssessmentStatus) =>
-  status === 'published' ? 'Active' : status === 'draft' ? 'Draft' : undefined;
+  status === 'published' ? 'Active'
+    : status === 'draft' ? 'Draft'
+      : status === 'archived' ? 'Archived'
+        : undefined;
 
 export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description }: AllAssessmentsTableProps = {}) {
   const router = useRouter();
   const { isTenantAdmin, user } = useAuth();
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
   const fixedLabel = fixedStatusLabel(fixedStatus);
+  /* Both lines of the page header. Read only when this table is on its OWN
+     route — see the header block below, which `embedded` drops whole. On the
+     Assessments page the tab pill directly above the list already names it,
+     and a heading repeating the pill over a paragraph repeating the heading
+     was two lines of furniture between the toolbar and the rows. */
   const heading = title || (fixedLabel ? `${fixedLabel} Assessments` : 'All Assessments');
   const subheading = description || (
     fixedStatus === 'published'
       ? 'View and manage published assessments ready for candidate invites.'
       : fixedStatus === 'draft'
         ? 'View and manage draft assessments that are still being prepared.'
-        : 'View and manage all assessments across jobs and job versions.'
+        : fixedStatus === 'archived'
+          ? 'Assessments taken out of circulation. Archived assessments cannot be edited or sent.'
+          : 'View and manage all assessments across jobs and job versions.'
   );
 
   const [rows, setRows] = useState<AssessmentRow[]>([]);
@@ -621,7 +652,16 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
           {/* ── 1. Page header ──────────────────────────────────────────────
               Title and subtitle only. No stat cards: the dashboard this screen
               is opened FROM owns those figures, and repeating them here would
-              be two places to disagree about the same number. */}
+              be two places to disagree about the same number.
+
+              Its own route only. Embedded, this table is a TAB, and the tab
+              pill above it has already said "All Assessments" / "Active" /
+              "Draft" — so the heading only repeated the pill and the paragraph
+              only repeated the heading, both of them sitting between the
+              toolbar and the rows the tab exists to show. The breadcrumb-led
+              route keeps the pair, because there is no pill there to name the
+              list. */}
+          {!embedded && (
           <div className="flex items-start gap-3 mb-5">
             <div className="hidden sm:flex w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 items-center justify-center shrink-0">
               <ClipboardList className="w-4 h-4 text-brand-blue" />
@@ -635,151 +675,146 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               </p>
             </div>
           </div>
+          )}
 
-          {/* ── 2. Search & filter toolbar ──────────────────────────────── */}
-          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
-              <div className="relative flex-1 min-w-0">
-                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                <input
-                  value={search}
-                  onChange={(e) => searchAndReset(e.target.value)}
-                  placeholder="Search assessment..."
-                  aria-label="Search assessments by name, ID, job name or job ID"
-                  disabled={isLoading && rows.length === 0}
-                  className="w-full h-9 pl-9 pr-9 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue disabled:opacity-50"
-                />
-                {search && (
-                  <button
-                    onClick={() => searchAndReset('')}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-gray-400 hover:text-gray-600"
-                    aria-label="Clear search"
-                  >
-                    <X className="w-4 h-4" />
-                  </button>
-                )}
-              </div>
+          {/* ── 2. Search & filter toolbar ────────────────────────────────
+              `ListToolbar` + `ListFilterPanel`, the same pair and the same
+              wrapper the Total Jobs tab uses, so every tab on the Assessments
+              page puts its search in the same place at the same size with the
+              same Reset and the same count badge beside it.
 
-              <button
-                type="button"
-                onClick={() => setFiltersOpen((o) => !o)}
-                aria-expanded={filtersOpen}
-                className={`h-9 px-3 inline-flex items-center justify-center gap-2 rounded-lg text-sm font-medium border transition-colors flex-shrink-0 ${
-                  activeFilterCount > 0
-                    ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/25'
-                    : filtersOpen
-                      ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/30'
-                      : 'bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 border-gray-200 dark:border-slate-700 hover:border-brand-blue/40 hover:text-brand-blue'
-                }`}
-              >
-                <SlidersHorizontal className="w-4 h-4" />
-                Filters
-                {activeFilterCount > 0 && (
-                  <span className="ml-0.5 min-w-[1.25rem] h-5 px-1 inline-flex items-center justify-center rounded-full bg-white/25 text-xs font-semibold">
-                    {activeFilterCount}
-                  </span>
-                )}
-              </button>
-            </div>
+              What stayed with this screen is what is about ITS data: which
+              controls the panel holds, and the draft-then-Apply rule they
+              commit under. The toolbar's own Reset is wired to `clearAll`, the
+              same handler the chips row and the panel's Clear All already
+              call, so there is one way to empty this list however it is
+              reached. */}
+          <ListToolbarPortal>
+            <ListToolbar
+              searchValue={search}
+              /* This screen debounces the query itself (`appliedSearch`, 300ms)
+                 before anything reads it, so the toolbar hands keystrokes
+                 straight through rather than debouncing a second time. Same
+                 arrangement as the Total Jobs tab. */
+              searchDebounceMs={0}
+              onSearchChange={searchAndReset}
+              searchPlaceholder="Search by assessment name, ID, job name or job ID..."
+              onToggleFilters={() => setFiltersOpen((o) => !o)}
+              filtersOpen={filtersOpen}
+              activeFilterCount={activeFilterCount}
+              /* APPLIED, not merely selected: the panel batches, so a picked
+                 filter that has not been applied yet is not narrowing anything
+                 and must not light the button up as though it were. */
+              filtersApplied={hasAnyFilter(filters)}
+              onClearFilters={clearAll}
+              className="mb-0"
+              countBadge={
+                <ListCountBadge filtered={sorted.length} total={rows.length} noun="assessment" />
+              }
+            />
 
             {/* The six filter controls. A panel rather than an always-open row:
                 six controls permanently above the table would push the rows —
                 the thing this screen is for — below the fold on a laptop. */}
             {filtersOpen && (
-              <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60">
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+              <ListFilterPanel
+                footer={
+                  <>
+                    <Button variant="secondary" size="sm" onClick={clearAll} icon={<X className="w-4 h-4" />}>
+                      Clear All
+                    </Button>
+                    <Button variant="primary" size="sm" onClick={applyFilters}>
+                      Apply Filters
+                    </Button>
+                  </>
+                }
+              >
+                <SearchableSelect
+                  label="Job"
+                  value={draftFilters.job}
+                  onChange={(v) => setDraftFilters((f) => ({ ...f, job: v }))}
+                  options={jobOptions}
+                  placeholder="All jobs"
+                  searchPlaceholder="Search job or ID..."
+                  allLabel="All jobs"
+                  emptyMessage="No jobs match"
+                />
+                <SearchableSelect
+                  label="Job Version"
+                  value={draftFilters.jobVersion}
+                  onChange={(v) => setDraftFilters((f) => ({ ...f, jobVersion: v }))}
+                  options={jobVersionOptions}
+                  placeholder="All versions"
+                  searchPlaceholder="Search version..."
+                  allLabel="All versions"
+                  emptyMessage="No versions match"
+                />
+                <SearchableSelect
+                  label="Assessment Version"
+                  value={draftFilters.assessmentVersion}
+                  onChange={(v) => setDraftFilters((f) => ({ ...f, assessmentVersion: v }))}
+                  options={assessmentVersionOptions}
+                  placeholder="All versions"
+                  searchPlaceholder="Search version..."
+                  allLabel="All versions"
+                  emptyMessage="No versions match"
+                />
+                {!fixedStatus && (
                   <SearchableSelect
-                    label="Job"
-                    value={draftFilters.job}
-                    onChange={(v) => setDraftFilters((f) => ({ ...f, job: v }))}
-                    options={jobOptions}
-                    placeholder="All jobs"
-                    searchPlaceholder="Search job or ID..."
-                    allLabel="All jobs"
-                    emptyMessage="No jobs match"
+                    label="Status"
+                    value={draftFilters.status}
+                    onChange={(v) => setDraftFilters((f) => ({ ...f, status: v }))}
+                    options={STATUS_OPTIONS}
+                    placeholder="All statuses"
+                    searchPlaceholder="Search status..."
+                    allLabel="All statuses"
+                    emptyMessage="No statuses match"
                   />
-                  <SearchableSelect
-                    label="Job Version"
-                    value={draftFilters.jobVersion}
-                    onChange={(v) => setDraftFilters((f) => ({ ...f, jobVersion: v }))}
-                    options={jobVersionOptions}
-                    placeholder="All versions"
-                    searchPlaceholder="Search version..."
-                    allLabel="All versions"
-                    emptyMessage="No versions match"
-                  />
-                  <SearchableSelect
-                    label="Assessment Version"
-                    value={draftFilters.assessmentVersion}
-                    onChange={(v) => setDraftFilters((f) => ({ ...f, assessmentVersion: v }))}
-                    options={assessmentVersionOptions}
-                    placeholder="All versions"
-                    searchPlaceholder="Search version..."
-                    allLabel="All versions"
-                    emptyMessage="No versions match"
-                  />
-                  {!fixedStatus && (
-                    <SearchableSelect
-                      label="Status"
-                      value={draftFilters.status}
-                      onChange={(v) => setDraftFilters((f) => ({ ...f, status: v }))}
-                      options={STATUS_OPTIONS}
-                      placeholder="All statuses"
-                      searchPlaceholder="Search status..."
-                      allLabel="All statuses"
-                      emptyMessage="No statuses match"
-                    />
-                  )}
+                )}
 
-                  {/* Created On — two native date inputs, the same control the
-                      Assessments dashboard's own Created from/to pair uses, so
-                      a date range is entered the same way across the product.
-                      Each bounds the other, which is what stops a range that
-                      can never match anything. */}
-                  <div className="sm:col-span-2">
-                    <label
-                      htmlFor="all-assessments-created-from"
-                      className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5"
-                    >
-                      Created On
-                    </label>
-                    <div className="flex items-center gap-2">
-                      <input
-                        id="all-assessments-created-from"
-                        type="date"
-                        aria-label="Created from"
-                        value={draftFilters.createdFrom}
-                        max={draftFilters.createdTo || undefined}
-                        onChange={(e) => setDraftFilters((f) => ({ ...f, createdFrom: e.target.value }))}
-                        className="flex-1 min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
-                      />
-                      <span className="text-xs text-gray-400 flex-shrink-0">to</span>
-                      <input
-                        type="date"
-                        aria-label="Created to"
-                        value={draftFilters.createdTo}
-                        min={draftFilters.createdFrom || undefined}
-                        onChange={(e) => setDraftFilters((f) => ({ ...f, createdTo: e.target.value }))}
-                        className="flex-1 min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
-                      />
-                    </div>
+                {/* Created On — two native date inputs, the same control the
+                    Assessments dashboard's own Created from/to pair uses, so
+                    a date range is entered the same way across the product.
+                    Each bounds the other, which is what stops a range that
+                    can never match anything. */}
+                <div className="sm:col-span-2">
+                  <label
+                    htmlFor="all-assessments-created-from"
+                    className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5"
+                  >
+                    Created On
+                  </label>
+                  <div className="flex items-center gap-2">
+                    <input
+                      id="all-assessments-created-from"
+                      type="date"
+                      aria-label="Created from"
+                      value={draftFilters.createdFrom}
+                      max={draftFilters.createdTo || undefined}
+                      onChange={(e) => setDraftFilters((f) => ({ ...f, createdFrom: e.target.value }))}
+                      className="flex-1 min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                    />
+                    <span className="text-xs text-gray-400 flex-shrink-0">to</span>
+                    <input
+                      type="date"
+                      aria-label="Created to"
+                      value={draftFilters.createdTo}
+                      min={draftFilters.createdFrom || undefined}
+                      onChange={(e) => setDraftFilters((f) => ({ ...f, createdTo: e.target.value }))}
+                      className="flex-1 min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                    />
                   </div>
                 </div>
-
-                <div className="flex items-center justify-end gap-2 mt-3">
-                  <Button variant="secondary" size="sm" onClick={clearAll} icon={<X className="w-4 h-4" />}>
-                    Clear All
-                  </Button>
-                  <Button variant="primary" size="sm" onClick={applyFilters}>
-                    Apply Filters
-                  </Button>
-                </div>
-              </div>
+              </ListFilterPanel>
             )}
-          </div>
 
-          {/* ── 3. Active filter chips ─────────────────────────────────────── */}
-          <FilterChips chips={chips} onClearAll={clearAll} className="mb-3" />
+            {/* ── 3. Active filter chips ─────────────────────────────────────
+                Inside the portal, with the row they summarise: the toolbar now
+                sits in the host page's slot, and chips left behind in the card
+                would be a list of applied filters nowhere near the control that
+                applied them. */}
+            <FilterChips chips={chips} onClearAll={clearAll} className="mt-3 mb-0" />
+          </ListToolbarPortal>
 
           {/* ── 4. The table ───────────────────────────────────────────────
               `tf-table-shell` is the house table shell: sticky header, its own
@@ -890,13 +925,29 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-4">
                           <ClipboardList className="w-7 h-7 text-brand-blue" />
                         </div>
+                        {/* The "nothing here yet" wording is the one place the
+                            pinned status shows through. Archived is the reason:
+                            the shared line, "Assessments you create will be
+                            listed here", is true of Draft and of All, and false
+                            of Archived — a new assessment lands in Draft, never
+                            in Archived, so on that tab it described something
+                            that cannot happen. Both archived strings are
+                            carried over verbatim from the empty state the
+                            Archived tab used before it moved into this table,
+                            so the tab reads exactly as it did. */}
                         <h3 className="text-base font-semibold text-gray-900 dark:text-slate-50 mb-1">
-                          {isNarrowed ? 'No assessments found' : 'No assessments yet'}
+                          {isNarrowed
+                            ? 'No assessments found'
+                            : fixedStatus === 'archived'
+                              ? 'No archived assessments found.'
+                              : 'No assessments yet'}
                         </h3>
                         <p className="text-sm text-gray-600 dark:text-slate-400 mb-4 max-w-md mx-auto">
                           {isNarrowed
                             ? 'No assessments match your current search or filter criteria.'
-                            : 'Assessments you create will be listed here.'}
+                            : fixedStatus === 'archived'
+                              ? 'Assessments you archive will appear here.'
+                              : 'Assessments you create will be listed here.'}
                         </p>
                         {isNarrowed && (
                           <Button variant="secondary" size="sm" onClick={clearAll} icon={<X className="w-4 h-4" />}>

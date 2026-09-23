@@ -586,7 +586,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
    * published JD reads back the same way it was configured.
    *
    * "Required" means Resume Scoring treats the criterion as Essential: it shares
-   * the 60% block, and a rating below 7 on it fails the whole Essential section.
+   * the 60% block, and a rating below 6 on it fails the whole Essential section.
    * "Preferred" criteria share the 40% block and never fail a candidate on their own.
    */
   const requirementLabel = requirementBadge;
@@ -4632,10 +4632,22 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           jobTitle={job.title}
           jobId={job.id}
           onClose={() => setShowSelectSourceModal(false)}
-          onScoringComplete={() => {
-            setShowSelectSourceModal(false);
+          onScoringFinished={() => {
+            // Run settled, popup still up: bring Scored Resumes in behind it.
             fetchScoredResumes();
             setActiveTab('scored-resumes');
+          }}
+          onScoringComplete={() => setShowSelectSourceModal(false)}
+          onViewResult={(item) => {
+            setShowSelectSourceModal(false);
+            const row = scoredResumes.find((r: any) => r.resumeId === item.resumeId || r.id === item.resumeId);
+            if (row) {
+              setViewingScoredResume(toCandidateDetail(row));
+            } else {
+              // Scored Resumes is still refreshing behind the popup; it is the
+              // tab already on screen, so the row is a moment away.
+              toast.info('Results are still loading — the candidate will appear in Scored Resumes in a moment.');
+            }
           }}
         />
       )}

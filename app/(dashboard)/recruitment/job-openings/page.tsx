@@ -7,7 +7,7 @@ import JDEditBlockedModal from '@/components/JDEditBlockedModal';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
 import DisableJobModal from '@/components/DisableJobModal';
 import { Job } from '@/lib/types/types';
-import { jdService } from '@/lib/services/jdService';
+import { jdService, JDListResponse } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useRouter, useSearchParams } from 'next/navigation';
@@ -104,6 +104,17 @@ function JobOpeningsSkeleton() {
 export default function JobOpeningsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [loading, setLoading] = useState(true);
+  // Total/Published/Draft/Archived, precomputed server-side (page 1 of the same
+  // `/jd` call) so the stat cards can show the right number immediately. `jobs`
+  // itself still fills in two steps below (page 1, then the rest in parallel) —
+  // without this, the cards read page 1's partial tally first and then jump to
+  // the correct one once every page has landed. `jobsFullyLoaded` marks the
+  // point where `jobs` itself is complete and can take over as the live source
+  // (so a publish/archive/delete action keeps updating the cards instantly,
+  // the way it did before this existed) — the handover is silent because by
+  // then the two sources agree.
+  const [statusCounts, setStatusCounts] = useState<JDListResponse['status_counts']>(null);
+  const [jobsFullyLoaded, setJobsFullyLoaded] = useState(false);
   const [quotaInfo, setQuotaInfo] = useState<{ remaining: number; limit: number; used: number } | undefined>();
   const [activeFilter, setActiveFilter] = useState<FilterStatus>('all');
   /* The modules holding the JD, not pre-formatted strings: the dialog draws
@@ -226,6 +237,7 @@ export default function JobOpeningsPage() {
 
   const fetchJobs = async () => {
     setLoading(true);
+    setJobsFullyLoaded(false);
     // Pull "my JDs" in smaller pages. The previous page_size=total request
     // produced oversized responses and browser transport failures upstream.
     let firstPage;
@@ -244,6 +256,8 @@ export default function JobOpeningsPage() {
          `?? []` guards a backend response without an `items` array — otherwise
          `.map` would throw and (crucially) leave the page stuck on the skeleton. */
       setJobs((firstPage.items ?? []).map(mapJDToJob));
+      // Precomputed on this same call — see fetchJobs' jobsFullyLoaded comment.
+      setStatusCounts(firstPage.status_counts ?? null);
     } catch (error) {
       // First-page failure (or a bad shape) is a real load failure — surface it.
       // The `finally` below still clears the skeleton so the page never hangs.
@@ -264,7 +278,10 @@ export default function JobOpeningsPage() {
       firstPage.total_pages || Math.ceil(firstPage.total / JD_BATCH_SIZE),
       1
     );
-    if (totalPages <= 1) return;
+    if (totalPages <= 1) {
+      setJobsFullyLoaded(true);
+      return;
+    }
 
     const restPages = Array.from({ length: totalPages - 1 }, (_, i) => i + 2);
     const results = await Promise.allSettled(
@@ -278,6 +295,9 @@ export default function JobOpeningsPage() {
     if (restJobs.length) {
       setJobs((prev) => [...prev, ...restJobs]);
     }
+    // `jobs` now has every page (or every page that didn't fail) — the stat
+    // cards can safely switch from `statusCounts` to their own live tally.
+    setJobsFullyLoaded(true);
   };
 
   const mapStatus = (status: string): 'Published' | 'Draft' | 'Closed' | 'Archived' | 'Disabled' => {
@@ -303,10 +323,20 @@ export default function JobOpeningsPage() {
   };
 
   const handleViewJob = (job: Job) => {
-    // Draft JDs go directly to jd-creation with current stage
+    // Draft JDs go directly to jd-creation. No `&stage=` here — `job.creation_stage`
+    // is whatever this LIST last fetched, which goes stale the moment the recruiter
+    // advances the draft's stage in a jd-creation tab/session without this page
+    // re-fetching (its own effect only re-runs on `user?.id` changing, not on every
+    // return visit). jd-creation always does its own fresh `jdService.get(id)` on
+    // load and resumes at THAT record's `creation_stage` when the URL carries none —
+    // see `memoizedEditingJD` in jd-creation/page.tsx, and the confirmed mechanic in
+    // JDCreation.tsx's own comments: "a JD opened with ?stage=create in the link
+    // lands on Step 1" regardless of what extraction the record actually has. Passing
+    // a stale stage here reopened an already-extracted draft back on Step 1, with the
+    // entered data invisible (not lost — just on a step this URL insisted on showing
+    // instead of the one the record was on).
     if (job.status === 'Draft') {
-      const stage = (job as any).creation_stage || 'create';
-      router.push(`/recruitment/jd-creation?id=${job.id}&stage=${stage}`);
+      router.push(`/recruitment/jd-creation?id=${job.id}`);
     } else {
       router.push(`/recruitment/job-details?id=${job.id}`);
     }
@@ -343,10 +373,11 @@ export default function JobOpeningsPage() {
   };
 
   const handleEditJob = async (job: Job) => {
-    // For Draft JDs, open at the stage where they left off
+    // For Draft JDs, open at the stage where they left off. No `&stage=` — see
+    // the same note on handleViewJob above; this list's `job.creation_stage`
+    // can be stale, and jd-creation's own fresh fetch is the source of truth.
     if (job.status === 'Draft') {
-      const stage = job.creation_stage || 'create';
-      router.push(`/recruitment/jd-creation?id=${job.id}&stage=${stage}`);
+      router.push(`/recruitment/jd-creation?id=${job.id}`);
       return;
     }
 
@@ -616,6 +647,8 @@ export default function JobOpeningsPage() {
     <div ref={rootRef} className="relative flex-1 flex flex-col overflow-x-clip bg-slate-50">
       <JobsListing
         jobs={jobs}
+        statusCounts={statusCounts}
+        jobsFullyLoaded={jobsFullyLoaded}
         onCreateNew={hasPermission('canCreateJD') || isTenantAdmin ? handleCreateNew : undefined}
         onViewJob={handleViewJob}
         onViewApplicants={handleViewApplicants}

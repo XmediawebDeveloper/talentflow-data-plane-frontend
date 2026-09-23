@@ -163,12 +163,12 @@ type TimelineEntry = { label: string; at: string; Icon: LucideIcon; tone: string
  *  silently collapsed a row's history down to just its latest state. The
  *  fallback inside buildFullTimeline still covers rows from before this
  *  field existed. */
-/** Compact view caps at the 4 most recent events (still oldest-first among
- *  themselves) — older ones drop off the table cell but stay reachable via
+/** Compact view caps at the 4 most recent events (newest first, matching the
+ *  full history) — older ones drop off the table cell but stay reachable via
  *  "View full history", which reads the uncapped trail separately. */
 const COMPACT_TIMELINE_LIMIT = 4;
 const timelineEvents = (inv: any): TimelineEntry[] =>
-  buildFullTimeline(inv, inv.timeline || []).slice(-COMPACT_TIMELINE_LIMIT);
+  buildFullTimeline(inv, inv.timeline || []).slice(0, COMPACT_TIMELINE_LIMIT);
 
 /** "View full history" only earns its place once something is actually
  *  hidden by the cap above — at 4 events or fewer the compact list already
@@ -227,13 +227,31 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
  *  a real Expired row...) sits in between, the gap isn't an expiry.
  *  Real audit rows never reach this: it only fills a hole they left. */
 const INFERENCE_SAFE_LABELS = new Set(['System Check', 'Email Read']);
+/** See the identical comment in AssessmentInviteActions.tsx: only the
+ *  Invite-Failed-before-Invited pair is a known backwards write; every other
+ *  pair (Edited -> its resend's Invited, Revoked -> a later Edited, etc.) is
+ *  already written in true chronological order, so this is intentionally
+ *  narrow rather than a generic rank table. */
+const ORDER_TIE_WINDOW_MS = 10 * 1000;
+const compareTimelineEntries = (a: TimelineEntry, b: TimelineEntry): number => {
+  const ta = new Date(a.at).getTime();
+  const tb = new Date(b.at).getTime();
+  if (Math.abs(ta - tb) <= ORDER_TIE_WINDOW_MS) {
+    const aFailed = a.label === 'Invite Failed';
+    const bFailed = b.label === 'Invite Failed';
+    if (aFailed && b.label === 'Invited') return 1;
+    if (bFailed && a.label === 'Invited') return -1;
+  }
+  return ta - tb;
+};
+
 const inferMissingExpiries = (
   events: TimelineEntry[],
   spanMs: number,
   expiredAction: string
 ): TimelineEntry[] => {
   if (!(spanMs > 0)) return events;
-  const sorted = [...events].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  const sorted = [...events].sort(compareTimelineEntries);
   const inferred: TimelineEntry[] = [];
   for (let i = 0; i < sorted.length; i++) {
     if (sorted[i].label !== 'Invited') continue;
@@ -342,9 +360,12 @@ const buildFullTimeline = (
   }
 
   const merged = inferMissingExpiries(out, inv.expires_at && inv.invitation_sent_at ? new Date(inv.expires_at).getTime() - new Date(inv.invitation_sent_at).getTime() : 0, 'ai_interview_invite_expired').sort(
-    (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
+    compareTimelineEntries
   );
-  return collapseRepeatedExpiries(merged);
+  // Every derivation above (inference, dedup, collapse) assumes ascending
+  // input, so the reverse — most recent event first — happens only here, on
+  // the way out.
+  return collapseRepeatedExpiries(merged).reverse();
 };
 
 /** Badge wording and colours kept in one place so a recruiter reads the same
@@ -440,6 +461,13 @@ export interface AIInterviewInviteTableProps {
   /** Extra line under the empty state when nothing is filtered. */
   emptyHint?: string;
 
+  /**
+   * Adds a "Job / Interview" column (desktop) / line (mobile) reading each
+   * row's `_config_title` (and `_jd_short_id` badge, when present) — for a
+   * list that spans every interview rather than one config's own tracker.
+   */
+  showJobColumn?: boolean;
+
   /** Bulk selection. Omit both to render no checkbox column at all. */
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
@@ -464,6 +492,7 @@ export default function AIInterviewInviteTable({
   isLoading,
   hasActiveFilters,
   emptyHint,
+  showJobColumn = false,
   selectedIds,
   onToggleSelect,
   isSelectable,
@@ -659,6 +688,12 @@ export default function AIInterviewInviteTable({
                       {inv.candidate_cid}
                     </p>
                   )}
+                  {showJobColumn && inv._config_title && (
+                    <p className="text-2xs text-gray-500 dark:text-slate-500 truncate">
+                      {inv._jd_short_id && <span className="font-medium text-gray-600 dark:text-slate-400">{inv._jd_short_id} · </span>}
+                      {inv._config_title}
+                    </p>
+                  )}
                 </div>
                 <AIInviteStatusBadge inv={inv} />
               </div>
@@ -748,6 +783,9 @@ export default function AIInterviewInviteTable({
               {selectable && <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left" aria-label="Select" />}
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">CID</th>
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Candidate</th>
+              {showJobColumn && (
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Job / Interview</th>
+              )}
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Status</th>
               <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Score</th>
               {/* hidden md:table-cell mirrors this column's <td> — without it the
@@ -805,6 +843,17 @@ export default function AIInterviewInviteTable({
                       </div>
                     </div>
                   </td>
+
+                  {showJobColumn && (
+                    <td className="py-3 px-4 align-middle max-w-[200px]">
+                      <p className="text-sm text-gray-700 dark:text-slate-300 truncate" title={inv._config_title || ''}>
+                        {inv._config_title || <span className="text-gray-400 dark:text-slate-500">—</span>}
+                      </p>
+                      {inv._jd_short_id && (
+                        <p className="text-xs text-gray-400 dark:text-slate-500 truncate">{inv._jd_short_id}</p>
+                      )}
+                    </td>
+                  )}
 
                   <td className="py-3 px-4 align-middle whitespace-nowrap">
                     <div className="flex items-center gap-1.5 flex-nowrap">

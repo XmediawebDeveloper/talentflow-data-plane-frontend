@@ -144,6 +144,8 @@ const describeTimelineAction = (action: string): { label: string; Icon: LucideIc
       return { label: 'Completed', Icon: CheckCircle, tone: 'text-success' };
     case 'assessment_invitation_expired':
       return { label: 'Expired at', Icon: Clock, tone: 'text-brand-orange-deep' };
+    case 'assessment_invite_failed':
+      return { label: 'Invite Failed', Icon: X, tone: 'text-red-600' };
     default:
       return { label: action.replace(/_/g, ' '), Icon: Clock, tone: 'text-gray-500' };
   }
@@ -178,7 +180,7 @@ const inferMissingExpiries = (
   expiredAction: string
 ): TimelineEntry[] => {
   if (!(spanMs > 0)) return events;
-  const sorted = [...events].sort((a, b) => new Date(a.at).getTime() - new Date(b.at).getTime());
+  const sorted = [...events].sort(compareTimelineEntries);
   const inferred: TimelineEntry[] = [];
   for (let i = 0; i < sorted.length; i++) {
     if (sorted[i].label !== 'Invited') continue;
@@ -216,6 +218,33 @@ const collapseRepeatedExpiries = (sorted: TimelineEntry[]): TimelineEntry[] => {
 };
 
 const FALLBACK_MATCH_WINDOW_MS = 2 * 60 * 1000;
+
+/** Chronological order isn't quite the same as raw timestamp order in ONE
+ *  known case: "Invite Failed" is written by the service layer before
+ *  "Invited" is written by the router further up the call stack for the
+ *  same send attempt, so a millisecond-accurate sort can show "Invite
+ *  Failed" a beat before the "Invited" it belongs to. Every other pair of
+ *  events (Edited -> its own resend's Invited, Revoked -> a later Edited,
+ *  etc.) is written in true chronological order by the backend already, so
+ *  a generic rank table here would do more harm than good — e.g. ranking
+ *  Edited ahead of Invited to fix nothing would instead flip the very
+ *  common "Edited" -> "Invited" (Save & Send) pair, which is always
+ *  genuinely written in that order and just seconds apart. Handle only the
+ *  one documented backwards case, and trust real timestamps everywhere
+ *  else. */
+const ORDER_TIE_WINDOW_MS = 10 * 1000;
+const compareTimelineEntries = (a: TimelineEntry, b: TimelineEntry): number => {
+  const ta = new Date(a.at).getTime();
+  const tb = new Date(b.at).getTime();
+  if (Math.abs(ta - tb) <= ORDER_TIE_WINDOW_MS) {
+    const aFailed = a.label === 'Invite Failed';
+    const bFailed = b.label === 'Invite Failed';
+    if (aFailed && b.label === 'Invited') return 1;
+    if (bFailed && a.label === 'Invited') return -1;
+  }
+  return ta - tb;
+};
+
 const buildFullTimeline = (
   inv: any,
   auditLogs: Array<{ action: string; created_at: string | null }>
@@ -288,18 +317,21 @@ const buildFullTimeline = (
   if (inv.opened_at) out.push({ label: 'System Check', at: inv.opened_at, Icon: Monitor, tone: 'text-brand-cyan' });
 
   const merged = inferMissingExpiries(out, inv.expires_at && inv.sent_at ? new Date(inv.expires_at).getTime() - new Date(inv.sent_at).getTime() : 0, 'assessment_invitation_expired').sort(
-    (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime()
+    compareTimelineEntries
   );
-  return collapseRepeatedExpiries(merged);
+  // Every derivation above (inference, dedup, collapse) assumes ascending
+  // input, so the reverse — most recent event first — happens only here, on
+  // the way out.
+  return collapseRepeatedExpiries(merged).reverse();
 };
 
 /** Compact per-row timeline preview — capped at the 4 most recent events
- *  (still oldest-first among themselves); older ones drop off the cell but
- *  stay reachable via "View full history", which reads the uncapped trail
- *  separately. */
+ *  (newest first, matching the full history); older ones drop off the cell
+ *  but stay reachable via "View full history", which reads the uncapped
+ *  trail separately. */
 const COMPACT_TIMELINE_LIMIT = 4;
 export const timelineEvents = (inv: any): TimelineEntry[] =>
-  buildFullTimeline(inv, inv.timeline || []).slice(-COMPACT_TIMELINE_LIMIT);
+  buildFullTimeline(inv, inv.timeline || []).slice(0, COMPACT_TIMELINE_LIMIT);
 
 /** "View full history" only earns its place once something is actually
  *  hidden by the cap above — at 4 events or fewer the compact list already
@@ -649,6 +681,8 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
           logs
             .filter((log) => !!log.created_at)
             .map((log) => ({ ...describeTimelineAction(log.action), at: log.created_at as string }))
+            .sort(compareTimelineEntries)
+            .reverse()
         );
       })
       .catch((err: any) => setError(err?.message || 'Failed to load history'))

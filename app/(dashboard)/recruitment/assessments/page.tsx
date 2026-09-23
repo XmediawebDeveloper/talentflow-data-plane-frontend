@@ -24,12 +24,17 @@ export default function AssessmentsRoute() {
   /* Which cut of the list to open on, for arrivals that already know: "Go to
      Assessments" off the Publish step sends `?tab=all` so the recruiter lands
      on All Assessments beside what they just published, rather than on the
-     summary cards with the list a click away.
+     summary cards with the list a click away. A Save-as-Draft exit sends
+     `?tab=draft` instead, because All Assessments collapses a new draft out of
+     sight whenever the same job already has a non-draft assessment — see the
+     note on `handleCreateAssessment` in assessments/create/page.tsx.
 
-     Compared against the one value that has a caller rather than mapped from
-     the URL wholesale — this is a URL turning into page state, so it accepts
-     what it is documented to accept and ignores everything else. */
-  const listTabFromUrl = searchParams.get('tab') === 'all' ? 'all' as const : undefined;
+     Compared against the values that have callers rather than mapped from the
+     URL wholesale — this is a URL turning into page state, so it accepts what
+     it is documented to accept and ignores everything else. */
+  const tabParam = searchParams.get('tab');
+  const listTabFromUrl =
+    tabParam === 'all' ? ('all' as const) : tabParam === 'draft' ? ('draft' as const) : undefined;
 
   // Capture create-flow params on first mount so they survive the URL strip
   // below. Without this, the loading spinner blocks <Assessments> from mounting
