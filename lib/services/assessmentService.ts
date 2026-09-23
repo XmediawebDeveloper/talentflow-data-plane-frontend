@@ -822,9 +822,11 @@ export const assessmentService = {
   /**
    * 1. Get assessment stats for dashboard
    */
-  async getStats(): Promise<AssessmentStatsResponse> {
+  async getStats(options?: { timeout?: number }): Promise<AssessmentStatsResponse> {
     try {
-      const response = await api.get<AssessmentStatsResponse>('/assessments/stats');
+      const response = await api.get<AssessmentStatsResponse>('/assessments/stats', {
+        timeout: options?.timeout,
+      });
       return response.data;
     } catch (error) {
       throw new Error(handleApiError(error));

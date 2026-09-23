@@ -219,37 +219,28 @@ const collapseRepeatedExpiries = (sorted: TimelineEntry[]): TimelineEntry[] => {
 
 const FALLBACK_MATCH_WINDOW_MS = 2 * 60 * 1000;
 
-/** Chronological order isn't quite the same as raw timestamp order: the
- *  backend can log two events for the same click a beat apart (e.g. the
- *  invitation row is written, THEN the send is attempted and, on failure,
- *  logged — but "Invited" itself is written by a caller further up the
- *  stack, after that), so a millisecond-accurate sort can show "Invite
- *  Failed" a second before the "Invited" it belongs to. Within a small
- *  window, break ties by lifecycle order instead of raw clock time; genuinely
- *  separate events (seconds apart is normal for a deliberate recruiter
- *  action, this window is for near-simultaneous logging only) still sort by
- *  their real timestamps. */
-const EVENT_ORDER_RANK: Record<string, number> = {
-  Invited: 0,
-  Edited: 1,
-  'Email Changed': 1,
-  'System Check': 2,
-  'Email Read': 2,
-  Started: 3,
-  Completed: 4,
-  Revoked: 5,
-  Terminated: 5,
-  'Expired at': 5,
-  'Invite Failed': 6,
-};
+/** Chronological order isn't quite the same as raw timestamp order in ONE
+ *  known case: "Invite Failed" is written by the service layer before
+ *  "Invited" is written by the router further up the call stack for the
+ *  same send attempt, so a millisecond-accurate sort can show "Invite
+ *  Failed" a beat before the "Invited" it belongs to. Every other pair of
+ *  events (Edited -> its own resend's Invited, Revoked -> a later Edited,
+ *  etc.) is written in true chronological order by the backend already, so
+ *  a generic rank table here would do more harm than good — e.g. ranking
+ *  Edited ahead of Invited to fix nothing would instead flip the very
+ *  common "Edited" -> "Invited" (Save & Send) pair, which is always
+ *  genuinely written in that order and just seconds apart. Handle only the
+ *  one documented backwards case, and trust real timestamps everywhere
+ *  else. */
 const ORDER_TIE_WINDOW_MS = 10 * 1000;
 const compareTimelineEntries = (a: TimelineEntry, b: TimelineEntry): number => {
   const ta = new Date(a.at).getTime();
   const tb = new Date(b.at).getTime();
   if (Math.abs(ta - tb) <= ORDER_TIE_WINDOW_MS) {
-    const ra = EVENT_ORDER_RANK[a.label] ?? 99;
-    const rb = EVENT_ORDER_RANK[b.label] ?? 99;
-    if (ra !== rb) return ra - rb;
+    const aFailed = a.label === 'Invite Failed';
+    const bFailed = b.label === 'Invite Failed';
+    if (aFailed && b.label === 'Invited') return 1;
+    if (bFailed && a.label === 'Invited') return -1;
   }
   return ta - tb;
 };
@@ -328,16 +319,19 @@ const buildFullTimeline = (
   const merged = inferMissingExpiries(out, inv.expires_at && inv.sent_at ? new Date(inv.expires_at).getTime() - new Date(inv.sent_at).getTime() : 0, 'assessment_invitation_expired').sort(
     compareTimelineEntries
   );
-  return collapseRepeatedExpiries(merged);
+  // Every derivation above (inference, dedup, collapse) assumes ascending
+  // input, so the reverse — most recent event first — happens only here, on
+  // the way out.
+  return collapseRepeatedExpiries(merged).reverse();
 };
 
 /** Compact per-row timeline preview — capped at the 4 most recent events
- *  (still oldest-first among themselves); older ones drop off the cell but
- *  stay reachable via "View full history", which reads the uncapped trail
- *  separately. */
+ *  (newest first, matching the full history); older ones drop off the cell
+ *  but stay reachable via "View full history", which reads the uncapped
+ *  trail separately. */
 const COMPACT_TIMELINE_LIMIT = 4;
 export const timelineEvents = (inv: any): TimelineEntry[] =>
-  buildFullTimeline(inv, inv.timeline || []).slice(-COMPACT_TIMELINE_LIMIT);
+  buildFullTimeline(inv, inv.timeline || []).slice(0, COMPACT_TIMELINE_LIMIT);
 
 /** "View full history" only earns its place once something is actually
  *  hidden by the cap above — at 4 events or fewer the compact list already
@@ -687,6 +681,8 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
           logs
             .filter((log) => !!log.created_at)
             .map((log) => ({ ...describeTimelineAction(log.action), at: log.created_at as string }))
+            .sort(compareTimelineEntries)
+            .reverse()
         );
       })
       .catch((err: any) => setError(err?.message || 'Failed to load history'))

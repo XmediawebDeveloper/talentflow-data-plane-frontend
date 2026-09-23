@@ -101,6 +101,11 @@ export interface AIMatchSessionListResponse {
   // can render immediately from this same list call.
   top_rating_exact_count?: number;
   top_rating_partial_count?: number;
+  // Tenant-wide distinct-candidate count across every job's latest match
+  // session, precomputed server-side so "Match by Candidate" can render
+  // immediately from this same list call instead of fetching every job's
+  // session and de-duplicating the rows in the browser.
+  total_matched_candidates?: number;
 }
 
 // Frontend-friendly candidate format (for UI components)

@@ -160,6 +160,13 @@ export default function AITalentMatchRoute() {
   // stat cards render immediately instead of waiting on every session's
   // full candidate detail to be fetched and bucket-counted client-side.
   const [ratingBandCounts, setRatingBandCounts] = useState<{ exact: number; partial: number } | null>(null);
+  // "Match by Candidate": tenant-wide distinct-candidate count across every
+  // job's latest match session, precomputed server-side in the same call so
+  // the stat card renders immediately instead of fetching every job's
+  // session and de-duplicating the rows in the browser (see
+  // AITalentMatchPage's buildCandidateRows, which still builds the full
+  // roll-up table lazily when the tab is actually opened).
+  const [totalMatchedCandidatesCount, setTotalMatchedCandidatesCount] = useState<number | null>(null);
   // Every session from the same call, kept raw (not collapsed to one-per-job
   // like `matchHistory`) so "View Versions" can build its table straight from
   // memory instead of re-fetching per job version — see
@@ -240,6 +247,7 @@ export default function AITalentMatchRoute() {
           exact: historyResponse.top_rating_exact_count ?? 0,
           partial: historyResponse.top_rating_partial_count ?? 0,
         });
+        setTotalMatchedCandidatesCount(historyResponse.total_matched_candidates ?? 0);
         setAllMatchSessions(historyResponse.items || []);
 
         // Keep route load summary-only.
@@ -273,6 +281,7 @@ export default function AITalentMatchRoute() {
           setMatchHistory([]);
           setMatchSessionCounts({});
           setRatingBandCounts(null);
+          setTotalMatchedCandidatesCount(null);
           setAllMatchSessions([]);
         }
       } finally {
@@ -340,6 +349,7 @@ export default function AITalentMatchRoute() {
           matchHistory={matchHistory}
           matchSessionCounts={matchSessionCounts}
           ratingBandCounts={ratingBandCounts}
+          totalMatchedCandidatesCount={totalMatchedCandidatesCount}
           allMatchSessions={allMatchSessions}
           onSaveMatch={handleSaveMatch}
           onMatchComplete={() => fetchData({ silent: true })}

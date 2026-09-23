@@ -493,6 +493,14 @@ export default function UserManagement() {
   const canForcePwChange = _isTenantAdmin || !!_perms.can_force_password_change || !!_perms.canForcePasswordChange;
   const canAssignRole = _isTenantAdmin || !!_perms.can_assign_roles || !!_perms.canAssignRoles;
   const [users, setUsers] = useState<ApiUser[]>([]);
+  // Tenant-wide active/inactive counts from a dedicated fast COUNT query
+  // (GET /users/count), used by the Active/Inactive stat cards below instead
+  // of `users.filter(...)` — `users` only ever holds the current page of
+  // `GET /users` (default page_size=20), so filtering it undercounts any
+  // tenant with more users than one page. `null` until that call resolves,
+  // during which the cards fall back to the old (possibly-undercounted but
+  // available) client tally rather than showing nothing.
+  const [userCounts, setUserCounts] = useState<{ active_users: number; inactive_users: number; total_users: number } | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   // Drill-in pattern: cards-first overview, switch to list+search when a stat
@@ -666,13 +674,28 @@ export default function UserManagement() {
   }, [router]);
 
   // Load users, roles, and permissions
-  // Auto-sync with Admin API first to ensure accurate counts
   useEffect(() => {
     if (hasFetched.current) return;
     hasFetched.current = true;
 
-    const initializeUsers = async () => {
-      // Auto-sync with Admin API first to reconcile any count mismatches
+    // These don't depend on the Admin API sync below in any way — each
+    // fetches straight from this tenant's own DB — so they fire immediately
+    // instead of waiting on it. They're what the Users/Active/Inactive count
+    // cards actually read; the sync result itself is never rendered anywhere.
+    loadUsers();
+    loadRoles();
+    loadAllPermissions();
+    userService.getUserCounts().then(setUserCounts).catch((error) => {
+      console.warn('Failed to load user counts:', error);
+    });
+
+    // Reconciles this tenant's user count against the external Admin API
+    // (two possible remote round trips, each up to 10s) and only ever
+    // produces a toast warning on a plan-limit mismatch — it used to be
+    // awaited BEFORE the three loads above even started, so the count cards
+    // sat on a blank/loading state for as long as that remote call took, for
+    // a side effect they don't display. Run concurrently instead.
+    const syncWithAdminApi = async () => {
       try {
         const syncResult = await userService.syncUsers();
         if (syncResult.synced) {
@@ -686,17 +709,10 @@ export default function UserManagement() {
         }
       } catch (error) {
         console.warn('Failed to sync users with Admin API:', error);
-        // Continue loading users even if sync fails
       }
-
-
-      // Then load users and related data
-      loadUsers();
-      loadRoles();
-      loadAllPermissions();
     };
 
-    initializeUsers();
+    syncWithAdminApi();
   }, []);
 
   // Component lifecycle tracking
@@ -2106,7 +2122,7 @@ export default function UserManagement() {
               <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Total Users</p>
               <div className="flex items-baseline gap-1 mt-1">
                 <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-slate-50">
-                  {limits?.current_users ?? users.length}
+                  {limits?.current_users ?? userCounts?.total_users ?? users.length}
                 </p>
                 <span className="text-sm text-gray-400 dark:text-slate-500">
                   / {limits?.max_users === -1 ? '∞' : (limits?.max_users ?? '—')}
@@ -2188,7 +2204,7 @@ export default function UserManagement() {
             <div className="pr-24">
               <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Active Users</p>
               <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1">
-                {users.filter(u => u.is_active).length}
+                {userCounts ? userCounts.active_users : users.filter(u => u.is_active).length}
               </p>
             </div>
             <div className="absolute right-3 top-3 flex items-center gap-2 sm:right-4 sm:top-4">
@@ -2221,7 +2237,7 @@ export default function UserManagement() {
             <div className="pr-24">
               <p className="text-xs sm:text-sm font-medium text-gray-500 dark:text-slate-500">Inactive Users</p>
               <p className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-slate-50 mt-1">
-                {users.filter(u => !u.is_active).length}
+                {userCounts ? userCounts.inactive_users : users.filter(u => !u.is_active).length}
               </p>
             </div>
             <div className="absolute right-3 top-3 flex items-center gap-2 sm:right-4 sm:top-4">

@@ -304,6 +304,21 @@ export const userService = {
   },
 
   /**
+   * Tenant-wide active/inactive/total user counts, one fast COUNT query —
+   * accurate regardless of how many users the tenant has, unlike deriving
+   * these from `listUsers()`'s response, which defaults to (and never
+   * exceeds) `page_size=100` and would silently undercount past that.
+   */
+  async getUserCounts(): Promise<{ active_users: number; inactive_users: number; total_users: number }> {
+    try {
+      const response = await api.get<{ active_users: number; inactive_users: number; total_users: number }>('/users/count');
+      return response.data;
+    } catch (error) {
+      throw new Error(handleApiError(error));
+    }
+  },
+
+  /**
    * List all users in the tenant
    */
   async listUsers(params?: {

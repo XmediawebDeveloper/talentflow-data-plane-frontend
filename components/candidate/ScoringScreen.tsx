@@ -41,7 +41,7 @@ export function ScoringScreen() {
   const progressPercent = Math.min(95, (waitTime / 120) * 100);
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-[100dvh] bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full">
         {/* Success Header */}
         <div className="text-center mb-8">
@@ -57,7 +57,7 @@ export function ScoringScreen() {
         </div>
 
         {/* Timer Display */}
-        <div className="bg-gradient-to-r from-purple-600 to-indigo-600 rounded-2xl p-6 mb-6 text-white">
+        <div className="bg-brand-blue rounded-2xl p-4 sm:p-6 mb-6 text-white">
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <BarChart3 className="w-5 h-5" />
@@ -85,7 +85,7 @@ export function ScoringScreen() {
               style={{ width: `${progressPercent}%` }}
             />
           </div>
-          <div className="flex justify-between text-xs mt-2 text-purple-200">
+          <div className="flex justify-between text-xs mt-2 text-white/70">
             <span>Processing</span>
             <span>{Math.round(progressPercent)}%</span>
           </div>
@@ -99,20 +99,20 @@ export function ScoringScreen() {
             </div>
             <span className="text-sm">Responses received</span>
           </div>
-          <div className={`flex items-center gap-3 ${waitTime >= 15 ? 'text-success' : waitTime >= 0 ? 'text-blue-600' : 'text-gray-400'}`}>
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center ${waitTime >= 30 ? 'bg-success-subtle' : waitTime >= 15 ? 'bg-blue-100' : 'bg-gray-100'}`}>
+          <div className={`flex items-center gap-3 ${waitTime >= 15 ? 'text-success' : waitTime >= 0 ? 'text-brand-blue' : 'text-gray-400'}`}>
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center ${waitTime >= 30 ? 'bg-success-subtle' : waitTime >= 15 ? 'bg-brand-blue/10' : 'bg-gray-100'}`}>
               {waitTime >= 30 ? <CheckCircle className="w-4 h-4" /> : waitTime >= 15 ? <Loader2 className="w-4 h-4 animate-spin" /> : <div className="w-2 h-2 bg-gray-300 rounded-full" />}
             </div>
             <span className="text-sm">Analyzing responses</span>
           </div>
-          <div className={`flex items-center gap-3 ${waitTime >= 60 ? 'text-success' : waitTime >= 30 ? 'text-blue-600' : 'text-gray-400'}`}>
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center ${waitTime >= 90 ? 'bg-success-subtle' : waitTime >= 60 ? 'bg-blue-100' : 'bg-gray-100'}`}>
+          <div className={`flex items-center gap-3 ${waitTime >= 60 ? 'text-success' : waitTime >= 30 ? 'text-brand-blue' : 'text-gray-400'}`}>
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center ${waitTime >= 90 ? 'bg-success-subtle' : waitTime >= 60 ? 'bg-brand-blue/10' : 'bg-gray-100'}`}>
               {waitTime >= 90 ? <CheckCircle className="w-4 h-4" /> : waitTime >= 60 ? <Loader2 className="w-4 h-4 animate-spin" /> : <div className="w-2 h-2 bg-gray-300 rounded-full" />}
             </div>
             <span className="text-sm">Generating feedback & scores</span>
           </div>
-          <div className={`flex items-center gap-3 ${waitTime >= 90 ? 'text-blue-600' : 'text-gray-400'}`}>
-            <div className={`w-6 h-6 rounded-full flex items-center justify-center ${waitTime >= 90 ? 'bg-blue-100' : 'bg-gray-100'}`}>
+          <div className={`flex items-center gap-3 ${waitTime >= 90 ? 'text-brand-blue' : 'text-gray-400'}`}>
+            <div className={`w-6 h-6 rounded-full flex items-center justify-center ${waitTime >= 90 ? 'bg-brand-blue/10' : 'bg-gray-100'}`}>
               {waitTime >= 90 ? <Loader2 className="w-4 h-4 animate-spin" /> : <div className="w-2 h-2 bg-gray-300 rounded-full" />}
             </div>
             <span className="text-sm">Preparing results</span>
@@ -128,8 +128,8 @@ export function ScoringScreen() {
 
         {/* Warning for extended wait */}
         {waitTime > 180 && (
-          <div className="mt-4 bg-blue-50 border border-blue-200 rounded-xl p-4">
-            <p className="text-sm text-blue-800">
+          <div className="mt-4 rounded-xl border border-brand-blue/20 bg-brand-blue/5 p-4">
+            <p className="text-sm text-gray-700">
               <strong>Taking longer than usual:</strong> Don't worry, your assessment is being processed. Please don't close this page. Results will appear automatically.
             </p>
           </div>
