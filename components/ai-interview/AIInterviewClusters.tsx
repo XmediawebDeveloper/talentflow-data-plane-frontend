@@ -2369,6 +2369,8 @@ export default function AIInterviewClusters() {
           const _updated = await aiInterviewService.update(id, {
             special_instructions: JSON.stringify(si),
             rounds_config: rounds,
+            // Skills were already deduped on gpt-4o by /generate-clusters.
+            semantic_skill_check: false,
           });
           // Adopt the BACKEND-CORRECTED special_instructions from the update
           // response. The server-side over-allocation backstop expands a bucket
@@ -2697,6 +2699,7 @@ export default function AIInterviewClusters() {
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
         rounds_config: buildUpdatedRoundsConfig(),
+        semantic_skill_check: false,
       });
       router.push(target);
     } catch {
@@ -2807,6 +2810,7 @@ export default function AIInterviewClusters() {
       await aiInterviewService.update(id, {
         special_instructions: JSON.stringify(si),
         rounds_config: buildUpdatedRoundsConfig(),
+        semantic_skill_check: false,
         // Audit-log hint: this IS the recruiter explicitly saving and leaving
         // (as opposed to the silent saves elsewhere on this page), so the
         // trail should show "Saved as Draft" / "Draft Updated" once — see
