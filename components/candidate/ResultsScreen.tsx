@@ -37,7 +37,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
     : `assessment-${Date.now().toString(36)}`;
 
   return (
-    <div className="min-h-[100dvh] bg-gradient-to-br from-green-50 via-blue-50 to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-[100dvh] bg-gray-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-2xl shadow-xl max-w-2xl w-full p-8">
         {/* Success Icon */}
         <div className="flex justify-center mb-6">
@@ -57,13 +57,13 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
         </p>
 
         {/* What Happens Next Section */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 mb-6">
+        <div className="rounded-xl border border-brand-blue/20 bg-brand-blue/5 p-4 sm:p-5 mb-6">
           <h2 className="text-lg font-semibold text-gray-800 text-center mb-4">
             What Happens Next?
           </h2>
           <div className="space-y-4">
             <div className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+              <div className="w-6 h-6 bg-brand-blue rounded-full flex items-center justify-center shrink-0">
                 <span className="text-white text-sm font-medium">1</span>
               </div>
               <p className="text-gray-700 text-sm">
@@ -71,7 +71,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
               </p>
             </div>
             <div className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+              <div className="w-6 h-6 bg-brand-blue rounded-full flex items-center justify-center shrink-0">
                 <span className="text-white text-sm font-medium">2</span>
               </div>
               <p className="text-gray-700 text-sm">
@@ -79,7 +79,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
               </p>
             </div>
             <div className="flex items-start gap-3">
-              <div className="w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center flex-shrink-0">
+              <div className="w-6 h-6 bg-brand-blue rounded-full flex items-center justify-center shrink-0">
                 <span className="text-white text-sm font-medium">3</span>
               </div>
               <p className="text-gray-700 text-sm">
@@ -90,7 +90,7 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
         </div>
 
         {/* Thank You Card */}
-        <div className="bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl p-4 mb-6 text-center">
+        <div className="rounded-xl border border-success-line bg-success-subtle p-4 mb-6 text-center">
           <div className="flex items-center justify-center gap-2 mb-1">
             <span className="text-lg">&#x1F44D;</span>
             <span className="font-semibold text-success">Thank You!</span>
@@ -101,20 +101,25 @@ export function ResultsScreen({ results, assessmentInfo }: ResultsScreenProps) {
         </div>
 
         {/* Stats Grid */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <div className="bg-gray-50 rounded-xl p-4 text-center">
+        {/* Three columns held at every width — the tiles are a number and a
+            one-word label, so stacking them would make a short summary three
+            screens tall. What scales instead is the type and the padding:
+            at 320px a column is ~88px, and a `text-2xl` "1h 30m" did not fit
+            in it. */}
+        <div className="grid grid-cols-3 gap-2 sm:gap-4 mb-6">
+          <div className="bg-gray-50 rounded-xl p-3 sm:p-4 text-center">
             <FileText className="w-5 h-5 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-500 mb-1">Questions</p>
-            <p className="text-2xl font-bold text-gray-800">{totalQuestions}</p>
+            <p className="text-xs sm:text-sm text-gray-500 mb-1">Questions</p>
+            <p className="text-lg sm:text-2xl font-bold text-gray-800 break-words">{totalQuestions}</p>
           </div>
-          <div className="bg-gray-50 rounded-xl p-4 text-center">
+          <div className="bg-gray-50 rounded-xl p-3 sm:p-4 text-center">
             <Clock className="w-5 h-5 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-500 mb-1">Duration</p>
-            <p className="text-2xl font-bold text-gray-800">{formatDuration(durationMinutes)}</p>
+            <p className="text-xs sm:text-sm text-gray-500 mb-1">Duration</p>
+            <p className="text-lg sm:text-2xl font-bold text-gray-800 break-words">{formatDuration(durationMinutes)}</p>
           </div>
-          <div className="bg-gray-50 rounded-xl p-4 text-center">
+          <div className="bg-gray-50 rounded-xl p-3 sm:p-4 text-center">
             <CheckSquare className="w-5 h-5 text-gray-400 mx-auto mb-2" />
-            <p className="text-sm text-gray-500 mb-1">Status</p>
+            <p className="text-xs sm:text-sm text-gray-500 mb-1">Status</p>
             <div className="flex items-center justify-center">
               <CheckCircle className="w-6 h-6 text-success" />
             </div>

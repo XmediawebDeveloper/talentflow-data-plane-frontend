@@ -4,7 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { toast } from 'sonner';
 import {
   FileCheck,
-  Search,
   RefreshCw,
   ChevronDown,
   ChevronLeft,
@@ -18,9 +17,16 @@ import {
   XCircle,
   ExternalLink,
   Download,
-  Filter,
 } from 'lucide-react';
 import ListEmptyState from '@/components/ui/list-empty-state';
+import ListToolbar from '@/components/ui/list-toolbar';
+import ListFilterPanel from '@/components/ui/list-filter-panel';
+import ListCountBadge from '@/components/ui/list-count-badge';
+/* Renders the toolbar into the host page's reserved position — on the
+   Assessments page, the one row above the tab pills. The AI Interview page
+   mounts this `compact`, with no filter row at all, so it is unaffected. */
+import { ListToolbarPortal } from '@/components/ui/list-toolbar-slot';
+import { Button } from '@/components/ui/button';
 import consentService, { ConsentLog, ConsentAuditLog } from '@/lib/services/consentService';
 import { formatIST } from '@/lib/utils/dateUtils';
 
@@ -29,14 +35,15 @@ interface ConsentLogsProps {
   defaultFeature?: string;
 }
 
-/* Every control in the filter row wears this: one height, one border, one focus
-   ring. Written once rather than repeated per field because the alignment IS
-   the sameness — the previous row set its padding three different ways
-   (`py-1.5 sm:py-2`, `px-1.5 sm:px-3`, `px-2 sm:px-3`) and no two controls
-   ended up the same height. A literal string, not a template, so Tailwind's
-   scanner can still see the class names. */
+/* Every control in the More Filters panel wears this. It is the field class the
+   panels on the Assessments page's other tabs use, verbatim, so a select here
+   and a select there are the same object — this row used to set its own height
+   and border because it was its own row; inside the shared panel it is not.
+   A literal string, not a template, so Tailwind's scanner can still see the
+   class names. */
 const FILTER_FIELD =
-  'h-9 min-w-0 px-3 bg-white border border-gray-300 rounded-lg text-sm text-black ' +
+  'w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg ' +
+  'bg-white dark:bg-slate-900 text-black dark:text-slate-100 ' +
   'focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40';
 
 export default function ConsentLogs({ compact = false, defaultFeature = '' }: ConsentLogsProps) {
@@ -54,13 +61,40 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
   const [startDate, setStartDate] = useState<string>('');
   const [endDate, setEndDate] = useState<string>('');
 
+  const [showFilters, setShowFilters] = useState(false);
+
+  /* What the count badge reads as its "before narrowing" figure.
+
+     The list is paged and filtered by the SERVER, so `total` is only ever the
+     count for the current query — there is no second number to compare it
+     with. This captures one: the total from whichever load ran with nothing
+     narrowing it, which the first load always is. Until then the badge simply
+     shows the two as equal, which is the truth at that moment. */
+  const [baselineTotal, setBaselineTotal] = useState(0);
+
+  /* True once the first request has come back, either way.
+     It gates the full-screen spinner below, which used to be `isLoading &&
+     logs.length === 0` — a test the search can now satisfy over and over: type
+     a query that matches nothing, and the next keystroke has `isLoading` true
+     with `logs` empty, so the whole component (the search box with it) is
+     replaced by the spinner and the caret is thrown out of the field
+     mid-word. That was harmless while the only control here was a Search
+     button. Now the first load gets the spinner and every load after it
+     refreshes the rows underneath a toolbar that stays put. */
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
+
   // Pagination
   const [page, setPage] = useState(0);
   const [limit] = useState(20);
 
+  /* `emailFilter` joins the dependency list. It has been in this component's
+     state since it was written and was passed to the API, but no control ever
+     set it — the filter row had a Search BUTTON and no search box, so the
+     candidate filter the backend supports could not be reached. The toolbar's
+     search box writes it now, debounced, exactly like every other tab's. */
   useEffect(() => {
     loadLogs();
-  }, [page, featureFilter, statusFilter, startDate, endDate]);
+  }, [page, featureFilter, statusFilter, emailFilter, startDate, endDate]);
 
   const loadLogs = async () => {
     setIsLoading(true);
@@ -78,10 +112,17 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
       const result = await consentService.getConsentLogs(params);
       setLogs(result.items);
       setTotal(result.total);
+      /* Only an unnarrowed load can set the baseline — see `baselineTotal`.
+         `featureFilter` is excluded from that test for the same reason
+         `hasNarrowingFilters` excludes it: the host page pins it. */
+      if (!statusFilter && !emailFilter.trim() && !startDate && !endDate) {
+        setBaselineTotal(result.total);
+      }
     } catch (error: any) {
       toast.error(error.message || 'Failed to load consent logs');
     } finally {
       setIsLoading(false);
+      setHasLoadedOnce(true);
     }
   };
 
@@ -98,13 +139,14 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
     }
   };
 
-  const handleSearch = () => {
-    setPage(0);
-    loadLogs();
-  };
-
   const clearFilters = () => {
-    setFeatureFilter('');
+    /* Back to `defaultFeature`, not to nothing. The host page PINS this one —
+       the Assessments tab mounts with 'ASSESSMENT' — so clearing it to '' does
+       not un-narrow the list, it widens it past what this tab is for and starts
+       showing AI Interview consents under an Assessments heading. It is also
+       the value `hasNarrowingFilters` treats as "not narrowed", so the two now
+       agree. */
+    setFeatureFilter(defaultFeature);
     setStatusFilter('');
     setEmailFilter('');
     setStartDate('');
@@ -141,7 +183,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
     startDate !== '' ||
     endDate !== '';
 
-  if (isLoading && logs.length === 0) {
+  if (isLoading && !hasLoadedOnce) {
     return (
       <div className="flex items-center justify-center py-12 tf-loader-center">
         <RefreshCw className="w-6 h-6 animate-spin text-gray-400" />
@@ -153,117 +195,147 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
     <div className="bg-white rounded-xl shadow-sm border border-gray-200">
       {/* Header */}
       <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 sm:gap-3">
-            <div className="p-1.5 sm:p-2 bg-purple-100 rounded-lg">
+        {/* `gap-3` + `min-w-0` + `shrink-0`, which this row did without while
+            the subtitle was "340 consent records". It is a full sentence now,
+            and a flex item defaults to `min-width: auto` — it refuses to shrink
+            below its content — so on a phone the text pushed the Refresh button
+            off the right edge instead of wrapping. `min-w-0` lets the text
+            column shrink and the sentence wrap; `shrink-0` keeps the icon chip
+            and the button at their own size; the gap stops the two ever
+            touching. */}
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
+            <div className="p-1.5 sm:p-2 bg-purple-100 rounded-lg shrink-0">
               <Shield className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h2 className="text-sm sm:text-lg font-semibold text-gray-900">Candidate Consent Logs</h2>
+              {/* The count moved to the toolbar's badge, which also states what
+                  the filters narrowed away ("12 of 340"). It stays here in
+                  `compact`, where there is no toolbar to carry it. */}
               <p className="text-xs sm:text-sm text-gray-500">
-                {total} consent records
+                {compact
+                  ? `${total} consent records`
+                  : 'Every consent a candidate has given or declined, with the record behind it.'}
               </p>
             </div>
           </div>
           <button
             onClick={loadLogs}
             disabled={isLoading}
-            className="p-1.5 sm:p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
+            className="p-1.5 sm:p-2 shrink-0 self-start text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
 
-      {/* Filters — one row.
+      {/* Search + filters — the shared toolbar, in the host page's one
+          position for it.
 
-          It was four stacked rows, and not by design: the children still carry
-          `col-span-2` / `sm:col-span-1` from a grid that is no longer their
-          parent (it is `flex flex-col` now), so those classes resolve to
-          nothing and every control took a line of its own. The date inputs were
-          `flex-1` inside that full-width column, which is what stretched them
-          the width of the card.
+          What stood here was a hand-built row: a Filters glyph, a status
+          select, two date inputs, a Search button and a Clear link, laid out
+          and coloured to its own rules. It was the last list on the
+          Assessments page still drawing its own, so the search box jumped
+          into this card the moment you opened the Consent Logs tab — and it
+          had no search box at all, only a button, so the candidate filter
+          this component has always sent to the API was unreachable.
 
-          Now one wrapping flex row: filters left, actions right on `ml-auto`,
-          and every control on the same `h-9` so the select, both dates and both
-          buttons share a baseline instead of each sizing itself from its own
-          padding. `flex-wrap` is what keeps that honest on a narrow screen —
-          one line wherever it fits, a clean second line where it cannot, rather
-          than a row that overflows.
+          Now: the same `ListToolbar` as every other tab (search, More
+          Filters, Reset, count badge, in that order) over the same
+          `ListFilterPanel`. The fields are the ones that were already here,
+          and each still commits as it changes — Done only closes the panel.
 
-          The dates are `w-[150px]`: a native date input needs about 135px to
-          show `mm/dd/yyyy` without clipping, so this is the narrowest they go
-          while still reading as date fields rather than truncated boxes.
-
-          Colour is the app's rather than purple. `focus:ring-brand-blue/40` +
-          `focus:border-brand-blue/40` is the ring every input in `ListToolbar`
-          wears, the Filter glyph takes the `text-brand-blue/60` that toolbar's
-          search icon uses, and Search is `bg-brand-blue` / `hover:bg-brand-blue-2`,
-          the house primary. The purple this replaces (`purple-500` rings,
-          `purple-600` button) was never a TalentFlow colour — it appears in no
-          `--brand-*` token in globals.css. */}
+          `compact` (the AI Interview page) had no filter row before and has
+          none now. */}
       {!compact && (
-        <div className="px-3 sm:px-6 py-3 bg-gray-50 border-b border-gray-200">
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <Filter className="w-4 h-4 text-brand-blue/60" />
-              <span className="text-sm font-medium text-gray-700">Filters</span>
-            </div>
+        <ListToolbarPortal>
+          <ListToolbar
+            searchValue={emailFilter}
+            onSearchChange={(value) => {
+              setEmailFilter(value);
+              setPage(0);
+            }}
+            searchPlaceholder="Search by candidate email..."
+            onToggleFilters={() => setShowFilters(!showFilters)}
+            filtersOpen={showFilters}
+            activeFilterCount={(statusFilter ? 1 : 0) + (startDate || endDate ? 1 : 0)}
+            filtersApplied={!!statusFilter || !!startDate || !!endDate}
+            onClearFilters={clearFilters}
+            className="mb-0"
+            countBadge={
+              <ListCountBadge
+                filtered={total}
+                total={Math.max(baselineTotal, total)}
+                noun="consent log"
+                nounPlural="consent logs"
+              />
+            }
+          />
 
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              aria-label="Filter by consent status"
-              className={FILTER_FIELD}
+          {showFilters && (
+            <ListFilterPanel
+              footer={
+                <Button variant="secondary" size="sm" onClick={() => setShowFilters(false)}>
+                  Done
+                </Button>
+              }
             >
-              <option value="">All Status</option>
-              <option value="accepted">Accepted</option>
-              <option value="declined">Declined</option>
-            </select>
+              <div>
+                <label htmlFor="consent-status" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                  Status
+                </label>
+                <select
+                  id="consent-status"
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value);
+                    setPage(0);
+                  }}
+                  className={FILTER_FIELD}
+                >
+                  <option value="">All statuses</option>
+                  <option value="accepted">Accepted</option>
+                  <option value="declined">Declined</option>
+                </select>
+              </div>
 
-            {/* The two dates are one control, so they travel together when the
-                row wraps — hence their own flex box rather than three loose
-                children with a stray "to" that could wrap onto its own line. */}
-            <div className="flex items-center gap-1.5 flex-shrink-0">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                aria-label="From date"
-                className={`${FILTER_FIELD} w-[150px]`}
-              />
-              <span className="text-xs text-gray-400 flex-shrink-0">to</span>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                aria-label="To date"
-                className={`${FILTER_FIELD} w-[150px]`}
-              />
-            </div>
+              <div>
+                <label htmlFor="consent-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                  Consented from
+                </label>
+                <input
+                  id="consent-from"
+                  type="date"
+                  value={startDate}
+                  max={endDate || undefined}
+                  onChange={(e) => {
+                    setStartDate(e.target.value);
+                    setPage(0);
+                  }}
+                  className={FILTER_FIELD}
+                />
+              </div>
 
-            {/* `sm:ml-auto` rather than `ml-auto`: on a phone the group has
-                already wrapped to its own line, and pushing it right there
-                would strand two buttons against the far edge with the fields
-                left-aligned above them. */}
-            <div className="flex items-center gap-2 sm:ml-auto flex-shrink-0">
-              <button
-                onClick={handleSearch}
-                className="h-9 px-3.5 inline-flex items-center gap-1.5 bg-brand-blue text-white rounded-lg text-sm font-medium hover:bg-brand-blue-2 transition-colors"
-              >
-                <Search className="w-4 h-4" />
-                <span>Search</span>
-              </button>
-
-              <button
-                onClick={clearFilters}
-                className="h-9 px-3 rounded-lg text-sm text-gray-600 hover:text-brand-blue hover:bg-brand-blue/5 transition-colors"
-              >
-                Clear
-              </button>
-            </div>
-          </div>
-        </div>
+              <div>
+                <label htmlFor="consent-to" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                  Consented to
+                </label>
+                <input
+                  id="consent-to"
+                  type="date"
+                  value={endDate}
+                  min={startDate || undefined}
+                  onChange={(e) => {
+                    setEndDate(e.target.value);
+                    setPage(0);
+                  }}
+                  className={FILTER_FIELD}
+                />
+              </div>
+            </ListFilterPanel>
+          )}
+        </ListToolbarPortal>
       )}
 
       {/* Nothing to list: the shared ListEmptyState, INSTEAD of the table —
@@ -272,10 +344,16 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
           It picks its own wording: a filter that matched nothing gets "No
           consent logs match …" and a Reset, an empty log gets the plain line.
 
-          The filter bar above stays either way; it is what a narrowed zero
-          needs, and `clearFilters` here is the same handler its own Clear
-          button calls. */}
-      {logs.length === 0 && !isLoading ? (
+          The toolbar above stays either way; it is what a narrowed zero
+          needs, and `clearFilters` here is the same handler its Reset calls.
+
+          No `!isLoading` in the test any more. Now that the search box fires
+          requests, a refresh over an empty result would otherwise fall through
+          to the table and draw a header above no rows for the length of the
+          request — the very thing this state replaced. It shows the last
+          settled answer instead, and the header's spinner says a newer one is
+          on its way. */}
+      {logs.length === 0 ? (
         <ListEmptyState
           icon={Shield}
           isNarrowed={hasNarrowingFilters}
