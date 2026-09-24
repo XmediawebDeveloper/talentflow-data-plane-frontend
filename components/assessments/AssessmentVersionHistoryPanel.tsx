@@ -176,6 +176,13 @@ interface AssessmentVersionHistoryPanelProps {
    */
   renderAction?: (assessment: AssessmentVersionRow) => ReactNode;
   /**
+   * True when `renderAction` is only a 3-dot menu (no quick-action icons), so
+   * the Actions column reserves one button's width instead of the icon
+   * cluster's — letting the child table fit its container without a
+   * horizontal scrollbar.
+   */
+  menuOnlyActions?: boolean;
+  /**
    * The picked ASSESSMENT version, and the way to change it.
    *
    * Selection lives here and nowhere else in this panel. There is no radio on
@@ -749,6 +756,7 @@ export default function AssessmentVersionHistoryPanel({
   onViewJobVersion,
   headerAction,
   renderAction,
+  menuOnlyActions = false,
   selectedAssessmentId,
   onSelectAssessment,
   activeSelection,
@@ -813,7 +821,9 @@ export default function AssessmentVersionHistoryPanel({
        eye alone                      90  (the 28px button plus the header word)
      Literal class strings, not built from a number, so Tailwind's scanner
      can see all three. */
-  const assessmentActionsMinW = renderAction
+  const assessmentActionsMinW = renderAction && menuOnlyActions && !onViewAssessment
+    ? 'min-w-[90px]'
+    : renderAction
     ? onViewAssessment
       ? 'min-w-[215px]'
       : 'min-w-[180px]'
@@ -828,7 +838,9 @@ export default function AssessmentVersionHistoryPanel({
     800 +
     (vocabulary.extraDetailColumn ? 170 : 0) +
     (showsAssessmentSelect ? 70 : 0) +
-    (showsAssessmentActions ? (renderAction ? (onViewAssessment ? 215 : 180) : 90) : 0);
+    (showsAssessmentActions
+      ? (renderAction ? (onViewAssessment ? 215 : menuOnlyActions ? 90 : 180) : 90)
+      : 0);
 
 
 

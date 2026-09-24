@@ -83,6 +83,10 @@ export interface ListToolbarProps {
    */
   filterPanel?: React.ReactNode;
 
+  /** Extra classes for the search box wrapper — e.g. `sm:flex-none sm:w-80`
+   *  to give it a fixed width instead of filling the row. */
+  searchClassName?: string;
+
   className?: string;
 }
 
@@ -100,6 +104,7 @@ export default function ListToolbar({
   children,
   countBadge,
   filterPanel,
+  searchClassName,
   className,
 }: ListToolbarProps) {
   /* ---- Debounced search -------------------------------------------------
@@ -150,7 +155,7 @@ export default function ListToolbar({
         filterPanel ? undefined : className
       )}
     >
-      <div className="flex-1 relative">
+      <div className={cn('flex-1 relative', searchClassName)}>
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
         <input
           type="text"
@@ -161,7 +166,9 @@ export default function ListToolbar({
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      {/* ml-auto keeps the controls right-aligned when the search box is given
+          a fixed width; with the default flex-1 box it has no effect. */}
+      <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
         {leadingActions}
 
         {onToggleFilters && (
