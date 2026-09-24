@@ -20,6 +20,7 @@ import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewInvitationListResponse } from '@/lib/services/aiInterviewService';
 import { formatISTDate, formatIST, parseIST } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
+import { InviteSourceValue, inviteSourceLabel } from '@/components/AIInterviewInviteTable';
 
 interface AIInterviewResultsProps {
   configId: string;
@@ -598,6 +599,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                       )}
                     </div>
 
+                    {inviteSourceLabel(session) && (
+                      <p className="text-xs text-gray-600">
+                        <InviteSourceValue inv={session} iconClassName="w-3 h-3" />
+                      </p>
+                    )}
+
                     <div>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {getStatusIcon(session.status)}
@@ -728,6 +735,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Email</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Status</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>
@@ -773,6 +781,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           {interviewVersion != null ? <VersionPill kind="interview" version={interviewVersion} /> : <span className="text-gray-400">—</span>}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-700">
+                          {inviteSourceLabel(session)
+                            ? <InviteSourceValue inv={session} iconClassName="w-3.5 h-3.5" />
+                            : <span className="text-gray-400">—</span>}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
                           <div className="flex items-center gap-1.5">
