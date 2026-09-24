@@ -806,7 +806,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             {/* Mode Switcher */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0 mb-3 sm:mb-4">
               <label className="text-xs sm:text-base text-gray-900 dark:text-slate-50 font-medium">Select Candidates</label>
-              <div className="flex gap-1.5 sm:gap-2">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
                 <button
                   onClick={() => setInputMode('manual')}
                   className={`flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm transition-colors ${
@@ -946,10 +946,11 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                 </div>
 
                 {/* Content: folder sidebar + resume list */}
-                <div className="flex" style={{ minHeight: '320px', maxHeight: '400px' }}>
-                  {/* Folder Sidebar (My Resumes only) */}
+                <div className="flex flex-col sm:flex-row" style={{ minHeight: '320px', maxHeight: '400px' }}>
+                  {/* Folder Sidebar (My Resumes only) — a short scrollable strip
+                      on top for mobile, a fixed left column from sm up. */}
                   {dbTab === 'my-resumes' && myFolders.length > 0 && (
-                    <div className="w-48 border-r border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 overflow-y-auto flex-shrink-0 p-3">
+                    <div className="w-full sm:w-48 max-h-28 sm:max-h-none border-b sm:border-b-0 sm:border-r border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 overflow-y-auto flex-shrink-0 p-3">
                       <p className="text-xs font-medium text-gray-500 dark:text-slate-500 uppercase mb-2 px-1">Folders</p>
                       <button
                         onClick={() => setSelectedFolder('all')}
@@ -966,13 +967,13 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                   {/* Resume List */}
                   <div className="flex-1 flex flex-col overflow-hidden">
                     {/* Search + Select All */}
-                    <div className="flex items-center gap-2 p-3 border-b border-gray-100 dark:border-slate-700/60">
+                    <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-100 dark:border-slate-700/60">
                       <input
                         type="text"
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                         placeholder="Search by name, email, or position..."
-                        className="flex-1 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                        className="flex-1 min-w-[10rem] px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                       />
                       <button
                         onClick={() => {
