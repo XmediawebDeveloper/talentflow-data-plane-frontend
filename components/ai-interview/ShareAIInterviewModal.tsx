@@ -700,10 +700,13 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
       for (const candidate of deduped) {
         try {
           if (candidate.generatedSessionId) {
-            // Session already created via Copy Link — just send the email, no new quota deduction
+            // Session already created via Copy Link — just send the email, no new quota deduction.
+            // keep_link: the recruiter may already have shared the copied link, so the
+            // email must carry that same link rather than rotating it.
             await aiInterviewService.sendSessionEmail(candidate.generatedSessionId, {
               custom_message: resolvedMessage,
               base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
+              keep_link: true,
             });
           } else {
             await aiInterviewService.inviteCandidate(config.id, {
@@ -1102,9 +1105,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           {/* Candidate Emails Section */}
           <div className="mb-6">
             {/* Mode Switcher */}
-            <div className="flex items-center justify-between mb-4">
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
               <label className="text-gray-900 dark:text-slate-50 font-medium">Select Candidates</label>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <button
                   onClick={() => setInputMode('manual')}
                   className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm transition-colors ${
@@ -1369,10 +1372,11 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                 </div>
 
                 {/* Content: folder sidebar + resume list */}
-                <div className="flex" style={{ minHeight: '300px', maxHeight: '380px' }}>
-                  {/* Folder Sidebar (My Resumes only) */}
+                <div className="flex flex-col sm:flex-row" style={{ minHeight: '300px', maxHeight: '380px' }}>
+                  {/* Folder Sidebar (My Resumes only) — short scrollable strip on
+                      top for mobile, fixed left column from sm up. */}
                   {dbTab === 'my-resumes' && myFolders.length > 0 && (
-                    <div className="w-48 border-r border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 overflow-y-auto flex-shrink-0 p-3">
+                    <div className="w-full sm:w-48 max-h-28 sm:max-h-none border-b sm:border-b-0 sm:border-r border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 overflow-y-auto flex-shrink-0 p-3">
                       <p className="text-xs font-medium text-gray-500 dark:text-slate-500 uppercase mb-2 px-1">Folders</p>
                       <button
                         onClick={() => setSelectedFolder('all')}
@@ -1389,13 +1393,13 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                   {/* Resume List */}
                   <div className="flex-1 flex flex-col overflow-hidden">
                     {/* Search + Select All */}
-                    <div className="flex items-center gap-2 p-3 border-b border-gray-100 dark:border-slate-700/60">
+                    <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-100 dark:border-slate-700/60">
                       <input
                         type="text"
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                         placeholder="Search by name, email, or position..."
-                        className="flex-1 px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-success-line"
+                        className="flex-1 min-w-[10rem] px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-success-line"
                       />
                       <button
                         onClick={() => {

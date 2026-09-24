@@ -42,6 +42,10 @@ import IntegrityCheckTab from './IntegrityCheckTab';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
 import { summarizeViolations } from './violationTaxonomy';
 import { Skeleton } from '@/components/ui/skeleton';
+import ResumeDetailView from '@/components/ResumeDetailView';
+import ViewResumeButton from '@/components/ui/view-resume-button';
+import { Tooltip as HoverTooltip } from '@/components/ui/tooltip';
+import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
 
 interface CandidateResultsViewProps {
   interview: AIInterviewResponse;
@@ -601,6 +605,19 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   // content is merged into the Eval tab. The render blocks are kept so any
   // deep-link / fallback still works.
   const [activeTab, setActiveTab] = useState<TabKey>('eval');
+  // View Resume — same in-place swap as the assessment candidate-result page
+  // (CandidateResultDetails): the body is replaced by ResumeDetailView and the
+  // breadcrumb gains a "Resume" crumb. `resumeDetail` is cached so reopening
+  // doesn't refetch.
+  const [resumeDetail, setResumeDetail] = useState<any>(null);
+  const [isLoadingResume, setIsLoadingResume] = useState(false);
+  const [showResume, setShowResume] = useState(false);
+  // Set when the lookup finds nothing — the resume view then renders a
+  // "Resume Not Available" state in place of the document.
+  const [resumeUnavailable, setResumeUnavailable] = useState(false);
+  // Resolved on load so the button can explain on hover that there's no
+  // resume: undefined = still checking, null = none found.
+  const [resolvedResumeId, setResolvedResumeId] = useState<string | null | undefined>(undefined);
   // Seek request from the Violations Event Log → Recording player. `key` is a
   // monotonic counter (via seekNonceRef) so clicking the same row twice re-fires.
   const [recordingSeek, setRecordingSeek] = useState<{ seconds: number; key: number } | null>(null);
@@ -1549,6 +1566,140 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   // Generic placeholder (for tabs that don't pass a key)
   const placeholderMsg = getPlaceholderMessage();
 
+  const openResumeUnavailable = () => {
+    setResumeUnavailable(true);
+    setShowResume(true);
+  };
+
+  // A session invited from the resume database
+  // carries resume_id; otherwise fall back to the resume library by exact email
+  // — accepted only when the names don't contradict, the same identity rule the
+  // interview agent applies (_names_plausibly_same_person), so a reused address
+  // can't surface a stranger's resume.
+  const resolveResumeId = async (): Promise<string | null> => {
+    const linked = liveSession.resume_id || interview.resume_id;
+    if (linked) return linked;
+
+    const email = (interview.candidate_email || liveSession.candidate_email || '').trim().toLowerCase();
+    if (!email) return null;
+    const tokens = (v: string) => new Set((v || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+    const inviteTokens = tokens(interview.candidate_name || liveSession.candidate_name || '');
+    const samePerson = (name: string) => {
+      const t = tokens(name);
+      if (inviteTokens.size === 0 || t.size === 0) return true;
+      return [...t].some(x => inviteTokens.has(x));
+    };
+
+    const { resumeService } = await import('@/lib/services/resumeService');
+    try {
+      const results = await resumeService.list({ search: email, page_size: 20 });
+      const match = (results.items || []).find((item: any) =>
+        (item.candidate_email || item.email || '').trim().toLowerCase() === email
+        && samePerson(item.candidate_name || ''));
+      return match?.id || null;
+    } catch (err) {
+      console.warn('[CandidateResultsView] Resume search failed:', err);
+      return null;
+    }
+  };
+
+  // Prev/Next re-renders this same instance with a different interview, so
+  // the cached resume belongs to the previous candidate and must be dropped,
+  // and availability is re-checked for the new one.
+  useEffect(() => {
+    setResumeDetail(null);
+    setShowResume(false);
+    setResumeUnavailable(false);
+    setResolvedResumeId(undefined);
+    let cancelled = false;
+    resolveResumeId().then(id => { if (!cancelled) setResolvedResumeId(id); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interview.id]);
+
+  const handleViewResume = async () => {
+    if (resumeDetail) { setShowResume(true); return; }
+    setIsLoadingResume(true);
+    setResumeUnavailable(false);
+    try {
+      const id = resolvedResumeId !== undefined ? resolvedResumeId : await resolveResumeId();
+      if (!id) {
+        openResumeUnavailable();
+        return;
+      }
+      const { resumeService } = await import('@/lib/services/resumeService');
+      const { convertApiResume } = await import('@/lib/utils/resumeMapper');
+      // The API record is snake_case — ResumeDetailView needs the mapped shape.
+      const [data, versions] = await Promise.all([
+        resumeService.get(id, true), // a genuine user view
+        resumeService.getVersions(id).catch(() => []),
+      ]);
+      setResumeDetail(convertApiResume(data, versions || []));
+      setShowResume(true);
+    } catch (err: any) {
+      // A linked resume that has since been deleted 404s — that's "not
+      // available", not a transient failure worth retrying. resumeService
+      // rethrows as a plain Error carrying only the backend detail, so the
+      // status is gone and the message is all there is to go on.
+      if (err?.response?.status === 404 || /not found/i.test(err?.message || '')) {
+        openResumeUnavailable();
+      } else {
+        console.error('[CandidateResultsView] Failed to load resume:', err);
+        toast.error('Could not load the resume. Please try again.');
+      }
+    } finally {
+      setIsLoadingResume(false);
+    }
+  };
+
+  const candidateBreadcrumbItems = breadcrumbItems ?? [
+    { label: 'Dashboard', href: '/dashboard' },
+    onNavigateToList
+      ? { label: 'AI Interviews', onClick: onNavigateToList }
+      : { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+    ...(breadcrumbTrail ?? []),
+    // Deepest crumb names the candidate whose results are open.
+    { label: interview.candidate_name || 'Candidate Results' },
+  ];
+
+  if (showResume && (resumeDetail || resumeUnavailable)) {
+    const inviteSource = liveSession.invite_source || interview.invite_source;
+    return (
+      <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+            <PageBreadcrumb
+              className="mb-4 md:mb-6"
+              items={[
+                ...candidateBreadcrumbItems.slice(0, -1),
+                // onClick, not href: the candidate crumb is the route we're
+                // already on, which a link cannot re-trigger.
+                { ...candidateBreadcrumbItems[candidateBreadcrumbItems.length - 1], href: undefined, onClick: () => setShowResume(false) },
+                { label: 'Resume' },
+              ]}
+            />
+            {resumeDetail ? (
+              <ResumeDetailView embedded resume={resumeDetail} onClose={() => setShowResume(false)} />
+            ) : (
+              <TabEmptyState
+                icon={FileText}
+                title="Resume Not Available"
+                description={inviteSource === 'email'
+                  ? 'This candidate was invited via direct email, so no resume is linked to this interview.'
+                  : 'No resume was found for this candidate.'}
+                action={
+                  <button type="button" onClick={() => setShowResume(false)} className={TAB_EMPTY_ACTION_CLASS}>
+                    <ArrowLeft className="w-4 h-4" /> Back to Results
+                  </button>
+                }
+              />
+            )}
+          </div>
+        </div>
+      </main>
+    );
+  }
+
   return (
     // overflow-x-clip, not overflow-x-hidden/overflow-y-auto: that pair made
     // this <main> its own scroll container without ever being height-bound
@@ -1570,15 +1721,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
               which leaves the bar exactly as it was. */}
           <PageBreadcrumb
             className="mb-4 md:mb-6"
-            items={breadcrumbItems ?? [
-              { label: 'Dashboard', href: '/dashboard' },
-              onNavigateToList
-                ? { label: 'AI Interviews', onClick: onNavigateToList }
-                : { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-              ...(breadcrumbTrail ?? []),
-              // Deepest crumb names the candidate whose results are open.
-              { label: interview.candidate_name || 'Candidate Results' },
-            ]}
+            items={candidateBreadcrumbItems}
             actions={totalCount != null && totalCount > 0 ? (
               <RecordPager
                 currentIndex={currentIndex}
@@ -1656,6 +1799,27 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   )}
                 </div>
               </div>
+              {/* View Resume — always rendered, like the assessment result
+                  page. Once the load-time lookup finds no resume it's
+                  disabled, and hovering explains why. A disabled button
+                  swallows mouse events in some browsers, so it's made
+                  pointer-transparent and the wrapping span takes the hover. */}
+              {resolvedResumeId === null ? (
+                <HoverTooltip
+                  position="bottom"
+                  content={(liveSession.invite_source || interview.invite_source) === 'email'
+                    ? 'Resume is not available because the candidate was invited via Direct Email.'
+                    : 'Resume not available'}
+                >
+                  <span className="inline-flex cursor-not-allowed flex-shrink-0">
+                    <ViewResumeButton onClick={handleViewResume} disabled className="pointer-events-none" />
+                  </span>
+                </HoverTooltip>
+              ) : (
+                // Spinner while the load-time check runs, so the button doesn't
+                // look clickable and then flip to disabled.
+                <ViewResumeButton onClick={handleViewResume} loading={isLoadingResume || resolvedResumeId === undefined} className="flex-shrink-0" />
+              )}
             </div>
           </div>
 

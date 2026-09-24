@@ -34,6 +34,7 @@ import AssessmentInviteTable, {
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import LanguageLogo, { logoLabelForId } from '@/components/assessments/LanguageLogo';
 
 interface AssessmentDetailsViewProps {
   assessment: any;
@@ -2222,8 +2223,9 @@ export default function AssessmentDetailsView({
                                   {codingLanguages.map((lang, idx) => (
                                     <span
                                       key={idx}
-                                      className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20"
+                                      className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20"
                                     >
+                                      <LanguageLogo language={logoLabelForId(lang, lang)} size="sm" />
                                       {lang}
                                     </span>
                                   ))}

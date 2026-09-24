@@ -1674,8 +1674,8 @@ export default function AIInterviewClusters() {
 
       // Snapshot the recruiter-typed "main" skills BEFORE any AI expansion.
       // Used by the chip rendering to highlight original recruiter intent.
-      const preExpansionMth = mthSkillNames.slice();
-      const preExpansionNth = nthSkillNames.slice();
+      let preExpansionMth = mthSkillNames.slice();
+      let preExpansionNth = nthSkillNames.slice();
 
       if (mthSkillNames.length === 0 && nthSkillNames.length === 0) {
         toast.error('Add at least one skill before generating clusters');
@@ -1934,6 +1934,34 @@ export default function AIInterviewClusters() {
         mthClusters: (result.mth_clusters ?? []).map(c => ({ name: c.name, priority: c.priority, skillCount: c.skills?.length ?? 0 })),
         nthClusters: (result.nth_clusters ?? []).map(c => ({ name: c.name, priority: c.priority, skillCount: c.skills?.length ?? 0 })),
       });
+      // The backend's gpt-4o dedup pass dropped these as meaning-duplicates.
+      // Remove them from the recruiter's main-skill list and snapshot too, so
+      // Configure stops showing (and re-sending) the pair — otherwise every
+      // regeneration re-judged it, and the model could drop the other side.
+      const removedDupes = result.removed_duplicates ?? [];
+      const removedMthKeys = new Set(
+        removedDupes.filter(d => d.bucket === 'mth').map(d => d.skill.toLowerCase().trim()),
+      );
+      const removedNthKeys = new Set(
+        removedDupes.filter(d => d.bucket === 'nth').map(d => d.skill.toLowerCase().trim()),
+      );
+      const keepMth = (name: string) => !removedMthKeys.has(name.toLowerCase().trim());
+      const keepNth = (name: string) => !removedNthKeys.has(name.toLowerCase().trim());
+      if (removedDupes.length > 0) {
+        preExpansionMth = preExpansionMth.filter(keepMth);
+        preExpansionNth = preExpansionNth.filter(keepNth);
+        mthSkillNames = mthSkillNames.filter(keepMth);
+        nthSkillNames = nthSkillNames.filter(keepNth);
+        if (mthExpanded) mthExpanded = mthExpanded.filter(e => keepMth(e.name));
+        if (nthExpanded) nthExpanded = nthExpanded.filter(e => keepNth(e.name));
+        toast.info(
+          removedDupes.length === 1
+            ? `Removed duplicate skill "${removedDupes[0].skill}" (same as "${removedDupes[0].kept}")`
+            : `Removed ${removedDupes.length} duplicate skills: ${removedDupes
+                .map(d => `"${d.skill}" (same as "${d.kept}")`).join(', ')}`,
+        );
+      }
+
       let newMthClusters: Cluster[] = mthSkillNames.length > 0 && result.mth_clusters
         ? (() => {
             const mthRaw = result.mth_clusters;
@@ -2079,6 +2107,8 @@ export default function AIInterviewClusters() {
       // Commit expanded skills to UI state so the user sees them on the page
       if (mthExpanded) setMthSkills(mthExpanded);
       if (nthExpanded) setNthSkills(nthExpanded);
+      if (removedMthKeys.size) setMthSkills(prev => prev.filter(e => keepMth(e.name)));
+      if (removedNthKeys.size) setNthSkills(prev => prev.filter(e => keepNth(e.name)));
       setMthClusters(newMthClusters);
       setNthClusters(newNthClusters);
       // Cluster cards stay collapsed by default per UX spec — recruiter
@@ -2103,6 +2133,18 @@ export default function AIInterviewClusters() {
           if (!Array.isArray(si.nth_main_skills) || si.nth_main_skills.length === 0) {
             si.nth_main_skills = nthEnabled ? preExpansionNth : [];
             setNthMainSkillSet(new Set((nthEnabled ? preExpansionNth : []).map(s => s.toLowerCase().trim())));
+          }
+          // Main skills saved by Configure still hold the pair the dedup just
+          // resolved — strip the removed side so it doesn't come back.
+          if (removedDupes.length > 0) {
+            if (Array.isArray(si.mth_main_skills)) {
+              si.mth_main_skills = (si.mth_main_skills as string[]).filter(keepMth);
+              setMthMainSkillSet(new Set((si.mth_main_skills as string[]).map(s => s.toLowerCase().trim())));
+            }
+            if (Array.isArray(si.nth_main_skills)) {
+              si.nth_main_skills = (si.nth_main_skills as string[]).filter(keepNth);
+              setNthMainSkillSet(new Set((si.nth_main_skills as string[]).map(s => s.toLowerCase().trim())));
+            }
           }
           // Persist parent → sub_skills bindings so subsequent "Regenerate"
           // clicks (which skip expansion when skills are already at target)
@@ -2213,6 +2255,19 @@ export default function AIInterviewClusters() {
               ...(nthExtra ? { jd_skills: nthExtra.jd_skills, custom_skills: nthExtra.custom_skills } : {}),
             };
           }
+          // Without expansion the round keeps its old skill lists — drop the
+          // dedup's removed side there as well.
+          const stripRound = (idx: number, keep: (n: string) => boolean) => {
+            if (idx < 0) return;
+            const r: any = rounds[idx];
+            rounds[idx] = {
+              ...r,
+              ...(Array.isArray(r.jd_skills) ? { jd_skills: r.jd_skills.filter((n: any) => typeof n !== 'string' || keep(n)) } : {}),
+              ...(Array.isArray(r.custom_skills) ? { custom_skills: r.custom_skills.filter((n: any) => typeof n !== 'string' || keep(n)) } : {}),
+            };
+          };
+          if (removedMthKeys.size) stripRound(mthIdx, keepMth);
+          if (removedNthKeys.size) stripRound(nthIdx, keepNth);
 
           // ── Compute the AI skill→question distribution ONCE, here at
           // generation time, and persist it to si.skill_distribution. This is
@@ -2259,6 +2314,11 @@ export default function AIInterviewClusters() {
                   ...(((config as any).jd_must_have_skills as string[] | undefined) || []),
                 ].filter((s): s is string =>
                   typeof s === 'string' && s.trim().length > 0 && !_mthExclude.has(s.toLowerCase())
+                  // `mthSkills` is still the pre-dedup state here; a meaning-
+                  // duplicate /generate-clusters removed shares no words with
+                  // its survivor, so closestDuplicate can't catch it — drop it
+                  // by name or the distributor re-assigns it to a question.
+                  && keepMth(s)
                   && (_mthOwnSkills.includes(s) || !closestDuplicate(_mthOwnSkills.map(n => ({ name: n })), k => k.name, s))
                 )));
                 const _nthJdPool = Array.from(new Set([
@@ -2267,6 +2327,7 @@ export default function AIInterviewClusters() {
                   ...(((config as any).jd_nice_to_have_skills as string[] | undefined) || []),
                 ].filter((s): s is string =>
                   typeof s === 'string' && s.trim().length > 0 && !_nthExclude.has(s.toLowerCase())
+                  && keepNth(s)
                   && (_nthOwnSkills.includes(s) || !closestDuplicate(_nthOwnSkills.map(n => ({ name: n })), k => k.name, s))
                 )));
                 const dist = await aiInterviewService.distributeSkills({
@@ -2299,6 +2360,7 @@ export default function AIInterviewClusters() {
                 const foldDistIntoClusters = (
                   clustersArr: Cluster[],
                   rows: any[],
+                  keep: (name: string) => boolean,
                 ): Cluster[] => {
                   if (!clustersArr.length || !Array.isArray(rows) || rows.length === 0) {
                     return clustersArr;
@@ -2341,6 +2403,7 @@ export default function AIInterviewClusters() {
                     for (const nm of skillNames) {
                       const k = nm.toLowerCase().trim();
                       if (!k || seenBucket.has(k)) continue;
+                      if (!keep(nm)) continue;   // removed as a duplicate by /generate-clusters
                       if (closestDuplicate(keptNames.map(n => ({ name: n })), n => n.name, nm)) continue;
                       target.skills.push(nm);
                       seenBucket.add(k);
@@ -2349,9 +2412,9 @@ export default function AIInterviewClusters() {
                   }
                   return next;
                 };
-                newMthClusters = foldDistIntoClusters(newMthClusters, dist.mth_questions || []);
+                newMthClusters = foldDistIntoClusters(newMthClusters, dist.mth_questions || [], keepMth);
                 if (nthEnabled) {
-                  newNthClusters = foldDistIntoClusters(newNthClusters, dist.nth_questions || []);
+                  newNthClusters = foldDistIntoClusters(newNthClusters, dist.nth_questions || [], keepNth);
                 }
                 // Re-sync state + SI so the cluster CARD shows the full set.
                 setMthClusters(newMthClusters);

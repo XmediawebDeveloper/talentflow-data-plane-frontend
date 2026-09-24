@@ -158,6 +158,15 @@ function toMatchRating(score: number): number {
   return Math.max(0, Math.min(10, Math.round((score ?? 0) / 10)));
 }
 
+/** A native <select> popup grows to fit its widest <option>, so a full-address
+ *  location ("1234 Elm Street, Apt. 56, Springfield, IL, 62704") or a long job
+ *  title blows the open dropdown past the screen edge on mobile. Clamp only the
+ *  DISPLAYED label — the option's `value` stays the full string, so filtering,
+ *  the selected-value display, and the `title` tooltip are all unaffected. */
+function clampOptionLabel(text: string, max = 32): string {
+  return text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+}
+
 /** Exact Match = a perfect 10, Partial Match = 7-9, anything under 7 is No Match. */
 function matchBandForRating(rating: number): 'exact' | 'partial' | 'no_match' {
   if (rating >= 10) return 'exact';
@@ -2529,7 +2538,7 @@ export default function AITalentMatchPage({
                         >
                           <option value="all">All Locations</option>
                           {candidateLocations.map(loc => (
-                            <option key={loc} value={loc}>{loc}</option>
+                            <option key={loc} value={loc} title={loc}>{clampOptionLabel(loc)}</option>
                           ))}
                         </select>
                       </div>
@@ -2545,7 +2554,7 @@ export default function AITalentMatchPage({
                         >
                           <option value="all">All Jobs</option>
                           {candidateJobTitles.map(title => (
-                            <option key={title} value={title}>{title}</option>
+                            <option key={title} value={title} title={title}>{clampOptionLabel(title)}</option>
                           ))}
                         </select>
                       </div>
@@ -3185,7 +3194,7 @@ export default function AITalentMatchPage({
                         >
                           <option value="all">All Locations</option>
                           {candidateLocations.map(loc => (
-                            <option key={loc} value={loc}>{loc}</option>
+                            <option key={loc} value={loc} title={loc}>{clampOptionLabel(loc)}</option>
                           ))}
                         </select>
                       </div>
@@ -3201,7 +3210,7 @@ export default function AITalentMatchPage({
                         >
                           <option value="all">All Jobs</option>
                           {candidateJobTitles.map(title => (
-                            <option key={title} value={title}>{title}</option>
+                            <option key={title} value={title} title={title}>{clampOptionLabel(title)}</option>
                           ))}
                         </select>
                       </div>
@@ -3631,9 +3640,22 @@ export default function AITalentMatchPage({
                       className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-3 shadow-sm cursor-pointer"
                     >
                       <div className="flex items-start justify-between gap-2 mb-2">
-                        <div className="min-w-0">
-                          <div className="text-sm font-medium text-blue-600 truncate">{row.name}</div>
-                          <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{job.jobTitle}</div>
+                        <div className="flex items-start gap-2.5 min-w-0">
+                          {/* Select — the same per-row checkbox the grid cards and
+                              the desktop table have, so a resume can be picked for
+                              bulk score/invite from the list view on mobile too. */}
+                          <input
+                            type="checkbox"
+                            aria-label={`Select ${row.name || 'candidate'}`}
+                            checked={selectedAllResumeKeys.has(key)}
+                            onClick={(e) => e.stopPropagation()}
+                            onChange={() => toggleAllResumeSelected(key)}
+                            className="mt-0.5 flex-shrink-0"
+                          />
+                          <div className="min-w-0">
+                            <div className="text-sm font-medium text-blue-600 truncate">{row.name}</div>
+                            <div className="text-xs text-gray-500 dark:text-slate-500 truncate">{job.jobTitle}</div>
+                          </div>
                         </div>
                         <span className={`inline-flex items-center justify-center w-7 h-7 rounded-full text-xs font-semibold border flex-shrink-0 ${candidateScoreBadgeClass(job.score)}`}>
                           {toMatchRating(job.score)}
@@ -3893,7 +3915,7 @@ export default function AITalentMatchPage({
               </div>
               <p className="text-sm text-gray-600 dark:text-slate-400">Click any job to view matched candidates</p>
             </div>
-            <div className="grid gap-3 sm:gap-4">
+            <div className="grid grid-cols-1 gap-3 sm:gap-4">
             {sortedHistory.slice((historyCurrentPage - 1) * historyItemsPerPage, historyCurrentPage * historyItemsPerPage).map((item) => {
               const jobData = jobs.find(j => j.id === item.jobId);
               // Version history is cached/keyed by the human JD-xxx code, not
@@ -4334,7 +4356,7 @@ export default function AITalentMatchPage({
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50">
             <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-[96vw] xl:max-w-6xl h-[85dvh] flex flex-col tf-round-edges">
-              <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
+              <div className="flex items-center justify-between px-4 sm:px-6 py-4 border-b border-gray-100 dark:border-slate-700/60 shrink-0">
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-11 h-11 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0">
                     <History className="w-5 h-5 text-brand-blue" />
@@ -4367,7 +4389,7 @@ export default function AITalentMatchPage({
                 </div>
               </div>
 
-              <div className="overflow-y-auto px-6 py-4 flex-1">
+              <div className="overflow-y-auto px-4 sm:px-6 py-4 flex-1">
                 {isLoadingModal ? (
                   <>
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-3">
@@ -4382,7 +4404,7 @@ export default function AITalentMatchPage({
                       ))}
                     </div>
                     <div className="rounded-xl border border-gray-200 dark:border-slate-700 p-3 mb-3">
-                      <div className="flex items-end gap-2 overflow-x-auto py-1 -my-1">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 sm:overflow-x-auto py-1 -my-1">
                         {Array.from({ length: 5 }).map((_, i) => (
                           <div key={i} className="flex-1 min-w-[8rem] space-y-1.5">
                             <Skeleton className="h-3 w-16" />
@@ -4435,7 +4457,7 @@ export default function AITalentMatchPage({
                           boundary out past them; the matching negative margin
                           cancels the padding's effect on layout, so the row's
                           rendered position is unchanged. */}
-                      <div className="flex items-end gap-2 overflow-x-auto py-1 -my-1">
+                      <div className="flex flex-col sm:flex-row items-stretch sm:items-end gap-2 sm:overflow-x-auto py-1 -my-1">
                         <div className="flex-1 min-w-[11rem]">
                           <label className={filterLabelClass}>Search</label>
                           <div className="relative">
@@ -4686,8 +4708,8 @@ export default function AITalentMatchPage({
                 )}
               </div>
 
-              <div className="px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-between gap-3 shrink-0">
-                <p className="text-xs text-gray-500 dark:text-slate-500 flex items-center gap-1.5">
+              <div className="px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 shrink-0">
+                <p className="text-xs text-gray-500 dark:text-slate-500 flex items-start sm:items-center gap-1.5">
                   <Info className="w-3.5 h-3.5 flex-shrink-0" />
                   Match rating is based on AI similarity between candidate resumes and the job description (1 - 10 scale).
                 </p>

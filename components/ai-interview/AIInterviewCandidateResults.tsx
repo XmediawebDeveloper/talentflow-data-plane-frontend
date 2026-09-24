@@ -5,7 +5,13 @@ import { createPortal } from 'react-dom';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useRouter } from 'next/navigation';
-import { ChevronLeft, ChevronRight, Eye, Users, CheckCircle, XCircle } from 'lucide-react';
+import {
+  ChevronLeft, ChevronRight, Eye, Users, CheckCircle, XCircle,
+  SlidersHorizontal, FileDown, FileText, FileSpreadsheet, Info, Download, X,
+  Square, CheckSquare,
+} from 'lucide-react';
+import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
+import { toast } from 'sonner';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
@@ -22,6 +28,7 @@ import {
   getProctoringRisk,
   formatDuration,
 } from './AIInterviewResults';
+import { InviteSourceValue, inviteSourceLabel } from '@/components/AIInterviewInviteTable';
 
 /**
  * Candidate Results — every candidate session across every AI interview, in one
@@ -32,6 +39,23 @@ import {
  * Row rendering imports the per-interview view's helpers rather than copying
  * them, so a status colour or risk rule only ever has to change in one place.
  */
+
+/* Toggleable table columns (Actions always shows) — same Customize Columns
+ * modal the resume scoring All Resumes tab uses. */
+const CANDIDATE_COLUMNS = [
+  { id: 'cid', label: 'CID' },
+  { id: 'candidate', label: 'Candidate' },
+  { id: 'email', label: 'Email' },
+  { id: 'jobId', label: 'Job ID' },
+  { id: 'jobTitle', label: 'Job Title' },
+  { id: 'jobVersion', label: 'Job Version' },
+  { id: 'interviewVersion', label: 'Interview Version' },
+  { id: 'status', label: 'Status' },
+  { id: 'score', label: 'Score' },
+  { id: 'timeline', label: 'Timeline' },
+  { id: 'proctoring', label: 'Proctoring Risk' },
+] as const;
+type CandidateColumnId = (typeof CANDIDATE_COLUMNS)[number]['id'];
 
 /** A session plus the interview it belongs to — rows here span configs. */
 type CandidateSessionRow = AIInterviewResponse & {
@@ -251,6 +275,97 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
     }
   };
 
+  const [columns, setColumns] = useState(() => CANDIDATE_COLUMNS.map((c) => ({ id: c.id as string, label: c.label as string, enabled: true })));
+  const [showColumnModal, setShowColumnModal] = useState(false);
+  const enabledColumns = columns.filter((c) => c.enabled);
+  const col = (id: CandidateColumnId) => columns.some((c) => c.id === id && c.enabled);
+
+  // Row selection for Export — rows span configs, so key by config + session.
+  const rowKey = (row: CandidateSessionRow) => `${row._config_id}-${row.id}`;
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set());
+  const toggleSelected = (row: CandidateSessionRow) =>
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      const key = rowKey(row);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const allOnPageSelected = pageRows.length > 0 && pageRows.every((row) => selectedKeys.has(rowKey(row)));
+  const toggleAllOnPage = () =>
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (allOnPageSelected) pageRows.forEach((row) => next.delete(rowKey(row)));
+      else pageRows.forEach((row) => next.add(rowKey(row)));
+      return next;
+    });
+  const selectedRows = rows.filter((row) => selectedKeys.has(rowKey(row)));
+
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'xls'>('csv');
+
+  // One export cell per column; Timeline splits into its three parts so each
+  // lands in its own spreadsheet column.
+  const exportHeaders = (): string[] =>
+    enabledColumns.flatMap((c) => (c.id === 'timeline' ? ['Started At', 'Completed At', 'Duration'] : [c.label]));
+  const exportRow = (row: CandidateSessionRow): string[] =>
+    enabledColumns.flatMap((c): string[] => {
+      switch (c.id) {
+        case 'cid': return [row.candidate_cid || ''];
+        case 'candidate': return [row.candidate_name || ''];
+        case 'email': return [row.candidate_email || ''];
+        case 'jobId': return [row._job_id || ''];
+        case 'jobTitle': return [row._config_title || ''];
+        case 'jobVersion': return [`V${row._job_version}`];
+        case 'interviewVersion': return [`V${row._interview_version}`];
+        case 'status': return [getStatusLabel(row.status)];
+        case 'score': return [row.score != null ? `${Math.round(row.score)}% (${row.score >= PASS_MARK ? 'Pass' : 'Fail'})` : ''];
+        case 'timeline': return [
+          row.started_at ? formatIST(row.started_at) : '',
+          row.completed_at ? formatIST(row.completed_at) : '',
+          row.started_at ? formatDuration(row) : '',
+        ];
+        case 'proctoring': return [row.status === 'completed' ? getProctoringRisk(row).level : ''];
+        default: return [''];
+      }
+    });
+
+  // Exports the selected rows when any are picked; otherwise every row
+  // matching the current search — all pages, not just this one.
+  const handleExport = () => {
+    const exportRows = selectedRows.length > 0 ? selectedRows : filteredRows;
+    if (exportRows.length === 0) {
+      toast.warning('No candidates to export');
+      return;
+    }
+    const headers = exportHeaders();
+    const data = exportRows.map(exportRow);
+    const baseName = `AI_Interview_Candidate_Results_${new Date().toISOString().slice(0, 10)}`;
+    let blob: Blob;
+    let fileName: string;
+    if (exportFormat === 'csv') {
+      const q = (v: string) => `"${v.replace(/"/g, '""')}"`;
+      const csv = [headers.map(q).join(','), ...data.map((cells) => cells.map(q).join(','))].join('\n');
+      blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+      fileName = `${baseName}.csv`;
+    } else {
+      const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"><style>table{border-collapse:collapse}th,td{border:1px solid #000;padding:8px;text-align:left}th{background:#f0f0f0;font-weight:bold}</style></head><body><table><thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${data.map((cells) => `<tr>${cells.map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></body></html>`;
+      blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+      fileName = `${baseName}.xls`;
+    }
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    toast.success(`Exported ${exportRows.length} records to ${exportFormat === 'csv' ? 'CSV' : 'Excel'}`);
+    setShowExportModal(false);
+  };
+
   /**
    * Opens that candidate's result view. Seeds the same nav list key the details
    * route reads for Previous/Next, scoped to rows from the SAME interview —
@@ -301,6 +416,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                   <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
                   <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
                   <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
                   <th className="text-right px-4 py-3 tf-sticky-col"><Skeleton className="h-3 w-20 ml-auto" /></th>
                 </tr>
               </thead>
@@ -319,6 +435,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                     <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
                     <td className="px-4 py-3"><Skeleton className="h-5 w-9 rounded-md" /></td>
                     <td className="px-4 py-3"><Skeleton className="h-5 w-9 rounded-md" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                     <td className="px-4 py-3"><Skeleton className="h-5 w-20 rounded-full" /></td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -387,6 +504,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
         activeFilterCount={search.activeFilterCount}
         filtersApplied={search.filtersApplied}
         onClearFilters={search.reset}
+        searchClassName="sm:flex-none sm:w-64 lg:w-80"
         countBadge={
           <ListCountBadge
             filtered={filteredRows.length}
@@ -395,6 +513,25 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
           />
         }
       >
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setShowColumnModal(true)}
+          icon={<SlidersHorizontal className="w-4 h-4" />}
+          className="hidden sm:flex whitespace-nowrap !h-[38px] !text-sm"
+        >
+          <span className="hidden md:inline">Customize Columns</span>
+          <span className="md:hidden">Columns</span>
+        </Button>
+        <Button
+          variant="secondary"
+          size="sm"
+          onClick={() => setShowExportModal(true)}
+          icon={<FileDown className="w-4 h-4" />}
+          className="whitespace-nowrap !h-[38px] !text-sm"
+        >
+          Export{selectedRows.length > 0 ? ` (${selectedRows.length})` : ''}
+        </Button>
         <ListViewToggle value={displayMode} onChange={setDisplayMode} />
       </ListToolbar>
     </>
@@ -447,6 +584,12 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                     <p className="text-xs text-gray-600 dark:text-slate-400 truncate" title={row._config_title}>
                       {row._config_title}
                     </p>
+
+                    {inviteSourceLabel(row) && (
+                      <p className="text-xs text-gray-600 dark:text-slate-400">
+                        <InviteSourceValue inv={row} iconClassName="w-3 h-3" />
+                      </p>
+                    )}
 
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
@@ -544,17 +687,33 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 dark:bg-slate-800 border-b border-gray-100 dark:border-slate-700">
                   <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">CID</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Candidate</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Email</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job ID</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Job Title</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Status</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>
+<th className="text-left px-4 py-3 w-12 align-middle tf-sticky-col-left">
+                      <button
+                        type="button"
+                        onClick={toggleAllOnPage}
+                        className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800"
+                        aria-label={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
+                        title={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
+                      >
+                        {allOnPageSelected ? (
+                          <CheckSquare className="w-4 h-4 text-brand-blue" />
+                        ) : (
+                          <Square className="w-4 h-4 text-gray-400" />
+                        )}
+                      </button>
+                    </th>
+                    {col('cid') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">CID</th>}
+                    {col('candidate') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Candidate</th>}
+                    {col('email') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Email</th>}
+                    {col('jobId') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job ID</th>}
+                    {col('jobTitle') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Job Title</th>}
+                    {col('jobVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>}
+                    {col('interviewVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>}
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>
+                    {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Status</th>}
+                    {col('score') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>}
+                    {col('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
+                    {col('proctoring') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>}
                     <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
@@ -567,90 +726,131 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                         onClick={() => openSession(row)}
                         className="hover:bg-brand-blue/5 transition-colors cursor-pointer"
                       >
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {row.candidate_cid ? (
-                            <span className="text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-1 rounded">
-                              {row.candidate_cid}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-xs flex-shrink-0">
-                              {(row.candidate_name || 'U')[0].toUpperCase()}
-                            </div>
-                            <span className="font-medium text-gray-900 dark:text-slate-50 truncate max-w-[160px]">
-                              {row.candidate_name || 'Unknown'}
-                            </span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-gray-600 dark:text-slate-400 truncate max-w-[180px] block">
-                            {row.candidate_email || '—'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {row._job_id ? (
-                            <JobIdBadge>{row._job_id}</JobIdBadge>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-gray-700 dark:text-slate-300 truncate max-w-[180px] block">
-                            {row._config_title}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <VersionPill kind="job" version={row._job_version} />
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <VersionPill kind="interview" version={row._interview_version} />
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="flex items-center gap-1.5 flex-wrap">
-                            <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
-                            {row.status === 'in_progress' && (
-                              <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
-                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                                LIVE
-                              </span>
+<td className="px-4 py-3 w-12 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => toggleSelected(row)}
+                            className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
+                            aria-label={selectedKeys.has(rowKey(row)) ? 'Deselect candidate' : 'Select candidate'}
+                          >
+                            {selectedKeys.has(rowKey(row)) ? (
+                              <CheckSquare className="w-4 h-4 text-brand-blue" />
+                            ) : (
+                              <Square className="w-4 h-4 text-gray-400" />
                             )}
-                          </div>
+                          </button>
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {row.score != null ? (
-                            <div className="flex items-center gap-1.5">
-                              <span className={`font-medium text-xs ${
-                                row.score >= 70 ? 'text-success' :
-                                row.score >= 50 ? 'text-brand-orange-deep' : 'text-destructive'
-                              }`}>
-                                {Math.round(row.score)}%
+                        {col('cid') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {row.candidate_cid ? (
+                              <span className="text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-1 rounded">
+                                {row.candidate_cid}
                               </span>
-                              <PassFailBadge score={row.score} />
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                        )}
+                        {col('candidate') && (
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-xs flex-shrink-0">
+                                {(row.candidate_name || 'U')[0].toUpperCase()}
+                              </div>
+                              <span className="font-medium text-gray-900 dark:text-slate-50 truncate max-w-[160px]">
+                                {row.candidate_name || 'Unknown'}
+                              </span>
                             </div>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-slate-400">
-                          <div className="flex flex-col gap-0.5 text-xs">
-                            <span><span className="text-gray-400 dark:text-slate-500">Started at:</span> {row.started_at ? formatIST(row.started_at) : '—'}</span>
-                            <span><span className="text-gray-400 dark:text-slate-500">Completed at:</span> {row.completed_at ? formatIST(row.completed_at) : '—'}</span>
-                            <span><span className="text-gray-400 dark:text-slate-500">Duration:</span> {formatDuration(row)}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {row.status === 'completed' ? (
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>
-                              {risk.level}
+                          </td>
+                        )}
+                        {col('email') && (
+                          <td className="px-4 py-3">
+                            <span className="text-gray-600 dark:text-slate-400 truncate max-w-[180px] block">
+                              {row.candidate_email || '—'}
                             </span>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
+                          </td>
+                        )}
+                        {col('jobId') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {row._job_id ? (
+                              <JobIdBadge>{row._job_id}</JobIdBadge>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                        )}
+                        {col('jobTitle') && (
+                          <td className="px-4 py-3">
+                            <span className="text-gray-700 dark:text-slate-300 truncate max-w-[180px] block">
+                              {row._config_title}
+                            </span>
+                          </td>
+                        )}
+                        {col('jobVersion') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <VersionPill kind="job" version={row._job_version} />
+                          </td>
+                        )}
+                        {col('interviewVersion') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <VersionPill kind="interview" version={row._interview_version} />
+                          </td>
+                        )}
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-700 dark:text-slate-300">
+                          {inviteSourceLabel(row)
+                            ? <InviteSourceValue inv={row} iconClassName="w-3.5 h-3.5" />
+                            : <span className="text-gray-400">—</span>}
                         </td>
+                        {col('status') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
+                              {row.status === 'in_progress' && (
+                                <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                                  LIVE
+                                </span>
+                              )}
+                            </div>
+                          </td>
+                        )}
+                        {col('score') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {row.score != null ? (
+                              <div className="flex items-center gap-1.5">
+                                <span className={`font-medium text-xs ${
+                                  row.score >= 70 ? 'text-success' :
+                                  row.score >= 50 ? 'text-brand-orange-deep' : 'text-destructive'
+                                }`}>
+                                  {Math.round(row.score)}%
+                                </span>
+                                <PassFailBadge score={row.score} />
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                        )}
+                        {col('timeline') && (
+                          <td className="px-4 py-3 whitespace-nowrap text-gray-600 dark:text-slate-400">
+                            <div className="flex flex-col gap-0.5 text-xs">
+                              <span><span className="text-gray-400 dark:text-slate-500">Started at:</span> {row.started_at ? formatIST(row.started_at) : '—'}</span>
+                              <span><span className="text-gray-400 dark:text-slate-500">Completed at:</span> {row.completed_at ? formatIST(row.completed_at) : '—'}</span>
+                              <span><span className="text-gray-400 dark:text-slate-500">Duration:</span> {formatDuration(row)}</span>
+                            </div>
+                          </td>
+                        )}
+                        {col('proctoring') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {row.status === 'completed' ? (
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>
+                                {risk.level}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                        )}
                         <td className="px-4 py-3 text-right whitespace-nowrap tf-sticky-col">
                           <Button
                             variant="secondary"
@@ -718,6 +918,93 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
           </>
         )}
       </div>
+
+    {showColumnModal && (
+      <ColumnCustomizationModal
+        columns={columns}
+        onClose={() => setShowColumnModal(false)}
+        onApply={(ids) => setColumns((prev) => prev.map((c) => ({ ...c, enabled: ids.includes(c.id) })))}
+      />
+    )}
+
+    {/* Export format picker — same modal as the resume scoring All Resumes tab. */}
+    {showExportModal && (
+      <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+        <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
+          <div className="flex items-start justify-between gap-3 p-5 border-b border-gray-200 shrink-0">
+            <div className="flex items-start gap-3">
+              <div className="w-11 h-11 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
+                <FileDown className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-gray-900">Export Candidate Results</h3>
+                <p className="text-sm text-gray-500 mt-1 flex items-center gap-1.5">
+                  {selectedRows.length > 0 ? `${selectedRows.length} selected records` : `${filteredRows.length} records`}
+                  <span className="w-1 h-1 rounded-full bg-blue-500" />
+                  {enabledColumns.length} columns
+                </p>
+              </div>
+            </div>
+            <Button variant="secondary" size="sm" onClick={() => setShowExportModal(false)} className="px-2 flex-shrink-0" aria-label="Close">
+              <X className="w-5 h-5" />
+            </Button>
+          </div>
+
+          <div className="p-5 overflow-y-auto flex-1">
+            <p className="text-sm font-bold text-gray-900 mb-3">Choose export format</p>
+            <div className="space-y-3">
+              {([
+                { key: 'csv', title: 'CSV Format', desc: 'Compatible with Excel, Google Sheets, and most spreadsheet apps.', Icon: FileText, iconWrap: 'bg-success-subtle', iconColor: 'text-success' },
+                { key: 'xls', title: 'Excel Format (.xls)', desc: 'Native Excel format with formatting and styling.', Icon: FileSpreadsheet, iconWrap: 'bg-blue-100', iconColor: 'text-blue-700' },
+              ] as const).map(({ key, title, desc, Icon, iconWrap, iconColor }) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setExportFormat(key)}
+                  className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
+                    exportFormat === key ? 'border-blue-500 bg-blue-50/60' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                  }`}
+                >
+                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${iconWrap}`}>
+                    <Icon className={`w-6 h-6 ${iconColor}`} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="font-bold text-gray-900">{title}</div>
+                    <div className="text-sm text-gray-500">{desc}</div>
+                  </div>
+                  <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${exportFormat === key ? 'border-blue-600' : 'border-gray-300'}`}>
+                    {exportFormat === key && <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            <div className="mt-4 p-4 bg-blue-50/60 rounded-xl flex items-start gap-3">
+              <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-gray-600">
+                <span className="block font-bold text-blue-700 mb-0.5">Columns included</span>
+                {enabledColumns.map((c) => c.label).join(', ')}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200 shrink-0">
+            <Button variant="secondary" size="md" onClick={() => setShowExportModal(false)}>
+              Cancel
+            </Button>
+            <Button
+              variant="primary"
+              size="md"
+              onClick={handleExport}
+              disabled={enabledColumns.length === 0}
+              icon={<Download className="w-4 h-4" />}
+            >
+              Export
+            </Button>
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 }

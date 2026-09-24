@@ -77,7 +77,6 @@ type BrowserWindow = Window & typeof globalThis & {
   webkitAudioContext?: typeof AudioContext;
 };
 
-const FACE_REGISTRATION_TIMEOUT_MS = 8000;
 const MULTI_FACE_MIN_CONFIDENT_SCORE = 0.45;
 
 interface SystemCheckFaceResult {
@@ -1154,14 +1153,14 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
       }
 
       if (onRegisterFace && videoRef.current) {
-        try {
-          await Promise.race([
-            onRegisterFace(videoRef.current).catch(() => false),
-            new Promise<boolean>((resolve) => setTimeout(() => resolve(false), FACE_REGISTRATION_TIMEOUT_MS)),
-          ]);
-        } catch (error) {
-          console.warn('[SYSTEM CHECK] Face baseline registration failed:', error);
-        }
+        // Fire-and-forget (2026-09-24): registration now runs off-thread in the
+        // portal's hook and keeps going after this screen unmounts; the baseline
+        // lands in storage before the assessment starts. Awaiting it here made
+        // the candidate sit on a spinner (and, on the old main-thread path,
+        // froze the next screen) for up to 8 s.
+        void onRegisterFace(videoRef.current)
+          .then((ok) => console.log(`[SYSTEM CHECK] Face baseline registration ${ok ? 'done' : 'not captured'} (background)`))
+          .catch((error) => console.warn('[SYSTEM CHECK] Face baseline registration failed:', error));
       }
 
       // Pass the stream to parent to keep camera alive (prevents black screen)

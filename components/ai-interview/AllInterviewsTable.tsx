@@ -49,11 +49,38 @@ interface InterviewRow {
   jdId?: string;            // job-version id, needed for the Edit route
   rawStatus: string;        // draft | published | archived (normalized)
   status: string;           // Draft | Active | Archived   -> column 5
+  rounds: string[];         // enabled round types, in config order
   invitations: number;      //                        -> column 6
+  completed: number;        // completed sessions, filled in by fetchAll
   createdAt: string;        // ISO                    -> column 7
   createdSort: number;      // epoch ms, so the sort never re-parses
   createdBy: string;        //                        -> column 8
+  config: AIInterviewResponse; // the raw config, handed to `renderRowActions`
 }
+
+/* Same full labels (tooltip) and short forms (pill text) the Total Jobs tab's
+   version panel uses for its Rounds cell. */
+const ROUND_SHORT_LABELS: Record<string, string> = {
+  hr: 'HR',
+  technical: 'TECH',
+  behavioral: 'BEH',
+  culture_fit: 'CF',
+  leadership: 'LEAD',
+  problem_solving: 'PS',
+  must_have_skills: 'MHS',
+  nice_to_have_skills: 'NHS',
+};
+
+const ROUND_LABELS: Record<string, string> = {
+  hr: 'HR',
+  technical: 'Technical',
+  behavioral: 'Behavioral',
+  culture_fit: 'Culture Fit',
+  leadership: 'Leadership',
+  problem_solving: 'Problem Solving',
+  must_have_skills: 'Must-Have Skills',
+  nice_to_have_skills: 'Nice-to-Have Skills',
+};
 
 const STATUS_LABEL: Record<string, string> = {
   published: 'Active',
@@ -95,10 +122,15 @@ function withInterviewVersions(items: AIInterviewResponse[]): InterviewRow[] {
       jdId: config.jd_id,
       rawStatus: raw,
       status: STATUS_LABEL[raw] || 'Draft',
+      rounds: (config.rounds_config || [])
+        .filter((round) => round.enabled !== false)
+        .map((round) => round.type),
       invitations: config.invitations_count ?? 0,
+      completed: 0,
       createdAt: config.created_at,
       createdSort: parseIST(config.created_at).getTime() || 0,
       createdBy: config.created_by_name || 'System',
+      config,
     };
   });
 }
@@ -163,7 +195,7 @@ function CreatedBy({ name }: { name: string }) {
 
 type SortKey =
   | 'jobId' | 'jobName' | 'jobVersion' | 'interviewVersion'
-  | 'status' | 'invitations' | 'createdAt' | 'createdBy';
+  | 'status' | 'rounds' | 'invitations' | 'completed' | 'createdAt' | 'createdBy';
 
 const text = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
 
@@ -176,7 +208,9 @@ const COMPARATORS: Record<SortKey, (a: InterviewRow, b: InterviewRow) => number>
     const order = ['Active', 'Draft', 'Archived'];
     return order.indexOf(a.status) - order.indexOf(b.status);
   },
+  rounds: (a, b) => a.rounds.length - b.rounds.length || text(a.rounds.join(','), b.rounds.join(',')),
   invitations: (a, b) => a.invitations - b.invitations,
+  completed: (a, b) => a.completed - b.completed,
   createdAt: (a, b) => a.createdSort - b.createdSort,
   createdBy: (a, b) => text(a.createdBy, b.createdBy),
 };
@@ -194,7 +228,9 @@ const COLUMNS: ColumnDef[] = [
   { key: 'jobVersion', label: 'Job Version' },
   { key: 'interviewVersion', label: 'Interview Version' },
   { key: 'status', label: 'Status' },
-  { key: 'invitations', label: 'Invitations Sent', align: 'right' },
+  { key: 'rounds', label: 'Rounds' },
+  { key: 'invitations', label: 'Invitations Sent' },
+  { key: 'completed', label: 'Completed' },
   { key: 'createdAt', label: 'Created On' },
   { key: 'createdBy', label: 'Created By', hideBelow: 'lg' },
 ];
@@ -251,9 +287,16 @@ export interface AllInterviewsTableProps {
   fixedStatus?: 'published' | 'draft' | 'archived';
   /** Heading shown above the search bar. Defaults to "All Interviews". */
   titleLabel?: string;
+  /**
+   * The Actions cell for one row. The AI Interview page passes the same 3-dot
+   * menu its Total Jobs Interview Versions table uses, so both tabs offer the
+   * same actions (Share, Track, View Results, Archive, Delete …) wired to the
+   * same handlers. Omitted, the table falls back to its own View / Edit menu.
+   */
+  renderRowActions?: (config: AIInterviewResponse) => React.ReactNode;
 }
 
-export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedStatus, titleLabel = 'All Interviews' }: AllInterviewsTableProps = {}) {
+export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedStatus, titleLabel = 'All Interviews', renderRowActions }: AllInterviewsTableProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isTenantAdmin, user } = useAuth();
@@ -314,7 +357,26 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
       seen.add(config.id);
       merged.push(config);
     }
-    return withInterviewVersions(merged);
+    const rows = withInterviewVersions(merged);
+
+    /* The list response carries no finished-sessions count, so read it off
+       each config's invitations aggregate (`completed`) — a page_size-1 probe,
+       only for configs that have sent at least one invite (the rest are 0),
+       ten at a time. A failed probe just leaves that row at 0. */
+    const withInvites = rows.filter((row) => row.invitations > 0);
+    for (let i = 0; i < withInvites.length; i += 10) {
+      await Promise.all(
+        withInvites.slice(i, i + 10).map(async (row) => {
+          try {
+            const res = await aiInterviewService.getConfigInvitations(row.id, { page: 1, page_size: 1, compact: true });
+            row.completed = res.completed || 0;
+          } catch {
+            /* leave at 0 */
+          }
+        }),
+      );
+    }
+    return rows;
   }, []);
 
   useEffect(() => {
@@ -545,7 +607,7 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
       return;
     }
     setSortKey(key);
-    setSortDir(key === 'createdAt' || key === 'invitations' ? 'desc' : 'asc');
+    setSortDir(key === 'createdAt' || key === 'invitations' || key === 'completed' ? 'desc' : 'asc');
   };
 
   /* View is always available; Edit is Draft-only and additionally gated on
@@ -745,9 +807,9 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
                       key={col.key}
                       scope="col"
                       aria-sort={isSorted ? (sortDir === 'asc' ? 'ascending' : 'descending') : 'none'}
-                      className={`px-3 py-2.5 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${
+                      className={`px-3 py-2.5 whitespace-nowrap align-middle text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 ${
                         col.align === 'right' ? 'text-right' : 'text-left'
-                      } ${col.hideBelow ? HIDE_CLASS[col.hideBelow] : ''}`}
+                      } ${col.hideBelow ? HIDE_CLASS[col.hideBelow] : ''} ${col.key === 'jobId' ? 'tf-sticky-col-left' : ''}`}
                     >
                       <button
                         type="button"
@@ -785,7 +847,7 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
                     {COLUMNS.map((col) => (
                       <td
                         key={col.key}
-                        className={`px-3 py-3 ${col.hideBelow ? HIDE_CLASS[col.hideBelow] : ''}`}
+                        className={`px-3 py-3 ${col.hideBelow ? HIDE_CLASS[col.hideBelow] : ''} ${col.key === 'jobId' ? 'tf-sticky-col-left' : ''}`}
                       >
                         <div
                           className="h-3.5 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse"
@@ -857,7 +919,8 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
                       flashedRowId === row.id ? 'bg-brand-blue/10 dark:bg-brand-blue/15' : ''
                     }`}
                   >
-                    <td className="px-3 py-2.5 align-middle">
+                    {/* Job ID stays pinned on the left while the table scrolls sideways. */}
+                    <td className="px-3 py-2.5 align-middle whitespace-nowrap tf-sticky-col-left">
                       {row.jobId ? (
                         <JobIdBadge>{row.jobId}</JobIdBadge>
                       ) : (
@@ -874,26 +937,51 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
                       </span>
                     </td>
 
-                    <td className="px-3 py-2.5 align-middle">
+                    <td className="px-3 py-2.5 align-middle whitespace-nowrap">
                       <VersionPill kind="job" version={row.jobVersion} />
                     </td>
 
-                    <td className="px-3 py-2.5 align-middle">
+                    <td className="px-3 py-2.5 align-middle whitespace-nowrap">
                       <VersionPill kind="interview" version={row.interviewVersion} />
                     </td>
 
-                    <td className="px-3 py-2.5 align-middle">
+                    <td className="px-3 py-2.5 align-middle whitespace-nowrap">
                       <StatusBadge status={row.status} />
                     </td>
 
-                    <td className="px-3 py-2.5 align-middle text-right">
+                    <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                      {row.rounds.length > 0 ? (
+                        <div className="flex items-center gap-1.5 flex-nowrap">
+                          {row.rounds.map((type, index) => (
+                            <span
+                              key={`${type}-${index}`}
+                              title={ROUND_LABELS[type] || type}
+                              className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold whitespace-nowrap bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30"
+                            >
+                              {ROUND_SHORT_LABELS[type] || ROUND_LABELS[type] || type}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
+                      )}
+                    </td>
+
+                    <td className="px-3 py-2.5 align-middle whitespace-nowrap">
                       <span className="tabular-nums text-gray-900 dark:text-slate-100">
                         {row.invitations.toLocaleString()}
                       </span>
                       <span className="text-xs text-gray-400 ml-1">sent</span>
                     </td>
 
-                    <td className="px-3 py-2.5 align-middle">
+                    <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                      <span className="tabular-nums text-gray-900 dark:text-slate-100">
+                        {row.completed.toLocaleString()}
+                      </span>
+                      <span className="text-xs text-gray-400 ml-1">completed</span>
+                    </td>
+
+                    <td className="px-3 py-2.5 align-middle whitespace-nowrap">
                       <span className="text-gray-600 dark:text-slate-400 tabular-nums">
                         {formatISTStamp(row.createdAt)}
                       </span>
@@ -907,6 +995,9 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
                       className="px-3 py-2.5 align-middle text-right tf-sticky-col"
                       onClick={(e) => e.stopPropagation()}
                     >
+                      {renderRowActions ? (
+                        <div className="flex justify-end">{renderRowActions(row.config)}</div>
+                      ) : (
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button
@@ -927,6 +1018,7 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
                           ))}
                         </DropdownMenuContent>
                       </DropdownMenu>
+                      )}
                     </td>
                   </tr>
                 ))}

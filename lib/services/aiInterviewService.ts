@@ -208,6 +208,10 @@ export interface AIInterviewInviteRequest {
 export interface AIInterviewResponse {
   id: string;
   tenant_id: string;
+  /** Which invite flow created the session — set on invitation list rows. */
+  invite_source?: 'resume' | 'email' | 'link';
+  /** Set only when the candidate was invited from the resume database. */
+  resume_id?: string;
   config_id?: string;
   display_id?: string;
   candidate_name?: string;
@@ -1143,6 +1147,10 @@ export const aiInterviewService = {
   ): Promise<{
     mth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
     nth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
+    /** Input skills the backend's dedup pass dropped as meaning-duplicates of
+     *  `kept`. The caller removes these from the saved main-skill list so the
+     *  same pair isn't re-sent (and re-judged) on every regeneration. */
+    removed_duplicates?: { skill: string; kept: string; bucket: 'mth' | 'nth' }[];
   }> {
     try {
       const response = await api.post('/ai-interview/generate-clusters', {
@@ -1390,6 +1398,8 @@ export const aiInterviewService = {
   async sendSessionEmail(sessionId: string, data: {
     custom_message?: string;
     base_url?: string;
+    /** Email the session's current link instead of rotating it (keeps a copied link working). */
+    keep_link?: boolean;
   }): Promise<{ message: string; session_id: string }> {
     const response = await api.post(`/ai-interview/session/${sessionId}/send-invite-email`, data);
     return response.data;
