@@ -7,7 +7,7 @@ import {
   MoreVertical, Monitor, RefreshCw, X, History,
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatIST } from '@/lib/utils/dateUtils';
+import { formatIST, parseIST } from '@/lib/utils/dateUtils';
 import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { assessmentService } from '@/lib/services/assessmentService';
@@ -124,7 +124,24 @@ export const copyInvitationLink = async (inv: any) => {
    sent_at) — that overwriting is what silently collapsed a row's history
    down to just its latest state. */
 
-export type TimelineEntry = { label: string; at: string; Icon: LucideIcon; tone: string };
+export type TimelineEntry = {
+  label: string;
+  at: string;
+  Icon: LucideIcon;
+  tone: string;
+  /** The candidate email the audit row recorded (`details.candidate_email`),
+   *  when the API sent one — View History shows it under the event. */
+  email?: string;
+};
+
+/** Epoch ms for a timeline timestamp, read the way the Timeline column prints
+ *  it. The backend's datetimes are naive IST strings; `new Date()` reads those
+ *  as the BROWSER's local time while an inferred expiry (built with
+ *  `toISOString()`) carries a Z, so outside IST the two could sort a few hours
+ *  apart. `parseIST` — what `formatIST` already uses for display — reads every
+ *  shape on one clock, so the order the trail is sorted in is the order its
+ *  printed times read in. */
+const eventMs = (at: string | null | undefined): number => parseIST(at).getTime();
 
 const describeTimelineAction = (action: string): { label: string; Icon: LucideIcon; tone: string } => {
   switch (action) {
@@ -190,8 +207,8 @@ const inferMissingExpiries = (
     if (j >= sorted.length) break;
     const between = sorted.slice(i + 1, j);
     if (between.some((e) => !INFERENCE_SAFE_LABELS.has(e.label))) continue;
-    const deadline = new Date(sorted[i].at).getTime() + spanMs;
-    if (deadline < new Date(sorted[j].at).getTime()) {
+    const deadline = eventMs(sorted[i].at) + spanMs;
+    if (deadline < eventMs(sorted[j].at)) {
       inferred.push({ ...describeTimelineAction(expiredAction), at: new Date(deadline).toISOString() });
     }
   }
@@ -235,8 +252,8 @@ const FALLBACK_MATCH_WINDOW_MS = 2 * 60 * 1000;
  *  else. */
 const ORDER_TIE_WINDOW_MS = 10 * 1000;
 const compareTimelineEntries = (a: TimelineEntry, b: TimelineEntry): number => {
-  const ta = new Date(a.at).getTime();
-  const tb = new Date(b.at).getTime();
+  const ta = eventMs(a.at);
+  const tb = eventMs(b.at);
   if (Math.abs(ta - tb) <= ORDER_TIE_WINDOW_MS) {
     const aFailed = a.label === 'Invite Failed';
     const bFailed = b.label === 'Invite Failed';
@@ -248,7 +265,7 @@ const compareTimelineEntries = (a: TimelineEntry, b: TimelineEntry): number => {
 
 const buildFullTimeline = (
   inv: any,
-  auditLogs: Array<{ action: string; created_at: string | null }>
+  auditLogs: Array<{ action: string; created_at: string | null; details?: Record<string, unknown> | null }>
 ): TimelineEntry[] => {
   // Defensive: collapse exact duplicates — same action, same millisecond —
   // rather than every occurrence of an action. The real fix is upstream
@@ -259,7 +276,7 @@ const buildFullTimeline = (
   const seen = new Set<string>();
   const dedupedLogs = auditLogs.filter((log) => {
     if (!log.created_at) return true;
-    const key = `${log.action}|${new Date(log.created_at).getTime()}`;
+    const key = `${log.action}|${eventMs(log.created_at)}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -267,13 +284,17 @@ const buildFullTimeline = (
 
   const out: TimelineEntry[] = dedupedLogs
     .filter((log) => !!log.created_at)
-    .map((log) => ({ ...describeTimelineAction(log.action), at: log.created_at as string }));
+    .map((log) => {
+      const detailEmail = log.details?.candidate_email;
+      const email = typeof detailEmail === 'string' ? detailEmail : undefined;
+      return { ...describeTimelineAction(log.action), at: log.created_at as string, ...(email ? { email } : {}) };
+    });
 
   // created_at (row birth, never touched again) rather than sent_at/
   // expires_at (both overwritten by a later resend) — using a mutable
   // column here would make the very fields a resend rewrites decide whether
   // history from BEFORE that resend still shows.
-  const clockExpired = !inv.started_at && !inv.unit_consumed && inv.expires_at && new Date(inv.expires_at) < new Date();
+  const clockExpired = !inv.started_at && !inv.unit_consumed && inv.expires_at && eventMs(inv.expires_at) < Date.now();
   // A revoked invitation was killed by the recruiter, not by its deadline —
   // even when a stale expires_at (older revokes overwrote it with the revoke
   // time) says the clock ran out, "Expired at" would be a phantom line.
@@ -283,6 +304,11 @@ const buildFullTimeline = (
     (resolveInviteStatus(inv) === 'expired' || clockExpired);
   const fallback: [string, string | null | undefined][] = [
     ['assessment_invite', inv.created_at],
+    // A revoke is audit-logged, but rows from before that trail existed only
+    // have the column. `revoked_at` is cleared by a resend, so when it is set
+    // the revoke is the invite's live state — the AI Interview trail carries
+    // the same fallback.
+    ['assessment_invitation_revoke', inv.revoked_at],
     ['assessment_start', inv.started_at],
     ['assessment_complete', inv.completed_at],
     ['assessment_exit', inv.terminated_at && !inv.completed_at ? inv.terminated_at : null],
@@ -292,7 +318,7 @@ const buildFullTimeline = (
   ];
   for (const [action, at] of fallback) {
     if (!at) continue;
-    const candidateMs = new Date(at).getTime();
+    const candidateMs = eventMs(at);
     const wantedLabel = describeTimelineAction(action).label;
     // The audit row is written AFTER the column is set (revoke/start rows
     // land seconds later; the invite row after the email goes out), so a
@@ -302,7 +328,7 @@ const buildFullTimeline = (
     const coveredByRealRow = dedupedLogs.some(
       (log) =>
         log.created_at &&
-        new Date(log.created_at).getTime() <= candidateMs + FALLBACK_MATCH_WINDOW_MS &&
+        eventMs(log.created_at) <= candidateMs + FALLBACK_MATCH_WINDOW_MS &&
         describeTimelineAction(log.action).label === wantedLabel
     );
     if (!coveredByRealRow) {
@@ -317,7 +343,7 @@ const buildFullTimeline = (
   if (inv.bounced_at) out.push({ label: 'Bounced', at: inv.bounced_at, Icon: RefreshCw, tone: 'text-destructive' });
   if (inv.opened_at) out.push({ label: 'System Check', at: inv.opened_at, Icon: Monitor, tone: 'text-brand-cyan' });
 
-  const merged = inferMissingExpiries(out, inv.expires_at && inv.sent_at ? new Date(inv.expires_at).getTime() - new Date(inv.sent_at).getTime() : 0, 'assessment_invitation_expired').sort(
+  const merged = inferMissingExpiries(out, inv.expires_at && inv.sent_at ? eventMs(inv.expires_at) - eventMs(inv.sent_at) : 0, 'assessment_invitation_expired').sort(
     compareTimelineEntries
   );
   // Every derivation above (inference, dedup, collapse) assumes ascending
@@ -333,6 +359,53 @@ const buildFullTimeline = (
 const COMPACT_TIMELINE_LIMIT = 4;
 export const timelineEvents = (inv: any): TimelineEntry[] =>
   buildFullTimeline(inv, inv.timeline || []).slice(0, COMPACT_TIMELINE_LIMIT);
+
+/** Timeline entry label -> the status key it puts an invitation in (the keys
+ *  the status badge and the Invitation Status tabs use). Only entries that ARE
+ *  a status are listed: Edited, Email Changed and Email Read record something
+ *  that happened to an invite without changing its status, so they are skipped
+ *  over rather than read as one. */
+const TIMELINE_LABEL_TO_STATUS: Record<string, string> = {
+  'Invited': 'sent',
+  'Revoked': 'revoked',
+  'System Check': 'opened',
+  'Started': 'started',
+  'Completed': 'completed',
+  'Terminated': 'abandoned',
+  'Expired at': 'expired',
+  'Invite Failed': 'failed',
+  'Bounced': 'bounced',
+};
+
+/** An invitation's CURRENT status: the most recent status entry in the same
+ *  trail the Timeline column prints (newest first). The Invitation Status
+ *  tab's Status badge, its tab counts and its tab filter all read this, so a
+ *  row's badge, the tab it sits under and the top of its Timeline cannot
+ *  disagree — Invited then Revoked is Revoked, Revoked then a resend is
+ *  Invited. Null only when the trail holds no status at all. */
+export const latestTimelineStatus = (inv: any): string | null => {
+  const latest = buildFullTimeline(inv, inv.timeline || []).find(isStatusEntry);
+  return latest ? TIMELINE_LABEL_TO_STATUS[latest.label] : null;
+};
+
+/** Whether a timeline entry is a status (vs. an edit / email signal). */
+const isStatusEntry = (entry: TimelineEntry): boolean => !!TIMELINE_LABEL_TO_STATUS[entry.label];
+
+/** One line under each event in View History, saying what it means. */
+const TIMELINE_EVENT_DESCRIPTION: Record<string, string> = {
+  'Invited': 'Invitation sent to candidate',
+  'Revoked': 'Invitation revoked',
+  'Edited': 'Invitation details edited',
+  'Email Changed': 'Candidate email changed',
+  'Email Read': 'Candidate opened the invitation email',
+  'System Check': 'Candidate accepted consent and began the system check',
+  'Started': 'Candidate started the assessment',
+  'Completed': 'Candidate completed the assessment',
+  'Terminated': 'Candidate left before completing the assessment',
+  'Expired at': 'Invitation link expired',
+  'Invite Failed': 'Invitation email could not be delivered',
+  'Bounced': 'Invitation email bounced',
+};
 
 /** "View full history" only earns its place once something is actually
  *  hidden by the cap above — at 4 events or fewer the compact list already
@@ -673,8 +746,16 @@ export function RevokeInvitationDialog({ target, onClose, getAssessmentId, onRev
   );
 }
 
-/** Full action-log modal — every send, resend, revoke, edit and candidate
- *  lifecycle milestone as its own row, oldest first. Fetched on demand. */
+/** Full history modal — every send, resend, revoke, edit and candidate
+ *  lifecycle milestone as its own row, OLDEST FIRST (the order they happened
+ *  in). Built by `buildFullTimeline`, the same merge the Timeline column and
+ *  `latestTimelineStatus` read, so the modal shows exactly those events —
+ *  including the ones synthesized from the row's own columns (a clock expiry,
+ *  a pre-audit revoke) — and marks the same latest status as current.
+ *
+ *  The trail is fetched fresh on open and merged with the one embedded in the
+ *  row; `buildFullTimeline` drops exact duplicates (same action, same
+ *  instant), so an event present in both appears once. */
 export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
   target: any | null;
   onClose: () => void;
@@ -691,27 +772,31 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
     setLoading(true);
     assessmentService.getInvitationTimeline(getAssessmentId(target), target.id)
       .then((logs) => {
-        setEntries(
-          logs
-            .filter((log) => !!log.created_at)
-            .map((log) => ({ ...describeTimelineAction(log.action), at: log.created_at as string }))
-            .sort(compareTimelineEntries)
-            .reverse()
-        );
+        // Newest first out of the merge; reversed for reading in order.
+        setEntries(buildFullTimeline(target, [...(target.timeline || []), ...logs]).reverse());
       })
       .catch((err: any) => setError(err?.message || 'Failed to load history'))
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target?.id]);
 
+  // The current status: the last status entry in time order — the same entry
+  // `latestTimelineStatus` picks for the Status column and tabs.
+  let currentIndex = -1;
+  if (entries) {
+    for (let i = entries.length - 1; i >= 0; i--) {
+      if (isStatusEntry(entries[i])) { currentIndex = i; break; }
+    }
+  }
+
   return (
     <Dialog open={!!target} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] sm:max-w-md p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Invitation History</DialogTitle>
-          <DialogDescription>{target?.candidate_name || target?.candidate_email || 'Candidate'}</DialogDescription>
+          <DialogDescription className="break-words">{target?.candidate_name || target?.candidate_email || 'Candidate'}</DialogDescription>
         </DialogHeader>
-        <div className="overflow-y-auto max-h-[60vh] -mx-1 px-1">
+        <div className="overflow-y-auto max-h-[60dvh] -mx-1 px-1">
           {loading ? (
             <div className="flex items-center justify-center py-10">
               <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
@@ -719,18 +804,40 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
           ) : error ? (
             <p className="text-sm text-destructive py-6 text-center">{error}</p>
           ) : entries && entries.length > 0 ? (
-            <ol className="space-y-3">
-              {entries.map((entry, i) => (
-                <li key={i} className="flex items-start gap-3">
-                  <span className={`mt-0.5 flex-shrink-0 rounded-full p-1.5 bg-gray-100 dark:bg-slate-800 ${entry.tone}`}>
-                    <entry.Icon className="w-3.5 h-3.5" />
-                  </span>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{entry.label}</p>
-                    <p className="text-xs text-gray-500 dark:text-slate-500">{formatIST(entry.at)}</p>
-                  </div>
-                </li>
-              ))}
+            <ol className="space-y-2 sm:space-y-3">
+              {entries.map((entry, i) => {
+                const isCurrent = i === currentIndex;
+                return (
+                  <li
+                    key={`${entry.label}-${entry.at}-${i}`}
+                    aria-current={isCurrent ? 'step' : undefined}
+                    className={`flex items-start gap-3 rounded-lg px-2 py-1.5 ${
+                      isCurrent ? 'bg-brand-blue/5 ring-1 ring-brand-blue/20' : ''
+                    }`}
+                  >
+                    <span className={`mt-0.5 flex-shrink-0 rounded-full p-1.5 bg-gray-100 dark:bg-slate-800 ${entry.tone}`}>
+                      <entry.Icon className="w-3.5 h-3.5" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs text-gray-500 dark:text-slate-500">{formatIST(entry.at)}</p>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                        <p className="text-sm font-medium text-gray-900 dark:text-slate-100">{entry.label}</p>
+                        {isCurrent && (
+                          <span className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                            Current status
+                          </span>
+                        )}
+                      </div>
+                      {TIMELINE_EVENT_DESCRIPTION[entry.label] && (
+                        <p className="text-xs text-gray-600 dark:text-slate-400 break-words">{TIMELINE_EVENT_DESCRIPTION[entry.label]}</p>
+                      )}
+                      {entry.email && (
+                        <p className="text-xs text-gray-500 dark:text-slate-500 break-all">{entry.email}</p>
+                      )}
+                    </div>
+                  </li>
+                );
+              })}
             </ol>
           ) : (
             <p className="text-sm text-gray-500 dark:text-slate-500 py-6 text-center">No history recorded yet.</p>
