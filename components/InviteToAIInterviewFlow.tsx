@@ -1,10 +1,10 @@
 'use client';
 
-import { useEffect, useState } from 'react';
-import { Brain, CheckCircle, Clock, Loader2, Mail, MapPin, Search, X } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { Brain, CheckCircle, Loader2, Mail, X } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatIST } from '@/lib/utils/dateUtils';
-import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import AIInterviewPicker, { type AIInterviewPickerSelection } from '@/components/ai-interview/AIInterviewPicker';
 import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
 import SelectedCandidatesPanel from '@/components/SelectedCandidatesPanel';
 import type { Resume } from '@/lib/types/types';
@@ -44,11 +44,12 @@ export default function InviteToAIInterviewFlow({
   onInvited,
   resumes,
 }: InviteToAIInterviewFlowProps) {
-  const [configs, setConfigs] = useState<any[]>([]);
+  const [configs, setConfigs] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
-  const [selectedConfig, setSelectedConfig] = useState<any>(null);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [selection, setSelection] = useState<AIInterviewPickerSelection | null>(null);
+  const selectedConfig = selection ? configs.find((c) => c.id === selection.interviewId) ?? null : null;
+  const bodyScrollRef = useRef<HTMLDivElement | null>(null);
   const [isSharing, setIsSharing] = useState(false);
   const [prefilled, setPrefilled] = useState<{ name: string; email: string; resumeId?: string }[]>([]);
   /** Candidates unticked in the panel — listed, but not invited. */
@@ -56,15 +57,29 @@ export default function InviteToAIInterviewFlow({
 
   const invitees = candidates.filter((candidate) => !excludedIds.includes(candidate.id));
 
-  // Only published configs can take invites, so drafts and archived ones never
-  // reach the list. Fetched on first open, then reused.
+  // Every config, archived included — the shared picker lists only the active
+  // ones, but needs the rest to number interview versions and group jobs the
+  // way the AI Interview page does. Fetched on first open, then reused.
   useEffect(() => {
     if (!open || hasLoaded) return;
     setHasLoaded(true);
     setIsLoading(true);
-    aiInterviewService
-      .listConfigs({ status: 'published', page_size: 100, compact: true })
-      .then((response) => setConfigs(response.items || []))
+    (async () => {
+      const live: AIInterviewResponse[] = [];
+      for (let page = 1; ; page += 1) {
+        const batch = await aiInterviewService.listConfigs({ page, page_size: 100, compact: true });
+        const items = batch.items || [];
+        live.push(...items);
+        if (items.length < 100 || live.length >= (batch.total ?? live.length)) break;
+      }
+      const archivedProbe = await aiInterviewService.listConfigs({ status: 'archived', page_size: 1, compact: true });
+      const archived = archivedProbe.total > archivedProbe.items.length
+        ? (await aiInterviewService.listConfigs({ status: 'archived', page_size: archivedProbe.total, compact: true })).items
+        : archivedProbe.items;
+      const seen = new Set<string>();
+      return [...live, ...archived].filter((c) => (seen.has(c.id) ? false : (seen.add(c.id), true)));
+    })()
+      .then(setConfigs)
       .catch(() => {
         toast.error('Failed to load AI interviews');
         setConfigs([]);
@@ -73,8 +88,7 @@ export default function InviteToAIInterviewFlow({
   }, [open, hasLoaded]);
 
   const closePicker = () => {
-    setSearchQuery('');
-    setSelectedConfig(null);
+    setSelection(null);
     setExcludedIds([]);
     onClose();
   };
@@ -105,9 +119,8 @@ export default function InviteToAIInterviewFlow({
 
   const closeShare = () => {
     setIsSharing(false);
-    setSelectedConfig(null);
+    setSelection(null);
     setPrefilled([]);
-    setSearchQuery('');
     setExcludedIds([]);
     onClose();
   };
@@ -129,16 +142,6 @@ export default function InviteToAIInterviewFlow({
 
   if (!open) return null;
 
-  const query = searchQuery.trim().toLowerCase();
-  const visibleConfigs = configs.filter(
-    (config) =>
-      !query ||
-      // Everything the row shows is searchable, JD number and location included.
-      `${config.jd_title || ''} ${config.position || ''} ${config.display_id || ''} ${config.jd_short_id || ''} ${config.jd_location || ''}`
-        .toLowerCase()
-        .includes(query)
-  );
-
   return (
     <>
       {/* Shell, header, body and footer are the Apply to Job / Score Resume
@@ -149,7 +152,7 @@ export default function InviteToAIInterviewFlow({
         onClick={closePicker}
       />
       <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-6xl xl:max-w-7xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
           <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
             <div className="flex items-center gap-3 min-w-0 flex-1">
               <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
@@ -172,7 +175,7 @@ export default function InviteToAIInterviewFlow({
           </div>
 
           {/* One scrolling body, as in the job dialog: panel, search, list. */}
-          <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+          <div ref={bodyScrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6">
             {/* Same Candidates Selected panel as the Score Resume dialog. */}
             {resumes && resumes.length > 0 && (
               <SelectedCandidatesPanel
@@ -185,163 +188,21 @@ export default function InviteToAIInterviewFlow({
               />
             )}
 
-            <div className="mb-4">
-              <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search AI Interviews</label>
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search by interview ID, role or job title..."
-                  className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                />
-              </div>
-            </div>
-
-            {/* Section heading and Clear Selection, as on the job list. */}
-            <div className="flex items-center justify-between gap-2 mb-3">
-              <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
-                Select an AI Interview
-                {visibleConfigs.length > 0 && (
-                  <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
-                    {visibleConfigs.length} available
-                  </span>
-                )}
-              </label>
-              {selectedConfig && (
-                <button
-                  onClick={() => setSelectedConfig(null)}
-                  className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
-                >
-                  Clear Selection
-                </button>
-              )}
-            </div>
-
+            {/* The interview list — the same shared picker as the AI Interview
+                page's Send Invite popup: search, Grouped/Ungrouped, the
+                one-at-a-time note, paging and the Configure Details preview. */}
             {isLoading ? (
               <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
                 <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
               </div>
-            ) : visibleConfigs.length === 0 ? (
-              <div className="py-12 text-center">
-                <p className="text-sm font-medium text-gray-700 mb-1">
-                  {configs.length === 0 ? 'No published AI interviews' : 'No interviews match your search'}
-                </p>
-                <p className="text-xs text-gray-500">
-                  {configs.length === 0
-                    ? 'Publish an AI interview before inviting candidates to it.'
-                    : 'Try a different job title or interview ID.'}
-                </p>
-              </div>
             ) : (
-              <div className="space-y-2">
-                {visibleConfigs.map((config) => {
-                  const isSelected = selectedConfig?.id === config.id;
-                  /* One interview at a time, so the rest go inert once one is
-                     picked — the job and assessment lists behave the same. */
-                  const blockedByOtherPick = !!selectedConfig && !isSelected;
-                  // Rounds can be switched off individually; only the live ones count.
-                  const enabledRounds = (config.rounds_config || []).filter(
-                    (round: any) => round.enabled !== false,
-                  ).length;
-                  return (
-                    <label
-                      key={config.id}
-                      title={blockedByOtherPick
-                        ? 'Only one AI interview can be sent at a time — clear the current selection to choose this one'
-                        : undefined}
-                      aria-disabled={blockedByOtherPick}
-                      className={`block w-full text-left p-4 rounded-lg border-2 transition-all ${
-                        blockedByOtherPick
-                          ? 'border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed'
-                          : isSelected
-                            ? 'border-brand-blue/50 bg-brand-blue/5 shadow-sm shadow-brand-blue/10 cursor-pointer'
-                            : 'border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/5 cursor-pointer'
-                      }`}
-                    >
-                      <div className="flex items-center gap-3">
-                        <input
-                          type="radio"
-                          name="invite-to-ai-interview-selection"
-                          checked={isSelected}
-                          disabled={blockedByOtherPick}
-                          onChange={() => !blockedByOtherPick && setSelectedConfig(config)}
-                          onClick={() => isSelected && setSelectedConfig(null)}
-                          className="w-4 h-4 flex-shrink-0 text-brand-blue border-gray-300 focus:ring-brand-blue/40 disabled:cursor-not-allowed"
-                        />
-                        <div className="min-w-0 flex-1">
-                          {/* Same four lines the Invite to Assessment rows use:
-                              ID + role + status, the JD it came from, then the
-                              interview's shape and who set it up. */}
-                          <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                            {config.display_id && (
-                              <span className="inline-flex items-center px-2.5 py-1 bg-brand-blue text-white rounded text-xs font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                                {config.display_id}
-                              </span>
-                            )}
-                            <h5 className="font-medium text-gray-900">
-                              {config.jd_title || config.position || 'Untitled'}
-                            </h5>
-                            <span className="px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ring-1 bg-green-100 text-green-700 ring-green-200">
-                              {config.status === 'published' ? 'Active' : config.status}
-                            </span>
-                            {isSelected && <CheckCircle className="w-5 h-5 text-brand-blue ml-auto flex-shrink-0" />}
-                          </div>
-
-                          {config.jd_short_id && (
-                            <div className="text-xs text-gray-700 font-medium mb-1.5">
-                              <span>{config.jd_short_id}</span>
-                              {config.jd_title && <span className="ml-2">{config.jd_title}</span>}
-                              {config.jd_version && (
-                                <span className="ml-1 text-gray-500">v{config.jd_version}</span>
-                              )}
-                            </div>
-                          )}
-
-                          <div className="flex items-center gap-3 text-sm text-gray-500 flex-wrap">
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {config.duration_minutes || 30} min
-                            </span>
-                            {enabledRounds > 0 && (
-                              <>
-                                <span>•</span>
-                                <span>{enabledRounds} round{enabledRounds === 1 ? '' : 's'}</span>
-                              </>
-                            )}
-                            {!!config.total_questions && (
-                              <>
-                                <span>•</span>
-                                <span>{config.total_questions} question{config.total_questions === 1 ? '' : 's'}</span>
-                              </>
-                            )}
-                            {config.jd_location && (
-                              <>
-                                <span>•</span>
-                                <span className="flex items-center gap-1 min-w-0">
-                                  <MapPin className="w-3 h-3 flex-shrink-0" />
-                                  <span className="truncate">{config.jd_location}</span>
-                                </span>
-                              </>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-3 text-xs text-gray-500 mt-1.5">
-                            {config.created_by_name && (
-                              <>
-                                <span>Created by: <span className="text-gray-700 font-medium">{config.created_by_name}</span></span>
-                                <span>•</span>
-                              </>
-                            )}
-                            {config.created_at && <span>{formatIST(config.created_at)}</span>}
-                          </div>
-                        </div>
-                      </div>
-                    </label>
-                  );
-                })}
-              </div>
+              <AIInterviewPicker
+                configs={configs}
+                selection={selection}
+                onSelectionChange={setSelection}
+                scrollContainerRef={bodyScrollRef}
+                searchLabel="Search AI Interviews"
+              />
             )}
           </div>
 
