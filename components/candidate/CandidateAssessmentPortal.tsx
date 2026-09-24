@@ -34,7 +34,7 @@ import CandidateHeader from './CandidateHeader';
 import CandidateStepper from './CandidateStepper';
 import { ErrorScreen } from './ErrorScreen';
 import { CompletedScreen } from './CompletedScreen';
-import InterviewFeedbackModal, { ASSESSMENT_RATING_PROMPTS } from './InterviewFeedbackModal';
+import InterviewFeedbackModal, { ASSESSMENT_RATING_HINTS, ASSESSMENT_RATING_PROMPTS } from './InterviewFeedbackModal';
 import { IdentityVerificationScreen } from './IdentityVerificationScreen';
 import CodingLanguagePickerStep from './CodingLanguagePickerStep';
 import { useAssessmentFaceBaseline } from '@/hooks/useAssessmentFaceBaseline';
@@ -599,18 +599,25 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     }
   }, [step, token]);
 
-  // Setup proctoring when assessment starts, stop when completed
+  // Setup proctoring when assessment starts; release media only at the end of
+  // the recording window. 2026-09-24: recordings now run past Submit until the
+  // feedback popup appears, so 'completing' / 'completed' must NOT stop the
+  // camera stream or the screen share (the recorders own them until then —
+  // see the recorder stop effect). Terminal states release everything.
   useEffect(() => {
     if (step === 'assessment') {
       startProctoring();
-    } else if (step === 'completing' || step === 'completed' || step === 'results' || step === 'terminated') {
-      // Explicitly stop proctoring when assessment ends
+      return;
+    }
+    if (step === 'completing' || step === 'completed') {
+      stopHeartbeatWorker();
+      return;
+    }
+    if (step === 'results' || step === 'terminated' || step === 'error') {
       stopProctoring();
       console.log('[PROCTORING] Stopped - assessment ended');
     }
-    return () => {
-      stopProctoring();
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
 
@@ -831,24 +838,13 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
       if (info.attempt_status === 'completed') {
         console.log('[DEBUG] Attempt status is COMPLETED');
-        // Already completed - show completed screen or results
-        try {
-          const resultData = await candidateService.getResults(token);
-          if (!isMountedRef.current) return;
-
-          if (resultData && resultData.overall_score !== undefined && !isNaN(resultData.overall_score)) {
-            setResults(resultData);
-            setStepSafe('results');
-          } else {
-            // Results not ready - show completed screen
-            setStepSafe('completed');
-          }
-        } catch {
-          // Results not ready - show completed screen
-          if (isMountedRef.current) {
-            setStepSafe('completed');
-          }
-        }
+        // Already completed — always the same Completed page the candidate saw
+        // on submit. A refresh or a restored tab (Ctrl+Shift+T) used to fetch
+        // results and, once scoring had finished, switch to the older
+        // ResultsScreen, so the same finished link looked different on revisit.
+        // Nothing on that screen needs the scores, so there is no reason to wait
+        // for them here.
+        setStepSafe('completed');
       // DISABLED: Identity verification removed - candidates can directly attend
       // } else if (!isIdentityVerified) {
       //   // Identity not verified - require verification first
@@ -1600,11 +1596,29 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, cameraStream, cameraRecordingEnabled, screenRecordingRequired, token, getRecordingMicTracks]);
 
+  // Recording window ends when the feedback popup appears on the completed
+  // screen (candidate request: keep both recordings running through Submit).
+  // If no popup is due (feedback already given), stop shortly after completion.
+  // Terminal states (terminated / error / results) stop immediately.
+  const FEEDBACK_GRACE_MS = 4000;
+  // Once the popup's state flips it still takes a moment to paint and for the
+  // screen-capture pipeline to pick the new frame up. Stopping immediately cut
+  // the recording just BEFORE the popup was visible; keep going a little.
+  const FEEDBACK_VISIBLE_GRACE_MS = 5000;
+  const finishRecordings = useCallback(() => {
+    void stopRecorders().finally(() => {
+      stopScreenShare();
+      stopProctoring();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopRecorders, stopScreenShare]);
+
   useEffect(() => {
-    if (step === 'completing' || step === 'completed' || step === 'results' || step === 'error' || step === 'terminated') {
-      void stopRecorders().finally(() => stopScreenShare());
-    }
-  }, [step, stopRecorders, stopScreenShare]);
+    if (step === 'results' || step === 'error' || step === 'terminated') { finishRecordings(); return; }
+    if (step !== 'completed') return;
+    const t = setTimeout(finishRecordings, showFeedback ? FEEDBACK_VISIBLE_GRACE_MS : FEEDBACK_GRACE_MS);
+    return () => clearTimeout(t);
+  }, [step, showFeedback, finishRecordings]);
 
   // Unmount: final-flush and release the share.
   useEffect(() => () => {
@@ -2341,7 +2355,8 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
               </div>
 
 
-              <div className="space-y-4">
+              {/* Two questions per row from `sm` up, one per row on phones. */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 {hrQuestions.map((q: any, idx: number) => {
                   const isYesNo = q.type === 'yes_no' || q.type === 'Yes/No';
                   const selectedAnswer = hrAnswers[q.key] || '';
@@ -2357,7 +2372,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                           </span>
                         </div>
                         {isYesNo ? (
-                          <div className="flex gap-3">
+                          <div className="flex flex-wrap gap-2">
                             {['Yes', 'No'].map((option) => (
                               <button
                                 key={option}
@@ -2368,7 +2383,10 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
                                     [q.key]: option
                                   }));
                                 }}
-                                className={`flex-1 px-4 py-2.5 rounded-lg border-2 text-sm font-medium transition-all ${
+                                /* The design system's `sm` button size (h-8, text-xs), not
+                                   full-width halves — a two-word answer does not need a
+                                   bar across the card. */
+                                className={`h-8 min-w-[4.5rem] px-4 rounded-lg border text-xs font-medium transition-all ${
                                   selectedAnswer === option
                                     ? 'border-gray-800 bg-gray-800 text-white'
                                     : 'border-gray-300 bg-white text-gray-700 hover:border-gray-400'
@@ -2442,6 +2460,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         <LoadingScreen
           message="Preparing your assessment..."
           subMessage="Please wait while we prepare your personalized assessment. This may take a moment."
+          steps={['Setting up', 'Personalizing', 'Almost ready']}
         />
       );
 
@@ -2504,7 +2523,11 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         <div className="relative">
           <LoadingScreen
             message="Submitting your assessment..."
-            subMessage={completingStuck ? 'This is taking longer than expected.' : 'Please wait...'}
+            subMessage={
+              completingStuck
+                ? 'This is taking longer than expected.'
+                : 'Please wait while we save your responses and process your submission.'
+            }
           />
           {completingStuck && (
             <div className="fixed bottom-8 left-0 right-0 flex justify-center z-50">
@@ -2554,6 +2577,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
             <InterviewFeedbackModal
               token={token}
               prompts={ASSESSMENT_RATING_PROMPTS}
+              hints={ASSESSMENT_RATING_HINTS}
               onSubmit={(payload) => candidateService.submitFeedback(token, payload)}
               onClose={dismissFeedback}
             />

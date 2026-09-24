@@ -1,8 +1,9 @@
 'use client';
 
-import { CheckCircle, Clock, FileText, X } from 'lucide-react';
+import { CheckCircle, Clock, FileText, Users, X } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
+import SuccessAnimation from '@/components/ui/success-animation';
 
 interface CompletedScreenProps {
   assessmentTitle?: string;
@@ -46,9 +47,21 @@ export function CompletedScreen({ assessmentTitle, candidateName }: CompletedScr
       <div className="max-w-lg w-full">
         {/* Success Card */}
         <div className="bg-white rounded-2xl shadow-xl p-5 sm:p-8 text-center">
-          {/* Success Icon */}
-          <div className="w-20 h-20 bg-success-subtle rounded-full flex items-center justify-center mx-auto mb-6">
-            <CheckCircle className="w-12 h-12 text-success" />
+          {/* The completed tick: `SuccessAnimation`, the same component the
+              recruiter's "Assessment Published!" screen plays. Nothing is shown
+              while its script loads — an empty box of the animation's size holds
+              the space — so the tick only ever appears drawn by the animation.
+              The green disc stays as the fallback for reduced motion or a CDN
+              that never answers, where no animation will run at all. */}
+          <div className="flex justify-center mb-4 sm:mb-5">
+            <SuccessAnimation
+              placeholder={<div className="w-24 h-24 sm:w-32 sm:h-32" aria-hidden />}
+              fallback={
+                <div className="w-20 h-20 bg-success-subtle rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-12 h-12 text-success" />
+                </div>
+              }
+            />
           </div>
 
           {/* Title */}
@@ -57,40 +70,41 @@ export function CompletedScreen({ assessmentTitle, candidateName }: CompletedScr
           </h1>
 
           {/* Subtitle */}
-          <p className="text-gray-600 mb-6">
+          <p className="text-sm sm:text-base text-gray-600 mb-5 sm:mb-6">
             {candidateName ? `Thank you, ${candidateName}!` : 'Thank you!'} Your assessment has been submitted successfully.
           </p>
 
-          {/* Info Box */}
-          <div className="bg-gray-50 rounded-xl p-6 mb-6">
-            <div className="space-y-4">
-              {assessmentTitle && (
-                <div className="flex items-center gap-3 text-left">
-                  <div className="w-10 h-10 rounded-lg bg-brand-blue/10 text-brand-blue flex items-center justify-center shrink-0">
-                    <FileText className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-gray-500 uppercase tracking-wide">Assessment</p>
-                    <p className="text-sm font-medium text-gray-900">{assessmentTitle}</p>
-                  </div>
+          {/* Info Box — the assessment and what happens next, split by a rule. */}
+          <div className="bg-info-subtle/40 rounded-xl px-4 sm:px-5 mb-3 text-left divide-y divide-info-line/70">
+            {assessmentTitle && (
+              <div className="flex items-center gap-3 sm:gap-4 py-4">
+                <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 text-brand-blue flex items-center justify-center shrink-0">
+                  <FileText className="w-5 h-5 sm:w-6 sm:h-6" />
                 </div>
-              )}
+                <div className="min-w-0">
+                  <p className="text-xs text-gray-500 uppercase tracking-wide">Assessment</p>
+                  <p className="text-sm sm:text-base font-medium text-gray-900 break-words">{assessmentTitle}</p>
+                </div>
+              </div>
+            )}
 
-              <div className="flex items-center gap-3 text-left">
-                <div className="w-10 h-10 rounded-lg bg-brand-cyan/10 text-brand-cyan flex items-center justify-center shrink-0">
-                  <Clock className="w-5 h-5" />
-                </div>
-                <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">What happens next?</p>
-                  <p className="text-sm font-medium text-gray-900">Your responses are being evaluated</p>
-                </div>
+            <div className="flex items-center gap-3 sm:gap-4 py-4">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-cyan/10 text-brand-cyan flex items-center justify-center shrink-0">
+                <Clock className="w-5 h-5 sm:w-6 sm:h-6" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-xs text-gray-500 uppercase tracking-wide">What happens next?</p>
+                <p className="text-sm sm:text-base font-medium text-gray-900">Your responses are being evaluated</p>
               </div>
             </div>
           </div>
 
-          {/* Message */}
-          <div className="text-sm text-gray-500 space-y-2 mb-6">
-            <p>
+          {/* Message — its own small panel, as in the reference. */}
+          <div className="bg-info-subtle/40 rounded-xl px-4 sm:px-5 py-3.5 mb-5 sm:mb-6 flex items-center gap-3 sm:gap-4 text-left">
+            <div className="w-10 h-10 rounded-xl bg-brand-blue/10 text-brand-blue flex items-center justify-center shrink-0">
+              <Users className="w-5 h-5" />
+            </div>
+            <p className="text-sm text-gray-600">
               The hiring team will review your results and contact you with next steps.
             </p>
           </div>
@@ -121,7 +135,7 @@ export function CompletedScreen({ assessmentTitle, candidateName }: CompletedScr
           )}
 
           {/* Footer */}
-          <div className="mt-8 pt-6 border-t border-gray-100">
+          <div className="mt-6 sm:mt-8 pt-5 sm:pt-6 border-t border-border">
             <p className="text-xs text-gray-400">
               Powered by TalentFlow AI Assessment Platform
             </p>

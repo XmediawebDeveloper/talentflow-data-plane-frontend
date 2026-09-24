@@ -208,6 +208,10 @@ export interface AIInterviewInviteRequest {
 export interface AIInterviewResponse {
   id: string;
   tenant_id: string;
+  /** Which invite flow created the session — set on invitation list rows. */
+  invite_source?: 'resume' | 'email' | 'link';
+  /** Set only when the candidate was invited from the resume database. */
+  resume_id?: string;
   config_id?: string;
   display_id?: string;
   candidate_name?: string;

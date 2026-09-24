@@ -4,7 +4,7 @@ import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Plus, Clock, Calendar, Users, CheckCircle, FileText, ArrowDown, ArrowRight, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
-import { useState, useEffect, useRef, type Dispatch, type SetStateAction } from 'react';
+import { useState, useEffect, useRef, type Dispatch, type ReactNode, type SetStateAction } from 'react';
 import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
 import { TRACKER_DIALOG_PANEL_CLASS, TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
 import { createPortal } from 'react-dom';
@@ -4426,7 +4426,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    *
    * `invitations_count` is the backend's count of invitations sent for an
    * assessment (AssessmentResponse.invitations_count) - the same field the
-   * per-assessment Track in `renderAssessmentQuickActions` is gated on, so the
+   * per-assessment Track in `renderAssessmentRowMenuItems` is gated on, so the
    * job-wide gate and the per-version ones inside the panel agree. It is
    * re-read on every render and `reloadAssessments()` runs when the share
    * modal closes, so the first invitation sent for a job enables its Track.
@@ -4879,6 +4879,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
            screen. */
         const displayedRows = assessmentLineages[jdId] ?? getOptimisticAssessmentRows(jdId);
         const hasRowsToShow = !!assessmentLineages[jdId] || displayedRows.length > 0;
+        /* The page's own preview modal, against the assessment that row IS.
+           Same component the list's Preview action opens, so there is one
+           assessment-details view in the app and this is it. */
+        const viewAssessmentVersion = (version: { id: string }) => {
+          const raw = displayedRows.find((v) => v.id === version.id);
+          if (!raw) return;
+          setSelectedAssessmentForPreview(mapAssessmentFromApi(raw, 0));
+          setShowPreviewModal(true);
+        };
         return (
         <div onClick={(e) => e.stopPropagation()}>
           <AssessmentVersionHistoryPanel
@@ -4971,16 +4980,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       };
                     })
             }
-            /* The eye on an assessment row - the page's own preview modal,
-               against the assessment that row IS. Same component the list's
-               Preview action opens, so there is one assessment-details view
-               in the app and this is it. */
-            onViewAssessment={(version) => {
-              const raw = displayedRows.find((v) => v.id === version.id);
-              if (!raw) return;
-              setSelectedAssessmentForPreview(mapAssessmentFromApi(raw, 0));
-              setShowPreviewModal(true);
-            }}
+            /* Only the Send Invite picker gets the panel's own eye; everywhere
+               else View is the first item of the row's ⋮ menu (see
+               `renderAction` below), so the Action column holds that menu
+               alone. */
+            onViewAssessment={selectMode ? viewAssessmentVersion : undefined}
             onSelectAssessment={
               onSelectAssessment ??
               ((assessmentId) =>
@@ -5032,14 +5036,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 jobVersion,
               )
             }
-            /* Invite / Track / Results and the same menu the card
-               carries, against THIS row's assessment. The lineage
-               rows come back raw from the API, so they run through
-               the list's own mapper first - both helpers read the
-               mapped shape (status wording, the revoked-invites
-               seal, the clone flags). */
-            /* The Total Jobs tab's own Actions column - same quick actions,
-               same compact menu, same spacing, from the same two helpers.
+            /* The Action column: one ⋮ menu per row, leading with View /
+               Send / Track / Result and then the same items the card's menu
+               carries, against THIS row's assessment. The lineage rows come
+               back raw from the API, so they run through the list's own
+               mapper first - both helpers read the mapped shape (status
+               wording, the revoked-invites seal, the clone flags). The menu
+               is keyed on the row, so opening one never opens another.
 
                The Send Invite dialog takes none of them. Its assessment rows
                exist to be CHOSEN between, and Send / Track / Result each act
@@ -5048,15 +5051,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                under the dialog, Track stacks a popup over it. The eye is the
                one control that answers "which of these am I picking?", so in
                the dialog the column holds that alone. */
+            singleActionControl
             renderAction={selectMode ? undefined : (version) => {
               const raw = displayedRows.find((v) => v.id === version.id);
               if (!raw) return null;
               const mapped = mapAssessmentFromApi(raw, 0);
-              return (
-                <>
-                  {renderAssessmentQuickActions(mapped)}
-                  {renderAssessmentMenu(mapped, `version:${version.id}`, 'compact')}
-                </>
+              return renderAssessmentMenu(
+                mapped,
+                `version:${version.id}`,
+                'compact',
+                renderAssessmentRowMenuItems(mapped, () => viewAssessmentVersion(version)),
               );
             }}
           />
@@ -5233,27 +5237,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    */
   const QUICK_ACTION_BASE =
     'h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 border rounded-md transition-all';
-  const QUICK_ACTION_DISABLED =
-    'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed';
-  /* One neutral enabled style for every icon-only quick action (Share/Track/
-     Results), replacing the old per-action accent (teal/cyan/blue) that put 3
-     competing colors on one row — the "no extra color, all buttons the same"
-     rule the UI–UX guidelines require. */
-  const QUICK_ACTION_ENABLED =
-    'border-gray-300 dark:border-slate-700 text-gray-600 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-gray-400';
 
   /* `variant` is the trigger's chrome, not its behaviour:
        'default' — the borderless 32px button the Job List row carries;
        'compact' — the 28px bordered square the Assessment Versions table's
-                   Share / Track / Result icons use, so the menu sits in that
-                   Action column as a fourth peer rather than an odd one out.
-     No `ml-auto` on the wrapper any more. Inside a content-width action
-     cluster it did nothing; inside the version table's Action cell it pushed
-     the menu to the far edge, away from the three icons it belongs with. */
+                   Action column uses, where this menu is the only control.
+     No `ml-auto` on the wrapper: inside the version table's Action cell it
+     would push the menu to the far edge of the column. */
+  /* `leadingItems` go at the top of the menu, above a divider. The Assessment
+     Versions table passes its row actions (View / Send / Track / Result) here,
+     so its Action column holds this one menu and nothing else. */
   const renderAssessmentMenu = (
     assessment: any,
     menuKey: string = assessment.id,
     variant: 'default' | 'compact' = 'default',
+    leadingItems?: ReactNode,
   ) => (
     <div className="flex items-center gap-1.5 flex-shrink-0">
       {/* Three Dots Menu */}
@@ -5305,6 +5303,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               left: Math.max(8, menuAnchor.right - 208),
             }}
           >
+            {leadingItems && (
+              <>
+                {leadingItems}
+                <div className="border-t border-gray-100 dark:border-slate-700/60 my-1"></div>
+              </>
+            )}
             {assessment.status !== 'Archived' && canCreateAssessment && (() => {
               // Gating computed FRONT-END, on the lineage this page has
               // actually loaded, so it does not depend on which of the
@@ -5464,141 +5468,126 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   );
 
   /**
-   * Invite / Track / Results for one assessment, as ONE definition.
-   *
-   * Lifted out of the list card so the Job Version History rows can offer
-   * the same three actions against the assessment of THEIR job version. The
-   * gates travel with them - publish state, the archived and revoked-invites
-   * seals, the permission check, and the invite count that decides whether
-   * Track appears at all - so a change to any of them cannot land on the card
-   * and miss the history, or the other way round.
+   * View / Send / Track / Result for one Assessment Versions row, as ⋮ menu
+   * items. They used to be icon buttons beside the menu; they now lead it, so
+   * the Action column holds the menu alone. The gates are unchanged: publish
+   * state, the archived and revoked-invites seals and the permission check for
+   * Send, and "has it been shared with anyone" for Track and Result. A gated
+   * item stays in the menu, disabled, with its reason on hover, as it did as a
+   * button.
    */
-  /* Icon-only, on the Assessment Versions table's Action column — its only
-     caller. The chrome is the job-openings row's icon-button (that page is the
-     house reference for this control): a 28px square, the action's own colour
-     at /40 on the border, hovering to a /10 tint and a solid border. Colours
-     come from the dashboard's own action palette — Share is `--menu-icon-share`
-     (brand-teal), and Results keeps the brand-blue it has always been.
-
-     Every handler, guard, toast and disabled rule below is unchanged; only the
-     label moved into `aria-label`/`title`, which now carry it for both screen
-     readers and hover. */
-  const renderAssessmentQuickActions = (assessment: ReturnType<typeof mapAssessmentFromApi>) => {
-    /* The create -> share -> track/results chain, read off the record itself.
-     *
-     * `invitations_count` is the backend's own count of invitations sent for
-     * this assessment (AssessmentResponse.invitations_count, surfaced by
-     * mapAssessmentFromApi as both `invitations_count` and `candidates`), so
-     * "has it been shared with anyone" is answered by the data rather than by
-     * any local flag. Zero means nobody has been invited yet, which is what
-     * gates Track and Results below. */
+  const renderAssessmentRowMenuItems = (
+    assessment: ReturnType<typeof mapAssessmentFromApi>,
+    onView?: () => void,
+  ) => {
+    /* `invitations_count` is the backend's own count of invitations sent for
+     * this assessment (surfaced by mapAssessmentFromApi as both
+     * `invitations_count` and `candidates`). Zero means nobody has been
+     * invited yet, which is what gates Track and Result below. */
     const invitationsSent = assessment.invitations_count ?? assessment.candidates ?? 0;
     const hasBeenShared = invitationsSent > 0;
 
+    const itemClass = (disabled: boolean) =>
+      `group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
+        disabled
+          ? 'text-gray-400 cursor-not-allowed'
+          : 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
+      }`;
+    const iconClass = (disabled: boolean, enabledColor: string) =>
+      `w-4 h-4 flex-shrink-0 ${disabled ? 'text-gray-300' : enabledColor}`;
+
+    const canShare = hasPermission('canUpdateAssessments') || isTenantAdmin;
+    const shareBlockedReason =
+      assessment.status === 'Draft' ? 'Publish assessment first to share' :
+      assessment.status === 'Archived' ? 'Archived assessments cannot be shared' :
+      assessment.has_revoked_invites ? 'Invites for this assessment have been revoked. Duplicate it to start fresh.' :
+      '';
+    const isShareBlocked = !!shareBlockedReason;
+    const trackReason = hasBeenShared
+      ? `Track invitation status (${invitationsSent})`
+      : 'Share the assessment to track invitations';
+    const resultReason = hasBeenShared
+      ? 'View results'
+      : assessment.status === 'Draft'
+      ? 'Publish the assessment to view results'
+      : 'Share the assessment to view results';
+
     return (
-    <div className="flex items-center gap-1.5 flex-nowrap">
-      {/* Share via Email.
-          Every row in this table IS a created assessment, so the "created
-          successfully" precondition is met by definition. What decides whether
-          a created assessment can be shared is unchanged: a Draft has nothing
-          published to send, an Archived one is out of circulation, and one
-          whose invites were revoked is sealed until it is duplicated. */}
-      {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (() => {
-        const shareBlockedReason =
-          assessment.status === 'Draft' ? 'Publish assessment first to share' :
-          assessment.status === 'Archived' ? 'Archived assessments cannot be shared' :
-          assessment.has_revoked_invites ? 'Invites for this assessment have been revoked. Duplicate it to start fresh.' :
-          '';
-        const isShareBlocked = !!shareBlockedReason;
-        return (
+      <>
+        {onView && (
           <button
             onClick={() => {
-              if (assessment.status === 'Draft') {
-                toast.warning('Please publish the assessment before sharing');
-                return;
-              }
-              if (assessment.status === 'Archived') {
-                toast.warning('Archived assessments cannot be shared');
-                return;
-              }
-              if (assessment.has_revoked_invites) {
-                toast.warning('Invites for this assessment have been revoked. Duplicate it to start fresh.');
-                return;
-              }
+              setOpenMenuId(null);
+              onView();
+            }}
+            title={`View assessment V${assessment.version ?? 1} details`}
+            className={itemClass(false)}
+          >
+            <Eye className={iconClass(false, 'text-menu-icon-view')} />
+            <span className={MENU_ITEM_SCALE_CLASS}>View</span>
+          </button>
+        )}
+
+        {/* Share via Email. Every row in this table IS a created assessment;
+            what decides whether it can be shared is unchanged: a Draft has
+            nothing published to send, an Archived one is out of circulation,
+            and one whose invites were revoked is sealed until duplicated. */}
+        {canShare && (
+          <button
+            onClick={() => {
+              if (isShareBlocked) return;
+              setOpenMenuId(null);
               setSelectedAssessmentForShare(assessment);
               setShowShareModal(true);
             }}
             disabled={isShareBlocked}
-            className={`${QUICK_ACTION_BASE} ${isShareBlocked ? QUICK_ACTION_DISABLED : QUICK_ACTION_ENABLED}`}
-            aria-label={shareBlockedReason || 'Share via email'}
             title={shareBlockedReason || 'Share via email'}
+            className={itemClass(isShareBlocked)}
           >
-            <Send className="w-3.5 h-3.5" />
+            <Send className={iconClass(isShareBlocked, 'text-menu-icon-share')} />
+            <span className={MENU_ITEM_SCALE_CLASS}>Send</span>
           </button>
-        );
-      })()}
+        )}
 
-      {/* Track Invites — enabled once the assessment has been shared with at
-          least one candidate. It used to be omitted entirely at zero
-          invitations, which left the Action column a control short and gave the
-          reader nothing to explain why; it is now always present and disabled
-          until there is something to track. */}
-      <button
-        onClick={() => handleTrackInvites(assessment)}
-        disabled={!hasBeenShared}
-        className={`${QUICK_ACTION_BASE} ${hasBeenShared ? QUICK_ACTION_ENABLED : QUICK_ACTION_DISABLED}`}
-        aria-label={hasBeenShared ? `Track invitation status (${invitationsSent})` : 'Share the assessment to track invitations'}
-        title={hasBeenShared ? `Track invitation status (${invitationsSent})` : 'Share the assessment to track invitations'}
-      >
-        <Radar className="w-3.5 h-3.5" />
-      </button>
+        {/* Track Invites — always offered, enabled once the assessment has been
+            shared with at least one candidate. */}
+        <button
+          onClick={() => {
+            if (!hasBeenShared) return;
+            setOpenMenuId(null);
+            handleTrackInvites(assessment);
+          }}
+          disabled={!hasBeenShared}
+          title={trackReason}
+          className={itemClass(!hasBeenShared)}
+        >
+          <Radar className={iconClass(!hasBeenShared, 'text-menu-icon-secondary')} />
+          <span className={MENU_ITEM_SCALE_CLASS}>Track</span>
+        </button>
 
-      {/* View Results — also gated on having been shared: with no invitation
-          sent there is no attempt to score, so the results page would open
-          empty. This subsumes the old Draft-only check (a Draft cannot have
-          been shared, so it fails this test too) while additionally covering a
-          published assessment nobody has been invited to yet. The Draft
-          early-return in the handler is kept as a belt. */}
-      <button
-        onClick={(e) => {
-          e.stopPropagation();
-          if (assessment.status === 'Draft') return;
-          /* Opened on the row's own coordinates: the JOB VERSION it sits under
-             AND the ASSESSMENT VERSION it is.
-             These actions are the Assessment Versions table's column (its only
-             caller), so every row here is one revision of one assessment under
-             one job version. The JD ROW the assessment points at names that job
-             version exactly — the same identifier the rest of the flow joins on
-             — and `version` is the revision the row's own badge prints. Naming
-             only the first let a job version holding several revisions report
-             all of them under one revision's button.
-             The page it lands on is the SAME page the Job List row's Result
-             opens, with the same two selectors: this names where they start,
-             and the job-wide reading stays one widening away. */
-          const jobScope = assessment.jd_id ? encodeURIComponent(assessment.jd_id) : 'all';
-          const versionScope = typeof assessment.version === 'number' ? assessment.version : 'all';
-          router.push(`/recruitment/assessments/${assessment.id}/results?job_version_id=${jobScope}&assessment_version=${versionScope}`);
-        }}
-        disabled={!hasBeenShared}
-        aria-label={
-          hasBeenShared
-            ? 'View results'
-            : assessment.status === 'Draft'
-            ? 'Publish the assessment to view results'
-            : 'Share the assessment to view results'
-        }
-        title={
-          hasBeenShared
-            ? 'View results'
-            : assessment.status === 'Draft'
-            ? 'Publish the assessment to view results'
-            : 'Share the assessment to view results'
-        }
-        className={`${QUICK_ACTION_BASE} ${hasBeenShared ? QUICK_ACTION_ENABLED : QUICK_ACTION_DISABLED}`}
-      >
-        <BarChart className="w-3.5 h-3.5" />
-      </button>
-    </div>
+        {/* View Results — also gated on having been shared: with no invitation
+            sent there is no attempt to score, so the results page would open
+            empty. */}
+        <button
+          onClick={() => {
+            if (!hasBeenShared || assessment.status === 'Draft') return;
+            setOpenMenuId(null);
+            /* Opened on the row's own coordinates: the JOB VERSION it sits
+               under (the JD row the assessment points at) AND the ASSESSMENT
+               VERSION it is — the same page, with the same two selectors, the
+               Job List row's Result opens. */
+            const jobScope = assessment.jd_id ? encodeURIComponent(assessment.jd_id) : 'all';
+            const versionScope = typeof assessment.version === 'number' ? assessment.version : 'all';
+            router.push(`/recruitment/assessments/${assessment.id}/results?job_version_id=${jobScope}&assessment_version=${versionScope}`);
+          }}
+          disabled={!hasBeenShared}
+          title={resultReason}
+          className={itemClass(!hasBeenShared)}
+        >
+          <BarChart className={iconClass(!hasBeenShared, 'text-menu-icon-score')} />
+          <span className={MENU_ITEM_SCALE_CLASS}>Result</span>
+        </button>
+      </>
     );
   };
 

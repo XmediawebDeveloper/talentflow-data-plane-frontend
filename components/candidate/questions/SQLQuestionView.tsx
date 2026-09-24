@@ -15,6 +15,7 @@ import {
   RefreshCw,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import LanguageLogo from '@/components/assessments/LanguageLogo';
 import { CurrentQuestion } from '@/lib/services/candidateService';
 
 interface SQLQuestionViewProps {
@@ -419,7 +420,7 @@ export function SQLQuestionView({
         {/* Editor Header */}
         <div className="flex items-center justify-between px-4 py-3 bg-gray-800 border-b border-gray-700">
           <div className="flex items-center gap-2 text-gray-300">
-            <Database className="w-5 h-5 text-blue-400" />
+            <LanguageLogo language="SQL" size="sm" />
             <span className="font-medium">SQL Editor</span>
           </div>
 

@@ -27,7 +27,9 @@ const importFromCDN = new Function('url', 'return import(url)') as (
 
 let dotlottieWcLoadPromise: Promise<void> | null = null;
 
-function loadDotlottieWc(): Promise<void> {
+/** Exported so every Lottie in the app shares this one CDN load (the candidate
+ *  LoadingScreen plays `loading.json` through it). */
+export function loadDotlottieWc(): Promise<void> {
   if (typeof window === 'undefined') return Promise.resolve();
   if (!dotlottieWcLoadPromise) {
     dotlottieWcLoadPromise = (
@@ -74,6 +76,10 @@ const subscribeToReducedMotion = (onChange: () => void) => {
 const getReducedMotion = () => window.matchMedia(REDUCED_MOTION_QUERY).matches;
 const getReducedMotionOnServer = () => false;
 
+/** The same `prefers-reduced-motion` store, for other Lottie hosts. */
+export const usePrefersReducedMotion = () =>
+  useSyncExternalStore(subscribeToReducedMotion, getReducedMotion, getReducedMotionOnServer);
+
 export interface SuccessAnimationProps {
   /**
    * Sizing for the animation box. Bigger than the badge it replaces is
@@ -92,18 +98,23 @@ export interface SuccessAnimationProps {
    * like a rendering fault rather than a fallback.
    */
   fallback?: React.ReactNode;
+  /**
+   * What to show only while the player's script is still loading. Omitted, the
+   * `fallback` shows then too. A host that must not flash a finished tick before
+   * the animation draws its own passes an empty box of the same size here; the
+   * `fallback` still covers reduced motion and a CDN that never answers.
+   */
+  placeholder?: React.ReactNode;
 }
 
 export default function SuccessAnimation({
   className = 'w-24 h-24 sm:w-32 sm:h-32',
   fallback,
+  placeholder,
 }: SuccessAnimationProps) {
-  const reducedMotion = useSyncExternalStore(
-    subscribeToReducedMotion,
-    getReducedMotion,
-    getReducedMotionOnServer,
-  );
+  const reducedMotion = usePrefersReducedMotion();
   const [playerReady, setPlayerReady] = useState(false);
+  const [loadFailed, setLoadFailed] = useState(false);
 
   useEffect(() => {
     if (reducedMotion) return;
@@ -113,13 +124,15 @@ export default function SuccessAnimation({
         if (!cancelled) setPlayerReady(true);
       })
       .catch(() => {
-        /* CDN fetch failed — stay on the fallback badge below. */
+        /* CDN fetch failed — settle on the fallback badge below. */
+        if (!cancelled) setLoadFailed(true);
       });
     return () => {
       cancelled = true;
     };
   }, [reducedMotion]);
 
+  if (!reducedMotion && !playerReady && !loadFailed && placeholder !== undefined) return <>{placeholder}</>;
   if (reducedMotion || !playerReady) return <>{fallback ?? <StaticBadge />}</>;
 
   const DotlottieWc = 'dotlottie-wc' as unknown as React.ElementType<{

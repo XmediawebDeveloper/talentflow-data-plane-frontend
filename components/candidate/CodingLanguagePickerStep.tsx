@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowRight, Code, Loader2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import LanguageLogo, { logoLabelForId } from '@/components/assessments/LanguageLogo';
 import { candidateService } from '@/lib/services/candidateService';
 import {
   LanguageConfig,
@@ -128,16 +129,10 @@ export default function CodingLanguagePickerStep({
                     : 'border-gray-200 dark:border-gray-700 hover:border-brand-blue/30 hover:bg-brand-blue/[0.03]'
                 } disabled:opacity-60`}
               >
-                <span className="flex items-center gap-3 min-w-0">
-                  {/* The circular brand tile from the reference, which the row
-                      did not have — the glyph sat loose against the label. */}
-                  <span
-                    className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 transition-colors ${
-                      selected ? 'bg-brand-blue/15 text-brand-blue' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'
-                    }`}
-                  >
-                    <Code className="w-4 h-4" />
-                  </span>
+                <span className="flex items-center gap-2.5 min-w-0">
+                  {/* The language's own mark, as on Configure Assessment's
+                      language picker — same component, size and gap. */}
+                  <LanguageLogo language={logoLabelForId(lang.id, lang.name)} />
                   {/* The label stays dark when selected. Turning it brand-blue
                       as well left the row with no plain text in it. */}
                   <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">
