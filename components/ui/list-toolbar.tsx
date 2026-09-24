@@ -63,6 +63,13 @@ export interface ListToolbarProps {
    */
   leadingActions?: React.ReactNode;
 
+  /**
+   * Controls placed IMMEDIATELY after More Filters — ahead of Reset and
+   * `children` — for a control that belongs beside the filter button itself
+   * (the Invitation Status tab's Refresh).
+   */
+  afterFiltersActions?: React.ReactNode;
+
   /** Extra controls appended to the right-hand group (e.g. a Sort dropdown). */
   children?: React.ReactNode;
 
@@ -101,6 +108,7 @@ export default function ListToolbar({
   filtersApplied = false,
   onClearFilters,
   leadingActions,
+  afterFiltersActions,
   children,
   countBadge,
   filterPanel,
@@ -197,6 +205,8 @@ export default function ListToolbar({
             )}
           </button>
         )}
+
+        {afterFiltersActions}
 
         {showClear && (
           <button
