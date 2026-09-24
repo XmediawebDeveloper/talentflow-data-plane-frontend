@@ -244,6 +244,13 @@ const roundScoreLabel = (roundType: string) => {
  *  This is only about which scores the card at the top of the page leads with. */
 const SUMMARY_HIDDEN_ROUND_TYPES = new Set(['hr']);
 
+/** A tab's lazily fetched content, tagged with the candidate it was fetched for. */
+type LazyTabLoad<T> = { key: string; status: 'loading' | 'loaded' | 'error'; data: T };
+
+type RecordingKind = 'candidate' | 'screen';
+type RecordingLoad = { key: string } & Record<RecordingKind, RecordingSource>;
+
+const NO_EVENTS: ProctoringEvent[] = [];
 
 export default function CandidateResultDetails({
   onBack,
@@ -280,8 +287,12 @@ export default function CandidateResultDetails({
   // appears when that automatic attempt failed.
   const [insightsError, setInsightsError] = useState<string | null>(null);
   const insightsAutoTriedRef = useRef<string | null>(null);
-  const [proctoringEvents, setProctoringEvents] = useState<ProctoringEvent[]>([]);
-  const [isLoadingEvents, setIsLoadingEvents] = useState(false);
+  /* The Violations event log, fetched the first time that tab is opened rather
+     than on page load. Tagged with the candidate it belongs to, so a Prev/Next
+     step reads as "not loaded yet" instead of showing the last candidate's log. */
+  const [eventsLoad, setEventsLoad] = useState<LazyTabLoad<ProctoringEvent[]> | null>(null);
+  // Bumped by the event log's Retry button to re-run the fetch.
+  const [eventsRetry, setEventsRetry] = useState(0);
   const [eventsPage, setEventsPage] = useState(1);
   const EVENTS_PER_PAGE = 10;
   const [eventsGoToPage, setEventsGoToPage] = useState('1');
@@ -301,10 +312,10 @@ export default function CandidateResultDetails({
   const detailContentRef = useRef<HTMLDivElement>(null);
 
   // One tab row now owns both summary panels and detailed question panels.
-  // `activeTab` is still kept for the proctoring-events fetch trigger, but the
-  // visible panel is driven by this top-level selection.
+  // The visible panel — and the lazy fetches for Recording and Violations —
+  // are driven by this top-level selection.
   const [overviewTab, setOverviewTab] = useState<string>('jd-summary');
-  /* The pair of views under the Job Description Summary. Same two the
+  /* The pair of views under the View JD menu item. Same two the
      assessment's own page offers, so a recruiter reading a result sees the job
      and the assessment exactly as they would there. */
   const [jdSummaryTab, setJdSummaryTab] = useState<'viewjd' | 'info'>('viewjd');
@@ -316,27 +327,32 @@ export default function CandidateResultDetails({
   const [jdLoading, setJdLoading] = useState(false);
   const [jdError, setJdError] = useState<string | null>(null);
   // A tab is offered only when its panel has something to render — the JD
-  // snapshot may not have loaded (or the JD captured nothing), and insights
-  // only exist once scoring completes. Without this, switching could land the
-  // recruiter on a blank panel.
-  const overviewTabs: CandidateDetailTab[] = [
-    ...(assessmentMeta ? [{ id: 'jd-summary', label: 'Job Description Summary', icon: FileText }] : []),
-    { id: 'section-performance', label: 'Section-wise Performance', icon: Activity },
-    ...(detailedResult && detailedResult.scoring_status === 'completed'
-      ? [{ id: 'candidate-insights', label: 'AI-Generated Candidate Insights', icon: Award }]
-      : []),
-  ];
+  // snapshot may not have loaded (or the JD captured nothing). Without this,
+  // switching could land the recruiter on a blank panel.
+  //
+  // One flat menu, in this order: AI-Generated Candidate Insights, HR Round,
+  // Technical Round, Coding Round, View JD, Recording, Violations. The Insights
+  // item is always offered, because its panel also carries the Section-wise
+  // Performance scores, which exist before scoring finishes; the insights card
+  // itself still waits for scoring.
+  const insightsTab: CandidateDetailTab = { id: 'candidate-insights', label: 'AI-Generated Candidate Insights', icon: Award };
+  const viewJdTab: CandidateDetailTab | null = assessmentMeta ? { id: 'jd-summary', label: 'View JD', icon: FileText } : null;
   const formatRoundTabLabel = (roundType: string) =>
     `${roundType.toLowerCase() === 'hr' ? 'HR' : roundType.charAt(0).toUpperCase() + roundType.slice(1)} Round`;
-  const analysisTabs: CandidateDetailTab[] = detailedResult && detailedResult.scoring_status !== 'processing'
+  // Rounds come from the candidate's own result, so a Coding Round appears only
+  // when this assessment has one.
+  const showAnalysisTabs = !!detailedResult && detailedResult.scoring_status !== 'processing';
+  const roundTabs: CandidateDetailTab[] = showAnalysisTabs && detailedResult
+    ? detailedResult.round_scores.map((round) => ({
+        id: round.round_type,
+        label: formatRoundTabLabel(round.round_type),
+        icon: Clipboard,
+        count: detailedResult.question_evaluations.filter(q => q.round_type === round.round_type).length,
+        isQuestionTab: true,
+      }))
+    : [];
+  const recordingTabs: CandidateDetailTab[] = showAnalysisTabs && detailedResult
     ? [
-        ...detailedResult.round_scores.map((round) => ({
-          id: round.round_type,
-          label: formatRoundTabLabel(round.round_type),
-          icon: Clipboard,
-          count: detailedResult.question_evaluations.filter(q => q.round_type === round.round_type).length,
-          isQuestionTab: true,
-        })),
         {
           id: 'recording',
           label: 'Recording',
@@ -353,12 +369,27 @@ export default function CandidateResultDetails({
         },
       ]
     : [];
-  const detailTabs = [...overviewTabs, ...analysisTabs];
+  const analysisTabs = [...roundTabs, ...recordingTabs];
+  // HR, Technical, Coding in that order, whatever order the result lists them
+  // in. A round type outside these three follows Coding, still above View JD.
+  const roundTab = (type: string) => roundTabs.filter(tab => tab.id.toLowerCase() === type);
+  const otherRoundTabs = roundTabs.filter(tab => !['hr', 'technical', 'coding'].includes(tab.id.toLowerCase()));
+  const detailTabs: CandidateDetailTab[] = [
+    insightsTab,
+    ...roundTab('hr'),
+    ...roundTab('technical'),
+    ...roundTab('coding'),
+    ...otherRoundTabs,
+    ...(viewJdTab ? [viewJdTab] : []),
+    ...recordingTabs,
+  ];
   // Falls back while the selected tab is still unavailable, e.g. the JD
   // snapshot request hasn't returned yet on first paint.
   const currentDetailTab = detailTabs.some(tab => tab.id === overviewTab)
     ? overviewTab
-    : (detailTabs[0]?.id ?? 'section-performance');
+    : (detailTabs[0]?.id ?? 'candidate-insights');
+  // The insights card with the Section-wise Performance scores below it.
+  const isInsightsPanel = currentDetailTab === 'candidate-insights';
   const isQuestionAnalysisTab = analysisTabs.some(tab => tab.id === currentDetailTab);
   const activeQuestionTab = isQuestionAnalysisTab ? currentDetailTab : activeTab;
   const scrollDetailContentToTop = useCallback(() => {
@@ -375,6 +406,14 @@ export default function CandidateResultDetails({
     if (tab.isQuestionTab) setActiveTab(tab.id);
     scrollDetailContentToTop();
   }, [scrollDetailContentToTop]);
+
+  // Only this candidate's log counts. Until it lands the tab reads as loading,
+  // including the first paint after the tab opens, so "No individual events
+  // recorded" can't flash before the request has even gone out.
+  const eventsForCandidate = eventsLoad?.key === candidateId ? eventsLoad : null;
+  const proctoringEvents = eventsForCandidate?.status === 'loaded' ? eventsForCandidate.data : NO_EVENTS;
+  const isLoadingEvents = !eventsForCandidate || eventsForCandidate.status === 'loading';
+  const eventsFailed = eventsForCandidate?.status === 'error';
 
   // Group events by minute + event_type so each row shows: event, timestamp (HH:MM), count
   const groupedEvents = Object.values(
@@ -519,7 +558,7 @@ export default function CandidateResultDetails({
     return () => { cancelled = true; };
   }, [assessmentId]);
 
-  /* The linked JD, for the View JD view under the Job Description Summary.
+  /* The linked JD, for the View JD view under the View JD menu item.
      Runs on the tab being opened and only while it has no record yet, so
      switching between the two views costs one request in total rather than one
      per switch. `assessmentMeta.jd_id` is the JD ROW this assessment was
@@ -725,49 +764,100 @@ export default function CandidateResultDetails({
     return () => clearInterval(pollInterval);
   }, [detailedResult?.scoring_status, assessmentId, candidateId]);
 
+  /* Recording and Violations each need a request of their own, so neither is
+     made on page load — only the first time the recruiter opens that tab. The
+     View JD and AI-Generated Candidate Insights panels read what the page already
+     loaded. Both effects key off `currentDetailTab` (what is on screen), not
+     `activeTab`, which lags behind across a Prev/Next step and would fire a
+     fetch for a tab nobody opened.
+
+     Each request is remembered in a ref keyed by candidate, so reopening a tab
+     is free. The ref is cleared when a request fails, or is abandoned because
+     the recruiter left the tab or the candidate before it answered — the next
+     visit then asks again instead of sitting on a spinner. */
+
   // Recording tab: presigned URLs for the candidate (webcam) and screen recordings.
-  const [candidateRecording, setCandidateRecording] = useState<RecordingSource>(EMPTY_RECORDING_SOURCE);
-  const [screenRecording, setScreenRecording] = useState<RecordingSource>(EMPTY_RECORDING_SOURCE);
+  const [recordingLoad, setRecordingLoad] = useState<RecordingLoad | null>(null);
+  const recordingForCandidate = recordingLoad?.key === candidateId ? recordingLoad : null;
+  const candidateRecording = recordingForCandidate?.candidate ?? EMPTY_RECORDING_SOURCE;
+  const screenRecording = recordingForCandidate?.screen ?? EMPTY_RECORDING_SOURCE;
+  // Merges into this candidate's entry, starting it fresh if the entry is a
+  // previous candidate's.
+  const updateRecording = useCallback((forCandidate: string, kind: RecordingKind, patch: Partial<RecordingSource>) => {
+    setRecordingLoad(prev => {
+      const base: RecordingLoad = prev?.key === forCandidate
+        ? prev
+        : { key: forCandidate, candidate: EMPTY_RECORDING_SOURCE, screen: EMPTY_RECORDING_SOURCE };
+      return { ...base, [kind]: { ...base[kind], ...patch } };
+    });
+  }, []);
+  const recordingRequestedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (activeTab !== 'recording' || !assessmentId || !candidateId) return;
-    if (candidateRecording.available !== null && screenRecording.available !== null) return; // already loaded
+    if (currentDetailTab !== 'recording' || !assessmentId || !candidateId) return;
+    if (recordingRequestedRef.current === candidateId) return;
+    recordingRequestedRef.current = candidateId;
     let cancelled = false;
-    const load = async (kind: 'candidate' | 'screen', set: (s: RecordingSource) => void) => {
-      set({ ...EMPTY_RECORDING_SOURCE, loading: true });
+    let pending = 2;
+    let failed = false;
+    const load = async (kind: RecordingKind) => {
+      updateRecording(candidateId, kind, { ...EMPTY_RECORDING_SOURCE, loading: true });
       try {
         const meta = await assessmentService.getRecordingUrl(assessmentId, candidateId, kind);
         if (cancelled) return;
-        if (!meta || !meta.url) { set({ ...EMPTY_RECORDING_SOURCE, available: false }); return; }
-        set({ available: true, url: meta.url, downloadUrl: meta.download_url, size: meta.size, loading: false, error: false });
+        if (!meta || !meta.url) {
+          updateRecording(candidateId, kind, { ...EMPTY_RECORDING_SOURCE, available: false });
+          return;
+        }
+        updateRecording(candidateId, kind, {
+          available: true, url: meta.url, downloadUrl: meta.download_url, size: meta.size, loading: false, error: false,
+        });
       } catch (err) {
         if (cancelled) return;
+        failed = true;
         console.error(`[CandidateResultDetails] Failed to load ${kind} recording:`, err);
-        set({ ...EMPTY_RECORDING_SOURCE, available: false, error: true });
+        updateRecording(candidateId, kind, { ...EMPTY_RECORDING_SOURCE, available: false, error: true });
+      } finally {
+        pending -= 1;
+        if (pending === 0 && failed && !cancelled) recordingRequestedRef.current = null;
       }
     };
-    void load('candidate', setCandidateRecording);
-    void load('screen', setScreenRecording);
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeTab, assessmentId, candidateId]);
+    void load('candidate');
+    void load('screen');
+    return () => {
+      cancelled = true;
+      if (pending > 0 && recordingRequestedRef.current === candidateId) recordingRequestedRef.current = null;
+    };
+  }, [currentDetailTab, assessmentId, candidateId, updateRecording]);
 
-  // Fetch proctoring events when violations tab is opened
+  // Violations tab: the proctoring event log.
+  const eventsRequestedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (activeTab !== 'violations' || !candidateId) return;
-    if (proctoringEvents.length > 0) return; // already loaded
-    const fetchEvents = async () => {
-      setIsLoadingEvents(true);
+    if (currentDetailTab !== 'violations' || !candidateId) return;
+    if (eventsRequestedRef.current === candidateId) return;
+    eventsRequestedRef.current = candidateId;
+    let cancelled = false;
+    let settled = false;
+    (async () => {
+      setEventsLoad({ key: candidateId, status: 'loading', data: NO_EVENTS });
       try {
         const response = await proctoringService.getEvents({ attempt_id: candidateId, page_size: 100 });
-        setProctoringEvents(response.items);
+        if (cancelled) return;
+        setEventsPage(1);
+        setEventsLoad({ key: candidateId, status: 'loaded', data: response.items || NO_EVENTS });
       } catch (err) {
+        if (cancelled) return;
         console.error('[CandidateResultDetails] Failed to fetch proctoring events:', err);
+        eventsRequestedRef.current = null;
+        setEventsLoad({ key: candidateId, status: 'error', data: NO_EVENTS });
       } finally {
-        setIsLoadingEvents(false);
+        settled = true;
       }
+    })();
+    return () => {
+      cancelled = true;
+      if (!settled && eventsRequestedRef.current === candidateId) eventsRequestedRef.current = null;
     };
-    fetchEvents();
-  }, [activeTab, candidateId]);
+  }, [currentDetailTab, candidateId, eventsRetry]);
 
   // Helper functions
   const getScoreColor = (score: number) => {
@@ -1414,10 +1504,131 @@ export default function CandidateResultDetails({
           </div>
         )}
 
+        {/* Candidate Insights - AI Generated Analysis */}
+        {isInsightsPanel && detailedResult && detailedResult.scoring_status === 'completed' && (
+          <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden mb-6">
+            <div className="bg-gray-50 border-b border-brand-blue/15 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-brand-blue ring-1 ring-white/20 shadow-md shadow-brand-blue/25 flex items-center justify-center flex-shrink-0">
+                  <Award className="w-5 h-5 text-white" />
+                </div>
+                <div>
+                  <h2 className="text-gray-900 flex items-center gap-2 text-sm sm:text-base tracking-tight font-semibold">
+                    AI-Generated Candidate Insights
+                  </h2>
+                  <p className="text-gray-600 text-xs sm:text-sm mt-1">Advanced automated analysis for Technical & Coding rounds</p>
+                </div>
+              </div>
+              {(!detailedResult.candidate_insights?.interview_strength) && (
+                <Button
+                  variant="primary"
+                  onClick={handleGenerateInsights}
+                  disabled={isGeneratingInsights}
+                >
+                  {isGeneratingInsights ? (
+                    <>
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Generating...
+                    </>
+                  ) : (
+                    <>
+                      <Award className="w-4 h-4" />
+                      Generate Insights
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+            <div className="p-4 sm:p-6">
+              {detailedResult.candidate_insights?.interview_strength ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 sm:gap-6">
+                {/* Interview Strength */}
+                {detailedResult.candidate_insights.interview_strength && (
+                  <div className="bg-success-subtle rounded-xl p-4 border border-success-line ring-1 ring-success-line">
+                    <h3 className="text-success-strong font-medium mb-3 flex items-center gap-2">
+                      <CheckCircle className="w-4 h-4" />
+                      Interview Strength
+                    </h3>
+                    <p className="text-sm text-success">
+                      {detailedResult.candidate_insights.interview_strength}
+                    </p>
+                  </div>
+                )}
+
+                {/* Interview Weakness */}
+                {detailedResult.candidate_insights.interview_weakness && (
+                  <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-gray-200 dark:border-slate-700">
+                    <h3 className="text-brand-orange-deep font-medium mb-3 flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4" />
+                      Interview Weakness
+                    </h3>
+                    <p className="text-sm text-gray-700">
+                      {detailedResult.candidate_insights.interview_weakness}
+                    </p>
+                  </div>
+                )}
+
+                {/* Interview Training Modules */}
+                {detailedResult.candidate_insights.interview_training_modules && (
+                  <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-gray-200 dark:border-slate-700">
+                    <h3 className="text-brand-blue font-medium mb-3 flex items-center gap-2">
+                      <FileText className="w-4 h-4" />
+                      Interview Training Modules
+                    </h3>
+                    <p className="text-sm text-gray-700">
+                      {detailedResult.candidate_insights.interview_training_modules}
+                    </p>
+                  </div>
+                )}
+
+                {/* Interview Training Suggestion */}
+                {detailedResult.candidate_insights.interview_training_suggestion && (
+                  <div className="bg-white dark:bg-slate-900 rounded-xl p-4 border border-gray-200 dark:border-slate-700">
+                    <h3 className="text-brand-cyan font-medium mb-3 flex items-center gap-2">
+                      <Briefcase className="w-4 h-4" />
+                      Interview Training Suggestion
+                    </h3>
+                    <p className="text-sm text-gray-700">
+                      {detailedResult.candidate_insights.interview_training_suggestion}
+                    </p>
+                  </div>
+                )}
+              </div>
+              ) : (
+                <div className="text-center py-12">
+                  <Award className="w-16 h-16 text-brand-blue/30 mx-auto mb-4" />
+                  <h3 className="text-lg text-gray-700 mb-2 tracking-tight font-semibold">No AI Insights Generated Yet</h3>
+                  <p className="text-gray-600 mb-4">
+                    Click &quot;Generate Insights&quot; to analyze this candidate&apos;s Technical and Coding performance
+                  </p>
+                  <Button
+                    variant="primary"
+                    onClick={handleGenerateInsights}
+                    disabled={isGeneratingInsights}
+                    className="mx-auto"
+                  >
+                    {isGeneratingInsights ? (
+                      <>
+                        <Loader2 className="w-5 h-5 animate-spin" />
+                        Generating AI Insights...
+                      </>
+                    ) : (
+                      <>
+                        <Award className="w-5 h-5" />
+                        Generate AI Insights
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* Score Calculation Notice - Show if individual questions are all 0.
-            Rides with the Section-wise Performance tab because it explains the
-            weighted section maths shown there. */}
-        {currentDetailTab === 'section-performance' && detailedResult && candidateData && (() => {
+            Rides with the Section-wise Performance section because it explains
+            the weighted section maths shown there. */}
+        {isInsightsPanel && detailedResult && candidateData && (() => {
           // Check if all questions show 0 points
           const allQuestionsZero = detailedResult.question_evaluations.every(q => q.points_earned === 0);
           const sectionsHaveScores = detailedResult.round_scores.some(r => (r.raw_score ?? 0) > 0);
@@ -1454,8 +1665,8 @@ export default function CandidateResultDetails({
           return null;
         })()}
 
-        {/* Section Scores */}
-        {currentDetailTab === 'section-performance' && (
+        {/* Section Scores — shown inside the AI-Generated Candidate Insights panel. */}
+        {isInsightsPanel && (
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 p-4 sm:p-6 mb-4 sm:mb-6">
           <h2 className="text-sm sm:text-base text-gray-900 mb-3 sm:mb-4 tracking-tight font-semibold">Section-wise Performance</h2>
           <div className="space-y-4">
@@ -2544,8 +2755,8 @@ export default function CandidateResultDetails({
                       recordedAt={detailedResult.started_at || detailedResult.completed_at}
                       dateLabel="Assessment Date"
                       onDownload={(kind) => assessmentService.logRecordingDownload(assessmentId, candidateId, kind)}
-                      onCandidateError={() => setCandidateRecording((s) => ({ ...s, error: true }))}
-                      onScreenError={() => setScreenRecording((s) => ({ ...s, error: true }))}
+                      onCandidateError={() => updateRecording(candidateId, 'candidate', { error: true })}
+                      onScreenError={() => updateRecording(candidateId, 'screen', { error: true })}
                     />
                   </div>
                 )}
@@ -2993,6 +3204,14 @@ export default function CandidateResultDetails({
                               </div>
                             ))}
                           </div>
+                        </div>
+                      ) : eventsFailed ? (
+                        <div className="text-center py-8 border border-dashed border-gray-200 rounded-xl bg-slate-50 ring-1 ring-black/[0.02]">
+                          <AlertCircle className="w-8 h-8 mx-auto mb-2 text-red-400" />
+                          <p className="text-sm text-red-600 dark:text-red-400 mb-3">Failed to load the event log</p>
+                          <Button variant="secondary" size="sm" onClick={() => setEventsRetry(n => n + 1)} className="mx-auto">
+                            Retry
+                          </Button>
                         </div>
                       ) : proctoringEvents.length === 0 ? (
                         <div className="text-center py-8 text-gray-500 border border-dashed border-gray-200 rounded-xl bg-slate-50 ring-1 ring-black/[0.02]">
