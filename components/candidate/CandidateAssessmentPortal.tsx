@@ -599,18 +599,25 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     }
   }, [step, token]);
 
-  // Setup proctoring when assessment starts, stop when completed
+  // Setup proctoring when assessment starts; release media only at the end of
+  // the recording window. 2026-09-24: recordings now run past Submit until the
+  // feedback popup appears, so 'completing' / 'completed' must NOT stop the
+  // camera stream or the screen share (the recorders own them until then —
+  // see the recorder stop effect). Terminal states release everything.
   useEffect(() => {
     if (step === 'assessment') {
       startProctoring();
-    } else if (step === 'completing' || step === 'completed' || step === 'results' || step === 'terminated') {
-      // Explicitly stop proctoring when assessment ends
+      return;
+    }
+    if (step === 'completing' || step === 'completed') {
+      stopHeartbeatWorker();
+      return;
+    }
+    if (step === 'results' || step === 'terminated' || step === 'error') {
       stopProctoring();
       console.log('[PROCTORING] Stopped - assessment ended');
     }
-    return () => {
-      stopProctoring();
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
 
@@ -1600,11 +1607,26 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, cameraStream, cameraRecordingEnabled, screenRecordingRequired, token, getRecordingMicTracks]);
 
+  // Recording window ends when the feedback popup appears on the completed
+  // screen (candidate request: keep both recordings running through Submit).
+  // If no popup is due (feedback already given), stop shortly after completion.
+  // Terminal states (terminated / error / results) stop immediately.
+  const FEEDBACK_GRACE_MS = 4000;
+  const finishRecordings = useCallback(() => {
+    void stopRecorders().finally(() => {
+      stopScreenShare();
+      stopProctoring();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopRecorders, stopScreenShare]);
+
   useEffect(() => {
-    if (step === 'completing' || step === 'completed' || step === 'results' || step === 'error' || step === 'terminated') {
-      void stopRecorders().finally(() => stopScreenShare());
-    }
-  }, [step, stopRecorders, stopScreenShare]);
+    if (step === 'results' || step === 'error' || step === 'terminated') { finishRecordings(); return; }
+    if (step !== 'completed') return;
+    if (showFeedback) { finishRecordings(); return; }
+    const t = setTimeout(finishRecordings, FEEDBACK_GRACE_MS);
+    return () => clearTimeout(t);
+  }, [step, showFeedback, finishRecordings]);
 
   // Unmount: final-flush and release the share.
   useEffect(() => () => {

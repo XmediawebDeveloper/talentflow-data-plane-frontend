@@ -275,6 +275,11 @@ export default function CandidateResultDetails({
   // card the AI-Interview detail page renders on its Overview tab.
   const [assessmentMeta, setAssessmentMeta] = useState<any | null>(null);
   const [isGeneratingInsights, setIsGeneratingInsights] = useState(false);
+  // Insights are generated automatically once scoring completes (like the AI
+  // interview: a loading card, then the result). The manual button only
+  // appears when that automatic attempt failed.
+  const [insightsError, setInsightsError] = useState<string | null>(null);
+  const insightsAutoTriedRef = useRef<string | null>(null);
   const [proctoringEvents, setProctoringEvents] = useState<ProctoringEvent[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(false);
   const [eventsPage, setEventsPage] = useState(1);
@@ -606,36 +611,28 @@ export default function CandidateResultDetails({
     }
 
     // Step 3 — the invitation had no resume_id, which is the normal case for
-    // manually-invited candidates. Search the resume library instead: by email
-    // first, then by name. A single search hit is accepted on its own, since
-    // the query was specific enough to return exactly one record.
+    // manually-invited candidates. Search the resume library by the invited
+    // e-mail and accept ONLY an exact e-mail match. 2026-09-24: the previous
+    // name fallback (and "accept a single hit") mapped aravinth@xmediasolutions.in
+    // to an unrelated library resume "ARAVINTH" <aravinth@example.com> — the
+    // name is not an identity. No e-mail match means no resume.
     const { resumeService } = await import('@/lib/services/resumeService');
-    const findInLibrary = async (query: string, matcher: (item: any) => boolean) => {
-      try {
-        const results = await resumeService.list({ search: query, page_size: 20 });
-        const items = results.items || [];
-        return items.find(matcher)?.id || (items.length === 1 ? items[0].id : null);
-      } catch (err) {
-        console.warn('[CandidateResultDetails] Resume search failed:', err);
-        return null;
-      }
-    };
-
-    if (email) {
-      const byEmail = await findInLibrary(
-        email,
-        item => (item.candidate_email || item.email || '').trim().toLowerCase() === email
-      );
-      if (byEmail) return byEmail;
+    if (!email) {
+      console.info('[CandidateResultDetails] resume lookup: candidate has no e-mail, not searching by name');
+      return null;
     }
-    if (name) {
-      const byName = await findInLibrary(
-        name,
-        item => (item.candidate_name || '').trim().toLowerCase() === name
+    try {
+      const results = await resumeService.list({ search: email, page_size: 20 });
+      const items = results.items || [];
+      const byEmail = items.find(
+        (item: any) => (item.candidate_email || item.email || '').trim().toLowerCase() === email
       );
-      if (byName) return byName;
+      console.info('[CandidateResultDetails] resume lookup by e-mail', { email, hits: items.length, matched: byEmail?.id ?? null, name });
+      return byEmail?.id || null;
+    } catch (err) {
+      console.warn('[CandidateResultDetails] Resume search failed:', err);
+      return null;
     }
-    return null;
   };
 
   const closeResume = useCallback(() => {
@@ -655,7 +652,9 @@ export default function CandidateResultDetails({
     try {
       const id = resumeId || (await resolveResumeId());
       if (!id) {
-        toast.error('No resume is linked to this candidate');
+        toast.error(detailedResult?.candidate_email
+          ? `No resume with the e-mail ${detailedResult.candidate_email} is in the library`
+          : 'No resume is linked to this candidate');
         return;
       }
       setResumeId(id);
@@ -793,6 +792,7 @@ export default function CandidateResultDetails({
     if (!detailedResult) return;
 
     setIsGeneratingInsights(true);
+    setInsightsError(null);
     try {
       const response = await assessmentService.generateCandidateInsights(
         assessmentId,
@@ -808,14 +808,28 @@ export default function CandidateResultDetails({
             ...response.insights
           }
         } : null);
+      } else {
+        setInsightsError('The insights service returned no result.');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to generate insights:', error);
-      toast.error('Failed to generate AI insights. Please try again.');
+      setInsightsError(error?.message || 'Failed to generate AI insights.');
     } finally {
       setIsGeneratingInsights(false);
     }
   };
+
+  // Automatic generation: as soon as scoring is complete and the stored result
+  // has no insights (background step skipped or failed), run it once for this
+  // candidate. Manual retry is offered only if this attempt fails.
+  useEffect(() => {
+    if (!detailedResult || detailedResult.scoring_status !== 'completed') return;
+    if (detailedResult.candidate_insights?.interview_strength) return;
+    if (isGeneratingInsights || insightsAutoTriedRef.current === candidateId) return;
+    insightsAutoTriedRef.current = candidateId;
+    void handleGenerateInsights();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detailedResult?.scoring_status, detailedResult?.candidate_insights?.interview_strength, candidateId]);
 
   if (isLoadingDetails) {
     // Mirrors the real detail layout below: the blue assessment bar, the
@@ -1710,23 +1724,13 @@ export default function CandidateResultDetails({
                   <p className="text-gray-600 text-xs sm:text-sm mt-1">Advanced automated analysis for Technical & Coding rounds</p>
                 </div>
               </div>
-              {(!detailedResult.candidate_insights?.interview_strength) && (
+              {(!detailedResult.candidate_insights?.interview_strength && insightsError && !isGeneratingInsights) && (
                 <Button
                   variant="primary"
                   onClick={handleGenerateInsights}
-                  disabled={isGeneratingInsights}
                 >
-                  {isGeneratingInsights ? (
-                    <>
-                      <Loader2 className="w-4 h-4 animate-spin" />
-                      Generating...
-                    </>
-                  ) : (
-                    <>
-                      <Award className="w-4 h-4" />
-                      Generate Insights
-                    </>
-                  )}
+                  <Award className="w-4 h-4" />
+                  Retry
                 </Button>
               )}
             </div>
@@ -1787,29 +1791,29 @@ export default function CandidateResultDetails({
               </div>
               ) : (
                 <div className="text-center py-12">
-                  <Award className="w-16 h-16 text-brand-blue/30 mx-auto mb-4" />
-                  <h3 className="text-lg text-gray-700 mb-2 tracking-tight font-semibold">No AI Insights Generated Yet</h3>
-                  <p className="text-gray-600 mb-4">
-                    Click &quot;Generate Insights&quot; to analyze this candidate&apos;s Technical and Coding performance
-                  </p>
-                  <Button
-                    variant="primary"
-                    onClick={handleGenerateInsights}
-                    disabled={isGeneratingInsights}
-                    className="mx-auto"
-                  >
-                    {isGeneratingInsights ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin" />
-                        Generating AI Insights...
-                      </>
-                    ) : (
-                      <>
+                  {detailedResult.scoring_status !== 'completed' ? (
+                    <>
+                      <Loader2 className="w-10 h-10 text-brand-blue/50 mx-auto mb-4 animate-spin" />
+                      <h3 className="text-lg text-gray-700 mb-2 tracking-tight font-semibold">Waiting for scoring</h3>
+                      <p className="text-gray-600">Insights are generated automatically as soon as the evaluation completes.</p>
+                    </>
+                  ) : insightsError && !isGeneratingInsights ? (
+                    <>
+                      <AlertCircle className="w-12 h-12 text-destructive/60 mx-auto mb-4" />
+                      <h3 className="text-lg text-gray-700 mb-2 tracking-tight font-semibold">Insights could not be generated</h3>
+                      <p className="text-gray-600 mb-4">{insightsError}</p>
+                      <Button variant="primary" onClick={handleGenerateInsights} className="mx-auto">
                         <Award className="w-5 h-5" />
-                        Generate AI Insights
-                      </>
-                    )}
-                  </Button>
+                        Retry
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Loader2 className="w-10 h-10 text-brand-blue/50 mx-auto mb-4 animate-spin" />
+                      <h3 className="text-lg text-gray-700 mb-2 tracking-tight font-semibold">Generating AI insights…</h3>
+                      <p className="text-gray-600">Analyzing this candidate&apos;s Technical and Coding performance. This takes a few seconds.</p>
+                    </>
+                  )}
                 </div>
               )}
             </div>
