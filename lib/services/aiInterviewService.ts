@@ -1398,6 +1398,8 @@ export const aiInterviewService = {
   async sendSessionEmail(sessionId: string, data: {
     custom_message?: string;
     base_url?: string;
+    /** Email the session's current link instead of rotating it (keeps a copied link working). */
+    keep_link?: boolean;
   }): Promise<{ message: string; session_id: string }> {
     const response = await api.post(`/ai-interview/session/${sessionId}/send-invite-email`, data);
     return response.data;
