@@ -25,6 +25,12 @@ import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { Button } from '@/components/ui/button';
 
+/** A native <select> popup grows to fit its widest <option>, so a full-address
+ *  location value blows the open dropdown past the screen edge on mobile. Clamp
+ *  only the DISPLAYED label — the option's `value` stays the full string. */
+const clampOptionLabel = (text: string, max = 32): string =>
+  text.length > max ? `${text.slice(0, max - 1).trimEnd()}…` : text;
+
 interface Job {
   id: string;
   title: string;
@@ -288,7 +294,7 @@ export default function AITalentMatchPageJobsList({
                 >
                   <option value="">All Departments</option>
                   {departments.map(dept => (
-                    <option key={dept} value={dept}>{dept}</option>
+                    <option key={dept} value={dept} title={dept}>{clampOptionLabel(dept)}</option>
                   ))}
                 </select>
               </div>
@@ -304,7 +310,7 @@ export default function AITalentMatchPageJobsList({
                 >
                   <option value="">All Locations</option>
                   {locations.map(loc => (
-                    <option key={loc} value={loc}>{loc}</option>
+                    <option key={loc} value={loc} title={loc}>{clampOptionLabel(loc)}</option>
                   ))}
                 </select>
               </div>
