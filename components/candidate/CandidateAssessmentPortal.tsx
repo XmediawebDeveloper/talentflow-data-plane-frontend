@@ -767,6 +767,21 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         return;
       }
 
+      // ── Gate 2: REVOKED ─────────────────────────────────────────────────────
+      // Must run before pending_lang_choice/completed/can_resume/consent below,
+      // otherwise a revoked-but-never-opened link (consent_accepted still
+      // false) falls into the consent branch and the assessment landing page
+      // loads instead of the revoked error. Safe to check unconditionally here:
+      // revoke is only ever allowed on an invitation that hasn't been started
+      // or completed (see isRevocableInvitation), so it can't preempt a
+      // legitimate resume/completed state.
+      if (info.is_revoked) {
+        setIsRevokedLink(true);
+        setError(info.message || 'This invitation has been revoked by the recruiter. Please contact them for details.');
+        setStepSafe('error');
+        return;
+      }
+
       // A persisted proctoring termination wins over every other status.
       try {
         const persisted = localStorage.getItem(assessmentTerminatedStorageKey(token));
