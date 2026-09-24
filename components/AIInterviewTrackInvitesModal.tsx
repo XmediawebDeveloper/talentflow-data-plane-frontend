@@ -14,6 +14,7 @@ import InviteFilterBar, {
 } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
 import { TRACKER_DIALOG_PANEL_CLASS } from '@/lib/constants/trackerDialog';
+import TabEmptyState from '@/components/ui/tab-empty-state';
 import AIInterviewInviteTable, {
   isExpiredForActions,
 } from '@/components/AIInterviewInviteTable';
@@ -254,6 +255,11 @@ export default function AIInterviewTrackInvitesModal({
     'bg-white dark:bg-slate-900 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed ' +
     'hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors';
 
+  /* Nobody invited yet (the unfiltered total is 0): like the Results tab, the
+     shared empty state stands alone — no zeroed stat cards, filter bar,
+     completion badge, empty table or pager. */
+  const isUnstarted = !isLoading && overview.total === 0;
+
   const panel = (
       <div className={embedded
         ? 'bg-white dark:bg-slate-900 w-full flex flex-col'
@@ -267,8 +273,16 @@ export default function AIInterviewTrackInvitesModal({
               </div>
               <div className="min-w-0">
                 <h2 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">
-                  <span className="hidden sm:inline">AI Interview - Invite Status Tracking</span>
-                  <span className="sm:hidden">Invite Status</span>
+                  {embedded ? (
+                    // Embedded as the details page's Invitation Status tab —
+                    // headed with that tab's own name.
+                    'Invitation Status'
+                  ) : (
+                    <>
+                      <span className="hidden sm:inline">AI Interview - Invite Status Tracking</span>
+                      <span className="sm:hidden">Invite Status</span>
+                    </>
+                  )}
                 </h2>
                 <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">{jdTitle}</p>
               </div>
@@ -287,6 +301,16 @@ export default function AIInterviewTrackInvitesModal({
           )}
         </div>
 
+        {isUnstarted ? (
+          <div className="px-2.5 sm:px-6 py-2.5 sm:py-4">
+            <TabEmptyState
+              icon={Mail}
+              title="No Invitations Sent Yet"
+              description="Invite candidates to this interview and their status appears here."
+            />
+          </div>
+        ) : (
+        <>
         {/* Stat row doubles as the status filter — same buckets and wording as the
             AI Interviews page tracker. */}
         <InviteStatCards
@@ -395,6 +419,8 @@ export default function AIInterviewTrackInvitesModal({
             isSelectable={isBulkResendable}
           />
         </div>
+        </>
+        )}
 
         {/* Resend confirmation — regenerates the interview token, so the old
             link stops working the moment the new email goes out. Mirrors the
@@ -446,7 +472,9 @@ export default function AIInterviewTrackInvitesModal({
           variant="warning"
         />
 
-        {/* Footer — stacks on phones; First/Last drop out below sm. */}
+        {/* Footer — stacks on phones; First/Last drop out below sm. Nothing to
+            count or page when nobody is invited, so embedded it goes too. */}
+        {!(isUnstarted && embedded) && (
         <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
           <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
             {resultsLabel}
@@ -495,6 +523,7 @@ export default function AIInterviewTrackInvitesModal({
             )}
           </div>
         </div>
+        )}
       </div>
   );
 

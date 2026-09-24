@@ -13,6 +13,7 @@ import { useQuota } from '@/contexts/QuotaContext';
 import { Button } from '@/components/ui/button';
 import { isValidEmailFormat } from '@/lib/utils/email';
 import SuccessAnimation from '@/components/ui/success-animation';
+import ListPagination from '@/components/ListPagination';
 
 // Delegates to the one shared, comprehensive format rule (lib/utils/email)
 // rather than this file's own regex, which didn't catch consecutive/
@@ -274,11 +275,25 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
   const enabledRounds = config.rounds_config ? config.rounds_config.filter((r: any) => r.enabled !== false) : [];
 
+  /* Candidate rows are paged with the project's ListPagination — 5 a page by
+     default, so a long prefilled list (25 resumes from My Resumes) doesn't
+     push the rest of the dialog out of reach. */
+  const [candidatePage, setCandidatePage] = useState(1);
+  const [candidatePageSize, setCandidatePageSize] = useState(5);
+  const candidateTotalPages = Math.max(1, Math.ceil(candidates.length / candidatePageSize));
+  const candidateSafePage = Math.min(candidatePage, candidateTotalPages);
+  const pagedCandidates = candidates.slice(
+    (candidateSafePage - 1) * candidatePageSize,
+    candidateSafePage * candidatePageSize,
+  );
+
   const addCandidate = () => {
     setCandidates([
       ...candidates,
       { id: Date.now().toString(), name: '', email: '', /* scheduledDate: '', scheduledTime: '', */ source: 'manual' },
     ]);
+    // Land on the page holding the new, empty row so it can be filled in.
+    setCandidatePage(Math.ceil((candidates.length + 1) / candidatePageSize));
   };
 
   const removeCandidate = (id: string) => {
@@ -826,8 +841,8 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             <SuccessAnimation
               className="w-14 h-14 sm:w-16 sm:h-16"
               fallback={
-                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-success-subtle rounded-full flex items-center justify-center">
-                  <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10 text-success" />
+                <div className="w-14 h-14 sm:w-16 sm:h-16 bg-brand-blue/10 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-8 h-8 sm:w-10 sm:h-10 text-brand-blue" />
                 </div>
               }
             />
@@ -947,21 +962,21 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         ? 'bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700 w-full flex flex-col overflow-hidden tf-round-edges'
         : 'bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col tf-round-edges'}>
         {/* Header */}
-        <div className="bg-gradient-to-r from-green-600 to-teal-600 px-4 sm:px-6 py-4 sm:py-5 flex items-center justify-between gap-3 shrink-0">
+        <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="w-8 h-8 sm:w-10 sm:h-10 bg-white/20 rounded-lg flex items-center justify-center flex-shrink-0">
-              <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+            <div className="w-9 h-9 rounded-lg bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center flex-shrink-0">
+              <Mail className="w-4 h-4 text-white" />
             </div>
             <div className="min-w-0">
-              <h2 className="text-base sm:text-lg font-semibold text-white truncate">Send AI Interview via Email</h2>
-              <p className="text-green-100 text-xs sm:text-sm truncate">{config.jd_title || config.position} — AI Interview</p>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate">Send AI Interview via Email</h2>
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 truncate">{config.jd_title || config.position} — AI Interview</p>
             </div>
           </div>
           {!embedded && (
             <button
               onClick={onClose}
               aria-label="Close dialog"
-              className="text-white hover:text-gray-900 hover:bg-white hover:bg-opacity-20 p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0"
+              className="text-gray-500 dark:text-slate-400 hover:text-brand-blue hover:bg-brand-blue/5 p-1.5 sm:p-2 rounded-lg transition-colors flex-shrink-0"
             >
               <X className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
@@ -973,7 +988,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           {/* Config Info Banner */}
           <div className="bg-gray-50 dark:bg-slate-800/50 border border-gray-200 dark:border-slate-700 rounded-lg p-4 mb-6">
             <div className="flex items-center gap-4">
-              <div className="w-12 h-12 rounded-lg bg-gradient-to-r from-green-600 to-teal-600 flex items-center justify-center">
+              <div className="w-12 h-12 rounded-lg bg-gradient-to-r from-brand-blue to-brand-blue-2 flex items-center justify-center">
                 <FileText className="w-6 h-6 text-white" />
               </div>
               <div className="flex-1">
@@ -1152,7 +1167,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                   <p className="text-sm text-gray-600 dark:text-slate-400">Enter candidate details manually</p>
                   <button
                     onClick={addCandidate}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-success hover:text-success rounded-lg transition-colors"
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-brand-blue hover:text-brand-blue-2 rounded-lg transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                     Add Candidate
@@ -1160,7 +1175,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                 </div>
 
                 <div className="space-y-3">
-                  {candidates.map((candidate) => (
+                  {pagedCandidates.map((candidate) => (
                     <div
                       key={candidate.id}
                       className={`p-4 border rounded-lg ${
@@ -1170,7 +1185,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                       <div className="flex items-center gap-3">
                         {candidate.source === 'database' && (
                           <div className="flex-shrink-0">
-                            <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-green-600 to-teal-600 flex items-center justify-center">
+                            <div className="w-8 h-8 rounded-lg bg-gradient-to-r from-brand-blue to-brand-blue-2 flex items-center justify-center">
                               <Database className="w-4 h-4 text-white" />
                             </div>
                           </div>
@@ -1184,7 +1199,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                               onChange={(e) => updateCandidate(candidate.id, 'name', e.target.value)}
                               placeholder="e.g., John Doe"
                               readOnly={candidate.source === 'database'}
-                              className={`w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-success-line focus:border-transparent ${
+                              className={`w-full px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent ${
                                 candidate.source === 'database' ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed' : ''
                               }`}
                             />
@@ -1203,7 +1218,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                                     ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed border-gray-200 dark:border-slate-700'
                                     : candidate.email.trim() && (!isValidEmail(candidate.email) || isDuplicateEmail(candidate.id, candidate.email))
                                       ? 'border-destructive-line focus:ring-destructive-line'
-                                      : 'border-gray-200 dark:border-slate-700 focus:ring-success-line focus:border-transparent'
+                                      : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-transparent'
                                 }`}
                               />
                               {/* Per-candidate Copy Link button */}
@@ -1223,7 +1238,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                                 }
                                 className={`flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs border transition-colors whitespace-nowrap flex-shrink-0 ${
                                   candidate.generatedLink
-                                    ? 'bg-success-subtle border-success-line text-success hover:bg-success-subtle'
+                                    ? 'bg-brand-blue/10 border-brand-blue/30 text-brand-blue hover:bg-brand-blue/10'
                                     : 'bg-white dark:bg-slate-900 border-gray-200 dark:border-slate-700 text-gray-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
                                 } disabled:opacity-50`}
                               >
@@ -1243,7 +1258,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                             )}
                             {candidate.generatedLink && (
                               <div className="mt-2">
-                                <p className="text-xs text-success mb-1.5">
+                                <p className="text-xs text-brand-blue mb-1.5">
                                   Link ready (expires {expiryDays}d) — share directly:
                                 </p>
                                 <div className="flex items-center gap-1.5 flex-wrap">
@@ -1251,9 +1266,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                                   <button
                                     onClick={() => window.open(`https://wa.me/?text=${encodeURIComponent(`You've been invited to an AI interview. Complete it here: ${candidate.generatedLink}`)}`, '_blank')}
                                     title="Share via WhatsApp"
-                                    className="p-1.5 rounded-lg hover:bg-success-subtle border border-gray-200 dark:border-slate-700 transition-colors group"
+                                    className="p-1.5 rounded-lg hover:bg-brand-blue/10 border border-gray-200 dark:border-slate-700 transition-colors group"
                                   >
-                                    <svg className="w-4 h-4 text-gray-400 dark:text-slate-500 group-hover:text-success" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
+                                    <svg className="w-4 h-4 text-gray-400 dark:text-slate-500 group-hover:text-brand-blue" viewBox="0 0 24 24" fill="currentColor"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/></svg>
                                   </button>
                                   {/* Telegram */}
                                   <button
@@ -1291,9 +1306,9 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                                   <button
                                     onClick={() => window.open(`sms:?body=${encodeURIComponent(`AI Interview invitation: ${candidate.generatedLink}`)}`, '_blank')}
                                     title="Share via SMS"
-                                    className="p-1.5 rounded-lg hover:bg-success-subtle border border-gray-200 dark:border-slate-700 transition-colors group"
+                                    className="p-1.5 rounded-lg hover:bg-brand-blue/10 border border-gray-200 dark:border-slate-700 transition-colors group"
                                   >
-                                    <svg className="w-4 h-4 text-gray-400 dark:text-slate-500 group-hover:text-success" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                                    <svg className="w-4 h-4 text-gray-400 dark:text-slate-500 group-hover:text-brand-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                                   </button>
                                 </div>
                               </div>
@@ -1333,6 +1348,18 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                     </div>
                   ))}
                 </div>
+
+                {candidates.length > 0 && (
+                  <ListPagination
+                    currentPage={candidateSafePage}
+                    itemsPerPage={candidatePageSize}
+                    totalItems={candidates.length}
+                    onPageChange={setCandidatePage}
+                    onItemsPerPageChange={(size) => { setCandidatePageSize(size); setCandidatePage(1); }}
+                    itemLabel="candidates"
+                    compact
+                  />
+                )}
               </>
             )}
 
@@ -1399,7 +1426,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                         placeholder="Search by name, email, or position..."
-                        className="flex-1 min-w-[10rem] px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-success-line"
+                        className="flex-1 min-w-[10rem] px-3 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
                       />
                       <button
                         onClick={() => {
@@ -1484,35 +1511,17 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             )}
           </div>
 
-          {/* Link Expiry */}
-          <div className="mb-6 flex items-center justify-end gap-2">
-            <Clock className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
-            <span className="text-xs text-gray-500 dark:text-slate-500">Link expiry</span>
-            <select
-              value={expiryDays}
-              onChange={(e) => setExpiryDays(Number(e.target.value))}
-              className="text-xs border border-gray-200 dark:border-slate-700 rounded-lg px-2 py-1 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-success-line focus:border-transparent"
-            >
-              <option value={1}>1 day</option>
-              <option value={3}>3 days</option>
-              <option value={7}>7 days</option>
-              <option value={14}>14 days</option>
-              <option value={30}>30 days</option>
-              <option value={0}>No expiry</option>
-            </select>
-          </div>
-
           {/* Custom Message */}
           <div className="mb-6">
             <div className="flex items-center justify-between mb-2">
               <label className="text-gray-900 dark:text-slate-50 font-medium">Email Message</label>
-              <span className="text-xs text-success font-medium">✓ Live preview below</span>
+              <span className="text-xs text-brand-blue font-medium">✓ Live preview below</span>
             </div>
             <textarea
               value={customMessage}
               onChange={(e) => setCustomMessage(e.target.value)}
               rows={10}
-              className="w-full px-4 py-3 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-success-line focus:border-transparent resize-none font-mono"
+              className="w-full px-4 py-3 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent resize-none font-mono"
               placeholder="Edit the message content here..."
             />
             <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">
@@ -1521,40 +1530,58 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             </p>
           </div>
 
-          {/* Settings */}
-          <div className="flex items-center mb-6">
+          {/* Settings — Send me a copy, then Link expiry beside it. */}
+          <div className="flex flex-wrap items-center gap-x-6 gap-y-3 mb-6">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
                 type="checkbox"
                 checked={sendCopy}
                 onChange={(e) => setSendCopy(e.target.checked)}
-                className="w-4 h-4 text-success border-gray-300 dark:border-slate-700 rounded focus:ring-success-line"
+                className="w-4 h-4 text-brand-blue border-gray-300 dark:border-slate-700 rounded focus:ring-brand-blue/40"
               />
               <span className="text-sm text-gray-700 dark:text-slate-300">Send me a copy</span>
             </label>
+            <div className="flex items-center gap-2">
+              <Clock className="w-3.5 h-3.5 text-gray-400 dark:text-slate-500" />
+              <span className="text-sm text-gray-700 dark:text-slate-300">Link expiry</span>
+              <select
+                value={expiryDays}
+                onChange={(e) => setExpiryDays(Number(e.target.value))}
+                aria-label="Link expiry"
+                className="text-xs border border-gray-200 dark:border-slate-700 rounded-lg px-2 py-1 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-transparent"
+              >
+                <option value={1}>1 day</option>
+                <option value={3}>3 days</option>
+                <option value={7}>7 days</option>
+                <option value={14}>14 days</option>
+                <option value={30}>30 days</option>
+                <option value={0}>No expiry</option>
+              </select>
+            </div>
           </div>
 
-          {/* Email Preview */}
-          <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-success-line rounded-lg p-6">
+          {/* Email Preview — colours from the Share Assessment via Email
+              preview: flat slate panel, hairline border, brand-blue accents. */}
+          <div className="bg-slate-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-lg p-6">
             <div className="flex items-center justify-between mb-4">
               <div className="flex items-center gap-2">
-                <Mail className="w-5 h-5 text-success" />
+                <Mail className="w-5 h-5 text-brand-blue" />
                 <h3 className="text-gray-900 dark:text-slate-50 font-semibold">Email Preview</h3>
               </div>
-              <span className="text-xs text-success bg-success-subtle px-3 py-1 rounded-full font-medium">
+              <span className="text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-3 py-1 rounded-full font-medium">
                 Exact email format
               </span>
             </div>
-            <p className="text-xs text-gray-600 dark:text-slate-400 mb-4 bg-white dark:bg-slate-900 rounded-lg px-3 py-2 border border-success-line">
+            <p className="text-xs text-gray-600 dark:text-slate-400 mb-4 bg-white dark:bg-slate-900 rounded-lg px-3 py-2 border border-gray-200 dark:border-slate-700">
               This is exactly how the email will appear to candidates. Edit the message above to see live changes.
             </p>
 
             {/* Actual Email Template Preview */}
-            <div className="bg-white rounded-lg shadow-md overflow-hidden max-w-xl mx-auto">
-              {/* Green Header */}
-              <div className="bg-gradient-to-r from-emerald-600 to-emerald-500 px-8 py-8 text-center">
+            <div className="bg-white rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden max-w-xl mx-auto">
+              {/* Brand Header */}
+              <div className="bg-brand-blue px-8 py-8 text-center">
                 <h1 className="text-white text-2xl font-bold mb-2">AI Interview Invitation</h1>
-                <p className="text-emerald-100 text-sm">TalentFlow</p>
+                <p className="text-white/80 text-sm">TalentFlow</p>
               </div>
 
               {/* Email Body */}
@@ -1571,15 +1598,15 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                 </div>
 
                 {/* Interview Title Box */}
-                <div className="bg-gradient-to-r from-emerald-50 to-emerald-100 border-2 border-success-line rounded-xl p-5 text-center mb-6">
-                  <div className="text-xl font-bold text-success-strong">
+                <div className="bg-brand-blue/5 border border-brand-blue/20 rounded-xl p-5 text-center mb-6">
+                  <div className="text-xl font-bold text-brand-blue">
                     {config.jd_title || config.position}
                   </div>
-                  <div className="text-sm text-success mt-1 font-medium">
+                  <div className="text-sm text-brand-blue/80 mt-1 font-medium">
                     {(user as any)?.tenantName || 'Our Company'}
                   </div>
                   {((config as any).jd_location) && (
-                    <div className="flex items-center justify-center gap-1.5 mt-1.5 text-success text-sm">
+                    <div className="flex items-center justify-center gap-1.5 mt-1.5 text-brand-blue/80 text-sm">
                       <MapPin className="w-3.5 h-3.5 flex-shrink-0" />
                       <span>{(config as any).jd_location}</span>
                     </div>
@@ -1588,7 +1615,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
 
                 {/* CTA Button */}
                 <div className="text-center mb-6">
-                  <div className="inline-block bg-gradient-to-r from-emerald-600 to-emerald-500 text-white px-8 py-3 rounded-lg font-semibold">
+                  <div className="inline-block bg-brand-blue text-white px-8 py-3 rounded-lg font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                     Start Interview
                   </div>
                 </div>

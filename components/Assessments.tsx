@@ -1,6 +1,7 @@
 'use client';
 
 import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { InviteSourceValue, assessmentInviteSource } from '@/components/AIInterviewInviteTable';
 import { Plus, Clock, Calendar, Users, CheckCircle, FileText, ArrowDown, ArrowRight, FileCheck, MoreVertical, Play, Sparkles, Eye, Edit2, BarChart, Mail, Trash2, Copy, Archive, Download, Link2, Share2, PauseCircle, Monitor, Brain, Code, ClipboardList, Globe, Pencil, Shield, Video, X, Info, CheckCircle2, Check, MonitorOff, Clipboard, Lock, TrendingUp, Activity, Loader2, ClipboardCheck, ChevronRight, ListFilter, FilterX, FileDown, FileSpreadsheet, CheckSquare, Square } from 'lucide-react';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
@@ -34,7 +35,6 @@ import AssessmentInviteTable, {
   InviteStatusBadge,
   isTrackedInviteCompleted,
   isValidInviteEmail,
-  inviteStatusBucket,
 } from '@/components/assessments/AssessmentInviteTable';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
@@ -75,6 +75,7 @@ import {
   RevokeInvitationDialog,
   InvitationHistoryDialog,
   timelineEvents,
+  latestTimelineStatus,
   isRevocableInvitation,
   canResendInvite,
 } from '@/components/AssessmentInviteActions';
@@ -1876,53 +1877,77 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      The terminal failure states (Invite Failed / Bounced / Terminated) and
      Pending keep their per-component red and slate — nothing else draws them
      yet, so there is nothing for them to stay in step with. */
-  const renderInviteStatusBadge = (inv: any) => {
-    const s = inv.status;
+  /* Drawing is split from deciding: `renderInviteBadgeForStatus` draws one
+     status key in its house badge; `resolveInviteFieldStatus` reads the key
+     off the row's own fields (the Track Invites popup's badge), and
+     `currentInviteStatus` reads it off the row's Timeline (the Invitation
+     Status tab) — so both readings share one set of badges. */
+  const renderInviteBadgeForStatus = (status: string, inv: { termination_code?: string | null }) => {
     const base = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs sm:text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1";
-    /* Resolved first so a lapsed invite shows only the Expired badge — never
-       the stale pre-expiry status. */
-    if (isInviteExpired(inv)) {
-      return <span className={`${base} bg-status-expired/10 text-status-expired ring-status-expired/20`}><Clock className="w-3 h-3" /> Expired</span>;
+    switch (status) {
+      case 'expired':
+        return <span className={`${base} bg-status-expired/10 text-status-expired ring-status-expired/20`}><Clock className="w-3 h-3" /> Expired</span>;
+      case 'completed': {
+        const autoCompleted = inv.termination_code === 'TENANT_SESSION_TIMEOUT';
+        return (
+          <span
+            className={`${base} bg-status-completed/10 dark:bg-status-completed/15 text-status-completed ring-status-completed/20 dark:ring-status-completed/25`}
+            title={autoCompleted ? 'Auto-submitted when the assessment duration elapsed' : undefined}
+          >
+            <CheckCircle className="w-3 h-3" />
+            Completed
+            {autoCompleted && <span className="text-status-completed/80">(Auto)</span>}
+          </span>
+        );
+      }
+      case 'failed':
+        return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}><X className="w-3 h-3" /> Invite Failed</span>;
+      case 'bounced':
+        return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}><RefreshCw className="w-3 h-3" /> Bounced</span>;
+      case 'revoked':
+        return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}><Ban className="w-3 h-3" /> Revoked</span>;
+      case 'abandoned':
+        return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`} title="Ended before completion — the candidate left the assessment"><Ban className="w-3 h-3" /> Terminated</span>;
+      case 'started':
+        return <span className={`${base} bg-status-progress/10 text-status-progress ring-status-progress/20`}><Play className="w-3 h-3" /> In Progress</span>;
+      case 'opened':
+        return <span className={`${base} bg-status-progress/10 text-status-progress ring-status-progress/20`} title="Consent accepted — the candidate is on the system check step"><Monitor className="w-3 h-3" /> System Check</span>;
+      case 'sent':
+        return <span className={`${base} bg-status-invited/10 text-status-invited ring-status-invited/20`}><Mail className="w-3 h-3" /> Invited</span>;
+      default:
+        return <span className={`${base} bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-gray-200 dark:ring-slate-700`}><Clock className="w-3 h-3" /> Pending</span>;
     }
-    if (s === 'completed' || inv.completed_at) {
-      const autoCompleted = inv.termination_code === 'TENANT_SESSION_TIMEOUT';
-      return (
-        <span
-          className={`${base} bg-status-completed/10 dark:bg-status-completed/15 text-status-completed ring-status-completed/20 dark:ring-status-completed/25`}
-          title={autoCompleted ? 'Auto-submitted when the assessment duration elapsed' : undefined}
-        >
-          <CheckCircle className="w-3 h-3" />
-          Completed
-          {autoCompleted && <span className="text-status-completed/80">(Auto)</span>}
-        </span>
-      );
-    }
-    if (s === 'failed') {
-      return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}><X className="w-3 h-3" /> Invite Failed</span>;
-    }
-    if (s === 'bounced' || inv.bounced_at) {
-      return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}><RefreshCw className="w-3 h-3" /> Bounced</span>;
-    }
-    if (s === 'revoked') {
-      return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`}><Ban className="w-3 h-3" /> Revoked</span>;
-    }
-    if (s === 'expired') {
-      return <span className={`${base} bg-status-expired/10 text-status-expired ring-status-expired/20`}><Clock className="w-3 h-3" /> Expired</span>;
-    }
-    if (s === 'abandoned') {
-      return <span className={`${base} bg-destructive-subtle text-destructive ring-destructive-line`} title="Ended before completion — the candidate left the assessment"><Ban className="w-3 h-3" /> Terminated</span>;
-    }
-    if (s === 'started' || inv.started_at) {
-      return <span className={`${base} bg-status-progress/10 text-status-progress ring-status-progress/20`}><Play className="w-3 h-3" /> In Progress</span>;
-    }
-    if (s === 'opened' || inv.opened_at) {
-      return <span className={`${base} bg-status-progress/10 text-status-progress ring-status-progress/20`} title="Consent accepted — the candidate is on the system check step"><Monitor className="w-3 h-3" /> System Check</span>;
-    }
-    if (s === 'sent' || inv.sent_at) {
-      return <span className={`${base} bg-status-invited/10 text-status-invited ring-status-invited/20`}><Mail className="w-3 h-3" /> Invited</span>;
-    }
-    return <span className={`${base} bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 ring-gray-200 dark:ring-slate-700`}><Clock className="w-3 h-3" /> Pending</span>;
   };
+
+  /* The status the row's own fields say, in the precedence this badge has
+     always used. Expiry is resolved first so a lapsed invite shows only the
+     Expired badge — never the stale pre-expiry status. */
+  const resolveInviteFieldStatus = (inv: any): string => {
+    const s = inv.status;
+    if (isInviteExpired(inv)) return 'expired';
+    if (s === 'completed' || inv.completed_at) return 'completed';
+    if (s === 'failed') return 'failed';
+    if (s === 'bounced' || inv.bounced_at) return 'bounced';
+    if (s === 'revoked') return 'revoked';
+    if (s === 'expired') return 'expired';
+    if (s === 'abandoned') return 'abandoned';
+    if (s === 'started' || inv.started_at) return 'started';
+    if (s === 'opened' || inv.opened_at) return 'opened';
+    if (s === 'sent' || inv.sent_at) return 'sent';
+    return 'pending';
+  };
+
+  const renderInviteStatusBadge = (inv: any) =>
+    renderInviteBadgeForStatus(resolveInviteFieldStatus(inv), inv);
+
+  /* The Invitation Status tab's one status rule: the latest status in the
+     row's Timeline (`latestTimelineStatus`, which reads the same trail the
+     Timeline column prints). Its Status badge, tab counts, tab filter, bulk
+     Resend eligibility and exported Status all go through here, so none of
+     them can disagree with the Timeline or with each other. The row's own
+     fields are only the fallback for a trail with no status in it. */
+  const currentInviteStatus = (inv: any): string =>
+    latestTimelineStatus(inv) ?? resolveInviteFieldStatus(inv);
 
   /* The mark a round is passed at. Shared by the Candidate Results table and
      the two score cells below — the popup spelled 70 into each of its own. */
@@ -1993,7 +2018,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      row the Status column shows as Expired, and the same test the per-row
      Resend item uses. */
   const isInviteResendable = (inv: any): boolean =>
-    inviteStatusBucket(inv) === 'expired' && !inv.started_at && !inv.completed_at;
+    currentInviteStatus(inv) === 'expired' && !inv.started_at && !inv.completed_at;
 
   /* Eligibility for a bulk revoke: Invited ('sent'), same rule as the per-row
      Revoke action (isRevocableInvitation). Scenario 4's "all selected are
@@ -2112,9 +2137,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       started: 'In Progress',
       opened: 'System Check',
       sent: 'Invited',
+      revoked: 'Revoked',
       pending: 'Pending',
     };
-    return labels[inviteStatusBucket(inv)] || 'Pending';
+    return labels[currentInviteStatus(inv)] || 'Pending';
   };
 
   /* The exported sheet's columns, in table order: what is on screen, with the
@@ -2134,6 +2160,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     { label: 'Job Version', value: (inv) => (inv._jd_version ? `v${inv._jd_version}` : '') },
     { label: 'Assessment Version', value: (inv) => (inv._assessment_version ? `v${inv._assessment_version}` : '') },
     { label: 'Assessment', value: (inv) => inv._assessment_title || '' },
+    { label: 'Invite Source', value: (inv) => (inv.resume_id ? 'From Resume' : 'From Email') },
     { label: 'Status', value: (inv) => inviteStatusText(inv) },
     { label: 'Invited On', value: (inv) => (inv.sent_at || inv.created_at ? formatIST(inv.sent_at || inv.created_at) : '') },
     { label: 'Started At', value: (inv) => (inv.started_at ? formatIST(inv.started_at) : '') },
@@ -2559,24 +2586,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
     return mins > 0 ? `${mins}m ${secs}s` : `${secs}s`;
-  };
-
-  // Same vocabulary as the per-assessment Candidate Results table.
-  const inviteSourceMeta = (source?: string) => {
-    const value = source || 'Manual';
-    const styles: Record<string, string> = {
-      'JD': 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20',
-      'Assessment': 'bg-brand-blue/10 text-brand-blue-2 ring-1 ring-brand-blue/20',
-      'Resume Scoring': 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
-      'My Resumes': 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
-      'Internal DB': 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20',
-      'Manual': 'bg-gray-100 text-gray-600 ring-1 ring-gray-200',
-    };
-    const labels: Record<string, string> = { 'JD': 'Job' };
-    return {
-      label: labels[value] || value,
-      cls: styles[value] || styles['Manual'],
-    };
   };
 
   const resultStatusClass = (status?: string) => {
@@ -6458,7 +6467,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           <table className="w-full min-w-[1930px] table-auto">
                             <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                               <tr>
-                                {['CID', 'Candidate', 'Email', 'Job ID', 'JD Title', 'Job Version', 'Assessment Version', 'Resume Version', 'Phone', 'Invite Source', 'Tech Score', 'Coding Score', 'Result Status', 'Timeline', 'Completed', 'Duration', 'Actions'].map((c) => (
+                                {['CID', 'Candidate', 'Email', 'Job ID', 'JD Title', 'Job Version', 'Assessment Version', 'Resume Version', 'Phone', 'Tech Score', 'Coding Score', 'Invite Source', 'Result Status', 'Timeline', 'Completed', 'Duration', 'Actions'].map((c) => (
                                   <th key={c} className="px-4 py-3"><Skeleton className="h-3 w-20" /></th>
                                 ))}
                               </tr>
@@ -6584,9 +6593,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Assessment Version</th>
                               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Resume Version</th>
                               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Phone</th>
-                              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Invite Source</th>
                               <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Tech Score</th>
                               <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Coding Score</th>
+                              <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Invite Source</th>
                               <th className="text-center px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Result Status</th>
                               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Timeline</th>
                               <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Completed</th>
@@ -6596,7 +6605,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           </thead>
                           <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                             {pageItems.map((result) => {
-                              const invite = inviteSourceMeta(result.invite_source);
                               return (
                                 <tr
                                   key={`${result._assessment_id}-${result.invitation_id}`}
@@ -6689,11 +6697,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <td className="px-4 py-4 align-middle text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
                                     {result.candidate_phone || '-'}
                                   </td>
-                                  <td className="px-4 py-4 align-middle whitespace-nowrap">
-                                    <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${invite.cls}`}>
-                                      {invite.label}
-                                    </span>
-                                  </td>
                                   <td className="px-4 py-4 align-middle text-center">
                                     <div className="flex flex-col items-center gap-1">
                                       <span className={`text-lg font-semibold ${typeof result.technical_score === 'number' ? (result.technical_score >= RESULT_PASS_MARK ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
@@ -6717,6 +6720,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         </span>
                                       )}
                                     </div>
+                                  </td>
+                                  {/* Invite Source — how this candidate was
+                                      actually invited, from the invitation's
+                                      own resume_id; sits right before Status. */}
+                                  <td className="px-4 py-4 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                                    <InviteSourceValue inv={assessmentInviteSource(result)} iconClassName="w-3.5 h-3.5" />
                                   </td>
                                   <td className="px-4 py-4 align-middle text-center whitespace-nowrap">
                                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs ${resultStatusClass(result.status)}`}>
@@ -6794,8 +6803,24 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                  inline completion meter (see below), deliberately not a card
                  row; the filter bar and the status badges are the Track Invites
                  popup's, reused rather than rebuilt, so the two cannot drift. */
+              /* Each row's current status, worked out once per render — the
+                 counts, the filter and the Status badge below all read it. */
+              type InviteRow = (typeof inviteStatusRows)[number];
+              const statusOfInvite = new Map<InviteRow, string>(
+                inviteStatusRows.map((inv) => [inv, currentInviteStatus(inv)]),
+              );
+              const statusOf = (inv: InviteRow) => statusOfInvite.get(inv) ?? currentInviteStatus(inv);
               const bucketCount = (bucket: string) =>
-                inviteStatusRows.filter((inv) => inviteStatusBucket(inv) === bucket).length;
+                inviteStatusRows.filter((inv) => statusOf(inv) === bucket).length;
+              /* The More Filters Status dropdown — the tabs below, as options. */
+              const INVITATION_STATUS_TAB_OPTIONS = [
+                { value: 'all', label: 'All Statuses' },
+                { value: 'sent', label: 'Invited' },
+                { value: 'revoked', label: 'Revoked' },
+                { value: 'expired', label: 'Expired' },
+                { value: 'started', label: 'In Progress' },
+                { value: 'completed', label: 'Completed' },
+              ];
               const totalInvites = inviteStatusRows.length;
               const completedInvites = bucketCount('completed');
 
@@ -6806,7 +6831,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               const fromTime = inviteStatusFilters.dateFrom ? new Date(`${inviteStatusFilters.dateFrom}T00:00:00`).getTime() : null;
               const toTime = inviteStatusFilters.dateTo ? new Date(`${inviteStatusFilters.dateTo}T23:59:59.999`).getTime() : null;
               const filtered = inviteStatusRows.filter((inv) => {
-                if (inviteStatusFilters.status !== 'all' && inviteStatusBucket(inv) !== inviteStatusFilters.status) return false;
+                if (inviteStatusFilters.status !== 'all' && statusOf(inv) !== inviteStatusFilters.status) return false;
                 if (search) {
                   /* Every identifier the row shows is searchable, plus the
                      assessment title, which the table no longer has a column
@@ -6928,6 +6953,21 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         filtersApplied={inviteStatusFilterCount > 0}
                         onClearFilters={clearInviteStatusFilters}
                         className="mb-0"
+                        /* Refresh sits immediately right of More Filters —
+                           moved up from the list card's header row, same
+                           button, handler and spinner. */
+                        afterFiltersActions={
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            onClick={loadAllInviteStatuses}
+                            disabled={isLoadingInviteStatus}
+                            title="Fetch the latest invite statuses"
+                            icon={<RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isLoadingInviteStatus ? 'animate-spin' : ''}`} />}
+                          >
+                            Refresh
+                          </Button>
+                        }
                         countBadge={
                           <ListCountBadge
                             filtered={total}
@@ -6966,14 +7006,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               }}
                               className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-black dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40"
                             >
-                              {/* Same trimmed list as before — one option per
-                                  segment above, so a pick here can never
-                                  return rows the segments cannot explain. */}
-                              {ASSESSMENT_INVITE_STATUS_OPTIONS
-                                .filter((option) => !['failed', 'abandoned'].includes(option.value))
-                                .map((option) => (
-                                  <option key={option.value} value={option.value}>{option.label}</option>
-                                ))}
+                              {/* One option per status tab, in tab order and
+                                  on the same keys, so a pick here can never
+                                  return rows the tabs cannot explain. */}
+                              {INVITATION_STATUS_TAB_OPTIONS.map((option) => (
+                                <option key={option.value} value={option.value}>{option.label}</option>
+                              ))}
                             </select>
                           </div>
 
@@ -7043,11 +7081,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           <Skeleton className="h-8 w-24 rounded-lg" />
                         </div>
                         <div className="min-h-[320px] overflow-auto tf-table-shell">
-                          <table className="w-full min-w-[1550px] table-auto">
+                          <table className="w-full min-w-[1690px] table-auto">
                             <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                               <tr>
                                 <th className="px-4 py-3 w-12"><Skeleton className="h-4 w-4 rounded" /></th>
-                                {['CID', 'Candidate', 'Job & Assessment', 'Status', 'Invited On', 'Timeline', 'Tech Score', 'Coding Score', 'Action'].map((c) => (
+                                {['CID', 'Candidate', 'Job & Assessment', 'Invite Source', 'Status', 'Invited On', 'Timeline', 'Tech Score', 'Coding Score', 'Action'].map((c) => (
                                   <th key={c} className="px-4 py-3"><Skeleton className="h-3 w-20" /></th>
                                 ))}
                               </tr>
@@ -7072,6 +7110,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       <Skeleton className="h-3 w-32" />
                                     </div>
                                   </td>
+                                  <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
                                   <td className="px-4 py-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
                                   <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
                                   <td className="px-4 py-4"><Skeleton className="h-4 w-40" /></td>
@@ -7139,17 +7178,26 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               No literal colour appears here, and each token's
                               dark value comes with it.
 
-                              Total Invited takes the Invited colour: it is the
-                              bucket every invite starts in, and the badge on a
-                              sent-but-untouched invite is already that blue.
+                              Total is every invite, in no one status, so it
+                              takes a neutral slate rather than a status
+                              colour. Invited is the 'sent' bucket — sent, not
+                              yet opened or started — the same bucket the
+                              status dropdown's Invited option and the bulk
+                              Revoke gate read, in the Invited badge's blue.
 
                               The classes are spelled out per segment rather
                               than built from the key — `text-status-${key}`
                               would be invisible to Tailwind's scanner, which
                               only sees literal class strings. */}
                           {([
-                            { key: 'all', label: 'Total Invited', icon: Users, value: totalInvites,
+                            { key: 'all', label: 'Total', icon: Users, value: totalInvites,
+                              text: 'text-slate-700 dark:text-slate-200', hover: 'hover:text-slate-900 dark:hover:text-slate-100', tint: 'bg-slate-500/10', ring: 'ring-slate-500/20' },
+                            { key: 'sent', label: 'Invited', icon: Mail, value: bucketCount('sent'),
                               text: 'text-status-invited', hover: 'hover:text-status-invited', tint: 'bg-status-invited/10', ring: 'ring-status-invited/20' },
+                            /* Revoked wears the Revoked badge's own red, per
+                               the segment-matches-badge rule above. */
+                            { key: 'revoked', label: 'Revoked', icon: Ban, value: bucketCount('revoked'),
+                              text: 'text-destructive', hover: 'hover:text-destructive', tint: 'bg-destructive-subtle', ring: 'ring-destructive-line' },
                             { key: 'expired', label: 'Expired', icon: Clock, value: bucketCount('expired'),
                               text: 'text-status-expired', hover: 'hover:text-status-expired', tint: 'bg-status-expired/10', ring: 'ring-status-expired/20' },
                             { key: 'started', label: 'In Progress', icon: Play, value: bucketCount('started'),
@@ -7254,10 +7302,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             every other tab keeps its own — two badges for one
                             list, in two different sizes, was exactly the drift
                             being straightened out. */}
-                        <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
-                          <div className="flex items-center gap-2 sm:gap-3 min-w-0">
-                            <h2 className="text-sm sm:text-base font-medium text-gray-900 dark:text-slate-50 tracking-tight">Invitations</h2>
-                          </div>
+                        {/* No "Invitations" title and no Refresh here any more
+                            (Refresh sits beside More Filters in the toolbar).
+                            What is left are the selection actions, each shown
+                            only under its own filter, so the row appears only
+                            when one of them does. */}
+                        {(showInviteBulkResend || showInviteBulkRevoke || showInviteExport) && (
+                        <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 flex flex-wrap items-center justify-end gap-2 sm:gap-3">
                           <div className="flex items-center gap-2">
                             {/* Export — the Resume Scoring page's control:
                                 FileDown, the green "you have a selection"
@@ -7308,18 +7359,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 Export ({selectedInviteRows.length})
                               </Button>
                             )}
-                            <Button
-                              variant="secondary"
-                              size="sm"
-                              onClick={loadAllInviteStatuses}
-                              disabled={isLoadingInviteStatus}
-                              title="Fetch the latest invite statuses"
-                              icon={<RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isLoadingInviteStatus ? 'animate-spin' : ''}`} />}
-                            >
-                              Refresh
-                            </Button>
                           </div>
                         </div>
+                        )}
 
                         {/* The `InviteFilterBar` that sat here is gone: its
                             four fields are the page toolbar above the tab
@@ -7338,7 +7380,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               one empty cell centres that cell across 1550px, so
                               the message sat off the side of the shell behind a
                               scrollbar that existed only to reach it. */}
-                          <table className={`w-full table-auto ${total === 0 ? '' : 'min-w-[1550px]'}`}>
+                          <table className={`w-full table-auto ${total === 0 ? '' : 'min-w-[1690px]'}`}>
                             {total > 0 && (
                             <thead className="sticky top-0 z-10 [&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                               <tr>
@@ -7374,6 +7416,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     recruiter anything more. Same th classes as
                                     every other column. */}
                                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Job &amp; Assessment</th>
+                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Invite Source</th>
                                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Status</th>
                                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Invited On</th>
                                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Timeline</th>
@@ -7405,7 +7448,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                               {total === 0 ? (
                                 <tr>
-                                  <td colSpan={10} className="p-0">
+                                  <td colSpan={11} className="p-0">
                                     <div className={`${TABLE_EMPTY_PANEL_CLASS} text-sm text-gray-500 dark:text-slate-500`}>
                                       No invitations match the current filters.
                                     </div>
@@ -7485,7 +7528,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         </p>
                                       </div>
                                     </td>
-                                    <td className="px-4 py-4 align-middle">{renderInviteStatusBadge(inv)}</td>
+                                    {/* The Timeline's latest status, on every
+                                        tab — the same value that decided
+                                        which tab this row is under. */}
+                                    {/* Invite Source — how this candidate was actually
+                                        invited, from the invitation's own resume_id. */}
+                                    <td className="px-4 py-4 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                                      <InviteSourceValue inv={assessmentInviteSource(inv)} iconClassName="w-3.5 h-3.5" />
+                                    </td>
+                                    <td className="px-4 py-4 align-middle">
+                                      {renderInviteBadgeForStatus(statusOf(inv), inv)}
+                                    </td>
                                     <td className="px-4 py-4 align-middle whitespace-nowrap">
                                       <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-slate-400">
                                         <Calendar className="w-4 h-4" />
@@ -9131,7 +9184,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     <thead>
                       <tr className="border-b border-gray-200 dark:border-slate-700">
                         <th className="w-8 py-3 pl-4 pr-0"><Skeleton className="h-4 w-4 rounded-full" /></th>
-                        {['CID', 'Candidate', 'Status', 'Timeline', 'Actions'].map((c) => (
+                        {['CID', 'Candidate', 'Invite Source', 'Status', 'Timeline', 'Actions'].map((c) => (
                           <th key={c} className="py-3 px-4 text-left"><Skeleton className="h-3 w-16" /></th>
                         ))}
                       </tr>
@@ -9150,6 +9203,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </div>
                             </div>
                           </td>
+                          <td className="py-3 px-4"><Skeleton className="h-4 w-24" /></td>
                           <td className="py-3 px-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
                           <td className="py-3 px-4"><Skeleton className="h-4 w-40" /></td>
                           <td className="py-3 px-4"><Skeleton className="h-8 w-8 rounded-md" /></td>
@@ -9209,6 +9263,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Assessment Version</th>
                         )}
                         <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Invite Source</th>
                         <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                         {/* hidden md:table-cell mirrors this column's <td>. Without
                             it the header carried one more cell than the body between
@@ -9324,6 +9379,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                                 </div>
                               </div>
+                            </td>
+                            {/* Invite Source — how this candidate was actually
+                                invited, from the invitation's own resume_id. */}
+                            <td className="py-3 px-4 align-top text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                              <InviteSourceValue inv={assessmentInviteSource(invitation)} iconClassName="w-3.5 h-3.5" />
                             </td>
                             <td className="py-3 px-4 align-top">
                               {/* Status is the badge alone. Expiry is resolved inside

@@ -44,6 +44,7 @@ import { summarizeViolations } from './violationTaxonomy';
 import { Skeleton } from '@/components/ui/skeleton';
 import ResumeDetailView from '@/components/ResumeDetailView';
 import ViewResumeButton from '@/components/ui/view-resume-button';
+import ResumeHoverPreview from '@/components/ResumeHoverPreview';
 import { Tooltip as HoverTooltip } from '@/components/ui/tooltip';
 import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
 
@@ -1815,10 +1816,15 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                     <ViewResumeButton onClick={handleViewResume} disabled className="pointer-events-none" />
                   </span>
                 </HoverTooltip>
+              ) : resolvedResumeId ? (
+                // A resume exists: hovering previews it, clicking opens it.
+                <ResumeHoverPreview resumeId={resolvedResumeId}>
+                  <ViewResumeButton onClick={handleViewResume} loading={isLoadingResume} className="flex-shrink-0" />
+                </ResumeHoverPreview>
               ) : (
                 // Spinner while the load-time check runs, so the button doesn't
                 // look clickable and then flip to disabled.
-                <ViewResumeButton onClick={handleViewResume} loading={isLoadingResume || resolvedResumeId === undefined} className="flex-shrink-0" />
+                <ViewResumeButton onClick={handleViewResume} loading className="flex-shrink-0" />
               )}
             </div>
           </div>

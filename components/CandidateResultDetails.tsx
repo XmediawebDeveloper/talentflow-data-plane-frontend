@@ -11,6 +11,9 @@ import RecordPager from '@/components/RecordPager';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import ResumeDetailView from '@/components/ResumeDetailView';
 import ViewResumeButton from '@/components/ui/view-resume-button';
+import ResumeHoverPreview from '@/components/ResumeHoverPreview';
+import { Tooltip as HoverTooltip } from '@/components/ui/tooltip';
+import TabEmptyState, { TAB_EMPTY_ACTION_CLASS } from '@/components/ui/tab-empty-state';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
@@ -309,12 +312,22 @@ export default function CandidateResultDetails({
   const [resumeDetail, setResumeDetail] = useState<any>(null);
   const [isLoadingResume, setIsLoadingResume] = useState(false);
   const [showResume, setShowResume] = useState(false);
+  // Opened with no resume to show — renders the "Resume Not Available" page.
+  const [resumeUnavailable, setResumeUnavailable] = useState(false);
+  // Load-time availability check: undefined = still checking, null = none.
+  const [resolvedResumeId, setResolvedResumeId] = useState<string | null | undefined>(undefined);
+  // Whether the invitation itself was sent from a resume (it carries
+  // resume_id). If not, the candidate was typed in by e-mail — the same rule
+  // the Invite Source column uses.
+  const [invitedFromResume, setInvitedFromResume] = useState(false);
   const detailContentRef = useRef<HTMLDivElement>(null);
 
   // One tab row now owns both summary panels and detailed question panels.
   // The visible panel — and the lazy fetches for Recording and Violations —
-  // are driven by this top-level selection.
-  const [overviewTab, setOverviewTab] = useState<string>('jd-summary');
+  // are driven by this top-level selection. The page opens on AI-Generated
+  // Candidate Insights, the first menu item; the Insights tab is always in the
+  // menu, so this holds on first paint, direct load and refresh alike.
+  const [overviewTab, setOverviewTab] = useState<string>('candidate-insights');
   /* The pair of views under the View JD menu item. Same two the
      assessment's own page offers, so a recruiter reading a result sees the job
      and the assessment exactly as they would there. */
@@ -599,10 +612,9 @@ export default function CandidateResultDetails({
   // when they were invited from a resume), and failing that the resume library
   // is searched by email.
   //
-  // Resolved on click, not on load: an upfront lookup costs a request the
-  // recruiter may never need, and — the reason the button didn't show before —
-  // a lookup that comes back empty must not be what decides whether the button
-  // exists at all.
+  // Resolved on load, as on the AI Interview result page, so a candidate with
+  // no resume gets a disabled button (with a tooltip saying why) instead of one
+  // that only fails once clicked. The button is still always rendered.
   const resolveResumeId = async (): Promise<string | null> => {
     const email = detailedResult?.candidate_email?.trim().toLowerCase();
     const name = detailedResult?.candidate_name?.trim().toLowerCase();
@@ -644,6 +656,7 @@ export default function CandidateResultDetails({
         matchedInvitation: match?.id,
         resumeId: match?.resume_id,
       });
+      setInvitedFromResume(!!match?.resume_id);
       if (match?.resume_id) return match.resume_id;
     } catch (err) {
       console.warn('[CandidateResultDetails] Invitation lookup failed:', err);
@@ -660,11 +673,22 @@ export default function CandidateResultDetails({
       console.info('[CandidateResultDetails] resume lookup: candidate has no e-mail, not searching by name');
       return null;
     }
+    // The e-mail match must also not contradict the invited name — the same
+    // identity rule the AI Interview page applies — so a reused address can't
+    // surface a stranger's resume.
+    const tokens = (v: string) => new Set((v || '').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean));
+    const inviteTokens = tokens(name || '');
+    const samePerson = (other: string) => {
+      const t = tokens(other);
+      if (inviteTokens.size === 0 || t.size === 0) return true;
+      return [...t].some(x => inviteTokens.has(x));
+    };
     try {
       const results = await resumeService.list({ search: email, page_size: 20 });
       const items = results.items || [];
       const byEmail = items.find(
         (item: any) => (item.candidate_email || item.email || '').trim().toLowerCase() === email
+          && samePerson(item.candidate_name || '')
       );
       console.info('[CandidateResultDetails] resume lookup by e-mail', { email, hits: items.length, matched: byEmail?.id ?? null, name });
       return byEmail?.id || null;
@@ -679,6 +703,34 @@ export default function CandidateResultDetails({
     onResumeViewChange?.(false);
   }, [onResumeViewChange]);
 
+  const openResumeUnavailable = () => {
+    setResumeUnavailable(true);
+    setShowResume(true);
+    onResumeViewChange?.(true, closeResume);
+  };
+
+  // Prev/Next can re-render this same instance for another attempt, so the
+  // cached resume belongs to the previous candidate and must be dropped.
+  useEffect(() => {
+    setResumeId(null);
+    setResumeDetail(null);
+    setShowResume(false);
+    setResumeUnavailable(false);
+    setResolvedResumeId(undefined);
+    setInvitedFromResume(false);
+  }, [candidateId]);
+
+  // Availability is checked once the result (and so the candidate's e-mail
+  // and name) has loaded.
+  const detailLoaded = !!detailedResult;
+  useEffect(() => {
+    if (!detailLoaded) return;
+    let cancelled = false;
+    resolveResumeId().then(id => { if (!cancelled) setResolvedResumeId(id); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candidateId, detailLoaded]);
+
   const handleViewResume = async () => {
     // Already fetched once — reopening shouldn't hit the API again.
     if (resumeDetail) {
@@ -688,12 +740,11 @@ export default function CandidateResultDetails({
     }
 
     setIsLoadingResume(true);
+    setResumeUnavailable(false);
     try {
-      const id = resumeId || (await resolveResumeId());
+      const id = resumeId || (resolvedResumeId !== undefined ? resolvedResumeId : await resolveResumeId());
       if (!id) {
-        toast.error(detailedResult?.candidate_email
-          ? `No resume with the e-mail ${detailedResult.candidate_email} is in the library`
-          : 'No resume is linked to this candidate');
+        openResumeUnavailable();
         return;
       }
       setResumeId(id);
@@ -711,9 +762,16 @@ export default function CandidateResultDetails({
       // breadcrumb on the standalone route, so it needs both the fact that the
       // resume is open and a way to close it from the candidate crumb.
       onResumeViewChange?.(true, closeResume);
-    } catch (err) {
-      console.error('[CandidateResultDetails] Failed to load resume:', err);
-      toast.error('Could not load the resume. Please try again.');
+    } catch (err: any) {
+      // A linked resume that has since been deleted 404s — that's "not
+      // available", not a transient failure. resumeService rethrows a plain
+      // Error carrying only the backend detail, so the message is what's left.
+      if (err?.response?.status === 404 || /not found/i.test(err?.message || '')) {
+        openResumeUnavailable();
+      } else {
+        console.error('[CandidateResultDetails] Failed to load resume:', err);
+        toast.error('Could not load the resume. Please try again.');
+      }
     } finally {
       setIsLoadingResume(false);
     }
@@ -1033,7 +1091,20 @@ export default function CandidateResultDetails({
   // embedded JobDetailView case). On the standalone route the page above owns
   // it and is told about the resume view through onResumeViewChange.
   if (showResume) {
-    const resumeBody = isLoadingResume || !resumeDetail ? (
+    const resumeBody = resumeUnavailable ? (
+      <TabEmptyState
+        icon={FileText}
+        title="Resume Not Available"
+        description={invitedFromResume
+          ? 'No resume was found for this candidate.'
+          : 'This candidate was invited via direct email, so no resume is linked to this assessment.'}
+        action={
+          <button type="button" onClick={closeResume} className={TAB_EMPTY_ACTION_CLASS}>
+            <ChevronLeft className="w-4 h-4" /> Back to Results
+          </button>
+        }
+      />
+    ) : isLoadingResume || !resumeDetail ? (
       /* Mirrors the ResumeDetailView document that replaces it: a header
          (avatar + name/subtitle) then a stack of full-width content lines. */
       <div className="space-y-6">
@@ -1150,10 +1221,31 @@ export default function CandidateResultDetails({
                 phone the badge drops to its own line instead of squeezing the
                 buttons or pushing them off the edge. */}
             <div className="flex flex-wrap items-center gap-2 sm:gap-3 self-start sm:self-auto">
-              {/* View Resume — always rendered, like the resume-scoring
-                  candidate page's button. Whether a resume can be found is
-                  decided on click, not by hiding the control. */}
-              <ViewResumeButton onClick={handleViewResume} loading={isLoadingResume} />
+              {/* View Resume — always rendered. With a resume, hovering shows
+                  a preview of it and clicking opens it in full. Without one
+                  it's disabled and hovering explains why; a disabled button
+                  swallows mouse events in some browsers, so it's made
+                  pointer-transparent and the wrapping span takes the hover. */}
+              {resolvedResumeId === null ? (
+                <HoverTooltip
+                  position="bottom"
+                  content={invitedFromResume
+                    ? 'Resume not available'
+                    : 'Resume is not available because the candidate was invited via Direct Email.'}
+                >
+                  <span className="inline-flex cursor-not-allowed flex-shrink-0">
+                    <ViewResumeButton onClick={handleViewResume} disabled className="pointer-events-none" />
+                  </span>
+                </HoverTooltip>
+              ) : resolvedResumeId ? (
+                <ResumeHoverPreview resumeId={resolvedResumeId}>
+                  <ViewResumeButton onClick={handleViewResume} loading={isLoadingResume} />
+                </ResumeHoverPreview>
+              ) : (
+                // Spinner while the load-time check runs, so the button doesn't
+                // look clickable and then flip to disabled.
+                <ViewResumeButton onClick={handleViewResume} loading />
+              )}
               {/* Export (PDF) — the same single-candidate export that used to
                   sit in a bar of its own above, now next to View Resume so the
                   page's two document actions read as one pair. Its chrome is
