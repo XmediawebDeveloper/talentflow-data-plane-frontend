@@ -2951,6 +2951,26 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
     }
 
+    // A stated CEILING, before the floor branches below. Mirrors the backend's
+    // _EXP_CEILING_RE - keep the two in sync.
+    //
+    // Reported 2026-09-24: "Upto 6 years" fell through to `singleMatch` and came back
+    // as experienceMin: 6, so Step 2 put the recruiter's MAXIMUM in the From box and
+    // left To empty. That also drove the second half of the report - with no To value
+    // `experienceHasCeiling` is false, so "Allow Overqualified" was forced to Yes and
+    // No was greyed out, on a JD that had stated an upper bound all along.
+    //
+    // Returns only experienceMax: the JD stated no floor, so From stays empty.
+    const ceilingMatch = normalized.match(
+      /(?:(?:up\s*to|upto|at\s+most|no\s+more\s+than|not\s+more\s+than|maximum|max\.?|less\s+than|under|below|fewer\s+than)\s*(?:of\s+)?(?:experience\s*)?:?\s*(\d{1,2}(?:\.\d+)?)\s*(?:years?|yrs?)\b|(\d{1,2}(?:\.\d+)?)\s*(?:years?|yrs?)\s*(?:or\s+(?:less|fewer|below)|maximum|max\.?)\b)/
+    );
+    if (ceilingMatch) {
+      const years = Number(ceilingMatch[1] ?? ceilingMatch[2]);
+      if (!Number.isNaN(years)) {
+        return { experienceMax: years };
+      }
+    }
+
     const plusMatch = normalized.match(/(\d{1,2}(?:\.\d+)?)\s*(?:\+|plus|or more|and above)/);
     if (plusMatch) {
       const years = Number(plusMatch[1]);

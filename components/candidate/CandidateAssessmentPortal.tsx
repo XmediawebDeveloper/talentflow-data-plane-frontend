@@ -1601,6 +1601,10 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   // If no popup is due (feedback already given), stop shortly after completion.
   // Terminal states (terminated / error / results) stop immediately.
   const FEEDBACK_GRACE_MS = 4000;
+  // Once the popup's state flips it still takes a moment to paint and for the
+  // screen-capture pipeline to pick the new frame up. Stopping immediately cut
+  // the recording just BEFORE the popup was visible; keep going a little.
+  const FEEDBACK_VISIBLE_GRACE_MS = 5000;
   const finishRecordings = useCallback(() => {
     void stopRecorders().finally(() => {
       stopScreenShare();
@@ -1612,8 +1616,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   useEffect(() => {
     if (step === 'results' || step === 'error' || step === 'terminated') { finishRecordings(); return; }
     if (step !== 'completed') return;
-    if (showFeedback) { finishRecordings(); return; }
-    const t = setTimeout(finishRecordings, FEEDBACK_GRACE_MS);
+    const t = setTimeout(finishRecordings, showFeedback ? FEEDBACK_VISIBLE_GRACE_MS : FEEDBACK_GRACE_MS);
     return () => clearTimeout(t);
   }, [step, showFeedback, finishRecordings]);
 
