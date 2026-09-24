@@ -8,7 +8,7 @@ import {
   XCircle, Copy, Trash2, Archive, ArchiveRestore, GitBranch,
   Loader2, RefreshCw, Briefcase, Globe, ChevronRight, ChevronDown, Check, Brain, Sparkles,
   Layers, Pencil, Zap, Timer, FileText, Settings, CheckCircle2, Download,
-  TrendingUp, QrCode, AlertCircle, ExternalLink,
+  QrCode, AlertCircle, ExternalLink, BarChart,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -45,6 +45,23 @@ const ROUND_LABELS: Record<string, string> = {
   must_have_skills: 'Must-Have Skills',
   nice_to_have_skills: 'Nice-to-Have Skills',
 };
+
+/* A tab's page heading — the tab's own name and icon, in the same icon-tile +
+   title shape the Version History tab already opens with, so every tab's
+   page is headed by exactly what its tab says. */
+function TabHeading({ icon: Icon, title, description }: { icon: React.ComponentType<{ className?: string }>; title: string; description?: string }) {
+  return (
+    <div className="mb-4">
+      <div className="flex items-center gap-2.5">
+        <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+          <Icon className="w-4 h-4 text-brand-blue" />
+        </div>
+        <h2 className="text-base font-semibold text-gray-900 dark:text-slate-50 tracking-tight">{title}</h2>
+      </div>
+      {description && <p className="text-sm text-gray-600 dark:text-slate-400 mt-1">{description}</p>}
+    </div>
+  );
+}
 
 function SectionCard({
   title,
@@ -1377,11 +1394,11 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             <div className="flex flex-col gap-1.5">
               {([
                 { key: 'overview', label: 'Interview Details', icon: FileText },
+                { key: 'invites', label: 'Invitation Status', icon: Mail },
+                { key: 'results', label: 'Results', icon: BarChart },
                 { key: 'activity', label: 'Recent Activity', icon: Clock },
-                { key: 'versions', label: 'Version History', icon: Layers },
                 { key: 'viewjd', label: 'View JD', icon: Briefcase },
-                { key: 'results', label: 'Results', icon: TrendingUp },
-                { key: 'invites', label: 'Track', icon: Mail },
+                { key: 'versions', label: 'Version History', icon: Layers },
               ] as { key: typeof activeTab; label: string; icon: typeof FileText }[]).map((t) => {
                 const isActive = activeTab === t.key;
                 return (
@@ -1451,6 +1468,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           {/* Overview Tab */}
           {activeTab === 'overview' && (
             <div className="space-y-5">
+              <TabHeading icon={FileText} title="Interview Details" />
 
               {/* Interview Details' own sub-tabs — Configure Details (this
                   tab's original content) and Interview Info (folded in from
@@ -1659,6 +1677,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           {/* Recent Activity Tab */}
           {activeTab === 'activity' && (
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-6">
+              <TabHeading icon={Clock} title="Recent Activity" />
               {activityLoading ? (
                 <div className="space-y-3">
                   {Array.from({ length: 6 }).map((_, i) => (
@@ -1737,9 +1756,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               <div className="px-6 py-4 border-b border-gray-100 bg-gray-50">
                 <div className="flex items-center gap-2.5 mb-1">
                   <div className="w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
-                    <Clock className="w-4 h-4 text-brand-blue" />
+                    <Layers className="w-4 h-4 text-brand-blue" />
                   </div>
-                  <h3 className="text-sm font-semibold text-gray-900 tracking-tight">Version History</h3>
+                  <h2 className="text-base font-semibold text-gray-900 tracking-tight">Version History</h2>
                 </div>
                 <p className="text-sm text-gray-600">Complete timeline of all changes made to this interview</p>
               </div>
@@ -1849,6 +1868,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               the Assessment Details page's own View JD tab use. */}
           {activeTab === 'viewjd' && (
             <div className="space-y-4 sm:space-y-5">
+              <TabHeading icon={Briefcase} title="View JD" />
               {!config.jd_id ? (
                 <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 px-3 sm:px-4 lg:px-6 py-8 text-center">
                   <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
@@ -1887,16 +1907,19 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
           {/* Results Tab — embedded candidate results (stats + filters + table) */}
           {activeTab === 'results' && (
-            <AIInterviewResults
-              embedded
-              configId={config.id}
-              configTitle={config.position || config.jd_title || 'AI Interview'}
-              jdTitle={config.jd_title || ''}
-              onBack={onBack}
-              onViewCandidate={handleCandidateClick}
-              jobVersion={config.jd_version ?? undefined}
-              interviewVersion={interviewVersionOrdinal}
-            />
+            <div>
+              <TabHeading icon={BarChart} title="Results" />
+              <AIInterviewResults
+                embedded
+                configId={config.id}
+                configTitle={config.position || config.jd_title || 'AI Interview'}
+                jdTitle={config.jd_title || ''}
+                onBack={onBack}
+                onViewCandidate={handleCandidateClick}
+                jobVersion={config.jd_version ?? undefined}
+                interviewVersion={interviewVersionOrdinal}
+              />
+            </div>
           )}
 
           {/* Track Tab — the AI Interview Track Invites popup (the same one
