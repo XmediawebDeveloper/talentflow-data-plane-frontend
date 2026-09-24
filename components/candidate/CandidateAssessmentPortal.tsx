@@ -452,11 +452,26 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   }, [token]);
 
   const recordingSettings = (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings) ?? null;
-  // Screen recording is a HARD gate (product decision 2026-09-23) unless the
-  // tenant switched it off in proctoring settings. Webcam recording follows
-  // webcam_monitoring. Adaptive mode (browsers without fullscreen/share) skips both.
-  const screenRecordingRequired = !useAdaptiveAssessmentMode && recordingSettings?.screen_recording !== false;
-  const cameraRecordingEnabled = !useAdaptiveAssessmentMode && recordingSettings?.webcam_monitoring !== false;
+  // Screen + webcam recording are a HARD gate, exactly like the AI interview
+  // (product decision 2026-09-23). 2026-09-24: a tester's tenant had the
+  // recruiter-side "Screen Recording" toggle OFF, which made this code skip the
+  // share picker and the hide-share-bar gate entirely (only a Candidate View
+  // was stored). The tenant toggle no longer weakens the gate; only adaptive
+  // mode (browsers without fullscreen / screen share) skips it.
+  const screenRecordingRequired = !useAdaptiveAssessmentMode;
+  const cameraRecordingEnabled = !useAdaptiveAssessmentMode;
+  useEffect(() => {
+    if (step === 'fullscreen_prompt') {
+      console.log('[AS-Recording] gate config', {
+        adaptiveMode: useAdaptiveAssessmentMode,
+        screenRecordingRequired,
+        cameraRecordingEnabled,
+        tenant_screen_recording_setting: recordingSettings?.screen_recording,
+        tenant_webcam_monitoring_setting: recordingSettings?.webcam_monitoring,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   useRefreshPrevention({
     enabled: isAssessmentActive,
