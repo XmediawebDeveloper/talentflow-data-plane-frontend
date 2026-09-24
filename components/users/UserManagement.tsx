@@ -540,6 +540,7 @@ export default function UserManagement() {
   const [editSelectedPermissionCodes, setEditSelectedPermissionCodes] = useState<Set<string>>(new Set());
   const [editOriginalRoleId, setEditOriginalRoleId] = useState<number | null>(null);
   const [editOriginalPermissionCodes, setEditOriginalPermissionCodes] = useState<Set<string>>(new Set());
+  const selectRoleRequestIdRef = useRef(0);
 
   // RBAC06-07: Feature permission states
   const [featurePermissionUser, setFeaturePermissionUser] = useState<ApiUser | null>(null);
@@ -771,11 +772,15 @@ export default function UserManagement() {
   };
 
   const selectRole = async (roleId: number, isEdit: boolean = false) => {
+    const requestId = ++selectRoleRequestIdRef.current;
     setIsLoadingPermissions(true);
 
     try {
       // Fetch full role details including permissions
       const roleDetails = await rbacService.getRoleById(roleId);
+
+      // A newer role selection started after this one — discard this stale response.
+      if (requestId !== selectRoleRequestIdRef.current) return;
 
       // Get permission IDs and codes from the role
       const permissionIds = new Set<number>(
@@ -798,6 +803,7 @@ export default function UserManagement() {
         setSelectedPermissionCodes(permissionCodes);
       }
     } catch (error) {
+      if (requestId !== selectRoleRequestIdRef.current) return;
       console.error('Error fetching role permissions:', error);
       // Clear permissions on error
       if (isEdit) {
@@ -810,7 +816,9 @@ export default function UserManagement() {
         setSelectedPermissionCodes(new Set());
       }
     } finally {
-      setIsLoadingPermissions(false);
+      if (requestId === selectRoleRequestIdRef.current) {
+        setIsLoadingPermissions(false);
+      }
     }
   };
 
@@ -2855,10 +2863,7 @@ export default function UserManagement() {
                       <button
                         key={role.id}
                         type="button"
-                        onClick={() => {
-                          if (editSelectedRoleId === role.id) return;
-                          selectRole(role.id, true);
-                        }}
+                        onClick={() => selectRole(role.id, true)}
                         className={`px-4 py-2 rounded-full text-sm font-medium transition-all ring-1 ${
                           isSelected
                             ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-white/10'
