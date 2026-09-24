@@ -1474,7 +1474,10 @@ export function AssessmentInterface({
     try {
       const hasAnswer = answer.text_response || answer.selected_options?.length || answer.code_submission;
       if (hasAnswer && !isCurrentAnswerLocked) {
-        await onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true });
+        // Fire-and-forget: the draft save must not hold up the jump (it used to
+        // be one of the two sequential round trips behind every palette click).
+        void onAnswerSubmit(currentQuestion.question_id, { ...answer, is_draft: true })
+          .catch((err) => console.warn('[NAVIGATE] draft save failed (auto-save will retry):', err));
         setAnswerStatuses(prev => {
           const newMap = new Map(prev);
           newMap.set(`question_${currentQuestion.question_number}`, { hasDraft: true, isLocked: false });

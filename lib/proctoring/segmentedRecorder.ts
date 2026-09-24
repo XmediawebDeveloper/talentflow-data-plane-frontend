@@ -41,6 +41,9 @@ export interface SegmentedRecorderOptions {
   audioBitsPerSecond?: number;
   timesliceMs?: number;
   checkpointMs?: number;
+  /** Minimum buffered bytes before a checkpoint uploads. Default = S3 part minimum;
+   *  pass 0 when the backend stages small segments (assessment) so every 30 s flushes. */
+  minSegmentBytes?: number;
   onError?: (errorName: string) => void;
 }
 
@@ -143,7 +146,8 @@ export class SegmentedRecorder {
     try {
       await this.requestData(recorder);
       const buffered = this.chunks.reduce((sum, c) => sum + c.size, 0);
-      if (buffered < MIN_SEGMENT_BYTES) return;
+      const minBytes = this.opts.minSegmentBytes ?? MIN_SEGMENT_BYTES;
+      if (buffered === 0 || buffered < minBytes) return;
       const chunks = this.chunks;
       this.chunks = [];
       const index = this.segmentIndex;

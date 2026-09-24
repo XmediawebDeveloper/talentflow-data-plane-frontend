@@ -1215,12 +1215,21 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     if (!stream || screenRecorderRef.current) return;
     const track = stream.getVideoTracks()[0];
     if (!track || track.readyState !== 'live') return;
+    // Mix the candidate microphone into the screen recording too (the AI
+    // interview does the same), so the Screen View is not silent. Also keeps
+    // both recordings symmetric: with audio on only one of them, Chrome's
+    // muxer starts that file at its first audio sample and the durations
+    // drift apart by ~1 s. A track may feed two recorders; the stream's track
+    // set is fixed at creation and never mutated afterwards.
+    const micTracks = (streamRef.current?.getAudioTracks() ?? []).filter((t) => t.readyState === 'live');
     const recorder = new SegmentedRecorder({
-      stream: new MediaStream([track]),
+      stream: new MediaStream([track, ...micTracks]),
       upload: (blob, idx, isFinal) => candidateService.uploadScreenRecording(token, blob, idx, isFinal),
       storageKey: `tf_as_rec_seg_screen_${token}`,
       label: 'AS-ScreenRecording',
       videoBitsPerSecond: 300_000,
+      audioBitsPerSecond: 64_000,
+      minSegmentBytes: 0, // backend stages small segments - flush every 30 s
       onError: (name) => {
         void candidateService.reportProctorEvent(token, {
           event_type: 'screen_recording_failed', timestamp: new Date().toISOString(),
@@ -1488,6 +1497,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
           label: 'AS-CameraRecording',
           videoBitsPerSecond: 200_000,
           audioBitsPerSecond: 64_000,
+          minSegmentBytes: 0, // backend stages small segments - flush every 30 s
           onError: (name) => {
             void candidateService.reportProctorEvent(token, {
               event_type: 'recording_failed', timestamp: new Date().toISOString(),
@@ -1846,6 +1856,26 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       total: response.progress.total,
       percent: response.progress.percent
     });
+    // Mirror the saved answer into the question cache so navigating back shows it.
+    for (const [num, q] of questionsCacheRef.current) {
+      if (q.question_id !== questionId) continue;
+      const hasContent = !!(answer.text_response || answer.selected_options?.length || answer.code_submission);
+      questionsCacheRef.current.set(num, {
+        ...q,
+        previous_answer: hasContent ? {
+          text_response: answer.text_response ?? null,
+          selected_options: answer.selected_options ?? null,
+          code_submission: answer.code_submission ?? null,
+          language: answer.language ?? q.previous_answer?.language ?? null,
+          code_input: q.previous_answer?.code_input ?? null,
+          code_execution_status: q.previous_answer?.code_execution_status ?? null,
+          code_execution_output: q.previous_answer?.code_execution_output ?? null,
+          code_execution_error: q.previous_answer?.code_execution_error ?? null,
+          is_locked: answer.is_draft === false ? true : (q.previous_answer?.is_locked ?? false),
+        } : q.previous_answer,
+      });
+      break;
+    }
 
     // Don't auto-navigate here - let the AssessmentInterface component handle navigation
     // via onNavigate (handleNext/handlePrevious). Auto-navigating here causes the
@@ -1927,10 +1957,56 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     setStepSafe('terminated');
   }, [token, setStepSafe]);
 
+  // ── Question cache: every question is generated before start, so load them
+  // all once and make palette navigation a local switch (2026-09-24). The
+  // /question call still runs in the background to keep the server's
+  // current-question index in sync and to refresh the cached entry.
+  const questionsCacheRef = useRef<Map<number, CurrentQuestion>>(new Map());
+  const questionsCacheAttemptRef = useRef<string | null>(null);
+  const navigationSeqRef = useRef(0);
+
+  const prefetchAllQuestions = useCallback(async () => {
+    try {
+      const attemptId = assessmentInfo?.attempt_id || assessmentData?.attempt_id || token;
+      const data = await candidateService.getAllQuestions(token);
+      const map = new Map<number, CurrentQuestion>();
+      for (const q of data.questions) map.set(q.question_number, q);
+      questionsCacheRef.current = map;
+      questionsCacheAttemptRef.current = attemptId;
+      console.log(`[QUESTIONS] cached ${map.size} questions for local navigation`);
+    } catch (err) {
+      console.warn('[QUESTIONS] prefetch failed — navigation falls back to per-question fetch:', err);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  useEffect(() => {
+    if (step === 'assessment') void prefetchAllQuestions();
+    else if (step === 'completing' || step === 'completed' || step === 'terminated' || step === 'error') {
+      questionsCacheRef.current = new Map();
+    }
+  }, [step, prefetchAllQuestions]);
+
   const handleNavigateToQuestion = async (questionNumber: number) => {
+    const seq = ++navigationSeqRef.current;
+    const cached = questionsCacheRef.current.get(questionNumber);
+    if (cached) {
+      // Instant local switch. The cached entry carries no all_question_statuses
+      // (server omits it) so it cannot overwrite fresher local status.
+      setCurrentQuestion({ ...cached, all_question_statuses: null });
+      // Background: keep the server's current index in sync + refresh the entry.
+      void candidateService.getCurrentQuestion(token, questionNumber)
+        .then((fresh) => {
+          questionsCacheRef.current.set(questionNumber, { ...fresh, all_question_statuses: null });
+        })
+        .catch((err) => console.warn('[QUESTIONS] background sync failed:', err));
+      return;
+    }
     try {
       const question = await candidateService.getCurrentQuestion(token, questionNumber);
+      if (seq !== navigationSeqRef.current) return; // a newer navigation won
       setCurrentQuestion(question);
+      questionsCacheRef.current.set(questionNumber, { ...question, all_question_statuses: null });
     } catch (err) {
       console.error('Failed to navigate to question:', err);
     }
