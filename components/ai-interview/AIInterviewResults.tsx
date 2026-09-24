@@ -991,13 +991,13 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                             {interviewVersion != null ? <VersionPill kind="interview" version={interviewVersion} /> : <span className="text-gray-400">—</span>}
                           </td>
                         )}
-                        {col('status') && (
-                          <td className="px-4 py-3 whitespace-nowrap text-gray-700">
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-700">
                           {inviteSourceLabel(session)
                             ? <InviteSourceValue inv={session} iconClassName="w-3.5 h-3.5" />
                             : <span className="text-gray-400">—</span>}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        {col('status') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex items-center gap-1.5">
                               <Badge variant={getStatusVariant(session.status)}>
                                 {getStatusIcon(session.status)}
