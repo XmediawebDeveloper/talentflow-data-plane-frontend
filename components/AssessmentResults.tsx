@@ -22,6 +22,7 @@ import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import EmptySearchIllustration from '@/components/ui/empty-search-illustration';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
 
 interface AssessmentResultsProps {
   onBack: () => void;
@@ -170,7 +171,7 @@ interface CandidateResult {
   name: string;
   email: string;
   phone?: string;
-  inviteSource?: string;
+  inviteSource?: 'resume' | 'email';
   avatar?: string;
   score: number;
   totalScore: number;
@@ -331,7 +332,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
          only carries over the `enabled` flag of ids a saved set already had. */
       { id: 'assessmentVersion', label: 'Assessment Version', enabled: true },
       { id: 'phone', label: 'Phone', enabled: true },
-      { id: 'inviteSource', label: 'Invite Source', enabled: true },
     ];
 
     // Add score columns only if those rounds are enabled for this assessment
@@ -343,6 +343,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     }
 
     baseColumns.push(
+      { id: 'inviteSource', label: 'Invite Source', enabled: true },
       { id: 'status', label: 'Result Status', enabled: true },
       { id: 'timeline', label: 'Timeline', enabled: true },
       { id: 'completed', label: 'Completed', enabled: true },
@@ -926,7 +927,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               name: item.candidate_name || 'Unknown',
               email: item.candidate_email || '',
               phone: item.candidate_phone || '',
-              inviteSource: item.invite_source || 'Manual',
+              // How the candidate was actually invited — resume_id is stored
+              // only for invites sent from a resume. See assessmentInviteSource.
+              inviteSource: item.resume_id ? 'resume' : 'email',
               score: scoringDone ? Number(item.overall_score) || 0 : 0,
               totalScore: 100,
               percentage: scoringDone ? Number(item.overall_score) || 0 : 0,
@@ -1043,30 +1046,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const PENDING_STATUS_LABEL = 'Not Started';
   const statusLabel = (status: CandidateResult['status']) =>
     status === 'Pending' ? PENDING_STATUS_LABEL : status;
-
-  const getInviteSourceMeta = (src?: string) => {
-    const value = src || 'Manual';
-    const styleMap: Record<string, string> = {
-      'JD': 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20',
-      'Assessment': 'bg-brand-blue/10 text-brand-blue-2 ring-1 ring-brand-blue/20',
-      'Resume Scoring': 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
-      'My Resumes': 'bg-brand-orange/10 text-brand-orange-deep ring-1 ring-brand-orange/20',
-      'Internal DB': 'bg-brand-teal/10 text-brand-teal ring-1 ring-brand-teal/20',
-      'Manual': 'bg-gray-100 text-gray-600 ring-1 ring-gray-200',
-    };
-    const labelMap: Record<string, string> = {
-      'JD': 'Job',
-      'Assessment': 'Assessment',
-      'Resume Scoring': 'Resume Scoring',
-      'My Resumes': 'My Resumes',
-      'Internal DB': 'Internal DB',
-      'Manual': 'Manual',
-    };
-    return {
-      cls: styleMap[value] || 'bg-gray-100 text-gray-600 ring-1 ring-gray-200',
-      label: labelMap[value] || value,
-    };
-  };
 
   const formatTimelineDate = (dateStr: string | undefined) => {
     if (!dateStr) return '';
@@ -2122,7 +2101,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               </div>
             ) : (
               paginatedCandidates.map((candidate) => {
-                const inviteMeta = getInviteSourceMeta(candidate.inviteSource);
                 const overallScore = getMobileOverallScore(candidate);
                 const passFail = getMobilePassFail(candidate);
                 return (
@@ -2190,9 +2168,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           </div>
                           <div className="rounded-lg bg-gray-50 p-2">
                             <div className="text-gray-500">Invite Source</div>
-                            <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium mt-1 ${inviteMeta.cls}`}>
-                              {inviteMeta.label}
-                            </span>
+                            <div className="text-gray-700 mt-1">
+                              <InviteSourceValue inv={{ invite_source: candidate.inviteSource }} iconClassName="w-3 h-3" />
+                            </div>
                           </div>
                           <div className="rounded-lg bg-gray-50 p-2">
                             <div className="text-gray-500">Duration</div>
@@ -2335,9 +2313,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       </div>
                     </th>
                   )}
-                  {isColumnEnabled('inviteSource') && (
-                    <th className={`w-36 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Invite Source</th>
-                  )}
                   {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
                     <th
                       className={`w-28 text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
@@ -2359,6 +2334,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         <ArrowUpDown className={`w-3 h-3 ${sortField === 'score' ? 'text-brand-blue' : 'text-gray-400'}`} />
                       </div>
                     </th>
+                  )}
+                  {isColumnEnabled('inviteSource') && (
+                    <th className={`w-36 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Invite Source</th>
                   )}
                   {isColumnEnabled('status') && (
                     <th
@@ -2522,18 +2500,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           <div className="truncate text-sm text-gray-600" title={candidate.phone || '-'}>{candidate.phone || '-'}</div>
                         </td>
                       )}
-                      {isColumnEnabled('inviteSource') && (
-                        <td className="px-4 py-4">
-                          {(() => {
-                            const meta = getInviteSourceMeta(candidate.inviteSource);
-                            return (
-                              <span className={`inline-flex items-center px-2 py-1 rounded text-xs font-medium ${meta.cls}`}>
-                                {meta.label}
-                              </span>
-                            );
-                          })()}
-                        </td>
-                      )}
                       {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
                         <td className="px-4 py-4 text-center">
                           <div className="flex items-center justify-center gap-2">
@@ -2565,6 +2531,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                               </span>
                             )}
                           </div>
+                        </td>
+                      )}
+                      {isColumnEnabled('inviteSource') && (
+                        <td className="px-4 py-4 text-sm text-gray-700 whitespace-nowrap">
+                          <InviteSourceValue inv={{ invite_source: candidate.inviteSource }} iconClassName="w-3.5 h-3.5" />
                         </td>
                       )}
                       {isColumnEnabled('status') && (

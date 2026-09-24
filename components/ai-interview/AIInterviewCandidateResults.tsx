@@ -796,13 +796,13 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                             <VersionPill kind="interview" version={row._interview_version} />
                           </td>
                         )}
-                        {col('status') && (
-                          <td className="px-4 py-3 whitespace-nowrap text-gray-700 dark:text-slate-300">
+                        <td className="px-4 py-3 whitespace-nowrap text-gray-700 dark:text-slate-300">
                           {inviteSourceLabel(row)
                             ? <InviteSourceValue inv={row} iconClassName="w-3.5 h-3.5" />
                             : <span className="text-gray-400">—</span>}
                         </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
+                        {col('status') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
                               {row.status === 'in_progress' && (

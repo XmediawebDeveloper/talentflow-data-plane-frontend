@@ -13,6 +13,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
+import { InviteSourceValue, assessmentInviteSource } from '@/components/AIInterviewInviteTable';
 
 /**
  * The candidate list for an ASSESSMENT invite tracker.
@@ -262,6 +263,7 @@ export default function AssessmentInviteTable({
                   <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Assessment Version</th>
                 )}
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Invite Source</th>
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
                 {/* hidden md:table-cell mirrors this column's <td>. Without
                     it the header carried one more cell than the body between
@@ -377,6 +379,11 @@ export default function AssessmentInviteTable({
                           <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                         </div>
                       </div>
+                    </td>
+                    {/* Invite Source — how this candidate was actually
+                        invited, from the invitation's own resume_id. */}
+                    <td className="py-3 px-4 align-top text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                      <InviteSourceValue inv={assessmentInviteSource(invitation)} iconClassName="w-3.5 h-3.5" />
                     </td>
                     <td className="py-3 px-4 align-top">
                       {/* Status is the badge alone. Expiry is resolved inside

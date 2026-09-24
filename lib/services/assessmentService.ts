@@ -183,6 +183,7 @@ export interface AssessmentAttemptResponse {
   candidate_phone?: string;
   invite_source?: string;
   candidate_display_id?: string;
+  resume_id?: string;  // set only when the candidate was invited from a resume
   assessment_title: string;
   jd_title: string;
   started_at?: string;
