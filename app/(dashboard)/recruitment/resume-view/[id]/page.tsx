@@ -206,7 +206,7 @@ import AITalentMatchProgressPanel from '@/components/AITalentMatchProgressPanel'
 import ScoringJobProgressModal, { JobScoringProgress } from '@/components/ScoringJobProgressModal';
 import ShareAssessmentModal from '@/components/ShareAssessmentModal';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
-import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
+import InviteToAIInterviewFlow from '@/components/InviteToAIInterviewFlow';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -354,7 +354,10 @@ export default function ResumeViewPage() {
   const [loadingInvite, setLoadingInvite] = useState(false);
   const [shareAssessments, setShareAssessments] = useState<any[]>([]);
   const [showShareAssessmentModal, setShowShareAssessmentModal] = useState(false);
-  const [shareAIConfig, setShareAIConfig] = useState<any>(null);
+  /* AI Interview invite — the shared Invite to AI Interview popup (the same
+     one My Resumes and the Internal Database use): pick the interview, then
+     the share modal with this candidate prefilled. */
+  const [showAIInviteFlow, setShowAIInviteFlow] = useState(false);
   const [inviteJobTitle, setInviteJobTitle] = useState('');
 
   useEffect(() => {
@@ -373,6 +376,10 @@ export default function ResumeViewPage() {
 
   const startInvite = async (intent: 'assessment' | 'ai-interview') => {
     setShowInviteMenu(false);
+    if (intent === 'ai-interview') {
+      setShowAIInviteFlow(true);
+      return;
+    }
     setInviteIntent(intent);
     setInviteJobQuery('');
     if (publishedJobs.length === 0) await fetchPublishedJobs();
@@ -410,34 +417,8 @@ export default function ResumeViewPage() {
     }
   };
 
-  // AI interview invite — needs a published interview config on that JD.
-  const openAIInterviewInvite = async (job: Job) => {
-    setLoadingInvite(true);
-    try {
-      const { aiInterviewService } = await import('@/lib/services/aiInterviewService');
-      const resp = await aiInterviewService.list({ page_size: 100 });
-      const published = (resp?.items || []).find((c: any) => {
-        const status = String(c?.status || '').toLowerCase();
-        return c.jd_id === job.id && (status === 'published' || status === 'active');
-      });
-
-      if (!published) {
-        toast.error(`Create and publish an AI interview for "${job.title}" before inviting candidates.`, { duration: 6000 });
-        return;
-      }
-      setShareAIConfig(published);
-      setShowInviteJobPicker(false);
-    } catch (err) {
-      console.error('[ResumeView] Failed to load AI interviews:', err);
-      toast.error('Could not load AI interviews. Please try again.');
-    } finally {
-      setLoadingInvite(false);
-    }
-  };
-
   const handleInviteJobPicked = (job: Job) => {
     if (inviteIntent === 'assessment') openAssessmentInvite(job);
-    else if (inviteIntent === 'ai-interview') openAIInterviewInvite(job);
   };
 
   const handleCompareCheck = (versionId: string) => {
@@ -1205,7 +1186,7 @@ Best regards`);
                         </span>
                         <span className="min-w-0">
                           <span className="block text-sm font-medium text-gray-900">AI Interview</span>
-                          <span className="block text-xs text-gray-500">Pick a job, then invite to its interview</span>
+                          <span className="block text-xs text-gray-500">Pick an interview, then send the invite</span>
                         </span>
                       </button>
                     )}
@@ -2575,21 +2556,15 @@ Best regards`);
         />
       )}
 
-      {/* Invite — step 2b: share the JD's AI interview. Same prefill as the
-          Assessment modal above. */}
-      {shareAIConfig && (
-        <ShareAIInterviewModal
-          isOpen={!!shareAIConfig}
-          onClose={() => setShareAIConfig(null)}
-          config={shareAIConfig}
-          onInviteSent={() => setShareAIConfig(null)}
-          initialCandidates={
-            resume?.email
-              ? [{ name: getCandidateName(), email: resume.email, resumeId }]
-              : undefined
-          }
-        />
-      )}
+      {/* Invite to AI Interview — the shared picker popup, this candidate
+          prefilled, then the share modal. */}
+      <InviteToAIInterviewFlow
+        open={showAIInviteFlow}
+        onClose={() => setShowAIInviteFlow(false)}
+        candidates={resume ? [{ id: resumeId, name: getCandidateName(), email: resume.email || undefined }] : []}
+        resumes={resume ? [resume] : undefined}
+        onInvited={() => setShowAIInviteFlow(false)}
+      />
 
       {/* Share via Email Modal */}
       {isShareModalOpen && (
