@@ -451,12 +451,20 @@ export function skillBundleMembers(name: string): { name: string; tokens: Set<st
  *
  *  The subset rule deliberately cannot see this: a longer name normally means a
  *  DIFFERENT product ("React" vs "React Native"). A conjunction says the opposite —
- *  the phrase enumerates members instead of qualifying a head noun. */
+ *  the phrase enumerates members instead of qualifying a head noun.
+ *
+ *  Also catches the ACRONYM form of a member even when the bundle spells that
+ *  member out in full — "SDLC" against "software development life cycle and
+ *  software testing life cycle" — via `skillInitialismMatch` per member, rather
+ *  than only literal word-set equality. Table-free, same as the backend. */
 export function skillIsBundlePart(part: string, bundle: string): boolean {
   const pt = skillContentTokens(part);
   if (pt.size === 0) return false;
   const members = skillBundleMembers(bundle);
   if (members.some(m => m.tokens.size === pt.size && [...m.tokens].every(t => pt.has(t)))) {
+    return true;
+  }
+  if (members.some(m => skillInitialismMatch(part, m.name).hit)) {
     return true;
   }
   // SHARED TRAILING HEAD — "Knowledge of ICU and CCU protocols" splits into {icu}

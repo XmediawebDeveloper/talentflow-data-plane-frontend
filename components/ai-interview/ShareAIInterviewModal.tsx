@@ -700,10 +700,13 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
       for (const candidate of deduped) {
         try {
           if (candidate.generatedSessionId) {
-            // Session already created via Copy Link — just send the email, no new quota deduction
+            // Session already created via Copy Link — just send the email, no new quota deduction.
+            // keep_link: the recruiter may already have shared the copied link, so the
+            // email must carry that same link rather than rotating it.
             await aiInterviewService.sendSessionEmail(candidate.generatedSessionId, {
               custom_message: resolvedMessage,
               base_url: typeof window !== 'undefined' ? window.location.origin : undefined,
+              keep_link: true,
             });
           } else {
             await aiInterviewService.inviteCandidate(config.id, {
