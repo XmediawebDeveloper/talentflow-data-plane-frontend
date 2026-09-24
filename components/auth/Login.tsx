@@ -216,10 +216,18 @@ export default function Login({ onBackToPublic }: LoginProps) {
     if (emailValue !== email) setEmail(emailValue);
     if (passwordValue !== password) setPassword(passwordValue);
 
+    // Re-detect synchronously instead of trusting `subdomain` state: that state is
+    // only set by the mount effect above via a setTimeout(0), so a fast submit
+    // (e.g. a password-manager autofill immediately followed by a click) can race
+    // ahead of it and send the login request with no org context at all. Since
+    // detectSubdomain() itself is synchronous, calling it again right here always
+    // has the answer in time for submit.
+    const resolvedSubdomain = detectSubdomain(new URLSearchParams(searchParams.toString())) || subdomain;
+
     setIsLoading(true);
 
     try {
-      const response = await authService.login({ email: emailValue, password: passwordValue, subdomain: subdomain || undefined });
+      const response = await authService.login({ email: emailValue, password: passwordValue, subdomain: resolvedSubdomain || undefined });
 
       // Check if 2FA is required
       if (isTwoFactorRequired(response)) {
