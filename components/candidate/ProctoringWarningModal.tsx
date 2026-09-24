@@ -41,6 +41,7 @@ const EVENT_ICONS: Record<ProctoringEventType, React.ReactNode> = {
   multiple_faces: <Users className="w-6 h-6" />,
   gaze_away: <ScanEye className="w-6 h-6" />,
   identity_mismatch: <UserX className="w-6 h-6" />,
+  assessment_terminated: <UserX className="w-6 h-6" />,
 };
 
 const EVENT_NAMES: Record<ProctoringEventType, string> = {
@@ -62,6 +63,7 @@ const EVENT_NAMES: Record<ProctoringEventType, string> = {
   multiple_faces: 'Multiple Faces Detected',
   gaze_away: 'Looking Away Detected',
   identity_mismatch: 'Identity Mismatch Detected',
+  assessment_terminated: 'Assessment Terminated',
 };
 
 const SEVERITY_COLORS: Record<'low' | 'medium' | 'high', { bg: string; border: string; text: string; icon: string }> = {

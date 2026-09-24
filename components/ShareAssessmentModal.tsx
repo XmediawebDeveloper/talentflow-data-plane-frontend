@@ -9,12 +9,12 @@ import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import VersionBadge from './VersionBadge';
 import { toast } from 'sonner';
 import { useQuota } from '@/contexts/QuotaContext';
+import { isValidEmailFormat } from '@/lib/utils/email';
 
-// Email validation regex - requires valid format with domain containing a period
-const isValidEmail = (email: string): boolean => {
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return emailRegex.test(email.trim());
-};
+// Delegates to the one shared, comprehensive format rule (lib/utils/email),
+// used everywhere else a candidate email is entered or edited, rather than
+// this file's own looser regex (which passed things like "user@example.c").
+const isValidEmail = (email: string): boolean => isValidEmailFormat(email);
 
 interface ShareAssessmentModalProps {
   isOpen: boolean;
@@ -232,9 +232,9 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               </button>
             ) : <div className="w-5" />}
             {isExpanded ? (
-              <FolderOpen className={`w-4 h-4 ${isSelected ? '' : 'text-brand-orange'}`} />
+              <FolderOpen className={`w-4 h-4 ${isSelected ? '' : 'text-gray-400 dark:text-slate-500'}`} />
             ) : (
-              <Folder className={`w-4 h-4 ${isSelected ? '' : 'text-brand-orange'}`} />
+              <Folder className={`w-4 h-4 ${isSelected ? '' : 'text-gray-400 dark:text-slate-500'}`} />
             )}
             <span className="flex-1 text-left truncate">{folder.name}</span>
             <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-gray-600 dark:text-slate-400">{count}</span>
@@ -517,12 +517,12 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
   if (showSuccess) {
     return (
-      <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full p-6 sm:p-8 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto">
-          <div className="w-16 h-16 bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-full flex items-center justify-center mx-auto mb-4">
-            <CheckCircle className="w-10 h-10 text-brand-blue" />
+      <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full p-5 sm:p-6 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto">
+          <div className="w-12 h-12 bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-full flex items-center justify-center mx-auto mb-3">
+            <CheckCircle className="w-6 h-6 text-brand-blue" />
           </div>
-          <h3 className="text-gray-900 dark:text-slate-50 tracking-tight mb-2">Assessment Shared Successfully!</h3>
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-1">Assessment Shared Successfully!</h3>
           <p className="text-gray-600 dark:text-slate-400 text-sm">
             Email invitations have been sent to {sentCount} candidate{sentCount > 1 ? 's' : ''}
           </p>
@@ -534,19 +534,19 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   // Duplicate invitation error popup
   if (showDuplicateError) {
     return (
-      <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-        <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full p-6 sm:p-8 max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden">
-          <div className="flex-shrink-0 text-center mb-6">
-            <div className="w-16 h-16 bg-brand-orange/10 ring-1 ring-brand-orange/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <AlertTriangle className="w-10 h-10 text-brand-orange-deep" />
+      <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full p-5 sm:p-6 max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden">
+          <div className="shrink-0 text-center mb-4">
+            <div className="w-12 h-12 bg-warning-subtle ring-1 ring-warning-line rounded-full flex items-center justify-center mx-auto mb-3">
+              <AlertTriangle className="w-6 h-6 text-warning" />
             </div>
-            <h3 className="text-gray-900 dark:text-slate-50 text-lg font-medium tracking-tight mb-2">Invitation Already Sent</h3>
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-1">Invitation Already Sent</h3>
             <p className="text-gray-600 dark:text-slate-400 text-sm">
               An invitation has already been sent to <span className="font-medium text-gray-800 dark:text-slate-100">{duplicateEmail}</span> for this assessment.
             </p>
           </div>
 
-          <div className="flex-1 min-h-0 overflow-y-auto bg-slate-50 dark:bg-slate-950 rounded-lg p-4 mb-6">
+          <div className="flex-1 min-h-0 overflow-y-auto bg-slate-50 dark:bg-slate-950 rounded-lg p-3 sm:p-4 mb-4">
             <p className="text-sm text-gray-700 dark:text-slate-300 mb-2">You can:</p>
             <ul className="text-sm text-gray-600 dark:text-slate-400 space-y-1">
               <li>• Try a <span className="font-medium">different email address</span></li>
@@ -555,7 +555,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             </ul>
           </div>
 
-          <div className="flex-shrink-0 flex gap-3">
+          <div className="shrink-0 flex flex-wrap gap-2">
             <button
               onClick={() => {
                 setShowDuplicateError(false);
@@ -582,18 +582,18 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   }
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-4xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-3xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
         {/* Header */}
-        <div className="bg-gray-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-6 py-5 flex items-center justify-between shrink-0">
+        <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
-              <Mail className="w-5 h-5 text-white" />
+            <div className="w-9 h-9 rounded-lg bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center shrink-0">
+              <Mail className="w-4 h-4 text-white" />
             </div>
             <div>
-              <h2 className="text-gray-900 dark:text-slate-50 tracking-tight">Share Assessment via Email</h2>
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Share Assessment via Email</h2>
               <div className="flex items-center gap-2">
-                <p className="text-gray-600 dark:text-slate-400 text-sm">{assessmentTitleForEmail}</p>
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 truncate">{assessmentTitleForEmail}</p>
                 <VersionBadge version={assessment.version} size="sm" variant="success" />
               </div>
             </div>
@@ -607,12 +607,12 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-6">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-5">
           {/* Assessment Info Banner */}
-          <div className="bg-slate-50 dark:bg-slate-950 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
-            <div className="flex items-start gap-2.5 sm:gap-4">
-              <div className="w-9 h-9 sm:w-12 sm:h-12 bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg flex items-center justify-center flex-shrink-0">
-                <FileText className="w-4 h-4 sm:w-6 sm:h-6 text-white" />
+          <div className="bg-slate-50 dark:bg-slate-950 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-lg p-3 mb-3 sm:mb-4">
+            <div className="flex items-start gap-3">
+              <div className="w-9 h-9 bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg flex items-center justify-center shrink-0">
+                <FileText className="w-4 h-4 text-white" />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
@@ -622,7 +622,28 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                     </span>
                   )}
                   <span className="text-gray-900 dark:text-slate-50">{assessmentTitleForEmail}</span>
-                  <VersionBadge version={assessment.version} size="sm" variant="secondary" />
+                  {/* Job version, then assessment version — the two are
+                      different facts about this row and the banner used to show
+                      only the second, so "V4" read as the job's version to
+                      anyone who did not already know. Both are labelled now:
+                      "Job V3 · Assessment V4".
+
+                      `jd_version` comes off the assessment record the modal is
+                      already given — the same field the Linked line below used
+                      to print — so this adds no request and nothing is
+                      hardcoded. Absent on an assessment with no job, which is
+                      why the badge is conditional rather than defaulting to
+                      v1. */}
+                  {typeof assessment.jd_version === 'number' && (
+                    <span className="inline-flex items-center text-2xs sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-md font-semibold bg-slate-100 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600 whitespace-nowrap">
+                      Job V{assessment.jd_version}
+                    </span>
+                  )}
+                  {typeof assessment.version === 'number' && (
+                    <span className="inline-flex items-center text-2xs sm:text-xs px-1.5 sm:px-2 py-0.5 rounded-md font-semibold bg-slate-100 text-slate-700 border border-slate-300 dark:bg-slate-800 dark:text-slate-200 dark:border-slate-600 whitespace-nowrap">
+                      Assessment V{assessment.version}
+                    </span>
+                  )}
                   {allAssessments.length > 1 && (
                     <span className="text-2xs sm:text-xs px-1.5 sm:px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-full font-medium">
                       +{allAssessments.length - 1} more
@@ -659,18 +680,12 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                     );
                   })()}
                 </div>
-                {assessment.jd_short_id && (
-                  <div className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mt-1">
-                    <span className="font-medium">Linked: </span>
-                    <span className="text-gray-800 dark:text-slate-100">{assessment.jd_short_id}</span>
-                    {assessment.jd_title && (
-                      <span className="ml-1 truncate">- {assessment.jd_title}</span>
-                    )}
-                    {assessment.jd_version && (
-                      <span className="ml-1 text-gray-500 dark:text-slate-500">v{assessment.jd_version}</span>
-                    )}
-                  </div>
-                )}
+                {/* The "Linked: JD-232 - Robotics v3" line stood here. It
+                    repeated the job the title above already names and carried
+                    the job version as a bare "v3" beside an unlabelled "V4",
+                    which was the pair that made the two versions impossible to
+                    tell apart. The version it carried now reads as "Job V3" in
+                    the title row. */}
                 {allAssessments.length > 1 && (
                   <div className="mt-2 pt-2 border-t border-gray-200 dark:border-slate-700">
                     <p className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 font-medium mb-1">
@@ -734,9 +749,9 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               return (
                 <div className={`mb-4 px-4 py-3 rounded-lg border text-sm ${
                   isInsufficient
-                    ? 'bg-red-50 border-red-200 text-red-800'
+                    ? 'bg-destructive-subtle border-destructive-line text-destructive-strong'
                     : isLow
-                    ? 'bg-brand-orange/10 border-brand-orange/20 ring-1 ring-brand-orange/20 text-brand-orange-deep'
+                    ? 'bg-warning-subtle border-warning-line ring-1 ring-warning-line text-warning-strong'
                     : 'bg-brand-blue/5 border-brand-blue/20 ring-1 ring-brand-blue/20 text-brand-blue'
                 }`}>
                   <div className="flex items-start gap-2">
@@ -779,9 +794,9 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               return (
                 <div className={`mb-4 px-4 py-3 rounded-lg border text-sm ${
                   isInsufficient
-                    ? 'bg-red-50 border-red-200 text-red-800'
+                    ? 'bg-destructive-subtle border-destructive-line text-destructive-strong'
                     : isLow
-                    ? 'bg-brand-orange/10 border-brand-orange/20 ring-1 ring-brand-orange/20 text-brand-orange-deep'
+                    ? 'bg-warning-subtle border-warning-line ring-1 ring-warning-line text-warning-strong'
                     : 'bg-brand-blue/5 border-brand-blue/20 ring-1 ring-brand-blue/20 text-brand-blue'
                 }`}>
                   <div className="flex items-center gap-2">
@@ -836,7 +851,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             {/* Manual Input Mode */}
             {inputMode === 'manual' && (
               <>
-                <div className="flex items-center justify-between mb-2 sm:mb-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2 sm:mb-3">
                   <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">Enter candidate details</p>
                   <button
                     onClick={addCandidate}
@@ -887,19 +902,19 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                               candidate.source === 'database'
                                 ? 'bg-gray-100 dark:bg-slate-800 cursor-not-allowed border-gray-200 dark:border-slate-700'
                                 : candidate.email.trim() && !isValidEmail(candidate.email)
-                                  ? 'border-red-500 focus:ring-red-500'
+                                  ? 'border-destructive focus:ring-destructive'
                                   : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-brand-blue'
                             }`}
                           />
                           {candidate.email.trim() && !isValidEmail(candidate.email) && (
-                            <p className="text-2xs sm:text-xs text-red-500 mt-0.5 sm:mt-1">Enter a valid email</p>
+                            <p className="text-2xs sm:text-xs text-destructive mt-0.5 sm:mt-1">Enter a valid email</p>
                           )}
                         </div>
                       </div>
                       {(candidates.length > 1 || candidate.source === 'database') && (
                         <button
                           onClick={() => removeCandidate(candidate.id)}
-                          className="p-1.5 sm:p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors flex-shrink-0"
+                          className="p-1.5 text-destructive hover:bg-destructive-subtle rounded-lg transition-colors shrink-0"
                         >
                           <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         </button>
@@ -1025,12 +1040,12 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                     </div>
 
                     {/* Action footer */}
-                    <div className="flex items-center justify-between px-3 py-2 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950">
+                    <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950">
                       <span className="text-xs text-gray-500 dark:text-slate-500">{selectedResumes.length} candidate{selectedResumes.length !== 1 ? 's' : ''} selected</span>
                       <button
                         onClick={handleAddFromDatabase}
                         disabled={selectedResumes.length === 0}
-                        className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg text-sm transition-colors disabled:bg-gray-300 disabled:from-gray-300 disabled:to-gray-300 disabled:shadow-none disabled:cursor-not-allowed"
+                        className="flex items-center gap-2 px-3 sm:px-4 py-1.5 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg text-xs sm:text-sm font-medium transition-colors disabled:bg-gray-300 disabled:shadow-none disabled:cursor-not-allowed whitespace-nowrap"
                       >
                         <Users className="w-4 h-4" />
                         Add Selected
@@ -1044,8 +1059,8 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
           {/* Custom Message */}
           <div className="mb-4 sm:mb-6">
-            <div className="flex items-center justify-between mb-1.5 sm:mb-2">
-              <label className="text-xs sm:text-base text-gray-900 dark:text-slate-50 font-medium">Email Message</label>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5 sm:mb-2">
+              <label className="text-xs sm:text-sm text-gray-900 dark:text-slate-50 font-medium">Email Message</label>
               <span className="text-2xs sm:text-xs text-brand-blue font-medium">✓ Live preview</span>
             </div>
             <textarea
@@ -1091,57 +1106,60 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
           </div>
 
           {/* Email Preview - Exact match of actual email */}
-          <div className="bg-gradient-to-br from-gray-50 to-gray-100 border-2 border-brand-blue/30 rounded-lg p-3 sm:p-6">
-            <div className="flex items-center justify-between mb-3 sm:mb-4">
+          {/* Flat slate, hairline border. Was a gray-50 -> gray-100 gradient inside
+              a 2px brand ring: two neutral stops and the heaviest border in
+              the dialog, for a panel that only frames a preview. */}
+          <div className="bg-slate-50 dark:bg-slate-950 border border-gray-200 dark:border-slate-700 rounded-lg p-3 sm:p-4">
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
               <div className="flex items-center gap-1.5 sm:gap-2">
-                <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
-                <h3 className="text-xs sm:text-base text-gray-900 dark:text-slate-50 font-semibold">Email Preview</h3>
+                <Mail className="w-4 h-4 text-brand-blue" />
+                <h3 className="text-sm font-semibold text-gray-900 dark:text-slate-50">Email Preview</h3>
               </div>
-              <span className="text-2xs sm:text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 sm:px-3 py-0.5 sm:py-1 rounded-full font-medium">
+              <span className="text-2xs sm:text-xs text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-0.5 rounded-full font-medium whitespace-nowrap">
                 Exact format
               </span>
             </div>
-            <p className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mb-3 sm:mb-4 bg-white dark:bg-slate-900 rounded-lg px-2 sm:px-3 py-1.5 sm:py-2 border border-brand-blue/20">
+            <p className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mb-3 bg-white dark:bg-slate-900 rounded-lg px-2.5 py-1.5 border border-gray-200 dark:border-slate-700">
               This is how the email will appear to candidates.
             </p>
 
             {/* Actual Email Template Preview */}
-            <div className="bg-white dark:bg-slate-900 rounded-lg shadow-md overflow-hidden">
+            <div className="bg-white dark:bg-slate-900 rounded-lg border border-gray-200 dark:border-slate-700 overflow-hidden">
               {/* Brand Header */}
-              <div className="bg-gradient-to-r from-brand-blue to-brand-cyan px-4 sm:px-8 py-4 sm:py-8 text-center">
-                <h1 className="text-white text-base sm:text-2xl font-bold mb-1 sm:mb-2">Assessment Invitation</h1>
-                <p className="text-white/80 text-2xs sm:text-sm">TalentFlow</p>
+              <div className="bg-brand-blue px-4 sm:px-6 py-4 sm:py-5 text-center">
+                <h1 className="text-white text-sm sm:text-base font-semibold mb-0.5">Assessment Invitation</h1>
+                <p className="text-white/80 text-2xs sm:text-xs">TalentFlow</p>
               </div>
 
               {/* Email Body */}
-              <div className="p-4 sm:p-8">
+              <div className="p-4 sm:p-5">
                 {/* Greeting and Message */}
-                <div className="mb-4 sm:mb-6 text-gray-700 dark:text-slate-300 text-xs sm:text-base leading-relaxed whitespace-pre-line">
+                <div className="mb-3 sm:mb-4 text-gray-700 dark:text-slate-300 text-xs sm:text-sm leading-relaxed whitespace-pre-line">
                   {customMessage.replace('[Candidate Name]', candidates[0].name || '[Candidate Name]')}
                 </div>
 
                 {/* Assessment Title Box */}
-                <div className="bg-gradient-to-r from-brand-blue/5 to-brand-cyan/10 border-2 border-brand-blue/40 rounded-xl p-3 sm:p-5 text-center mb-4 sm:mb-6">
-                  <div className="text-sm sm:text-xl font-bold text-brand-blue">
+                <div className="bg-brand-blue/5 border border-brand-blue/20 rounded-lg p-3 sm:p-4 text-center mb-3 sm:mb-4">
+                  <div className="text-sm font-semibold text-brand-blue break-words">
                     {assessmentTitleForEmail}
                   </div>
                 </div>
 
                 {/* CTA Button */}
-                <div className="text-center mb-4 sm:mb-6">
-                  <div className="inline-block bg-gradient-to-r from-brand-blue to-brand-cyan text-white px-5 sm:px-8 py-2 sm:py-3 rounded-lg text-xs sm:text-base font-semibold shadow-md shadow-brand-blue/25 ring-1 ring-white/10">
+                <div className="text-center mb-3 sm:mb-4">
+                  <div className="inline-block bg-brand-blue text-white px-4 sm:px-6 py-2 rounded-lg text-xs sm:text-sm font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
                     Start Assessment
                   </div>
                 </div>
 
                 {/* Expiry Info */}
-                <p className="text-center text-gray-600 dark:text-slate-400 text-2xs sm:text-sm mb-4 sm:mb-6">
+                <p className="text-center text-gray-600 dark:text-slate-400 text-2xs sm:text-xs mb-0">
                   Expires: <strong>{expiryDays > 0 ? `${expiryDays} day${expiryDays > 1 ? 's' : ''}` : 'No expiry'}</strong>
                 </p>
               </div>
 
               {/* Footer */}
-              <div className="bg-gray-50 dark:bg-slate-800/50 px-4 sm:px-8 py-3 sm:py-6 text-center border-t border-gray-200 dark:border-slate-700">
+              <div className="bg-slate-50 dark:bg-slate-800/50 px-4 sm:px-6 py-3 text-center border-t border-gray-200 dark:border-slate-700">
                 <p className="text-gray-500 dark:text-slate-500 text-2xs sm:text-xs mb-1 sm:mb-2">© 2026 TalentFlow. All rights reserved.</p>
                 <p className="text-gray-400 dark:text-slate-500 text-2xs sm:text-xs">If you did not expect this email, please ignore it.</p>
               </div>
@@ -1150,7 +1168,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 bg-slate-50 dark:bg-slate-950 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
+        <div className="px-4 sm:px-5 py-3 bg-slate-50 dark:bg-slate-950 border-t border-gray-100 dark:border-slate-700/60 flex flex-wrap items-center justify-between gap-3 shrink-0">
           <div className="text-sm text-gray-600 dark:text-slate-400">
             {(() => {
               const validCount = candidates.filter(c => c.name.trim() && c.email.trim()).length;
@@ -1159,7 +1177,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               const isUnlimited = available !== null && available >= 999999;
               const insufficientQuota = !isUnlimited && available !== null && available < needed;
               return (
-                <span className={insufficientQuota ? 'text-red-600' : ''}>
+                <span className={insufficientQuota ? 'text-destructive' : ''}>
                   {validCount} candidate{validCount !== 1 ? 's' : ''} will receive {allAssessments.length > 1 ? `${allAssessments.length} assessments` : 'this assessment'}
                   {insufficientQuota && (
                     <span className="ml-2 font-medium">— only {available} unit{available !== 1 ? 's' : ''} available</span>
@@ -1178,7 +1196,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             <button
               onClick={handleSend}
               disabled={!isValid || isSubmitting || (quotaStats !== null && quotaStats.available === 0 && quotaStats.total_quota < 999999)}
-              className="px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors disabled:bg-gray-300 disabled:from-gray-300 disabled:to-gray-300 disabled:shadow-none disabled:cursor-not-allowed flex items-center gap-2"
+              className="px-4 sm:px-5 py-1.5 sm:py-2 text-xs sm:text-sm font-medium bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors disabled:bg-gray-300 disabled:shadow-none disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
             >
               {isSubmitting ? (
                 <>

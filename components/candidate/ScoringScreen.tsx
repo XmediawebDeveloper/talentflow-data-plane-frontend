@@ -42,13 +42,13 @@ export function ScoringScreen() {
 
   return (
     <div className="min-h-[100dvh] bg-gray-50 flex items-center justify-center p-4">
-      <div className="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full">
+      <div className="bg-white rounded-2xl shadow-xl p-5 sm:p-8 max-w-lg w-full">
         {/* Success Header */}
         <div className="text-center mb-8">
           <div className="w-20 h-20 bg-success-subtle rounded-full flex items-center justify-center mx-auto mb-4">
             <CheckCircle className="w-12 h-12 text-success" />
           </div>
-          <h1 className="text-2xl font-bold text-gray-800 mb-2">
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-800 mb-2">
             Assessment Completed!
           </h1>
           <p className="text-gray-600">
@@ -58,7 +58,7 @@ export function ScoringScreen() {
 
         {/* Timer Display */}
         <div className="bg-brand-blue rounded-2xl p-4 sm:p-6 mb-6 text-white">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <div className="flex items-center gap-2">
               <BarChart3 className="w-5 h-5" />
               <span className="font-medium">Evaluation in Progress</span>
@@ -85,7 +85,7 @@ export function ScoringScreen() {
               style={{ width: `${progressPercent}%` }}
             />
           </div>
-          <div className="flex justify-between text-xs mt-2 text-white/70">
+          <div className="flex justify-between gap-2 text-xs mt-2 text-white/70">
             <span>Processing</span>
             <span>{Math.round(progressPercent)}%</span>
           </div>

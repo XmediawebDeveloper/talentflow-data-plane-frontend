@@ -2,6 +2,7 @@
 
 import { Mail, Play, CheckCircle, Clock, Ban, Loader2, Users, Eye, Pencil, MoreVertical, Check, Monitor, RefreshCw, Send, X } from 'lucide-react';
 import { formatIST } from '@/lib/utils/dateUtils';
+import { isValidEmailFormat } from '@/lib/utils/email';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
 import { VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
@@ -59,7 +60,12 @@ export const isInviteExpired = (inv: any): boolean => {
    to disagree about whether it could be resent. */
 
 /** Resendable, and therefore bulk-selectable: an invite that went out or
- *  lapsed, and that the candidate has neither started nor finished. */
+ *  lapsed, and that the candidate has neither started nor finished. This
+ *  table's own per-row menu (below) treats Invited the same way — direct
+ *  Resend, no Revoke step — so the bulk rule here has to match: it is a
+ *  DIFFERENT, deliberately simpler action model than AssessmentInviteActions'
+ *  (used by the Invite Tracking popup / Invitation Status tab), not a copy of
+ *  it. */
 export const isBulkResendable = (inv: any): boolean =>
   ['sent', 'expired'].includes(inv.status)
   && !inv.started_at
@@ -87,8 +93,11 @@ export const inviteStatusBucket = (inv: any): string => {
   return 'pending';
 };
 
-export const isValidInviteEmail = (email: string) =>
-  /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+// Delegates to the one shared, comprehensive format rule (lib/utils/email)
+// rather than this file's own regex, so a "Change Email" address can't pass
+// here while failing the exact same check on the Edit Invitation dialog or
+// the backend that actually saves it.
+export const isValidInviteEmail = (email: string) => isValidEmailFormat(email);
 
 /** Badge wording and colours, in one place so a recruiter reads the same
  *  status wherever tracking was opened from. Expiry is resolved first, so a
@@ -528,9 +537,17 @@ export default function AssessmentInviteTable({
                             value={newEmailValue}
                             onChange={e => onNewEmailChange(e.target.value)}
                             placeholder="new@email.com"
-                            className="text-xs border border-gray-200 dark:border-slate-700 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue w-full"
+                            aria-invalid={newEmailValue.trim().length > 0 && !isValidInviteEmail(newEmailValue) ? 'true' : undefined}
+                            className={`text-xs border rounded px-2 py-1 focus:outline-none focus:ring-2 w-full ${
+                              newEmailValue.trim().length > 0 && !isValidInviteEmail(newEmailValue)
+                                ? 'border-destructive focus:ring-destructive/40 focus:border-destructive'
+                                : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/40 focus:border-brand-blue'
+                            }`}
                             autoFocus
                           />
+                          {newEmailValue.trim().length > 0 && !isValidInviteEmail(newEmailValue) && (
+                            <p className="text-2xs text-destructive">Please enter a valid email address.</p>
+                          )}
                           <div className="flex gap-1">
                             <Button
                               variant="primary"

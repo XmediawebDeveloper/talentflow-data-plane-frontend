@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, XCir
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
 import { assessmentService, DetailedResultResponse, InvitationResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
 import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringService';
+import { RecordingPlayer, EMPTY_RECORDING_SOURCE, type RecordingSource } from '@/components/recording/RecordingPlayer';
 import { formatISTDate, formatISTTime, formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import { toast } from 'sonner';
 import RecordPager from '@/components/RecordPager';
@@ -331,6 +332,12 @@ export default function CandidateResultDetails({
           count: detailedResult.question_evaluations.filter(q => q.round_type === round.round_type).length,
           isQuestionTab: true,
         })),
+        {
+          id: 'recording',
+          label: 'Recording',
+          icon: Camera,
+          isQuestionTab: true,
+        },
         {
           id: 'violations',
           label: 'Violations',
@@ -718,6 +725,32 @@ export default function CandidateResultDetails({
 
     return () => clearInterval(pollInterval);
   }, [detailedResult?.scoring_status, assessmentId, candidateId]);
+
+  // Recording tab: presigned URLs for the candidate (webcam) and screen recordings.
+  const [candidateRecording, setCandidateRecording] = useState<RecordingSource>(EMPTY_RECORDING_SOURCE);
+  const [screenRecording, setScreenRecording] = useState<RecordingSource>(EMPTY_RECORDING_SOURCE);
+  useEffect(() => {
+    if (activeTab !== 'recording' || !assessmentId || !candidateId) return;
+    if (candidateRecording.available !== null && screenRecording.available !== null) return; // already loaded
+    let cancelled = false;
+    const load = async (kind: 'candidate' | 'screen', set: (s: RecordingSource) => void) => {
+      set({ ...EMPTY_RECORDING_SOURCE, loading: true });
+      try {
+        const meta = await assessmentService.getRecordingUrl(assessmentId, candidateId, kind);
+        if (cancelled) return;
+        if (!meta || !meta.url) { set({ ...EMPTY_RECORDING_SOURCE, available: false }); return; }
+        set({ available: true, url: meta.url, downloadUrl: meta.download_url, size: meta.size, loading: false, error: false });
+      } catch (err) {
+        if (cancelled) return;
+        console.error(`[CandidateResultDetails] Failed to load ${kind} recording:`, err);
+        set({ ...EMPTY_RECORDING_SOURCE, available: false, error: true });
+      }
+    };
+    void load('candidate', setCandidateRecording);
+    void load('screen', setScreenRecording);
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, assessmentId, candidateId]);
 
   // Fetch proctoring events when violations tab is opened
   useEffect(() => {
@@ -2493,6 +2526,26 @@ export default function CandidateResultDetails({
                   );
                 })}
 
+                {/* Recording Tab Content */}
+                {activeQuestionTab === 'recording' && (
+                  <div className="space-y-4 sm:space-y-6">
+                    <div className="pb-3 sm:pb-4 border-b border-gray-100">
+                      <h2 className="text-base sm:text-lg font-semibold text-gray-900">Recording</h2>
+                      <p className="text-xs sm:text-sm text-gray-500">Webcam and entire-screen recordings captured during the assessment.</p>
+                    </div>
+                    <RecordingPlayer
+                      candidate={candidateRecording}
+                      screen={screenRecording}
+                      recordId={candidateId}
+                      recordedAt={detailedResult.started_at || detailedResult.completed_at}
+                      dateLabel="Assessment Date"
+                      onDownload={(kind) => assessmentService.logRecordingDownload(assessmentId, candidateId, kind)}
+                      onCandidateError={() => setCandidateRecording((s) => ({ ...s, error: true }))}
+                      onScreenError={() => setScreenRecording((s) => ({ ...s, error: true }))}
+                    />
+                  </div>
+                )}
+
                 {/* Violations Tab Content */}
                 {activeQuestionTab === 'violations' && detailedResult.proctoring_stats && (
                   <div className="space-y-4 sm:space-y-6">
@@ -2977,6 +3030,11 @@ export default function CandidateResultDetails({
                                   case 'face_missing':             return { label: 'Face Not Detected',       icon: <UserX className="w-4 h-4" />,        color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
                                   case 'screenshot_attempt':       return { label: 'Screenshot Attempt',      icon: <Maximize className="w-4 h-4" />,     color: 'text-brand-blue',        bg: 'bg-brand-blue/5',    severity: 'high'   };
                                   case 'screen_recording_attempt': return { label: 'Screen Recording Attempt', icon: <Monitor className="w-4 h-4" />,      color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
+                                  case 'gaze_away':                return { label: 'Gaze Away',                icon: <Eye className="w-4 h-4" />,          color: 'text-brand-orange-deep', bg: 'bg-brand-orange/5',  severity: 'medium' };
+                                  case 'identity_mismatch':        return { label: 'Identity Mismatch',        icon: <UserX className="w-4 h-4" />,        color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
+                                  case 'camera_frozen':            return { label: 'Camera Frozen',            icon: <Eye className="w-4 h-4" />,          color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
+                                  case 'screen_share_stopped':     return { label: 'Screen Share Stopped',     icon: <Monitor className="w-4 h-4" />,      color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
+                                  case 'assessment_terminated':    return { label: 'Assessment Terminated',    icon: <AlertCircle className="w-4 h-4" />,  color: 'text-destructive',           bg: 'bg-destructive-subtle',          severity: 'high'   };
                                   case 'fullscreen_exit':          return { label: 'Fullscreen Exit',          icon: <Maximize className="w-4 h-4" />,     color: 'text-brand-blue',        bg: 'bg-brand-blue/5',    severity: 'medium'   };
                                   default:                         return { label: row.event_type.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase()), icon: <AlertCircle className="w-4 h-4" />, color: 'text-slate-600', bg: 'bg-slate-50', severity: 'low' };
                                 }

@@ -18,6 +18,7 @@ import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewStatsResponse, AIInterviewSettingsResponse, AIInterviewAuditActivity, AIInterviewAuditTrailResponse } from '@/lib/services/aiInterviewService';
 import api from '@/lib/services/api';
 import { toast } from 'sonner';
+import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
 import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
 import ArchiveAIInterviewModal from '@/components/ai-interview/ArchiveAIInterviewModal';
 import DeleteAIInterviewModal from '@/components/ai-interview/DeleteAIInterviewModal';
@@ -2741,6 +2742,7 @@ export default function AIInterview() {
               ) : (() => {
                 const totalInvites = inviteStatusRows.length;
                 const bucketCount = (predicate: (inv: any) => boolean) => inviteStatusRows.filter(predicate).length;
+                const invitedCount = bucketCount((inv) => inv.status === 'invited');
                 const expiredCount = bucketCount((inv) => resolveInviteStatus(inv) === 'expired');
                 const inProgressCount = bucketCount((inv) => inv.status === 'in_progress');
                 const completedCount = bucketCount((inv) => inv.status === 'completed');
@@ -2781,7 +2783,9 @@ export default function AIInterview() {
                    and a completion-rate meter beside it rather than a fifth
                    segment (nothing to filter to). */
                 const segments = ([
-                  { key: 'all', label: 'Total Invited', Icon: Users, value: totalInvites,
+                  { key: 'all', label: 'Total', Icon: Users, value: totalInvites,
+                    text: 'text-gray-700 dark:text-slate-300', hover: 'hover:text-gray-900 dark:hover:text-slate-100', tint: 'bg-gray-100 dark:bg-slate-700/50', ring: 'ring-gray-300 dark:ring-slate-600' },
+                  { key: 'invited', label: 'Invited', Icon: Mail, value: invitedCount,
                     text: 'text-status-invited', hover: 'hover:text-status-invited', tint: 'bg-status-invited/10', ring: 'ring-status-invited/20' },
                   { key: 'in_progress', label: 'In Progress', Icon: Play, value: inProgressCount,
                     text: 'text-status-progress', hover: 'hover:text-status-progress', tint: 'bg-status-progress/10', ring: 'ring-status-progress/20' },
@@ -2838,13 +2842,15 @@ export default function AIInterview() {
                         })}
                       </div>
 
-                      <div className="flex items-center gap-2.5 sm:gap-3 lg:justify-end flex-shrink-0">
-                        <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Completion rate</span>
-                        <div className="h-1.5 w-20 sm:w-28 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden flex-shrink-0">
-                          <div className="h-full rounded-full bg-brand-blue transition-all" style={{ width: `${completionRate}%` }} />
+                      <div className="flex flex-col gap-1 lg:items-end flex-shrink-0">
+                        <div className="flex items-center gap-2.5 sm:gap-3">
+                          <span className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">Completion rate</span>
+                          <div className="h-1.5 w-20 sm:w-28 rounded-full bg-gray-100 dark:bg-slate-800 overflow-hidden flex-shrink-0">
+                            <div className="h-full rounded-full bg-brand-blue transition-all" style={{ width: `${completionRate}%` }} />
+                          </div>
+                          <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">{completionRate}%</span>
                         </div>
-                        <span className="text-sm font-semibold tabular-nums text-gray-900 dark:text-slate-50">{completionRate}%</span>
-                        <span className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap hidden sm:inline">
+                        <span className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">
                           {completedCount.toLocaleString()} of {totalInvites.toLocaleString()} completed
                         </span>
                       </div>
@@ -3786,6 +3792,7 @@ export default function AIInterview() {
                   isLoading={invitesInitialLoading}
                   hasActiveFilters={filtersActive}
                   emptyHint={'Use the "Send via Email" button to invite candidates'}
+                  jdShortId={viewInvitationsConfig.jd_short_id}
                   selectedIds={selectedInviteIds}
                   onToggleSelect={toggleSelectOne}
                   onResend={(inv) => setResendInviteTarget(inv)}
@@ -4072,7 +4079,13 @@ export default function AIInterview() {
       </ConfirmationDialog>
 
       {/* Edit invitation modal — only reachable while the invitation is REVOKED */}
-      {editInviteTarget && (
+      {editInviteTarget && (() => {
+        const editInviteEmailTrimmed = editInviteForm.candidate_email.trim();
+        const editInviteEmailError =
+          editInviteEmailTrimmed.length > 0 && !isValidEmailFormat(editInviteEmailTrimmed)
+            ? EMAIL_FORMAT_ERROR
+            : null;
+        return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md">
             <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between">
@@ -4100,8 +4113,16 @@ export default function AIInterview() {
                   type="email"
                   value={editInviteForm.candidate_email}
                   onChange={(e) => setEditInviteForm((f) => ({ ...f, candidate_email: e.target.value }))}
-                  className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                  aria-invalid={editInviteEmailError ? 'true' : undefined}
+                  className={`w-full px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
+                    editInviteEmailError
+                      ? 'border-destructive focus:ring-destructive/30 focus:border-destructive'
+                      : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
+                  }`}
                 />
+                {editInviteEmailError && (
+                  <p className="mt-1 text-xs text-destructive">{editInviteEmailError}</p>
+                )}
               </div>
             </div>
             <div className="px-5 sm:px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-end gap-2">
@@ -4118,6 +4139,10 @@ export default function AIInterview() {
                   const email = editInviteForm.candidate_email.trim();
                   if (!name || !email) {
                     toast.error('Candidate name and email are required');
+                    return;
+                  }
+                  if (!isValidEmailFormat(email)) {
+                    toast.error(EMAIL_FORMAT_ERROR);
                     return;
                   }
                   setSavingEditInvite(true);
@@ -4146,7 +4171,7 @@ export default function AIInterview() {
                     setSavingEditInvite(false);
                   }
                 }}
-                disabled={savingEditInvite}
+                disabled={savingEditInvite || !!editInviteEmailError}
                 icon={savingEditInvite ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
               >
                 Save & Send
@@ -4154,7 +4179,8 @@ export default function AIInterview() {
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
     </main>
   );
 }

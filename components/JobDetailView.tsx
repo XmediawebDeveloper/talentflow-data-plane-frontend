@@ -4718,6 +4718,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           onClose={() => setTrackAIInterviewConfig(null)}
           configId={trackAIInterviewConfig.id}
           jdTitle={job.title}
+          jdShortId={job.job_id}
           // Completed rows offer View Result — swap the popup for the same
           // inline candidate result view the AI Interview Result tab opens.
           onViewResult={(inv) => {

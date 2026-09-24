@@ -41,6 +41,7 @@ import { CodingQuestionView } from './questions/CodingQuestionView';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useRetryQueue } from '@/hooks/useRetryQueue';
 import { getFullscreenChangeEvent, isFullscreen as getIsFullscreen, exitFullscreen as compatExitFullscreen, requestFullscreen as compatRequestFullscreen, playVideo } from '@/lib/utils/browserCompat';
+import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 
 interface Round {
   round_type: string;
@@ -79,6 +80,8 @@ interface AssessmentInterfaceProps {
     }
   ) => Promise<SubmitAnswerResponse>;
   onComplete: () => void;
+  /** Production-only proctoring termination (tab hidden, Esc/F11, Alt+Tab, Meta, PiP). */
+  onTerminated?: (reason: string, message: string) => void;
   onNavigate: (questionNumber: number) => void;
   onSetQuestion?: (question: CurrentQuestion) => void;
   onTimeUpdate?: (remainingSeconds: number) => void;
@@ -101,6 +104,7 @@ export function AssessmentInterface({
   initialTimeRemainingSeconds,
   onAnswerSubmit,
   onComplete,
+  onTerminated,
   onNavigate,
   onSetQuestion,
   onTimeUpdate,
@@ -728,7 +732,12 @@ export function AssessmentInterface({
   ]);
 
   // 🛡️ PROCTORING: Exit Fullscreen on Complete
+  // Set by every app-initiated fullscreen exit / completion so the
+  // termination watcher below never mistakes our own exit for the candidate leaving.
+  const terminationDisarmedRef = useRef(false);
+
   const exitAssessmentFullscreen = async () => {
+    terminationDisarmedRef.current = true;
     try {
       if (getIsFullscreen()) {
         await compatExitFullscreen();
@@ -804,6 +813,105 @@ export function AssessmentInterface({
       document.removeEventListener(eventName, handleFullscreenChange);
     };
   }, [token, isDisqualified, showCompleteConfirm, enforceFullscreen]);
+
+  // ── "Stay on the page" — TERMINATE on leaving (PRODUCTION ONLY) ────────────
+  // Same policy as the AI interview (CandidateAIInterviewPortal.tsx): switching
+  // tabs / minimising, Alt+Tab, Esc or F11 out of fullscreen, the Windows/⌘ key,
+  // or Picture-in-Picture ends the assessment immediately. The rules step tells
+  // the candidate before they start. Staging (NEXT_PUBLIC_ENVIRONMENT !==
+  // 'production') only logs these as violations so testers are not thrown out.
+  // A window blur on its own is NOT a termination (OS notifications and the
+  // share bar steal focus without the candidate leaving) — it just re-checks
+  // the two hard signals: tab hidden or fullscreen dropped.
+  useEffect(() => {
+    if (!IS_PRODUCTION_ENV || !onTerminated) return;
+    if (isDisqualified) return;
+
+    const fsEvent = getFullscreenChangeEvent();
+    let done = false;
+    let armed = false;
+    let sawFullscreen = false;
+
+    const MESSAGES: Record<string, string> = {
+      key_f11: 'Pressed F11 to exit fullscreen',
+      key_escape: 'Pressed the Esc key to exit fullscreen',
+      key_alt_tab: 'Used Alt + Tab to switch away from the assessment',
+      key_meta: 'Pressed the Windows / ⌘ (Meta) key',
+      left_screen_fullscreen_exit: 'Exited fullscreen mode',
+      left_screen_tab_hidden: 'Switched to another tab or minimized the window',
+      picture_in_picture: 'Opened a video in Picture-in-Picture',
+    };
+    const isMetaKey = (e: KeyboardEvent) =>
+      e.key === 'Meta' || e.key === 'OS' || e.code === 'MetaLeft' || e.code === 'MetaRight' || e.code === 'OSLeft' || e.code === 'OSRight';
+
+    const terminateNow = (reason: string) => {
+      if (done || !armed || terminationDisarmedRef.current || showCompleteConfirm) return;
+      done = true;
+      console.error(`[PROCTORING] TERMINATED: ${reason}`);
+      onTerminated(reason, MESSAGES[reason] || 'Left the assessment screen');
+    };
+
+    const fullscreenSignalsActive = () => enforceFullscreen && sawFullscreen;
+
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'F11' && enforceFullscreen) {
+        try { e.preventDefault(); } catch { /* ignore */ }
+        terminateNow('key_f11');
+      } else if (e.key === 'Escape' && enforceFullscreen) {
+        terminateNow('key_escape');
+      } else if (e.key === 'Tab' && e.altKey) {
+        terminateNow('key_alt_tab');
+      } else if (isMetaKey(e)) {
+        terminateNow('key_meta');
+      }
+    };
+    const onKeyUp = (e: KeyboardEvent) => { if (isMetaKey(e)) terminateNow('key_meta'); };
+    const onVisibility = () => { if (document.hidden) terminateNow('left_screen_tab_hidden'); };
+    const onEnterPiP = () => { terminateNow('picture_in_picture'); };
+
+    let blurTimer: ReturnType<typeof setTimeout> | null = null;
+    const clearBlurTimer = () => { if (blurTimer) { clearTimeout(blurTimer); blurTimer = null; } };
+    const onBlur = () => {
+      clearBlurTimer();
+      blurTimer = setTimeout(() => {
+        blurTimer = null;
+        if (document.hidden) terminateNow('left_screen_tab_hidden');
+        else if (fullscreenSignalsActive() && !getIsFullscreen()) terminateNow('left_screen_fullscreen_exit');
+        // still visible & fullscreen → focus-only loss, logged elsewhere as window_blur
+      }, 500);
+    };
+    const onFocus = () => clearBlurTimer();
+    const onFsChange = () => {
+      if (getIsFullscreen()) { sawFullscreen = true; return; }
+      if (fullscreenSignalsActive()) terminateNow('left_screen_fullscreen_exit');
+    };
+
+    document.addEventListener(fsEvent, onFsChange);
+    const armTimer = window.setTimeout(() => {
+      armed = true;
+      if (getIsFullscreen()) sawFullscreen = true;
+      document.addEventListener('visibilitychange', onVisibility);
+      window.addEventListener('blur', onBlur);
+      window.addEventListener('focus', onFocus);
+      window.addEventListener('keydown', onKeyDown, true);
+      window.addEventListener('keyup', onKeyUp, true);
+      document.addEventListener('enterpictureinpicture', onEnterPiP, true);
+      if (document.hidden) terminateNow('left_screen_tab_hidden');
+      if (document.pictureInPictureElement) terminateNow('picture_in_picture');
+    }, 1200);
+
+    return () => {
+      window.clearTimeout(armTimer);
+      clearBlurTimer();
+      document.removeEventListener(fsEvent, onFsChange);
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('blur', onBlur);
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('keydown', onKeyDown, true);
+      window.removeEventListener('keyup', onKeyUp, true);
+      document.removeEventListener('enterpictureinpicture', onEnterPiP, true);
+    };
+  }, [token, onTerminated, isDisqualified, showCompleteConfirm, enforceFullscreen]);
 
   // Exit fullscreen only on unmount (separate effect so it doesn't run on every re-render)
   useEffect(() => {
@@ -1603,23 +1711,23 @@ export function AssessmentInterface({
       {/* DISQUALIFICATION Modal - Shows when fullscreen is exited */}
       {showDisqualificationModal && (
         <div className="fixed inset-0 bg-black/98 backdrop-blur-lg flex items-center justify-center z-[10000]">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full mx-4 p-10 text-center border-8 border-destructive">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full mx-4 p-5 sm:p-8 text-center border-4 sm:border-8 border-destructive max-h-[calc(100dvh-2rem)] overflow-y-auto">
             {/* Disqualification Icon */}
-            <div className="w-32 h-32 bg-destructive rounded-full flex items-center justify-center mx-auto mb-8">
-              <ShieldAlert className="w-20 h-20 text-white" />
+            <div className="w-20 h-20 sm:w-28 sm:h-28 bg-destructive rounded-full flex items-center justify-center mx-auto mb-5 sm:mb-6">
+              <ShieldAlert className="w-10 h-10 sm:w-14 sm:h-14 text-white" />
             </div>
 
             {/* Title */}
-            <h2 className="text-4xl font-bold text-destructive mb-6 uppercase tracking-wider">
+            <h2 className="text-2xl sm:text-4xl font-bold text-destructive mb-4 sm:mb-6 uppercase tracking-wide sm:tracking-wider break-words">
               DISQUALIFIED
             </h2>
 
             {/* Main Message */}
-            <div className="bg-destructive-subtle border-4 border-destructive rounded-xl p-6 mb-6">
-              <p className="text-xl font-bold text-destructive-strong mb-4">
+            <div className="bg-destructive-subtle border-2 sm:border-4 border-destructive rounded-xl p-4 sm:p-6 mb-4 sm:mb-6">
+              <p className="text-base sm:text-xl font-bold text-destructive-strong mb-3 sm:mb-4">
                 Critical Assessment Violation
               </p>
-              <p className="text-base text-destructive-strong font-semibold">
+              <p className="text-sm sm:text-base text-destructive-strong font-semibold">
                 You have been disqualified for violating assessment security rules.
               </p>
               <p className="text-sm text-destructive mt-3">
@@ -1628,8 +1736,8 @@ export function AssessmentInterface({
             </div>
 
             {/* Consequence Notice */}
-            <div className="bg-gray-100 border-2 border-gray-400 rounded-xl p-6 mb-8">
-              <p className="text-lg font-bold text-gray-900 mb-3">
+            <div className="bg-gray-100 border border-gray-400 rounded-xl p-4 sm:p-6 mb-5 sm:mb-6">
+              <p className="text-base sm:text-lg font-bold text-gray-900 mb-2 sm:mb-3">
                 Your assessment has been terminated
               </p>
               <p className="text-sm text-gray-700">
@@ -1641,13 +1749,13 @@ export function AssessmentInterface({
             <Button
               variant="primary"
               onClick={handleDisqualificationAcknowledgment}
-              className="w-full bg-destructive hover:bg-destructive text-white py-5 text-xl font-bold uppercase tracking-wider"
+              className="w-full bg-destructive hover:bg-destructive text-white py-3 sm:py-4 text-base sm:text-lg font-bold uppercase tracking-wide"
             >
               I UNDERSTAND
             </Button>
 
             {/* Footer Notice */}
-            <p className="text-xs text-gray-500 mt-6">
+            <p className="text-xs text-gray-500 mt-4 sm:mt-6">
               Click "I Understand" to submit your assessment and view your completion status.
             </p>
           </div>
@@ -1657,14 +1765,14 @@ export function AssessmentInterface({
       {/* Auto-Submit Modal - Shows on 3rd violation (NO CONTINUE BUTTON) */}
       {showViolationWarning && (
         <div className="fixed inset-0 bg-black/95 backdrop-blur-md flex items-center justify-center z-[9999]">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-md w-full mx-4 p-8 text-center border-4 border-destructive">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-md w-full mx-4 p-5 sm:p-8 text-center border-2 sm:border-4 border-destructive max-h-[calc(100dvh-2rem)] overflow-y-auto">
             {/* Skull/Warning Icon */}
             <div className="w-24 h-24 bg-destructive rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
               <ShieldAlert className="w-16 h-16 text-white" />
             </div>
 
             {/* Title - AUTO-SUBMITTING */}
-            <h2 className="text-3xl font-bold text-destructive mb-4 uppercase">
+            <h2 className="text-xl sm:text-3xl font-bold text-destructive mb-3 sm:mb-4 uppercase break-words">
               💀 3 VIOLATIONS - AUTO-SUBMITTING 💀
             </h2>
 
@@ -1679,7 +1787,7 @@ export function AssessmentInterface({
               <p className="text-xl font-bold text-destructive-strong mb-3">
                 Maximum Violations Reached
               </p>
-              <p className="text-base text-destructive-strong font-semibold">
+              <p className="text-sm sm:text-base text-destructive-strong font-semibold">
                 You have violated assessment security rules 3 times.
               </p>
             </div>
@@ -1698,11 +1806,11 @@ export function AssessmentInterface({
             </div>
 
             {/* Countdown Timer - NO CONTINUE BUTTON */}
-            <div className="bg-destructive text-white rounded-xl p-8 mb-6">
-              <p className="text-5xl font-bold mb-4 tabular-nums">
+            <div className="bg-destructive text-white rounded-xl p-5 sm:p-8 mb-5 sm:mb-6">
+              <p className="text-3xl sm:text-5xl font-bold mb-3 sm:mb-4 tabular-nums">
                 {autoSubmitCountdown}
               </p>
-              <p className="text-xl font-bold uppercase tracking-wider">
+              <p className="text-sm sm:text-xl font-bold uppercase tracking-wide break-words">
                 AUTO-SUBMITTING IN {autoSubmitCountdown} SECOND{autoSubmitCountdown !== 1 ? 'S' : ''}...
               </p>
             </div>
@@ -1734,7 +1842,7 @@ export function AssessmentInterface({
             wrong, in the middle of a timed assessment. `offlineReason` is
             'browser' only when the device itself reports being offline. */}
         {!isOnline && (
-          <div className="bg-warning text-white px-4 py-2 flex items-center justify-between">
+          <div className="bg-warning text-white px-4 py-2 flex flex-wrap items-center justify-between gap-2">
             <div className="flex items-center gap-2">
               <WifiOff className="w-4 h-4" />
               <span className="text-sm font-medium">
@@ -1763,7 +1871,7 @@ export function AssessmentInterface({
 
         {/* Main Header */}
         <header className="bg-white border-b border-gray-200 px-4 py-3">
-          <div className="w-full px-2 sm:px-4 lg:px-6 flex items-center justify-between">
+          <div className="w-full px-2 sm:px-4 lg:px-6 flex items-center justify-between gap-2">
             {/* Logo & Title */}
             <div className="flex items-center gap-3">
               {/* TalentFlow Logo - Always Visible */}
@@ -1948,7 +2056,7 @@ export function AssessmentInterface({
           <div className="bg-white rounded-lg border border-gray-200 shadow-sm overflow-hidden">
             {/* Question Header */}
             <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-gray-50/50">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-3">
                   <div className={`w-10 h-10 rounded-lg ${getRoundColor(currentQuestion.round_type)} flex items-center justify-center`}>
                     {(() => {
@@ -2075,12 +2183,12 @@ export function AssessmentInterface({
               <p className="text-sm font-medium text-gray-700">Progress</p>
               <div className="flex items-center gap-3 text-xs flex-wrap">
                 <span className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded bg-warning-subtle border border-warning-line"></div>
-                  Unanswered
+                  <div className="w-3 h-3 rounded bg-purple-100 border border-purple-300"></div>
+                  Not answered
                 </span>
                 <span className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded bg-warning-subtle border border-warning-line" />
-                  Draft
+                  <div className="w-3 h-3 rounded bg-orange-100 border border-orange-300" />
+                  Answered
                 </span>
                 <span className="flex items-center gap-1">
                   <div className="w-3 h-3 rounded bg-success-subtle border border-success-line"></div>
@@ -2096,9 +2204,9 @@ export function AssessmentInterface({
                 const questionStatus = answerStatuses.get(`question_${num}`);
                 const isLocked = questionStatus?.isLocked || false;
                 const hasDraft = questionStatus?.hasDraft || false;
-                let colorClass = 'bg-warning-subtle text-warning'; // Unanswered
+                let colorClass = 'bg-purple-100 text-purple-700'; // Not answered (violet)
                 let icon = null;
-                let titleText = `Question ${num} - Unanswered`;
+                let titleText = `Question ${num} - Not answered`;
 
                 if (isCurrent) {
                   colorClass = 'bg-gray-800 text-white ring-2 ring-gray-800 ring-offset-2';
@@ -2108,9 +2216,9 @@ export function AssessmentInterface({
                   icon = <Lock className="w-4 h-4" />;
                   titleText = `Question ${num} - Submitted`;
                 } else if (hasDraft) {
-                  colorClass = 'bg-warning-subtle text-warning-strong';
+                  colorClass = 'bg-orange-100 text-orange-700'; // Answered, not yet submitted (orange)
                   icon = <Save className="w-4 h-4" />;
-                  titleText = `Question ${num} - Draft saved`;
+                  titleText = `Question ${num} - Answered (not submitted)`;
                 }
 
                 return (
