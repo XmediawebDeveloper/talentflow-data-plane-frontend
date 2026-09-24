@@ -313,8 +313,10 @@ export default function CandidateResultDetails({
 
   // One tab row now owns both summary panels and detailed question panels.
   // The visible panel — and the lazy fetches for Recording and Violations —
-  // are driven by this top-level selection.
-  const [overviewTab, setOverviewTab] = useState<string>('jd-summary');
+  // are driven by this top-level selection. The page opens on AI-Generated
+  // Candidate Insights, the first menu item; the Insights tab is always in the
+  // menu, so this holds on first paint, direct load and refresh alike.
+  const [overviewTab, setOverviewTab] = useState<string>('candidate-insights');
   /* The pair of views under the View JD menu item. Same two the
      assessment's own page offers, so a recruiter reading a result sees the job
      and the assessment exactly as they would there. */
