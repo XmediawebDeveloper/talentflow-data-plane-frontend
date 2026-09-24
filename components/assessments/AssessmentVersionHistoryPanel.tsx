@@ -176,6 +176,11 @@ interface AssessmentVersionHistoryPanelProps {
    */
   renderAction?: (assessment: AssessmentVersionRow) => ReactNode;
   /**
+   * `renderAction` renders a single control (a lone ⋮ menu), so the Actions
+   * column is sized for one 28px button instead of a row of quick actions.
+   */
+  singleActionControl?: boolean;
+  /**
    * The picked ASSESSMENT version, and the way to change it.
    *
    * Selection lives here and nowhere else in this panel. There is no radio on
@@ -749,6 +754,7 @@ export default function AssessmentVersionHistoryPanel({
   onViewJobVersion,
   headerAction,
   renderAction,
+  singleActionControl = false,
   selectedAssessmentId,
   onSelectAssessment,
   activeSelection,
@@ -810,10 +816,10 @@ export default function AssessmentVersionHistoryPanel({
      controls this host does not render:
        eye + quick actions + menu   215
        quick actions + menu          180
-       eye alone                      90  (the 28px button plus the header word)
+       eye alone, or a lone menu      90  (the 28px button plus the header word)
      Literal class strings, not built from a number, so Tailwind's scanner
      can see all three. */
-  const assessmentActionsMinW = renderAction
+  const assessmentActionsMinW = renderAction && !singleActionControl
     ? onViewAssessment
       ? 'min-w-[215px]'
       : 'min-w-[180px]'
@@ -828,7 +834,7 @@ export default function AssessmentVersionHistoryPanel({
     800 +
     (vocabulary.extraDetailColumn ? 170 : 0) +
     (showsAssessmentSelect ? 70 : 0) +
-    (showsAssessmentActions ? (renderAction ? (onViewAssessment ? 215 : 180) : 90) : 0);
+    (showsAssessmentActions ? (renderAction && !singleActionControl ? (onViewAssessment ? 215 : 180) : 90) : 0);
 
 
 

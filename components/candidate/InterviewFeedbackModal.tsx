@@ -19,18 +19,39 @@
  */
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Star, X, CheckCircle, Loader2, AlertCircle } from "lucide-react";
+import {
+  Star,
+  X,
+  CheckCircle,
+  Loader2,
+  AlertCircle,
+  ArrowRight,
+  MessageCircleMore,
+  FileText,
+  Laptop,
+  MessageSquareText,
+  type LucideIcon,
+} from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { candidateAIInterviewService } from "@/lib/services/candidateAIInterviewService";
 
 const COMMENT_MAX = 500;
 
-/** The three rated dimensions, in the order the story lists them. */
-const RATING_ROWS = [
-  { key: "overall", label: "How was your interview experience?" },
-  { key: "question_quality", label: "How would you rate the interview questions?" },
-  { key: "ai_experience", label: "How was your experience interacting with the AI interviewer?" },
-] as const;
+/** The three rated dimensions, in the order the story lists them. Each row has
+ *  its own icon and tone (global status tokens) so the three read as distinct
+ *  questions at a glance. */
+const RATING_ROWS: readonly {
+  key: "overall" | "question_quality" | "ai_experience";
+  label: string;
+  hint: string;
+  Icon: LucideIcon;
+  iconClass: string;
+}[] = [
+  { key: "overall", label: "How was your interview experience?", hint: "Rate your overall experience.", Icon: Star, iconClass: "text-warning fill-warning" },
+  { key: "question_quality", label: "How would you rate the interview questions?", hint: "Were the questions relevant and well-structured?", Icon: FileText, iconClass: "text-info" },
+  { key: "ai_experience", label: "How was your experience interacting with the AI interviewer?", hint: "Tell us how the conversation with the AI interviewer felt.", Icon: Laptop, iconClass: "text-success" },
+];
 
 type RatingKey = (typeof RATING_ROWS)[number]["key"];
 
@@ -43,10 +64,20 @@ export const ASSESSMENT_RATING_PROMPTS: Record<RatingKey, string> = {
   ai_experience: "How was your experience using the assessment platform?",
 };
 
+/** The AI Assessment helper line under each prompt. */
+export const ASSESSMENT_RATING_HINTS: Record<RatingKey, string> = {
+  overall: "Rate your overall experience.",
+  question_quality: "Were the questions relevant and well-structured?",
+  ai_experience: "Tell us about the platform performance and usability.",
+};
+
 export type FeedbackRatings = Record<RatingKey, number>;
 
 interface StarRatingProps {
   label: string;
+  hint: string;
+  Icon: LucideIcon;
+  iconClass: string;
   value: number;
   onChange: (value: number) => void;
   disabled?: boolean;
@@ -61,17 +92,20 @@ interface StarRatingProps {
  *  clickable divs would be neither.
  *
  *  Hover preview is visual only — the committed value is what `value` says. */
-function StarRating({ label, value, onChange, disabled }: StarRatingProps) {
+function StarRating({ label, hint, Icon, iconClass, value, onChange, disabled }: StarRatingProps) {
   const [hovered, setHovered] = useState(0);
   const shown = hovered || value;
 
   return (
-    <div>
-      <p className="text-sm font-medium text-gray-800 mb-2">{label}</p>
+    <div className="flex items-start gap-3 sm:gap-4 py-4 first:pt-0">
+      <Icon className={`w-5 h-5 sm:w-6 sm:h-6 shrink-0 mt-0.5 ${iconClass}`} aria-hidden />
+      <div className="min-w-0 flex-1">
+      <p className="text-sm sm:text-base font-semibold text-gray-900">{label}</p>
+      <p className="text-xs sm:text-sm text-gray-500 mt-0.5 mb-2.5">{hint}</p>
       <div
         role="radiogroup"
         aria-label={label}
-        className="flex items-center gap-1"
+        className="flex items-center gap-1 sm:gap-1.5"
         onMouseLeave={() => setHovered(0)}
       >
         {[1, 2, 3, 4, 5].map((star) => {
@@ -90,7 +124,7 @@ function StarRating({ label, value, onChange, disabled }: StarRatingProps) {
                   style={{ width: full ? "100%" : "50%" }}
                   aria-hidden="true"
                 >
-                  <Star className="w-7 h-7 fill-amber-400 text-amber-400 transition-colors" />
+                  <Star className="w-7 h-7 fill-warning text-warning transition-colors" />
                 </span>
               )}
               {/* Two invisible hit areas stacked over the glyph. */}
@@ -106,7 +140,7 @@ function StarRating({ label, value, onChange, disabled }: StarRatingProps) {
                   onFocus={() => setHovered(v)}
                   onBlur={() => setHovered(0)}
                   onClick={() => onChange(v)}
-                  className={`absolute inset-y-0 w-1/2 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 disabled:cursor-not-allowed ${
+                  className={`absolute inset-y-0 w-1/2 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue disabled:cursor-not-allowed ${
                     idx === 0 ? "left-0" : "left-1/2"
                   }`}
                 />
@@ -115,10 +149,11 @@ function StarRating({ label, value, onChange, disabled }: StarRatingProps) {
           );
         })}
         {value > 0 && (
-          <span className="ml-2 text-xs font-medium text-gray-500 tabular-nums">
-            {value.toFixed(1)}/5
+          <span className="ml-2 sm:ml-3 text-sm font-semibold text-gray-900 tabular-nums">
+            {value.toFixed(1)} / 5
           </span>
         )}
+      </div>
       </div>
     </div>
   );
@@ -133,6 +168,9 @@ interface InterviewFeedbackModalProps {
    *  pass ASSESSMENT_RATING_PROMPTS for the assessment flow. Only the wording
    *  changes — the submitted field names stay identical across both modules. */
   prompts?: Record<RatingKey, string>;
+  /** Override the helper line under each prompt; pass ASSESSMENT_RATING_HINTS
+   *  alongside ASSESSMENT_RATING_PROMPTS. */
+  hints?: Record<RatingKey, string>;
   /** Override the submit call. Defaults to the AI Interview endpoint. */
   onSubmit?: (payload: {
     overall: number | null;
@@ -146,6 +184,7 @@ export default function InterviewFeedbackModal({
   token,
   onClose,
   prompts,
+  hints,
   onSubmit,
 }: InterviewFeedbackModalProps) {
   const [ratings, setRatings] = useState<Record<RatingKey, number>>({
@@ -226,7 +265,7 @@ export default function InterviewFeedbackModal({
         role="dialog"
         aria-modal="true"
         aria-labelledby="feedback-title"
-        className="bg-white rounded-2xl shadow-xl w-full max-w-md max-h-[90dvh] overflow-y-auto"
+        className="bg-white rounded-2xl shadow-xl w-full max-w-[95vw] sm:max-w-lg md:max-w-xl max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden"
         onClick={(e) => e.stopPropagation()}
       >
         {submitted ? (
@@ -240,9 +279,11 @@ export default function InterviewFeedbackModal({
           </div>
         ) : (
           <>
-            <div className="flex items-start justify-between px-6 pt-6 pb-2">
-              <div>
-                <h2 id="feedback-title" className="text-lg font-bold text-gray-900">
+            {/* Header — stays put while the body scrolls on short screens. */}
+            <div className="shrink-0 flex items-start gap-3 sm:gap-4 px-5 sm:px-6 pt-5 sm:pt-6 pb-4">
+              <MessageCircleMore className="w-7 h-7 sm:w-8 sm:h-8 text-brand-blue shrink-0" aria-hidden />
+              <div className="min-w-0 flex-1">
+                <h2 id="feedback-title" className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">
                   Quick feedback
                 </h2>
                 <p className="text-sm text-gray-500 mt-0.5">
@@ -260,42 +301,51 @@ export default function InterviewFeedbackModal({
               </button>
             </div>
 
-            <div className="px-6 py-4 space-y-5">
-              {RATING_ROWS.map((row) => (
-                <StarRating
-                  key={row.key}
-                  label={prompts?.[row.key] ?? row.label}
-                  value={ratings[row.key]}
-                  disabled={submitting}
-                  onChange={(value) => setRatings((prev) => ({ ...prev, [row.key]: value }))}
-                />
-              ))}
+            {/* Body — the three ratings and the comment, one divided list. */}
+            <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-6 pb-4">
+              <div className="divide-y divide-border">
+                {RATING_ROWS.map((row) => (
+                  <StarRating
+                    key={row.key}
+                    label={prompts?.[row.key] ?? row.label}
+                    hint={hints?.[row.key] ?? row.hint}
+                    Icon={row.Icon}
+                    iconClass={row.iconClass}
+                    value={ratings[row.key]}
+                    disabled={submitting}
+                    onChange={(value) => setRatings((prev) => ({ ...prev, [row.key]: value }))}
+                  />
+                ))}
 
-              <div>
-                <label htmlFor="feedback-comment" className="block text-sm font-medium text-gray-800 mb-2">
-                  Any quick feedback? <span className="font-normal text-gray-400">(optional)</span>
-                </label>
-                <textarea
-                  id="feedback-comment"
-                  value={comment}
-                  // Hard-capped here as well as by maxLength so a paste can't
-                  // exceed the limit the backend also enforces.
-                  onChange={(e) => setComment(e.target.value.slice(0, COMMENT_MAX))}
-                  maxLength={COMMENT_MAX}
-                  disabled={submitting}
-                  rows={3}
-                  placeholder="Tell us anything that would make this better…"
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent disabled:bg-gray-50"
-                />
-                <p className="text-2xs text-gray-400 mt-1 text-right tabular-nums">
-                  {comment.length}/{COMMENT_MAX}
-                </p>
+                <div className="flex items-start gap-3 sm:gap-4 pt-4">
+                  <MessageSquareText className="w-5 h-5 sm:w-6 sm:h-6 shrink-0 mt-0.5 text-brand-blue" aria-hidden />
+                  <div className="min-w-0 flex-1">
+                    <label htmlFor="feedback-comment" className="block text-sm sm:text-base font-semibold text-gray-900 mb-2">
+                      Any quick feedback? <span className="font-normal text-sm text-gray-500">(optional)</span>
+                    </label>
+                    <Textarea
+                      id="feedback-comment"
+                      value={comment}
+                      // Hard-capped here as well as by maxLength so a paste can't
+                      // exceed the limit the backend also enforces.
+                      onChange={(e) => setComment(e.target.value.slice(0, COMMENT_MAX))}
+                      maxLength={COMMENT_MAX}
+                      disabled={submitting}
+                      rows={3}
+                      placeholder="Tell us anything that would make this better…"
+                      className="min-h-[84px] max-h-40"
+                    />
+                    <p className="text-xs text-gray-400 mt-1 text-right tabular-nums">
+                      {comment.length}/{COMMENT_MAX}
+                    </p>
+                  </div>
+                </div>
               </div>
 
               {error && (
                 <div
                   role="alert"
-                  className="flex items-start gap-2 px-3 py-2.5 rounded-lg bg-destructive-subtle border border-destructive-line"
+                  className="mt-3 flex items-start gap-2 px-3 py-2.5 rounded-lg bg-destructive-subtle border border-destructive-line"
                 >
                   <AlertCircle className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
                   <p className="text-sm text-destructive leading-snug">{error}</p>
@@ -303,24 +353,27 @@ export default function InterviewFeedbackModal({
               )}
             </div>
 
-            <div className="px-6 pb-6 pt-1 flex items-center gap-3">
-              <Button
-                type="button"
-                variant="primary"
-                onClick={handleSubmit}
-                disabled={!canSubmit}
-                className="flex-1"
-              >
-                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
-                {submitting ? "Submitting…" : "Submit Feedback"}
-              </Button>
+            {/* Footer — actions on the right, always in reach. */}
+            <div className="shrink-0 flex items-center justify-end gap-2 sm:gap-3 px-5 sm:px-6 py-4 border-t border-border">
               <Button
                 type="button"
                 variant="secondary"
                 onClick={handleClose}
                 disabled={submitting}
+                className="border-transparent bg-transparent text-gray-600 hover:text-gray-900"
               >
                 Skip
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                onClick={handleSubmit}
+                disabled={!canSubmit}
+                className="flex-1 sm:flex-none sm:px-6"
+              >
+                {submitting && <Loader2 className="w-4 h-4 animate-spin" />}
+                {submitting ? "Submitting…" : "Submit Feedback"}
+                {!submitting && <ArrowRight className="w-4 h-4" />}
               </Button>
             </div>
           </>

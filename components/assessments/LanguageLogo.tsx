@@ -7,6 +7,8 @@
  * carry one mark in the dialog and another on the card behind it.
  */
 
+import { resolveLanguageAlias } from '@/lib/constants/languageTemplates';
+
 /** Logo file per language, named after the FILE and not the label, as
  *  `public/logos/languages/README.md` requires (`cplusplus.svg` for C++,
  *  `csharp.svg` for C#). A language with no file falls back to a lettered
@@ -26,6 +28,15 @@ export const LANGUAGE_LOGOS: Record<string, string> = {
   PHP: 'php',
   Kotlin: 'kotlin',
   Swift: 'swift',
+};
+
+/** The LANGUAGE_LOGOS label for a language id or alias ("cpp", "python3", "C++").
+ *  The code editor and candidate picker hold ids while this map is keyed by the
+ *  labels Configure Assessment shows, so resolve the id back to its label.
+ *  A language with no logo falls back to `fallback`, which renders the tile. */
+export const logoLabelForId = (id: string, fallback: string = id): string => {
+  const resolved = resolveLanguageAlias(id);
+  return Object.keys(LANGUAGE_LOGOS).find((label) => resolveLanguageAlias(label) === resolved) ?? fallback;
 };
 
 /** `md` is the picker's card and chip size; `sm` is the size that sits inside
