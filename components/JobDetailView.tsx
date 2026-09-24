@@ -1655,7 +1655,9 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 ? formatISTDate(result.started_at)
                 : 'N/A',
               invitedBy: result.invite_source || 'System',
-              inviteSource: result.invite_source || 'Manual',
+              // How the candidate was actually invited — resume_id is stored
+              // only for invites sent from a resume. See assessmentInviteSource.
+              inviteSource: result.resume_id ? 'resume' : 'email',
               status: result.status || (result.completed_at ? 'completed' : 'in_progress'),
               // Without scoring_status the JD-side getResultStatus() falls
               // through to the started_at branch and shows In Progress

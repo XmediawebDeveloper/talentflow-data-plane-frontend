@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
+import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
 
 // AS-24: localStorage key for column preferences (v2 with new columns)
 const COLUMN_PREFERENCES_KEY = 'assessment_results_jd_column_preferences_v2';
@@ -118,9 +119,9 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
     { id: 'email', label: 'Email', enabled: true },
     { id: 'assessmentName', label: 'Assessment', enabled: true },
     { id: 'phone', label: 'Phone', enabled: true },
-    { id: 'inviteSource', label: 'Invite Source', enabled: true },
     ...(hasTechnicalRound ? [{ id: 'techScore', label: 'Tech Score', enabled: true }] : []),
     ...(hasCodingRound ? [{ id: 'codingScore', label: 'Coding Score', enabled: true }] : []),
+    { id: 'inviteSource', label: 'Invite Source', enabled: true },
     { id: 'status', label: 'Result Status', enabled: true },
     { id: 'timeline', label: 'Timeline', enabled: true },
     { id: 'completed', label: 'Completed', enabled: true },
@@ -905,10 +906,8 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         }
                         if (col.id === 'inviteSource') {
                           return (
-                            <td key={col.id} className="py-3 px-4">
-                              <span className="inline-flex items-center px-2 py-1 rounded text-xs bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20">
-                                {result.inviteSource || 'Manual'}
-                              </span>
+                            <td key={col.id} className="py-3 px-4 text-sm text-gray-700 whitespace-nowrap">
+                              <InviteSourceValue inv={{ invite_source: result.inviteSource }} iconClassName="w-3.5 h-3.5" />
                             </td>
                           );
                         }
