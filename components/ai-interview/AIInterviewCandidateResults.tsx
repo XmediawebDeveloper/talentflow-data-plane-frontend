@@ -28,6 +28,7 @@ import {
   getProctoringRisk,
   formatDuration,
 } from './AIInterviewResults';
+import { InviteSourceValue, inviteSourceLabel } from '@/components/AIInterviewInviteTable';
 
 /**
  * Candidate Results — every candidate session across every AI interview, in one
@@ -415,6 +416,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                   <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
                   <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
                   <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
+                  <th className="text-left px-4 py-3 whitespace-nowrap"><Skeleton className="h-3 w-20" /></th>
                   <th className="text-right px-4 py-3 tf-sticky-col"><Skeleton className="h-3 w-20 ml-auto" /></th>
                 </tr>
               </thead>
@@ -433,6 +435,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                     <td className="px-4 py-3"><Skeleton className="h-4 w-28" /></td>
                     <td className="px-4 py-3"><Skeleton className="h-5 w-9 rounded-md" /></td>
                     <td className="px-4 py-3"><Skeleton className="h-5 w-9 rounded-md" /></td>
+                    <td className="px-4 py-3"><Skeleton className="h-4 w-24" /></td>
                     <td className="px-4 py-3"><Skeleton className="h-5 w-20 rounded-full" /></td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
@@ -582,6 +585,12 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                       {row._config_title}
                     </p>
 
+                    {inviteSourceLabel(row) && (
+                      <p className="text-xs text-gray-600 dark:text-slate-400">
+                        <InviteSourceValue inv={row} iconClassName="w-3 h-3" />
+                      </p>
+                    )}
+
                     <div className="flex items-center gap-1.5 flex-wrap">
                       <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
                       {row.status === 'in_progress' && (
@@ -700,6 +709,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                     {col('jobTitle') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Job Title</th>}
                     {col('jobVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>}
                     {col('interviewVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>}
+                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>
                     {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Status</th>}
                     {col('score') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>}
                     {col('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
@@ -787,7 +797,12 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                           </td>
                         )}
                         {col('status') && (
-                          <td className="px-4 py-3 whitespace-nowrap">
+                          <td className="px-4 py-3 whitespace-nowrap text-gray-700 dark:text-slate-300">
+                          {inviteSourceLabel(row)
+                            ? <InviteSourceValue inv={row} iconClassName="w-3.5 h-3.5" />
+                            : <span className="text-gray-400">—</span>}
+                        </td>
+                        <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <Badge variant={getStatusVariant(row.status)}>{getStatusLabel(row.status)}</Badge>
                               {row.status === 'in_progress' && (

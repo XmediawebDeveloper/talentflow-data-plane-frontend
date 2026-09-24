@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   X, Mail, Play, CheckCircle, Clock, Ban, Copy, Loader2, Users, Eye, Pencil,
-  MoreVertical, Check, Monitor, History, XCircle,
+  MoreVertical, Check, Monitor, History, XCircle, FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -454,6 +454,29 @@ export const AIInviteStatusBadge = ({ inv }: { inv: any }) => {
   }
 };
 
+/** "Invite Source" wording and icon for the backend's invite_source. Anonymous
+ *  share-link sessions ("link") came from neither flow, so they read as a dash.
+ *  Mail is the same glyph the "Invited" stat card and timeline entry use;
+ *  FileText is the resume document. Both share one tone so neither source
+ *  reads as more important than the other. */
+const INVITE_SOURCES: Record<string, { label: string; Icon: LucideIcon }> = {
+  resume: { label: 'From Resume', Icon: FileText },
+  email: { label: 'From Email', Icon: Mail },
+};
+export const inviteSourceLabel = (inv: any): string | null => INVITE_SOURCES[inv.invite_source]?.label ?? null;
+
+export const InviteSourceValue =({ inv, iconClassName }: { inv: any; iconClassName: string }) => {
+  const source = INVITE_SOURCES[inv.invite_source];
+  if (!source) return null;
+  const { label, Icon } = source;
+  return (
+    <span className="inline-flex items-center gap-1.5 whitespace-nowrap">
+      <Icon className={`${iconClassName} flex-shrink-0 text-brand-blue`} aria-hidden="true" />
+      {label}
+    </span>
+  );
+};
+
 /** Percentage cell for the Score column. null renders an
  *  em dash — the round wasn't run, isn't scored yet, or the evaluation carries no
  *  per-round breakdown. 60 is the same pass mark the overall Score column uses. */
@@ -777,6 +800,14 @@ export default function AIInterviewInviteTable({
                       )}
                     </span>
                   ))}
+                  {inviteSourceLabel(inv) && (
+                    <span className="inline-flex items-center gap-1 text-2xs text-gray-600 dark:text-slate-400 whitespace-nowrap">
+                      Invite Source:{' '}
+                      <span className="font-medium">
+                        <InviteSourceValue inv={inv} iconClassName="w-2.5 h-2.5" />
+                      </span>
+                    </span>
+                  )}
                   {isInviteExpired(inv) && (
                     <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-2xs font-medium ring-1 bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20 whitespace-nowrap flex-shrink-0">
                       <Clock className="w-2.5 h-2.5" /> Expired
@@ -831,6 +862,7 @@ export default function AIInterviewInviteTable({
               {showJobColumn && (
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Job / Interview</th>
               )}
+              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Invite Source</th>
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Status</th>
               <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Score</th>
               {/* hidden md:table-cell mirrors this column's <td> — without it the
@@ -905,6 +937,12 @@ export default function AIInterviewInviteTable({
                       )}
                     </td>
                   )}
+
+                  <td className="py-3 px-4 align-middle whitespace-nowrap text-xs font-medium text-gray-600 dark:text-slate-400">
+                    {inviteSourceLabel(inv)
+                      ? <InviteSourceValue inv={inv} iconClassName="w-3.5 h-3.5" />
+                      : <span className="text-gray-400 dark:text-slate-500">—</span>}
+                  </td>
 
                   <td className="py-3 px-4 align-middle whitespace-nowrap">
                     <div className="flex items-center gap-1.5 flex-nowrap">
