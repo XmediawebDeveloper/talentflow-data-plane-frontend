@@ -225,6 +225,10 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   const cameraRecorderRef = useRef<SegmentedRecorder | null>(null);
   const cameraRelayStopRef = useRef<(() => void) | null>(null);
   const cameraRelayVideoRef = useRef<HTMLVideoElement | null>(null);
+  // One processed microphone track shared by BOTH recorders (gain + limiter),
+  // built from the camera stream's mic. Lives in its own AudioContext.
+  const recordingAudioCtxRef = useRef<AudioContext | null>(null);
+  const recordingMicTrackRef = useRef<MediaStreamTrack | null>(null);
   const pendingResumeAfterShareRef = useRef(false);
   const shareBarPageRef = useRef<HTMLDivElement | null>(null);
   const shareBarCardRef = useRef<HTMLDivElement | null>(null);
@@ -448,11 +452,26 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   }, [token]);
 
   const recordingSettings = (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings) ?? null;
-  // Screen recording is a HARD gate (product decision 2026-09-23) unless the
-  // tenant switched it off in proctoring settings. Webcam recording follows
-  // webcam_monitoring. Adaptive mode (browsers without fullscreen/share) skips both.
-  const screenRecordingRequired = !useAdaptiveAssessmentMode && recordingSettings?.screen_recording !== false;
-  const cameraRecordingEnabled = !useAdaptiveAssessmentMode && recordingSettings?.webcam_monitoring !== false;
+  // Screen + webcam recording are a HARD gate, exactly like the AI interview
+  // (product decision 2026-09-23). 2026-09-24: a tester's tenant had the
+  // recruiter-side "Screen Recording" toggle OFF, which made this code skip the
+  // share picker and the hide-share-bar gate entirely (only a Candidate View
+  // was stored). The tenant toggle no longer weakens the gate; only adaptive
+  // mode (browsers without fullscreen / screen share) skips it.
+  const screenRecordingRequired = !useAdaptiveAssessmentMode;
+  const cameraRecordingEnabled = !useAdaptiveAssessmentMode;
+  useEffect(() => {
+    if (step === 'fullscreen_prompt') {
+      console.log('[AS-Recording] gate config', {
+        adaptiveMode: useAdaptiveAssessmentMode,
+        screenRecordingRequired,
+        cameraRecordingEnabled,
+        tenant_screen_recording_setting: recordingSettings?.screen_recording,
+        tenant_webcam_monitoring_setting: recordingSettings?.webcam_monitoring,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   useRefreshPrevention({
     enabled: isAssessmentActive,
@@ -580,18 +599,25 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     }
   }, [step, token]);
 
-  // Setup proctoring when assessment starts, stop when completed
+  // Setup proctoring when assessment starts; release media only at the end of
+  // the recording window. 2026-09-24: recordings now run past Submit until the
+  // feedback popup appears, so 'completing' / 'completed' must NOT stop the
+  // camera stream or the screen share (the recorders own them until then —
+  // see the recorder stop effect). Terminal states release everything.
   useEffect(() => {
     if (step === 'assessment') {
       startProctoring();
-    } else if (step === 'completing' || step === 'completed' || step === 'results' || step === 'terminated') {
-      // Explicitly stop proctoring when assessment ends
+      return;
+    }
+    if (step === 'completing' || step === 'completed') {
+      stopHeartbeatWorker();
+      return;
+    }
+    if (step === 'results' || step === 'terminated' || step === 'error') {
       stopProctoring();
       console.log('[PROCTORING] Stopped - assessment ended');
     }
-    return () => {
-      stopProctoring();
-    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step]);
 
 
@@ -759,6 +785,21 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       if (_expiredByStatus || _expiredByClock) {
         setIsExpiredLink(true);
         setError('This assessment link has expired. Please contact your recruiter for a new link.');
+        setStepSafe('error');
+        return;
+      }
+
+      // ── Gate 2: REVOKED ─────────────────────────────────────────────────────
+      // Must run before pending_lang_choice/completed/can_resume/consent below,
+      // otherwise a revoked-but-never-opened link (consent_accepted still
+      // false) falls into the consent branch and the assessment landing page
+      // loads instead of the revoked error. Safe to check unconditionally here:
+      // revoke is only ever allowed on an invitation that hasn't been started
+      // or completed (see isRevocableInvitation), so it can't preempt a
+      // legitimate resume/completed state.
+      if (info.is_revoked) {
+        setIsRevokedLink(true);
+        setError(info.message || 'This invitation has been revoked by the recruiter. Please contact them for details.');
         setStepSafe('error');
         return;
       }
@@ -1199,17 +1240,67 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     screenStreamRef.current = null;
   }, []);
 
+  /**
+   * Recording microphone: the raw getUserMedia track (browser auto-gain on)
+   * came out very loud / clipped in the Candidate View. Route it once through
+   * a gain + limiter and hand the SAME processed track to both recorders so
+   * the two views sound identical. Falls back to the raw track if Web Audio
+   * is unavailable. The track identity never changes after creation.
+   */
+  const RECORDING_MIC_GAIN = 0.7;
+  const getRecordingMicTracks = useCallback((source: MediaStream | null): MediaStreamTrack[] => {
+    if (recordingMicTrackRef.current && recordingMicTrackRef.current.readyState === 'live') {
+      return [recordingMicTrackRef.current];
+    }
+    const raw = (source?.getAudioTracks() ?? []).filter((t) => t.readyState === 'live');
+    if (raw.length === 0) return [];
+    try {
+      const ctx = recordingAudioCtxRef.current && recordingAudioCtxRef.current.state !== 'closed'
+        ? recordingAudioCtxRef.current
+        : new AudioContext({ sampleRate: 48000 });
+      recordingAudioCtxRef.current = ctx;
+      void ctx.resume?.().catch(() => {});
+      const src = ctx.createMediaStreamSource(new MediaStream([raw[0]]));
+      const gain = ctx.createGain();
+      gain.gain.value = RECORDING_MIC_GAIN;
+      const limiter = ctx.createDynamicsCompressor();
+      limiter.threshold.value = -12;
+      limiter.knee.value = 6;
+      limiter.ratio.value = 8;
+      limiter.attack.value = 0.003;
+      limiter.release.value = 0.2;
+      const dest = ctx.createMediaStreamDestination();
+      src.connect(gain).connect(limiter).connect(dest);
+      const track = dest.stream.getAudioTracks()[0] ?? null;
+      if (!track) return raw;
+      recordingMicTrackRef.current = track;
+      return [track];
+    } catch (e) {
+      console.warn('[AS-Recording] mic processing unavailable, using raw track:', e);
+      return raw;
+    }
+  }, []);
+
   const startScreenRecorder = useCallback(() => {
     const stream = screenStreamRef.current;
     if (!stream || screenRecorderRef.current) return;
     const track = stream.getVideoTracks()[0];
     if (!track || track.readyState !== 'live') return;
+    // Mix the candidate microphone into the screen recording too (the AI
+    // interview does the same), so the Screen View is not silent. Also keeps
+    // both recordings symmetric: with audio on only one of them, Chrome's
+    // muxer starts that file at its first audio sample and the durations
+    // drift apart by ~1 s. A track may feed two recorders; the stream's track
+    // set is fixed at creation and never mutated afterwards.
+    const micTracks = getRecordingMicTracks(streamRef.current);
     const recorder = new SegmentedRecorder({
-      stream: new MediaStream([track]),
+      stream: new MediaStream([track, ...micTracks]),
       upload: (blob, idx, isFinal) => candidateService.uploadScreenRecording(token, blob, idx, isFinal),
       storageKey: `tf_as_rec_seg_screen_${token}`,
       label: 'AS-ScreenRecording',
       videoBitsPerSecond: 300_000,
+      audioBitsPerSecond: 64_000,
+      minSegmentBytes: 0, // backend stages small segments - flush every 30 s
       onError: (name) => {
         void candidateService.reportProctorEvent(token, {
           event_type: 'screen_recording_failed', timestamp: new Date().toISOString(),
@@ -1219,7 +1310,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     });
     screenRecorderRef.current = recorder;
     recorder.start();
-  }, [token]);
+  }, [token, getRecordingMicTracks]);
 
   const requestEntireScreenShare = useCallback(async (): Promise<MediaStream> => {
     const displayMediaOptions: any = {
@@ -1437,6 +1528,10 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     const scr = screenRecorderRef.current; screenRecorderRef.current = null;
     await Promise.all([cam?.stop(), scr?.stop()]);
     cameraRelayStopRef.current?.(); cameraRelayStopRef.current = null;
+    try { recordingMicTrackRef.current?.stop(); } catch { /* ignore */ }
+    recordingMicTrackRef.current = null;
+    try { await recordingAudioCtxRef.current?.close(); } catch { /* ignore */ }
+    recordingAudioCtxRef.current = null;
     if (cameraRelayVideoRef.current) { cameraRelayVideoRef.current.srcObject = null; cameraRelayVideoRef.current = null; }
   }, []);
 
@@ -1454,6 +1549,12 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       }
     } catch { /* storage unavailable */ }
 
+    // Wait for the camera stream so both recorders start in the SAME tick with
+    // the SAME microphone. Previously the screen recorder started on the first
+    // run (before the camera was ready): it got no mic track (silent Screen
+    // View) and began ~4 s earlier (1:02 vs 0:58 durations).
+    if (cameraRecordingEnabled && !cameraStream) return;
+
     if (cameraRecordingEnabled && cameraStream && !cameraRecorderRef.current) {
       try {
         const relayVideo = document.createElement('video');
@@ -1469,7 +1570,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         cameraRelayStopRef.current = relay.stop;
         const tracks: MediaStreamTrack[] = [];
         if (relay.track) tracks.push(relay.track); else tracks.push(...cameraStream.getVideoTracks());
-        tracks.push(...cameraStream.getAudioTracks());
+        tracks.push(...getRecordingMicTracks(cameraStream));
         const recorder = new SegmentedRecorder({
           stream: new MediaStream(tracks),
           upload: (blob, idx, isFinal) => candidateService.uploadRecording(token, blob, idx, isFinal),
@@ -1477,6 +1578,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
           label: 'AS-CameraRecording',
           videoBitsPerSecond: 200_000,
           audioBitsPerSecond: 64_000,
+          minSegmentBytes: 0, // backend stages small segments - flush every 30 s
           onError: (name) => {
             void candidateService.reportProctorEvent(token, {
               event_type: 'recording_failed', timestamp: new Date().toISOString(),
@@ -1492,13 +1594,28 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     }
     if (screenRecordingRequired) startScreenRecorder();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, cameraStream, cameraRecordingEnabled, screenRecordingRequired, token]);
+  }, [step, cameraStream, cameraRecordingEnabled, screenRecordingRequired, token, getRecordingMicTracks]);
+
+  // Recording window ends when the feedback popup appears on the completed
+  // screen (candidate request: keep both recordings running through Submit).
+  // If no popup is due (feedback already given), stop shortly after completion.
+  // Terminal states (terminated / error / results) stop immediately.
+  const FEEDBACK_GRACE_MS = 4000;
+  const finishRecordings = useCallback(() => {
+    void stopRecorders().finally(() => {
+      stopScreenShare();
+      stopProctoring();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopRecorders, stopScreenShare]);
 
   useEffect(() => {
-    if (step === 'completing' || step === 'completed' || step === 'results' || step === 'error' || step === 'terminated') {
-      void stopRecorders().finally(() => stopScreenShare());
-    }
-  }, [step, stopRecorders, stopScreenShare]);
+    if (step === 'results' || step === 'error' || step === 'terminated') { finishRecordings(); return; }
+    if (step !== 'completed') return;
+    if (showFeedback) { finishRecordings(); return; }
+    const t = setTimeout(finishRecordings, FEEDBACK_GRACE_MS);
+    return () => clearTimeout(t);
+  }, [step, showFeedback, finishRecordings]);
 
   // Unmount: final-flush and release the share.
   useEffect(() => () => {
@@ -1835,6 +1952,26 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       total: response.progress.total,
       percent: response.progress.percent
     });
+    // Mirror the saved answer into the question cache so navigating back shows it.
+    for (const [num, q] of questionsCacheRef.current) {
+      if (q.question_id !== questionId) continue;
+      const hasContent = !!(answer.text_response || answer.selected_options?.length || answer.code_submission);
+      questionsCacheRef.current.set(num, {
+        ...q,
+        previous_answer: hasContent ? {
+          text_response: answer.text_response ?? null,
+          selected_options: answer.selected_options ?? null,
+          code_submission: answer.code_submission ?? null,
+          language: answer.language ?? q.previous_answer?.language ?? null,
+          code_input: q.previous_answer?.code_input ?? null,
+          code_execution_status: q.previous_answer?.code_execution_status ?? null,
+          code_execution_output: q.previous_answer?.code_execution_output ?? null,
+          code_execution_error: q.previous_answer?.code_execution_error ?? null,
+          is_locked: answer.is_draft === false ? true : (q.previous_answer?.is_locked ?? false),
+        } : q.previous_answer,
+      });
+      break;
+    }
 
     // Don't auto-navigate here - let the AssessmentInterface component handle navigation
     // via onNavigate (handleNext/handlePrevious). Auto-navigating here causes the
@@ -1916,10 +2053,56 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     setStepSafe('terminated');
   }, [token, setStepSafe]);
 
+  // ── Question cache: every question is generated before start, so load them
+  // all once and make palette navigation a local switch (2026-09-24). The
+  // /question call still runs in the background to keep the server's
+  // current-question index in sync and to refresh the cached entry.
+  const questionsCacheRef = useRef<Map<number, CurrentQuestion>>(new Map());
+  const questionsCacheAttemptRef = useRef<string | null>(null);
+  const navigationSeqRef = useRef(0);
+
+  const prefetchAllQuestions = useCallback(async () => {
+    try {
+      const attemptId = assessmentInfo?.attempt_id || assessmentData?.attempt_id || token;
+      const data = await candidateService.getAllQuestions(token);
+      const map = new Map<number, CurrentQuestion>();
+      for (const q of data.questions) map.set(q.question_number, q);
+      questionsCacheRef.current = map;
+      questionsCacheAttemptRef.current = attemptId;
+      console.log(`[QUESTIONS] cached ${map.size} questions for local navigation`);
+    } catch (err) {
+      console.warn('[QUESTIONS] prefetch failed — navigation falls back to per-question fetch:', err);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  useEffect(() => {
+    if (step === 'assessment') void prefetchAllQuestions();
+    else if (step === 'completing' || step === 'completed' || step === 'terminated' || step === 'error') {
+      questionsCacheRef.current = new Map();
+    }
+  }, [step, prefetchAllQuestions]);
+
   const handleNavigateToQuestion = async (questionNumber: number) => {
+    const seq = ++navigationSeqRef.current;
+    const cached = questionsCacheRef.current.get(questionNumber);
+    if (cached) {
+      // Instant local switch. The cached entry carries no all_question_statuses
+      // (server omits it) so it cannot overwrite fresher local status.
+      setCurrentQuestion({ ...cached, all_question_statuses: null });
+      // Background: keep the server's current index in sync + refresh the entry.
+      void candidateService.getCurrentQuestion(token, questionNumber)
+        .then((fresh) => {
+          questionsCacheRef.current.set(questionNumber, { ...fresh, all_question_statuses: null });
+        })
+        .catch((err) => console.warn('[QUESTIONS] background sync failed:', err));
+      return;
+    }
     try {
       const question = await candidateService.getCurrentQuestion(token, questionNumber);
+      if (seq !== navigationSeqRef.current) return; // a newer navigation won
       setCurrentQuestion(question);
+      questionsCacheRef.current.set(questionNumber, { ...question, all_question_statuses: null });
     } catch (err) {
       console.error('Failed to navigate to question:', err);
     }

@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, GitBranch, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Check, Info, RefreshCw, Layers, Radar } from 'lucide-react';
+import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Check, Info, RefreshCw, Layers, Radar } from 'lucide-react';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef, useCallback, useMemo, type ComponentType } from 'react';
 import { createPortal } from 'react-dom';
@@ -25,6 +25,7 @@ import DeleteAIInterviewModal from '@/components/ai-interview/DeleteAIInterviewM
 import AIInterviewReviewPreviewModal from '@/components/ai-interview/AIInterviewReviewPreviewModal';
 import CandidateResultsView from '@/components/ai-interview/CandidateResultsView';
 import AIInterviewAuditTrail from '@/components/AIInterviewAuditTrail';
+import ConfigurePreviewDialog from '@/components/ai-interview/ConfigurePreviewDialog';
 import AIInterviewCandidateResults from '@/components/ai-interview/AIInterviewCandidateResults';
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, AI_INTERVIEW_INVITE_STATUS_OPTIONS, hasActiveInviteFilters, type InviteFilterState, type InviteStatusOption } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
@@ -48,18 +49,17 @@ import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import AllInterviewsTable from '@/components/ai-interview/AllInterviewsTable';
 
-/* The version panel's Actions column icon buttons, matched to the Assessment
-   page's own (`QUICK_ACTION_BASE` / `QUICK_ACTION_DISABLED` in Assessments.tsx):
-   the 28px bordered square that Share / Track / Result and the compact 3-dot menu
-   all share, so they read as one evenly spaced cluster in that column. */
+/* The version panel's 3-dot menu trigger — the 28px bordered square matched to
+   the Assessment page's `QUICK_ACTION_BASE` in Assessments.tsx. */
 const QUICK_ACTION_BASE =
   'h-7 w-7 flex items-center justify-center bg-white dark:bg-slate-900 border rounded-md transition-all';
-const QUICK_ACTION_DISABLED =
-  'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-400 dark:text-slate-500 cursor-not-allowed';
 /* One dropdown item's row, shared by every entry in the compact menu so they
    line up exactly as the Assessment page's do. */
 const VERSION_MENU_ITEM_CLASS =
   'group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors';
+/* Same row, greyed out — the look the menu's disabled Delete already uses. */
+const VERSION_MENU_ITEM_DISABLED_CLASS =
+  'group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60';
 
 // Returns the effective interview duration string.
 // New configs store the real 30 / 35 / N value in duration_minutes.
@@ -214,13 +214,21 @@ export default function AIInterview() {
   // opens the existing Share (invite) modal for the chosen config.
   const [showInvitePicker, setShowInvitePicker] = useState(false);
   const [invitePickerSearch, setInvitePickerSearch] = useState('');
-  /* Which job card in the Send Invite picker is expanded to show its interview
-     versions, and which interview version is currently picked. The picker
-     mirrors the Assessment page's "Send Invite" dialog: open a job's versions,
-     then choose the interview version to send. One job expands at a time and one
-     version is picked across the whole dialog, so both are single values, not
-     the per-job maps the always-on list rows use. */
+  /* The Send Invite picker lists every active interview version as one flat
+     table (the Active tab's list view); one version is picked across the
+     whole dialog. */
+  /* Send Invite picker: Ungrouped (flat table, default) or Grouped (one card
+     per job); in Grouped, which job card is expanded to show its versions. */
+  const [invitePickerViewMode, setInvitePickerViewMode] = useState<'grouped' | 'ungrouped'>('ungrouped');
   const [invitePickerExpandedKey, setInvitePickerExpandedKey] = useState<string | null>(null);
+  /* Send Invite picker paging — the project's ListPagination, one page of rows
+     (Ungrouped) or job cards (Grouped) at a time; the dialog body is the
+     scroller it returns to the top on a page change. */
+  const [invitePickerPage, setInvitePickerPage] = useState(1);
+  const [invitePickerPageSize, setInvitePickerPageSize] = useState(10);
+  const invitePickerScrollRef = useRef<HTMLDivElement | null>(null);
+  /* The Send Invite picker row whose eye opened the Configure Details preview. */
+  const [configurePreviewId, setConfigurePreviewId] = useState<string | null>(null);
   const [invitePickerSelection, setInvitePickerSelection] = useState<
     { jobKey: string; jdId?: string; interviewId: string } | null
   >(null);
@@ -924,6 +932,7 @@ export default function AIInterview() {
       await aiInterviewService.delete(deleteTarget.id);
       toast.success('Configuration deleted');
       loadData();
+      setRefreshSignal((n) => n + 1);
       setDeleteTarget(null);
     } catch (error) {
       console.error('Failed to delete:', error);
@@ -991,6 +1000,7 @@ export default function AIInterview() {
       await aiInterviewService.archive(archiveTarget.id);
       toast.success('Configuration archived');
       await Promise.all([loadData(), loadArchivedConfigs()]);
+      setRefreshSignal((n) => n + 1);
       setArchiveTarget(null);
     } catch (error: any) {
       toast.error(error.message || 'Failed to archive');
@@ -1009,6 +1019,7 @@ export default function AIInterview() {
       );
       loadData();
       loadArchivedConfigs();
+      setRefreshSignal((n) => n + 1);
     } catch (error: any) {
       toast.error(error.message || 'Failed to unarchive');
     }
@@ -1541,85 +1552,10 @@ export default function AIInterview() {
     const hasBeenShared = invitations > 0;
     const menuKey = `version:${config.id}`;
 
-    /* Share, off the row's own status — a Draft has nothing published to send,
-       an Archived one is out of circulation — reported by disabling with the
-       reason in the tooltip rather than hiding, the way the Assessment column
-       keeps its shape down the table. */
-    const shareBlockedReason = !canShareAIInterviews
-      ? 'You do not have permission to share interviews'
-      : normalizedStatus === 'draft'
-        ? 'Publish the interview first to share'
-        : normalizedStatus === 'archived'
-          ? 'Archived interviews cannot be shared'
-          : !isPublished
-            ? 'Only active interviews can be shared'
-            : '';
-    const shareBlocked = !!shareBlockedReason;
-
+    // Every action lives in the 3-dot menu — the row carries no quick-action
+    // buttons of its own.
     return (
-      <div className="flex items-center gap-1.5 flex-nowrap">
-        {/* Share / Invite */}
-        <button
-          type="button"
-          onClick={() => { if (shareBlocked) return; setShareConfig(config); }}
-          disabled={shareBlocked}
-          className={`${QUICK_ACTION_BASE} ${
-            shareBlocked
-              ? QUICK_ACTION_DISABLED
-              : 'text-brand-teal border-brand-teal/40 hover:bg-brand-teal/10 hover:border-brand-teal'
-          }`}
-          aria-label={shareBlockedReason || 'Share / invite'}
-          title={shareBlockedReason || 'Share / invite'}
-        >
-          <Send className="w-3.5 h-3.5" />
-        </button>
-
-        {/* Track Invites — enabled once at least one invite exists, disabled
-            (not removed) until then so the cell keeps its four controls. */}
-        <button
-          type="button"
-          onClick={() => { if (hasBeenShared) handleViewInvitations(config); }}
-          disabled={!hasBeenShared}
-          className={`${QUICK_ACTION_BASE} ${
-            hasBeenShared
-              ? 'text-brand-cyan border-brand-cyan/40 hover:bg-brand-cyan/10 hover:border-brand-cyan'
-              : QUICK_ACTION_DISABLED
-          }`}
-          aria-label={hasBeenShared ? `Track invitation status (${invitations})` : 'Share the interview to track invitations'}
-          title={hasBeenShared ? `Track invitation status (${invitations})` : 'Share the interview to track invitations'}
-        >
-          <Users className="w-3.5 h-3.5" />
-        </button>
-
-        {/* Results — gated on having been shared: with no invite there is no
-            session to score, so the results page would open empty. */}
-        <button
-          type="button"
-          onClick={() => { if (hasBeenShared) router.push(`/recruitment/ai-interviews/${config.id}/results`); }}
-          disabled={!hasBeenShared}
-          className={`${QUICK_ACTION_BASE} ${
-            hasBeenShared
-              ? 'text-brand-blue border-brand-blue/40 hover:bg-brand-blue/10 hover:border-brand-blue'
-              : QUICK_ACTION_DISABLED
-          }`}
-          aria-label={
-            hasBeenShared
-              ? 'View interview results'
-              : isPublished
-                ? 'Share the interview to view results'
-                : 'Publish the interview to view results'
-          }
-          title={
-            hasBeenShared
-              ? 'View interview results'
-              : isPublished
-                ? 'Share the interview to view results'
-                : 'Publish the interview to view results'
-          }
-        >
-          <BarChart2 className="w-3.5 h-3.5" />
-        </button>
-
+      <div className="flex items-center">
         {/* Compact 3-dot menu, portalled to <body> so the panel table's
             overflow box cannot clip it (see `menuAnchor`). */}
         <div className="relative">
@@ -1683,15 +1619,33 @@ export default function AIInterview() {
                   <span className={MENU_ITEM_SCALE_CLASS}>Share / Invite</span>
                 </button>
               )}
-              {isPublished && canInviteAIInterviews && (
-                <button
-                  onClick={() => handleViewInvitations(config)}
-                  className={VERSION_MENU_ITEM_CLASS}
-                >
-                  <Users className="w-4 h-4 flex-shrink-0 text-menu-icon-secondary" />
-                  <span className={MENU_ITEM_SCALE_CLASS}>View Invitations</span>
-                </button>
-              )}
+              {/* Track / View Results — always listed, but disabled (reason in
+                  the tooltip) until at least one invite exists: before that
+                  there is nothing to track and no session to score. */}
+              <button
+                onClick={() => { if (!hasBeenShared) return; handleViewInvitations(config); setOpenMenuId(null); }}
+                disabled={!hasBeenShared}
+                title={hasBeenShared ? `Track invitation status (${invitations})` : 'Share the interview to track invitations'}
+                className={hasBeenShared ? VERSION_MENU_ITEM_CLASS : VERSION_MENU_ITEM_DISABLED_CLASS}
+              >
+                <Radar className={`w-4 h-4 flex-shrink-0 ${hasBeenShared ? 'text-brand-cyan' : ''}`} />
+                <span className={MENU_ITEM_SCALE_CLASS}>Track{hasBeenShared ? ` (${invitations})` : ''}</span>
+              </button>
+              <button
+                onClick={() => { if (!hasBeenShared) return; router.push(`/recruitment/ai-interviews/${config.id}/results`); setOpenMenuId(null); }}
+                disabled={!hasBeenShared}
+                title={
+                  hasBeenShared
+                    ? 'View interview results'
+                    : isPublished
+                      ? 'Share the interview to view results'
+                      : 'Publish the interview to view results'
+                }
+                className={hasBeenShared ? VERSION_MENU_ITEM_CLASS : VERSION_MENU_ITEM_DISABLED_CLASS}
+              >
+                <BarChart2 className={`w-4 h-4 flex-shrink-0 ${hasBeenShared ? 'text-menu-icon-view' : ''}`} />
+                <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
+              </button>
               {(canArchiveAIInterviews || canDeleteAIInterviews) && (
                 <div className="my-1 h-px bg-gray-100 dark:bg-slate-800" />
               )}
@@ -2294,7 +2248,7 @@ export default function AIInterview() {
               the same shape as the Assessments page's "All Assessments"
               table, as opposed to the Total Jobs tab's one-card-per-job
               (collapsed lineage) list below. */}
-          {activeTab === 'all-interviews' && <AllInterviewsTable toolbarSlot={toolbarSlotEl} refreshSignal={refreshSignal} />}
+          {activeTab === 'all-interviews' && <AllInterviewsTable toolbarSlot={toolbarSlotEl} refreshSignal={refreshSignal} renderRowActions={renderInterviewVersionActions} />}
 
           {/* Active/Draft/Archived, Ungrouped — the same flat table as All
               Interviews, locked to this tab's own status so no other status's
@@ -2306,6 +2260,7 @@ export default function AIInterview() {
               refreshSignal={refreshSignal}
               fixedStatus={activeTab as 'published' | 'draft' | 'archived'}
               titleLabel={CONFIG_LIST_TAB_TITLES[activeTab]}
+              renderRowActions={renderInterviewVersionActions}
             />
           )}
 
@@ -2607,17 +2562,9 @@ export default function AIInterview() {
                                   </div>
                                 );
                               }}
-                              /* Actions column, same shape as the Assessment
-                                 page's: the leading square eye comes from
-                                 `onViewAssessment`, then this page's own quick
-                                 actions and compact menu from `renderAction`.
-                                 Opens the read-only Review & Publish peek
-                                 rather than navigating away — that's what
-                                 clicking the row itself (`onRowClick` below)
-                                 already does. */
-                              onViewAssessment={(child) =>
-                                setReviewPreviewTarget({ id: child.id, version: child.version })
-                              }
+                              /* Actions column: just the 3-dot menu, sized as
+                                 such so the table fills the panel unscrolled. */
+                              menuOnlyActions
                               renderAction={(child) => {
                                 const source = configsByJobVersionId.get(child.jd_id || '')
                                   ?.find((candidate) => candidate.id === child.id);
@@ -2719,9 +2666,84 @@ export default function AIInterview() {
           {activeTab === 'invitation-status' && (
             <div className="p-3 sm:p-6">
               {isLoadingInviteStatus ? (
-                <div className="flex items-center justify-center py-16">
-                  <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
-                </div>
+                /* Skeleton — the Assessments page's Invitation Status tab
+                   skeleton, shaped to this tab: seven status segments plus the
+                   completion-rate meter, the filter bar, then the invite
+                   table's own columns (CID, Candidate, Job / Interview,
+                   Status, Score, Timeline, Actions). */
+                <>
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-3 mb-4 sm:mb-5">
+                    <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] self-start overflow-hidden max-w-full">
+                      {Array.from({ length: 7 }).map((_, i) => (
+                        <div key={i} className="inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 min-h-[36px]">
+                          <Skeleton className="h-3.5 w-3.5 rounded" />
+                          <Skeleton className="h-3.5 w-14" />
+                          <Skeleton className="h-[18px] w-6 rounded-full" />
+                        </div>
+                      ))}
+                    </div>
+                    <div className="flex flex-col gap-1 lg:items-end flex-shrink-0">
+                      <div className="flex items-center gap-2.5 sm:gap-3">
+                        <Skeleton className="h-3.5 w-24" />
+                        <Skeleton className="h-1.5 w-20 sm:w-28 rounded-full" />
+                        <Skeleton className="h-4 w-8" />
+                      </div>
+                      <Skeleton className="h-3 w-28" />
+                    </div>
+                  </div>
+
+                  {/* Filter bar */}
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-4">
+                    <Skeleton className="h-9 w-full sm:flex-1 rounded-lg" />
+                    <Skeleton className="h-9 w-32 rounded-lg" />
+                  </div>
+
+                  {/* Invitations table */}
+                  <div className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
+                    <div className="min-h-[320px] overflow-auto">
+                      <table className="w-full min-w-[1000px] table-auto">
+                        <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
+                          <tr>
+                            {['CID', 'Candidate', 'Job / Interview', 'Status', 'Score', 'Timeline', 'Actions'].map((c) => (
+                              <th key={c} className="px-4 py-3"><Skeleton className="h-3 w-20" /></th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
+                          {Array.from({ length: 8 }).map((_, r) => (
+                            <tr key={r}>
+                              <td className="px-4 py-4"><Skeleton className="h-5 w-16 rounded" /></td>
+                              <td className="px-4 py-4">
+                                <div className="flex items-center gap-3">
+                                  <Skeleton className="h-9 w-9 rounded-full flex-shrink-0" />
+                                  <div className="space-y-1.5">
+                                    <Skeleton className="h-4 w-32" />
+                                    <Skeleton className="h-3 w-40" />
+                                  </div>
+                                </div>
+                              </td>
+                              <td className="px-4 py-4">
+                                <div className="space-y-1.5">
+                                  <Skeleton className="h-4 w-44" />
+                                  <Skeleton className="h-3 w-28" />
+                                </div>
+                              </td>
+                              <td className="px-4 py-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
+                              <td className="px-4 py-4"><Skeleton className="h-5 w-20 mx-auto rounded-full" /></td>
+                              <td className="px-4 py-4">
+                                <div className="space-y-1.5">
+                                  <Skeleton className="h-3 w-36" />
+                                  <Skeleton className="h-3 w-28" />
+                                </div>
+                              </td>
+                              <td className="px-4 py-4"><Skeleton className="h-8 w-8 rounded-md" /></td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </>
               ) : inviteStatusError ? (
                 <div className="text-center py-12">
                   <p className="text-sm text-destructive mb-3">{inviteStatusError}</p>
@@ -3188,18 +3210,36 @@ export default function AIInterview() {
       </div>
       </div>
 
-      {/* Send Invite — job/version picker, matched to the Assessment page's own
-          "Send Invite" dialog: open a job's versions, then pick the interview
-          version to send. One card per job (versions live behind View Versions),
-          a single radio pick across the whole dialog, and Continue hands the
+      {/* Send Invite — a flat table of every active interview version (the
+          Active tab's list view), a single radio pick across the dialog, an
+          eye per row for the Configure Details preview, and Continue hands the
           chosen interview to the existing Share modal. */}
       {showInvitePicker && (() => {
         const closePicker = () => {
           setShowInvitePicker(false);
+          setInvitePickerPage(1);
           setInvitePickerExpandedKey(null);
           setInvitePickerSelection(null);
         };
 
+        /* The Active tab's list view: one row per ACTIVE interview version
+           (not one card per job), searchable by job title, Job ID or
+           interview ID. Newest first, like that list. */
+        const q = invitePickerSearch.trim().toLowerCase();
+        const activeConfigs = configs
+          .filter((c) => normalizeConfigStatus(c.status) === 'published')
+          .sort((x, y) => new Date(y.created_at || 0).getTime() - new Date(x.created_at || 0).getTime());
+        const pickerRows = activeConfigs.filter((c) =>
+          !q ||
+          `${c.jd_title || ''} ${c.position || ''} ${c.display_id || ''} ${c.jd_short_id || ''}`
+            .toLowerCase()
+            .includes(q),
+        );
+        const interviewVersionOf = (c: AIInterviewResponse) =>
+          (c.jd_id ? interviewVersionRows(c.jd_id).find((r) => r.id === c.id)?.version : undefined) ?? 1;
+        const PICKER_TH = 'px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800';
+
+        /* Grouped view — the original one-card-per-job picker. */
         /* One card per JOB, collapsed on the same lineage key the main list
            uses — jd_short_id names the job, jd_id names a single version — so
            this dialog lists jobs, not every version, exactly as the reference
@@ -3227,17 +3267,26 @@ export default function AIInterview() {
           return [...byLineage.values()];
         };
 
-        const q = invitePickerSearch.trim().toLowerCase();
         /* Filtered BEFORE the collapse so a job stays listed when the version
            that matched the search is not the one representing it. */
-        const matching = configs.filter((c) =>
+        const matching = activeConfigs.filter((c) =>
           !q ||
           `${c.jd_title || ''} ${c.position || ''} ${c.display_id || ''} ${c.jd_short_id || ''}`
             .toLowerCase()
             .includes(q),
         );
         const jobRows = collapse(matching);
-        const jobCount = collapse(configs).length;
+        const jobCount = collapse(activeConfigs).length;
+        /* The Active tab's job-row totals, over the same active configs. */
+        const pickerJobTotals = new Map<string, { interviews: number; active: number; invitations: number }>();
+        for (const c of activeConfigs) {
+          const key = lineageKeyOf(c);
+          const entry = pickerJobTotals.get(key) ?? { interviews: 0, active: 0, invitations: 0 };
+          entry.interviews += 1;
+          entry.active += 1;
+          entry.invitations += c.invitations_count ?? 0;
+          pickerJobTotals.set(key, entry);
+        }
 
         const statusPillStyles: Record<string, string> = {
           published: 'bg-success-subtle text-success ring-success-line',
@@ -3249,6 +3298,14 @@ export default function AIInterview() {
         const statusPillLabels: Record<string, string> = {
           published: 'Active', draft: 'Draft', completed: 'Completed', cancelled: 'Cancelled', archived: 'Archived',
         };
+
+        const pickerTotal = invitePickerViewMode === 'ungrouped' ? pickerRows.length : jobRows.length;
+        const pickerTotalPages = Math.max(1, Math.ceil(pickerTotal / invitePickerPageSize));
+        const pickerSafePage = Math.min(Math.max(1, invitePickerPage), pickerTotalPages);
+        const pageSlice = <T,>(list: T[]) =>
+          list.slice((pickerSafePage - 1) * invitePickerPageSize, pickerSafePage * invitePickerPageSize);
+        const pagedPickerRows = pageSlice(pickerRows);
+        const pagedJobRows = pageSlice(jobRows);
 
         /* Resolve the picked interview off live data, and say why it cannot be
            sent if so — the version table offers every version of a job, Drafts
@@ -3286,7 +3343,7 @@ export default function AIInterview() {
                   </div>
                   <div className="min-w-0">
                     <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Send Invite</h2>
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Open a job&rsquo;s versions, then pick the interview version to send</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Pick the active interview to send</p>
                   </div>
                 </div>
                 <Button variant="secondary" size="sm" onClick={closePicker} aria-label="Close" className="px-2 flex-shrink-0">
@@ -3295,7 +3352,7 @@ export default function AIInterview() {
               </div>
 
               {/* Content */}
-              <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
+              <div ref={invitePickerScrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
                 {/* Search */}
                 <div className="mb-4">
                   <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search Jobs</label>
@@ -3305,32 +3362,208 @@ export default function AIInterview() {
                       type="text"
                       autoFocus
                       value={invitePickerSearch}
-                      onChange={(e) => setInvitePickerSearch(e.target.value)}
+                      onChange={(e) => { setInvitePickerSearch(e.target.value); setInvitePickerPage(1); }}
                       placeholder="Search by job title, Job ID or interview ID..."
                       className="w-full pl-10 pr-4 py-2 text-sm text-black dark:text-slate-100 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                     />
                   </div>
                 </div>
 
+                {/* Grouped/Ungrouped — the same toggle the Active/Draft/Archived
+                    tabs carry. Ungrouped: one row per active interview version.
+                    Grouped: one card per job, versions behind View Versions. */}
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
+                  <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                    {([
+                      { key: 'ungrouped', label: 'Ungrouped' },
+                      { key: 'grouped', label: 'Grouped' },
+                    ] as const).map((mode) => {
+                      const isActive = invitePickerViewMode === mode.key;
+                      return (
+                        <button
+                          key={mode.key}
+                          type="button"
+                          aria-pressed={isActive}
+                          onClick={() => { setInvitePickerViewMode(mode.key); setInvitePickerSelection(null); setInvitePickerPage(1); }}
+                          className={`px-2.5 sm:px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                            isActive
+                              ? 'bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue'
+                              : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
+                          }`}
+                        >
+                          {mode.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
                 <div className="flex items-center justify-between gap-2 mb-3">
                   <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
                     Select an Interview
-                    {configs.length > 0 && (
-                      <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
-                        {jobCount} job{jobCount !== 1 ? 's' : ''}
-                      </span>
-                    )}
+                    <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
+                      {invitePickerViewMode === 'ungrouped'
+                        ? `${pickerRows.length} active interview${pickerRows.length !== 1 ? 's' : ''}`
+                        : `${jobCount} job${jobCount !== 1 ? 's' : ''}`}
+                    </span>
                   </label>
                   {invitePickerSelection && (
-                    <button
-                      onClick={() => setInvitePickerSelection(null)}
-                      className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
-                    >
-                      Clear Selection
-                    </button>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                        <CheckCircle className="w-3 h-3" />
+                        1 selected
+                      </span>
+                      <button
+                        onClick={() => setInvitePickerSelection(null)}
+                        className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
+                      >
+                        Clear Selection
+                      </button>
+                    </div>
                   )}
                 </div>
 
+                {/* Why the pick is single — same banner style as the Score
+                    Resumes page's Job Eligibility note. */}
+                <div className="mb-3 flex items-start gap-2 rounded-lg bg-brand-blue/[0.06] border border-brand-blue/20 px-3 py-2.5">
+                  <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
+                  <div className="min-w-0">
+                    <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">One interview per invite</p>
+                    <p className="mt-0.5 text-xs text-gray-700 dark:text-slate-300">
+                      You can pick only one interview at a time, so everyone you invite gets the same interview. To invite people to a different interview, send another invite.
+                    </p>
+                  </div>
+                </div>
+
+                {invitePickerViewMode === 'ungrouped' ? (
+                <>
+                {pickerRows.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500 dark:text-slate-400">
+                    <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-slate-700" />
+                    <p>{q ? 'No active interviews match your search' : 'No active interviews'}</p>
+                    <p className="text-sm">{q ? 'Try a different job title or Job ID.' : 'Publish an AI interview to invite candidates to it.'}</p>
+                  </div>
+                ) : (
+                  <div className="rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+                    <div className="overflow-x-auto scrollbar-visible">
+                      <table className="w-full text-sm border-collapse">
+                        <thead className="sticky top-0 z-[6]">
+                          <tr className="border-b border-gray-200 dark:border-slate-700">
+                            <th className={`${PICKER_TH} w-14 tf-sticky-col-left !bg-slate-50 dark:!bg-slate-800`}>Select</th>
+                            <th className={PICKER_TH}>Job ID</th>
+                            <th className={PICKER_TH}>Job Name</th>
+                            <th className={PICKER_TH}>Job Version</th>
+                            <th className={PICKER_TH}>Interview Version</th>
+                            <th className={PICKER_TH}>Status</th>
+                            <th className={PICKER_TH}>Rounds</th>
+                            <th className={PICKER_TH}>Invitations Sent</th>
+                            <th className={PICKER_TH}>Created On</th>
+                            <th className={`${PICKER_TH} pr-6`}>Created By</th>
+                            <th className={`${PICKER_TH} !text-center tf-sticky-col !bg-slate-50 dark:!bg-slate-800`}>Preview</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {pagedPickerRows.map((config) => {
+                            const isSelected = invitePickerSelection?.interviewId === config.id;
+                            const rounds = (config.rounds_config || []).filter((round) => round.enabled !== false);
+                            const pick = () => setInvitePickerSelection(
+                              isSelected ? null : { jobKey: config.id, jdId: config.jd_id, interviewId: config.id },
+                            );
+                            return (
+                              <tr
+                                key={config.id}
+                                onClick={pick}
+                                aria-selected={isSelected}
+                                data-row-selected={isSelected ? 'true' : undefined}
+                                className={`border-b border-gray-100 dark:border-slate-700/60 last:border-b-0 cursor-pointer transition-colors ${
+                                  isSelected ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/15' : 'hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10'
+                                }`}
+                              >
+                                <td className="px-3 py-2.5 align-middle tf-sticky-col-left">
+                                  <input
+                                    type="radio"
+                                    name="ai-interview-invite-picker-selection"
+                                    checked={isSelected}
+                                    onChange={pick}
+                                    onClick={(e) => e.stopPropagation()}
+                                    aria-label={`Select ${config.jd_title || config.position || 'interview'}`}
+                                    className="w-4 h-4 accent-brand-blue cursor-pointer"
+                                  />
+                                </td>
+                                <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                                  {config.jd_short_id ? <JobIdBadge>{config.jd_short_id}</JobIdBadge> : <span className="text-xs text-gray-400">—</span>}
+                                </td>
+                                <td className="px-3 py-2.5 align-middle max-w-[16rem]">
+                                  <span className="block truncate font-medium text-gray-900 dark:text-slate-50" title={config.jd_title || config.position || 'Untitled'}>
+                                    {config.jd_title || config.position || 'Untitled'}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                                  <span className="inline-flex items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 text-brand-blue bg-brand-blue/10 ring-brand-blue/20">
+                                    V{config.jd_version ?? 1}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                                  <span className="inline-flex items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 text-brand-cyan bg-brand-cyan/10 ring-brand-cyan/20">
+                                    V{interviewVersionOf(config)}
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ring-1 bg-success-subtle text-success ring-success-line">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
+                                    Active
+                                  </span>
+                                </td>
+                                <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                                  {rounds.length > 0 ? (
+                                    <div className="flex items-center gap-1.5 flex-nowrap">
+                                      {rounds.map((round, index) => (
+                                        <span
+                                          key={`${round.type}-${index}`}
+                                          title={ROUND_LABELS[round.type] || round.type}
+                                          className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold whitespace-nowrap bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30"
+                                        >
+                                          {ROUND_SHORT_LABELS[round.type] || ROUND_LABELS[round.type] || round.type}
+                                        </span>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-gray-400">—</span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                                  <span className="tabular-nums text-gray-900 dark:text-slate-100">{(config.invitations_count ?? 0).toLocaleString()}</span>
+                                  <span className="text-xs text-gray-400 ml-1">sent</span>
+                                </td>
+                                <td className="px-3 py-2.5 align-middle whitespace-nowrap text-gray-600 dark:text-slate-400 tabular-nums">
+                                  {config.created_at ? formatIST(config.created_at) : '—'}
+                                </td>
+                                <td className="px-3 pr-6 py-2.5 align-middle whitespace-nowrap text-gray-600 dark:text-slate-400">
+                                  {config.created_by_name || 'System'}
+                                </td>
+                                <td className="px-3 py-2.5 align-middle text-center tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setConfigurePreviewId(config.id)}
+                                    className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-slate-700 text-gray-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-brand-blue/10 hover:text-brand-blue hover:border-brand-blue/40 transition-colors"
+                                    aria-label="Preview interview configuration"
+                                    title="Preview"
+                                  >
+                                    <Eye className="w-3.5 h-3.5" />
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+                </>
+                ) : (
+                <>
                 {jobRows.length === 0 ? (
                   <div className="text-center py-8 text-gray-500 dark:text-slate-400">
                     <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-slate-700" />
@@ -3338,37 +3571,49 @@ export default function AIInterview() {
                     <p className="text-sm">{q ? 'Try a different job title or Job ID.' : 'Create an AI interview against a job first.'}</p>
                   </div>
                 ) : (
-                  <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-0.5">
-                    {jobRows.map((config) => {
+                  <div className="space-y-3">
+                    {pagedJobRows.map((config) => {
                       const jobKey = lineageKeyOf(config);
                       const jdId = config.jd_id;
                       const ownsSelection = invitePickerSelection?.jobKey === jobKey;
                       const dimmed = !!invitePickerSelection && !ownsSelection;
                       const expanded = invitePickerExpandedKey === jobKey;
-                      const enabledRounds = (config.rounds_config || []).filter((r: any) => r.enabled !== false);
                       const normalizedStatus = normalizeConfigStatus(config.status);
                       const statusPill = statusPillStyles[normalizedStatus]
                         || 'bg-slate-100 text-gray-700 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700';
                       const statusPillLabel = statusPillLabels[normalizedStatus] || getStatusLabel(config.status);
+                      /* The Active tab's four job figures, in its order and colours. */
+                      const totals = pickerJobTotals.get(jobKey) ?? { interviews: 0, active: 0, invitations: 0 };
                       const rowMetrics = [
-                        { key: 'rounds', icon: GitBranch, iconClass: 'text-brand-blue', value: enabledRounds.length, label: 'Rounds' },
-                        { key: 'duration', icon: Clock, iconClass: 'text-brand-cyan', value: getInterviewDuration(config.duration_minutes, (config as any).special_instructions), label: 'Duration' },
-                        { key: 'invitations', icon: Send, iconClass: 'text-brand-orange', value: config.invitations_count ?? 0, label: 'Invitations Sent' },
+                        { key: 'job-versions', icon: Layers, iconClass: 'text-brand-blue', value: getJobVersionCount(config), label: 'Job Versions' },
+                        { key: 'interviews', icon: Video, iconClass: 'text-brand-cyan', value: totals.interviews, label: 'Interviews' },
+                        { key: 'invitations', icon: Send, iconClass: 'text-brand-orange', value: totals.invitations, label: 'Invitations Sent' },
+                        { key: 'active', icon: CheckCircle, iconClass: 'text-menu-icon-activate', value: totals.active, label: 'Completed' },
                       ];
+                      const toggleExpanded = () => {
+                        if (!jdId) return;
+                        const opening = !expanded;
+                        setInvitePickerExpandedKey(opening ? jobKey : null);
+                        if (opening) jdLineage.ensureLoaded(jdId, jdId);
+                      };
                       return (
                         <div
                           key={jobKey}
-                          className={`@container/ai-row relative p-3 sm:p-4 rounded-xl border ring-1 ring-black/[0.02] dark:ring-white/[0.02] transition-all duration-150 ${
+                          /* Clicking the card opens its versions, as on the Active tab. */
+                          onClick={toggleExpanded}
+                          className={`@container/ai-row relative p-3 sm:p-4 rounded-xl border ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 transition-all duration-150 ${
+                            jdId ? 'cursor-pointer' : 'cursor-default'
+                          } ${
                             ownsSelection
                               ? 'border-brand-blue/50 bg-brand-blue/[0.03] shadow-md shadow-brand-blue/10'
-                              : `border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-blue/30 ${dimmed ? 'opacity-60' : ''}`
+                              : `border-gray-300 dark:border-slate-700 bg-white dark:bg-slate-900 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 ${dimmed ? 'opacity-60' : ''}`
                           }`}
                         >
                           <div className="flex flex-col gap-3 @4xl/ai-row:flex-row @4xl/ai-row:items-center @4xl/ai-row:gap-4">
                             {/* Identity */}
                             <div className="flex items-center gap-2.5 min-w-0 @4xl/ai-row:w-[360px] @4xl/ai-row:flex-shrink-0">
                               <div className="h-9 w-9 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-lg flex items-center justify-center flex-shrink-0">
-                                <Video className="h-4 w-4 text-brand-blue" />
+                                <Briefcase className="h-4 w-4 text-brand-blue" />
                               </div>
                               {config.jd_short_id && (
                                 <JobIdBadge className="flex-shrink-0">{config.jd_short_id}</JobIdBadge>
@@ -3387,7 +3632,7 @@ export default function AIInterview() {
                             </div>
 
                             {/* Metrics */}
-                            <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-3 sm:gap-x-0 sm:gap-y-0 @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0">
+                            <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0">
                               {rowMetrics.map(({ key, icon: MetricIcon, iconClass, value, label }) => (
                                 <div key={key} className="min-w-0 sm:px-3 sm:border-l sm:border-gray-100 dark:sm:border-slate-700/60 sm:first:border-l-0 sm:first:pl-0">
                                   <div className="flex items-center gap-1.5 min-w-0">
@@ -3400,15 +3645,15 @@ export default function AIInterview() {
                             </div>
 
                             {/* View Versions toggle */}
-                            <div className="flex items-center flex-wrap gap-2 flex-shrink-0 self-start @4xl/ai-row:self-auto @4xl/ai-row:ml-auto">
+                            <div
+                              className="flex items-center flex-wrap gap-2 flex-shrink-0 self-start @4xl/ai-row:self-auto @4xl/ai-row:ml-auto"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               {jdId ? (
                                 <button
                                   type="button"
-                                  onClick={() => {
-                                    const opening = !expanded;
-                                    setInvitePickerExpandedKey(opening ? jobKey : null);
-                                    if (opening && jdId) jdLineage.ensureLoaded(jdId, jdId);
-                                  }}
+                                  onClick={toggleExpanded}
+                                  title={expanded ? 'Hide version history' : 'View version history'}
                                   aria-expanded={expanded}
                                   className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
                                     expanded
@@ -3441,11 +3686,14 @@ export default function AIInterview() {
                               Picking a radio records the job + interview version as
                               the dialog's single selection. */}
                           {expanded && jdId && (
-                            <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60">
+                            <div
+                              className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700/60 cursor-default"
+                              onClick={(e) => e.stopPropagation()}
+                            >
                               <AssessmentVersionHistoryPanel
                                 jobVersions={jdLineage.lineages[jdId]}
                                 jobVersionDetails={jdLineage.versionDetails}
-                                assessments={interviewVersionRows(jdId)}
+                                assessments={interviewVersionRows(jdId, 'published')}
                                 loading={jdLineage.isLoading(jdId)}
                                 currentAssessmentId={config.id}
                                 vocabulary={INTERVIEW_VOCABULARY}
@@ -3454,7 +3702,21 @@ export default function AIInterview() {
                                 onSelectAssessment={(interviewId) =>
                                   setInvitePickerSelection({ jobKey, jdId, interviewId })
                                 }
+                                /* Mode and Rounds — the Active tab's two columns. */
                                 renderChildDetail={(child) => {
+                                  const source = configsByJobVersionId.get(child.jd_id || '')
+                                    ?.find((candidate) => candidate.id === child.id);
+                                  if (!source) {
+                                    return <span className="text-sm text-gray-500 dark:text-slate-400">&mdash;</span>;
+                                  }
+                                  const mode = modeFromConfig(source.special_instructions, source.duration_minutes);
+                                  return (
+                                    <span className="text-sm font-medium text-gray-900 dark:text-slate-100">
+                                      {mode === 'fixed' ? 'Timed' : 'Conversational'}
+                                    </span>
+                                  );
+                                }}
+                                renderChildExtraDetail={(child) => {
                                   const source = configsByJobVersionId.get(child.jd_id || '')
                                     ?.find((candidate) => candidate.id === child.id);
                                   const rounds = (source?.rounds_config || []).filter((round) => round.enabled !== false);
@@ -3462,24 +3724,21 @@ export default function AIInterview() {
                                     return <span className="text-sm text-gray-500 dark:text-slate-400">&mdash;</span>;
                                   }
                                   return (
-                                    <div className="flex flex-col gap-0.5">
+                                    <div className="flex items-center gap-1.5 flex-nowrap">
                                       {rounds.map((round, index) => (
-                                        <div key={`${round.type}-${index}`} className="text-xs whitespace-nowrap leading-snug">
-                                          <span className="font-semibold text-gray-900 dark:text-slate-100">
-                                            {ROUND_LABELS[round.type] || round.type}
-                                          </span>
-                                        </div>
+                                        <span
+                                          key={`${round.type}-${index}`}
+                                          title={ROUND_LABELS[round.type] || round.type}
+                                          className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-semibold whitespace-nowrap bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/30"
+                                        >
+                                          {ROUND_SHORT_LABELS[round.type] || ROUND_LABELS[round.type] || round.type}
+                                        </span>
                                       ))}
                                     </div>
                                   );
                                 }}
-                                /* Same read-only peek the job list's own
-                                   version panel offers — picking an interview
-                                   to invite to shouldn't require leaving this
-                                   dialog just to check what's in it. */
-                                onViewAssessment={(child) =>
-                                  setReviewPreviewTarget({ id: child.id, version: child.version })
-                                }
+                                /* Same Configure Details preview as the Ungrouped eye. */
+                                onViewAssessment={(child) => setConfigurePreviewId(child.id)}
                               />
                             </div>
                           )}
@@ -3488,13 +3747,31 @@ export default function AIInterview() {
                     })}
                   </div>
                 )}
+                </>
+                )}
+
+                {pickerTotal > 0 && (
+                  <ListPagination
+                    currentPage={pickerSafePage}
+                    itemsPerPage={invitePickerPageSize}
+                    totalItems={pickerTotal}
+                    onPageChange={setInvitePickerPage}
+                    onItemsPerPageChange={(size) => { setInvitePickerPageSize(size); setInvitePickerPage(1); }}
+                    itemLabel={invitePickerViewMode === 'ungrouped' ? 'interviews' : 'jobs'}
+                    scrollContainerRef={invitePickerScrollRef}
+                    compact
+                    alwaysShow
+                  />
+                )}
               </div>
 
               {/* Footer */}
               <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700">
                 <div className="min-w-0 truncate whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-slate-300">
                   {!invitePickerSelection ? (
-                    'Open a job’s versions and select an interview to continue'
+                    invitePickerViewMode === 'ungrouped'
+                      ? 'Select an interview to continue'
+                      : 'Open a job’s versions and select an interview to continue'
                   ) : blockedReason ? (
                     <span className="inline-flex items-center gap-1.5 align-middle text-brand-orange-deep">
                       <Info className="w-4 h-4 flex-shrink-0" />
@@ -3534,6 +3811,11 @@ export default function AIInterview() {
           </div>
         );
       })()}
+
+      {/* Send Invite picker's eye — the interview's Configure Details, read-only. */}
+      {configurePreviewId && (
+        <ConfigurePreviewDialog configId={configurePreviewId} onClose={() => setConfigurePreviewId(null)} />
+      )}
 
       {/* Share Modal */}
       {shareConfig && (

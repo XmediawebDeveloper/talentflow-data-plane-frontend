@@ -954,6 +954,12 @@ export const candidateService = {
   /**
    * Get current question
    */
+  /** All questions of the running attempt in one call (palette navigation is then local). */
+  async getAllQuestions(token: string): Promise<{ total_questions: number; questions: CurrentQuestion[]; all_question_statuses: QuestionStatusInfo[] }> {
+    const response = await candidateApi.get(`/candidate/assessment/${token}/questions`);
+    return response.data;
+  },
+
   async getCurrentQuestion(token: string, questionNumber?: number): Promise<CurrentQuestion> {
     try {
       const params = questionNumber ? { question_number: questionNumber } : {};

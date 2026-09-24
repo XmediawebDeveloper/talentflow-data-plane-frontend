@@ -210,17 +210,17 @@ export function RecordingPlayer({
       <div className="flex items-center gap-1 bg-slate-100 rounded-lg p-1 w-fit ring-1 ring-slate-200">
         <button
           type="button"
-          onClick={() => setView('candidate')}
-          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${isCandidate ? 'bg-white text-brand-blue shadow-sm ring-1 ring-brand-blue/15' : 'text-gray-500 hover:text-gray-700'}`}
-        >
-          <Camera className="w-3.5 h-3.5" /> Candidate View
-        </button>
-        <button
-          type="button"
           onClick={() => setView('screen')}
           className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${!isCandidate ? 'bg-white text-brand-blue shadow-sm ring-1 ring-brand-blue/15' : 'text-gray-500 hover:text-gray-700'}`}
         >
           <Monitor className="w-3.5 h-3.5" /> {screenLabel}
+        </button>
+        <button
+          type="button"
+          onClick={() => setView('candidate')}
+          className={`flex items-center gap-1.5 px-4 py-1.5 rounded-md text-sm font-medium transition-colors ${isCandidate ? 'bg-white text-brand-blue shadow-sm ring-1 ring-brand-blue/15' : 'text-gray-500 hover:text-gray-700'}`}
+        >
+          <Camera className="w-3.5 h-3.5" /> Candidate View
         </button>
       </div>
 
