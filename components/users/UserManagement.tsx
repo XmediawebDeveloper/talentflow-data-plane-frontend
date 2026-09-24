@@ -489,6 +489,8 @@ export default function UserManagement() {
   const _isTenantAdmin = currentUser?.role === 'tenant_admin';
   const _perms: any = currentUser?.permissions || {};
   const canDisableUser = _isTenantAdmin || !!_perms.can_disable_users || !!_perms.canDisableUsers;
+  const canUpdateUser = _isTenantAdmin || !!_perms.can_update_users || !!_perms.canUpdateUsers;
+  const canCreateUser = _isTenantAdmin || !!_perms.can_create_users || !!_perms.canCreateUsers;
   const canResetPassword = _isTenantAdmin || !!_perms.can_reset_user_password || !!_perms.canResetUserPassword;
   const canForcePwChange = _isTenantAdmin || !!_perms.can_force_password_change || !!_perms.canForcePasswordChange;
   const canAssignRole = _isTenantAdmin || !!_perms.can_assign_roles || !!_perms.canAssignRoles;
@@ -537,7 +539,23 @@ export default function UserManagement() {
 
   // Track selected permission codes (for custom permission UI)
   const [selectedPermissionCodes, setSelectedPermissionCodes] = useState<Set<string>>(new Set());
-  const [editSelectedPermissionCodes, setEditSelectedPermissionCodes] = useState<Set<string>>(new Set());
+  const [editSelectedPermissionCodes, _setEditSelectedPermissionCodes] = useState<Set<string>>(new Set());
+  // Backend (app/config/mandatory_permissions.py) always re-adds these 2 view-only
+  // codes to permission_ids on save regardless of what the client sends — every
+  // role, including admin, keeps baseline read access to the Analytics dashboard
+  // and Support. jd:read / my_resumes:read used to be in that baseline too, which
+  // silently overrode an Owner's choice to fully disable Job Descriptions / My
+  // Resumes — that's now fixed server-side, so those two are Owner-controlled
+  // like any other permission and must NOT be forced on here.
+  const MANDATORY_PERMISSION_CODES = new Set(['analytics:read', 'support:read']);
+  const setEditSelectedPermissionCodes = (updater: React.SetStateAction<Set<string>>) => {
+    _setEditSelectedPermissionCodes(prev => {
+      const base = typeof updater === 'function' ? (updater as (p: Set<string>) => Set<string>)(prev) : updater;
+      const next = new Set(base);
+      MANDATORY_PERMISSION_CODES.forEach(c => next.add(c));
+      return next;
+    });
+  };
   const [editOriginalRoleId, setEditOriginalRoleId] = useState<number | null>(null);
   const [editOriginalPermissionCodes, setEditOriginalPermissionCodes] = useState<Set<string>>(new Set());
   const selectRoleRequestIdRef = useRef(0);
@@ -1370,6 +1388,12 @@ export default function UserManagement() {
     const matchingRole = availableRoles.find(r => r.code.toLowerCase() === user.role.toLowerCase());
     setEditSelectedRoleId(matchingRole?.id || null);
 
+    // Guard the permissions panel with a loading state so it doesn't render
+    // with whatever was left over from the last time this modal was open
+    // (all toggles off / 0 selected) before flipping to the real values a
+    // moment later once the fetch below resolves.
+    setIsLoadingPermissions(true);
+
     // Fetch fresh user data with permission_ids
     try {
       const freshUserData = await userService.getUser(user.id);
@@ -1563,6 +1587,8 @@ export default function UserManagement() {
       // Fallback to empty permissions if fetch fails
       setEditSelectedPermissionIds(new Set());
       setEditOriginalPermissionIds(new Set());
+    } finally {
+      setIsLoadingPermissions(false);
     }
 
   };
@@ -2079,28 +2105,30 @@ export default function UserManagement() {
               <Link2 className="w-4 h-4" />
               Dependencies
             </button>
-            {/* RBAC01: Check user limits before showing Add User button */}
-            <button
-              onClick={() => {
-                if (isAtLimit) {
-                  if (isTrial) {
-                    toast.error('User limit reached. Add-on seat purchases are only available for paid subscriptions. Please upgrade your plan.');
-                  } else {
-                    setShowAddSeatsModal(true);
+            {/* RBAC01: Check user limits before showing Add User button — also requires users:create */}
+            {canCreateUser && (
+              <button
+                onClick={() => {
+                  if (isAtLimit) {
+                    if (isTrial) {
+                      toast.error('User limit reached. Add-on seat purchases are only available for paid subscriptions. Please upgrade your plan.');
+                    } else {
+                      setShowAddSeatsModal(true);
+                    }
+                    return;
                   }
-                  return;
-                }
-                setIsCreateModalOpen(true);
-              }}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shadow-md ring-1 ring-white/10 ${
-                isAtLimit
-                  ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-red-500/25'
-                  : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-brand-blue/25'
-              }`}
-            >
-              <Plus className="w-4 h-4" />
-              {isAtLimit && !isTrial ? 'Buy More Seats' : 'Invite User'}
-            </button>
+                  setIsCreateModalOpen(true);
+                }}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shadow-md ring-1 ring-white/10 ${
+                  isAtLimit
+                    ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-red-500/25'
+                    : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-brand-blue/25'
+                }`}
+              >
+                <Plus className="w-4 h-4" />
+                {isAtLimit && !isTrial ? 'Buy More Seats' : 'Invite User'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -2477,8 +2505,8 @@ export default function UserManagement() {
                           </button>
                         )} */}
   
-                        {/* Edit button - Disabled when user is inactive */}
-                        {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
+                        {/* Edit button - requires users:update, disabled when user is inactive */}
+                        {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && canUpdateUser && (
                           <button
                             onClick={() => user.is_active && openEditModal(user)}
                             disabled={!user.is_active}
@@ -3085,18 +3113,27 @@ export default function UserManagement() {
                               {/* View card */}
                               {category.viewCode && (() => {
                                 const badge = getActionBadge(category.viewCode);
-                                const isOn = editSelectedPermissionCodes.has(category.viewCode);
+                                const isMandatory = MANDATORY_PERMISSION_CODES.has(category.viewCode);
+                                const isOn = isMandatory || editSelectedPermissionCodes.has(category.viewCode);
                                 return (
                                   <div
                                     key={category.viewCode}
-                                    onClick={() => toggleCode(category.viewCode!)}
-                                    className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-blue/5 border-brand-blue/30 ring-1 ring-brand-blue/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-blue/30 hover:bg-brand-blue/5'}`}
+                                    onClick={isMandatory
+                                      ? () => toast.info(`"View ${category.name}" is a baseline permission every account keeps — it can't be disabled.`)
+                                      : () => toggleCode(category.viewCode!)}
+                                    title={isMandatory ? 'Baseline permission — always enabled for every account' : undefined}
+                                    className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border transition-all select-none ${isMandatory ? 'cursor-default' : 'cursor-pointer'} ${isOn ? 'bg-brand-blue/5 border-brand-blue/30 ring-1 ring-brand-blue/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-blue/30 hover:bg-brand-blue/5'}`}
                                   >
                                     <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
                                       <span className="text-2xs sm:text-xs font-bold">{badge.letter}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">View {category.name}</div>
+                                      <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">
+                                        View {category.name}
+                                        {isMandatory && (
+                                          <span className="ml-1.5 text-2xs font-normal text-gray-500 dark:text-slate-500 italic">(always on)</span>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
                                 );
