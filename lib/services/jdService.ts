@@ -849,7 +849,7 @@ export const jdService = {
   async validateIndustry(
     id: string,
     industrySuggestedName: string,
-    options: { force?: boolean } = {},
+    options: { force?: boolean; source?: 'suggested' | 'manual' } = {},
   ): Promise<IndustryValidationResponse> {
     try {
       const response = await api.post<IndustryValidationResponse>(`/jd/${id}/validate-industry`, {
@@ -857,6 +857,10 @@ export const jdService = {
         // The recruiter has seen the warning and insists - the gate asks, it does
         // not block, and this is how their answer gets back through it.
         force: Boolean(options.force),
+        // "suggested" = our own Step 2 proposal the recruiter accepted: the gate runs
+        // only the free duplicate check, never a second model opinion on our first.
+        // "manual" = the recruiter typed it: full gate. Strict by default.
+        source: options.source ?? 'manual',
       });
       return response.data;
     } catch (error) {

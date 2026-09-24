@@ -2706,7 +2706,10 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
     if (!editingId || !name) return;
     setIsResolvingIndustryGate(true);
     try {
-      const result = await jdService.validateIndustry(editingId, name, { force: true });
+      const result = await jdService.validateIndustry(editingId, name, {
+        force: true,
+        source: extractedData.industryIsCustom ? 'manual' : 'suggested',
+      });
       if (result.outcome === 'created' && result.industry_type) {
         applyResolvedIndustryCode(result.industry_type, result.industry_label || name, true);
         setIndustryGate(null);
@@ -5874,9 +5877,19 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
       }
       setIsRegenerating(true);
       try {
-        const gate = await jdService.validateIndustry(editingId, proposedIndustry);
+        // A name the recruiter typed gets the full check; one they merely accepted from
+        // our own suggestion does not - a second model opinion on our first had the
+        // system arguing with itself in front of them.
+        const gate = await jdService.validateIndustry(editingId, proposedIndustry, {
+          source: extractedData.industryIsCustom ? 'manual' : 'suggested',
+        });
         if (gate.outcome === 'created' && gate.industry_type) {
           applyResolvedIndustryCode(gate.industry_type, gate.industry_label || proposedIndustry, true);
+          // Filed under an industry that already existed: say so rather than swap it
+          // silently - the recruiter accepted one name and will see another.
+          if (gate.message) {
+            toast.success({ title: 'Industry set', description: gate.message });
+          }
           // Do NOT carry on in this closure: its extractedData still holds the
           // sentinel, and the reformat / save payloads below would file the JD under
           // 'others'. Let the state land, then re-enter through a fresh closure - the

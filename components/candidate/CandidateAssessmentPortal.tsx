@@ -225,6 +225,10 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   const cameraRecorderRef = useRef<SegmentedRecorder | null>(null);
   const cameraRelayStopRef = useRef<(() => void) | null>(null);
   const cameraRelayVideoRef = useRef<HTMLVideoElement | null>(null);
+  // One processed microphone track shared by BOTH recorders (gain + limiter),
+  // built from the camera stream's mic. Lives in its own AudioContext.
+  const recordingAudioCtxRef = useRef<AudioContext | null>(null);
+  const recordingMicTrackRef = useRef<MediaStreamTrack | null>(null);
   const pendingResumeAfterShareRef = useRef(false);
   const shareBarPageRef = useRef<HTMLDivElement | null>(null);
   const shareBarCardRef = useRef<HTMLDivElement | null>(null);
@@ -448,11 +452,26 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   }, [token]);
 
   const recordingSettings = (assessmentData?.proctoring_settings ?? assessmentInfo?.proctoring_settings) ?? null;
-  // Screen recording is a HARD gate (product decision 2026-09-23) unless the
-  // tenant switched it off in proctoring settings. Webcam recording follows
-  // webcam_monitoring. Adaptive mode (browsers without fullscreen/share) skips both.
-  const screenRecordingRequired = !useAdaptiveAssessmentMode && recordingSettings?.screen_recording !== false;
-  const cameraRecordingEnabled = !useAdaptiveAssessmentMode && recordingSettings?.webcam_monitoring !== false;
+  // Screen + webcam recording are a HARD gate, exactly like the AI interview
+  // (product decision 2026-09-23). 2026-09-24: a tester's tenant had the
+  // recruiter-side "Screen Recording" toggle OFF, which made this code skip the
+  // share picker and the hide-share-bar gate entirely (only a Candidate View
+  // was stored). The tenant toggle no longer weakens the gate; only adaptive
+  // mode (browsers without fullscreen / screen share) skips it.
+  const screenRecordingRequired = !useAdaptiveAssessmentMode;
+  const cameraRecordingEnabled = !useAdaptiveAssessmentMode;
+  useEffect(() => {
+    if (step === 'fullscreen_prompt') {
+      console.log('[AS-Recording] gate config', {
+        adaptiveMode: useAdaptiveAssessmentMode,
+        screenRecordingRequired,
+        cameraRecordingEnabled,
+        tenant_screen_recording_setting: recordingSettings?.screen_recording,
+        tenant_webcam_monitoring_setting: recordingSettings?.webcam_monitoring,
+      });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step]);
 
   useRefreshPrevention({
     enabled: isAssessmentActive,
@@ -1225,6 +1244,47 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     screenStreamRef.current = null;
   }, []);
 
+  /**
+   * Recording microphone: the raw getUserMedia track (browser auto-gain on)
+   * came out very loud / clipped in the Candidate View. Route it once through
+   * a gain + limiter and hand the SAME processed track to both recorders so
+   * the two views sound identical. Falls back to the raw track if Web Audio
+   * is unavailable. The track identity never changes after creation.
+   */
+  const RECORDING_MIC_GAIN = 0.7;
+  const getRecordingMicTracks = useCallback((source: MediaStream | null): MediaStreamTrack[] => {
+    if (recordingMicTrackRef.current && recordingMicTrackRef.current.readyState === 'live') {
+      return [recordingMicTrackRef.current];
+    }
+    const raw = (source?.getAudioTracks() ?? []).filter((t) => t.readyState === 'live');
+    if (raw.length === 0) return [];
+    try {
+      const ctx = recordingAudioCtxRef.current && recordingAudioCtxRef.current.state !== 'closed'
+        ? recordingAudioCtxRef.current
+        : new AudioContext({ sampleRate: 48000 });
+      recordingAudioCtxRef.current = ctx;
+      void ctx.resume?.().catch(() => {});
+      const src = ctx.createMediaStreamSource(new MediaStream([raw[0]]));
+      const gain = ctx.createGain();
+      gain.gain.value = RECORDING_MIC_GAIN;
+      const limiter = ctx.createDynamicsCompressor();
+      limiter.threshold.value = -12;
+      limiter.knee.value = 6;
+      limiter.ratio.value = 8;
+      limiter.attack.value = 0.003;
+      limiter.release.value = 0.2;
+      const dest = ctx.createMediaStreamDestination();
+      src.connect(gain).connect(limiter).connect(dest);
+      const track = dest.stream.getAudioTracks()[0] ?? null;
+      if (!track) return raw;
+      recordingMicTrackRef.current = track;
+      return [track];
+    } catch (e) {
+      console.warn('[AS-Recording] mic processing unavailable, using raw track:', e);
+      return raw;
+    }
+  }, []);
+
   const startScreenRecorder = useCallback(() => {
     const stream = screenStreamRef.current;
     if (!stream || screenRecorderRef.current) return;
@@ -1236,7 +1296,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     // muxer starts that file at its first audio sample and the durations
     // drift apart by ~1 s. A track may feed two recorders; the stream's track
     // set is fixed at creation and never mutated afterwards.
-    const micTracks = (streamRef.current?.getAudioTracks() ?? []).filter((t) => t.readyState === 'live');
+    const micTracks = getRecordingMicTracks(streamRef.current);
     const recorder = new SegmentedRecorder({
       stream: new MediaStream([track, ...micTracks]),
       upload: (blob, idx, isFinal) => candidateService.uploadScreenRecording(token, blob, idx, isFinal),
@@ -1254,7 +1314,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     });
     screenRecorderRef.current = recorder;
     recorder.start();
-  }, [token]);
+  }, [token, getRecordingMicTracks]);
 
   const requestEntireScreenShare = useCallback(async (): Promise<MediaStream> => {
     const displayMediaOptions: any = {
@@ -1472,6 +1532,10 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     const scr = screenRecorderRef.current; screenRecorderRef.current = null;
     await Promise.all([cam?.stop(), scr?.stop()]);
     cameraRelayStopRef.current?.(); cameraRelayStopRef.current = null;
+    try { recordingMicTrackRef.current?.stop(); } catch { /* ignore */ }
+    recordingMicTrackRef.current = null;
+    try { await recordingAudioCtxRef.current?.close(); } catch { /* ignore */ }
+    recordingAudioCtxRef.current = null;
     if (cameraRelayVideoRef.current) { cameraRelayVideoRef.current.srcObject = null; cameraRelayVideoRef.current = null; }
   }, []);
 
@@ -1489,6 +1553,12 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       }
     } catch { /* storage unavailable */ }
 
+    // Wait for the camera stream so both recorders start in the SAME tick with
+    // the SAME microphone. Previously the screen recorder started on the first
+    // run (before the camera was ready): it got no mic track (silent Screen
+    // View) and began ~4 s earlier (1:02 vs 0:58 durations).
+    if (cameraRecordingEnabled && !cameraStream) return;
+
     if (cameraRecordingEnabled && cameraStream && !cameraRecorderRef.current) {
       try {
         const relayVideo = document.createElement('video');
@@ -1504,7 +1574,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         cameraRelayStopRef.current = relay.stop;
         const tracks: MediaStreamTrack[] = [];
         if (relay.track) tracks.push(relay.track); else tracks.push(...cameraStream.getVideoTracks());
-        tracks.push(...cameraStream.getAudioTracks());
+        tracks.push(...getRecordingMicTracks(cameraStream));
         const recorder = new SegmentedRecorder({
           stream: new MediaStream(tracks),
           upload: (blob, idx, isFinal) => candidateService.uploadRecording(token, blob, idx, isFinal),
@@ -1528,7 +1598,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     }
     if (screenRecordingRequired) startScreenRecorder();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, cameraStream, cameraRecordingEnabled, screenRecordingRequired, token]);
+  }, [step, cameraStream, cameraRecordingEnabled, screenRecordingRequired, token, getRecordingMicTracks]);
 
   useEffect(() => {
     if (step === 'completing' || step === 'completed' || step === 'results' || step === 'error' || step === 'terminated') {
