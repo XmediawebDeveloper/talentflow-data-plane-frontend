@@ -3013,8 +3013,13 @@ export default function UserManagement() {
                                 s.actions.forEach(a => next.delete(a.code));
                               });
                             } else {
-                              // Enable viewCode only (user picks individual actions)
+                              // Enable all codes in this category
                               if (category.viewCode) next.add(category.viewCode);
+                              category.actions?.forEach(a => next.add(a.code));
+                              category.subCategories?.forEach(s => {
+                                if (s.viewCode) next.add(s.viewCode);
+                                s.actions.forEach(a => next.add(a.code));
+                              });
                             }
                             return next;
                           });
