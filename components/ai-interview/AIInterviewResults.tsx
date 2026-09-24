@@ -13,13 +13,15 @@ import { useRouter } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
-  Ban,
+  Ban, SlidersHorizontal, FileDown, FileText, FileSpreadsheet, Info, Download, X,
+  Square, CheckSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import type { AIInterviewResponse, AIInterviewInvitationListResponse } from '@/lib/services/aiInterviewService';
 import { formatISTDate, formatIST, parseIST } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
+import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
 import { InviteSourceValue, inviteSourceLabel } from '@/components/AIInterviewInviteTable';
 
 interface AIInterviewResultsProps {
@@ -66,6 +68,21 @@ interface AIInterviewResultsProps {
   jobVersion?: number;
   interviewVersion?: number;
 }
+
+/* Toggleable table columns (Actions always shows). Same Customize Columns
+ * modal the resume scoring All Resumes tab uses. */
+const RESULT_COLUMNS = [
+  { id: 'cid', label: 'CID' },
+  { id: 'candidate', label: 'Candidate' },
+  { id: 'email', label: 'Email' },
+  { id: 'jobVersion', label: 'Job Version' },
+  { id: 'interviewVersion', label: 'Interview Version' },
+  { id: 'status', label: 'Status' },
+  { id: 'score', label: 'Score' },
+  { id: 'timeline', label: 'Timeline' },
+  { id: 'proctoring', label: 'Proctoring Risk' },
+] as const;
+type ResultColumnId = (typeof RESULT_COLUMNS)[number]['id'];
 
 /* Job versions blue, interview versions cyan — same two colours the All
  * Interviews table and the Interview/Assessment Version History panels use
@@ -185,6 +202,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
   const [totalSessions, setTotalSessions] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [summary, setSummary] = useState({
+    invited: 0,
     completed: 0,
     inProgress: 0,
     terminated: 0,
@@ -261,15 +279,27 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
     }
   };
 
+  // Row selection for Export. Keyed by session id and holding the session
+  // itself: the list is server-paginated, so a row picked on page 1 is no
+  // longer in `sessions` once the user moves to page 2.
+  const [selected, setSelected] = useState<Map<string, AIInterviewResponse>>(() => new Map());
+  const toggleSelected = (session: AIInterviewResponse) =>
+    setSelected((prev) => {
+      const next = new Map(prev);
+      if (next.has(session.id)) next.delete(session.id);
+      else next.set(session.id, session);
+      return next;
+    });
+
   // Search and filters live in the shared hook. This view queries the SERVER,
   // so `appliedQuery` matters twice over: it keeps one request per pause rather
   // than per keystroke, and it is what the request is built from.
   const search = useListSearch({
-    initialFilters: { status: 'all', scoreMin: '', scoreMax: '', dateFrom: '', dateTo: '' },
+    initialFilters: { status: 'all', scoreMin: '', scoreMax: '', dateFrom: '', dateTo: '', jobVersion: '', interviewVersion: '' },
     onChange: () => setCurrentPage(1),
     // Score min/max is one logical range filter, and so is the date range.
     countFilters: (f) =>
-      [f.scoreMin || f.scoreMax, f.dateFrom || f.dateTo].filter(Boolean).length,
+      [f.scoreMin || f.scoreMax, f.dateFrom || f.dateTo, f.jobVersion, f.interviewVersion].filter(Boolean).length,
   });
   const {
     status: statusFilter,
@@ -277,6 +307,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
     scoreMax,
     dateFrom,
     dateTo,
+    jobVersion: jobVersionFilter,
+    interviewVersion: interviewVersionFilter,
   } = search.filters;
 
   const requestParams = useMemo(() => ({
@@ -299,15 +331,17 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
       // has, filled the same way: a dedicated page_size-1 probe per status,
       // scoped by the same search/date params so the cards stay in step with
       // an active search rather than always reading the whole config.
-      const [result, expiredProbe, revokedProbe]: [AIInterviewInvitationListResponse, AIInterviewInvitationListResponse, AIInterviewInvitationListResponse] = await Promise.all([
+      const [result, expiredProbe, revokedProbe, invitedProbe]: [AIInterviewInvitationListResponse, AIInterviewInvitationListResponse, AIInterviewInvitationListResponse, AIInterviewInvitationListResponse] = await Promise.all([
         aiInterviewService.getConfigInvitations(configId, requestParams),
         aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'expired', page: 1, page_size: 1 }),
         aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'revoked', page: 1, page_size: 1 }),
+        aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'invited', page: 1, page_size: 1 }),
       ]);
       setSessions(result.items);
       setTotalSessions(result.total);
       setTotalPages(Math.max(1, result.total_pages || 1));
       setSummary({
+        invited: invitedProbe.total || 0,
         completed: result.completed || 0,
         inProgress: result.in_progress || 0,
         terminated: result.terminated || 0,
@@ -334,12 +368,14 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
         aiInterviewService.getConfigInvitations(configId, requestParams),
         aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'expired', page: 1, page_size: 1 }),
         aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'revoked', page: 1, page_size: 1 }),
+        aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'invited', page: 1, page_size: 1 }),
       ])
-        .then(([r, expiredProbe, revokedProbe]) => {
+        .then(([r, expiredProbe, revokedProbe, invitedProbe]) => {
           setSessions(r.items);
           setTotalSessions(r.total);
           setTotalPages(Math.max(1, r.total_pages || 1));
           setSummary({
+            invited: invitedProbe.total || 0,
             completed: r.completed || 0,
             inProgress: r.in_progress || 0,
             terminated: r.terminated || 0,
@@ -353,7 +389,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
   }, [sessions, configId, requestParams]);
 
   // The hook's `onChange` returns to page 1 whenever the query or a filter moves.
-  const paginatedSessions = sessions;
+  // Job/interview version are properties of this config, not of each row, so
+  // the version filters narrow client-side against the resolved versions.
+  const versionMatches =
+    (!jobVersionFilter || String(jobVersion) === jobVersionFilter) &&
+    (!interviewVersionFilter || String(interviewVersion) === interviewVersionFilter);
+  const paginatedSessions = versionMatches ? sessions : [];
 
   // No candidate has been invited to this interview yet. The search box, status
   // dropdown and More Filters would all be narrowing nothing, so the whole bar
@@ -361,6 +402,99 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
   // filter that happens to match nothing is NOT this case — the bar has to stay
   // put so it can be cleared, and `isNarrowed` is what tells the two apart.
   const isUnstarted = !isLoading && sessions.length === 0 && !search.isNarrowed;
+
+  const [columns, setColumns] = useState(() => RESULT_COLUMNS.map((c) => ({ id: c.id as string, label: c.label as string, enabled: true })));
+  const [showColumnModal, setShowColumnModal] = useState(false);
+  const enabledColumns = columns.filter((c) => c.enabled);
+  const col = (id: ResultColumnId) => columns.some((c) => c.id === id && c.enabled);
+
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exportFormat, setExportFormat] = useState<'csv' | 'xls'>('csv');
+  const [isExporting, setIsExporting] = useState(false);
+
+  // One export cell per column; Timeline splits into its three parts so each
+  // lands in its own spreadsheet column.
+  const exportHeaders = (): string[] =>
+    enabledColumns.flatMap((c) => (c.id === 'timeline' ? ['Started At', 'Completed At', 'Duration'] : [c.label]));
+  const exportRow = (session: AIInterviewResponse): string[] =>
+    enabledColumns.flatMap((c): string[] => {
+      switch (c.id) {
+        case 'cid': return [session.candidate_cid || ''];
+        case 'candidate': return [session.candidate_name || ''];
+        case 'email': return [session.candidate_email || ''];
+        case 'jobVersion': return [jobVersion != null ? `V${jobVersion}` : ''];
+        case 'interviewVersion': return [interviewVersion != null ? `V${interviewVersion}` : ''];
+        case 'status': return [getStatusLabel(session.status)];
+        case 'score': return [session.score != null ? `${Math.round(session.score)}%` : ''];
+        case 'timeline': return [
+          session.started_at ? formatIST(session.started_at) : '',
+          session.completed_at ? formatIST(session.completed_at) : '',
+          session.started_at ? formatDuration(session) : '',
+        ];
+        case 'proctoring': return [session.status === 'completed' ? getProctoringRisk(session).level : ''];
+        default: return [''];
+      }
+    });
+
+  // Exports the selected rows when any are picked; otherwise every row
+  // matching the current search/filters, not just this page.
+  const handleExport = async () => {
+    setIsExporting(true);
+    try {
+      const all: AIInterviewResponse[] = selected.size > 0 ? Array.from(selected.values()) : [];
+      if (selected.size === 0) {
+        for (let page = 1; ; page += 1) {
+          const res = await aiInterviewService.getConfigInvitations(configId, { ...requestParams, page, page_size: 100 });
+          all.push(...res.items);
+          if (res.items.length < 100 || page >= (res.total_pages || 1)) break;
+        }
+      }
+      const rows = selected.size > 0 ? all : versionMatches ? all : [];
+      if (rows.length === 0) {
+        toast.warning('No candidates to export');
+        return;
+      }
+      const headers = exportHeaders();
+      const data = rows.map(exportRow);
+      const baseName = `${(configTitle || jdTitle || 'AI_Interview').replace(/\s+/g, '_')}_Results_${new Date().toISOString().slice(0, 10)}`;
+      let blob: Blob;
+      let fileName: string;
+      if (exportFormat === 'csv') {
+        const q = (v: string) => `"${v.replace(/"/g, '""')}"`;
+        const csv = [headers.map(q).join(','), ...data.map((row) => row.map(q).join(','))].join('\n');
+        blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8;' });
+        fileName = `${baseName}.csv`;
+      } else {
+        const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><head><meta charset="UTF-8"><style>table{border-collapse:collapse}th,td{border:1px solid #000;padding:8px;text-align:left}th{background:#f0f0f0;font-weight:bold}</style></head><body><table><thead><tr>${headers.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${data.map((row) => `<tr>${row.map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('')}</tbody></table></body></html>`;
+        blob = new Blob([html], { type: 'application/vnd.ms-excel;charset=utf-8;' });
+        fileName = `${baseName}.xls`;
+      }
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+      toast.success(`Exported ${rows.length} records to ${exportFormat === 'csv' ? 'CSV' : 'Excel'}`);
+      setShowExportModal(false);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to export results');
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
+  const allOnPageSelected = paginatedSessions.length > 0 && paginatedSessions.every((s) => selected.has(s.id));
+  const toggleAllOnPage = () =>
+    setSelected((prev) => {
+      const next = new Map(prev);
+      if (allOnPageSelected) paginatedSessions.forEach((s) => next.delete(s.id));
+      else paginatedSessions.forEach((s) => next.set(s.id, s));
+      return next;
+    });
 
   const handleViewDetails = (session: AIInterviewResponse) => {
     // Embedded (Results tab inside the interview details page): open the
@@ -401,10 +535,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
           its own counts and Quick Actions, and the tab leads with the candidate
           table instead. */}
       {!embedded && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 mb-6">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
           {([
-            { key: 'all', label: 'Total Invited', value: totalSessions, Icon: Users,
+            { key: 'all', label: 'Total', value: totalSessions, Icon: Users,
               iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15', iconColor: 'text-brand-blue', activeRing: 'ring-brand-blue/50 border-brand-blue/40' },
+            { key: 'invited', label: 'Invited', value: summary.invited, Icon: Mail,
+              iconBg: 'bg-brand-cyan/10 ring-1 ring-brand-cyan/20', iconColor: 'text-brand-blue', activeRing: 'ring-brand-cyan/50 border-brand-cyan/40' },
             { key: 'completed', label: 'Completed', value: summary.completed, Icon: CheckCircle,
               iconBg: 'bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-success-line', iconColor: 'text-success', activeRing: 'ring-success/50 border-success-line' },
             { key: 'in_progress', label: 'In Progress', value: summary.inProgress, Icon: Clock,
@@ -464,6 +600,25 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
           leadingActions={toolbarActions}
           className="mb-0"
         >
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowColumnModal(true)}
+            icon={<SlidersHorizontal className="w-4 h-4" />}
+            className="hidden sm:flex whitespace-nowrap !h-[38px] !text-sm"
+          >
+            <span className="hidden md:inline">Customize Columns</span>
+            <span className="md:hidden">Columns</span>
+          </Button>
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => setShowExportModal(true)}
+            icon={<FileDown className="w-4 h-4" />}
+            className="whitespace-nowrap !h-[38px] !text-sm"
+          >
+            Export{selected.size > 0 ? ` (${selected.size})` : ''}
+          </Button>
           <select
             value={statusFilter}
             onChange={(e) => search.setFilter('status', e.target.value)}
@@ -480,8 +635,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
         {/* Expanded filters */}
         {showFilters && (
           <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-brand-blue/10">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 lg:gap-5">
-            <div>
+          <div className="flex flex-wrap gap-x-6 gap-y-4">
+            <div className="flex-1 min-w-0 basis-[240px]">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Score Range (%)</label>
               <div className="flex items-center gap-2">
                 <input
@@ -491,7 +646,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                   max={100}
                   value={search.draftFilters.scoreMin}
                   onChange={(e) => search.setDraftFilter('scoreMin', e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                  className="w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
                 <span className="text-gray-400 text-sm">to</span>
                 <input
@@ -501,27 +656,51 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                   max={100}
                   value={search.draftFilters.scoreMax}
                   onChange={(e) => search.setDraftFilter('scoreMax', e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                  className="w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
               </div>
             </div>
-            <div>
+            <div className="flex-[1.4] min-w-0 basis-[320px]">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Completion Date</label>
               <div className="flex items-center gap-2">
                 <input
                   type="date"
                   value={search.draftFilters.dateFrom}
                   onChange={(e) => search.setDraftFilter('dateFrom', e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                  className="w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
                 <span className="text-gray-400 text-sm">to</span>
                 <input
                   type="date"
                   value={search.draftFilters.dateTo}
                   onChange={(e) => search.setDraftFilter('dateTo', e.target.value)}
-                  className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                  className="w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
               </div>
+            </div>
+            <div className="flex-1 min-w-0 basis-[180px]">
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Job Version</label>
+              <select
+                value={search.draftFilters.jobVersion}
+                onChange={(e) => search.setDraftFilter('jobVersion', e.target.value)}
+                aria-label="Job Version"
+                className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"
+              >
+                <option value="">All job versions</option>
+                {jobVersion != null && <option value={String(jobVersion)}>V{jobVersion}</option>}
+              </select>
+            </div>
+            <div className="flex-1 min-w-0 basis-[180px]">
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Interview Version</label>
+              <select
+                value={search.draftFilters.interviewVersion}
+                onChange={(e) => search.setDraftFilter('interviewVersion', e.target.value)}
+                aria-label="Interview Version"
+                className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"
+              >
+                <option value="">All interview versions</option>
+                {interviewVersion != null && <option value={String(interviewVersion)}>V{interviewVersion}</option>}
+              </select>
             </div>
           </div>
 
@@ -554,7 +733,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
             description="Invite candidates to this interview to see their sessions here."
             action={emptyStateAction ?? undefined}
           />
-        ) : sessions.length === 0 ? (
+        ) : paginatedSessions.length === 0 ? (
           /* Records exist, a search or filter just matched none of them. That
              needs the "clear it" exit, not a create-something CTA. */
           <ListEmptyState
@@ -607,8 +786,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
 
                     <div>
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        {getStatusIcon(session.status)}
                         <Badge variant={getStatusVariant(session.status)}>
+                          {getStatusIcon(session.status)}
                           {getStatusLabel(session.status)}
                         </Badge>
                         {session.status === 'in_progress' && (
@@ -641,16 +820,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
 
                     {session.score != null && (
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 bg-gray-200 rounded-full h-1.5">
-                          <div
-                            className={`h-1.5 rounded-full ${
-                              session.score >= 70 ? 'bg-success' :
-                              session.score >= 50 ? 'bg-brand-orange' : 'bg-destructive'
-                            }`}
-                            style={{ width: `${Math.min(100, session.score)}%` }}
-                          />
-                        </div>
-                        <span className={`font-medium text-xs shrink-0 ${
+                        <span className={`font-semibold text-sm shrink-0 ${
                           session.score >= 70 ? 'text-success' :
                           session.score >= 50 ? 'text-brand-orange-deep' : 'text-destructive'
                         }`}>
@@ -730,16 +900,31 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
               <table className="w-full text-sm">
                 <thead className="bg-slate-50 border-b border-gray-100">
                   <tr>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">CID</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Candidate</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Email</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>
+<th className="text-left px-4 py-3 w-12 align-middle tf-sticky-col-left">
+                      <button
+                        type="button"
+                        onClick={toggleAllOnPage}
+                        className="p-1 rounded hover:bg-gray-100"
+                        aria-label={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
+                        title={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
+                      >
+                        {allOnPageSelected ? (
+                          <CheckSquare className="w-4 h-4 text-brand-blue" />
+                        ) : (
+                          <Square className="w-4 h-4 text-gray-400" />
+                        )}
+                      </button>
+                    </th>
+                    {col('cid') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">CID</th>}
+                    {col('candidate') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Candidate</th>}
+                    {col('email') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Email</th>}
+                    {col('jobVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>}
+                    {col('interviewVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>}
                     <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Status</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>
+                    {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Status</th>}
+                    {col('score') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>}
+                    {col('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
+                    {col('proctoring') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>}
                     <th className="text-right px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide tf-sticky-col">Actions</th>
                   </tr>
                 </thead>
@@ -752,113 +937,136 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                         onClick={() => handleViewDetails(session)}
                         className="hover:bg-brand-blue/5 transition-colors cursor-pointer"
                       >
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {session.candidate_cid ? (
-                            <span className="text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-1 rounded">
-                              {session.candidate_cid}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
+<td className="px-4 py-3 w-12 align-middle tf-sticky-col-left" onClick={(e) => e.stopPropagation()}>
+                          <button
+                            type="button"
+                            onClick={() => toggleSelected(session)}
+                            className="p-1 rounded hover:bg-gray-200"
+                            aria-label={selected.has(session.id) ? 'Deselect candidate' : 'Select candidate'}
+                          >
+                            {selected.has(session.id) ? (
+                              <CheckSquare className="w-4 h-4 text-brand-blue" />
+                            ) : (
+                              <Square className="w-4 h-4 text-gray-400" />
+                            )}
+                          </button>
                         </td>
-                        <td className="px-4 py-3">
-                          <div className="flex items-center gap-2">
-                            <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-xs flex-shrink-0">
-                              {(session.candidate_name || 'U')[0].toUpperCase()}
+                        {col('cid') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {session.candidate_cid ? (
+                              <span className="text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-1 rounded">
+                                {session.candidate_cid}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                        )}
+                        {col('candidate') && (
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-semibold text-xs flex-shrink-0">
+                                {(session.candidate_name || 'U')[0].toUpperCase()}
+                              </div>
+                              <span className="font-medium text-gray-900 truncate max-w-[160px]">
+                                {session.candidate_name || 'Unknown'}
+                              </span>
                             </div>
-                            <span className="font-medium text-gray-900 truncate max-w-[160px]">
-                              {session.candidate_name || 'Unknown'}
+                          </td>
+                        )}
+                        {col('email') && (
+                          <td className="px-4 py-3">
+                            <span className="text-gray-600 truncate max-w-[180px] block">
+                              {session.candidate_email || '—'}
                             </span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3">
-                          <span className="text-gray-600 truncate max-w-[180px] block">
-                            {session.candidate_email || '—'}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {jobVersion != null ? <VersionPill kind="job" version={jobVersion} /> : <span className="text-gray-400">—</span>}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {interviewVersion != null ? <VersionPill kind="interview" version={interviewVersion} /> : <span className="text-gray-400">—</span>}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-700">
+                          </td>
+                        )}
+                        {col('jobVersion') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {jobVersion != null ? <VersionPill kind="job" version={jobVersion} /> : <span className="text-gray-400">—</span>}
+                          </td>
+                        )}
+                        {col('interviewVersion') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {interviewVersion != null ? <VersionPill kind="interview" version={interviewVersion} /> : <span className="text-gray-400">—</span>}
+                          </td>
+                        )}
+                        {col('status') && (
+                          <td className="px-4 py-3 whitespace-nowrap text-gray-700">
                           {inviteSourceLabel(session)
                             ? <InviteSourceValue inv={session} iconClassName="w-3.5 h-3.5" />
                             : <span className="text-gray-400">—</span>}
                         </td>
                         <td className="px-4 py-3 whitespace-nowrap">
-                          <div className="flex items-center gap-1.5">
-                            {getStatusIcon(session.status)}
-                            <Badge variant={getStatusVariant(session.status)}>
-                              {getStatusLabel(session.status)}
-                            </Badge>
-                            {session.status === 'in_progress' && (
-                              <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
-                                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                                LIVE
-                              </span>
-                            )}
-                          </div>
-                          {/* Mini skill coverage bar for live sessions */}
-                          {session.status === 'in_progress' && session.skill_coverage && (() => {
-                            const sc = session.skill_coverage;
-                            const total = sc.covered.length + sc.medium_covered.length + sc.low_covered.length + sc.uncovered.length;
-                            const coveredPct = total > 0 ? Math.round(((sc.covered.length + sc.medium_covered.length) / total) * 100) : 0;
-                            return (
-                              <div className="mt-1.5">
-                                <div className="flex items-center gap-1 mb-0.5">
-                                  <span className="text-2xs text-gray-500">{sc.questions_asked}/{sc.total_questions} Q</span>
-                                  <span className="text-2xs text-success font-medium ml-auto">{coveredPct}% covered</span>
-                                </div>
-                                <div className="flex h-1 rounded-full overflow-hidden bg-gray-200 w-28">
-                                  <div className="bg-success" style={{ width: `${Math.round((sc.covered.length / (total || 1)) * 100)}%` }} />
-                                  <div className="bg-warning" style={{ width: `${Math.round((sc.medium_covered.length / (total || 1)) * 100)}%` }} />
-                                  <div className="bg-orange-400" style={{ width: `${Math.round((sc.low_covered.length / (total || 1)) * 100)}%` }} />
-                                </div>
-                              </div>
-                            );
-                          })()}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {session.score != null ? (
-                            <div className="flex items-center gap-2">
-                              <div className="w-16 bg-gray-200 rounded-full h-1.5">
-                                <div
-                                  className={`h-1.5 rounded-full ${
-                                    session.score >= 70 ? 'bg-success' :
-                                    session.score >= 50 ? 'bg-brand-orange' : 'bg-destructive'
-                                  }`}
-                                  style={{ width: `${Math.min(100, session.score)}%` }}
-                                />
-                              </div>
-                              <span className={`font-medium text-xs ${
-                                session.score >= 70 ? 'text-success' :
-                                session.score >= 50 ? 'text-brand-orange-deep' : 'text-destructive'
-                              }`}>
-                                {Math.round(session.score)}%
-                              </span>
+                            <div className="flex items-center gap-1.5">
+                              <Badge variant={getStatusVariant(session.status)}>
+                                {getStatusIcon(session.status)}
+                                {getStatusLabel(session.status)}
+                              </Badge>
+                              {session.status === 'in_progress' && (
+                                <span className="flex items-center gap-1 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full">
+                                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
+                                  LIVE
+                                </span>
+                              )}
                             </div>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-600">
-                          <div className="flex flex-col gap-0.5 text-xs">
-                            <span><span className="text-gray-400">Started at:</span> {session.started_at ? formatIST(session.started_at) : '—'}</span>
-                            <span><span className="text-gray-400">Completed at:</span> {session.completed_at ? formatIST(session.completed_at) : '—'}</span>
-                            <span><span className="text-gray-400">Duration:</span> {formatDuration(session)}</span>
-                          </div>
-                        </td>
-                        <td className="px-4 py-3 whitespace-nowrap">
-                          {session.status === 'completed' ? (
-                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>
-                              {risk.level}
-                            </span>
-                          ) : (
-                            <span className="text-gray-400">—</span>
-                          )}
-                        </td>
+                            {/* Mini skill coverage bar for live sessions */}
+                            {session.status === 'in_progress' && session.skill_coverage && (() => {
+                              const sc = session.skill_coverage;
+                              const total = sc.covered.length + sc.medium_covered.length + sc.low_covered.length + sc.uncovered.length;
+                              const coveredPct = total > 0 ? Math.round(((sc.covered.length + sc.medium_covered.length) / total) * 100) : 0;
+                              return (
+                                <div className="mt-1.5">
+                                  <div className="flex items-center gap-1 mb-0.5">
+                                    <span className="text-2xs text-gray-500">{sc.questions_asked}/{sc.total_questions} Q</span>
+                                    <span className="text-2xs text-success font-medium ml-auto">{coveredPct}% covered</span>
+                                  </div>
+                                  <div className="flex h-1 rounded-full overflow-hidden bg-gray-200 w-28">
+                                    <div className="bg-success" style={{ width: `${Math.round((sc.covered.length / (total || 1)) * 100)}%` }} />
+                                    <div className="bg-warning" style={{ width: `${Math.round((sc.medium_covered.length / (total || 1)) * 100)}%` }} />
+                                    <div className="bg-orange-400" style={{ width: `${Math.round((sc.low_covered.length / (total || 1)) * 100)}%` }} />
+                                  </div>
+                                </div>
+                              );
+                            })()}
+                          </td>
+                        )}
+                        {col('score') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {session.score != null ? (
+                              <div className="flex items-center gap-2">
+                                <span className={`font-semibold text-sm ${
+                                  session.score >= 70 ? 'text-success' :
+                                  session.score >= 50 ? 'text-brand-orange-deep' : 'text-destructive'
+                                }`}>
+                                  {Math.round(session.score)}%
+                                </span>
+                              </div>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                        )}
+                        {col('timeline') && (
+                          <td className="px-4 py-3 whitespace-nowrap text-gray-600">
+                            <div className="flex flex-col gap-0.5 text-xs">
+                              <span><span className="text-gray-400">Started at:</span> {session.started_at ? formatIST(session.started_at) : '—'}</span>
+                              <span><span className="text-gray-400">Completed at:</span> {session.completed_at ? formatIST(session.completed_at) : '—'}</span>
+                              <span><span className="text-gray-400">Duration:</span> {formatDuration(session)}</span>
+                            </div>
+                          </td>
+                        )}
+                        {col('proctoring') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {session.status === 'completed' ? (
+                              <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>
+                                {risk.level}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                        )}
                         <td className="px-4 py-3 text-right whitespace-nowrap tf-sticky-col">
                           <Button
                             variant="secondary"
@@ -927,6 +1135,93 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
           </>
         )}
         </div>
+
+      {showColumnModal && (
+        <ColumnCustomizationModal
+          columns={columns}
+          onClose={() => setShowColumnModal(false)}
+          onApply={(ids) => setColumns((prev) => prev.map((c) => ({ ...c, enabled: ids.includes(c.id) })))}
+        />
+      )}
+
+      {/* Export format picker — same modal as the resume scoring All Resumes tab. */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
+          <div className="bg-white rounded-2xl shadow-2xl border border-gray-200 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
+            <div className="flex items-start justify-between gap-3 p-5 border-b border-gray-200 shrink-0">
+              <div className="flex items-start gap-3">
+                <div className="w-11 h-11 rounded-full bg-blue-50 flex items-center justify-center flex-shrink-0">
+                  <FileDown className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900">Export Interview Results</h3>
+                  <p className="text-sm text-gray-500 mt-1 flex items-center gap-1.5">
+                    {selected.size > 0 ? `${selected.size} selected records` : `${versionMatches ? totalSessions : 0} records`}
+                    <span className="w-1 h-1 rounded-full bg-blue-500" />
+                    {enabledColumns.length} columns
+                  </p>
+                </div>
+              </div>
+              <Button variant="secondary" size="sm" onClick={() => setShowExportModal(false)} className="px-2 flex-shrink-0" aria-label="Close">
+                <X className="w-5 h-5" />
+              </Button>
+            </div>
+
+            <div className="p-5 overflow-y-auto flex-1">
+              <p className="text-sm font-bold text-gray-900 mb-3">Choose export format</p>
+              <div className="space-y-3">
+                {([
+                  { key: 'csv', title: 'CSV Format', desc: 'Compatible with Excel, Google Sheets, and most spreadsheet apps.', Icon: FileText, iconWrap: 'bg-success-subtle', iconColor: 'text-success' },
+                  { key: 'xls', title: 'Excel Format (.xls)', desc: 'Native Excel format with formatting and styling.', Icon: FileSpreadsheet, iconWrap: 'bg-blue-100', iconColor: 'text-blue-700' },
+                ] as const).map(({ key, title, desc, Icon, iconWrap, iconColor }) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setExportFormat(key)}
+                    className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
+                      exportFormat === key ? 'border-blue-500 bg-blue-50/60' : 'border-gray-200 hover:border-gray-300 hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className={`w-12 h-12 rounded-lg flex items-center justify-center flex-shrink-0 ${iconWrap}`}>
+                      <Icon className={`w-6 h-6 ${iconColor}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-bold text-gray-900">{title}</div>
+                      <div className="text-sm text-gray-500">{desc}</div>
+                    </div>
+                    <span className={`w-5 h-5 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${exportFormat === key ? 'border-blue-600' : 'border-gray-300'}`}>
+                      {exportFormat === key && <span className="w-2.5 h-2.5 rounded-full bg-blue-600" />}
+                    </span>
+                  </button>
+                ))}
+              </div>
+
+              <div className="mt-4 p-4 bg-blue-50/60 rounded-xl flex items-start gap-3">
+                <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
+                <p className="text-sm text-gray-600">
+                  <span className="block font-bold text-blue-700 mb-0.5">Columns included</span>
+                  {enabledColumns.map((c) => c.label).join(', ')}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200 shrink-0">
+              <Button variant="secondary" size="md" onClick={() => setShowExportModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                size="md"
+                onClick={handleExport}
+                disabled={isExporting || enabledColumns.length === 0}
+                icon={isExporting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+              >
+                Export
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 

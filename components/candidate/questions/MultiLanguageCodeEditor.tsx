@@ -17,6 +17,7 @@ import {
   Lock,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import LanguageLogo, { logoLabelForId } from '@/components/assessments/LanguageLogo';
 import { toast } from '@/components/ui/enhanced-toast';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { CurrentQuestion, candidateService, CodeSubmissionResult } from '@/lib/services/candidateService';
@@ -157,6 +158,35 @@ const buildInitialEditorState = (
   };
 };
 
+/** One heading style for every block in the Problem panel, whether it comes
+ *  from a structured field (`input_format`, `constraints`) or from a label
+ *  written inside `question_text`. */
+const PROBLEM_HEADING_CLASS = 'text-sm font-semibold text-gray-900 mb-1.5';
+
+/** Labels generated problems write inline ("… array. Input Format: …"). At the
+ *  start of a line any short Title Case label counts; mid-line only these do,
+ *  so an ordinary sentence with a colon is never split. */
+const KNOWN_PROBLEM_LABELS =
+  'Input Format|Output Format|Required Edge Cases|Edge Cases|Constraints|Sample Input|Sample Output|Expected Output|Examples?(?: \\d+)?|Explanation|Notes?|Function Signature|Requirements';
+const PROBLEM_LABEL_RE = new RegExp(
+  `(?:^|\\n)[ \\t]*(?:#{1,6}[ \\t]*)?\\*{0,2}((?:${KNOWN_PROBLEM_LABELS})|[A-Z][\\w()'/-]*(?:[ \\t][A-Z0-9][\\w()'/-]*){0,4})\\*{0,2}[ \\t]*:\\*{0,2}(?=\\s|$)` +
+    `|(?<=[.!?])[ \\t]+\\*{0,2}(${KNOWN_PROBLEM_LABELS})\\*{0,2}[ \\t]*:\\*{0,2}(?=\\s|$)`,
+  'g'
+);
+
+/** Split a problem description into its lead paragraph and labelled sections.
+ *  The text itself is not altered, only divided; no labels → one lead block. */
+const splitProblemText = (text: string): { intro: string; sections: { label: string; body: string }[] } => {
+  const matches = [...text.matchAll(PROBLEM_LABEL_RE)];
+  if (matches.length === 0) return { intro: text, sections: [] };
+  const sections = matches.map((m, i) => {
+    const bodyStart = (m.index ?? 0) + m[0].length;
+    const bodyEnd = i + 1 < matches.length ? matches[i + 1].index ?? text.length : text.length;
+    return { label: (m[1] || m[2]).trim(), body: text.slice(bodyStart, bodyEnd).trim() };
+  });
+  return { intro: text.slice(0, matches[0].index).trim(), sections };
+};
+
 export function MultiLanguageCodeEditor({
   question,
   answer,
@@ -167,6 +197,7 @@ export function MultiLanguageCodeEditor({
   copyPasteBlocking = true,
 }: MultiLanguageCodeEditorProps) {
   const dialog = useGlobalDialog();
+  const problemText = splitProblemText(question.question_text || '');
 
   const configuredLanguages = Array.isArray(question.coding_languages)
     ? question.coding_languages
@@ -721,24 +752,41 @@ export function MultiLanguageCodeEditor({
           <span className="text-sm font-medium text-gray-800">Problem</span>
         </div>
 
-        {/* Scrollable Content - Problem + Output */}
-        <div className="flex-1 overflow-y-auto">
-          {/* Problem Section */}
-          <div className="p-5 space-y-5 border-b border-gray-100">
+        {/* Content - the problem details scroll on their own; Output stays
+            pinned beneath them so a run's result is always in view. */}
+        <div className="flex-1 min-h-0 flex flex-col">
+          {/* Problem Section — inner scroll */}
+          <div className="flex-1 min-h-0 max-h-[60vh] md:max-h-none overflow-y-auto p-5 space-y-5 border-b border-gray-200">
             {/* Problem Title & Description */}
             <div>
               <h3 className="text-lg font-semibold text-gray-800 mb-2">
                 {question.problem_title || question.question_text}
               </h3>
-              <div className="prose prose-sm max-w-none text-gray-600">
-                <p className="whitespace-pre-wrap">{question.question_text}</p>
-              </div>
+              {problemText.intro && (
+                <div className="prose prose-sm max-w-none text-gray-600">
+                  <p className="whitespace-pre-wrap">{problemText.intro}</p>
+                </div>
+              )}
             </div>
+
+            {/* Labels written inside the description ("Input Format:",
+                "Required Edge Cases:" …) as their own headed blocks, styled
+                like the structured fields below, instead of inline text. */}
+            {problemText.sections.map((section, idx) => (
+              <div key={`${section.label}-${idx}`}>
+                <h4 className={PROBLEM_HEADING_CLASS}>{section.label}</h4>
+                {section.body && (
+                  <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg whitespace-pre-wrap">
+                    {section.body}
+                  </p>
+                )}
+              </div>
+            ))}
 
             {/* Input/Output Format */}
             {question.input_format && (
               <div>
-                <h4 className="font-medium text-gray-800 mb-2 text-sm">Input Format</h4>
+                <h4 className={PROBLEM_HEADING_CLASS}>Input Format</h4>
                 <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
                   {question.input_format}
                 </p>
@@ -747,7 +795,7 @@ export function MultiLanguageCodeEditor({
 
             {question.output_format && (
               <div>
-                <h4 className="font-medium text-gray-800 mb-2 text-sm">Output Format</h4>
+                <h4 className={PROBLEM_HEADING_CLASS}>Output Format</h4>
                 <p className="text-sm text-gray-600 bg-gray-50 p-3 rounded-lg">
                   {question.output_format}
                 </p>
@@ -757,7 +805,7 @@ export function MultiLanguageCodeEditor({
             {/* Constraints */}
             {question.constraints && question.constraints.length > 0 && (
               <div>
-                <h4 className="font-medium text-gray-800 mb-2 text-sm">Constraints</h4>
+                <h4 className={PROBLEM_HEADING_CLASS}>Constraints</h4>
                 <ul className="text-sm text-gray-600 space-y-1 bg-gray-50 p-3 rounded-lg">
                   {question.constraints.map((constraint, idx) => (
                     <li key={idx} className="flex items-start gap-2">
@@ -771,7 +819,7 @@ export function MultiLanguageCodeEditor({
 
             {/* Sample Input/Output */}
             <div className="space-y-3">
-              <h4 className="font-medium text-gray-800 text-sm">Example</h4>
+              <h4 className="text-sm font-semibold text-gray-900">Example</h4>
 
               {question.sample_input && (
                 <div className="relative">
@@ -806,8 +854,9 @@ export function MultiLanguageCodeEditor({
             </div>
           </div>
 
-          {/* Output Section - Always visible below problem */}
-          <div className="p-4 bg-gray-50">
+          {/* Output Section - pinned below the problem. Capped so a long run
+              result scrolls inside it instead of squeezing the problem away. */}
+          <div className="shrink-0 max-h-[45%] overflow-y-auto p-4 bg-gray-50">
             <div className="flex items-center gap-2 mb-3">
               <Terminal className="w-4 h-4 text-gray-600" />
               <span className="text-sm font-medium text-gray-800">Output</span>
@@ -972,7 +1021,7 @@ export function MultiLanguageCodeEditor({
                 className="flex items-center gap-2 px-3 py-1.5 bg-gray-700 rounded-lg text-sm font-medium text-gray-200 cursor-default"
                 title="Language locked (compiler mode)"
               >
-                <Code className="w-4 h-4" />
+                <LanguageLogo language={logoLabelForId(selectedLanguage, currentLangConfig?.name)} size="sm" />
                 <span>{currentLangConfig?.name || selectedLanguage}</span>
                 <Lock className="w-3.5 h-3.5 text-gray-400" />
               </div>
@@ -983,7 +1032,7 @@ export function MultiLanguageCodeEditor({
                   allowLanguageChange ? 'hover:bg-gray-600 cursor-pointer' : 'cursor-default'
                 }`}
               >
-                <Code className="w-4 h-4" />
+                <LanguageLogo language={logoLabelForId(selectedLanguage, currentLangConfig?.name)} size="sm" />
                 <span>{currentLangConfig?.name || selectedLanguage}</span>
                 {allowLanguageChange && <ChevronDown className="w-4 h-4" />}
               </button>
@@ -1013,12 +1062,13 @@ export function MultiLanguageCodeEditor({
                   <button
                     key={lang.id}
                     onClick={() => handleLanguageChange(lang.id)}
-                    className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors ${
+                    className={`w-full flex items-center gap-1.5 text-left px-4 py-2 text-sm hover:bg-gray-700 transition-colors ${
                       selectedLanguage === lang.id
                         ? 'text-blue-400 bg-gray-700'
                         : 'text-gray-300'
                     }`}
                   >
+                    <LanguageLogo language={logoLabelForId(lang.id, lang.name)} size="sm" />
                     {lang.name}
                   </button>
                 ))}

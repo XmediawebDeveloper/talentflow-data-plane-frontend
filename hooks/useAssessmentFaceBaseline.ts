@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import '@/lib/tfjs-rejection-guard';
 import { ensureFaceApiCpuBackend, loadFaceApiWithCpuBackend, type FaceApiModule } from '@/lib/face-api-loader';
+import { createFaceIdentityWorker } from '@/lib/proctoring/faceIdentityWorker';
 import {
   createVideoFrameCanvas,
   FACE_API_MODEL_URLS,
@@ -179,16 +180,36 @@ export function useAssessmentFaceBaseline(token: string): UseAssessmentFaceBasel
 
   const registerFace = useCallback(async (videoElement: HTMLVideoElement): Promise<boolean> => {
     const descriptors: Float32Array[] = [];
-
-    for (let index = 0; index < REGISTRATION_CAPTURES; index += 1) {
-      if (index > 0) {
-        await new Promise((resolve) => setTimeout(resolve, CAPTURE_DELAY_MS));
+    // 2026-09-24: the three registration captures ran face-api on the CPU
+    // backend ON THE MAIN THREAD (5-8 s each on slow laptops) right as the
+    // coding-language picker appeared - the "cannot click anything for a
+    // while" hang after System Check. They now run in the identity Web Worker
+    // (same descriptors, same model); the main thread only grabs frames.
+    // Main-thread fallback (worker unavailable) takes a single capture.
+    const worker = createFaceIdentityWorker({ modelUrls: FACE_API_MODEL_URLS, inputSize: 224 });
+    let usedWorker = false;
+    try {
+      const ready = await Promise.race([
+        worker.ready,
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 25000)),
+      ]);
+      if (ready) {
+        usedWorker = true;
+        for (let index = 0; index < REGISTRATION_CAPTURES; index += 1) {
+          if (index > 0) await new Promise((resolve) => setTimeout(resolve, CAPTURE_DELAY_MS));
+          if (videoElement.readyState < 2 || videoElement.videoWidth === 0) continue;
+          const result = await worker.describe(videoElement, 320);
+          if (result?.descriptor) descriptors.push(result.descriptor);
+        }
       }
-
+    } catch (error) {
+      console.warn('[AssessmentFaceBaseline] worker registration failed, falling back to main thread:', error);
+    } finally {
+      worker.terminate();
+    }
+    if (!usedWorker) {
       const descriptor = await detectDescriptor(videoElement);
-      if (descriptor) {
-        descriptors.push(descriptor);
-      }
+      if (descriptor) descriptors.push(descriptor);
     }
 
     if (descriptors.length === 0) {

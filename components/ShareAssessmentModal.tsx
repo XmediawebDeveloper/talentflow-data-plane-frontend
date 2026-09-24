@@ -7,6 +7,7 @@ import api from '@/lib/services/api';
 import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import VersionBadge from './VersionBadge';
+import SuccessAnimation from '@/components/ui/success-animation';
 import { toast } from 'sonner';
 import { useQuota } from '@/contexts/QuotaContext';
 import { isValidEmailFormat } from '@/lib/utils/email';
@@ -408,14 +409,24 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
         setIsSubmitting(false);
 
+        // Nothing went out — say so and leave the form open to retry, rather
+        // than showing the success popup over a batch that fully failed.
+        if (sentCount === 0) {
+          toast.error('Failed to send invitations. Please try again.', { id: 'bulk-invite-multi' });
+          return;
+        }
+
+        // The success popup below is the confirmation, so the progress toast
+        // is dismissed rather than turned into a second "sent" message. A
+        // partial failure still gets its warning.
         if (failedCount === 0) {
-          toast.success(`Successfully sent ${sentCount} invitation${sentCount > 1 ? 's' : ''} for ${allAssessments.length} assessment${allAssessments.length > 1 ? 's' : ''}!`, { id: 'bulk-invite-multi' });
+          toast.dismiss('bulk-invite-multi');
         } else {
           toast.warning(`Sent ${sentCount} invitations successfully. ${failedCount} failed.`, { id: 'bulk-invite-multi' });
         }
 
         setSentCount(sentCount);
-        if (sentCount > 0) onInviteSent?.(sentCount);
+        onInviteSent?.(sentCount);
         setShowSuccess(true);
         setTimeout(() => {
           setShowSuccess(false);
@@ -517,12 +528,22 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
   if (showSuccess) {
     return (
-      <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
+      <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4" role="dialog" aria-modal="true">
         <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full p-5 sm:p-6 text-center max-h-[calc(100dvh-2rem)] overflow-y-auto">
-          <div className="w-12 h-12 bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-full flex items-center justify-center mx-auto mb-3">
-            <CheckCircle className="w-6 h-6 text-brand-blue" />
+          {/* The same animated tick the AI Interview share popup plays. The
+              static badge this popup used to show is the fallback — while the
+              player loads, for reduced motion, or if the CDN never answers. */}
+          <div className="flex justify-center mb-3">
+            <SuccessAnimation
+              className="w-14 h-14 sm:w-16 sm:h-16"
+              fallback={
+                <div className="w-12 h-12 bg-brand-blue/10 ring-1 ring-brand-blue/20 rounded-full flex items-center justify-center">
+                  <CheckCircle className="w-6 h-6 text-brand-blue" />
+                </div>
+              }
+            />
           </div>
-          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-1">Assessment Shared Successfully!</h3>
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-1">Assessment shared successfully</h3>
           <p className="text-gray-600 dark:text-slate-400 text-sm">
             Email invitations have been sent to {sentCount} candidate{sentCount > 1 ? 's' : ''}
           </p>
@@ -821,7 +842,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             {/* Mode Switcher */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-0 mb-3 sm:mb-4">
               <label className="text-xs sm:text-base text-gray-900 dark:text-slate-50 font-medium">Select Candidates</label>
-              <div className="flex gap-1.5 sm:gap-2">
+              <div className="flex flex-wrap gap-1.5 sm:gap-2">
                 <button
                   onClick={() => setInputMode('manual')}
                   className={`flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm transition-colors ${
@@ -961,10 +982,11 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                 </div>
 
                 {/* Content: folder sidebar + resume list */}
-                <div className="flex" style={{ minHeight: '320px', maxHeight: '400px' }}>
-                  {/* Folder Sidebar (My Resumes only) */}
+                <div className="flex flex-col sm:flex-row" style={{ minHeight: '320px', maxHeight: '400px' }}>
+                  {/* Folder Sidebar (My Resumes only) — a short scrollable strip
+                      on top for mobile, a fixed left column from sm up. */}
                   {dbTab === 'my-resumes' && myFolders.length > 0 && (
-                    <div className="w-48 border-r border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 overflow-y-auto flex-shrink-0 p-3">
+                    <div className="w-full sm:w-48 max-h-28 sm:max-h-none border-b sm:border-b-0 sm:border-r border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 overflow-y-auto flex-shrink-0 p-3">
                       <p className="text-xs font-medium text-gray-500 dark:text-slate-500 uppercase mb-2 px-1">Folders</p>
                       <button
                         onClick={() => setSelectedFolder('all')}
@@ -981,13 +1003,13 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                   {/* Resume List */}
                   <div className="flex-1 flex flex-col overflow-hidden">
                     {/* Search + Select All */}
-                    <div className="flex items-center gap-2 p-3 border-b border-gray-100 dark:border-slate-700/60">
+                    <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-100 dark:border-slate-700/60">
                       <input
                         type="text"
                         value={searchQuery}
                         onChange={e => setSearchQuery(e.target.value)}
                         placeholder="Search by name, email, or position..."
-                        className="flex-1 px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                        className="flex-1 min-w-[10rem] px-3 py-2 border border-gray-200 dark:border-slate-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                       />
                       <button
                         onClick={() => {

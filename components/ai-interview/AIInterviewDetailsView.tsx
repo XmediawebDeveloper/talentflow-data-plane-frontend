@@ -131,9 +131,16 @@ interface AIInterviewDetailsViewProps {
    * one), so the breadcrumb stays anchored to that job instead of resetting.
    */
   breadcrumbItems?: BreadcrumbCrumb[];
+  /**
+   * Render ONLY the Interview Details → Configure Details section — no page
+   * chrome, header, tabs or background loads. Used by the Send Invite
+   * picker's preview popup so a recruiter can check an interview's setup
+   * without leaving the dialog.
+   */
+  configureOnly?: boolean;
 }
 
-export default function AIInterviewDetailsView({ config, onBack, onRefresh, currentIndex, totalCount, onPrev, onNext, breadcrumbItems }: AIInterviewDetailsViewProps) {
+export default function AIInterviewDetailsView({ config, onBack, onRefresh, currentIndex, totalCount, onPrev, onNext, breadcrumbItems, configureOnly = false }: AIInterviewDetailsViewProps) {
   const router = useRouter();
   const { user, isTenantAdmin } = useAuth();
   const canCreateAIInterviews = isTenantAdmin || !!user?.permissions?.canCreateAIInterviews;
@@ -287,8 +294,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
   // Always load activity on mount (needed for invite count in header)
   useEffect(() => {
+    if (configureOnly) return;
     loadActivity();
-  }, [loadActivity]);
+  }, [loadActivity, configureOnly]);
 
   useEffect(() => {
     if (activeTab === 'versions') loadVersionHistory();
@@ -323,6 +331,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   // paged-live + separate-archived fetch AllInterviewsTable.tsx's `fetchAll`
   // uses, deduped the same way.
   useEffect(() => {
+    if (configureOnly) return;
     if (siblingConfigsRequested.current) return;
     siblingConfigsRequested.current = true;
     (async () => {
@@ -588,431 +597,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     return { total, completed, inProgress, avgScore };
   }, [recentActivity]);
 
-  // Show candidate detail view
-  if (candidateDetail) {
-    // Prev/Next between candidates in the list this detail was opened from.
-    const navIdx = candidateNavIds.indexOf(candidateDetail.id);
-    const prevId = navIdx > 0 ? candidateNavIds[navIdx - 1] : null;
-    const nextId = navIdx >= 0 && navIdx < candidateNavIds.length - 1 ? candidateNavIds[navIdx + 1] : null;
-    // The interview the candidate belongs to stays in the trail, so it reads
-    // … › <interview> › <candidate> rather than dropping the page the recruiter
-    // just came from. onClick, not href: this view lives on the interview's own
-    // route, so a link couldn't switch the body back to the candidate list.
-    const backToInterview = () => setCandidateDetail(null);
-    const interviewLabel = config.jd_title || config.position || 'Interview Details';
-    const candidateLabel = candidateDetail.candidate_name || 'Candidate Results';
-    return (
-      <CandidateResultsView
-        interview={candidateDetail}
-        onBack={backToInterview}
-        // A caller-supplied trail (reached from a JD's Job Details page) is
-        // anchored somewhere else entirely, so extend that one instead of the
-        // AI Interviews trail — its last crumb is this interview.
-        {...(breadcrumbItems
-          ? {
-              breadcrumbItems: [
-                ...breadcrumbItems.slice(0, -1),
-                { ...breadcrumbItems[breadcrumbItems.length - 1], href: undefined, onClick: backToInterview },
-                { label: candidateLabel },
-              ],
-            }
-          : { breadcrumbTrail: [{ label: interviewLabel, onClick: backToInterview }] })}
-        currentIndex={navIdx >= 0 ? navIdx : undefined}
-        totalCount={candidateNavIds.length || undefined}
-        onPrev={prevId ? () => handleCandidateClick(prevId) : undefined}
-        onNext={nextId ? () => handleCandidateClick(nextId) : undefined}
-      />
-    );
-  }
-
-  return (
-    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
-      <div className="mx-auto w-full max-w-[1400px]">
-        <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
-          {/* Previous / Next rides inside the breadcrumb bar, as on
-              job-details, so it stays reachable while the sticky crumb is
-              pinned. Passed as undefined when there's no list to page through,
-              which leaves the bar exactly as it was. */}
-          <PageBreadcrumb
-            className="mb-4 md:mb-6"
-            items={breadcrumbItems ?? [
-              { label: 'Dashboard', href: '/dashboard' },
-              { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
-              { label: config.jd_title || config.position || 'Interview Details' },
-            ]}
-            actions={totalCount != null && totalCount > 0 ? (
-              <RecordPager
-                currentIndex={currentIndex}
-                totalCount={totalCount}
-                onPrev={onPrev}
-                onNext={onNext}
-              />
-            ) : undefined}
-          />
-      {/* Loading overlay for candidate fetch */}
-      {candidateLoading && (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-white/60">
-          <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
-        </div>
-      )}
-      {/* Header — the Assessment Details summary card
-          (`AssessmentDetailsView.tsx`), copied rather than reinvented: white
-          card, brand-blue border/ring, a solid ID pill + plain-weight title
-          + status on row 1, and a quiet bulleted fact line ending on the
-          mode/round/version chips on row 2. */}
-      <div className="mb-4">
-        <div className="bg-white dark:bg-slate-900 rounded-xl border border-brand-blue/30 dark:border-brand-blue/40 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
-          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
-            <div className="flex-1 min-w-0">
-              {/* Row 1: AI-002  Title  Status */}
-              <div className="flex flex-wrap items-center gap-2 mb-2">
-                {config.display_id && (
-                  <span className="inline-flex items-center px-2 py-0.5 bg-blue-600 text-white rounded-md text-xs font-semibold font-mono tracking-wide">
-                    {config.display_id}
-                  </span>
-                )}
-                <h1 className="font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate">
-                  {config.jd_title || config.position || 'Untitled'}
-                </h1>
-                <Badge variant={getStatusVariant(config.status)}>{getStatusLabel(config.status)}</Badge>
-              </div>
-
-              {/* Row 2: quiet bulleted facts */}
-              <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
-                {([
-                  { key: 'linked-jd', icon: Briefcase, label: config.jd_short_id ? `Linked to ${config.jd_short_id}` : null },
-                  { key: 'level', icon: null, label: config.jd_experience_level || null },
-                  { key: 'duration', icon: Clock, label: formattedDuration },
-                  { key: 'invites', icon: Users, label: `${invitationStats.total} invite${invitationStats.total !== 1 ? 's' : ''}` },
-                  { key: 'created-at', icon: Calendar, label: config.created_at ? `Created ${formatIST(config.created_at)}` : null },
-                  { key: 'updated-at', icon: Calendar, label: config.updated_at ? `Updated ${formatIST(config.updated_at)}` : null },
-                ] as { key: string; icon: typeof Clock | null; label: string | null }[])
-                  .filter((fact) => !!fact.label)
-                  .map((fact, i) => (
-                    <React.Fragment key={fact.key}>
-                      {i > 0 && <span aria-hidden className="text-gray-300">&bull;</span>}
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        {fact.icon && <fact.icon className="w-4 h-4 flex-shrink-0" />}
-                        <span className="truncate" title={fact.label ?? undefined}>{fact.label}</span>
-                      </div>
-                    </React.Fragment>
-                  ))}
-              </div>
-
-              {/* Row 3: mode/round/version badges, on their own line so they
-                  read as tags rather than crowding the plain-text facts
-                  above. */}
-              <div className="flex flex-wrap items-center gap-1.5 mt-2">
-                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ring-1 ${
-                  interviewMode === 'flexible'
-                    ? 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20'
-                    : 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
-                }`}>
-                  {interviewMode === 'flexible' ? (
-                    <><Zap className="w-3 h-3" /> Flexible</>
-                  ) : (
-                    <><Timer className="w-3 h-3" /> Timed</>
-                  )}
-                </span>
-                {enabledRounds.map((r, i) => (
-                  <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-brand-blue/10 text-brand-blue rounded-full ring-1 ring-brand-blue/20">
-                    <Layers className="w-3 h-3" /> {ROUND_LABELS[r.type] || r.type}
-                  </span>
-                ))}
-                {/* Job Version — the Assessment Details header's "Manage
-                    Jobs · V{n}" pill. Each row opens the AI interview
-                    authored against that job version (same destination the
-                    Total Jobs tab's View Versions panel opens), never the
-                    Job Description page — so a row with no interview has
-                    nowhere to go and is disabled rather than clickable. */}
-                {config.jd_id && (
-                  <div className="relative" ref={jobVersionMenuRef}>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const opening = !showJobVersionMenu;
-                        setShowJobVersionMenu(opening);
-                        if (opening) ensureJobVersionsLoaded();
-                      }}
-                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-600 text-white rounded-full text-xs font-medium hover:bg-purple-700 transition-colors whitespace-nowrap"
-                      aria-label={`Job version, currently V${config.jd_version ?? 1}`}
-                      aria-haspopup="menu"
-                      aria-expanded={showJobVersionMenu}
-                      title="View job version history"
-                    >
-                      Job Version
-                      <span aria-hidden className="text-white/50">&middot;</span>
-                      V{config.jd_version ?? 1}
-                      <ChevronDown className={`w-3 h-3 transition-transform ${showJobVersionMenu ? 'rotate-180' : ''}`} />
-                    </button>
-
-                    {showJobVersionMenu && (
-                      <div
-                        role="menu"
-                        aria-label="Job versions"
-                        className="absolute left-0 top-full mt-2 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-xl shadow-lg shadow-brand-blue/10 border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 overflow-hidden">
-                        <div className="flex items-baseline justify-between gap-2 px-3 py-2">
-                          <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 tracking-tight">Job Versions</span>
-                          <span className="text-2xs text-gray-500 dark:text-slate-400">
-                            {jobVersions.length} version{jobVersions.length === 1 ? '' : 's'}
-                          </span>
-                        </div>
-                        <div className="border-t border-gray-100 dark:border-slate-700/60" />
-                        <div className="max-h-72 overflow-y-auto py-1">
-                          {jobVersionsLoading ? (
-                            <div className="px-3 py-3 flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400">
-                              <Loader2 className="w-3 h-3 animate-spin text-brand-blue" /> Loading job versions…
-                            </div>
-                          ) : jobVersions.length === 0 ? (
-                            <div className="px-3 py-3 text-xs text-gray-500 dark:text-slate-400">No versions available</div>
-                          ) : (
-                            jobVersions.map((version) => {
-                              const isCurrent = version.id === config.jd_id;
-                              const linkedConfig = linkedConfigForJobVersion(version.id);
-                              const clickable = isCurrent || !!linkedConfig;
-                              return (
-                                <button
-                                  key={version.id}
-                                  type="button"
-                                  role="menuitem"
-                                  aria-current={isCurrent ? 'true' : undefined}
-                                  disabled={!clickable}
-                                  onClick={() => {
-                                    if (!clickable) return;
-                                    setShowJobVersionMenu(false);
-                                    if (!isCurrent && linkedConfig) {
-                                      router.push(`/recruitment/ai-interviews/${linkedConfig.id}`);
-                                    }
-                                  }}
-                                  title={!clickable ? 'No AI interview has been created for this job version' : undefined}
-                                  className={`w-full px-3 py-2 text-left transition-colors ${
-                                    !clickable
-                                      ? 'opacity-50 cursor-not-allowed'
-                                      : isCurrent
-                                        ? 'bg-brand-blue/5 hover:bg-brand-blue/10'
-                                        : 'hover:bg-brand-blue/5'
-                                  }`}
-                                >
-                                  <div className="flex items-center gap-2">
-                                    <span className="w-4 flex-shrink-0 flex items-center justify-center">
-                                      {isCurrent && <Check className="w-3.5 h-3.5 text-brand-blue" />}
-                                    </span>
-                                    <span className="text-sm font-semibold text-gray-900 dark:text-slate-100 tabular-nums flex-shrink-0">
-                                      V{version.version_number}
-                                    </span>
-                                    {version.is_latest_version && (
-                                      <span className="flex-shrink-0 text-2xs px-1.5 py-0.5 rounded-full font-medium bg-brand-blue/10 text-brand-blue">
-                                        Current
-                                      </span>
-                                    )}
-                                    <Badge variant={getStatusVariant(version.status)} className="flex-shrink-0 text-2xs px-1.5 py-0.5">
-                                      {getStatusLabel(version.status)}
-                                    </Badge>
-                                    <span aria-hidden className="ml-auto flex-shrink-0 text-2xs font-medium text-brand-blue">
-                                      {isCurrent ? 'Linked' : clickable ? 'View' : 'No interview'}
-                                    </span>
-                                  </div>
-                                  {(version.published_at || version.created_at) && (
-                                    <div className="pl-6 mt-0.5 text-2xs text-gray-500 dark:text-slate-400">
-                                      {formatIST(version.published_at || version.created_at || '')}
-                                    </div>
-                                  )}
-                                </button>
-                              );
-                            })
-                          )}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                )}
-
-                {/* Interview Version — static. An AI interview config is one
-                    evolving record, not a family of standalone records the
-                    way an assessment is, so there is nothing for this badge
-                    to switch to; it states the fact (this config's ordinal
-                    among every interview authored against its job version)
-                    and stops there. */}
-                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-blue text-white rounded-full text-xs font-medium whitespace-nowrap">
-                  Interview Version
-                  <span aria-hidden className="text-white/50">&middot;</span>
-                  V{interviewVersionOrdinal}
-                </span>
-              </div>
-            </div>
-
-            {/* Actions */}
-            <div className="flex items-center gap-2 flex-shrink-0 self-start flex-wrap">
-              {/* Share — a dialog now, not a tab; same slot & styling the
-                  Assessment Details header's Share button uses. */}
-              {config.status === 'published' && canShareAIInterviews && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setShowShareModal(true)}
-                  icon={<Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-                >
-                  Share
-                </Button>
-              )}
-              {config.status === 'draft' && config.jd_id && canUpdateAIInterviews && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => {
-                    const url = `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`;
-                    router.push(url);
-                  }}
-                  icon={<Pencil className="w-3.5 h-3.5 flex-shrink-0" />}
-                  className="gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm"
-                >
-                  <span className="hidden sm:inline">Continue Editing</span>
-                  <span className="sm:hidden">Edit</span>
-                </Button>
-              )}
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={handleExportCSV}
-                title="Export clusters & HR questions to CSV"
-                aria-label="Export to CSV"
-                className="px-2 min-w-[40px] min-h-[40px]"
-              >
-                <Download className="w-4 h-4" />
-              </Button>
-              {onRefresh && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={onRefresh}
-                  aria-label="Refresh"
-                  className="px-2 min-w-[40px] min-h-[40px]"
-                >
-                  <RefreshCw className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Unified detail layout: vertical navigation on the left, the selected
-          tab's content on the right — the same grid, aside chrome and button
-          states as the Assessment Details page (`AssessmentDetailsView.tsx`),
-          so the two detail pages read as one screen. The strip this replaced
-          was horizontal and scrolled sideways (`overflow-x-auto
-          scrollbar-hide`), so with seven tabs the last of them was
-          off-screen and undiscoverable under a wide desktop. */}
-      <div className="grid grid-cols-[180px_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[220px_minmax(0,1fr)] sm:gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
-        <aside className="sticky top-20 self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
-          <nav className="p-2 sm:p-3" aria-label="Interview details sections">
-            <div className="flex flex-col gap-1.5">
-              {([
-                { key: 'overview', label: 'Interview Details', icon: FileText },
-                { key: 'activity', label: 'Recent Activity', icon: Clock },
-                { key: 'versions', label: 'Version History', icon: Layers },
-                { key: 'viewjd', label: 'View JD', icon: Briefcase },
-                { key: 'results', label: 'Results', icon: TrendingUp },
-                { key: 'invites', label: 'Track', icon: Mail },
-              ] as { key: typeof activeTab; label: string; icon: typeof FileText }[]).map((t) => {
-                const isActive = activeTab === t.key;
-                return (
-                  <button
-                    key={t.key}
-                    type="button"
-                    onClick={() => setActiveTab(t.key)}
-                    aria-current={isActive ? 'page' : undefined}
-                    className={`w-full rounded-lg px-3 py-2.5 text-left text-xs sm:text-sm transition-colors flex items-center gap-2 ${
-                      isActive
-                        ? 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
-                        : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
-                    }`}
-                  >
-                    <t.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                    <span className="min-w-0 leading-snug">{t.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          </nav>
-        </aside>
-
-        {/* Content — `min-w-0` so a wide table inside a tab scrolls in its own
-            box instead of stretching the grid column and pushing the nav off
-            the page. */}
-        <div className="min-w-0 overflow-x-auto scroll-mt-24 py-4 sm:py-6 space-y-4 sm:space-y-6">
-
-          {/* JD staleness banner — shows when the linked JD was edited after
-              this interview config was created. Computed by the single-config
-              GET endpoint (see _compute_jd_staleness in the router). */}
-          {config.jd_stale && (
-            <div
-              role="alert"
-              className="flex items-start gap-3 rounded-xl border border-warning-line bg-warning-subtle px-4 py-3"
-            >
-              <div className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-warning text-white text-2xs font-bold">
-                !
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-warning-strong">
-                  Linked JD has changed since this interview was configured
-                </p>
-                <p className="mt-0.5 text-xs text-warning-strong">
-                  {config.jd_stale_reason ?? 'The underlying Job Description was updated after this config was created.'}
-                  {config.jd_current_version != null && config.jd_version != null && (
-                    <> Snapshot: v{config.jd_version} &middot; Current: v{config.jd_current_version}.</>
-                  )}
-                  {' '}Candidates who take this interview will be evaluated against the snapshotted skills, not the current JD.
-                </p>
-                {config.status === 'draft' && config.jd_id && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const url = `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`;
-                      router.push(url);
-                    }}
-                    className="mt-2 inline-flex items-center gap-1 rounded-md border border-warning-line bg-white px-2.5 py-1 text-xs font-medium text-warning-strong hover:bg-warning-subtle"
-                  >
-                    Re-sync with latest JD
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Overview Tab */}
-          {activeTab === 'overview' && (
-            <div className="space-y-5">
-
-              {/* Interview Details' own sub-tabs — Configure Details (this
-                  tab's original content) and Interview Info (folded in from
-                  the sidebar's former "AI Interview Info" item). */}
-              <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
-                {([
-                  { key: 'configure', label: 'Configure Details' },
-                  { key: 'info', label: 'Interview Info' },
-                ] as const).map((tab) => {
-                  const isActive = detailsSubTab === tab.key;
-                  return (
-                    <button
-                      key={tab.key}
-                      type="button"
-                      aria-pressed={isActive}
-                      onClick={() => setDetailsSubTab(tab.key)}
-                      className={`px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
-                        isActive
-                          ? 'bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue'
-                          : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
-                      }`}
-                    >
-                      {tab.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {detailsSubTab === 'configure' && (
-              <>
+  /* Interview Details → Configure Details, as one value so the Send Invite
+     picker's preview (`configureOnly`) can render exactly this section. */
+  const configureDetailsContent = (
+    <>
               {/* Interview Mode */}
               <SectionCard title="Interview Mode" icon={Zap}>
                 <div className="flex items-center gap-3">
@@ -1461,8 +1049,437 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 </div>
               </SectionCard>
 
-              </>
+    </>
+  );
+
+  if (configureOnly) {
+    return <div className="space-y-5">{configureDetailsContent}</div>;
+  }
+
+  // Show candidate detail view
+  if (candidateDetail) {
+    // Prev/Next between candidates in the list this detail was opened from.
+    const navIdx = candidateNavIds.indexOf(candidateDetail.id);
+    const prevId = navIdx > 0 ? candidateNavIds[navIdx - 1] : null;
+    const nextId = navIdx >= 0 && navIdx < candidateNavIds.length - 1 ? candidateNavIds[navIdx + 1] : null;
+    // The interview the candidate belongs to stays in the trail, so it reads
+    // … › <interview> › <candidate> rather than dropping the page the recruiter
+    // just came from. onClick, not href: this view lives on the interview's own
+    // route, so a link couldn't switch the body back to the candidate list.
+    const backToInterview = () => setCandidateDetail(null);
+    const interviewLabel = config.jd_title || config.position || 'Interview Details';
+    const candidateLabel = candidateDetail.candidate_name || 'Candidate Results';
+    return (
+      <CandidateResultsView
+        interview={candidateDetail}
+        onBack={backToInterview}
+        // A caller-supplied trail (reached from a JD's Job Details page) is
+        // anchored somewhere else entirely, so extend that one instead of the
+        // AI Interviews trail — its last crumb is this interview.
+        {...(breadcrumbItems
+          ? {
+              breadcrumbItems: [
+                ...breadcrumbItems.slice(0, -1),
+                { ...breadcrumbItems[breadcrumbItems.length - 1], href: undefined, onClick: backToInterview },
+                { label: candidateLabel },
+              ],
+            }
+          : { breadcrumbTrail: [{ label: interviewLabel, onClick: backToInterview }] })}
+        currentIndex={navIdx >= 0 ? navIdx : undefined}
+        totalCount={candidateNavIds.length || undefined}
+        onPrev={prevId ? () => handleCandidateClick(prevId) : undefined}
+        onNext={nextId ? () => handleCandidateClick(nextId) : undefined}
+      />
+    );
+  }
+
+  return (
+    <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          {/* Previous / Next rides inside the breadcrumb bar, as on
+              job-details, so it stays reachable while the sticky crumb is
+              pinned. Passed as undefined when there's no list to page through,
+              which leaves the bar exactly as it was. */}
+          <PageBreadcrumb
+            className="mb-4 md:mb-6"
+            items={breadcrumbItems ?? [
+              { label: 'Dashboard', href: '/dashboard' },
+              { label: 'AI Interviews', href: '/recruitment/ai-interviews' },
+              { label: config.jd_title || config.position || 'Interview Details' },
+            ]}
+            actions={totalCount != null && totalCount > 0 ? (
+              <RecordPager
+                currentIndex={currentIndex}
+                totalCount={totalCount}
+                onPrev={onPrev}
+                onNext={onNext}
+              />
+            ) : undefined}
+          />
+      {/* Loading overlay for candidate fetch */}
+      {candidateLoading && (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-white/60">
+          <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
+        </div>
+      )}
+      {/* Header — the Assessment Details summary card
+          (`AssessmentDetailsView.tsx`), copied rather than reinvented: white
+          card, brand-blue border/ring, a solid ID pill + plain-weight title
+          + status on row 1, and a quiet bulleted fact line ending on the
+          mode/round/version chips on row 2. */}
+      <div className="mb-4">
+        <div className="bg-white dark:bg-slate-900 rounded-xl border border-brand-blue/30 dark:border-brand-blue/40 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
+          <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
+            <div className="flex-1 min-w-0">
+              {/* Row 1: AI-002  Title  Status */}
+              <div className="flex flex-wrap items-center gap-2 mb-2">
+                {config.display_id && (
+                  <span className="inline-flex items-center px-2 py-0.5 bg-blue-600 text-white rounded-md text-xs font-semibold font-mono tracking-wide">
+                    {config.display_id}
+                  </span>
+                )}
+                <h1 className="font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate">
+                  {config.jd_title || config.position || 'Untitled'}
+                </h1>
+                <Badge variant={getStatusVariant(config.status)}>{getStatusLabel(config.status)}</Badge>
+              </div>
+
+              {/* Row 2: quiet bulleted facts */}
+              <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
+                {([
+                  { key: 'linked-jd', icon: Briefcase, label: config.jd_short_id ? `Linked to ${config.jd_short_id}` : null },
+                  { key: 'level', icon: null, label: config.jd_experience_level || null },
+                  { key: 'duration', icon: Clock, label: formattedDuration },
+                  { key: 'invites', icon: Users, label: `${invitationStats.total} invite${invitationStats.total !== 1 ? 's' : ''}` },
+                  { key: 'created-at', icon: Calendar, label: config.created_at ? `Created ${formatIST(config.created_at)}` : null },
+                  { key: 'updated-at', icon: Calendar, label: config.updated_at ? `Updated ${formatIST(config.updated_at)}` : null },
+                ] as { key: string; icon: typeof Clock | null; label: string | null }[])
+                  .filter((fact) => !!fact.label)
+                  .map((fact, i) => (
+                    <React.Fragment key={fact.key}>
+                      {i > 0 && <span aria-hidden className="text-gray-300">&bull;</span>}
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        {fact.icon && <fact.icon className="w-4 h-4 flex-shrink-0" />}
+                        <span className="truncate" title={fact.label ?? undefined}>{fact.label}</span>
+                      </div>
+                    </React.Fragment>
+                  ))}
+              </div>
+
+              {/* Row 3: mode/round/version badges, on their own line so they
+                  read as tags rather than crowding the plain-text facts
+                  above. */}
+              <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ring-1 ${
+                  interviewMode === 'flexible'
+                    ? 'bg-brand-cyan/10 text-brand-cyan ring-brand-cyan/20'
+                    : 'bg-brand-orange/10 text-brand-orange-deep ring-brand-orange/20'
+                }`}>
+                  {interviewMode === 'flexible' ? (
+                    <><Zap className="w-3 h-3" /> Flexible</>
+                  ) : (
+                    <><Timer className="w-3 h-3" /> Timed</>
+                  )}
+                </span>
+                {enabledRounds.map((r, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 px-2 py-0.5 text-xs bg-brand-blue/10 text-brand-blue rounded-full ring-1 ring-brand-blue/20">
+                    <Layers className="w-3 h-3" /> {ROUND_LABELS[r.type] || r.type}
+                  </span>
+                ))}
+                {/* Job Version — the Assessment Details header's "Manage
+                    Jobs · V{n}" pill. Each row opens the AI interview
+                    authored against that job version (same destination the
+                    Total Jobs tab's View Versions panel opens), never the
+                    Job Description page — so a row with no interview has
+                    nowhere to go and is disabled rather than clickable. */}
+                {config.jd_id && (
+                  <div className="relative" ref={jobVersionMenuRef}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const opening = !showJobVersionMenu;
+                        setShowJobVersionMenu(opening);
+                        if (opening) ensureJobVersionsLoaded();
+                      }}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-purple-600 text-white rounded-full text-xs font-medium hover:bg-purple-700 transition-colors whitespace-nowrap"
+                      aria-label={`Job version, currently V${config.jd_version ?? 1}`}
+                      aria-haspopup="menu"
+                      aria-expanded={showJobVersionMenu}
+                      title="View job version history"
+                    >
+                      Job Version
+                      <span aria-hidden className="text-white/50">&middot;</span>
+                      V{config.jd_version ?? 1}
+                      <ChevronDown className={`w-3 h-3 transition-transform ${showJobVersionMenu ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showJobVersionMenu && (
+                      <div
+                        role="menu"
+                        aria-label="Job versions"
+                        className="absolute left-0 top-full mt-2 w-72 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 rounded-xl shadow-lg shadow-brand-blue/10 border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 overflow-hidden">
+                        <div className="flex items-baseline justify-between gap-2 px-3 py-2">
+                          <span className="text-xs font-semibold text-gray-900 dark:text-slate-100 tracking-tight">Job Versions</span>
+                          <span className="text-2xs text-gray-500 dark:text-slate-400">
+                            {jobVersions.length} version{jobVersions.length === 1 ? '' : 's'}
+                          </span>
+                        </div>
+                        <div className="border-t border-gray-100 dark:border-slate-700/60" />
+                        <div className="max-h-72 overflow-y-auto py-1">
+                          {jobVersionsLoading ? (
+                            <div className="px-3 py-3 flex items-center gap-2 text-xs text-gray-500 dark:text-slate-400">
+                              <Loader2 className="w-3 h-3 animate-spin text-brand-blue" /> Loading job versions…
+                            </div>
+                          ) : jobVersions.length === 0 ? (
+                            <div className="px-3 py-3 text-xs text-gray-500 dark:text-slate-400">No versions available</div>
+                          ) : (
+                            jobVersions.map((version) => {
+                              const isCurrent = version.id === config.jd_id;
+                              const linkedConfig = linkedConfigForJobVersion(version.id);
+                              const clickable = isCurrent || !!linkedConfig;
+                              return (
+                                <button
+                                  key={version.id}
+                                  type="button"
+                                  role="menuitem"
+                                  aria-current={isCurrent ? 'true' : undefined}
+                                  disabled={!clickable}
+                                  onClick={() => {
+                                    if (!clickable) return;
+                                    setShowJobVersionMenu(false);
+                                    if (!isCurrent && linkedConfig) {
+                                      router.push(`/recruitment/ai-interviews/${linkedConfig.id}`);
+                                    }
+                                  }}
+                                  title={!clickable ? 'No AI interview has been created for this job version' : undefined}
+                                  className={`w-full px-3 py-2 text-left transition-colors ${
+                                    !clickable
+                                      ? 'opacity-50 cursor-not-allowed'
+                                      : isCurrent
+                                        ? 'bg-brand-blue/5 hover:bg-brand-blue/10'
+                                        : 'hover:bg-brand-blue/5'
+                                  }`}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <span className="w-4 flex-shrink-0 flex items-center justify-center">
+                                      {isCurrent && <Check className="w-3.5 h-3.5 text-brand-blue" />}
+                                    </span>
+                                    <span className="text-sm font-semibold text-gray-900 dark:text-slate-100 tabular-nums flex-shrink-0">
+                                      V{version.version_number}
+                                    </span>
+                                    {version.is_latest_version && (
+                                      <span className="flex-shrink-0 text-2xs px-1.5 py-0.5 rounded-full font-medium bg-brand-blue/10 text-brand-blue">
+                                        Current
+                                      </span>
+                                    )}
+                                    <Badge variant={getStatusVariant(version.status)} className="flex-shrink-0 text-2xs px-1.5 py-0.5">
+                                      {getStatusLabel(version.status)}
+                                    </Badge>
+                                    <span aria-hidden className="ml-auto flex-shrink-0 text-2xs font-medium text-brand-blue">
+                                      {isCurrent ? 'Linked' : clickable ? 'View' : 'No interview'}
+                                    </span>
+                                  </div>
+                                  {(version.published_at || version.created_at) && (
+                                    <div className="pl-6 mt-0.5 text-2xs text-gray-500 dark:text-slate-400">
+                                      {formatIST(version.published_at || version.created_at || '')}
+                                    </div>
+                                  )}
+                                </button>
+                              );
+                            })
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Interview Version — static. An AI interview config is one
+                    evolving record, not a family of standalone records the
+                    way an assessment is, so there is nothing for this badge
+                    to switch to; it states the fact (this config's ordinal
+                    among every interview authored against its job version)
+                    and stops there. */}
+                <span className="inline-flex items-center gap-1 px-2.5 py-1 bg-brand-blue text-white rounded-full text-xs font-medium whitespace-nowrap">
+                  Interview Version
+                  <span aria-hidden className="text-white/50">&middot;</span>
+                  V{interviewVersionOrdinal}
+                </span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center gap-2 flex-shrink-0 self-start flex-wrap">
+              {/* Share — a dialog now, not a tab; same slot & styling the
+                  Assessment Details header's Share button uses. */}
+              {config.status === 'published' && canShareAIInterviews && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => setShowShareModal(true)}
+                  icon={<Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+                >
+                  Share
+                </Button>
               )}
+              {config.status === 'draft' && config.jd_id && canUpdateAIInterviews && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    const url = `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`;
+                    router.push(url);
+                  }}
+                  icon={<Pencil className="w-3.5 h-3.5 flex-shrink-0" />}
+                  className="gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm"
+                >
+                  <span className="hidden sm:inline">Continue Editing</span>
+                  <span className="sm:hidden">Edit</span>
+                </Button>
+              )}
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={handleExportCSV}
+                title="Export clusters & HR questions to CSV"
+                aria-label="Export to CSV"
+                className="px-2 min-w-[40px] min-h-[40px]"
+              >
+                <Download className="w-4 h-4" />
+              </Button>
+              {onRefresh && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={onRefresh}
+                  aria-label="Refresh"
+                  className="px-2 min-w-[40px] min-h-[40px]"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Unified detail layout: vertical navigation on the left, the selected
+          tab's content on the right — the same grid, aside chrome and button
+          states as the Assessment Details page (`AssessmentDetailsView.tsx`),
+          so the two detail pages read as one screen. The strip this replaced
+          was horizontal and scrolled sideways (`overflow-x-auto
+          scrollbar-hide`), so with seven tabs the last of them was
+          off-screen and undiscoverable under a wide desktop. */}
+      <div className="grid grid-cols-[180px_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[220px_minmax(0,1fr)] sm:gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
+        <aside className="sticky top-20 self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+          <nav className="p-2 sm:p-3" aria-label="Interview details sections">
+            <div className="flex flex-col gap-1.5">
+              {([
+                { key: 'overview', label: 'Interview Details', icon: FileText },
+                { key: 'activity', label: 'Recent Activity', icon: Clock },
+                { key: 'versions', label: 'Version History', icon: Layers },
+                { key: 'viewjd', label: 'View JD', icon: Briefcase },
+                { key: 'results', label: 'Results', icon: TrendingUp },
+                { key: 'invites', label: 'Track', icon: Mail },
+              ] as { key: typeof activeTab; label: string; icon: typeof FileText }[]).map((t) => {
+                const isActive = activeTab === t.key;
+                return (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setActiveTab(t.key)}
+                    aria-current={isActive ? 'page' : undefined}
+                    className={`w-full rounded-lg px-3 py-2.5 text-left text-xs sm:text-sm transition-colors flex items-center gap-2 ${
+                      isActive
+                        ? 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
+                        : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
+                    }`}
+                  >
+                    <t.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                    <span className="min-w-0 leading-snug">{t.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </nav>
+        </aside>
+
+        {/* Content — `min-w-0` so a wide table inside a tab scrolls in its own
+            box instead of stretching the grid column and pushing the nav off
+            the page. */}
+        <div className="min-w-0 overflow-x-auto scroll-mt-24 py-4 sm:py-6 space-y-4 sm:space-y-6">
+
+          {/* JD staleness banner — shows when the linked JD was edited after
+              this interview config was created. Computed by the single-config
+              GET endpoint (see _compute_jd_staleness in the router). */}
+          {config.jd_stale && (
+            <div
+              role="alert"
+              className="flex items-start gap-3 rounded-xl border border-warning-line bg-warning-subtle px-4 py-3"
+            >
+              <div className="mt-0.5 flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-warning text-white text-2xs font-bold">
+                !
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-warning-strong">
+                  Linked JD has changed since this interview was configured
+                </p>
+                <p className="mt-0.5 text-xs text-warning-strong">
+                  {config.jd_stale_reason ?? 'The underlying Job Description was updated after this config was created.'}
+                  {config.jd_current_version != null && config.jd_version != null && (
+                    <> Snapshot: v{config.jd_version} &middot; Current: v{config.jd_current_version}.</>
+                  )}
+                  {' '}Candidates who take this interview will be evaluated against the snapshotted skills, not the current JD.
+                </p>
+                {config.status === 'draft' && config.jd_id && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`;
+                      router.push(url);
+                    }}
+                    className="mt-2 inline-flex items-center gap-1 rounded-md border border-warning-line bg-white px-2.5 py-1 text-xs font-medium text-warning-strong hover:bg-warning-subtle"
+                  >
+                    Re-sync with latest JD
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Overview Tab */}
+          {activeTab === 'overview' && (
+            <div className="space-y-5">
+
+              {/* Interview Details' own sub-tabs — Configure Details (this
+                  tab's original content) and Interview Info (folded in from
+                  the sidebar's former "AI Interview Info" item). */}
+              <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                {([
+                  { key: 'configure', label: 'Configure Details' },
+                  { key: 'info', label: 'Interview Info' },
+                ] as const).map((tab) => {
+                  const isActive = detailsSubTab === tab.key;
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      aria-pressed={isActive}
+                      onClick={() => setDetailsSubTab(tab.key)}
+                      className={`px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                        isActive
+                          ? 'bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue'
+                          : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
+                      }`}
+                    >
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {detailsSubTab === 'configure' && configureDetailsContent}
 
               {/* Interview Info sub-tab — formerly the sidebar's own "AI
                   Interview Info" item. */}

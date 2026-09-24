@@ -4,7 +4,7 @@ import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   X, Mail, Play, CheckCircle, Clock, Ban, Copy, Loader2, Users, Eye, Pencil,
-  MoreVertical, Check, Monitor, History, FileText,
+  MoreVertical, Check, Monitor, History, XCircle, FileText,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -137,6 +137,32 @@ export const displayInviteScore = (inv: any): number | null => {
   const value = Number(raw);
   return Number.isFinite(value) ? Math.round(value) : null;
 };
+
+/** Pass/Fail for the Score column. The backend's `final_result` wins; older
+ *  sessions without it fall back to the same 60% MHS pass mark the evaluation
+ *  report uses. null (no badge) until there is a score to judge. */
+export const inviteResult = (inv: any, score: number | null): 'Pass' | 'Fail' | null => {
+  const backendFinal = (inv?.ai_evaluation?.final_result || '').toString().toLowerCase();
+  if (backendFinal === 'pass') return 'Pass';
+  if (backendFinal === 'fail') return 'Fail';
+  if (score == null) return null;
+  return score >= 60 ? 'Pass' : 'Fail';
+};
+
+/** Same pill as the Candidate Results tab's PassFailBadge — tick/cross inside. */
+const ResultBadge = ({ result }: { result: 'Pass' | 'Fail' | null }) =>
+  result ? (
+    <span
+      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium ring-1 whitespace-nowrap ${
+        result === 'Pass'
+          ? 'bg-success-subtle text-success ring-success-line'
+          : 'bg-destructive-subtle text-destructive ring-destructive-line'
+      }`}
+    >
+      {result === 'Pass' ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+      {result}
+    </span>
+  ) : null;
 
 const initialsOf = (name: string | null | undefined): string =>
   (name || '?')
@@ -454,9 +480,12 @@ export const InviteSourceValue =({ inv, iconClassName }: { inv: any; iconClassNa
 /** Percentage cell for the Score column. null renders an
  *  em dash — the round wasn't run, isn't scored yet, or the evaluation carries no
  *  per-round breakdown. 60 is the same pass mark the overall Score column uses. */
-const ScoreCell = ({ value }: { value: number | null }) =>
+const ScoreCell = ({ value, result }: { value: number | null; result: 'Pass' | 'Fail' | null }) =>
   value != null ? (
-    <span className={`font-semibold ${value >= 60 ? 'text-success' : 'text-destructive'}`}>{value}%</span>
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`font-semibold ${value >= 60 ? 'text-success' : 'text-destructive'}`}>{value}%</span>
+      <ResultBadge result={result} />
+    </span>
   ) : (
     <span className="text-gray-400 dark:text-slate-500">—</span>
   );
@@ -762,7 +791,10 @@ export default function AIInterviewInviteTable({
                     <span key={label} className="text-2xs text-gray-600 dark:text-slate-400 whitespace-nowrap">
                       {label}:{' '}
                       {value != null ? (
-                        <span className={`font-semibold ${value >= 60 ? 'text-success' : 'text-destructive'}`}>{value}%</span>
+                        <>
+                          <span className={`font-semibold ${value >= 60 ? 'text-success' : 'text-destructive'}`}>{value}%</span>{' '}
+                          <ResultBadge result={inviteResult(inv, value)} />
+                        </>
                       ) : (
                         <span className="text-gray-400 dark:text-slate-500">—</span>
                       )}
@@ -924,7 +956,7 @@ export default function AIInterviewInviteTable({
                   </td>
 
                   <td className="py-3 px-4 align-middle text-center text-sm whitespace-nowrap">
-                    <ScoreCell value={score} />
+                    <ScoreCell value={score} result={inviteResult(inv, score)} />
                   </td>
 
                   {/* Every milestone on its own line, oldest first. align-top so

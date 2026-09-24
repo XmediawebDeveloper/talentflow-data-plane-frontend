@@ -1147,6 +1147,10 @@ export const aiInterviewService = {
   ): Promise<{
     mth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
     nth_clusters: { id: string; name: string; priority: number; skills: string[]; reason?: string }[];
+    /** Input skills the backend's dedup pass dropped as meaning-duplicates of
+     *  `kept`. The caller removes these from the saved main-skill list so the
+     *  same pair isn't re-sent (and re-judged) on every regeneration. */
+    removed_duplicates?: { skill: string; kept: string; bucket: 'mth' | 'nth' }[];
   }> {
     try {
       const response = await api.post('/ai-interview/generate-clusters', {

@@ -1,5 +1,6 @@
 import { X, Clock, Users, Brain, Code, BarChart, Sparkles, Shield, Video } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import LanguageLogo, { logoLabelForId } from '@/components/assessments/LanguageLogo';
 
 interface AssessmentPreviewModalProps {
   isOpen: boolean;
@@ -260,7 +261,8 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                     <div className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Programming Languages:</div>
                     <div className="flex flex-wrap gap-1.5 sm:gap-2">
                       {section.languages.map((lang: string, lidx: number) => (
-                        <span key={lidx} className="px-2 sm:px-3 py-0.5 sm:py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-lg text-xs sm:text-sm">
+                        <span key={lidx} className="inline-flex items-center gap-1.5 px-2 sm:px-3 py-0.5 sm:py-1 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded-lg text-xs sm:text-sm">
+                          <LanguageLogo language={logoLabelForId(lang, lang)} size="sm" />
                           {lang}
                         </span>
                       ))}
