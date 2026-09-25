@@ -297,9 +297,9 @@ export const PERMISSION_MODULES: ModulePermissions[] = [
   },
   {
     id: 'database',
-    name: 'Internal Database',
+    name: 'Shared Database',
     icon: 'Database',
-    description: 'Internal candidate database',
+    description: 'Shared candidate database',
     permissions: [
       {
         action: 'view',
@@ -587,8 +587,8 @@ export const PERMISSION_MODULES: ModulePermissions[] = [
       },
       {
         action: 'menu_my_resumes',
-        label: 'Menu My Resumes',
-        description: 'Visibility of My Resumes menu item',
+        label: 'Menu Resume Database',
+        description: 'Visibility of Resume Database menu item',
       },
       {
         action: 'menu_teams',
@@ -597,8 +597,8 @@ export const PERMISSION_MODULES: ModulePermissions[] = [
       },
       {
         action: 'menu_internal_db',
-        label: 'Menu Internal DB',
-        description: 'Visibility of Internal DB menu item',
+        label: 'Menu Shared Database',
+        description: 'Visibility of Shared Database menu item',
       },
       {
         action: 'menu_assessments',

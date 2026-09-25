@@ -109,8 +109,18 @@ export default function SelectSourceModal({
   // a hardcoded string (two instances would clobber each other's registration).
   const panelOwnerId = useId();
 
-  // Check if user has Internal DB access permission
-  const hasInternalDBAccess = user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false;
+  // Internal Database tab requires BOTH view access to Internal Database AND
+  // its own Score Resume sub-action (internal_db:score) — scoring is a
+  // distinct capability from browsing, same as My Resumes' own below, so an
+  // Owner can disable one source without touching the other (mirrors the
+  // per-source AI Talent Match permissions).
+  const hasInternalDBAccess =
+    (user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false) &&
+    hasPermissionCode('internal_db:score');
+
+  // My Resumes tab used to be unconditional; now gated by its own Score
+  // Resume sub-action the same way.
+  const hasMyResumesScoreAccess = hasPermissionCode('my_resumes:score');
 
   // Check if user has scoring permission
   const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
@@ -127,7 +137,12 @@ export default function SelectSourceModal({
   const canShareMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:share');
 
   // State
-  const [activeTab, setActiveTab] = useState<'my-resumes' | 'internal-db'>('my-resumes');
+  // Default to whichever source the Owner actually left enabled — falls
+  // back to 'internal-db' only when My Resumes' own Score Resume permission
+  // is off but Internal Database's is on.
+  const [activeTab, setActiveTab] = useState<'my-resumes' | 'internal-db'>(
+    hasMyResumesScoreAccess ? 'my-resumes' : (hasInternalDBAccess ? 'internal-db' : 'my-resumes')
+  );
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -781,7 +796,7 @@ export default function SelectSourceModal({
         if (existingResume) {
           return {
             success: false,
-            error: `A resume for ${existingResume.candidate_name || 'this candidate'} already exists in your Internal Resume Database.`,
+            error: `A resume for ${existingResume.candidate_name || 'this candidate'} already exists in your Shared Resume Database.`,
             existingResume: {
               id: existingResume.id,
               candidateName: existingResume.candidate_name || existingResume.file_name || 'Unknown',
@@ -994,6 +1009,8 @@ export default function SelectSourceModal({
         {/* Tabs */}
         <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 pt-3 sm:pt-4 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
           <div className="flex gap-1 sm:gap-2">
+            {/* Only show My Resumes tab if the Owner granted its Score Resume sub-action */}
+            {hasMyResumesScoreAccess && (
             <button
               onClick={() => handleTabChange('my-resumes')}
               className={`px-3 sm:px-5 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
@@ -1013,6 +1030,7 @@ export default function SelectSourceModal({
                 {tabCounts.myResumes ?? ''}
               </span>
             </button>
+            )}
             {/* Only show Internal Database tab if user has permission */}
             {hasInternalDBAccess && (
               <button
@@ -1024,8 +1042,8 @@ export default function SelectSourceModal({
                 }`}
               >
                 <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline">Internal Database</span>
-                <span className="sm:hidden">Internal DB</span>
+                <span className="hidden sm:inline">Shared Database</span>
+                <span className="sm:hidden">Shared DB</span>
                 <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-2xs sm:text-xs ${
                   activeTab === 'internal-db'
                     ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
@@ -1046,6 +1064,7 @@ export default function SelectSourceModal({
             job-details page has no provider of its own. Nothing is actually
             draggable here (the table is rendered with `draggable={false}`);
             the provider only satisfies the hooks. */}
+        {(hasMyResumesScoreAccess || hasInternalDBAccess) ? (
         <DndProvider backend={HTML5Backend}>
         <div className="flex flex-1 overflow-hidden">
           {/* Left Sidebar — the My Resumes page's own FolderTree, so the
@@ -1151,7 +1170,7 @@ export default function SelectSourceModal({
                 Resume Database and My Resumes pages use — column set and
                 order, widths, sticky header, sticky Actions column,
                 separators, hover/selected states, checkbox styling,
-                pagination — so this popup's Internal Database tab looks
+                pagination — so this popup's Shared Database tab looks
                 exactly like the Resume Database page instead of a second,
                 hand-rolled implementation of it. */}
             <div className="flex-1 min-h-0 flex flex-col">
@@ -1203,7 +1222,7 @@ export default function SelectSourceModal({
                     })
                   }
                   /* Archive/Delete/Share/Tag stay My Resumes-only — the
-                     Internal Database tab never offered them (it's a shared,
+                     Shared Database tab never offered them (it's a shared,
                      org-wide list to pick candidates from, not one this
                      modal manages), so only the read-only Preview/Download
                      actions carry over onto it. */
@@ -1278,6 +1297,11 @@ export default function SelectSourceModal({
           </div>
         </div>
         </DndProvider>
+        ) : (
+          <div className="flex-1 flex items-center justify-center p-10 text-center text-sm text-gray-500 dark:text-slate-400">
+            You don't have permission to score resumes from either source.
+          </div>
+        )}
 
         {/* Footer */}
         <div className="border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 px-4 sm:px-6 py-3 flex-shrink-0">

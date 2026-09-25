@@ -16,7 +16,7 @@ export default function ScoredResumeDetailLegacyRedirect() {
     if (resumeId) {
       router.replace(`/recruitment/resume-view/${resumeId}`);
     } else {
-      router.replace('/recruitment/my-resumes');
+      router.replace('/recruitment/resume-database?tab=my-resumes');
     }
   }, [router, searchParams]);
 

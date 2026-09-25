@@ -6,6 +6,7 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Search, X, Video, MoreVertical, Eye, Pencil,
   ArrowUp, ArrowDown, ArrowUpDown, AlertTriangle, RefreshCw, SlidersHorizontal,
+  Square, CheckSquare,
 } from 'lucide-react';
 import {
   DropdownMenu,
@@ -16,6 +17,7 @@ import {
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Button } from '@/components/ui/button';
 import ListPagination from '@/components/ListPagination';
+import ListCountBadge from '@/components/ui/list-count-badge';
 import SearchableSelect, { type SearchableSelectOption } from '@/components/ui/searchable-select';
 import FilterChips, { type FilterChip } from '@/components/ui/filter-chips';
 import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
@@ -23,6 +25,7 @@ import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
+import { MENU_ITEM_SCALE_CLASS, MENU_ITEM_LIGHT_HIGHLIGHT_CLASS, MENU_PANEL_BORDER_CLASS } from '@/lib/constants/menuAnimation';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 
 /** The page-size ladder this screen specifies (same ladder as the Assessments
@@ -157,7 +160,7 @@ function StatusBadge({ status }: { status: string }) {
 /* Job versions blue, interview versions cyan — the same two colours the
    Interview/Assessment Version History panels already use for the same
    roles, so a V3 means the same thing wherever it is read. */
-function VersionPill({ kind, version }: { kind: 'job' | 'interview'; version: number }) {
+export function VersionPill({ kind, version }: { kind: 'job' | 'interview'; version: number }) {
   return (
     <span
       className={`inline-flex items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 ${
@@ -274,6 +277,12 @@ export interface AllInterviewsTableProps {
    */
   toolbarSlot?: HTMLDivElement | null;
   /**
+   * DOM node beside the host's Refresh button that the Clear Sort button
+   * portals into, so it sits in the pill row with the page's other list
+   * actions. Falls back to rendering above the table when unset.
+   */
+  sortActionSlot?: HTMLElement | null;
+  /**
    * Bumped by the host's Refresh button (AIInterview.tsx) to force a
    * reload — this table otherwise only refetches on mount or its own Retry.
    */
@@ -297,7 +306,7 @@ export interface AllInterviewsTableProps {
   renderRowActions?: (config: AIInterviewResponse) => React.ReactNode;
 }
 
-export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedStatus, titleLabel = 'All Interviews', renderRowActions }: AllInterviewsTableProps = {}) {
+export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refreshSignal, fixedStatus, titleLabel = 'All Interviews', renderRowActions }: AllInterviewsTableProps = {}) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { isTenantAdmin, user } = useAuth();
@@ -314,7 +323,9 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const [sortKey, setSortKey] = useState<SortKey>('createdAt');
+  // null = no column sort: the default newest-first order, no header
+  // highlighted. Clear Sort returns here.
+  const [sortKey, setSortKey] = useState<SortKey | null>(null);
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
 
   const [page, setPage] = useState(1);
@@ -486,6 +497,7 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
   }, [rows, appliedSearch, filters]);
 
   const sorted = useMemo(() => {
+    if (!sortKey) return [...filtered].sort((a, b) => b.createdSort - a.createdSort);
     const compare = COMPARATORS[sortKey];
     return [...filtered].sort((a, b) => {
       const primary = compare(a, b);
@@ -497,6 +509,34 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
   const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
   const pageRows = sorted.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  // Row selection — the CheckSquare / Square column the Candidate Results tab
+  // opens with. Selection survives paging; it is pruned to the rows that
+  // still exist after a reload or a narrower filter.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set());
+  useEffect(() => {
+    setSelectedIds((prev) => {
+      if (prev.size === 0) return prev;
+      const visible = new Set(sorted.map((row) => row.id));
+      const next = new Set([...prev].filter((id) => visible.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [sorted]);
+  const toggleSelected = (id: string) =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const allOnPageSelected = pageRows.length > 0 && pageRows.every((row) => selectedIds.has(row.id));
+  const toggleAllOnPage = () =>
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allOnPageSelected) pageRows.forEach((row) => next.delete(row.id));
+      else pageRows.forEach((row) => next.add(row.id));
+      return next;
+    });
 
   useEffect(() => {
     if (!highlightId || highlightHandledRef.current || isLoading) return;
@@ -610,6 +650,25 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
     setSortKey(key);
     setSortDir(key === 'createdAt' || key === 'invitations' || key === 'completed' ? 'desc' : 'asc');
   };
+  const clearSort = () => {
+    setSortKey(null);
+    setSortDir('desc');
+  };
+
+  /* Clear Sort — beside the host's Refresh, and only while a column sort is
+     applied: with none there is nothing to clear. */
+  const clearSortButton = sortKey ? (
+    <Button
+      variant="secondary"
+      size="sm"
+      onClick={clearSort}
+      title="Clear the column sort"
+      icon={<X className="w-3.5 h-3.5" />}
+      className="flex-shrink-0"
+    >
+      Clear Sort
+    </Button>
+  ) : null;
 
   /* View is always available; Edit is Draft-only and additionally gated on
      canUpdateAIInterviews, the same permission the card list's own Edit
@@ -631,7 +690,7 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
     return actions;
   };
 
-  const columnCount = COLUMNS.length + 1; // + Actions
+  const columnCount = COLUMNS.length + 2; // + Select + Actions
   /* Whether the table has data rows to lay out — and so whether its header
      belongs on screen at all.
      With none, the header is the only thing left forcing a width: its cells are
@@ -687,13 +746,24 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
             }`}
           >
             <SlidersHorizontal className="w-4 h-4" />
-            Filters
+            <span className="hidden sm:inline">More Filters</span>
+            <span className="sm:hidden">Filters</span>
             {activeFilterCount > 0 && (
               <span className="ml-0.5 min-w-[1.25rem] h-5 px-1 inline-flex items-center justify-center rounded-full bg-white/25 text-xs font-semibold">
                 {activeFilterCount}
               </span>
             )}
           </button>
+
+          {/* Count badge after More Filters — the Assessments page's: rows
+              left after search + filters, of all rows, or the ticked count. */}
+          <ListCountBadge
+            filtered={sorted.length}
+            total={rows.length}
+            noun="interview"
+            selected={selectedIds.size}
+            className="flex-shrink-0 text-center"
+          />
         </div>
 
         {filtersOpen && (
@@ -792,6 +862,9 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
   return (
     <div className="p-3 sm:p-6">
       {toolbarSlot ? createPortal(toolbar, toolbarSlot) : toolbar}
+      {clearSortButton && (sortActionSlot
+        ? createPortal(clearSortButton, sortActionSlot)
+        : <div className="flex justify-end mb-3">{clearSortButton}</div>)}
 
       {/* ── The table ── */}
       <div className="rounded-xl border border-gray-200 dark:border-slate-700 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden bg-white dark:bg-slate-900">
@@ -800,6 +873,24 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
             {hasBodyRows && (
             <thead>
               <tr className="border-b border-gray-200 dark:border-slate-700">
+                {/* Select All — this page's rows. Not pinned: Job ID is the
+                    pinned column, and it covers this one as the table scrolls. */}
+                <th scope="col" className="pl-3 pr-0 py-2.5 w-10 align-middle">
+                  <button
+                    type="button"
+                    onClick={toggleAllOnPage}
+                    disabled={isLoading}
+                    className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800 disabled:opacity-40"
+                    aria-label={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
+                    title={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
+                  >
+                    {allOnPageSelected ? (
+                      <CheckSquare className="w-4 h-4 text-brand-blue" />
+                    ) : (
+                      <Square className="w-4 h-4 text-gray-400" />
+                    )}
+                  </button>
+                </th>
                 {COLUMNS.map((col) => {
                   const isSorted = sortKey === col.key;
                   const SortIcon = !isSorted ? ArrowUpDown : sortDir === 'asc' ? ArrowUp : ArrowDown;
@@ -845,6 +936,9 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
               {isLoading &&
                 Array.from({ length: 8 }).map((_, i) => (
                   <tr key={`skeleton-${i}`} className="border-b border-gray-100 dark:border-slate-700/60">
+                    <td className="pl-3 pr-0 py-3 w-10">
+                      <div className="h-4 w-4 ml-1 rounded bg-slate-200/70 dark:bg-slate-700/60 animate-pulse" />
+                    </td>
                     {COLUMNS.map((col) => (
                       <td
                         key={col.key}
@@ -920,6 +1014,21 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
                       flashedRowId === row.id ? 'bg-brand-blue/10 dark:bg-brand-blue/15' : ''
                     }`}
                   >
+                    <td className="pl-3 pr-0 py-2.5 w-10 align-middle" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        onClick={() => toggleSelected(row.id)}
+                        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700"
+                        aria-label={selectedIds.has(row.id) ? `Deselect ${row.jobName}` : `Select ${row.jobName}`}
+                      >
+                        {selectedIds.has(row.id) ? (
+                          <CheckSquare className="w-4 h-4 text-brand-blue" />
+                        ) : (
+                          <Square className="w-4 h-4 text-gray-400" />
+                        )}
+                      </button>
+                    </td>
+
                     {/* Job ID stays pinned on the left while the table scrolls sideways. */}
                     <td className="px-3 py-2.5 align-middle whitespace-nowrap tf-sticky-col-left">
                       {row.jobId ? (
@@ -1010,9 +1119,9 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
                             <MoreVertical className="w-4 h-4" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuContent align="end" className={`w-44 ${MENU_PANEL_BORDER_CLASS}`}>
                           {rowActions(row).map(({ key, label, icon: Icon, run }) => (
-                            <DropdownMenuItem key={key} onClick={run} className="gap-2">
+                            <DropdownMenuItem key={key} onClick={run} className={`group gap-2 ${MENU_ITEM_LIGHT_HIGHLIGHT_CLASS}`}>
                               <Icon className="w-4 h-4" />
                               <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
                             </DropdownMenuItem>

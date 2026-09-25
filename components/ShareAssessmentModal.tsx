@@ -204,7 +204,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
       setInternalDbData(items.map(mapResume));
       setInternalDbLoaded(true);
     } catch {
-      toast.error('Failed to load Internal Database');
+      toast.error('Failed to load Shared Database');
     } finally {
       setIsLoadingResumes(false);
     }
@@ -1146,7 +1146,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       }`}
                     >
                       <Database className="w-4 h-4" />
-                      Internal Database
+                      Shared Database
                       <span className="px-1.5 py-0.5 rounded-full text-xs bg-slate-200 text-gray-700 dark:text-slate-300">{internalDbData.length}</span>
                     </button>
                   )}

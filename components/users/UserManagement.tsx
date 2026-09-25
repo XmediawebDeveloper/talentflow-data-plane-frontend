@@ -81,7 +81,7 @@ const MODULE_DISPLAY_NAMES: Record<string, string> = {
   jd: 'Job Descriptions',
   resumes: 'Resumes',
   my_resumes: 'My Resumes',
-  internal_db: 'Internal Database',
+  internal_db: 'Shared Database',
   assessments: 'Assessments',
   candidates: 'Candidates',
   analytics: 'Analytics',
@@ -377,7 +377,7 @@ const permissionLabels: Record<keyof UserPermissions, string> = {
   can_manage_jd: 'Manage JD',
   can_upload_resumes: 'Upload Resumes',
   can_view_resumes: 'View Resumes',
-  can_access_internal_db: 'Internal DB',
+  can_access_internal_db: 'Shared Database',
   can_create_assessments: 'Create Assessments',
   can_view_analytics: 'View Analytics',
   can_manage_settings: 'Manage Settings',
@@ -489,6 +489,8 @@ export default function UserManagement() {
   const _isTenantAdmin = currentUser?.role === 'tenant_admin';
   const _perms: any = currentUser?.permissions || {};
   const canDisableUser = _isTenantAdmin || !!_perms.can_disable_users || !!_perms.canDisableUsers;
+  const canUpdateUser = _isTenantAdmin || !!_perms.can_update_users || !!_perms.canUpdateUsers;
+  const canCreateUser = _isTenantAdmin || !!_perms.can_create_users || !!_perms.canCreateUsers;
   const canResetPassword = _isTenantAdmin || !!_perms.can_reset_user_password || !!_perms.canResetUserPassword;
   const canForcePwChange = _isTenantAdmin || !!_perms.can_force_password_change || !!_perms.canForcePasswordChange;
   const canAssignRole = _isTenantAdmin || !!_perms.can_assign_roles || !!_perms.canAssignRoles;
@@ -537,9 +539,26 @@ export default function UserManagement() {
 
   // Track selected permission codes (for custom permission UI)
   const [selectedPermissionCodes, setSelectedPermissionCodes] = useState<Set<string>>(new Set());
-  const [editSelectedPermissionCodes, setEditSelectedPermissionCodes] = useState<Set<string>>(new Set());
+  const [editSelectedPermissionCodes, _setEditSelectedPermissionCodes] = useState<Set<string>>(new Set());
+  // Backend (app/config/mandatory_permissions.py) always re-adds these 2 view-only
+  // codes to permission_ids on save regardless of what the client sends — every
+  // role, including admin, keeps baseline read access to the Analytics dashboard
+  // and Support. jd:read / my_resumes:read used to be in that baseline too, which
+  // silently overrode an Owner's choice to fully disable Job Descriptions / My
+  // Resumes — that's now fixed server-side, so those two are Owner-controlled
+  // like any other permission and must NOT be forced on here.
+  const MANDATORY_PERMISSION_CODES = new Set(['analytics:read', 'support:read']);
+  const setEditSelectedPermissionCodes = (updater: React.SetStateAction<Set<string>>) => {
+    _setEditSelectedPermissionCodes(prev => {
+      const base = typeof updater === 'function' ? (updater as (p: Set<string>) => Set<string>)(prev) : updater;
+      const next = new Set(base);
+      MANDATORY_PERMISSION_CODES.forEach(c => next.add(c));
+      return next;
+    });
+  };
   const [editOriginalRoleId, setEditOriginalRoleId] = useState<number | null>(null);
   const [editOriginalPermissionCodes, setEditOriginalPermissionCodes] = useState<Set<string>>(new Set());
+  const selectRoleRequestIdRef = useRef(0);
 
   // RBAC06-07: Feature permission states
   const [featurePermissionUser, setFeaturePermissionUser] = useState<ApiUser | null>(null);
@@ -771,11 +790,15 @@ export default function UserManagement() {
   };
 
   const selectRole = async (roleId: number, isEdit: boolean = false) => {
+    const requestId = ++selectRoleRequestIdRef.current;
     setIsLoadingPermissions(true);
 
     try {
       // Fetch full role details including permissions
       const roleDetails = await rbacService.getRoleById(roleId);
+
+      // A newer role selection started after this one — discard this stale response.
+      if (requestId !== selectRoleRequestIdRef.current) return;
 
       // Get permission IDs and codes from the role
       const permissionIds = new Set<number>(
@@ -798,6 +821,7 @@ export default function UserManagement() {
         setSelectedPermissionCodes(permissionCodes);
       }
     } catch (error) {
+      if (requestId !== selectRoleRequestIdRef.current) return;
       console.error('Error fetching role permissions:', error);
       // Clear permissions on error
       if (isEdit) {
@@ -810,7 +834,9 @@ export default function UserManagement() {
         setSelectedPermissionCodes(new Set());
       }
     } finally {
-      setIsLoadingPermissions(false);
+      if (requestId === selectRoleRequestIdRef.current) {
+        setIsLoadingPermissions(false);
+      }
     }
   };
 
@@ -1035,17 +1061,31 @@ export default function UserManagement() {
     }
   };
 
-  // Select/Deselect all permissions for edit modal
+  // Select/Deselect all permissions for edit modal.
+  // NOTE: the actual checkbox/category UI and the save payload are both driven
+  // by `editSelectedPermissionCodes` (see toggleCategory / requestBody.permission_codes
+  // below) — not `editSelectedPermissionIds`, which nothing else reads. Toggling
+  // `editSelectedPermissionIds` here was a no-op that looked like it did nothing.
+  const getAllCustomPermissionCodes = (): string[] =>
+    CUSTOM_PERMISSION_CATEGORIES.flatMap(category => [
+      ...(category.viewCode ? [category.viewCode] : []),
+      ...(category.actions?.map(a => a.code) || []),
+      ...(category.subCategories?.flatMap(s => [
+        ...(s.viewCode ? [s.viewCode] : []),
+        ...s.actions.map(a => a.code),
+      ]) || []),
+    ]);
+
   const handleSelectAllEditPermissions = () => {
-    const allPermissionIds = allPermissions.map(p => p.id);
-    const allSelected = allPermissionIds.every(id => editSelectedPermissionIds.has(id));
+    const allCodes = getAllCustomPermissionCodes();
+    const allSelected = allCodes.every(code => editSelectedPermissionCodes.has(code));
 
     if (allSelected) {
       // Deselect all
-      setEditSelectedPermissionIds(new Set());
+      setEditSelectedPermissionCodes(new Set());
     } else {
       // Select all
-      setEditSelectedPermissionIds(new Set(allPermissionIds));
+      setEditSelectedPermissionCodes(new Set(allCodes));
     }
   };
 
@@ -1362,6 +1402,12 @@ export default function UserManagement() {
     const matchingRole = availableRoles.find(r => r.code.toLowerCase() === user.role.toLowerCase());
     setEditSelectedRoleId(matchingRole?.id || null);
 
+    // Guard the permissions panel with a loading state so it doesn't render
+    // with whatever was left over from the last time this modal was open
+    // (all toggles off / 0 selected) before flipping to the real values a
+    // moment later once the fetch below resolves.
+    setIsLoadingPermissions(true);
+
     // Fetch fresh user data with permission_ids
     try {
       const freshUserData = await userService.getUser(user.id);
@@ -1555,6 +1601,8 @@ export default function UserManagement() {
       // Fallback to empty permissions if fetch fails
       setEditSelectedPermissionIds(new Set());
       setEditOriginalPermissionIds(new Set());
+    } finally {
+      setIsLoadingPermissions(false);
     }
 
   };
@@ -2071,28 +2119,30 @@ export default function UserManagement() {
               <Link2 className="w-4 h-4" />
               Dependencies
             </button>
-            {/* RBAC01: Check user limits before showing Add User button */}
-            <button
-              onClick={() => {
-                if (isAtLimit) {
-                  if (isTrial) {
-                    toast.error('User limit reached. Add-on seat purchases are only available for paid subscriptions. Please upgrade your plan.');
-                  } else {
-                    setShowAddSeatsModal(true);
+            {/* RBAC01: Check user limits before showing Add User button — also requires users:create */}
+            {canCreateUser && (
+              <button
+                onClick={() => {
+                  if (isAtLimit) {
+                    if (isTrial) {
+                      toast.error('User limit reached. Add-on seat purchases are only available for paid subscriptions. Please upgrade your plan.');
+                    } else {
+                      setShowAddSeatsModal(true);
+                    }
+                    return;
                   }
-                  return;
-                }
-                setIsCreateModalOpen(true);
-              }}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shadow-md ring-1 ring-white/10 ${
-                isAtLimit
-                  ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-red-500/25'
-                  : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-brand-blue/25'
-              }`}
-            >
-              <Plus className="w-4 h-4" />
-              {isAtLimit && !isTrial ? 'Buy More Seats' : 'Invite User'}
-            </button>
+                  setIsCreateModalOpen(true);
+                }}
+                className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all shadow-md ring-1 ring-white/10 ${
+                  isAtLimit
+                    ? 'bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white shadow-red-500/25'
+                    : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-brand-blue/25'
+                }`}
+              >
+                <Plus className="w-4 h-4" />
+                {isAtLimit && !isTrial ? 'Buy More Seats' : 'Invite User'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -2469,8 +2519,8 @@ export default function UserManagement() {
                           </button>
                         )} */}
   
-                        {/* Edit button - Disabled when user is inactive */}
-                        {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
+                        {/* Edit button - requires users:update, disabled when user is inactive */}
+                        {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && canUpdateUser && (
                           <button
                             onClick={() => user.is_active && openEditModal(user)}
                             disabled={!user.is_active}
@@ -2855,10 +2905,7 @@ export default function UserManagement() {
                       <button
                         key={role.id}
                         type="button"
-                        onClick={() => {
-                          if (editSelectedRoleId === role.id) return;
-                          selectRole(role.id, true);
-                        }}
+                        onClick={() => selectRole(role.id, true)}
                         className={`px-4 py-2 rounded-full text-sm font-medium transition-all ring-1 ${
                           isSelected
                             ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-white/10'
@@ -2881,9 +2928,20 @@ export default function UserManagement() {
                       <Shield className="w-3.5 h-3.5 text-brand-blue" />
                       Permissions
                     </label>
-                    <span className="text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-0.5 rounded-full">
-                      {editSelectedPermissionCodes.size} active
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSelectAllEditPermissions}
+                        className="text-2xs font-medium text-brand-blue hover:underline"
+                      >
+                        {getAllCustomPermissionCodes().every(code => editSelectedPermissionCodes.has(code))
+                          ? 'Deselect all'
+                          : 'Select all'}
+                      </button>
+                      <span className="text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-0.5 rounded-full">
+                        {editSelectedPermissionCodes.size} active
+                      </span>
+                    </div>
                   </div>
 
                   {isLoadingPermissions ? (
@@ -3013,8 +3071,13 @@ export default function UserManagement() {
                                 s.actions.forEach(a => next.delete(a.code));
                               });
                             } else {
-                              // Enable viewCode only (user picks individual actions)
+                              // Enable all codes in this category
                               if (category.viewCode) next.add(category.viewCode);
+                              category.actions?.forEach(a => next.add(a.code));
+                              category.subCategories?.forEach(s => {
+                                if (s.viewCode) next.add(s.viewCode);
+                                s.actions.forEach(a => next.add(a.code));
+                              });
                             }
                             return next;
                           });
@@ -3075,18 +3138,27 @@ export default function UserManagement() {
                               {/* View card */}
                               {category.viewCode && (() => {
                                 const badge = getActionBadge(category.viewCode);
-                                const isOn = editSelectedPermissionCodes.has(category.viewCode);
+                                const isMandatory = MANDATORY_PERMISSION_CODES.has(category.viewCode);
+                                const isOn = isMandatory || editSelectedPermissionCodes.has(category.viewCode);
                                 return (
                                   <div
                                     key={category.viewCode}
-                                    onClick={() => toggleCode(category.viewCode!)}
-                                    className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border cursor-pointer transition-all select-none ${isOn ? 'bg-brand-blue/5 border-brand-blue/30 ring-1 ring-brand-blue/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-blue/30 hover:bg-brand-blue/5'}`}
+                                    onClick={isMandatory
+                                      ? () => toast.info(`"View ${category.name}" is a baseline permission every account keeps — it can't be disabled.`)
+                                      : () => toggleCode(category.viewCode!)}
+                                    title={isMandatory ? 'Baseline permission — always enabled for every account' : undefined}
+                                    className={`flex items-start gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border transition-all select-none ${isMandatory ? 'cursor-default' : 'cursor-pointer'} ${isOn ? 'bg-brand-blue/5 border-brand-blue/30 ring-1 ring-brand-blue/20 shadow-sm' : 'bg-slate-50/50 dark:bg-slate-800/50 border-gray-100 dark:border-slate-700/60 opacity-50 hover:opacity-90 hover:border-brand-blue/30 hover:bg-brand-blue/5'}`}
                                   >
                                     <div className={`w-6 h-6 sm:w-8 sm:h-8 rounded flex items-center justify-center flex-shrink-0 ${badge.cls}`}>
                                       <span className="text-2xs sm:text-xs font-bold">{badge.letter}</span>
                                     </div>
                                     <div className="flex-1 min-w-0">
-                                      <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">View {category.name}</div>
+                                      <div className="font-semibold text-xs sm:text-sm text-gray-900 dark:text-slate-50">
+                                        View {category.name}
+                                        {isMandatory && (
+                                          <span className="ml-1.5 text-2xs font-normal text-gray-500 dark:text-slate-500 italic">(always on)</span>
+                                        )}
+                                      </div>
                                     </div>
                                   </div>
                                 );

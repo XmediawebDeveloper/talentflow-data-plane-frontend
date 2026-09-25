@@ -564,8 +564,8 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
     const skillType = skill.type || 'Skill';
     return (
       <div key={skill.name} className="group">
-        <div className="flex items-center gap-2">
-          <span className={`flex-1 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border ${
+        <div className="flex items-center gap-2 min-w-0">
+          <span className={`flex-1 min-w-0 inline-flex items-center gap-1.5 px-2.5 py-1.5 text-xs rounded-lg border break-words ${
             fromJd ? color.tag : 'bg-advice-positive-bg text-advice-positive border-advice-positive/25'
           }`}>
             {skill.name}
@@ -574,7 +574,7 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
           <select
             value={skillType}
             onChange={e => updateSkillType(skill.name, e.target.value as SkillType)}
-            className={`text-2xs font-medium px-1.5 py-0.5 rounded border cursor-pointer focus:outline-none ${SKILL_TYPE_COLORS[skillType]}`}
+            className={`flex-shrink-0 text-2xs font-medium px-1.5 py-0.5 rounded border cursor-pointer focus:outline-none ${SKILL_TYPE_COLORS[skillType]}`}
           >
             <option value="Skill">Skill</option>
             <option value="Command">Command</option>
@@ -631,7 +631,7 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
       {/* Header — skipped entirely when a host card draws its own (the
           Nice-to-Have wrapper does), so the card does not open with an empty
           bordered strip. */}
-      <div className={`flex items-start justify-between gap-3 px-4 ${
+      <div className={`flex flex-wrap items-start justify-between gap-3 px-4 ${
         title || mode === 'flexible' ? 'py-3 border-b border-gray-100' : 'py-0'
       }`}>
         {/* `title` is empty when a host card draws its own heading (the
@@ -659,7 +659,7 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
           <span />
         )}
         {mode === 'flexible' && (
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="flex flex-wrap items-center gap-1.5 flex-shrink-0">
             <label className="text-xs text-gray-500">Weight</label>
             <div className="flex items-center">
               <input
@@ -706,7 +706,7 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
 
         {/* Flexible mode: locked notice replaces the add-skill input */}
         {mode === 'flexible' && isLocked ? (
-          <div className="flex items-center justify-between gap-2 px-3 py-2.5 bg-gradient-to-r from-brand-orange/5 via-white to-brand-orange/5 border border-brand-orange/20 ring-1 ring-brand-orange/10 rounded-lg shadow-sm shadow-brand-orange/5">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5 bg-gradient-to-r from-brand-orange/5 via-white to-brand-orange/5 border border-brand-orange/20 ring-1 ring-brand-orange/10 rounded-lg shadow-sm shadow-brand-orange/5">
             <div className="flex items-center gap-2">
               <Lock className="w-3.5 h-3.5 text-brand-orange flex-shrink-0" />
               <span className="text-xs text-brand-orange-deep">Skills locked after cluster generation.</span>
@@ -728,7 +728,7 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
             <span className="text-xs text-gray-400">Free text only</span>
           </div>
           <div className="flex items-start gap-2">
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <input
                 value={newSkillName}
                 onChange={(e) => {
@@ -810,7 +810,7 @@ function SkillSection({ title, subtitle, category, config, jdSkillNames, mode, q
                           ? <ChevronDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                           : <ChevronUp className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                         }
-                        <span className="flex-1 text-sm font-medium text-gray-800">{cluster.name || 'Unnamed Topic'}</span>
+                        <span className="flex-1 min-w-0 text-sm font-medium text-gray-800 break-words">{cluster.name || 'Unnamed Topic'}</span>
                         <PriorityBadge p={cluster.priority} />
                         <span className="text-2xs text-gray-400">{clusterSkills.length} skill{clusterSkills.length !== 1 ? 's' : ''}</span>
                       </button>
@@ -994,7 +994,7 @@ function HRSection({
 
   return (
     <div className={`rounded-xl transition-all ${enabled ? 'bg-white border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5' : 'border border-gray-100 bg-slate-50 opacity-60'}`}>
-      <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-gray-100">
+      <div className="flex flex-wrap items-start justify-between gap-3 px-4 py-3 border-b border-gray-100">
         <SectionHeader
           icon={Users}
           title="HR Round"
@@ -1029,7 +1029,7 @@ function HRSection({
           }
         />
         {enabled && mode === 'flexible' && (
-          <div className="flex items-center gap-1.5 flex-shrink-0">
+          <div className="flex flex-wrap items-center gap-1.5 flex-shrink-0">
             <label className="text-xs text-gray-500">Weight</label>
             <div className="flex items-center">
               <input
@@ -1070,8 +1070,8 @@ function HRSection({
 
           {/* Question bank selection — both modes */}
           <>
-            <div className="flex items-center justify-between">
-              <div className="space-y-0.5">
+            <div className="flex items-start justify-between gap-3">
+              <div className="space-y-0.5 min-w-0">
                 <span className="block text-xs font-medium text-gray-600">
                   {mode === 'fixed'
                     ? `Select exactly ${effectiveCount} question${effectiveCount !== 1 ? 's' : ''} for Bina to ask`
@@ -1081,7 +1081,7 @@ function HRSection({
                   Closing is the default tag. Mark any question as Opening to ask it before the technical rounds; Closing questions are asked at the end.
                 </span>
               </div>
-              <span className={`text-xs font-semibold ${selectedIds.length >= effectiveCount ? 'text-advice-positive' : 'text-gray-500'}`}>
+              <span className={`text-xs font-semibold whitespace-nowrap flex-shrink-0 ${selectedIds.length >= effectiveCount ? 'text-advice-positive' : 'text-gray-500'}`}>
                 {selectedIds.length} / {effectiveCount} selected
               </span>
             </div>
@@ -1124,7 +1124,7 @@ function HRSection({
                       className="mt-0.5 w-3.5 h-3.5 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40 flex-shrink-0 disabled:cursor-not-allowed"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-xs text-gray-800 leading-relaxed">{q.question_text}</p>
+                      <p className="text-xs text-gray-800 leading-relaxed break-words">{q.question_text}</p>
                       <div className="mt-2 flex flex-wrap items-center gap-2">
                         <span className="text-2xs font-semibold uppercase tracking-wide text-gray-400">Ask As</span>
                         <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 bg-white p-1">
@@ -1181,7 +1181,7 @@ function HRSection({
           {/* Add Question — available in both modes, persists to HR Question Bank */}
           {addingQuestion ? (
             <div className="border border-gray-100 rounded-lg p-3 space-y-2 bg-slate-50 ring-1 ring-black/[0.02]">
-              <div className="flex items-center justify-between">
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-0.5">
                 <span className="text-xs font-medium text-gray-700">Add Question To HR Question Bank</span>
                 <span className="text-2xs text-gray-400">Saved to database</span>
               </div>
@@ -2898,11 +2898,14 @@ export default function AIInterviewConfig() {
             width above the columns, where it reads as the page's subject
             rather than as the first setting. */}
         <div className="mb-5 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 px-4 py-3.5">
-          <div className="flex items-start justify-between gap-3">
+          {/* Stacks on phones: the summary takes the full card width and the
+              two actions sit in a row beneath it, instead of a column that
+              squeezed the summary beside it. */}
+          <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
             <div className="min-w-0 flex-1">
               <JobOpeningSummary job={publishedJdToJob(selectedJd)} mergeInfoRows />
             </div>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-shrink-0">
+            <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
               {jdId && (
                 <button
                   type="button"
@@ -3028,9 +3031,9 @@ export default function AIInterviewConfig() {
 
                 {/* Buffer Time toggle — only in conversational mode */}
                 {mode === 'flexible' && (
-                  <div className="flex items-center justify-between pt-3 border-t border-gray-100">
-                    <div>
-                      <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-3 pt-3 border-t border-gray-100">
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
                         <span className="text-sm font-medium text-gray-900">Buffer Time</span>
                         <span className="text-xs px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 font-medium">+5 min</span>
                       </div>
@@ -3069,11 +3072,11 @@ export default function AIInterviewConfig() {
                 subtitle="Engine used to transcribe the candidate's spoken answers."
               />
               <div className="flex items-center gap-2.5 flex-wrap">
-                <div className="relative">
+                <div className="relative max-w-full">
                   <select
                     value={sttModel}
                     onChange={e => setSttModel(e.target.value)}
-                    className="appearance-none text-sm font-medium pl-3 pr-8 py-2 rounded-lg border border-gray-200 bg-white text-gray-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
+                    className="max-w-full truncate appearance-none text-sm font-medium pl-3 pr-8 py-2 rounded-lg border border-gray-200 bg-white text-gray-900 cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                   >
                     {STT_MODELS.map(m => (
                       <option key={m.value} value={m.value}>
@@ -3120,8 +3123,8 @@ export default function AIInterviewConfig() {
 
             {/* ── NTH ── */}
             <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-              <div className="flex items-start justify-between gap-3 px-4 py-3 border-b border-gray-100">
-                <div className="flex items-start gap-2.5">
+              <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2 px-4 py-3 border-b border-gray-100">
+                <div className="flex flex-1 items-start gap-2.5 min-w-[12rem]">
                   <span className="flex items-center h-10 flex-shrink-0">
                   <label className="relative inline-flex items-center cursor-pointer">
                     <input type="checkbox" checked={nth.enabled} onChange={() => {
@@ -3149,13 +3152,13 @@ export default function AIInterviewConfig() {
                   <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex-shrink-0">
                     <Sparkles className="w-5 h-5 text-brand-cyan" />
                   </div>
-                  <div className="min-w-0">
+                  <div className="flex-1 min-w-0">
                     <div className="font-semibold text-gray-900 text-sm tracking-tight">Nice-To-Have Skills</div>
                     <p className="text-xs text-gray-500 mt-0.5">Optional skills that add value to the role.</p>
                   </div>
                 </div>
                 {nth.enabled && (
-                  <div className="flex items-center h-10 flex-shrink-0">
+                  <div className="flex items-center sm:h-10 flex-shrink-0">
                     {mode === 'fixed' ? (
                       <span className="px-2 py-0.5 text-xs rounded-full bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
                         {timedQDist.nth} questions
@@ -3532,14 +3535,14 @@ export default function AIInterviewConfig() {
 
               {PROXY_INTEGRITY_VERIFICATION_ENABLED && additionalTab === 'proxy' && (
                 <div role="tabpanel" className="p-4 space-y-2">
-                  <div className="flex items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
                         <QrCode className="w-5 h-5 text-brand-blue" />
                       </div>
                       <span className="text-sm font-medium text-gray-900 tracking-tight">Enable Proxy Integrity Verification</span>
                     </div>
-                    <label className="relative inline-flex items-center cursor-pointer">
+                    <label className="relative inline-flex items-center cursor-pointer flex-shrink-0">
                       <input
                         type="checkbox"
                         checked={environmentVerificationEnabled}
@@ -3578,7 +3581,7 @@ export default function AIInterviewConfig() {
                 <div className="divide-y divide-gray-50">
                   <div className="px-3 py-2 flex items-start justify-between gap-2">
                     <span className="text-xs text-gray-500 flex-shrink-0">Role Title</span>
-                    <span className="text-xs font-semibold text-gray-900 text-right">{selectedJd.title}</span>
+                    <span className="text-xs font-semibold text-gray-900 text-right break-words min-w-0">{selectedJd.title}</span>
                   </div>
                   {experienceSummary && (
                     <div className="px-3 py-2 flex items-start justify-between gap-2">
@@ -3654,7 +3657,7 @@ export default function AIInterviewConfig() {
               {mode === 'fixed' && (
                 <div className="space-y-3 mb-4">
                   <div className="border border-gray-100 rounded-lg overflow-hidden ring-1 ring-black/[0.02]">
-                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                    <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
                       <span className="text-xs font-medium text-brand-blue">Question Budget (Total: 15)</span>
                       <span className="text-xs text-gray-400">{totalFixed} min</span>
                     </div>
@@ -3732,7 +3735,7 @@ export default function AIInterviewConfig() {
                   )}
                   {pctValid && (
                     <div className="border border-gray-100 rounded-lg overflow-hidden ring-1 ring-black/[0.02]">
-                      <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex items-center justify-between">
+                      <div className="px-3 py-2 bg-gray-50 border-b border-gray-100 flex flex-wrap items-center justify-between gap-x-2 gap-y-0.5">
                         <span className="text-xs font-medium text-brand-blue">Time Allocation</span>
                         <span className="text-xs font-semibold text-gray-700">
                           {bufferEnabled ? '30 min base + 5 min buffer' : '30 min total'}
@@ -3800,8 +3803,11 @@ export default function AIInterviewConfig() {
             outcomes, and they now sit where the form ends rather than beside
             the summary the recruiter is still reading. Sticky, because this
             form is long enough that the buttons were regularly off-screen. */}
-        <div className="sticky bottom-0 z-10 mt-6 -mx-4 md:-mx-8 px-4 md:px-8 py-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-b-2xl">
-          <div className="flex items-center gap-2">
+        <div className="sticky bottom-0 z-10 mt-6 -mx-4 md:-mx-8 px-4 md:px-8 py-3 bg-white/95 dark:bg-slate-900/95 backdrop-blur border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-3 rounded-b-2xl">
+          {/* On phones the bar is two rows (leave / advance) rather than four
+              stacked buttons: it is sticky, and the full stack covered a
+              quarter of the screen the form itself needs. */}
+          <div className="flex items-center justify-between sm:justify-start gap-2">
             <button
               type="button"
               onClick={() => {
@@ -3816,11 +3822,11 @@ export default function AIInterviewConfig() {
             <WizardDiscardButton onClick={handleDiscardDraft} disabled={savingDraft} />
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          <div className="flex flex-row items-stretch sm:items-center gap-2">
             <button
               onClick={handleSaveAsDraft}
               disabled={savingDraft}
-              className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 sm:flex-none whitespace-nowrap inline-flex items-center justify-center gap-2 px-3 sm:px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
               {savingDraft ? 'Saving…' : 'Save as Draft'}
@@ -3829,23 +3835,28 @@ export default function AIInterviewConfig() {
             {/* No native `title` on the button — the styled bubble below
                 already shows `continueDisabledReason`, and setting both made
                 the browser draw a second plain tooltip over it. */}
-            <div className="relative group">
+            <div className="relative group flex-1 sm:flex-none">
               <button
                 onClick={handleContinueToClusters}
                 disabled={!canContinueToClusters}
                 aria-disabled={!canContinueToClusters}
-                className={`w-full inline-flex items-center justify-center gap-2 px-5 py-2.5 text-sm rounded-lg transition-colors ${
+                className={`w-full whitespace-nowrap inline-flex items-center justify-center gap-2 px-3 sm:px-5 py-2.5 text-sm rounded-lg transition-colors ${
                   canContinueToClusters
                     ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
                     : 'bg-slate-200 text-gray-400 cursor-not-allowed'
                 }`}
               >
                 {savingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : null}
-                {savingDraft ? 'Saving…' : 'Continue to Clusters'}
+                {savingDraft ? 'Saving…' : (
+                  <>
+                    <span className="sm:hidden">Continue</span>
+                    <span className="hidden sm:inline">Continue to Clusters</span>
+                  </>
+                )}
                 {!savingDraft && <ChevronRight className="w-4 h-4" />}
               </button>
               {!canContinueToClusters && continueDisabledReason && (
-                <div className="pointer-events-none absolute bottom-full right-0 mb-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-normal w-max max-w-xs z-10">
+                <div className="pointer-events-none absolute bottom-full right-0 mb-2 px-3 py-2 text-xs text-white bg-gray-900 rounded-md shadow-lg opacity-0 group-hover:opacity-100 transition-opacity whitespace-normal w-max max-w-[calc(100vw-2rem)] sm:max-w-xs z-10">
                   {continueDisabledReason}
                   <div className="absolute top-full right-6 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-gray-900" />
                 </div>

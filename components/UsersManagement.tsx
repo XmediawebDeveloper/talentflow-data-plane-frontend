@@ -376,7 +376,9 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
   };
 
   const rbacCodeToUserRole = (code: string): UserRole => {
-    if (code === 'admin') return 'tenant_admin';
+    // Do NOT map 'admin' -> 'tenant_admin': the backend no longer treats the
+    // 'admin' role as an automatic tenant_admin bypass (it's a normal,
+    // permission-governed role, same as recruiter/viewer/billing_manager).
     return code as UserRole;
   };
 

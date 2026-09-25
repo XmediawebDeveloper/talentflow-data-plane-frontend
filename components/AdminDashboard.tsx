@@ -225,16 +225,16 @@ export default function AdminDashboard({
               <div className="flex items-center gap-2 mt-1 flex-wrap">
                 <span
                   className="text-xs text-brand-blue font-medium cursor-pointer hover:underline hover:text-brand-blue-2 transition-colors"
-                  onClick={() => router.push('/recruitment/my-resumes')}
+                  onClick={() => router.push('/recruitment/resume-database?tab=my-resumes')}
                 >
                   {stats?.my_resumes || 0} My Resumes
                 </span>
                 <span className="text-xs text-gray-300">|</span>
                 <span
                   className="text-xs text-brand-cyan font-medium cursor-pointer hover:underline hover:text-brand-teal transition-colors"
-                  onClick={() => router.push('/recruitment/resume-database')}
+                  onClick={() => router.push('/recruitment/resume-database?tab=internal-db')}
                 >
-                  {stats?.internal_db_resumes || 0} Internal DB
+                  {stats?.internal_db_resumes || 0} Shared Database
                 </span>
               </div>
             </div>
@@ -349,7 +349,7 @@ export default function AdminDashboard({
             {subscriptionUnits.RU && hasPlanFeature('resume_upload') && (
               <div
                 className="group cursor-pointer bg-white rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 ring-1 ring-black/[0.02] p-4 hover:shadow-md hover:shadow-brand-blue/10 hover:border-brand-blue/30 hover:-translate-y-0.5 transition-all"
-                onClick={() => router.push('/recruitment/my-resumes')}
+                onClick={() => router.push('/recruitment/resume-database?tab=my-resumes')}
               >
                 <div className="flex items-center gap-3 mb-2">
                   <div className="w-10 h-10 bg-brand-blue/10 ring-1 ring-brand-blue/15 rounded-xl flex items-center justify-center flex-shrink-0">

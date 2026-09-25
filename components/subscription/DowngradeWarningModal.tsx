@@ -67,7 +67,7 @@ export default function DowngradeWarningModal({
   const getActionLink = (quotaType: string) => {
     switch (quotaType) {
       case 'resume_storage':
-        return '/recruitment/my-resumes';
+        return '/recruitment/resume-database?tab=my-resumes';
       case 'max_seats':
         return '/organization/user-management';
       default:

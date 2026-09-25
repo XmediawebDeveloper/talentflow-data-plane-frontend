@@ -815,12 +815,19 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
       <DialogContent className="w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] sm:max-w-lg p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Invitation History</DialogTitle>
+          {/* Name, then the email — two candidates can share a name, and the
+              email is what tells them apart. */}
           {/* Name, then the invitation's email beside it — the one place the
               popup names the address. */}
           <DialogDescription className="break-words">
+            
             {target?.candidate_name || (!target?.candidate_email ? 'Candidate' : null)}
             {target?.candidate_name && target?.candidate_email && ' — '}
             {target?.candidate_email && <span className="break-all">{target.candidate_email}</span>}
+          
+            {target?.candidate_name && target?.candidate_email && (
+              <span className="text-gray-400 dark:text-slate-500"> · {target.candidate_email}</span>
+            )}
           </DialogDescription>
         </DialogHeader>
         {/* flex-1 min-h-0: the list takes whatever height the dialog has

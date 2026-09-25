@@ -626,7 +626,7 @@ function DroppableFolderCard({
                 role="menuitem"
                 disabled={!canUpload || !onUploadToFolder}
                 onClick={(e) => runFolderAction(e, () => onUploadToFolder?.(folder.id), !canUpload || !onUploadToFolder)}
-                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 disabled:text-gray-400 dark:disabled:text-slate-600 transition-colors"
+                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
               >
                 <Upload className={`w-4 h-4 ${canUpload && onUploadToFolder ? 'text-menu-icon-download' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>Upload to Folder</span>
@@ -637,7 +637,7 @@ function DroppableFolderCard({
                 disabled={!canCreateSubfolder || !onCreateSubfolder}
                 onClick={(e) => runFolderAction(e, () => onCreateSubfolder?.(folder.id), !canCreateSubfolder || !onCreateSubfolder)}
                 title={!canCreateSubfolder ? `Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)` : undefined}
-                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 disabled:text-gray-400 dark:disabled:text-slate-600 transition-colors"
+                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
               >
                 <Plus className={`w-4 h-4 ${canCreateSubfolder && onCreateSubfolder ? 'text-menu-icon-secondary' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>Create Subfolder</span>
@@ -648,7 +648,7 @@ function DroppableFolderCard({
                 role="menuitem"
                 disabled={!canRename || !onStartRename}
                 onClick={(e) => runFolderAction(e, () => onStartRename?.(folder), !canRename || !onStartRename)}
-                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 disabled:text-gray-400 dark:disabled:text-slate-600 transition-colors"
+                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
               >
                 <Edit2 className={`w-4 h-4 ${canRename && onStartRename ? 'text-menu-icon-edit' : ''}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>Rename Folder</span>
@@ -659,7 +659,7 @@ function DroppableFolderCard({
                 role="menuitem"
                 disabled={!canDelete || !onDeleteFolder}
                 onClick={(e) => runFolderAction(e, () => onDeleteFolder?.(folder.id), !canDelete || !onDeleteFolder)}
-                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 disabled:text-gray-400 dark:disabled:text-slate-600 transition-colors"
+                className="group w-full flex items-center gap-2 px-3 py-2 text-left text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:text-gray-400 dark:disabled:text-slate-600 disabled:hover:bg-white dark:disabled:hover:bg-transparent transition-colors"
               >
                 <Trash2 className="w-4 h-4" />
                 <span className={MENU_ITEM_SCALE_CLASS}>Delete Folder</span>

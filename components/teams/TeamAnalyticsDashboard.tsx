@@ -70,7 +70,10 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
   });
   const [toDate, setToDate] = useState(() => new Date().toISOString().split('T')[0]);
 
-  const isTenantAdmin = userRole === 'tenant_admin' || userRole === 'owner' || userRole === 'admin';
+  // Must match the backend's actual gate (current_user.is_tenant_admin) for the
+  // all-teams-usage endpoint — a raw role-string comparison drifts from the
+  // backend (e.g. 'admin' is no longer an automatic tenant_admin bypass there).
+  const isTenantAdmin = authIsTenantAdmin;
 
   useEffect(() => {
     fetchAnalyticsData();

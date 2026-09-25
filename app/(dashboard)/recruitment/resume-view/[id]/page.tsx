@@ -238,8 +238,10 @@ export default function ResumeViewPage() {
   const nextId = navIndex >= 0 && navIndex < navList.length - 1 ? navList[navIndex + 1] : null;
 
   // Which list the user opened this resume from, so the breadcrumb points back
-  // to the right place ("My Resumes" vs "Internal Database"). The originating
-  // list stores this in sessionStorage as `resumeNavSource`.
+  // to the right place — for the two resume pools that now means the right TAB
+  // of Resume Database. The originating list stores this in sessionStorage as
+  // `resumeNavSource`; its values are unchanged ('my-resumes' is the tab, not a
+  // route, since the /recruitment/my-resumes page became a redirect).
   const [viewSource, setViewSource] = useState<'my-resumes' | 'resume-database' | 'ai-talent-match' | 'job-details'>('resume-database');
   const [jobDetailsReturnUrl, setJobDetailsReturnUrl] = useState<string | null>(null);
   const [jobDetailsTitle, setJobDetailsTitle] = useState('');
@@ -268,8 +270,15 @@ export default function ResumeViewPage() {
       }
     } catch { /* ignore */ }
   }, []);
+  /* My Resumes and Internal Database are tabs of one Resume Database page, so
+     the trail names both the page and the tab the recruiter actually came
+     from, and the link carries `?tab=` to land them back on it rather than on
+     whichever tab happens to be their default. */
   const sourceCrumbs =
-    viewSource === 'my-resumes' ? [{ label: 'My Resumes', href: '/recruitment/my-resumes' }]
+    viewSource === 'my-resumes' ? [
+      { label: 'Resume Database', href: '/recruitment/resume-database?tab=my-resumes' },
+      { label: 'My Resumes', href: '/recruitment/resume-database?tab=my-resumes' },
+    ]
     // The "Match Details" step only exists when the resume was opened from a
     // specific job's match list. The candidate roll-up spans jobs and stores no
     // job id, so it goes straight from AI Talent Match to the candidate.
@@ -286,7 +295,10 @@ export default function ResumeViewPage() {
       { label: 'Job Descriptions', href: '/recruitment/job-openings' },
       { label: jobDetailsTitle || 'Job Details', href: jobDetailsReturnUrl || '/recruitment/job-openings' },
     ]
-    : [{ label: 'Internal Database', href: '/recruitment/resume-database' }];
+    : [
+      { label: 'Resume Database', href: '/recruitment/resume-database?tab=internal-db' },
+      { label: 'Shared Database', href: '/recruitment/resume-database?tab=internal-db' },
+    ];
 
   // Apply to Job modal state
   const [isApplyToJobModalOpen, setIsApplyToJobModalOpen] = useState(false);
@@ -322,8 +334,20 @@ export default function ResumeViewPage() {
   const [versionPreviewUrl, setVersionPreviewUrl] = useState<string | null>(null);
   const [versionPreviewLabel, setVersionPreviewLabel] = useState<string>('');
 
-  const canShareResume = isTenantAdmin || hasPermissionCode('my_resumes:share');
-  const canDeleteResume = isTenantAdmin || hasPermission('canDeleteResumes') || hasPermissionCode('my_resumes:delete');
+  // Source-aware, same as hasAITalentMatchSourcePermission below: a resume
+  // opened from Internal Database must be gated by internal_db:* codes, not
+  // my_resumes:* — otherwise disabling Internal Database's own Delete/Share
+  // has no effect as long as My Resumes' Delete/Share stays enabled.
+  const canShareResume = isTenantAdmin || (
+    viewSource === 'resume-database'
+      ? hasPermissionCode('internal_db:share')
+      : hasPermissionCode('my_resumes:share')
+  );
+  const canDeleteResume = isTenantAdmin || (
+    viewSource === 'resume-database'
+      ? hasPermissionCode('internal_db:delete')
+      : hasPermission('canDeleteResumes') || hasPermissionCode('my_resumes:delete')
+  );
   const canApplyResumeToJob =
     hasPlanFeature('resume_scoring') &&
     (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')));
@@ -355,7 +379,7 @@ export default function ResumeViewPage() {
   const [shareAssessments, setShareAssessments] = useState<any[]>([]);
   const [showShareAssessmentModal, setShowShareAssessmentModal] = useState(false);
   /* AI Interview invite — the shared Invite to AI Interview popup (the same
-     one My Resumes and the Internal Database use): pick the interview, then
+     one My Resumes and the Shared Database use): pick the interview, then
      the share modal with this candidate prefilled. */
   const [showAIInviteFlow, setShowAIInviteFlow] = useState(false);
   const [inviteJobTitle, setInviteJobTitle] = useState('');
@@ -751,7 +775,7 @@ Best regards`);
       try {
         await resumeService.delete(resumeId);
         toast.success('Resume deleted');
-        router.push('/recruitment/my-resumes');
+        router.push('/recruitment/resume-database?tab=my-resumes');
       } catch (err) {
         toast.error('Failed to delete resume');
       }

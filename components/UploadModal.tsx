@@ -746,7 +746,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
         const detail = error?.response?.data?.detail;
         const existingResume = detail?.existing_resume;
         errorMessage = existingResume?.candidate_name
-          ? `A resume for ${existingResume.candidate_name} already exists in your Internal Resume Database.`
+          ? `A resume for ${existingResume.candidate_name} already exists in your Shared Resume Database.`
           : 'This resume already exists in the system.';
       } else if (error?.response?.status === 403) {
         const detail = error?.response?.data?.detail;

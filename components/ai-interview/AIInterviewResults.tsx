@@ -22,12 +22,17 @@ import type { AIInterviewResponse, AIInterviewInvitationListResponse } from '@/l
 import { formatISTDate, formatIST, parseIST } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
-import { InviteSourceValue, inviteSourceLabel } from '@/components/AIInterviewInviteTable';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { INVITE_SOURCE_FILTER_OPTIONS } from './ColumnFilterFields';
+import { InviteSourceValue, inviteSourceLabel, isRevocableInvite, isExpiredForActions } from '@/components/AIInterviewInviteTable';
+import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 interface AIInterviewResultsProps {
   configId: string;
   configTitle?: string;
   jdTitle?: string;
+  /** The job's short id (e.g. "JD-151"), shown before the title in the header. */
+  jdShortId?: string;
   onBack: () => void;
   /** Overrides the default AI Interviews trail. Set when these results are
    *  opened from a JD's Job Details page, so the breadcrumb stays anchored to
@@ -37,6 +42,16 @@ interface AIInterviewResultsProps {
    *  without the page <main>/breadcrumb/back-button chrome. Used when the
    *  results view is embedded as a tab inside the interview details page. */
   embedded?: boolean;
+  /** Shows the status cards (Total, Invited, Completed …) even when
+   *  embedded — the interview details page's Results tab, so it reads like
+   *  the standalone results page and the Track popup. Defaults to !embedded;
+   *  Job Details leaves it off, having counts of its own. */
+  showStats?: boolean;
+  /** Opened for ONE version (a version row's View Results, or a version's
+   *  own details page): every row shares that job and interview version, so
+   *  the Job Version / Interview Version columns, filters and export columns
+   *  are left out. */
+  hideVersionDetails?: boolean;
   /** When provided (embedded case), clicking a candidate opens their details
    *  inline via this callback (passing the session id and the ordered list of
    *  currently-visible session ids for Prev/Next) instead of navigating to the
@@ -77,6 +92,7 @@ const RESULT_COLUMNS = [
   { id: 'email', label: 'Email' },
   { id: 'jobVersion', label: 'Job Version' },
   { id: 'interviewVersion', label: 'Interview Version' },
+  { id: 'inviteSource', label: 'Invite Source' },
   { id: 'status', label: 'Status' },
   { id: 'score', label: 'Score' },
   { id: 'timeline', label: 'Timeline' },
@@ -195,7 +211,7 @@ export function formatDuration(session: AIInterviewResponse): string {
   return `${mins}m ${secs}s`;
 }
 
-export default function AIInterviewResults({ configId, configTitle, jdTitle, embedded = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp }: AIInterviewResultsProps) {
+export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp }: AIInterviewResultsProps) {
   const router = useRouter();
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -264,6 +280,9 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const PAGE_SIZE = 15;
+  // With a Source filter the list is fetched whole and paged here (see
+  // pageBySource); this caps that one request.
+  const SOURCE_FETCH_LIMIT = 1000;
 
   // Local text so a partial edit doesn't get clobbered by currentPage until Enter/blur commits it.
   const [goToPage, setGoToPage] = useState(String(currentPage));
@@ -295,11 +314,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
   // so `appliedQuery` matters twice over: it keeps one request per pause rather
   // than per keystroke, and it is what the request is built from.
   const search = useListSearch({
-    initialFilters: { status: 'all', scoreMin: '', scoreMax: '', dateFrom: '', dateTo: '', jobVersion: '', interviewVersion: '' },
+    initialFilters: { status: 'all', scoreMin: '', scoreMax: '', dateFrom: '', dateTo: '', jobVersion: '', interviewVersion: '', inviteSource: '' },
     onChange: () => setCurrentPage(1),
     // Score min/max is one logical range filter, and so is the date range.
     countFilters: (f) =>
-      [f.scoreMin || f.scoreMax, f.dateFrom || f.dateTo, f.jobVersion, f.interviewVersion].filter(Boolean).length,
+      [f.scoreMin || f.scoreMax, f.dateFrom || f.dateTo, f.jobVersion, f.interviewVersion, f.inviteSource].filter(Boolean).length,
   });
   const {
     status: statusFilter,
@@ -309,6 +328,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
     dateTo,
     jobVersion: jobVersionFilter,
     interviewVersion: interviewVersionFilter,
+    inviteSource: sourceFilter,
   } = search.filters;
 
   const requestParams = useMemo(() => ({
@@ -318,10 +338,27 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
     score_max: scoreMax !== '' ? parseFloat(scoreMax) : undefined,
     date_from: dateFrom || undefined,
     date_to: dateTo || undefined,
-    page: currentPage,
-    page_size: PAGE_SIZE,
+    /* Source (email / resume) has no server-side filter, so with one set the
+       whole matching list is fetched and filtered and paged here — see
+       pageBySource. */
+    page: sourceFilter ? 1 : currentPage,
+    page_size: sourceFilter ? SOURCE_FETCH_LIMIT : PAGE_SIZE,
     compact: true,
-  }), [search.appliedQuery, statusFilter, scoreMin, scoreMax, dateFrom, dateTo, currentPage]);
+  }), [search.appliedQuery, statusFilter, scoreMin, scoreMax, dateFrom, dateTo, currentPage, sourceFilter]);
+
+  /* The rows, total and page count to show for one list response: the
+     server's own page as it is, or — with a Source filter — this page of the
+     rows from that source, so the pagination and counts describe what is
+     actually listed. */
+  const pageBySource = useCallback((res: AIInterviewInvitationListResponse) => {
+    if (!sourceFilter) {
+      return { items: res.items, total: res.total, pages: Math.max(1, res.total_pages || 1) };
+    }
+    const matching = res.items.filter((s) => (s as any).invite_source === sourceFilter);
+    const pages = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
+    const page = Math.min(currentPage, pages);
+    return { items: matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), total: matching.length, pages };
+  }, [sourceFilter, currentPage]);
 
   const loadSessions = useCallback(async () => {
     setIsLoading(true);
@@ -337,9 +374,10 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
         aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'revoked', page: 1, page_size: 1 }),
         aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'invited', page: 1, page_size: 1 }),
       ]);
-      setSessions(result.items);
-      setTotalSessions(result.total);
-      setTotalPages(Math.max(1, result.total_pages || 1));
+      const shown = pageBySource(result);
+      setSessions(shown.items);
+      setTotalSessions(shown.total);
+      setTotalPages(shown.pages);
       setSummary({
         invited: invitedProbe.total || 0,
         completed: result.completed || 0,
@@ -353,7 +391,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
     } finally {
       setIsLoading(false);
     }
-  }, [configId, requestParams]);
+  }, [configId, requestParams, pageBySource]);
 
   useEffect(() => {
     loadSessions();
@@ -371,9 +409,10 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
         aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'invited', page: 1, page_size: 1 }),
       ])
         .then(([r, expiredProbe, revokedProbe, invitedProbe]) => {
-          setSessions(r.items);
-          setTotalSessions(r.total);
-          setTotalPages(Math.max(1, r.total_pages || 1));
+          const shown = pageBySource(r);
+          setSessions(shown.items);
+          setTotalSessions(shown.total);
+          setTotalPages(shown.pages);
           setSummary({
             invited: invitedProbe.total || 0,
             completed: r.completed || 0,
@@ -386,7 +425,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
         .catch(() => {});
     }, 5000);
     return () => clearInterval(id);
-  }, [sessions, configId, requestParams]);
+  }, [sessions, configId, requestParams, pageBySource]);
 
   // The hook's `onChange` returns to page 1 whenever the query or a filter moves.
   // Job/interview version are properties of this config, not of each row, so
@@ -403,7 +442,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
   // put so it can be cleared, and `isNarrowed` is what tells the two apart.
   const isUnstarted = !isLoading && sessions.length === 0 && !search.isNarrowed;
 
-  const [columns, setColumns] = useState(() => RESULT_COLUMNS.map((c) => ({ id: c.id as string, label: c.label as string, enabled: true })));
+  // Without the version columns in the list at all, the table, the Customize
+  // Columns modal and the export all drop them together.
+  const [columns, setColumns] = useState(() => RESULT_COLUMNS
+    .filter((c) => !hideVersionDetails || (c.id !== 'jobVersion' && c.id !== 'interviewVersion'))
+    .map((c) => ({ id: c.id as string, label: c.label as string, enabled: true })));
   const [showColumnModal, setShowColumnModal] = useState(false);
   const enabledColumns = columns.filter((c) => c.enabled);
   const col = (id: ResultColumnId) => columns.some((c) => c.id === id && c.enabled);
@@ -424,6 +467,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
         case 'email': return [session.candidate_email || ''];
         case 'jobVersion': return [jobVersion != null ? `V${jobVersion}` : ''];
         case 'interviewVersion': return [interviewVersion != null ? `V${interviewVersion}` : ''];
+        case 'inviteSource': return [inviteSourceLabel(session) || ''];
         case 'status': return [getStatusLabel(session.status)];
         case 'score': return [session.score != null ? `${Math.round(session.score)}%` : ''];
         case 'timeline': return [
@@ -445,7 +489,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
       if (selected.size === 0) {
         for (let page = 1; ; page += 1) {
           const res = await aiInterviewService.getConfigInvitations(configId, { ...requestParams, page, page_size: 100 });
-          all.push(...res.items);
+          all.push(...(sourceFilter ? res.items.filter((s) => (s as any).invite_source === sourceFilter) : res.items));
           if (res.items.length < 100 || page >= (res.total_pages || 1)) break;
         }
       }
@@ -487,6 +531,52 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
     }
   };
 
+  /* Bulk Revoke / Resend, driven by the status card — the Track popup's
+     rule: the Invited card offers Revoke for the ticked rows that can still be
+     revoked, the Expired card offers Resend for the ticked rows a fresh link
+     can go to. Shown wherever the cards are, since they decide which applies.
+     Ticked rows that do not qualify are left out and the button's count says
+     how many will actually be acted on. */
+  const showInviteActions = showStats ?? !embedded;
+  const selectedSessions = Array.from(selected.values());
+  const revocableSelected = showInviteActions && statusFilter === 'invited'
+    ? selectedSessions.filter(isRevocableInvite) : [];
+  const resendableSelected = showInviteActions && statusFilter === 'expired'
+    ? selectedSessions.filter((s) => isExpiredForActions(s) && !s.started_at && !s.completed_at) : [];
+  const [bulkAction, setBulkAction] = useState<'revoke' | 'resend' | null>(null);
+  const [isBulkWorking, setIsBulkWorking] = useState(false);
+  const runBulkAction = async () => {
+    const action = bulkAction;
+    const targets = action === 'revoke' ? revocableSelected : resendableSelected;
+    if (!action || targets.length === 0) { setBulkAction(null); return; }
+    setIsBulkWorking(true);
+    let done = 0;
+    let failed = 0;
+    // One at a time: each resend emails a candidate, and one failure must not
+    // stop the rest.
+    for (const session of targets) {
+      try {
+        if (action === 'revoke') await aiInterviewService.revokeInvitation(session.id);
+        else await aiInterviewService.sendSessionEmail(session.id, { base_url: window.location.origin });
+        done++;
+      } catch {
+        failed++;
+      }
+    }
+    if (done > 0) {
+      toast.success(action === 'revoke'
+        ? `Revoked ${done} invitation${done === 1 ? '' : 's'}.`
+        : `New invitation link${done === 1 ? '' : 's'} sent to ${done} candidate${done === 1 ? '' : 's'}.`);
+    }
+    if (failed > 0) {
+      toast.error(`${failed} invitation${failed === 1 ? '' : 's'} could not be ${action === 'revoke' ? 'revoked' : 'resent'}.`);
+    }
+    setSelected(new Map());
+    setIsBulkWorking(false);
+    setBulkAction(null);
+    await loadSessions();
+  };
+
   const allOnPageSelected = paginatedSessions.length > 0 && paginatedSessions.every((s) => selected.has(s.id));
   const toggleAllOnPage = () =>
     setSelected((prev) => {
@@ -523,8 +613,31 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
         <div className="mb-6">
           <div className="flex items-start justify-between">
             <div>
-              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">{configTitle || 'AI Interview'}</h1>
-              {jdTitle && <p className="text-sm text-gray-500 mt-1">{jdTitle}</p>}
+              {/* JD ID, then the job title — one line. The subtitle that
+                  repeated the title underneath is gone. */}
+              <h1 className="flex flex-wrap items-center gap-3 text-2xl font-bold text-gray-900 tracking-tight">
+                {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
+                <span>{jdTitle || configTitle || 'AI Interview'}</span>
+                {/* One version's results: the table has no version columns, so
+                    the title names the version — "App development - V1
+                    Interview Version - V1", the Track popup's header. */}
+                {hideVersionDetails && (jobVersion != null || interviewVersion != null) && (
+                  <span className="flex items-center gap-3 text-sm font-medium text-gray-500 whitespace-nowrap">
+                    {jobVersion != null && (
+                      <span className="inline-flex items-center gap-1.5">
+                        -
+                        <VersionPill kind="job" version={jobVersion} />
+                      </span>
+                    )}
+                    {interviewVersion != null && (
+                      <span className="inline-flex items-center gap-1.5">
+                        Interview Version -
+                        <VersionPill kind="interview" version={interviewVersion} />
+                      </span>
+                    )}
+                  </span>
+                )}
+              </h1>
             </div>
           </div>
         </div>
@@ -534,8 +647,19 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
           Result" tab, the summary cards are dropped: that page already carries
           its own counts and Quick Actions, and the tab leads with the candidate
           table instead. */}
-      {!embedded && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4 mb-6">
+      {/* Embedded, the cards sit in a column beside the page's own nav, a
+          few hundred pixels narrower than the standalone page — seven in a
+          row there left each ~130px, and the icon-beside-label layout cut
+          labels like "IN PROGRESS" short. So embedded cards wrap to two
+          rows of four until xl, and stack icon + count over a full-width
+          label instead of squeezing all three onto one line. */}
+      {(showStats ?? !embedded) && (
+        <div className={embedded
+          /* px-0.5: the selected card's ring-2 draws 2px outside it, and the
+             details page's content column (overflow-x-auto) clips anything
+             past its edge — this keeps the first and last rings whole. */
+          ? 'grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3 mb-5 px-0.5 pt-0.5'
+          : 'grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4 mb-6'}>
           {([
             { key: 'all', label: 'Total', value: totalSessions, Icon: Users,
               iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15', iconColor: 'text-brand-blue', activeRing: 'ring-brand-blue/50 border-brand-blue/40' },
@@ -566,17 +690,31 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                       : `Show only ${label.toLowerCase()} candidates`
                 }
                 onClick={() => search.setFilter('status', key === 'all' ? 'all' : isActive ? 'all' : key)}
-                className={`text-left bg-white rounded-xl border p-4 shadow-sm shadow-brand-blue/5 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 ${
+                className={`text-left bg-white rounded-xl border ${embedded ? 'p-3' : 'p-4'} shadow-sm min-w-0 shadow-brand-blue/5 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 ${
                   isActive ? `ring-2 ${activeRing}` : 'border-gray-100 ring-1 ring-black/[0.02] hover:border-brand-blue/20'
                 }`}
               >
-                <div className="flex items-center gap-2.5 mb-2">
-                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${iconBg}`}>
-                    <Icon className={`w-4 h-4 ${iconColor}`} />
-                  </div>
-                  <span className="text-xs text-gray-500 font-medium uppercase tracking-wide truncate">{label}</span>
-                </div>
-                <div className="text-2xl font-bold text-gray-900 tracking-tight">{value}</div>
+                {embedded ? (
+                  <>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${iconBg}`}>
+                        <Icon className={`w-4 h-4 ${iconColor}`} />
+                      </div>
+                      <div className="text-xl font-bold text-gray-900 tracking-tight tabular-nums">{value}</div>
+                    </div>
+                    <span className="block text-2xs text-gray-500 font-medium uppercase tracking-wide whitespace-nowrap">{label}</span>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2.5 mb-2">
+                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${iconBg}`}>
+                        <Icon className={`w-4 h-4 ${iconColor}`} />
+                      </div>
+                      <span className="text-xs text-gray-500 font-medium uppercase tracking-wide truncate">{label}</span>
+                    </div>
+                    <div className="text-2xl font-bold text-gray-900 tracking-tight">{value}</div>
+                  </>
+                )}
               </button>
             );
           })}
@@ -600,6 +738,32 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
           leadingActions={toolbarActions}
           className="mb-0"
         >
+          {revocableSelected.length > 0 && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setBulkAction('revoke')}
+              disabled={isBulkWorking}
+              title="Revoke the selected candidates' interview links"
+              icon={isBulkWorking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Ban className="w-4 h-4" />}
+              className="whitespace-nowrap !h-[38px] !text-sm"
+            >
+              {isBulkWorking ? 'Revoking…' : `Revoke (${revocableSelected.length})`}
+            </Button>
+          )}
+          {resendableSelected.length > 0 && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setBulkAction('resend')}
+              disabled={isBulkWorking}
+              title="Resend a fresh link to the selected expired invitations"
+              icon={isBulkWorking ? <Loader2 className="w-4 h-4 animate-spin" /> : <Mail className="w-4 h-4" />}
+              className="whitespace-nowrap !h-[38px] !text-sm"
+            >
+              {isBulkWorking ? 'Sending…' : `Resend (${resendableSelected.length})`}
+            </Button>
+          )}
           <Button
             variant="secondary"
             size="sm"
@@ -631,6 +795,29 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
           </select>
           <ListViewToggle value={displayMode} onChange={setDisplayMode} />
         </ListToolbar>
+
+        {/* Bulk Revoke / Resend confirmations — the Track popup's wording and
+            colours: red for revoke, brand blue for resend. */}
+        <ConfirmationDialog
+          isOpen={bulkAction === 'revoke'}
+          onClose={() => { if (!isBulkWorking) setBulkAction(null); }}
+          onConfirm={runBulkAction}
+          title="Revoke invitations for selected candidates?"
+          description={`The interview link for ${revocableSelected.length} selected candidate${revocableSelected.length === 1 ? '' : 's'} will stop working immediately.`}
+          confirmText={isBulkWorking ? 'Revoking…' : `Yes, revoke ${revocableSelected.length}`}
+          cancelText="Cancel"
+          variant="danger"
+        />
+        <ConfirmationDialog
+          isOpen={bulkAction === 'resend'}
+          onClose={() => { if (!isBulkWorking) setBulkAction(null); }}
+          onConfirm={runBulkAction}
+          title="Resend invitations to selected candidates?"
+          description={`A fresh interview link will be emailed to ${resendableSelected.length} selected candidate${resendableSelected.length === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
+          confirmText={isBulkWorking ? 'Sending…' : `Yes, resend to ${resendableSelected.length}`}
+          cancelText="Cancel"
+          variant="info"
+        />
 
         {/* Expanded filters */}
         {showFilters && (
@@ -678,6 +865,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                 />
               </div>
             </div>
+            {!hideVersionDetails && (
+            <>
             <div className="flex-1 min-w-0 basis-[180px]">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Job Version</label>
               <select
@@ -700,6 +889,22 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
               >
                 <option value="">All interview versions</option>
                 {interviewVersion != null && <option value={String(interviewVersion)}>V{interviewVersion}</option>}
+              </select>
+            </div>
+            </>
+            )}
+            <div className="flex-1 min-w-0 basis-[180px]">
+              <label className="block text-xs font-medium text-gray-600 mb-1.5">Source</label>
+              <select
+                value={search.draftFilters.inviteSource}
+                onChange={(e) => search.setDraftFilter('inviteSource', e.target.value)}
+                aria-label="Source"
+                className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"
+              >
+                <option value="">All sources</option>
+                {INVITE_SOURCE_FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>{option.label}</option>
+                ))}
               </select>
             </div>
           </div>
@@ -778,7 +983,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                       )}
                     </div>
 
-                    {inviteSourceLabel(session) && (
+                    {col('inviteSource') && inviteSourceLabel(session) && (
                       <p className="text-xs text-gray-600">
                         <InviteSourceValue inv={session} iconClassName="w-3 h-3" />
                       </p>
@@ -920,7 +1125,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                     {col('email') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Email</th>}
                     {col('jobVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>}
                     {col('interviewVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>}
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>
+                    {col('inviteSource') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>}
                     {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Status</th>}
                     {col('score') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>}
                     {col('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
@@ -991,11 +1196,13 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, emb
                             {interviewVersion != null ? <VersionPill kind="interview" version={interviewVersion} /> : <span className="text-gray-400">—</span>}
                           </td>
                         )}
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-700">
-                          {inviteSourceLabel(session)
-                            ? <InviteSourceValue inv={session} iconClassName="w-3.5 h-3.5" />
-                            : <span className="text-gray-400">—</span>}
-                        </td>
+                        {col('inviteSource') && (
+                          <td className="px-4 py-3 whitespace-nowrap text-gray-700">
+                            {inviteSourceLabel(session)
+                              ? <InviteSourceValue inv={session} iconClassName="w-3.5 h-3.5" />
+                              : <span className="text-gray-400">—</span>}
+                          </td>
+                        )}
                         {col('status') && (
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex items-center gap-1.5">

@@ -51,8 +51,11 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
   const [sortBy, setSortBy] = useState<'total' | 'name' | 'recent'>('total');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
 
-  const isTenantAdmin = userRole === 'tenant_admin' || userRole === 'owner' || userRole === 'admin';
   const { isTenantAdmin: authIsTenantAdmin, user } = useAuth();
+  // Must match the backend's actual gate (current_user.is_tenant_admin) for the
+  // team-members-usage endpoint — a raw role-string comparison drifts from the
+  // backend (e.g. 'admin' is no longer an automatic tenant_admin bypass there).
+  const isTenantAdmin = authIsTenantAdmin;
   const canExport = authIsTenantAdmin || !!user?.permissions?.canExport;
 
   useEffect(() => {

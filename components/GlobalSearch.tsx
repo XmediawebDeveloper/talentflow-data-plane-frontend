@@ -205,7 +205,7 @@ export default function GlobalSearch({ className }: GlobalSearchProps) {
                   {folders.map(({ folder, path }) => (
                     <button
                       key={folder.id}
-                      onClick={() => handleSelect(`/recruitment/my-resumes?folder_id=${folder.id}`)}
+                      onClick={() => handleSelect(`/recruitment/resume-database?tab=my-resumes&folder_id=${folder.id}`)}
                       className="w-full text-left px-4 py-2.5 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors border-b border-gray-50 dark:border-gray-750 last:border-b-0"
                     >
                       <div className="flex items-center gap-2">

@@ -953,7 +953,7 @@ export default function Settings() {
                       <option value="dashboard">Dashboard</option>
                       <option value="jobs">Jobs Listing</option>
                       <option value="my-resumes">My Resumes</option>
-                      <option value="internal-db">Internal Database</option>
+                      <option value="internal-db">Shared Database</option>
                     </select>
                     <p className="text-xs text-gray-500 dark:text-slate-500 mt-1">The page you'll see first when you log in</p>
                   </div>

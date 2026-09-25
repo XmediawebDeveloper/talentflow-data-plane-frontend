@@ -157,8 +157,12 @@ export default function Sidebar({ user, tenant, subscriptionExpired, accountSusp
     '/recruitment/job-openings': resumeViewSource === 'job-details'
       ? ['/recruitment/job-details', '/recruitment/resume-view', '/recruitment/jd-creation']
       : ['/recruitment/job-details', '/recruitment/jd-creation'],
-    '/recruitment/my-resumes': resumeViewSource === 'my-resumes' ? ['/recruitment/resume-view'] : [],
-    '/recruitment/resume-database': resumeViewSource === 'resume-database' ? ['/recruitment/resume-view'] : [],
+    // One entry now that My Resumes and Internal Database are tabs of the same
+    // page — a resume opened from EITHER tab keeps Resume Database highlighted.
+    '/recruitment/resume-database':
+      resumeViewSource === 'my-resumes' || resumeViewSource === 'resume-database'
+        ? ['/recruitment/resume-view', '/recruitment/my-resumes']
+        : ['/recruitment/my-resumes'],
     '/recruitment/ai-talent-match': resumeViewSource === 'ai-talent-match' ? ['/recruitment/resume-view'] : [],
   };
 

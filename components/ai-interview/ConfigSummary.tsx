@@ -35,18 +35,22 @@ export function SectionHeader({
   } as const;
 
   return (
-    <div className="flex items-start justify-between gap-3">
-      <div className="flex items-start gap-2.5 min-w-0">
+    /* Wraps rather than squeezes: the title block claims the row and the
+       trailing chips drop beneath it when both no longer fit. With the chips
+       pinned (flex-shrink-0) beside a shrinkable title, a phone-width card
+       crushed the title to one letter per line. */
+    <div className="flex flex-1 min-w-0 flex-wrap items-start justify-between gap-x-3 gap-y-2">
+      <div className="flex flex-1 items-start gap-2.5 min-w-[12rem]">
         {leading}
         <div className={`w-10 h-10 rounded-xl flex items-center justify-center ring-1 flex-shrink-0 ${tones[tone]}`}>
           <Icon className="w-5 h-5" />
         </div>
-        <div className="min-w-0">
-          <div className="font-semibold text-gray-900 dark:text-slate-100 text-sm tracking-tight">{title}</div>
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-gray-900 dark:text-slate-100 text-sm tracking-tight break-words">{title}</div>
           {subtitle && <p className="text-xs text-gray-500 dark:text-slate-400 mt-0.5">{subtitle}</p>}
         </div>
       </div>
-      {trailing && <div className="flex items-center gap-2 flex-shrink-0">{trailing}</div>}
+      {trailing && <div className="flex flex-wrap items-center gap-2">{trailing}</div>}
     </div>
   );
 }

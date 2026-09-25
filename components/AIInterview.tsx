@@ -1,6 +1,6 @@
 'use client';
 
-import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Check, Info, RefreshCw, Layers, Radar } from 'lucide-react';
+import { Video, Users, CheckCircle, MoreVertical, Settings, TrendingUp, Clock, FileText, Copy, X, Loader2, Send, Mail, Briefcase, Globe, Brain, Shield, Lightbulb, Eye, Trash2, Play, Pause, Archive, ArchiveRestore, ScrollText, Camera, Monitor, AlertTriangle, Pencil, BarChart2, ChevronDown, Search, Plus, ClipboardList, Ban, Square, CheckSquare, Info, RefreshCw, Layers, Radar } from 'lucide-react';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { useState, useEffect, useRef, useCallback, useMemo, type ComponentType } from 'react';
 import { createPortal } from 'react-dom';
@@ -29,7 +29,17 @@ import AIInterviewPicker from '@/components/ai-interview/AIInterviewPicker';
 import AIInterviewCandidateResults from '@/components/ai-interview/AIInterviewCandidateResults';
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, AI_INTERVIEW_INVITE_STATUS_OPTIONS, hasActiveInviteFilters, type InviteFilterState, type InviteStatusOption } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
-import AIInterviewInviteTable, { isRevocableInvite, resolveInviteStatus } from '@/components/AIInterviewInviteTable';
+import AIInterviewInviteTable, { isRevocableInvite, isExpiredForActions, resolveInviteStatus, displayInviteScore } from '@/components/AIInterviewInviteTable';
+import SearchableSelect from '@/components/ui/searchable-select';
+import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
+import {
+  FilterSelect,
+  jobFilterOptions,
+  versionFilterOptions,
+  INVITE_SOURCE_FILTER_OPTIONS,
+  RESULT_FILTER_OPTIONS,
+  matchesResultFilter,
+} from '@/components/ai-interview/ColumnFilterFields';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
@@ -47,7 +57,7 @@ import AssessmentVersionHistoryPanel, {
 } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
-import AllInterviewsTable from '@/components/ai-interview/AllInterviewsTable';
+import AllInterviewsTable, { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
 
 /* The version panel's 3-dot menu trigger — the 28px bordered square matched to
    the Assessment page's `QUICK_ACTION_BASE` in Assessments.tsx. */
@@ -56,7 +66,7 @@ const QUICK_ACTION_BASE =
 /* One dropdown item's row, shared by every entry in the compact menu so they
    line up exactly as the Assessment page's do. */
 const VERSION_MENU_ITEM_CLASS =
-  'group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 transition-colors';
+  'group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors';
 /* Same row, greyed out — the look the menu's disabled Delete already uses. */
 const VERSION_MENU_ITEM_DISABLED_CLASS =
   'group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60';
@@ -108,6 +118,16 @@ const INVITATION_PAGE_SIZE = 10;
  * option — the segmented pills above it use resolveInviteStatus(), which can
  * bucket a still-'invited' row as expired, so the dropdown must offer the
  * same value or picking a pill would leave it showing nothing selected. */
+/* Invitation Status's per-column filters — one per table column with a fixed
+   set of values. '' means any. */
+const EMPTY_INVITE_COLUMN_FILTERS = {
+  job: '',
+  jobVersion: '',
+  interviewVersion: '',
+  inviteSource: '',
+  result: '',
+};
+
 const INVITATION_STATUS_TAB_OPTIONS: InviteStatusOption[] = [
   { value: 'all', label: 'All Statuses' },
   { value: 'invited', label: 'Invited' },
@@ -243,12 +263,25 @@ export default function AIInterview() {
   // Bulk revoke — checkbox selection (current invitations page) + confirm dialog state
   const [selectedInviteIds, setSelectedInviteIds] = useState<Set<string>>(new Set());
   const [bulkRevokeConfirmOpen, setBulkRevokeConfirmOpen] = useState(false);
+  // The Track popup's bulk Resend (Expired card).
+  const [trackerBulkResendOpen, setTrackerBulkResendOpen] = useState(false);
+  const [isTrackerBulkResending, setIsTrackerBulkResending] = useState(false);
   const [isBulkRevoking, setIsBulkRevoking] = useState(false);
   // Edit invitation modal target — only ever set for a REVOKED invitation
   const [editInviteTarget, setEditInviteTarget] = useState<any | null>(null);
   const [editInviteForm, setEditInviteForm] = useState({ candidate_name: '', candidate_email: '' });
   const [savingEditInvite, setSavingEditInvite] = useState(false);
   const [inviteFilters, setInviteFilters] = useState<InviteFilterState>(EMPTY_INVITE_FILTERS);
+  /* Job Version and Interview Version filters. Everything in a tracker
+     belongs to one interview, so each offers that interview's single value
+     and every row matches it — they mirror the table's columns rather than
+     narrow it. Source does narrow: see loadInvitations. */
+  const [trackerJobVersionFilter, setTrackerJobVersionFilter] = useState('');
+  const [trackerVersionFilter, setTrackerVersionFilter] = useState('');
+  const [trackerSourceFilter, setTrackerSourceFilter] = useState('');
+  const [trackerResultFilter, setTrackerResultFilter] = useState('');
+  // See handleViewInvitations.
+  const [trackerShowVersions, setTrackerShowVersions] = useState(false);
   const [invitationTotal, setInvitationTotal] = useState(0);
   const [invitationTotalPages, setInvitationTotalPages] = useState(1);
   const [invitationOverview, setInvitationOverview] = useState({
@@ -259,6 +292,7 @@ export default function AIInterview() {
     terminated: 0,
     cancelled: 0,
     revoked: 0,
+    expired: 0,
   });
   const [configListPage, setConfigListPage] = useState(1);
   const [configListItemsPerPage, setConfigListItemsPerPage] = useState(10);
@@ -293,8 +327,19 @@ export default function AIInterview() {
   const [isLoadingInviteStatus, setIsLoadingInviteStatus] = useState(false);
   const [inviteStatusError, setInviteStatusError] = useState<string | null>(null);
   const [inviteStatusFilters, setInviteStatusFilters] = useState<InviteFilterState>(EMPTY_INVITE_FILTERS);
+  /* The tab's per-column filters — kept beside InviteFilterState (shared
+     with the Track dialogs, which don't have these columns) rather than in
+     it. '' means any. */
+  const [inviteStatusColumnFilters, setInviteStatusColumnFilters] = useState(EMPTY_INVITE_COLUMN_FILTERS);
   const [inviteStatusPage, setInviteStatusPage] = useState(1);
   const [inviteStatusItemsPerPage, setInviteStatusItemsPerPage] = useState(20);
+  /* The tab's filter panel (behind More Filters in the toolbar above the
+     pills), its row selection, and the bulk revoke that acts on it. */
+  const [showInviteStatusFilters, setShowInviteStatusFilters] = useState(false);
+  const [selectedStatusInviteIds, setSelectedStatusInviteIds] = useState<Set<string>>(new Set());
+  const [statusBulkRevokeOpen, setStatusBulkRevokeOpen] = useState(false);
+  const [statusBulkResendOpen, setStatusBulkResendOpen] = useState(false);
+  const [isStatusBulkResending, setIsStatusBulkResending] = useState(false);
 
   // 3-dot menu
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -393,6 +438,9 @@ export default function AIInterview() {
      portal needs the node to already be mounted to target it, and a ref alone
      doesn't re-render this component when it first attaches. */
   const [toolbarSlotEl, setToolbarSlotEl] = useState<HTMLDivElement | null>(null);
+  // Beside Refresh in the pill row: the All Interviews table portals its
+  // Clear Sort button here.
+  const [sortActionSlotEl, setSortActionSlotEl] = useState<HTMLSpanElement | null>(null);
 
   /* Refresh button in the tab-pills row. Bumped on every click; the three
      tabs that manage their own data (AllInterviewsTable, AIInterviewCandidateResults,
@@ -582,10 +630,11 @@ export default function AIInterview() {
          card disagree with the rows it filters to: the remainder also holds
          expired and system_check sessions. Asking the endpoint for each bucket
          directly keeps the numbers and the filtered table in step. */
-      const [result, invitedOnly, revokedOnly] = await Promise.all([
+      const [result, invitedOnly, revokedOnly, expiredOnly] = await Promise.all([
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, compact: true }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, compact: true, status: 'invited' }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, compact: true, status: 'revoked' }),
+        aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, compact: true, status: 'expired' }),
       ]);
       setInvitationOverview({
         total: result.total || 0,
@@ -595,6 +644,7 @@ export default function AIInterview() {
         terminated: result.terminated || 0,
         cancelled: result.cancelled || 0,
         revoked: revokedOnly.total || 0,
+        expired: expiredOnly.total || 0,
       });
     } catch (error) {
       console.error('Failed to load invitation overview:', error);
@@ -606,13 +656,38 @@ export default function AIInterview() {
         terminated: 0,
         cancelled: 0,
         revoked: 0,
+        expired: 0,
       });
     }
   }, []);
 
-  const loadInvitations = useCallback(async (configId: string, page: number, filters: InviteFilterState) => {
+  const loadInvitations = useCallback(async (configId: string, page: number, filters: InviteFilterState, source = '', resultFilter = '') => {
     setLoadingInvitations(true);
     try {
+      /* Source (email / resume) and Result (the Score column's Pass / Fail)
+         have no server-side filter, so with either set the whole matching
+         list is fetched and filtered and paged here —
+         filtering only the current server page would leave the page count
+         and "Showing X of Y" describing rows that are not there. */
+      if (source || resultFilter) {
+        const all = await aiInterviewService.getConfigInvitations(configId, {
+          search: filters.search.trim() || undefined,
+          status: filters.status !== 'all' ? filters.status : undefined,
+          invite_date_from: filters.dateFrom || undefined,
+          invite_date_to: filters.dateTo || undefined,
+          page: 1,
+          page_size: 1000,
+        });
+        const matching = (all.items || []).filter((inv: any) =>
+          (!source || inv.invite_source === source) && matchesResultFilter(displayInviteScore(inv), resultFilter));
+        const totalPages = Math.max(1, Math.ceil(matching.length / INVITATION_PAGE_SIZE));
+        const safePage = Math.min(page, totalPages);
+        setInvitations(matching.slice((safePage - 1) * INVITATION_PAGE_SIZE, safePage * INVITATION_PAGE_SIZE));
+        setInvitationTotal(matching.length);
+        setInvitationTotalPages(totalPages);
+        if (safePage !== page) setInvitationPage(safePage);
+        return;
+      }
       const result = await aiInterviewService.getConfigInvitations(configId, {
         search: filters.search.trim() || undefined,
         status: filters.status !== 'all' ? filters.status : undefined,
@@ -647,10 +722,10 @@ export default function AIInterview() {
   // reflect the new status immediately.
   const refreshInvitationsView = useCallback(async (configId: string) => {
     await Promise.all([
-      loadInvitations(configId, invitationPage, inviteFilters),
+      loadInvitations(configId, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter),
       loadInvitationOverview(configId),
     ]);
-  }, [loadInvitations, loadInvitationOverview, invitationPage, inviteFilters]);
+  }, [loadInvitations, loadInvitationOverview, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter]);
 
   /* Invitation Status tab — one getConfigInvitations() per config (draft,
      published and archived alike, so nothing invited from an archived
@@ -668,6 +743,26 @@ export default function AIInterview() {
         setInviteStatusRows([]);
         return;
       }
+      /* Interview version — a config stores no number of its own, so it is
+         the Nth config created against its job version (`jd_id`), oldest
+         first: the same derivation the All Interviews table uses, so a V2
+         here is the V2 there. Computed over every config, whatever its
+         status, so the number can't shift with what is loaded. */
+      const interviewVersionById = new Map<string, number>();
+      const byJobVersion = new Map<string, typeof allConfigs>();
+      allConfigs.forEach((config) => {
+        if (!config.jd_id) return;
+        const bucket = byJobVersion.get(config.jd_id);
+        if (bucket) bucket.push(config);
+        else byJobVersion.set(config.jd_id, [config]);
+      });
+      byJobVersion.forEach((bucket) => {
+        bucket
+          .slice()
+          .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
+          .forEach((config, index) => interviewVersionById.set(config.id, index + 1));
+      });
+
       const perConfig = await Promise.all(
         allConfigs.map(async (config) => {
           try {
@@ -682,6 +777,8 @@ export default function AIInterview() {
               _config_title: config.jd_title || config.position || 'Untitled',
               _jd_id: config.jd_id,
               _jd_short_id: config.jd_short_id,
+              _jd_version: config.jd_version ?? 1,
+              _interview_version: interviewVersionById.get(config.id) ?? 1,
             }));
           } catch {
             // One config's invitations being unavailable must not empty the tab.
@@ -855,15 +952,21 @@ export default function AIInterview() {
 
   useEffect(() => {
     if (!viewInvitationsConfig) return;
-    loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters);
-  }, [viewInvitationsConfig, invitationPage, inviteFilters, loadInvitations]);
+    loadInvitations(viewInvitationsConfig.id, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter);
+  }, [viewInvitationsConfig, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter, loadInvitations]);
 
   // Bulk-revoke selection is scoped to the current invitations page — clear it
   // whenever the page, filters, or the open config changes so a stale selection
   // from a different page/filter set can't be carried into a revoke action.
   useEffect(() => {
     setSelectedInviteIds(new Set());
-  }, [viewInvitationsConfig, invitationPage, inviteFilters]);
+  }, [viewInvitationsConfig, invitationPage, inviteFilters, trackerSourceFilter, trackerResultFilter]);
+
+  // Same rule for the Invitation Status tab: a new filter or a reload is a new
+  // list, so a selection made on the old one is dropped.
+  useEffect(() => {
+    setSelectedStatusInviteIds(new Set());
+  }, [inviteStatusFilters, inviteStatusColumnFilters, inviteStatusRows]);
 
   useEffect(() => {
     if (!viewInvitationsConfig) return;
@@ -942,7 +1045,12 @@ export default function AIInterview() {
     setOpenMenuId(null);
   };
 
-  const handleViewInvitations = async (config: AIInterviewResponse) => {
+  /* The Job Version / Interview Version columns and filters describe which
+     version a tracker is for. They show when the tracker is opened from a
+     job's own row on Total Jobs; opened from a version row they are hidden,
+     since the row that was clicked already names the version. */
+  const handleViewInvitations = async (config: AIInterviewResponse, showVersionDetails = false) => {
+    setTrackerShowVersions(showVersionDetails);
     /* Loading from the very first paint. The effect that fetches the rows runs
        AFTER the popup's first render, so without this the body showed "No
        candidates invited yet" for one frame - wrong, and a third height for
@@ -957,6 +1065,10 @@ export default function AIInterview() {
     setInvitations([]);
     setViewInvitationsConfig(config);
     setInviteFilters(EMPTY_INVITE_FILTERS);
+    setTrackerJobVersionFilter('');
+    setTrackerVersionFilter('');
+    setTrackerSourceFilter('');
+    setTrackerResultFilter('');
     setInvitationPage(1);
     setOpenMenuId(null);
   };
@@ -1189,7 +1301,8 @@ export default function AIInterview() {
       return;
     }
 
-    handleViewInvitations(publishedConfig);
+    // A deep link names a job, not a version — the job row's view.
+    handleViewInvitations(publishedConfig, true);
     clearQuickActionUrl();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
@@ -1620,7 +1733,7 @@ export default function AIInterview() {
                 <span className={MENU_ITEM_SCALE_CLASS}>Track{hasBeenShared ? ` (${invitations})` : ''}</span>
               </button>
               <button
-                onClick={() => { if (!hasBeenShared) return; router.push(`/recruitment/ai-interviews/${config.id}/results`); setOpenMenuId(null); }}
+                onClick={() => { if (!hasBeenShared) return; router.push(`/recruitment/ai-interviews/${config.id}/results?scope=version`); setOpenMenuId(null); }}
                 disabled={!hasBeenShared}
                 title={
                   hasBeenShared
@@ -1663,7 +1776,7 @@ export default function AIInterview() {
                   className={`group w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors ${
                     hasBeenShared
                       ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
-                      : 'text-destructive'
+                      : 'text-destructive hover:bg-gray-100 dark:hover:bg-slate-800'
                   }`}
                 >
                   <Trash2 className="w-4 h-4 flex-shrink-0" />
@@ -1696,6 +1809,52 @@ export default function AIInterview() {
   };
 
   const isConfigListTab = ['all', 'published', 'draft', 'completed', 'archived'].includes(activeTab);
+
+  /* Ticked Invitation Status rows that can still be revoked — drives the
+     Revoke (N) button beside Refresh. The selection is cleared whenever the
+     filters change, so every ticked row is one on screen. */
+  const statusRevocableSelectedCount = selectedStatusInviteIds.size === 0
+    ? 0
+    : inviteStatusRows.filter((inv) => selectedStatusInviteIds.has(inv.id) && isRevocableInvite(inv)).length;
+
+  /* Ticked rows a fresh link can be sent to — the Track Invites popup's bulk
+     resend rule: Expired, and never once the candidate started or finished.
+     Offered only under the Expired filter, as on the Assessments page: a
+     resend means nothing for a link that has not lapsed. */
+  const statusResendableSelectedRows = inviteStatusFilters.status !== 'expired' || selectedStatusInviteIds.size === 0
+    ? []
+    : inviteStatusRows.filter((inv) =>
+        selectedStatusInviteIds.has(inv.id) && isExpiredForActions(inv) && !inv.started_at && !inv.completed_at);
+
+  /* A fresh link to each invitation, one at a time — each send emails a
+     candidate, and a failure on one must not stop the rest. Shared by the
+     Invitation Status tab's and the Track popup's bulk Resend. */
+  const resendInvitesInBulk = async (targets: any[]) => {
+    let sent = 0;
+    let failedCount = 0;
+    for (const inv of targets) {
+      try {
+        await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
+        sent++;
+      } catch (error) {
+        console.error(`Failed to resend AI interview invitation ${inv.id}:`, error);
+        failedCount++;
+      }
+    }
+    if (sent > 0) toast.success(`New invitation link${sent === 1 ? '' : 's'} sent to ${sent} candidate${sent === 1 ? '' : 's'}.`);
+    if (failedCount > 0) toast.error(`${failedCount} invitation${failedCount === 1 ? '' : 's'} could not be resent.`);
+  };
+
+  const handleStatusBulkResend = async () => {
+    const targets = statusResendableSelectedRows;
+    if (targets.length === 0) { setStatusBulkResendOpen(false); return; }
+    setIsStatusBulkResending(true);
+    await resendInvitesInBulk(targets);
+    setSelectedStatusInviteIds(new Set());
+    setStatusBulkResendOpen(false);
+    setIsStatusBulkResending(false);
+    await loadAllInviteStatuses();
+  };
 
   /** The heading shown above the search/filter bar for each config-list tab —
    *  same spot and treatment as Resume Scoring's "All Resumes (299)". */
@@ -2179,6 +2338,47 @@ export default function AIInterview() {
           </div>
         </div>
 
+          <div className="flex items-center gap-2 flex-shrink-0">
+          <span ref={setSortActionSlotEl} className="flex items-center empty:hidden" />
+          {/* Bulk Revoke — Invitation Status only, beside Refresh, and only
+              once a ticked row can still be revoked (Invited / In Progress):
+              the Assessments page's Revoke (N) button. */}
+          {/* Bulk Resend — the Expired filter's action, same place and shape. */}
+          {activeTab === 'invitation-status' && statusResendableSelectedRows.length > 0 && (
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setStatusBulkResendOpen(true)}
+              disabled={isStatusBulkResending}
+              title="Resend a fresh link to the selected expired invitations"
+              icon={isStatusBulkResending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+            >
+              {isStatusBulkResending ? 'Sending…' : `Resend (${statusResendableSelectedRows.length})`}
+            </Button>
+          )}
+          <ConfirmationDialog
+            isOpen={statusBulkResendOpen}
+            onClose={() => { if (!isStatusBulkResending) setStatusBulkResendOpen(false); }}
+            onConfirm={handleStatusBulkResend}
+            title="Resend invitations to selected candidates?"
+            description={`A fresh interview link will be emailed to ${statusResendableSelectedRows.length} selected candidate${statusResendableSelectedRows.length === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
+            confirmText={isStatusBulkResending ? 'Sending…' : `Yes, resend to ${statusResendableSelectedRows.length}`}
+            cancelText="Cancel"
+            variant="info"
+          />
+          {activeTab === 'invitation-status' && statusRevocableSelectedCount > 0 && (
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setStatusBulkRevokeOpen(true)}
+              disabled={isBulkRevoking}
+              title="Revoke the selected candidates' interview links"
+              icon={isBulkRevoking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
+            >
+              {isBulkRevoking ? 'Revoking…' : `Revoke (${statusRevocableSelectedCount})`}
+            </Button>
+          )}
+
           {/* Refresh — right corner of the pill row. Refetches whichever tab
               is on screen: the config-list/processing/invitation-status/
               settings tabs this component owns directly, plus a bump of
@@ -2195,6 +2395,7 @@ export default function AIInterview() {
           >
             <span className="hidden sm:inline">{isRefreshingTab ? 'Refreshing...' : 'Refresh'}</span>
           </Button>
+          </div>
         </div>
 
         {/* Grouped/Ungrouped — Active/Draft/Archived only. Ungrouped (the
@@ -2236,7 +2437,7 @@ export default function AIInterview() {
               the same shape as the Assessments page's "All Assessments"
               table, as opposed to the Total Jobs tab's one-card-per-job
               (collapsed lineage) list below. */}
-          {activeTab === 'all-interviews' && <AllInterviewsTable toolbarSlot={toolbarSlotEl} refreshSignal={refreshSignal} renderRowActions={renderInterviewVersionActions} />}
+          {activeTab === 'all-interviews' && <AllInterviewsTable toolbarSlot={toolbarSlotEl} sortActionSlot={sortActionSlotEl} refreshSignal={refreshSignal} renderRowActions={renderInterviewVersionActions} />}
 
           {/* Active/Draft/Archived, Ungrouped — the same flat table as All
               Interviews, locked to this tab's own status so no other status's
@@ -2245,6 +2446,7 @@ export default function AIInterview() {
             <AllInterviewsTable
               key={activeTab}
               toolbarSlot={toolbarSlotEl}
+              sortActionSlot={sortActionSlotEl}
               refreshSignal={refreshSignal}
               fixedStatus={activeTab as 'published' | 'draft' | 'archived'}
               titleLabel={CONFIG_LIST_TAB_TITLES[activeTab]}
@@ -2445,7 +2647,7 @@ export default function AIInterview() {
                                 onClick={(e) => {
                                   e.stopPropagation();
                                   if (!canTrack || !trackTarget) return;
-                                  void handleViewInvitations(trackTarget);
+                                  void handleViewInvitations(trackTarget, true);
                                 }}
                                 className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
                                   canTrack
@@ -2647,10 +2849,10 @@ export default function AIInterview() {
           )}
 
           {/* Invitation Status Tab — every invitation across every AI
-              interview (draft, published and archived alike), placed right
-              under the tab pills — the segmented status filter, the search
-              bar and the list all live in this one card, the same layout
-              the Assessments page's own Invitation Status tab uses. */}
+              interview (draft, published and archived alike). The search and
+              filters portal into the shared toolbar slot above the tab pills;
+              the segmented status filter and the list live in this card —
+              the Assessments page's own Invitation Status layout. */}
           {activeTab === 'invitation-status' && (
             <div className="p-3 sm:p-6">
               {isLoadingInviteStatus ? (
@@ -2680,19 +2882,13 @@ export default function AIInterview() {
                     </div>
                   </div>
 
-                  {/* Filter bar */}
-                  <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-4">
-                    <Skeleton className="h-9 w-full sm:flex-1 rounded-lg" />
-                    <Skeleton className="h-9 w-32 rounded-lg" />
-                  </div>
-
                   {/* Invitations table */}
                   <div className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
                     <div className="min-h-[320px] overflow-auto">
                       <table className="w-full min-w-[1000px] table-auto">
                         <thead className="[&_th]:bg-slate-50 dark:[&_th]:bg-slate-800 [&_th]:border-b [&_th]:border-gray-200 dark:[&_th]:border-slate-700">
                           <tr>
-                            {['CID', 'Candidate', 'Job / Interview', 'Status', 'Score', 'Timeline', 'Actions'].map((c) => (
+                            {['Select', 'CID', 'Candidate', 'Job ID', 'Job Title', 'Job Version', 'Interview Version', 'Invite Source', 'Status', 'Score', 'Timeline', 'Actions'].map((c) => (
                               <th key={c} className="px-4 py-3"><Skeleton className="h-3 w-20" /></th>
                             ))}
                           </tr>
@@ -2700,6 +2896,7 @@ export default function AIInterview() {
                         <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                           {Array.from({ length: 8 }).map((_, r) => (
                             <tr key={r}>
+                              <td className="px-4 py-4"><Skeleton className="h-4 w-4 rounded" /></td>
                               <td className="px-4 py-4"><Skeleton className="h-5 w-16 rounded" /></td>
                               <td className="px-4 py-4">
                                 <div className="flex items-center gap-3">
@@ -2710,12 +2907,11 @@ export default function AIInterview() {
                                   </div>
                                 </div>
                               </td>
-                              <td className="px-4 py-4">
-                                <div className="space-y-1.5">
-                                  <Skeleton className="h-4 w-44" />
-                                  <Skeleton className="h-3 w-28" />
-                                </div>
-                              </td>
+                              <td className="px-4 py-4"><Skeleton className="h-5 w-16 rounded" /></td>
+                              <td className="px-4 py-4"><Skeleton className="h-4 w-36" /></td>
+                              <td className="px-4 py-4"><Skeleton className="h-5 w-9 rounded-md" /></td>
+                              <td className="px-4 py-4"><Skeleton className="h-5 w-9 rounded-md" /></td>
+                              <td className="px-4 py-4"><Skeleton className="h-4 w-24" /></td>
                               <td className="px-4 py-4"><Skeleton className="h-6 w-20 rounded-full" /></td>
                               <td className="px-4 py-4"><Skeleton className="h-5 w-20 mx-auto rounded-full" /></td>
                               <td className="px-4 py-4">
@@ -2779,13 +2975,177 @@ export default function AIInterview() {
                     if (fromTime !== null && sentAt < fromTime) return false;
                     if (toTime !== null && sentAt > toTime) return false;
                   }
+                  const col = inviteStatusColumnFilters;
+                  if (col.job && inv._jd_short_id !== col.job) return false;
+                  if (col.jobVersion && String(inv._jd_version) !== col.jobVersion) return false;
+                  if (col.interviewVersion && String(inv._interview_version) !== col.interviewVersion) return false;
+                  if (col.inviteSource && inv.invite_source !== col.inviteSource) return false;
+                  if (!matchesResultFilter(displayInviteScore(inv), col.result)) return false;
                   return true;
                 });
                 const total = filtered.length;
                 const totalPages = Math.max(1, Math.ceil(total / inviteStatusItemsPerPage));
                 const safePage = Math.min(Math.max(1, inviteStatusPage), totalPages);
                 const pageItems = filtered.slice((safePage - 1) * inviteStatusItemsPerPage, safePage * inviteStatusItemsPerPage);
-                const filtersActive = hasActiveInviteFilters(inviteStatusFilters);
+                const columnFilterCount = Object.values(inviteStatusColumnFilters).filter(Boolean).length;
+                const filtersActive = hasActiveInviteFilters(inviteStatusFilters) || columnFilterCount > 0;
+
+                /* Filter options come from the loaded invitations, so every
+                   choice matches at least one row. */
+                const jobOptions = jobFilterOptions(inviteStatusRows, (inv) => inv._jd_short_id, (inv) => inv._config_title);
+                const jobVersionOptions = versionFilterOptions(inviteStatusRows, (inv) => inv._jd_version);
+                const interviewVersionOptions = versionFilterOptions(inviteStatusRows, (inv) => inv._interview_version);
+                const updateColumnFilter = (key: keyof typeof EMPTY_INVITE_COLUMN_FILTERS, value: string) => {
+                  setInviteStatusColumnFilters((prev) => ({ ...prev, [key]: value }));
+                  setInviteStatusPage(1);
+                };
+
+                /* Row selection — every row can be ticked, like the other
+                   tabs; Select All covers this page. Revoke acts only on the
+                   ticked rows that can still be revoked (Invited / In
+                   Progress), and says how many that is. */
+                const pageIds = pageItems.map((inv) => inv.id);
+                const allPageSelected = pageIds.length > 0 && pageIds.every((id) => selectedStatusInviteIds.has(id));
+                const toggleSelectAllOnPage = () =>
+                  setSelectedStatusInviteIds((prev) => {
+                    const next = new Set(prev);
+                    if (allPageSelected) pageIds.forEach((id) => next.delete(id));
+                    else pageIds.forEach((id) => next.add(id));
+                    return next;
+                  });
+                const toggleSelectOneInvite = (id: string) =>
+                  setSelectedStatusInviteIds((prev) => {
+                    const next = new Set(prev);
+                    if (next.has(id)) next.delete(id);
+                    else next.add(id);
+                    return next;
+                  });
+                const selectedStatusRows = filtered.filter((inv) => selectedStatusInviteIds.has(inv.id));
+                const revocableSelectedRows = selectedStatusRows.filter(isRevocableInvite);
+
+                /* What More Filters reports: status off 'all' is one, and the
+                   date range is one filter however many ends are set. */
+                const inviteStatusFilterCount =
+                  (inviteStatusFilters.status !== 'all' ? 1 : 0)
+                  + (inviteStatusFilters.dateFrom || inviteStatusFilters.dateTo ? 1 : 0)
+                  + columnFilterCount;
+                const updateInviteStatusFilters = (patch: Partial<InviteFilterState>) => {
+                  setInviteStatusFilters({ ...inviteStatusFilters, ...patch });
+                  setInviteStatusPage(1);
+                };
+
+                /* This tab's search/filter row, in the shared slot ABOVE the
+                   tab pills where every other tab's sits — the Assessments
+                   page's Invitation Status layout. It used to be an
+                   InviteFilterBar inside the card, the one tab whose search
+                   sat below the pills. */
+                const inviteStatusToolbar = (
+                  <>
+                    <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3">
+                      Invitation Status ({totalInvites})
+                    </h2>
+                    <ListToolbar
+                      searchValue={inviteStatusFilters.search}
+                      onSearchChange={(value) => updateInviteStatusFilters({ search: value })}
+                      searchPlaceholder="Search by candidate name, email, or job..."
+                      onToggleFilters={() => setShowInviteStatusFilters((open) => !open)}
+                      filtersOpen={showInviteStatusFilters}
+                      activeFilterCount={inviteStatusFilterCount}
+                      filtersApplied={inviteStatusFilterCount > 0}
+                      onClearFilters={() => {
+                        setInviteStatusFilters(EMPTY_INVITE_FILTERS);
+                        setInviteStatusColumnFilters(EMPTY_INVITE_COLUMN_FILTERS);
+                        setInviteStatusPage(1);
+                      }}
+                      className="mb-0"
+                      countBadge={
+                        <ListCountBadge
+                          filtered={total}
+                          total={totalInvites}
+                          noun="invitation"
+                          selected={selectedStatusRows.length}
+                        />
+                      }
+                      filterPanel={
+                        /* One filter per column with a fixed set of values —
+                           candidate and CID are what the search box is for,
+                           and Timeline is covered by the Invited date range. */
+                        <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/30 p-3 sm:p-4">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+                            <SearchableSelect
+                              label="Job"
+                              value={inviteStatusColumnFilters.job}
+                              onChange={(v) => updateColumnFilter('job', v)}
+                              options={jobOptions}
+                              placeholder="All jobs"
+                              searchPlaceholder="Search job ID or title..."
+                              allLabel="All jobs"
+                              emptyMessage="No jobs match"
+                            />
+                            <FilterSelect id="ai-invite-job-version" label="Job Version" anyLabel="All versions"
+                              value={inviteStatusColumnFilters.jobVersion} onChange={(v) => updateColumnFilter('jobVersion', v)}
+                              options={jobVersionOptions} />
+                            <FilterSelect id="ai-invite-interview-version" label="Interview Version" anyLabel="All versions"
+                              value={inviteStatusColumnFilters.interviewVersion} onChange={(v) => updateColumnFilter('interviewVersion', v)}
+                              options={interviewVersionOptions} />
+                            <FilterSelect id="ai-invite-source" label="Invite Source" anyLabel="All sources"
+                              value={inviteStatusColumnFilters.inviteSource} onChange={(v) => updateColumnFilter('inviteSource', v)}
+                              options={INVITE_SOURCE_FILTER_OPTIONS} />
+                            <FilterSelect id="ai-invite-result" label="Result" anyLabel="Any result"
+                              value={inviteStatusColumnFilters.result} onChange={(v) => updateColumnFilter('result', v)}
+                              options={RESULT_FILTER_OPTIONS} />
+                            <div>
+                              <label htmlFor="ai-invite-status-filter" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                                Status
+                              </label>
+                              <select
+                                id="ai-invite-status-filter"
+                                value={inviteStatusFilters.status}
+                                onChange={(e) => updateInviteStatusFilters({ status: e.target.value })}
+                                className={AI_FILTER_FIELD_CLASS}
+                              >
+                                {INVITATION_STATUS_TAB_OPTIONS.map((option) => (
+                                  <option key={option.value} value={option.value}>{option.label}</option>
+                                ))}
+                              </select>
+                            </div>
+                            <div>
+                              <label htmlFor="ai-invite-sent-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                                Invited from
+                              </label>
+                              <input
+                                id="ai-invite-sent-from"
+                                type="date"
+                                value={inviteStatusFilters.dateFrom}
+                                max={inviteStatusFilters.dateTo || undefined}
+                                onChange={(e) => updateInviteStatusFilters({ dateFrom: e.target.value })}
+                                className={`${AI_FILTER_FIELD_CLASS} dark:[color-scheme:dark]`}
+                              />
+                            </div>
+                            <div>
+                              <label htmlFor="ai-invite-sent-to" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">
+                                Invited to
+                              </label>
+                              <input
+                                id="ai-invite-sent-to"
+                                type="date"
+                                value={inviteStatusFilters.dateTo}
+                                min={inviteStatusFilters.dateFrom || undefined}
+                                onChange={(e) => updateInviteStatusFilters({ dateTo: e.target.value })}
+                                className={`${AI_FILTER_FIELD_CLASS} dark:[color-scheme:dark]`}
+                              />
+                            </div>
+                          </div>
+                          <div className="mt-4 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex items-center justify-end gap-2">
+                            <Button variant="secondary" size="sm" onClick={() => setShowInviteStatusFilters(false)}>
+                              Done
+                            </Button>
+                          </div>
+                        </div>
+                      }
+                    />
+                  </>
+                );
 
                 /* Segmented status filter — same shape as the Assessments
                    page's Invitation Status tab: a raised-white selected pill
@@ -2866,15 +3226,7 @@ export default function AIInterview() {
                       </div>
                     </div>
 
-                    <InviteFilterBar
-                      filters={inviteStatusFilters}
-                      onChange={(next) => {
-                        setInviteStatusFilters(next);
-                        setInviteStatusPage(1);
-                      }}
-                      statusOptions={INVITATION_STATUS_TAB_OPTIONS}
-                      searchPlaceholder="Search by candidate name, email, or job..."
-                    />
+                    {toolbarSlotEl ? createPortal(inviteStatusToolbar, toolbarSlotEl) : inviteStatusToolbar}
 
                     <div className="mt-4">
                       <AIInterviewInviteTable
@@ -2882,6 +3234,11 @@ export default function AIInterview() {
                         isLoading={false}
                         hasActiveFilters={filtersActive}
                         showJobColumn
+                        selectedIds={selectedStatusInviteIds}
+                        onToggleSelect={toggleSelectOneInvite}
+                        isSelectable={() => true}
+                        allSelected={allPageSelected}
+                        onToggleSelectAll={toggleSelectAllOnPage}
                         onResend={(inv) => setResendInviteTarget(inv)}
                         onEdit={(inv) => {
                           setEditInviteForm({
@@ -2904,6 +3261,46 @@ export default function AIInterview() {
                         itemLabel="invitations"
                       />
                     </div>
+
+                    {/* Bulk revoke — the Track dialog's bulk revoke, over this
+                        tab's ticked rows that can still be revoked. Each is
+                        revoked on its own, so one link that already changed
+                        state doesn't block the rest. */}
+                    <ConfirmationDialog
+                      isOpen={statusBulkRevokeOpen}
+                      onClose={() => { if (!isBulkRevoking) setStatusBulkRevokeOpen(false); }}
+                      onConfirm={async () => {
+                        const targets = revocableSelectedRows;
+                        if (targets.length === 0) { setStatusBulkRevokeOpen(false); return; }
+                        setIsBulkRevoking(true);
+                        try {
+                          const results = await Promise.allSettled(
+                            targets.map((inv) => aiInterviewService.revokeInvitation(inv.id))
+                          );
+                          const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+                          const failed = results.length - succeeded;
+                          if (succeeded > 0) toast.success(`Revoked ${succeeded} invitation${succeeded === 1 ? '' : 's'}.`);
+                          if (failed > 0) toast.error(`Failed to revoke ${failed} invitation${failed === 1 ? '' : 's'}.`);
+                          setSelectedStatusInviteIds(new Set());
+                          await loadAllInviteStatuses();
+                        } finally {
+                          setIsBulkRevoking(false);
+                          setStatusBulkRevokeOpen(false);
+                        }
+                      }}
+                      /* Same shape as the bulk Resend confirmation: a question,
+                         one sentence saying what happens, and the count on the
+                         confirm button — no per-candidate list. */
+                      title="Revoke invitations for selected candidates?"
+                      description={`The interview link for ${revocableSelectedRows.length} selected candidate${revocableSelectedRows.length === 1 ? '' : 's'} will stop working immediately.${
+                        revocableSelectedRows.length < selectedStatusRows.length
+                          ? ` ${selectedStatusRows.length - revocableSelectedRows.length} selected invitation${selectedStatusRows.length - revocableSelectedRows.length === 1 ? ' is' : 's are'} not Invited or In Progress and will be left as ${selectedStatusRows.length - revocableSelectedRows.length === 1 ? 'it is' : 'they are'}.`
+                          : ''
+                      }`}
+                      confirmText={isBulkRevoking ? 'Revoking…' : `Yes, revoke ${revocableSelectedRows.length}`}
+                      cancelText="Cancel"
+                      variant="danger"
+                    />
                   </>
                 );
               })()}
@@ -3349,11 +3746,21 @@ export default function AIInterview() {
           list itself is <AIInterviewInviteTable>, shared with the Job Details
           tracker so both entry points show identical columns and action rules. */}
       {viewInvitationsConfig && (() => {
-        // "Select All" only ever targets revocable rows on the CURRENT page — the
-        // list is server-paginated, so this intentionally does not reach across
-        // pages. isRevocableInvite is the table's own rule, imported rather than
-        // restated so the checkboxes can't disagree with the Revoke action.
-        const selectableIds = invitations.filter(isRevocableInvite).map((inv) => inv.id);
+        /* Selection follows the selected card, as on the Assessments page:
+           the Invited card ticks the rows that can be revoked and offers
+           Revoke; the Expired card ticks the rows a fresh link can go to and
+           offers Resend. Every other card has no bulk action, so no checkbox
+           column either. "Select All" only ever targets the CURRENT page — the
+           list is server-paginated. The row rules are the table's own, so a
+           checkbox can never disagree with the action it feeds. */
+        const trackerBulkMode: 'revoke' | 'resend' | null =
+          inviteFilters.status === 'invited' ? 'revoke'
+            : inviteFilters.status === 'expired' ? 'resend'
+              : null;
+        const isTrackerResendable = (inv: any) => isExpiredForActions(inv) && !inv.started_at && !inv.completed_at;
+        const trackerRowSelectable = trackerBulkMode === 'resend' ? isTrackerResendable : isRevocableInvite;
+        const selectableIds = trackerBulkMode ? invitations.filter(trackerRowSelectable).map((inv) => inv.id) : [];
+        const trackerSelectedRows = invitations.filter((inv) => selectedInviteIds.has(inv.id) && trackerRowSelectable(inv));
         const allSelectableOnPageSelected =
           selectableIds.length > 0 && selectableIds.every((id) => selectedInviteIds.has(id));
         const toggleSelectAll = () =>
@@ -3418,8 +3825,30 @@ export default function AIInterview() {
                         <span className="hidden sm:inline">AI Interview - Invite Status Tracking</span>
                         <span className="sm:hidden">Invite Status</span>
                       </h2>
-                      <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">
-                        {viewInvitationsConfig.jd_title || viewInvitationsConfig.position}
+                      {/* JD ID, then the job title. */}
+                      <p className="flex items-center gap-2 text-2xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 min-w-0">
+                        {viewInvitationsConfig.jd_short_id && (
+                          <JobIdBadge className="flex-shrink-0">{viewInvitationsConfig.jd_short_id}</JobIdBadge>
+                        )}
+                        <span className="truncate">{viewInvitationsConfig.jd_title || viewInvitationsConfig.position}</span>
+                        {/* Opened from a version row, the table has no version
+                            columns — the header names the version instead. */}
+                        {!trackerShowVersions && (
+                          <span className="-ml-0.5 flex items-center gap-3 flex-shrink-0 whitespace-nowrap">
+                            {/* The job version reads as part of the title: "App development - V1". */}
+                            <span className="inline-flex items-center gap-1.5">
+                              -
+                              <VersionPill kind="job" version={viewInvitationsConfig.jd_version ?? 1} />
+                            </span>
+                            <span className="inline-flex items-center gap-1.5">
+                              Interview Version -
+                              <VersionPill
+                                kind="interview"
+                                version={interviewVersionOrdinal(viewInvitationsConfig, [...configs, ...archivedConfigs])}
+                              />
+                            </span>
+                          </span>
+                        )}
                       </p>
                     </div>
                   </div>
@@ -3455,7 +3884,7 @@ export default function AIInterview() {
                   loadInvitationOverview, which queries unfiltered — selecting a
                   bucket narrows the table without collapsing the other cards. */}
               <InviteStatCards
-                gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1 sm:gap-2 lg:gap-3"
+                gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-3"
                 activeStatus={inviteFilters.status}
                 onSelect={(status) => {
                   setInviteFilters({ ...inviteFilters, status });
@@ -3466,6 +3895,7 @@ export default function AIInterview() {
                   { key: 'invited', label: 'Invited', Icon: Mail, value: invitationOverview.invited, ...INVITE_CARD_TONES.blue },
                   { key: 'in_progress', label: 'In Progress', Icon: Play, value: invitationOverview.inProgress, ...INVITE_CARD_TONES.orange },
                   { key: 'completed', label: 'Completed', Icon: CheckCircle, value: invitationOverview.completed, ...INVITE_CARD_TONES.green },
+                  { key: 'expired', label: 'Expired', Icon: Clock, value: invitationOverview.expired, ...INVITE_CARD_TONES.orange },
                   { key: 'terminated', label: 'Terminated', Icon: Ban, value: invitationOverview.terminated, ...INVITE_CARD_TONES.red },
                   { key: 'revoked', label: 'Revoked', Icon: Ban, value: invitationOverview.revoked, ...INVITE_CARD_TONES.indigo },
                 ]}
@@ -3478,9 +3908,16 @@ export default function AIInterview() {
               <div className="px-2.5 sm:px-6 pt-2 sm:pt-3 flex-shrink-0">
                 <div className="flex items-center gap-2.5 rounded-xl bg-brand-blue/[0.08] border border-brand-blue/20 px-3 py-2.5">
                   <Info className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                  <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                  <p className="flex-1 min-w-0 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
                     <span className="font-semibold">Note:</span> Results are available only for candidates with Complete status. Other candidates&rsquo; results are not available.
                   </p>
+                  {/* Completion rate — moved here from the selection bar, where
+                      it sat apart from the note that explains which results
+                      exist. Solid and bold so it reads at a glance. */}
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap flex-shrink-0 bg-brand-blue text-white shadow-sm shadow-brand-blue/25">
+                    <TrendingUp className="w-4 h-4" strokeWidth={2.5} />
+                    {completionRate}% Completion
+                  </span>
                 </div>
               </div>
 
@@ -3492,6 +3929,32 @@ export default function AIInterview() {
                 }}
                 statusOptions={AI_INTERVIEW_INVITE_STATUS_OPTIONS}
                 searchPlaceholder="Search by candidate name or email..."
+                extraSelects={[
+                  ...(trackerShowVersions ? [{
+                    key: 'job-version', ariaLabel: 'Job Version', anyLabel: 'All Job Versions', value: trackerJobVersionFilter,
+                    options: [{ value: String(viewInvitationsConfig.jd_version ?? 1), label: `Job V${viewInvitationsConfig.jd_version ?? 1}` }],
+                    onChange: setTrackerJobVersionFilter,
+                  },
+                  {
+                    key: 'interview-version', ariaLabel: 'Interview Version', anyLabel: 'All Interview Versions', value: trackerVersionFilter,
+                    options: (() => {
+                      const v = interviewVersionOrdinal(viewInvitationsConfig, [...configs, ...archivedConfigs]);
+                      return [{ value: String(v), label: `Interview V${v}` }];
+                    })(),
+                    onChange: setTrackerVersionFilter,
+                  }] : []),
+                  {
+                    key: 'source', ariaLabel: 'Source', anyLabel: 'All Sources', value: trackerSourceFilter,
+                    options: INVITE_SOURCE_FILTER_OPTIONS,
+                    onChange: (value) => { setTrackerSourceFilter(value); setInvitationPage(1); },
+                  },
+                  {
+                    key: 'result', ariaLabel: 'Result', anyLabel: 'All Results', value: trackerResultFilter,
+                    options: RESULT_FILTER_OPTIONS,
+                    onChange: (value) => { setTrackerResultFilter(value); setInvitationPage(1); },
+                  },
+                ]}
+                onClearExtras={() => { setTrackerJobVersionFilter(''); setTrackerVersionFilter(''); setTrackerSourceFilter(''); setTrackerResultFilter(''); }}
               />
 
               {/* Bulk selection bar, and — on the same row, straight across
@@ -3509,16 +3972,12 @@ export default function AIInterview() {
                       onClick={toggleSelectAll}
                       className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
                     >
-                      <span
-                        role="checkbox"
-                        aria-checked={allSelectableOnPageSelected}
-                        className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
-                          allSelectableOnPageSelected
-                            ? 'bg-brand-blue border-brand-blue'
-                            : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600'
-                        }`}
-                      >
-                        {allSelectableOnPageSelected && <Check className="w-3 h-3 text-white" />}
+                      <span role="checkbox" aria-checked={allSelectableOnPageSelected} className="p-1 flex-shrink-0">
+                        {allSelectableOnPageSelected ? (
+                          <CheckSquare className="w-4 h-4 text-brand-blue" />
+                        ) : (
+                          <Square className="w-4 h-4 text-gray-400" />
+                        )}
                       </span>
                       Select All ({selectableIds.length})
                     </button>
@@ -3527,22 +3986,54 @@ export default function AIInterview() {
                   )}
 
                   <div className="flex items-center gap-2">
-                    {selectedInviteIds.size > 0 && (
-                      <button
-                        type="button"
+                    {/* The selected card's bulk action — never both. */}
+                    {trackerBulkMode === 'revoke' && trackerSelectedRows.length > 0 && (
+                      <Button
+                        variant="destructive"
+                        size="sm"
                         onClick={() => setBulkRevokeConfirmOpen(true)}
                         disabled={isBulkRevoking}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium text-destructive bg-destructive-subtle ring-1 ring-destructive-line rounded-lg hover:bg-destructive-subtle dark:hover:bg-destructive/20 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                        title="Revoke the selected candidates' interview links"
+                        icon={isBulkRevoking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
                       >
-                        <Ban className="w-3.5 h-3.5" />
-                        Revoke Selected ({selectedInviteIds.size})
-                      </button>
+                        {isBulkRevoking ? 'Revoking…' : `Revoke (${trackerSelectedRows.length})`}
+                      </Button>
                     )}
-                    <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
-                      <TrendingUp className="w-3.5 h-3.5" />
-                      {completionRate}% Completion
-                    </span>
+                    {trackerBulkMode === 'resend' && trackerSelectedRows.length > 0 && (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        onClick={() => setTrackerBulkResendOpen(true)}
+                        disabled={isTrackerBulkResending}
+                        title="Resend a fresh link to the selected expired invitations"
+                        icon={isTrackerBulkResending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
+                      >
+                        {isTrackerBulkResending ? 'Sending…' : `Resend (${trackerSelectedRows.length})`}
+                      </Button>
+                    )}
                   </div>
+                  <ConfirmationDialog
+                    isOpen={trackerBulkResendOpen}
+                    onClose={() => { if (!isTrackerBulkResending) setTrackerBulkResendOpen(false); }}
+                    onConfirm={async () => {
+                      const targets = trackerSelectedRows;
+                      if (targets.length === 0) { setTrackerBulkResendOpen(false); return; }
+                      setIsTrackerBulkResending(true);
+                      try {
+                        await resendInvitesInBulk(targets);
+                        setSelectedInviteIds(new Set());
+                        await refreshInvitationsView(viewInvitationsConfig.id);
+                      } finally {
+                        setIsTrackerBulkResending(false);
+                        setTrackerBulkResendOpen(false);
+                      }
+                    }}
+                    title="Resend invitations to selected candidates?"
+                    description={`A fresh interview link will be emailed to ${trackerSelectedRows.length} selected candidate${trackerSelectedRows.length === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
+                    confirmText={isTrackerBulkResending ? 'Sending…' : `Yes, resend to ${trackerSelectedRows.length}`}
+                    cancelText="Cancel"
+                    variant="info"
+                  />
                 </div>
               )}
 
@@ -3564,9 +4055,11 @@ export default function AIInterview() {
                   isLoading={invitesInitialLoading}
                   hasActiveFilters={filtersActive}
                   emptyHint={'Use the "Send via Email" button to invite candidates'}
-                  jdShortId={viewInvitationsConfig.jd_short_id}
-                  selectedIds={selectedInviteIds}
-                  onToggleSelect={toggleSelectOne}
+                  jobVersion={trackerShowVersions ? (viewInvitationsConfig.jd_version ?? 1) : undefined}
+                  interviewVersion={trackerShowVersions ? interviewVersionOrdinal(viewInvitationsConfig, [...configs, ...archivedConfigs]) : undefined}
+                  selectedIds={trackerBulkMode ? selectedInviteIds : undefined}
+                  onToggleSelect={trackerBulkMode ? toggleSelectOne : undefined}
+                  isSelectable={trackerRowSelectable}
                   onResend={(inv) => setResendInviteTarget(inv)}
                   onEdit={(inv) => {
                     setEditInviteForm({
@@ -3730,7 +4223,7 @@ export default function AIInterview() {
         }
         confirmText={resendingEmailFor && resendingEmailFor === resendInviteTarget?.id ? 'Sending…' : 'Yes, send new link'}
         cancelText="Cancel"
-        variant="warning"
+        variant="info"
       >
         {resendInviteTarget && (() => {
           /* Anchor on the last send, mirroring the backend: on a second resend
@@ -3831,24 +4324,13 @@ export default function AIInterview() {
             setBulkRevokeConfirmOpen(false);
           }
         }}
-        title={`Revoke ${selectedInviteIds.size} Interview Link${selectedInviteIds.size === 1 ? '' : 's'}?`}
-        description="The selected interview links will be immediately expired and candidates will no longer be able to access them."
-        confirmText={isBulkRevoking ? 'Revoking…' : 'Confirm'}
+        /* Same shape as the bulk Resend confirmation — no per-candidate list. */
+        title="Revoke invitations for selected candidates?"
+        description={`The interview link for ${selectedInviteIds.size} selected candidate${selectedInviteIds.size === 1 ? '' : 's'} will stop working immediately.`}
+        confirmText={isBulkRevoking ? 'Revoking…' : `Yes, revoke ${selectedInviteIds.size}`}
         cancelText="Cancel"
         variant="danger"
-      >
-        {selectedInviteIds.size > 0 && (
-          <div className="max-h-40 overflow-y-auto rounded-lg border border-gray-100 dark:border-slate-700/60 divide-y divide-gray-100 dark:divide-slate-700/60">
-            {invitations
-              .filter((inv) => selectedInviteIds.has(inv.id))
-              .map((inv) => (
-                <div key={inv.id} className="px-3 py-2 text-sm text-gray-700 dark:text-slate-300 truncate">
-                  {inv.candidate_name || 'Unknown'} <span className="text-gray-400 dark:text-slate-500">— {inv.candidate_email}</span>
-                </div>
-              ))}
-          </div>
-        )}
-      </ConfirmationDialog>
+      />
 
       {/* Edit invitation modal — only reachable while the invitation is REVOKED */}
       {editInviteTarget && (() => {

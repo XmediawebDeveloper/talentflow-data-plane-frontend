@@ -71,7 +71,7 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
           <div className="min-w-0">
             <h2 className="text-lg sm:text-xl lg:text-2xl text-gray-900 mb-0.5 sm:mb-1">Upload History</h2>
             <p className="text-xs sm:text-sm text-gray-600">
-              View all past bulk upload reports for {currentSource === 'my-resumes' ? 'My Resumes' : 'Internal Database'}
+              View all past bulk upload reports for {currentSource === 'my-resumes' ? 'My Resumes' : 'Shared Database'}
             </p>
           </div>
           <button

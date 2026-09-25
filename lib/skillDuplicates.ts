@@ -297,7 +297,28 @@ function stripSelfAcronymParenthetical(phrase: string): string {
   return (phrase || '').trim().replace(/\(\s*[A-Z][A-Z0-9]{1,7}\s*\)\s*$/, '').trim();
 }
 
-export function skillInitialismMatch(a: string, b: string): { hit: boolean; exact: boolean } {
+/** "S D L C" / "S.D.L.C" / "S-D-L-C" -> "SDLC" — a recruiter spelling an
+ *  acronym letter by letter instead of writing it as one token. Mirrors
+ *  backend `_collapse_spelled_out_acronym`.
+ *
+ *  Structural, not a lookup: fires ONLY when every separator-delimited piece
+ *  is exactly one letter, which no genuine multi-word skill name is ("Node
+ *  JS", "Test Planning" both have a piece longer than one letter) — so this
+ *  can never misfire on an ordinary phrase. */
+const LETTER_SPACED_SEP_RE = /[\s.\-/,]+/;
+
+function collapseSpelledOutAcronym(text: string): string {
+  if (!text || !text.trim()) return text;
+  const pieces = text.trim().split(LETTER_SPACED_SEP_RE).filter(Boolean);
+  if (pieces.length < 3 || !pieces.every(p => p.length === 1 && /^[a-zA-Z]$/.test(p))) {
+    return text;
+  }
+  return pieces.join('');
+}
+
+export function skillInitialismMatch(aRaw: string, bRaw: string): { hit: boolean; exact: boolean } {
+  const a = collapseSpelledOutAcronym(aRaw);
+  const b = collapseSpelledOutAcronym(bRaw);
   for (const [short, longRaw] of [[a, b], [b, a]] as [string, string][]) {
     const long = stripSelfAcronymParenthetical(longRaw);
     const lt = skillTokenSequence(long, false);
