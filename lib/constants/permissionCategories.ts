@@ -97,6 +97,7 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'my_resumes:apply_job', label: 'Apply to Job' },
       { code: 'my_resumes:assessment', label: 'Assessment' },
       { code: 'my_resumes:ai_match', label: 'AI Talent Match' },
+      { code: 'my_resumes:score', label: 'Score Resume' },
       { code: 'my_resumes:share', label: 'Share Resume' },
     ],
     // Rule: Assessment invite from My Resumes requires Assessment Share
@@ -115,6 +116,7 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'internal_db:apply_job', label: 'Apply to Job' },
       { code: 'internal_db:assessment', label: 'Assessment' },
       { code: 'internal_db:ai_match', label: 'AI Talent Match' },
+      { code: 'internal_db:score', label: 'Score Resume' },
       { code: 'internal_db:share', label: 'Share Resume' },
     ],
     // Rule: Assessment invite from Internal DB requires Assessment Share

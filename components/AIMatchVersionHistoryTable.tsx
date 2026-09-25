@@ -118,10 +118,10 @@ interface AIMatchVersionHistoryTableProps {
   } | undefined;
   onRetry: () => void;
   onViewSession: (session: AIMatchSessionResponse) => void;
-  /** Permission/status gating (toast on denial, etc.) is the caller's job —
-   *  this component only renders the menu item and disables it when the
-   *  resolved job is Disabled. */
-  onRunMatch: (session: AIMatchSessionResponse) => void;
+  /** Omit to hide the "Run AI Match" menu item entirely (e.g. the caller
+   *  lacks ai_match:run) — pass it only when the action should be offered.
+   *  Still disabled by this component when the resolved job is Disabled. */
+  onRunMatch?: (session: AIMatchSessionResponse) => void;
 }
 
 /**
@@ -347,14 +347,16 @@ export default function AIMatchVersionHistoryTable({
                         <Eye className="w-4 h-4 text-menu-icon-view" />
                         <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
                       </DropdownMenuItem>
-                      <DropdownMenuItem
-                        className={actionsMenuItemClass}
-                        disabled={job?.status?.toLowerCase() === 'disabled'}
-                        onSelect={() => onRunMatch(session)}
-                      >
-                        <Sparkles className="w-4 h-4 text-menu-icon-ai" />
-                        <span className={MENU_ITEM_SCALE_CLASS}>Run AI Match</span>
-                      </DropdownMenuItem>
+                      {onRunMatch && (
+                        <DropdownMenuItem
+                          className={actionsMenuItemClass}
+                          disabled={job?.status?.toLowerCase() === 'disabled'}
+                          onSelect={() => onRunMatch(session)}
+                        >
+                          <Sparkles className="w-4 h-4 text-menu-icon-ai" />
+                          <span className={MENU_ITEM_SCALE_CLASS}>Run AI Match</span>
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </td>
@@ -451,14 +453,16 @@ export default function AIMatchVersionHistoryTable({
                     <Eye className="w-4 h-4 text-menu-icon-view" />
                     <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
                   </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className={actionsMenuItemClass}
-                    disabled={job?.status?.toLowerCase() === 'disabled'}
-                    onSelect={() => onRunMatch(session)}
-                  >
-                    <Sparkles className="w-4 h-4 text-menu-icon-ai" />
-                    <span className={MENU_ITEM_SCALE_CLASS}>Run AI Match</span>
-                  </DropdownMenuItem>
+                  {onRunMatch && (
+                    <DropdownMenuItem
+                      className={actionsMenuItemClass}
+                      disabled={job?.status?.toLowerCase() === 'disabled'}
+                      onSelect={() => onRunMatch(session)}
+                    >
+                      <Sparkles className="w-4 h-4 text-menu-icon-ai" />
+                      <span className={MENU_ITEM_SCALE_CLASS}>Run AI Match</span>
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>

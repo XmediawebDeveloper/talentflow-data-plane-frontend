@@ -14,6 +14,7 @@ import { Users, BarChart3, FileText, ClipboardCheck, Upload, Briefcase, AlertCir
 import teamService, { TeamUsageSummary, AllTeamsUsageSummary, MyTeamsUsageSummary } from '@/lib/services/teamService';
 import TeamMemberUsage from '@/components/teams/TeamMemberUsage';
 import { Skeleton } from '@/components/ui/skeleton';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 // Unit type labels for display
 const UNIT_TYPE_LABELS: Record<string, { label: string; icon: React.ReactNode; color: string }> = {
@@ -53,9 +54,11 @@ export default function TeamUsageSummaryComponent({ userRole, teamId }: TeamUsag
   const [selectedDays, setSelectedDays] = useState(30);
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
 
-  // Only tenant_admin and owner roles should have access to all teams' usage
-  const isTenantAdmin = userRole === 'tenant_admin' || userRole === 'owner' || userRole === 'admin';
-  const isBillingManager = userRole === 'billing_manager' || userRole === 'finance';
+  // Must match the backend's actual gate (current_user.is_tenant_admin) for the
+  // all-teams-usage endpoint — a raw role-string comparison drifts from the
+  // backend (e.g. 'admin' is no longer an automatic tenant_admin bypass there).
+  const { isTenantAdmin } = useAuth();
+  const isBillingManager = userRole === 'billing_manager';
 
   useEffect(() => {
     fetchUsageData();

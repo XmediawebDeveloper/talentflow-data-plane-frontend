@@ -1591,13 +1591,15 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         document.removeEventListener('visibilitychange', screenVisHandler);
         if (originalOnStop) (originalOnStop as any).call(sr, ev);
       };
-      // If candidate stops sharing manually — record as severe malpractice and block the interview
+      // If candidate stops sharing manually — record as severe malpractice and block the interview.
+      // Finalize/upload whatever was captured so far instead of discarding it: a bare
+      // recorder.stop() here (the old behavior) threw away the buffered chunks and never
+      // sent the is_final S3 part, so the multipart upload never completed and the
+      // recruiter saw NO screen recording at all for any interview where sharing stopped
+      // early. stopAndUploadScreenRecording() flushes the tail, retries the final upload,
+      // and does the same ref/track cleanup — so it is no longer duplicated here.
       screenStream.getVideoTracks()[0]?.addEventListener('ended', () => {
-        if (screenRecorderRef.current?.state !== 'inactive') {
-          try { screenRecorderRef.current?.stop(); } catch { /* ignore */ }
-        }
-        screenRecorderRef.current = null;
-        screenStreamRef.current = null;
+        stopAndUploadScreenRecording();
         // Only show the blocking overlay when the interview is actually running
         if (stepRef.current === 'interview') {
           setScreenShareStopped(true);
@@ -3018,13 +3020,10 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
         sr.ondataavailable = (e) => { if (e.data.size > 0) screenChunksRef.current.push(e.data); };
         sr.start(5000);
         screenRecorderRef.current = sr;
-        // Re-attach ended listener
+        // Re-attach ended listener — finalize/upload the tail instead of discarding it
+        // (see the matching fix on the initial share listener above for why).
         screenStream.getVideoTracks()[0]?.addEventListener('ended', () => {
-          if (screenRecorderRef.current?.state !== 'inactive') {
-            try { screenRecorderRef.current?.stop(); } catch { /* ignore */ }
-          }
-          screenRecorderRef.current = null;
-          screenStreamRef.current = null;
+          stopAndUploadScreenRecording();
           if (stepRef.current === 'interview') {
             setScreenShareStopped(true);
             InterviewEventBus.emit('screen_share_stopped');

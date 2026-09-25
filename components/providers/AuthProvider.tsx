@@ -311,7 +311,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (async () => {
       try {
         const { userService } = await import('@/lib/services/userService');
-        const record = await userService.getUser(user.id);
+        const record = await userService.getUser(user.id, { silent: true });
         if (cancelled || !record?.user_display_id) return;
         /* Patched onto whatever the user object is by the time this lands, not
            onto the one captured when the fetch started — `refreshUser` may have

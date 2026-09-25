@@ -34,6 +34,7 @@ import {
   AuditLogEntry,
 } from '@/lib/types/rbac';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { useAuth } from '@/lib/hooks/useAuth';
 
 type TabType = 'roles' | 'audit';
 
@@ -57,6 +58,11 @@ const getRoleBadgeClass = (isSystem: boolean) =>
 export default function RoleManagement() {
   const router = useRouter();
   const dialog = useGlobalDialog();
+  const { hasPermission } = useAuth();
+  // Route access only requires view rights (canViewRoles); mutating actions
+  // (create/edit/delete) additionally require the manage permission — without
+  // this, a view-only user sees fully clickable Create/Edit/Delete controls.
+  const canManageRoles = hasPermission('canManagePermissionsRoles');
   const [activeTab, setActiveTab] = useState<TabType>('roles');
   const [roles, setRoles] = useState<RoleListItem[]>([]);
   const [permissions, setPermissions] = useState<Permission[]>([]);
@@ -398,6 +404,7 @@ export default function RoleManagement() {
                   <div className="mt-1 font-semibold">{managedPermissionsCount}</div>
                 </div>
               </div>
+              {canManageRoles && (
               <button
                 onClick={() => setCreateOpen(true)}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
@@ -406,6 +413,7 @@ export default function RoleManagement() {
                 Create Role
                 <ArrowUpRight className="h-4 w-4" />
               </button>
+              )}
             </div>
           </div>
         </section>
@@ -659,7 +667,7 @@ export default function RoleManagement() {
                                 >
                                   <Eye className="h-4 w-4" />
                                 </button>
-                                {!protectedRoleCodes.includes(role.code) ? (
+                                {canManageRoles && !protectedRoleCodes.includes(role.code) ? (
                                   <button
                                     onClick={() => handleEditRole(role)}
                                     className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-[border-color,box-shadow,color,background-color] hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
@@ -673,7 +681,7 @@ export default function RoleManagement() {
                                     <Lock className="h-4 w-4" />
                                   </span>
                                 )}
-                                {!role.is_system ? (
+                                {canManageRoles && !role.is_system ? (
                                   <button
                                     onClick={() => handleDeleteRole(role.id)}
                                     className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-destructive-line/15 bg-destructive/[0.05] text-destructive transition-all hover:-translate-y-0.5 hover:bg-destructive/[0.1]"
@@ -751,7 +759,7 @@ export default function RoleManagement() {
                             <Eye className="h-4 w-4" />
                             View permissions
                           </button>
-                          {!protectedRoleCodes.includes(role.code) && (
+                          {canManageRoles && !protectedRoleCodes.includes(role.code) && (
                             <button
                               onClick={() => handleEditRole(role)}
                               className="inline-flex items-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-brand-cyan/20 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
@@ -760,7 +768,7 @@ export default function RoleManagement() {
                               Edit
                             </button>
                           )}
-                          {!role.is_system && (
+                          {canManageRoles && !role.is_system && (
                             <button
                               onClick={() => handleDeleteRole(role.id)}
                               className="inline-flex items-center gap-2 rounded-xl border border-destructive-line/15 bg-destructive/[0.05] px-3 py-2 text-sm font-medium text-destructive transition-all hover:bg-destructive/[0.1]"

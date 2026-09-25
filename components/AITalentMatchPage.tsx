@@ -3,7 +3,8 @@
 import Image from 'next/image';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { Button } from '@/components/ui/button';
-import { ArrowUpDown, Sparkles, BarChart3, Search, ChevronDown, ChevronRight, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video } from 'lucide-react';
+import { ArrowUpDown, Sparkles, BarChart3, Search, ChevronDown, ChevronRight, Mail, Phone, MapPin, Building2, CheckCircle, Star, User, Users, FileText, Send, TrendingUp, Clock, Calendar, Briefcase, History, Eye, ArrowLeft, X, DollarSign, CheckCircle2, AlertCircle, AlertTriangle, PlayCircle, Paperclip, ClipboardList, XCircle, Loader2, Info, RefreshCw, PieChart, MoreVertical, Video, FileDown } from 'lucide-react';
+import { exportToCSV, type ExportColumn } from '@/lib/utils/exportUtils';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -263,11 +264,18 @@ export default function AITalentMatchPage({
 }: AITalentMatchPageProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { hasPermission, isTenantAdmin, user } = useAuth();
+  const { hasPermission, hasPermissionCode, isTenantAdmin, user } = useAuth();
   const { quotaData } = useQuota();
 
   // ✅ RBAC: Check if user can run AI match operations (bypass for tenant admin)
   const canRunAiMatch = isTenantAdmin || (user?.permissions?.canRunAiMatch ?? false);
+  // ai_match:export uses the raw granular code, not the legacy can_export
+  // column — that column is a shared bucket written by many unrelated
+  // "Export" checkboxes (JD, Resumes, Internal DB, Assessments, Scoring,
+  // Teams...), so it stays true from any one of them even after this
+  // category's own Export checkbox is turned off (same bug shape fixed for
+  // can_view_ai_match elsewhere in this app).
+  const canExport = isTenantAdmin || hasPermissionCode('ai_match:export');
   const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
   const canCreateAssessments = isTenantAdmin || hasPermission('canCreateAssessments');
   const canCreateAIInterviews = isTenantAdmin || hasPermission('canCreateAIInterviews');
@@ -2306,25 +2314,21 @@ export default function AITalentMatchPage({
             )}
             */}
             
-            <Button
-              variant="primary"
-              onClick={() => {
-                if (!canRunAiMatch) {
-                  toast.error('You do not have permission to run AI matching operations');
-                  return;
-                }
-                setViewMode('new');
-                setSelectedJob('');
-                setSelectedCandidates([]);
-                router.push('/recruitment/ai-talent-match', { scroll: false });
-              }}
-              disabled={!canRunAiMatch}
-              className="w-full sm:w-auto"
-              title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
-            >
-              <Sparkles className="w-3.5 h-3.5" />
-              Run AI Match
-            </Button>
+            {canRunAiMatch && (
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setViewMode('new');
+                  setSelectedJob('');
+                  setSelectedCandidates([]);
+                  router.push('/recruitment/ai-talent-match', { scroll: false });
+                }}
+                className="w-full sm:w-auto"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                Run AI Match
+              </Button>
+            )}
           </div>
         </div>
 
@@ -4157,13 +4161,9 @@ export default function AITalentMatchPage({
                           }, targetJobId);
                           updateUrlParams({ jdId: targetJobId, view: 'results' });
                         }}
-                        onRunMatch={(session) => {
-                          if (!canRunAiMatch) {
-                            toast.error('You do not have permission to run AI matching operations');
-                            return;
-                          }
+                        onRunMatch={canRunAiMatch ? (session) => {
                           handleRunAIMatch(session.jd_id || item.jobId);
-                        }}
+                        } : undefined}
                       />
                     </div>
                   )}
@@ -4190,23 +4190,19 @@ export default function AITalentMatchPage({
               <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
                 Start using AI Talent Match to find the best candidates for your jobs. Our AI will analyze and rank candidates based on job fit.
               </p>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  if (!canRunAiMatch) {
-                    toast.error('You do not have permission to run AI matching operations');
-                    return;
-                  }
-                  setViewMode('new');
-                  setSelectedJob('');
-                  router.push('/recruitment/ai-talent-match', { scroll: false });
-                }}
-                disabled={!canRunAiMatch}
-                title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
-              >
-                <Sparkles className="w-4 h-4" />
-                Run AI Match Now
-              </Button>
+              {canRunAiMatch && (
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    setViewMode('new');
+                    setSelectedJob('');
+                    router.push('/recruitment/ai-talent-match', { scroll: false });
+                  }}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Run AI Match Now
+                </Button>
+              )}
             </div>
           </div>
         ) : (
@@ -4730,6 +4726,56 @@ export default function AITalentMatchPage({
   if (viewMode === 'results') {
     const filteredCandidates = filteredCandidatesMemo;
     const paginatedCandidates = getPaginatedCandidates();
+
+    // One Export for both states, same as ScoredResumesTable: exports the
+    // selection when there is one, otherwise every currently filtered row.
+    const handleExportCandidates = () => {
+      const dataToExport = selectedCandidates.length > 0
+        ? filteredCandidates.filter(c => selectedCandidates.includes(c.id))
+        : filteredCandidates;
+      if (dataToExport.length === 0) {
+        toast.error('No candidates to export');
+        return;
+      }
+      const jobTitle = selectedJobData?.title || selectedHistoryItem?.jobTitle || 'Candidates';
+      const jobVersion = selectedJobData?.currentVersion ? `v${selectedJobData.currentVersion}` : '-';
+      const columns: ExportColumn[] = [
+        { key: 'rank', header: 'Matched Rating' },
+        { key: 'name', header: 'Candidate Name' },
+        { key: 'jobTitle', header: 'Job Title' },
+        { key: 'jobVersion', header: 'Job Version' },
+        { key: 'email', header: 'Email' },
+        { key: 'phone', header: 'Phone' },
+        { key: 'location', header: 'Location' },
+        { key: 'skills', header: 'Skills' },
+        { key: 'experience', header: 'Experience' },
+        { key: 'uploadedBy', header: 'Uploaded By' },
+        { key: 'uploadDate', header: 'Uploaded Date' },
+        { key: 'resumeVersion', header: 'Resume Version' },
+        { key: 'attachments', header: 'Attachments' },
+        { key: 'scoredStatus', header: 'Scored Status' },
+      ];
+      const rows = dataToExport.map(c => ({
+        rank: c.rank ?? '-',
+        name: c.name || 'Unknown',
+        jobTitle,
+        jobVersion,
+        email: c.email || '-',
+        phone: c.phone || '-',
+        location: c.location || '-',
+        skills: (c.skills || []).join(', '),
+        experience: c.experience || '-',
+        uploadedBy: formatUploadedBy(c.uploadedByName, c.uploadedBy),
+        uploadDate: c.uploadDate ? formatISTDate(c.uploadDate) : '-',
+        resumeVersion: `v${c.resumeVersion || 1}`,
+        attachments: c.attachmentCount || 1,
+        scoredStatus: scoredResumeIds.has(c.resumeId) ? 'Scored' : 'Not Scored',
+      }));
+      const filenameSafeTitle = jobTitle.replace(/\s+/g, '_');
+      const dateStamp = new Date().toISOString().slice(0, 10);
+      exportToCSV(rows, columns, `AI_Talent_Match_${filenameSafeTitle}_${dateStamp}`);
+      toast.success(`Exported ${rows.length} candidate${rows.length !== 1 ? 's' : ''} to CSV`);
+    };
     const excellentCount = matchedCandidates.filter(c => c.matchScore >= 85).length;
     const goodCount = matchedCandidates.filter(c => c.matchScore >= 70 && c.matchScore < 85).length;
     const moderateCount = matchedCandidates.filter(c => c.matchScore < 70).length;
@@ -4821,6 +4867,17 @@ export default function AITalentMatchPage({
                 <option value={7}>7+ Rating</option>
                 <option value={9}>9+ Rating</option>
               </select>
+              {canExport && matchedCandidates.length > 0 && (
+                <Button
+                  variant="secondary"
+                  size="md"
+                  onClick={handleExportCandidates}
+                  icon={<FileDown className="w-3.5 h-3.5" />}
+                  className="whitespace-nowrap"
+                >
+                  Export
+                </Button>
+              )}
               {/* Count badge closes the row up to this point, as it does on
                   every list — the Score/Invite actions below carry their own
                   `sm:ml-auto` instead, so with a selection they take over the
@@ -4959,21 +5016,15 @@ export default function AITalentMatchPage({
               <p className="text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto mb-4">
                 AI Talent Match has not been run for this job yet. Run AI matching to find candidates that match this job description.
               </p>
-              <Button
-                variant="primary"
-                onClick={() => {
-                  if (!canRunAiMatch) {
-                    toast.error('You do not have permission to run AI matching operations');
-                    return;
-                  }
-                  handleRunAIMatch(selectedJob);
-                }}
-                disabled={!canRunAiMatch}
-                title={!canRunAiMatch ? 'You do not have permission to run AI matching operations' : ''}
-              >
-                <Sparkles className="w-4 h-4" />
-                Run AI Match
-              </Button>
+              {canRunAiMatch && (
+                <Button
+                  variant="primary"
+                  onClick={() => handleRunAIMatch(selectedJob)}
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Run AI Match
+                </Button>
+              )}
             </div>
           ) : (
           <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm">
