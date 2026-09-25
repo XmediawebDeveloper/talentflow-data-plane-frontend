@@ -503,18 +503,26 @@ export function EvalReportCombined({
 
       {/* ── Everything below is captured into the PDF ─────────────────── */}
       <div className="bg-white space-y-6">
-        {/* 1. Verdict hero — compact Pass/Fail + Match Score + candidate */}
+        {/* 1. Verdict hero — the candidate photo as its own card beside the
+            Pass/Fail + Match Score banner; both share the same corner radius. */}
+        <div className="flex items-stretch gap-4" style={{ pageBreakInside: 'avoid' }}>
+          <div className={`w-32 min-h-[128px] shrink-0 rounded-xl overflow-hidden flex items-center justify-center text-4xl font-bold shadow-sm border ${
+            isPartialEvaluation
+              ? 'bg-amber-100 text-amber-900 border-amber-200'
+              : isPassed
+                ? 'bg-emerald-50 text-emerald-600 border-emerald-200'
+                : 'bg-red-50 text-red-500 border-red-200'
+          }`}>
+            {candidateImage
+              ? <img src={candidateImage} alt={candidate.name} className="w-full h-full object-cover" />
+              : <span>{avatarInitials}</span>}
+          </div>
         {isPartialEvaluation ? (
           <div
-            className="rounded-xl p-5 text-amber-950 bg-amber-100 border border-amber-200 shadow-sm"
+            className="flex-1 min-w-0 flex flex-col justify-center rounded-xl p-5 text-amber-950 bg-amber-100 border border-amber-200 shadow-sm"
             style={{ pageBreakInside: 'avoid' }}
           >
             <div className="flex flex-wrap items-center gap-4">
-              <div className="relative w-14 h-14 rounded-xl bg-amber-200/70 flex items-center justify-center text-lg font-bold overflow-hidden ring-2 ring-white/70 shrink-0">
-                {candidateImage
-                  ? <img src={candidateImage} alt={candidate.name} className="w-full h-full object-cover" />
-                  : <span>{avatarInitials}</span>}
-              </div>
               <div className="min-w-0">
                 <div className="text-xl font-bold leading-tight truncate">{candidate.name}</div>
                 <div className="text-sm text-amber-900/80 mb-1 truncate">{candidate.role}</div>
@@ -527,18 +535,13 @@ export function EvalReportCombined({
           </div>
         ) : (
           <div
-            className={`rounded-xl p-5 text-white shadow-md ${
+            className={`flex-1 min-w-0 flex flex-col justify-center rounded-xl p-5 text-white shadow-md ${
               isPassed ? 'bg-emerald-500' : 'bg-red-500'
             }`}
             style={{ pageBreakInside: 'avoid' }}
           >
             <div className="flex flex-wrap items-center justify-between gap-4">
               <div className="flex items-center gap-4 min-w-0">
-                <div className="relative w-14 h-14 rounded-xl bg-white/20 flex items-center justify-center text-lg font-bold overflow-hidden ring-2 ring-white/30 shrink-0">
-                  {candidateImage
-                    ? <img src={candidateImage} alt={candidate.name} className="w-full h-full object-cover" />
-                    : <span>{avatarInitials}</span>}
-                </div>
                 <div className="min-w-0">
                   <div className="text-xl font-bold leading-tight truncate">{candidate.name}</div>
                   <div className="text-sm text-white/90 mb-1.5 truncate">{candidate.role}</div>
@@ -566,6 +569,7 @@ export function EvalReportCombined({
             </div>
           </div>
         )}
+        </div>
 
         {/* 2. Interview meta strip (once) */}
         <div className="rounded-2xl border border-gray-200 bg-white p-5" style={{ pageBreakInside: 'avoid' }}>
