@@ -356,13 +356,13 @@ function DraggableClusterSkill({
     <span
       ref={isReadOnly ? undefined : drag as unknown as React.Ref<HTMLSpanElement>}
       title={isAiDerived ? 'Merged or added by AI from your skills' : undefined}
-      className={`group/chip inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs border transition-all duration-200 backdrop-blur-sm ${
+      className={`group/chip inline-flex items-center gap-1 max-w-full px-2.5 py-1 rounded-full text-xs border transition-all duration-200 backdrop-blur-sm ${
         isReadOnly ? 'cursor-default' : 'cursor-grab active:cursor-grabbing hover:-translate-y-0.5 hover:shadow-sm'
       } ${isDragging ? 'opacity-40 scale-95' : 'opacity-100 scale-100'} ${chipClass ?? 'bg-white border-gray-200 text-gray-700'} ${isAiDerived ? 'italic' : ''}`}
     >
       {!isReadOnly && <GripVertical className="w-3 h-3 flex-shrink-0 opacity-40 group-hover/chip:opacity-70 transition-opacity" />}
       {isAiDerived && <Sparkles className="w-3 h-3 flex-shrink-0 opacity-70" />}
-      <span className="font-medium">{skillName}</span>
+      <span className="font-medium min-w-0 break-words">{skillName}</span>
       {!isReadOnly && (
         <button
           onClick={(e) => { e.stopPropagation(); if (removalLocked) return; onRemove(skillName, clusterId); }}
@@ -485,12 +485,12 @@ function ClusterRow({
 
       {/* Collapsed header */}
       <div
-        className={`flex items-center gap-2 px-3.5 py-3 cursor-pointer transition-all duration-200 ${expanded ? 'hover:bg-brand-blue/[0.04]' : 'hover:bg-brand-blue/[0.025]'}`}
+        className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-3 cursor-pointer transition-all duration-200 ${expanded ? 'hover:bg-brand-blue/[0.04]' : 'hover:bg-brand-blue/[0.025]'}`}
         onClick={() => onToggleExpand(cluster.id)}
       >
         {/* Hide drag handle when read-only (flexible finalized) */}
         {!isReadOnly && (
-          <div ref={drag as unknown as React.Ref<HTMLDivElement>} className="cursor-grab active:cursor-grabbing p-0.5 opacity-30 hover:opacity-70 transition-opacity">
+          <div ref={drag as unknown as React.Ref<HTMLDivElement>} className="hidden sm:block cursor-grab active:cursor-grabbing p-0.5 opacity-30 hover:opacity-70 transition-opacity">
             <GripVertical className="w-4 h-4 text-gray-400" />
           </div>
         )}
@@ -500,7 +500,7 @@ function ClusterRow({
             <AlertTriangle className="w-2.5 h-2.5" /> Empty
           </span>
         )}
-        <span className={`text-sm font-semibold flex-1 truncate transition-colors ${expanded ? 'text-brand-blue-deep' : 'text-gray-900'}`}>
+        <span className={`text-sm font-semibold flex-1 min-w-0 truncate transition-colors ${expanded ? 'text-brand-blue-deep' : 'text-gray-900'}`}>
           {cluster.name || 'Unnamed Cluster'}
         </span>
         {(() => {
@@ -512,12 +512,12 @@ function ClusterRow({
               className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-semibold bg-gradient-to-r from-brand-blue/10 to-brand-blue/5 text-brand-blue border border-brand-blue/20 flex-shrink-0 shadow-sm shadow-brand-blue/5"
             >
               <Sparkles className="w-2.5 h-2.5" />
-              {aiCount} AI
+              {aiCount}<span className="hidden sm:inline"> AI</span>
             </span>
           );
         })()}
-        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-2xs font-medium bg-gray-100 text-gray-600 ring-1 ring-gray-200/60">
-          {visibleClusterSkills.length} skill{visibleClusterSkills.length !== 1 ? 's' : ''}
+        <span className="inline-flex items-center flex-shrink-0 px-2 py-0.5 rounded-full text-2xs font-medium bg-gray-100 text-gray-600 ring-1 ring-gray-200/60">
+          {visibleClusterSkills.length}<span className="hidden sm:inline">&nbsp;skill{visibleClusterSkills.length !== 1 ? 's' : ''}</span>
         </span>
         {/* Rename and remove, on the row itself. Both used to live inside the
             expanded panel, so renaming a cluster meant opening it first and
@@ -547,17 +547,17 @@ function ClusterRow({
             </button>
           </>
         )}
-        <div className={`flex items-center justify-center w-6 h-6 rounded-full transition-all duration-300 ${expanded ? 'bg-brand-blue/15 text-brand-blue rotate-180' : 'text-gray-400 hover:bg-gray-100'}`}>
+        <div className={`flex items-center justify-center w-6 h-6 rounded-full flex-shrink-0 transition-all duration-300 ${expanded ? 'bg-brand-blue/15 text-brand-blue rotate-180' : 'text-gray-400 hover:bg-gray-100'}`}>
           <ChevronDown className="w-3.5 h-3.5" />
         </div>
       </div>
 
       {/* Expanded content */}
       {expanded && (
-        <div className="px-4 pb-4 pt-2 space-y-3 border-t border-brand-blue/10 relative">
+        <div className="px-3 sm:px-4 pb-4 pt-2 space-y-3 border-t border-brand-blue/10 relative">
           {/* Cluster name + Priority side-by-side for compactness */}
-          <div className="grid grid-cols-3 gap-2.5">
-            <div className="col-span-2">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div className="sm:col-span-2">
               <label className="text-2xs font-semibold text-gray-400 uppercase tracking-wider">Cluster Name</label>
               <input
                 type="text"
@@ -602,7 +602,7 @@ function ClusterRow({
                 ).length;
                 return (
                   <div className="mt-1.5">
-                    <div className="flex items-center justify-between mb-1.5">
+                    <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1 mb-1.5">
                       <div className="text-2xs font-semibold uppercase tracking-wide text-gray-400">
                         Skills ({totalCount}{commandCount > 0 ? ` · ${commandCount} command${commandCount === 1 ? '' : 's'}` : ''})
                       </div>
@@ -821,7 +821,7 @@ function CategorySection({
       <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-brand-blue/30 to-transparent" />
 
       {/* Header */}
-      <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100/80 bg-gradient-to-br from-slate-50/80 via-white to-brand-blue/[0.02]">
+      <div className="flex items-start justify-between gap-3 px-4 sm:px-5 py-4 border-b border-gray-100/80 bg-gradient-to-br from-slate-50/80 via-white to-brand-blue/[0.02]">
         <div className="flex items-start gap-3 min-w-0">
           <div className="flex items-center justify-center w-9 h-9 rounded-xl bg-gradient-to-br from-brand-blue/15 to-brand-blue/5 ring-1 ring-brand-blue/15 text-brand-blue shadow-sm shadow-brand-blue/10 flex-shrink-0">
             {icon}
@@ -900,9 +900,9 @@ function CategorySection({
           return (
             <span
               key={entry.name}
-              className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium border transition-all hover:-translate-y-0.5 hover:shadow-sm ${chipClass}`}
+              className={`inline-flex items-center gap-1 max-w-full px-2.5 py-1 rounded-full text-xs font-medium border transition-all hover:-translate-y-0.5 hover:shadow-sm ${chipClass}`}
             >
-              {entry.name}
+              <span className="min-w-0 break-words">{entry.name}</span>
               {!isReadOnly && (
                 <button
                   type="button"
@@ -1024,7 +1024,7 @@ function CategorySection({
       {/* Cluster list */}
       <div className="p-4 space-y-2.5">
         {clusters.length === 0 ? (
-          <div className="py-10 text-center border-2 border-dashed border-brand-blue/20 rounded-xl bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5">
+          <div className="py-10 px-4 text-center border-2 border-dashed border-brand-blue/20 rounded-xl bg-gradient-to-br from-brand-blue/5 via-white to-brand-cyan/5">
             <div className="w-14 h-14 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center mx-auto mb-3">
               <Layers className="w-7 h-7 text-brand-blue" />
             </div>
@@ -2935,11 +2935,11 @@ export default function AIInterviewClusters() {
             </div>
 
             {/* Step indicator */}
-            <div className="flex items-center gap-3 mb-6">
+            <div className="flex items-center justify-center sm:justify-start gap-3 mb-6">
               {Array.from({ length: 4 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-2">
                   <Skeleton className="h-8 w-8 rounded-full" />
-                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="hidden sm:block h-3 w-16" />
                 </div>
               ))}
             </div>
@@ -2947,9 +2947,9 @@ export default function AIInterviewClusters() {
             {/* Header: icon + title + subtitle */}
             <div className="flex items-center gap-3 mb-6">
               <Skeleton className="h-11 w-11 rounded-xl shrink-0" />
-              <div className="space-y-2">
-                <Skeleton className="h-6 w-48" />
-                <Skeleton className="h-4 w-64" />
+              <div className="space-y-2 min-w-0 flex-1">
+                <Skeleton className="h-6 w-48 max-w-full" />
+                <Skeleton className="h-4 w-64 max-w-full" />
               </div>
             </div>
 
@@ -3044,14 +3044,14 @@ export default function AIInterviewClusters() {
           {/* Header */}
           <div className="mb-6">
             {/* Header row */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-11 h-11 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                   <Layers className="w-5 h-5 text-brand-blue" />
                 </div>
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-1.5">
-                    <h1 className="text-xl font-semibold text-gray-900 tracking-tight">Skill Clusters</h1>
+                    <h1 className="text-lg sm:text-xl font-semibold text-gray-900 tracking-tight">Skill Clusters</h1>
                     {/* Stealth dot — only the admin knows it's there. Click opens the
                       Question Distribution popover. Tiny (6×6), neutral gray, no hover ring,
                       sits flush with the heading so casual users don't register it. */}
@@ -3501,12 +3501,12 @@ export default function AIInterviewClusters() {
                     </Popover>
                     */}
                   </div>
-                  <p className="text-sm text-gray-500 mt-0.5">
+                  <p className="text-xs sm:text-sm text-gray-500 mt-0.5">
                     Organize skills into weighted clusters for focused interview coverage
                   </p>
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-shrink-0 [&>button]:w-full sm:[&>button]:w-auto">
                 {/* Skill Importance toggle REMOVED — per-skill High/Med/Low
                     selection is no longer surfaced on the cluster page. */}
                 {/* Hide regenerate when flexible mode clusters are finalized */}
@@ -3535,11 +3535,11 @@ export default function AIInterviewClusters() {
           {/* Stretching columns, so the sticky summary can travel the whole
               height of the content beside it — see the Preview step. */}
           <div className="flex gap-6 items-stretch">
-          <div className="flex-1 min-w-0 space-y-6 pb-24">
+          <div className="flex-1 min-w-0 space-y-4 sm:space-y-6 pb-32 sm:pb-24">
 
           {/* Flexible mode: finalized lock banner */}
           {isFlexible && isFinalized && (
-            <div className="flex items-center justify-between gap-3 px-4 py-3 bg-gradient-to-r from-brand-orange/5 via-white to-brand-orange/10 border border-brand-orange/20 ring-1 ring-brand-orange/10 shadow-sm shadow-brand-orange/10 rounded-xl">
+            <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2 px-4 py-3 bg-gradient-to-r from-brand-orange/5 via-white to-brand-orange/10 border border-brand-orange/20 ring-1 ring-brand-orange/10 shadow-sm shadow-brand-orange/10 rounded-xl">
               <div className="flex items-center gap-2">
                 <Lock className="w-4 h-4 text-brand-orange-deep flex-shrink-0" />
                 <p className="text-xs font-semibold text-brand-orange-deep">
@@ -4138,14 +4138,18 @@ export default function AIInterviewClusters() {
           the content card width and leaves no white bleed in the side margins —
           the page background shows through on the left/right. */}
       <div className="fixed bottom-0 left-0 right-0 z-10">
-        <div className="mx-auto w-full max-w-[1400px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 ring-1 ring-black/[0.02] shadow-lg shadow-brand-blue/5 rounded-t-2xl px-4 md:px-8 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="mx-auto w-full max-w-[1400px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 ring-1 ring-black/[0.02] shadow-lg shadow-brand-blue/5 rounded-t-2xl px-4 md:px-8 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+          {/* Mobile: two rows — leave (Back + Discard) over advance (Save +
+              Continue), each button sharing its row — instead of four buttons
+              in one line that overflowed the viewport. */}
+          <div className="flex items-center justify-between sm:justify-start gap-2">
             <Button variant="secondary" size="md" onClick={handleBack} disabled={saving || generating} icon={<ArrowLeft className="w-4 h-4" />}>
-              Back to Configure
+              <span className="sm:hidden">Back</span>
+              <span className="hidden sm:inline">Back to Configure</span>
             </Button>
             <WizardDiscardButton onClick={handleDiscard} disabled={saving || generating} />
           </div>
-          <div className="flex items-center gap-2">
+          <div className="grid grid-cols-2 sm:flex sm:items-center gap-2">
             <Button
               variant="secondary"
               size="md"
@@ -4162,7 +4166,12 @@ export default function AIInterviewClusters() {
               disabled={saving || generating}
               icon={saving ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
             >
-              {saving ? 'Saving...' : 'Continue to Preview'}
+              {saving ? 'Saving...' : (
+                <>
+                  <span className="sm:hidden">Continue</span>
+                  <span className="hidden sm:inline">Continue to Preview</span>
+                </>
+              )}
               {!saving && (
                 <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />

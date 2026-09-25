@@ -2021,47 +2021,60 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
           );
         })()}
 
-        {/* Tabs card */}
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
-          {/* top-9 (36px), not top-0: the breadcrumb above is sticky at top-0 and
-              sits on z-30, so pinning the tabs at the same offset would park them
-              underneath it. 36px = the breadcrumb's height (py-2 + text-sm line). */}
-          <div className="sticky top-9 z-20 border-b border-gray-100 bg-slate-50/95 backdrop-blur supports-[backdrop-filter]:bg-slate-50/80 shadow-sm rounded-t-xl px-6 overflow-x-auto">
-            <div className="flex gap-1 min-w-max sm:min-w-0">
-              {tabs.map(tab => (
-                <button
-                  key={tab.key}
-                  onClick={() => { setActiveTab(tab.key); setViolationPage(1); }}
-                  className={`flex flex-1 items-center justify-center gap-1.5 py-4 px-3 text-sm border-b-2 transition-colors whitespace-nowrap ${
-                    activeTab === tab.key
-                      ? tab.key === 'violations' || tab.key === 'verification'
-                        ? 'border-destructive text-destructive font-medium'
-                        : 'border-brand-blue text-brand-blue font-medium'
-                      : 'border-transparent text-gray-500 hover:text-gray-700'
-                  }`}
-                >
-                  {tab.icon}
-                  {tab.label}
-                  {tab.live && (
-                    <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full ml-0.5 ring-1 ring-destructive-line">
-                      <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
-                      LIVE
-                    </span>
-                  )}
-                  {tab.badge !== undefined && (
-                    <span className={`ml-0.5 px-1.5 py-0.5 rounded-full text-xs font-medium ${
-                      tab.badge > 0 && tab.badgeTone === 'critical'
-                        ? 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line'
-                        : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200'
-                    }`}>
-                      {tab.badge}
-                    </span>
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
+        {/* Detail layout: vertical navigation on the left, the selected tab's
+            content on the right — the same grid, aside chrome and button states
+            as the AI Interview Details page (`AIInterviewDetailsView.tsx`), so
+            the two detail pages read as one screen. The strip this replaced was
+            horizontal and scrolled sideways with nine tabs. */}
+        <div className="grid grid-cols-[150px_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4 lg:grid-cols-[210px_minmax(0,1fr)] lg:gap-6">
+          {/* top-12: clears the sticky breadcrumb (top-0, 36px tall). */}
+          <aside className="sticky top-12 self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+            <nav className="p-2 sm:p-3" aria-label="Candidate result sections">
+              <div className="flex flex-col gap-1.5">
+                {tabs.map(tab => {
+                  const isActive = activeTab === tab.key;
+                  const isAlertTab = tab.key === 'violations' || tab.key === 'verification';
+                  return (
+                    <button
+                      key={tab.key}
+                      type="button"
+                      onClick={() => { setActiveTab(tab.key); setViolationPage(1); }}
+                      aria-current={isActive ? 'page' : undefined}
+                      className={`w-full rounded-lg px-3 py-2.5 text-left text-xs sm:text-sm transition-colors flex items-center gap-2 ${
+                        isActive
+                          ? isAlertTab
+                            ? 'bg-destructive-subtle text-destructive font-medium ring-1 ring-destructive-line'
+                            : 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
+                          : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
+                      }`}
+                    >
+                      <span className="shrink-0 [&>svg]:w-3.5 [&>svg]:h-3.5 sm:[&>svg]:w-4 sm:[&>svg]:h-4">{tab.icon}</span>
+                      <span className="min-w-0 flex-1 leading-snug">{tab.label}</span>
+                      {tab.live && (
+                        <span className="flex items-center gap-0.5 px-1.5 py-0.5 bg-destructive text-white text-2xs font-bold rounded-full ring-1 ring-destructive-line">
+                          <span className="w-1 h-1 rounded-full bg-white animate-pulse" />
+                          LIVE
+                        </span>
+                      )}
+                      {tab.badge !== undefined && (
+                        <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
+                          tab.badge > 0 && tab.badgeTone === 'critical'
+                            ? 'bg-destructive-subtle text-destructive ring-1 ring-destructive-line'
+                            : 'bg-slate-100 text-slate-500 ring-1 ring-slate-200'
+                        }`}>
+                          {tab.badge}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            </nav>
+          </aside>
 
+        {/* Content — `min-w-0` so a wide table inside a tab scrolls in its own
+            box instead of stretching the grid column. */}
+        <div className="min-w-0 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
           <div className="p-6">
             {/* Evaluation pending spinner — shown for ALL tabs while batch eval runs */}
             {evaluationPending && renderEvaluationSpinner()}
@@ -4941,6 +4954,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
             )}
 
           </div>
+        </div>
         </div>
         </div>
       </div>

@@ -1,9 +1,12 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Users, Mail, Play, Check, CheckCircle, Ban, TrendingUp, Loader2 } from 'lucide-react';
+import { X, Users, Mail, Play, Square, CheckSquare, CheckCircle, Clock, Ban, TrendingUp, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS, matchesResultFilter } from '@/components/ai-interview/ColumnFilterFields';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { Button } from '@/components/ui/button';
 import InviteFilterBar, {
@@ -17,6 +20,7 @@ import { TRACKER_DIALOG_PANEL_CLASS } from '@/lib/constants/trackerDialog';
 import TabEmptyState from '@/components/ui/tab-empty-state';
 import AIInterviewInviteTable, {
   isExpiredForActions,
+  displayInviteScore,
 } from '@/components/AIInterviewInviteTable';
 
 /* Bulk resend eligibility — Expired rows only, and never once the candidate
@@ -35,10 +39,17 @@ interface AIInterviewTrackInvitesModalProps {
   /** Published AI interview config whose invitations are being tracked. */
   configId: string;
   jdTitle: string;
-  /** This job's short id (e.g. "JD-014"), shown as its own column next to
-   *  CID — every row in this tracker shares one job, unlike the AI
-   *  Interviews page's all-jobs list which reads it per row instead. */
+  /** This job's short id (e.g. "JD-014"), shown before the job title in the
+   *  header and offered as the JD ID filter. */
   jdShortId?: string;
+  /** The tracked interview's job version and interview version, shown as a
+   *  column each (every row here shares both). Leave either out and the
+   *  tracker looks the config up itself. */
+  jobVersion?: number;
+  interviewVersion?: number;
+  /** Tracking ONE version (a version's own details page): every row shares
+   *  its job and interview version, so their columns and filters are left out. */
+  hideVersionDetails?: boolean;
   /** Opens a completed candidate's result. When the host can render the result
    *  inline (Job Details does), pass this; the table only offers View Details
    *  on completed rows when it is present. */
@@ -71,10 +82,37 @@ export default function AIInterviewTrackInvitesModal({
   configId,
   jdTitle,
   jdShortId,
+  jobVersion: jobVersionProp,
+  interviewVersion: interviewVersionProp,
+  hideVersionDetails = false,
   onViewResult,
   embedded = false,
 }: AIInterviewTrackInvitesModalProps) {
   const [isLoading, setIsLoading] = useState(true);
+
+  /* Job / interview version for the two version columns. Taken from the host
+     when it knows them; otherwise derived here from the config list — the
+     interview version is this config's place among its job version's
+     configs, which only the full list can say. */
+  const [lookedUpVersions, setLookedUpVersions] = useState<{ job: number; interview: number } | null>(null);
+  const needsVersionLookup = !hideVersionDetails && (jobVersionProp == null || interviewVersionProp == null);
+  useEffect(() => {
+    if (!isOpen || !needsVersionLookup) return;
+    let cancelled = false;
+    aiInterviewService
+      .listConfigs({ page: 1, page_size: 500, compact: true })
+      .then((res) => {
+        if (cancelled) return;
+        const all = res.items ?? [];
+        const self = all.find((c) => c.id === configId);
+        if (!self) return;
+        setLookedUpVersions({ job: self.jd_version ?? 1, interview: interviewVersionOrdinal(self, all) });
+      })
+      .catch(() => { /* The columns simply stay hidden. */ });
+    return () => { cancelled = true; };
+  }, [isOpen, needsVersionLookup, configId]);
+  const jobVersion = hideVersionDetails ? undefined : (jobVersionProp ?? lookedUpVersions?.job);
+  const interviewVersion = hideVersionDetails ? undefined : (interviewVersionProp ?? lookedUpVersions?.interview);
   const [invitations, setInvitations] = useState<any[]>([]);
   const [page, setPage] = useState(1);
   // "Go to page" input for the footer — buffered locally so a partial edit
@@ -95,6 +133,15 @@ export default function AIInterviewTrackInvitesModal({
      already accepted search/status/date — this tracker just never passed them,
      so it always showed the unfiltered first page. */
   const [filters, setFilters] = useState<InviteFilterState>(EMPTY_INVITE_FILTERS);
+  /* Job Version and Interview Version filters. Everything in a tracker
+     belongs to one interview, so each offers that interview's single value
+     and every row matches it — they mirror the table's columns rather than
+     narrow it. Source does narrow: see loadInvitations. */
+  const [jobVersionFilter, setJobVersionFilter] = useState('');
+  const [versionFilter, setVersionFilter] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('');
+  const [resultFilter, setResultFilter] = useState('');
+  const fetchAllForClientFilters = !!(sourceFilter || resultFilter);
   const [totalPages, setTotalPages] = useState(1);
   const [filteredTotal, setFilteredTotal] = useState(0);
   /* Card counts are deliberately NOT taken from the filtered response: selecting
@@ -108,6 +155,7 @@ export default function AIInterviewTrackInvitesModal({
     terminated: 0,
     cancelled: 0,
     revoked: 0,
+    expired: 0,
   });
   const refreshRef = useRef<NodeJS.Timeout | null>(null);
   // Resend flow — confirm first (the old link stops working), then send.
@@ -120,7 +168,11 @@ export default function AIInterviewTrackInvitesModal({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkResendConfirm, setShowBulkResendConfirm] = useState(false);
   const [isBulkResending, setIsBulkResending] = useState(false);
-  const selectableIds = invitations.filter(isBulkResendable).map((inv: any) => inv.id);
+  /* Selection follows the selected card: only the Expired card has a bulk
+     action here (Resend), so only it shows the checkboxes and Select All.
+     Revoke is not offered in this tracker at all — see the component note. */
+  const bulkResendMode = filters.status === 'expired';
+  const selectableIds = bulkResendMode ? invitations.filter(isBulkResendable).map((inv: any) => inv.id) : [];
   const allSelected =
     selectableIds.length > 0 && selectableIds.every((id: string) => selectedIds.has(id));
   const toggleSelectAll = () =>
@@ -189,23 +241,38 @@ export default function AIInterviewTrackInvitesModal({
          `invited` or `revoked`, and deriving either as "total minus the rest"
          would leave that card disagreeing with the rows it filters to — the
          remainder also holds expired and system_check sessions. */
-      const [result, summary, invitedOnly, revokedOnly] = await Promise.all([
+      const [result, summary, invitedOnly, revokedOnly, expiredOnly] = await Promise.all([
         aiInterviewService.getConfigInvitations(configId, {
           search: filters.search.trim() || undefined,
           status: filters.status !== 'all' ? filters.status : undefined,
           invite_date_from: filters.dateFrom || undefined,
           invite_date_to: filters.dateTo || undefined,
-          page,
-          page_size: PAGE_SIZE,
+          /* Source (email / resume) and Result (the Score column's Pass /
+             Fail) have no server-side filter, so with either set the whole
+             matching list is fetched and paged here instead. */
+          page: fetchAllForClientFilters ? 1 : page,
+          page_size: fetchAllForClientFilters ? 1000 : PAGE_SIZE,
         }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1 }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, status: 'invited' }),
         aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, status: 'revoked' }),
+        aiInterviewService.getConfigInvitations(configId, { page: 1, page_size: 1, status: 'expired' }),
       ]);
 
-      setInvitations(result.items || []);
-      setFilteredTotal(result.total || 0);
-      setTotalPages(Math.max(1, result.total_pages || 1));
+      if (fetchAllForClientFilters) {
+        const matching = (result.items || []).filter((inv: any) =>
+          (!sourceFilter || inv.invite_source === sourceFilter) && matchesResultFilter(displayInviteScore(inv), resultFilter));
+        const pages = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
+        const safePage = Math.min(page, pages);
+        setInvitations(matching.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE));
+        setFilteredTotal(matching.length);
+        setTotalPages(pages);
+        if (safePage !== page) setPage(safePage);
+      } else {
+        setInvitations(result.items || []);
+        setFilteredTotal(result.total || 0);
+        setTotalPages(Math.max(1, result.total_pages || 1));
+      }
       setOverview({
         total: summary.total || 0,
         invited: invitedOnly.total || 0,
@@ -214,11 +281,12 @@ export default function AIInterviewTrackInvitesModal({
         terminated: summary.terminated || 0,
         cancelled: summary.cancelled || 0,
         revoked: revokedOnly.total || 0,
+        expired: expiredOnly.total || 0,
       });
 
       /* Filtering can empty the page you were on — drop back rather than showing
          "no candidates" over a list that still has results. */
-      if ((result.items || []).length === 0 && (result.total || 0) > 0 && page > 1) {
+      if (!fetchAllForClientFilters && (result.items || []).length === 0 && (result.total || 0) > 0 && page > 1) {
         setPage(current => Math.min(current - 1, Math.max(1, result.total_pages || 1)));
       }
     } catch (error) {
@@ -227,7 +295,7 @@ export default function AIInterviewTrackInvitesModal({
     } finally {
       setIsLoading(false);
     }
-  }, [configId, page, filters]);
+  }, [configId, page, filters, sourceFilter, resultFilter, fetchAllForClientFilters]);
 
   // Same 15s silent refresh the assessment tracker uses — candidates move through
   // an interview while the recruiter watches this list.
@@ -284,7 +352,11 @@ export default function AIInterviewTrackInvitesModal({
                     </>
                   )}
                 </h2>
-                <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">{jdTitle}</p>
+                {/* JD ID, then the job title. */}
+                <p className="flex items-center gap-2 text-2xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 min-w-0">
+                  {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
+                  <span className="truncate">{jdTitle}</span>
+                </p>
               </div>
             </div>
           </div>
@@ -314,7 +386,7 @@ export default function AIInterviewTrackInvitesModal({
         {/* Stat row doubles as the status filter — same buckets and wording as the
             AI Interviews page tracker. */}
         <InviteStatCards
-          gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-1 sm:gap-2 lg:gap-3"
+          gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-3"
           activeStatus={filters.status}
           onSelect={(status) => {
             setFilters({ ...filters, status });
@@ -325,6 +397,7 @@ export default function AIInterviewTrackInvitesModal({
             { key: 'invited', label: 'Invited', Icon: Mail, value: overview.invited, ...INVITE_CARD_TONES.blue },
             { key: 'in_progress', label: 'In Progress', Icon: Play, value: overview.inProgress, ...INVITE_CARD_TONES.orange },
             { key: 'completed', label: 'Completed', Icon: CheckCircle, value: overview.completed, ...INVITE_CARD_TONES.green },
+            { key: 'expired', label: 'Expired', Icon: Clock, value: overview.expired, ...INVITE_CARD_TONES.orange },
             { key: 'terminated', label: 'Terminated', Icon: Ban, value: overview.terminated, ...INVITE_CARD_TONES.red },
             { key: 'revoked', label: 'Revoked', Icon: Ban, value: overview.revoked, ...INVITE_CARD_TONES.indigo },
           ]}
@@ -339,6 +412,29 @@ export default function AIInterviewTrackInvitesModal({
           }}
           statusOptions={AI_INTERVIEW_INVITE_STATUS_OPTIONS}
           searchPlaceholder="Search by candidate name or email..."
+          extraSelects={[
+            ...(hideVersionDetails ? [] : [{
+              key: 'job-version', ariaLabel: 'Job Version', anyLabel: 'All Job Versions', value: jobVersionFilter,
+              options: jobVersion != null ? [{ value: String(jobVersion), label: `Job V${jobVersion}` }] : [],
+              onChange: setJobVersionFilter,
+            },
+            {
+              key: 'interview-version', ariaLabel: 'Interview Version', anyLabel: 'All Interview Versions', value: versionFilter,
+              options: interviewVersion != null ? [{ value: String(interviewVersion), label: `Interview V${interviewVersion}` }] : [],
+              onChange: setVersionFilter,
+            }]),
+            {
+              key: 'source', ariaLabel: 'Source', anyLabel: 'All Sources', value: sourceFilter,
+              options: INVITE_SOURCE_FILTER_OPTIONS,
+              onChange: (value) => { setSourceFilter(value); setPage(1); },
+            },
+            {
+              key: 'result', ariaLabel: 'Result', anyLabel: 'All Results', value: resultFilter,
+              options: RESULT_FILTER_OPTIONS,
+              onChange: (value) => { setResultFilter(value); setPage(1); },
+            },
+          ]}
+          onClearExtras={() => { setJobVersionFilter(''); setVersionFilter(''); setSourceFilter(''); setResultFilter(''); }}
         />
 
         {/* Select All — same control, wording and placement as the assessment
@@ -353,16 +449,12 @@ export default function AIInterviewTrackInvitesModal({
                 onClick={toggleSelectAll}
                 className="flex items-center gap-2 text-xs sm:text-sm text-gray-600 dark:text-slate-400 hover:text-brand-blue transition-colors"
               >
-                <span
-                  role="checkbox"
-                  aria-checked={allSelected}
-                  className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
-                    allSelected
-                      ? 'bg-brand-blue border-brand-blue'
-                      : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600'
-                  }`}
-                >
-                  {allSelected && <Check className="w-3 h-3 text-white" />}
+                <span role="checkbox" aria-checked={allSelected} className="p-1 flex-shrink-0">
+                  {allSelected ? (
+                    <CheckSquare className="w-4 h-4 text-brand-blue" />
+                  ) : (
+                    <Square className="w-4 h-4 text-gray-400" />
+                  )}
                 </span>
                 Select All ({selectableIds.length})
               </button>
@@ -372,7 +464,7 @@ export default function AIInterviewTrackInvitesModal({
 
             <div className="flex items-center gap-2">
               {/* Bulk Resend — appears once something is ticked. */}
-              {selectedIds.size > 0 && (
+              {bulkResendMode && selectedIds.size > 0 && (
                 <Button
                   variant="primary"
                   size="sm"
@@ -408,12 +500,13 @@ export default function AIInterviewTrackInvitesModal({
             isLoading={isLoading}
             hasActiveFilters={filtersActive}
             emptyHint="Use Send Invite to invite candidates to this job's AI interview."
-            jdShortId={jdShortId}
+            jobVersion={jobVersion}
+            interviewVersion={interviewVersion}
             onResend={(inv) => setResendTarget(inv)}
             resendingId={resendingId}
             onViewDetails={onViewResult}
-            selectedIds={selectedIds}
-            onToggleSelect={toggleSelectOne}
+            selectedIds={bulkResendMode ? selectedIds : undefined}
+            onToggleSelect={bulkResendMode ? toggleSelectOne : undefined}
             // Bulk-resend gating (Expired only), not the AI Interviews
             // page's revocable-only default.
             isSelectable={isBulkResendable}
@@ -457,7 +550,7 @@ export default function AIInterviewTrackInvitesModal({
           }
           confirmText={resendingId && resendingId === resendTarget?.id ? 'Sending…' : 'Yes, send new link'}
           cancelText="Cancel"
-          variant="warning"
+          variant="info"
         />
 
         {/* Bulk resend confirmation — selected Expired candidates only. */}
@@ -469,7 +562,7 @@ export default function AIInterviewTrackInvitesModal({
           description={`A fresh interview link will be emailed to ${selectedIds.size} selected candidate${selectedIds.size === 1 ? '' : 's'}. Each candidate's previous link will stop working immediately.`}
           confirmText={isBulkResending ? 'Sending…' : `Yes, resend to ${selectedIds.size}`}
           cancelText="Cancel"
-          variant="warning"
+          variant="info"
         />
 
         {/* Footer — stacks on phones; First/Last drop out below sm. Nothing to

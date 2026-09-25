@@ -1,6 +1,9 @@
 'use client';
 
 import { X, Mail, Plus, Trash2, Send, CheckCircle, Copy, Clock, FileText, Users, Upload, Database, AlertTriangle, Loader2, FileSpreadsheet, MapPin, ShieldAlert, Info, FolderOpen, Folder, ChevronRight, ChevronDown } from 'lucide-react';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { VersionPill } from './AllInterviewsTable';
+import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import React, { useState, useEffect, useRef } from 'react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -56,6 +59,9 @@ interface ShareAIInterviewModalProps {
    * Read once on mount, so render this modal conditionally to refresh it.
    */
   initialCandidates?: { name: string; email: string; resumeId?: string }[];
+  /** This interview's version, shown in the header. Looked up from the
+   *  config list when the host does not pass it. */
+  interviewVersion?: number;
 }
 
 const ROUND_LABELS: Record<string, string> = {
@@ -69,9 +75,27 @@ const ROUND_LABELS: Record<string, string> = {
   nice_to_have_skills: 'Nice-to-Have Skills',
 };
 
-export default function ShareAIInterviewModal({ isOpen, onClose, config, onInviteSent, embedded = false, initialCandidates }: ShareAIInterviewModalProps) {
+export default function ShareAIInterviewModal({ isOpen, onClose, config, onInviteSent, embedded = false, initialCandidates, interviewVersion: interviewVersionProp }: ShareAIInterviewModalProps) {
   const { user } = useAuth();
   const { quotaData } = useQuota();
+
+  /* Interview version for the header. A config stores no number of its own —
+     it is this config's place among its job version's configs, which only
+     the full list can say — so it is looked up once per open unless the host
+     already knows it. The header simply omits it until then. */
+  const [lookedUpInterviewVersion, setLookedUpInterviewVersion] = useState<number | undefined>(undefined);
+  useEffect(() => {
+    if (!isOpen || interviewVersionProp != null || !config?.id || !config.jd_id) return;
+    let cancelled = false;
+    aiInterviewService
+      .listConfigs({ page: 1, page_size: 500, compact: true })
+      .then((res) => {
+        if (!cancelled) setLookedUpInterviewVersion(interviewVersionOrdinal(config, res.items ?? []));
+      })
+      .catch(() => { /* Header shows the job version only. */ });
+    return () => { cancelled = true; };
+  }, [isOpen, interviewVersionProp, config?.id, config?.jd_id]);
+  const interviewVersion = interviewVersionProp ?? lookedUpInterviewVersion;
 
   // Quota stats state
   const [quotaStats, setQuotaStats] = useState<{
@@ -271,10 +295,6 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     });
   };
 
-  if (!isOpen) return null;
-
-  const enabledRounds = config.rounds_config ? config.rounds_config.filter((r: any) => r.enabled !== false) : [];
-
   /* Candidate rows are paged with the project's ListPagination — 5 a page by
      default, so a long prefilled list (25 resumes from My Resumes) doesn't
      push the rest of the dialog out of reach. */
@@ -286,6 +306,11 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
     (candidateSafePage - 1) * candidatePageSize,
     candidateSafePage * candidatePageSize,
   );
+
+  // Early return must stay below every hook call (Rules of Hooks).
+  if (!isOpen) return null;
+
+  const enabledRounds = config.rounds_config ? config.rounds_config.filter((r: any) => r.enabled !== false) : [];
 
   const addCandidate = () => {
     setCandidates([
@@ -969,7 +994,24 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             </div>
             <div className="min-w-0">
               <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate">Send AI Interview via Email</h2>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 truncate">{config.jd_title || config.position} — AI Interview</p>
+              {/* JD ID, the job title, then its job version — which job (and
+                  which version of it) these invitations are for. */}
+              <p className="flex items-center gap-2 mt-0.5 text-xs sm:text-sm text-gray-600 dark:text-slate-400 min-w-0">
+                {config.jd_short_id && <JobIdBadge className="flex-shrink-0">{config.jd_short_id}</JobIdBadge>}
+                <span className="truncate">{config.jd_title || config.position}</span>
+                {config.jd_id && (
+                  <span className="inline-flex items-center gap-1.5 flex-shrink-0" title="Job version">
+                    -
+                    <VersionPill kind="job" version={config.jd_version ?? 1} />
+                  </span>
+                )}
+                {interviewVersion != null && (
+                  <span className="inline-flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap">
+                    Interview Version -
+                    <VersionPill kind="interview" version={interviewVersion} />
+                  </span>
+                )}
+              </p>
             </div>
           </div>
           {!embedded && (

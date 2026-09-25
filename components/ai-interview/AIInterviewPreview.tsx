@@ -162,11 +162,11 @@ function SectionCard({
   const [open, setOpen] = useState(defaultOpen);
   return (
     <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
-      <div className="flex items-center gap-3 px-5 py-3.5 border-b border-gray-100 bg-slate-50/60">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 sm:px-5 py-3.5 border-b border-gray-100 bg-slate-50/60">
         <div className="w-10 h-10 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
           <Icon className="w-5 h-5 text-brand-blue" />
         </div>
-        <h3 className="text-sm font-semibold text-gray-800 tracking-tight">{title}</h3>
+        <h3 className="min-w-0 break-words text-sm font-semibold text-gray-800 tracking-tight">{title}</h3>
         {badge}
         <div className="ml-auto flex items-center gap-2">
           {action}
@@ -181,7 +181,7 @@ function SectionCard({
           </button>
         </div>
       </div>
-      {open && <div className="p-5">{children}</div>}
+      {open && <div className="p-4 sm:p-5">{children}</div>}
     </div>
   );
 }
@@ -202,9 +202,9 @@ function EditInConfigureButton({ onClick }: { onClick: () => void }) {
 
 function InfoRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-start justify-between py-2">
-      <span className="text-sm text-gray-500">{label}</span>
-      <span className="text-sm font-medium text-gray-900 text-right">{value}</span>
+    <div className="flex items-start justify-between gap-3 py-2">
+      <span className="text-sm text-gray-500 flex-shrink-0">{label}</span>
+      <span className="min-w-0 break-words text-sm font-medium text-gray-900 text-right">{value}</span>
     </div>
   );
 }
@@ -510,8 +510,8 @@ export default function AIInterviewPreview() {
                 </p>
 
                 {/* What was published */}
-                <div className="mt-8 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-slate-50/60 p-4 sm:p-5 text-left flex items-start gap-4">
-                  <div className="w-14 h-14 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
+                <div className="mt-8 rounded-xl border border-gray-100 ring-1 ring-black/[0.02] bg-slate-50/60 p-4 sm:p-5 text-left flex items-start gap-3 sm:gap-4">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                     <Bot className="w-7 h-7 text-brand-blue" />
                   </div>
                   <div className="min-w-0">
@@ -586,7 +586,7 @@ export default function AIInterviewPreview() {
           card so both steps of the flow line up at the same width and gutters. */}
       <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
         <div className="mx-auto w-full max-w-[1400px]">
-          <div className="p-4 md:p-8 pb-24 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
+          <div className="p-4 md:p-8 pb-52 sm:pb-24 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
             <PageBreadcrumb
               className="mb-4 md:mb-6"
               items={
@@ -666,7 +666,7 @@ export default function AIInterviewPreview() {
             record carries; what it does not carry (employment type, posted
             date, author) the summary simply leaves out. */}
         <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/5 px-4 py-3.5">
-          <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
             <div className="min-w-0 flex-1">
               <JobOpeningSummary job={jdAsJob} mergeInfoRows />
             </div>
@@ -745,8 +745,8 @@ export default function AIInterviewPreview() {
                   <Clock className="w-4 h-4 text-brand-blue" />
                   <h4 className="text-sm font-semibold text-gray-800 tracking-tight">Time Allocation</h4>
                 </div>
-                <div className="overflow-hidden rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
-                  <table className="w-full text-sm">
+                <div className="overflow-x-auto rounded-lg border border-gray-100 ring-1 ring-black/[0.02]">
+                  <table className="w-full min-w-[360px] text-sm">
                     <thead>
                       <tr className="bg-slate-50 text-left">
                         <th className="px-4 py-2.5 font-medium text-gray-600">Round</th>
@@ -827,9 +827,9 @@ export default function AIInterviewPreview() {
                   <div className="space-y-3">
                     {mthClusters.map(cluster => (
                       <div key={cluster.id} className="border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-4 bg-white hover:border-brand-blue/30 hover:shadow-sm hover:shadow-brand-blue/10 transition-all">
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
                           <PriorityBadge p={cluster.priority} />
-                          <span className="text-sm font-semibold text-gray-900">{cluster.name}</span>
+                          <span className="min-w-0 break-words text-sm font-semibold text-gray-900">{cluster.name}</span>
                           <span className="text-xs text-gray-400 ml-auto">
                             {cluster.skills.length} skill{cluster.skills.length !== 1 ? 's' : ''}
                           </span>
@@ -857,9 +857,9 @@ export default function AIInterviewPreview() {
                   <div className="space-y-3">
                     {nthClusters.map(cluster => (
                       <div key={cluster.id} className="border border-gray-100 ring-1 ring-black/[0.02] rounded-lg p-4 bg-white hover:border-brand-cyan/30 hover:shadow-sm hover:shadow-brand-cyan/10 transition-all">
-                        <div className="flex items-center gap-2 mb-2">
+                        <div className="flex flex-wrap items-center gap-2 mb-2">
                           <PriorityBadge p={cluster.priority} />
-                          <span className="text-sm font-semibold text-gray-900">{cluster.name}</span>
+                          <span className="min-w-0 break-words text-sm font-semibold text-gray-900">{cluster.name}</span>
                           <span className="text-xs text-gray-400 ml-auto">
                             {cluster.skills.length} skill{cluster.skills.length !== 1 ? 's' : ''}
                           </span>
@@ -944,7 +944,7 @@ export default function AIInterviewPreview() {
               )}
             </div>
 
-            <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+            <div className="flex flex-wrap items-center justify-between gap-3 px-3.5 py-2.5">
               <span className="text-sm text-gray-600">Introduction Video</span>
               {interview.introduction_video_url ? (
                 <div className="flex items-center gap-2">
@@ -969,7 +969,7 @@ export default function AIInterviewPreview() {
             </div>
 
             <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
-              <span className="text-sm text-gray-600">Languages</span>
+              <span className="text-sm text-gray-600 flex-shrink-0">Languages</span>
               <div className="flex flex-wrap items-center gap-1.5 justify-end">
                 {languages.map(lang => (
                   <span
@@ -1004,7 +1004,7 @@ export default function AIInterviewPreview() {
             <div className="divide-y divide-gray-50">
               <div className="px-3 py-2 flex items-start justify-between gap-2">
                 <span className="text-xs text-gray-500 flex-shrink-0">Role Title</span>
-                <span className="text-xs font-semibold text-gray-900 text-right">{position}</span>
+                <span className="min-w-0 break-words text-xs font-semibold text-gray-900 text-right">{position}</span>
               </div>
               {interview.jd_short_id && (
                 <div className="px-3 py-2 flex items-start justify-between gap-2">
@@ -1138,15 +1138,16 @@ export default function AIInterviewPreview() {
           max-w-[1400px] div so it lines up with the content card and leaves no
           white bleed in the side margins. */}
       <div className="fixed bottom-0 left-0 right-0 z-40">
-        <div className="mx-auto w-full max-w-[1400px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 ring-1 ring-black/[0.02] shadow-lg shadow-brand-blue/5 rounded-t-2xl px-4 md:px-8 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
+        <div className="mx-auto w-full max-w-[1400px] bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-800 ring-1 ring-black/[0.02] shadow-lg shadow-brand-blue/5 rounded-t-2xl px-4 md:px-8 py-3 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
+          <div className="flex items-center justify-between sm:justify-start gap-2">
             <Button variant="secondary" size="md" onClick={goBack} icon={<ArrowLeft className="w-4 h-4" />}>
               Back to Clusters
             </Button>
             <WizardDiscardButton onClick={handleDiscard} />
           </div>
-          <div className="flex items-center gap-2">
-            <Button variant="secondary" size="md" onClick={handleSaveAsDraft}>
+          {/* Phones stack the two actions full-width, Publish on top. */}
+          <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2">
+            <Button variant="secondary" size="md" onClick={handleSaveAsDraft} className="w-full sm:w-auto justify-center">
               Save as Draft
             </Button>
             <Button
@@ -1154,6 +1155,7 @@ export default function AIInterviewPreview() {
               size="md"
               onClick={() => setShowConfirm(true)}
               disabled={publishing}
+              className="w-full sm:w-auto justify-center"
               icon={publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
             >
               {publishing ? 'Publishing...' : (
