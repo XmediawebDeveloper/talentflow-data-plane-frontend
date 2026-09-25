@@ -36,6 +36,7 @@ import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Button } from '@/components/ui/button';
 
 /* Same batch size and same reason as the Assessments dashboard's own list: the
@@ -65,6 +66,7 @@ interface AssessmentRow {
   rawStatus: string;         // draft | published | closed | archived
   status: string;            // Draft | Active | Completed | Archived  -> column 5
   invitations: number;       //                   -> column 6
+  completed: number;         // completed_count   -> column 7 (candidates who completed it)
   createdAt: string;         // ISO               -> column 7
   createdSort: number;       // epoch ms, so the sort never re-parses
   createdBy: string;         //                   -> column 8
@@ -96,6 +98,7 @@ const toRow = (a: AssessmentResponse): AssessmentRow => {
     rawStatus: raw,
     status: STATUS_LABEL[raw] || 'Draft',
     invitations: a.invitations_count ?? 0,
+    completed: a.completed_count ?? 0,
     createdAt: a.created_at,
     createdSort: parseIST(a.created_at).getTime() || 0,
     createdBy: a.created_by_name || 'System',
@@ -132,7 +135,7 @@ function StatusBadge({ status }: { status: string }) {
    same roles, as the Assessment Version History panel's chips, so a V3 means
    the same thing and looks the same wherever it is read. Kept as a compact
    mono-width pill so a column of them lines up. */
-function VersionPill({ kind, version }: { kind: 'job' | 'assessment'; version: number }) {
+export function VersionPill({ kind, version }: { kind: 'job' | 'assessment'; version: number }) {
   return (
     <span
       className={`inline-flex items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 ${
@@ -160,7 +163,7 @@ function CreatedBy({ name }: { name: string }) {
     .join('') || '?';
 
   return (
-    <span className="inline-flex items-center gap-2 min-w-0">
+    <span className="inline-flex items-center gap-2 min-w-0 max-w-[12rem]">
       <span
         aria-hidden="true"
         className="h-6 w-6 flex-shrink-0 rounded-full bg-slate-100 dark:bg-slate-700/60 text-2xs font-semibold text-slate-600 dark:text-slate-300 flex items-center justify-center ring-1 ring-slate-200 dark:ring-slate-600"
@@ -182,7 +185,7 @@ function CreatedBy({ name }: { name: string }) {
    column that sorts backwards. */
 type SortKey =
   | 'jobId' | 'jobName' | 'jobVersion' | 'assessmentVersion'
-  | 'status' | 'invitations' | 'createdAt' | 'createdBy';
+  | 'status' | 'invitations' | 'completed' | 'createdAt' | 'createdBy';
 
 const text = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
 
@@ -199,6 +202,7 @@ const COMPARATORS: Record<SortKey, (a: AssessmentRow, b: AssessmentRow) => numbe
     return order.indexOf(a.status) - order.indexOf(b.status);
   },
   invitations: (a, b) => a.invitations - b.invitations,
+  completed: (a, b) => a.completed - b.completed,
   createdAt: (a, b) => a.createdSort - b.createdSort,
   createdBy: (a, b) => text(a.createdBy, b.createdBy),
 };
@@ -222,6 +226,7 @@ const COLUMNS: ColumnDef[] = [
   { key: 'assessmentVersion', label: 'Assessment Version' },
   { key: 'status', label: 'Status' },
   { key: 'invitations', label: 'Invitations Sent', align: 'right' },
+  { key: 'completed', label: 'Completed', align: 'right' },
   { key: 'createdAt', label: 'Created On' },
   { key: 'createdBy', label: 'Created By', hideBelow: 'lg' },
 ];
@@ -263,6 +268,13 @@ interface AllAssessmentsTableProps {
   fixedStatus?: FixedAssessmentStatus;
   title?: string;
   description?: string;
+  /** Bumped by the page's Clear Sort button (next to the Settings tab, outside
+   *  this table): each new value puts the sort back to its default. Only the
+   *  sort — search, filters and the page stay as they are. */
+  clearSortSignal?: number;
+  /** Told whether the sort is at its default, so Clear Sort can disable
+   *  itself when there is nothing to clear. */
+  onSortDefaultChange?: (isDefault: boolean) => void;
 }
 
 const fixedStatusLabel = (status?: FixedAssessmentStatus) =>
@@ -271,7 +283,11 @@ const fixedStatusLabel = (status?: FixedAssessmentStatus) =>
       : status === 'archived' ? 'Archived'
         : undefined;
 
-export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description }: AllAssessmentsTableProps = {}) {
+/* The order a tab opens in — newest first — and what Clear Sort returns to. */
+const DEFAULT_SORT_KEY: SortKey = 'createdAt';
+const DEFAULT_SORT_DIR: 'asc' | 'desc' = 'desc';
+
+export default function AllAssessmentsTable({ embedded = false, fixedStatus, title, description, clearSortSignal, onSortDefaultChange }: AllAssessmentsTableProps = {}) {
   const router = useRouter();
   const { isTenantAdmin, user } = useAuth();
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
@@ -310,11 +326,26 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   const [filters, setFilters] = useState<Filters>(EMPTY_FILTERS);
   const [filtersOpen, setFiltersOpen] = useState(false);
 
-  const [sortKey, setSortKey] = useState<SortKey>('createdAt');
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const [sortKey, setSortKey] = useState<SortKey>(DEFAULT_SORT_KEY);
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>(DEFAULT_SORT_DIR);
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+
+  /* Clear Sort. The first value is whatever the signal was when this tab
+     mounted, so arriving on a tab never clears anything — only a click does. */
+  const lastClearSortSignal = useRef(clearSortSignal);
+  useEffect(() => {
+    if (clearSortSignal === lastClearSortSignal.current) return;
+    lastClearSortSignal.current = clearSortSignal;
+    setSortKey(DEFAULT_SORT_KEY);
+    setSortDir(DEFAULT_SORT_DIR);
+  }, [clearSortSignal]);
+
+  const isDefaultSort = sortKey === DEFAULT_SORT_KEY && sortDir === DEFAULT_SORT_DIR;
+  useEffect(() => {
+    onSortDefaultChange?.(isDefaultSort);
+  }, [isDefaultSort, onSortDefaultChange]);
 
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
@@ -594,7 +625,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
     /* A new column opens in its most useful direction rather than always
        ascending: dates and counts are read newest-/largest-first, names and
        ids A-Z. */
-    setSortDir(key === 'createdAt' || key === 'invitations' ? 'desc' : 'asc');
+    setSortDir(key === 'createdAt' || key === 'invitations' || key === 'completed' ? 'desc' : 'asc');
   };
 
   /* ── Actions ─────────────────────────────────────────────────────────────
@@ -604,20 +635,23 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
      same `canUpdateAssessments` permission the dashboard's edit path checks,
      so the menu cannot offer an action the next screen refuses. */
   const rowActions = (row: AssessmentRow) => {
-    const actions: { key: string; label: string; icon: typeof Eye; run: () => void }[] = [
+    /* `iconClassName` is the ⋮-menu icon token for the action — the
+       `text-menu-icon-*` set the Invitation Status tab's menu colours its
+       icons with (globals.css), so View reads the same blue there and here. */
+    const actions: { key: string; label: string; icon: typeof Eye; iconClassName: string; run: () => void }[] = [
       {
-        key: 'view', label: 'View', icon: Eye,
+        key: 'view', label: 'View', icon: Eye, iconClassName: 'text-menu-icon-view',
         run: () => router.push(`/recruitment/assessments/${row.id}`),
       },
     ];
     if (row.rawStatus === 'draft' && canUpdateAssessment) {
       actions.push({
-        key: 'edit', label: 'Edit', icon: Pencil,
+        key: 'edit', label: 'Edit', icon: Pencil, iconClassName: 'text-menu-icon-edit',
         run: () => router.push(`/recruitment/assessments/create?edit=${row.id}`),
       });
     }
     actions.push({
-      key: 'history', label: 'View History', icon: History,
+      key: 'history', label: 'View History', icon: History, iconClassName: 'text-menu-icon-secondary',
       run: () => router.push(`/recruitment/assessments/${row.id}?tab=versions`),
     });
     return actions;
@@ -979,21 +1013,17 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         </td>
 
                         {/* 2. Job Name — the row's anchor, so it carries the
-                            weight. Truncated with the full name in `title`,
-                            and the assessment's own title on the second line:
-                            two assessments of one job differ only by that. */}
-                        <td className="px-3 py-2.5 align-middle max-w-[16rem]">
+                            weight. The job name only, truncated with the full
+                            name in `title`. */}
+                        <td className="px-3 py-2.5 align-middle">
+                          {/* The cap sits on the span: a table cell's own
+                              max-width is ignored, so on the td it let a long
+                              job name widen the column uncut. */}
                           <span
-                            className="block truncate font-medium text-gray-900 dark:text-slate-50"
+                            className="block max-w-[16rem] truncate font-medium text-gray-900 dark:text-slate-50"
                             title={row.jobName}
                           >
                             {row.jobName}
-                          </span>
-                          <span
-                            className="block truncate text-xs text-gray-500 dark:text-slate-500"
-                            title={row.assessmentId ? `${row.assessmentId} · ${row.title}` : row.title}
-                          >
-                            {row.assessmentId ? `${row.assessmentId} · ${row.title}` : row.title}
                           </span>
                         </td>
 
@@ -1022,6 +1052,19 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                           <span className="text-xs text-gray-400 ml-1">sent</span>
                         </td>
 
+                        {/* 7. Completed — candidates who completed this
+                            assessment (`completed_count`), in the same
+                            right-aligned tabular figures as Invitations Sent
+                            beside it, with "Completed" muted after the
+                            number — whatever the count — the way "sent"
+                            follows that one. */}
+                        <td className="px-3 py-2.5 align-middle text-right whitespace-nowrap">
+                          <span className="tabular-nums text-gray-900 dark:text-slate-100">
+                            {row.completed.toLocaleString()}
+                          </span>
+                          <span className="text-xs text-gray-400 ml-1">Completed</span>
+                        </td>
+
                         {/* 7. Created On — date AND time, fixed width. */}
                         <td className="px-3 py-2.5 align-middle">
                           <span className="text-gray-600 dark:text-slate-400 tabular-nums">
@@ -1030,7 +1073,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                         </td>
 
                         {/* 8. Created By */}
-                        <td className={`px-3 py-2.5 align-middle max-w-[12rem] ${HIDE_CLASS.lg}`}>
+                        <td className={`px-3 py-2.5 align-middle ${HIDE_CLASS.lg}`}>
                           <CreatedBy name={row.createdBy} />
                         </td>
 
@@ -1056,10 +1099,10 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-44">
-                              {rowActions(row).map(({ key, label, icon: Icon, run }) => (
+                              {rowActions(row).map(({ key, label, icon: Icon, iconClassName, run }) => (
                                 <DropdownMenuItem key={key} onClick={run} className="gap-2">
-                                  <Icon className="w-4 h-4" />
-                                  {label}
+                                  <Icon className={`w-4 h-4 ${iconClassName}`} />
+                                  <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
                                 </DropdownMenuItem>
                               ))}
                             </DropdownMenuContent>

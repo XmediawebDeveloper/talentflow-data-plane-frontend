@@ -237,6 +237,25 @@ const collapseRepeatedExpiries = (sorted: TimelineEntry[]): TimelineEntry[] => {
 
 const FALLBACK_MATCH_WINDOW_MS = 2 * 60 * 1000;
 
+/** The exact-duplicate filter in buildFullTimeline only catches the same
+ *  action at the same millisecond. The same event also arrives twice a few
+ *  seconds apart — logged by two layers, or once under each of two actions
+ *  that read the same (a send and its resend row are both "Invited") — and
+ *  prints as two identical lines. So back-to-back entries with the same
+ *  label inside this window are one event: the earliest is kept. Only
+ *  neighbours in time order merge, so a genuine repeat (Invited -> Revoked
+ *  -> Invited, even within the minute) keeps every line. */
+const DUPLICATE_EVENT_WINDOW_MS = 60 * 1000;
+const collapseRepeatedEvents = (sorted: TimelineEntry[]): TimelineEntry[] =>
+  sorted.filter((entry, i) => {
+    const prev = sorted[i - 1];
+    return !(
+      prev &&
+      prev.label === entry.label &&
+      eventMs(entry.at) - eventMs(prev.at) <= DUPLICATE_EVENT_WINDOW_MS
+    );
+  });
+
 /** Chronological order isn't quite the same as raw timestamp order in ONE
  *  known case: "Invite Failed" is written by the service layer before
  *  "Invited" is written by the router further up the call stack for the
@@ -349,16 +368,17 @@ const buildFullTimeline = (
   // Every derivation above (inference, dedup, collapse) assumes ascending
   // input, so the reverse — most recent event first — happens only here, on
   // the way out.
-  return collapseRepeatedExpiries(merged).reverse();
+  return collapseRepeatedExpiries(collapseRepeatedEvents(merged)).reverse();
 };
 
-/** Compact per-row timeline preview — capped at the 4 most recent events
- *  (newest first, matching the full history); older ones drop off the cell
- *  but stay reachable via "View full history", which reads the uncapped
- *  trail separately. */
+/** The per-row Timeline cell: the 4 most recent events, printed oldest
+ *  first so the latest update is always the bottom line — and the bottom
+ *  status line is what `latestTimelineStatus` puts in the Status column.
+ *  Older events drop off the cell, not the trail: "View full history" opens
+ *  every one of them. */
 const COMPACT_TIMELINE_LIMIT = 4;
 export const timelineEvents = (inv: any): TimelineEntry[] =>
-  buildFullTimeline(inv, inv.timeline || []).slice(0, COMPACT_TIMELINE_LIMIT);
+  buildFullTimeline(inv, inv.timeline || []).slice(0, COMPACT_TIMELINE_LIMIT).reverse();
 
 /** Timeline entry label -> the status key it puts an invitation in (the keys
  *  the status badge and the Invitation Status tabs use). Only entries that ARE
@@ -408,9 +428,8 @@ const TIMELINE_EVENT_DESCRIPTION: Record<string, string> = {
 };
 
 /** "View full history" only earns its place once something is actually
- *  hidden by the cap above — at 4 events or fewer the compact list already
- *  shows everything, so the link would open a modal identical to what's
- *  already on screen. */
+ *  hidden by the cap above — at 4 events or fewer the cell already shows
+ *  everything, so the link would open a modal identical to what's on screen. */
 export const hasMoreTimelineHistory = (inv: any): boolean =>
   buildFullTimeline(inv, inv.timeline || []).length > COMPACT_TIMELINE_LIMIT;
 
@@ -755,7 +774,8 @@ export function RevokeInvitationDialog({ target, onClose, getAssessmentId, onRev
  *
  *  The trail is fetched fresh on open and merged with the one embedded in the
  *  row; `buildFullTimeline` drops exact duplicates (same action, same
- *  instant), so an event present in both appears once. */
+ *  instant) and back-to-back repeats of one event, so an event present in
+ *  both — or logged twice — appears once. */
 export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
   target: any | null;
   onClose: () => void;
@@ -789,21 +809,33 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
     }
   }
 
+
   return (
     <Dialog open={!!target} onOpenChange={(open) => { if (!open) onClose(); }}>
-      <DialogContent className="w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] sm:max-w-md p-4 sm:p-6">
+      <DialogContent className="w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] sm:max-w-lg p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Invitation History</DialogTitle>
           {/* Name, then the email — two candidates can share a name, and the
               email is what tells them apart. */}
+          {/* Name, then the invitation's email beside it — the one place the
+              popup names the address. */}
           <DialogDescription className="break-words">
-            {target?.candidate_name || target?.candidate_email || 'Candidate'}
+            
+            {target?.candidate_name || (!target?.candidate_email ? 'Candidate' : null)}
+            {target?.candidate_name && target?.candidate_email && ' — '}
+            {target?.candidate_email && <span className="break-all">{target.candidate_email}</span>}
+          
             {target?.candidate_name && target?.candidate_email && (
               <span className="text-gray-400 dark:text-slate-500"> · {target.candidate_email}</span>
             )}
           </DialogDescription>
         </DialogHeader>
-        <div className="overflow-y-auto max-h-[60dvh] -mx-1 px-1">
+        {/* flex-1 min-h-0: the list takes whatever height the dialog has
+            left under its header and scrolls inside it. A fixed cap alone let
+            header + list outgrow the dialog's own max height on short
+            screens, and the dialog's overflow-hidden then cut the last card
+            off. py-1 keeps the current card's ring clear of the scroll edge. */}
+        <div className="flex-1 min-h-0 overflow-y-auto max-h-[70dvh] -mx-1 px-1 py-1">
           {loading ? (
             <div className="flex items-center justify-center py-10">
               <Loader2 className="w-6 h-6 text-brand-blue animate-spin" />
@@ -837,9 +869,6 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
                       </div>
                       {TIMELINE_EVENT_DESCRIPTION[entry.label] && (
                         <p className="text-xs text-gray-600 dark:text-slate-400 break-words">{TIMELINE_EVENT_DESCRIPTION[entry.label]}</p>
-                      )}
-                      {entry.email && (
-                        <p className="text-xs text-gray-500 dark:text-slate-500 break-all">{entry.email}</p>
                       )}
                     </div>
                   </li>

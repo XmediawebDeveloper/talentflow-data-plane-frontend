@@ -1306,7 +1306,7 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
                       <Mic className="w-6 h-6 text-warning" />
                     </div>
                     <div>
-                      <p className="font-semibold text-gray-900">Microphone</p>
+                      <p className={T_CARD_TITLE}>Microphone</p>
                       <p className="text-sm text-gray-500">{micCheck.message}</p>
                     </div>
                   </div>

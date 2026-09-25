@@ -295,7 +295,7 @@ export function ConsentModal({ assessmentInfo, onAccept, onDecline }: ConsentMod
                   aria-describedby="proctoring-desc"
                 />
                 <span id="proctoring-desc">
-                  <strong className="text-gray-900">I consent to AI proctoring and monitoring</strong>
+                  <strong className={T_CARD_TITLE}>I consent to AI proctoring and monitoring</strong>
                   <br />
                   <span className="text-gray-700 text-sm">I understand that my activity will be tracked to ensure test integrity.</span>
                 </span>

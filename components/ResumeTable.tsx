@@ -98,8 +98,8 @@ export function ResumeTableSkeleton({ rows = 8 }: { rows?: number }) {
    gray-700 text, hover:bg-gray-50, px-3/py-2 rows, sharp corners, and a
    scale-on-hover label. Orange/red variants mirror that same menu's
    Disable Job / Delete Job treatment for Archive and Delete here. */
-const resumeActionMenuItemClass = 'group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50';
-const resumeActionMenuItemRedClass = 'group w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive-subtle';
+const resumeActionMenuItemClass = 'group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700';
+const resumeActionMenuItemRedClass = 'group w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive';
 // Drag item type for resumes
 const RESUME_DRAG_TYPE = 'RESUME';
 

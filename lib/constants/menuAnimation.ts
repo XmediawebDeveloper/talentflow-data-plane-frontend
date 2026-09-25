@@ -14,7 +14,7 @@
  * reuse on both the hand-rolled menus and the Radix `DropdownMenuItem` ones.
  */
 export const MENU_ITEM_SCALE_CLASS =
-  'inline-block origin-left transition-transform duration-150 ease-out group-hover:scale-[0.97] group-focus:scale-[0.97] group-data-[highlighted]:scale-[0.97]';
+  'menu-item-label inline-block origin-left transition-transform duration-150 ease-out group-hover:scale-[0.97] group-focus:scale-[0.97] group-data-[highlighted]:scale-[0.97]';
 
 /**
  * Hover/keyboard highlight for a Radix `DropdownMenuItem` in a ⋮ menu: a plain
