@@ -85,10 +85,14 @@ function AIInterviewResultsContent() {
   // Set when opened from a JD's Job Details page ("AI Interview → Result"), so
   // the breadcrumb and Back stay anchored to that job.
   const fromJobDetails = searchParams.get('from') === 'job-details';
+  // Opened from a version row's View Results: one version, so no version
+  // columns or filters. A job row's View Results carries no scope.
+  const versionScoped = searchParams.get('scope') === 'version';
 
   const [configTitle, setConfigTitle] = useState('');
   const [jdTitle, setJdTitle] = useState('');
   const [jdId, setJdId] = useState('');
+  const [jdShortId, setJdShortId] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -103,6 +107,7 @@ function AIInterviewResultsContent() {
           // Taken from the config rather than the URL — the JD this interview
           // belongs to is the authoritative link target for the breadcrumb.
           setJdId(response.jd_id || '');
+          setJdShortId(response.jd_short_id || '');
         } else {
           setError('AI Interview config not found');
         }
@@ -158,6 +163,8 @@ function AIInterviewResultsContent() {
       configId={configId}
       configTitle={configTitle}
       jdTitle={jdTitle}
+      jdShortId={jdShortId}
+      hideVersionDetails={versionScoped}
       onBack={handleBack}
       breadcrumbItems={breadcrumbItems}
     />
