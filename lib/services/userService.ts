@@ -339,20 +339,25 @@ export const userService = {
   /**
    * Get a single user by ID
    */
-  async getUser(userId: string): Promise<ApiUser> {
+  async getUser(userId: string, options?: { silent?: boolean }): Promise<ApiUser> {
     try {
-      console.log(`[USER SERVICE] Fetching user data for ID: ${userId}`);
+      if (!options?.silent) console.log(`[USER SERVICE] Fetching user data for ID: ${userId}`);
       const response = await api.get<ApiUser>(`/users/${userId}`);
-      console.log(`[USER SERVICE] Received user data:`, {
-        id: response.data.id,
-        email: response.data.email,
-        role: response.data.role,
-        permission_ids: response.data.permission_ids,
-        permission_count: response.data.permission_ids?.length || 0
-      });
+      if (!options?.silent) {
+        console.log(`[USER SERVICE] Received user data:`, {
+          id: response.data.id,
+          email: response.data.email,
+          role: response.data.role,
+          permission_ids: response.data.permission_ids,
+          permission_count: response.data.permission_ids?.length || 0
+        });
+      }
       return response.data;
     } catch (error) {
-      console.error(`[USER SERVICE] Error fetching user ${userId}:`, error);
+      // Callers that expect this to legitimately 403 for non-admins (e.g. a
+      // self-lookup with no users:read) pass silent so it doesn't surface as
+      // a "Console Error" in the dev overlay before their own catch discards it.
+      if (!options?.silent) console.error(`[USER SERVICE] Error fetching user ${userId}:`, error);
       throw new Error(handleApiError(error));
     }
   },

@@ -322,8 +322,20 @@ export default function ResumeViewPage() {
   const [versionPreviewUrl, setVersionPreviewUrl] = useState<string | null>(null);
   const [versionPreviewLabel, setVersionPreviewLabel] = useState<string>('');
 
-  const canShareResume = isTenantAdmin || hasPermissionCode('my_resumes:share');
-  const canDeleteResume = isTenantAdmin || hasPermission('canDeleteResumes') || hasPermissionCode('my_resumes:delete');
+  // Source-aware, same as hasAITalentMatchSourcePermission below: a resume
+  // opened from Internal Database must be gated by internal_db:* codes, not
+  // my_resumes:* — otherwise disabling Internal Database's own Delete/Share
+  // has no effect as long as My Resumes' Delete/Share stays enabled.
+  const canShareResume = isTenantAdmin || (
+    viewSource === 'resume-database'
+      ? hasPermissionCode('internal_db:share')
+      : hasPermissionCode('my_resumes:share')
+  );
+  const canDeleteResume = isTenantAdmin || (
+    viewSource === 'resume-database'
+      ? hasPermissionCode('internal_db:delete')
+      : hasPermission('canDeleteResumes') || hasPermissionCode('my_resumes:delete')
+  );
   const canApplyResumeToJob =
     hasPlanFeature('resume_scoring') &&
     (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')));
