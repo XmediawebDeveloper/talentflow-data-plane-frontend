@@ -3408,7 +3408,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             // Otherwise, show the full duplicate resolution modal here
             return {
               success: false,
-              error: `A resume for ${existingResume.candidate_name || 'this candidate'} already exists in your Internal Resume Database.`,
+              error: `A resume for ${existingResume.candidate_name || 'this candidate'} already exists in your Shared Resume Database.`,
               existingResume: {
                 id: existingResume.id,
                 candidateName: existingResume.candidate_name || existingResume.file_name || 'Unknown',

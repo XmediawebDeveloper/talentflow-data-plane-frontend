@@ -881,7 +881,7 @@ export default function StyleGuidePage() {
             <div className="space-y-8">
               <div>
                 <GuidelineNote>
-                  <strong>UI–UX Guidelines §6:</strong> "Two Clear Zones — My Resumes, Internal
+                  <strong>UI–UX Guidelines §6:</strong> "Two Clear Zones — My Resumes, Shared
                   Database. Search Must Be Always Visible — sticky search bar, filters collapse
                   into a drawer. Bulk Operations — checkbox-based selection, one-click bulk
                   upload/score/invite/download."
@@ -890,7 +890,7 @@ export default function StyleGuidePage() {
                 <Tabs defaultValue="my-resumes">
                   <TabsList>
                     <TabsTrigger value="my-resumes"><FolderOpen className="w-3.5 h-3.5" /> My Resumes</TabsTrigger>
-                    <TabsTrigger value="internal-db">Internal Database</TabsTrigger>
+                    <TabsTrigger value="internal-db">Shared Database</TabsTrigger>
                   </TabsList>
                 </Tabs>
                 <div className="mt-3 flex items-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 px-3 py-2 bg-white dark:bg-slate-900">

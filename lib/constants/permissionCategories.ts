@@ -107,7 +107,7 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
   },
   {
     id: 'internal_database',
-    name: 'Internal Database',
+    name: 'Shared Database',
     description: 'Shared resume database permissions',
     viewCode: 'internal_db:read',
     actions: [

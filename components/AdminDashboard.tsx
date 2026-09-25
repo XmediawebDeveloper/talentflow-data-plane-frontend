@@ -234,7 +234,7 @@ export default function AdminDashboard({
                   className="text-xs text-brand-cyan font-medium cursor-pointer hover:underline hover:text-brand-teal transition-colors"
                   onClick={() => router.push('/recruitment/resume-database?tab=internal-db')}
                 >
-                  {stats?.internal_db_resumes || 0} Internal DB
+                  {stats?.internal_db_resumes || 0} Shared Database
                 </span>
               </div>
             </div>

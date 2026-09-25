@@ -228,7 +228,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
       setInternalDbData((res.data?.items ?? []).map(mapResume));
       setInternalDbLoaded(true);
     } catch {
-      toast.error('Failed to load Internal Database');
+      toast.error('Failed to load Shared Database');
     } finally {
       setIsLoadingResumes(false);
     }
@@ -1392,7 +1392,7 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
                       }`}
                     >
                       <Database className="w-4 h-4" />
-                      Internal Database
+                      Shared Database
                       <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300">{internalDbData.length}</span>
                     </button>
                   )}
