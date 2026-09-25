@@ -26,7 +26,6 @@ import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { MENU_ITEM_SCALE_CLASS, MENU_ITEM_LIGHT_HIGHLIGHT_CLASS, MENU_PANEL_BORDER_CLASS } from '@/lib/constants/menuAnimation';
-import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 
 /** The page-size ladder this screen specifies (same ladder as the Assessments
  *  equivalent, so pagination reads the same across the two products). */
