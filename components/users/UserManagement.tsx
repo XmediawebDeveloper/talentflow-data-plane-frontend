@@ -812,6 +812,8 @@ export default function UserManagement() {
       console.log(`[DEBUG] Permission codes:`, Array.from(permissionCodes));
 
       if (isEdit) {
+        // TEMP DIAGNOSTIC — remove once the spurious-toast root cause is confirmed.
+        console.log(`[SELECT-ROLE] resolved roleId=${roleId}, applying ${permissionCodes.size} codes`, { timeStamp: performance.now() });
         setEditSelectedRoleId(roleId);
         setEditSelectedPermissionIds(permissionIds);
         setEditSelectedPermissionCodes(permissionCodes);
@@ -3035,7 +3037,18 @@ export default function UserManagement() {
                             (category.subCategories?.some(s => s.actions.some(a => editSelectedPermissionCodes.has(a.code))) ?? false)
                           : true;
 
-                        const toggleCategory = () => {
+                        const toggleCategory = (e?: React.MouseEvent) => {
+                          // TEMP DIAGNOSTIC — remove once the spurious-toast root cause is confirmed.
+                          console.log(`[TOGGLE-CATEGORY] fired for "${category.name}"`, {
+                            isTrusted: e?.isTrusted,
+                            eventType: e?.type,
+                            targetTag: (e?.target as HTMLElement | undefined)?.tagName,
+                            targetText: (e?.target as HTMLElement | undefined)?.textContent?.slice(0, 60),
+                            currentTargetTag: (e?.currentTarget as HTMLElement | undefined)?.tagName,
+                            activeElement: document.activeElement?.tagName,
+                            timeStamp: e?.timeStamp,
+                          });
+                          console.trace('[TOGGLE-CATEGORY] call stack');
                           if (isCategoryActive) {
                             // Block if any code in this category is required by another active permission
                             const allCategoryCodes = [

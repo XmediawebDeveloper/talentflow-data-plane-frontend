@@ -111,6 +111,7 @@ export interface Permission {
   // ---------------------------------------------------------------------------
   // Additional camelCase fields the UI relies on (User/Resume management).
   // ---------------------------------------------------------------------------
+  canViewUsers?: boolean;
   canCreateUsers?: boolean;
   canUpdateUsers?: boolean;
   canDeleteUsers?: boolean;
