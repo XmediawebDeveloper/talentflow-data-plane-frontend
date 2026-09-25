@@ -191,6 +191,18 @@ export function mapApiUserToUser(apiUser: ApiUser): User {
       // Settings & Admin — same legacy/granular fallback pattern
       canManageSettings: apiUser.permissions.can_manage_settings || (apiUser.permissions as any).can_view_settings || (apiUser.permissions as any).can_update_settings,
       canManageUsers: apiUser.permissions.can_manage_users || (apiUser.permissions as any).can_view_users,
+      // Granular Users permissions — the Users table's per-row action icons
+      // (Edit/Reset Password/Force Password Change/Disable toggle) each read
+      // one of these individually; without them here they silently stayed
+      // hidden for every non-tenant-admin user regardless of what was granted.
+      canViewUsers: (apiUser.permissions as any).can_view_users,
+      canCreateUsers: (apiUser.permissions as any).can_create_users,
+      canUpdateUsers: (apiUser.permissions as any).can_update_users,
+      canDeleteUsers: (apiUser.permissions as any).can_delete_users,
+      canDisableUsers: (apiUser.permissions as any).can_disable_users,
+      canResetUserPassword: (apiUser.permissions as any).can_reset_user_password,
+      canForcePasswordChange: (apiUser.permissions as any).can_force_password_change,
+      canAssignRoles: (apiUser.permissions as any).can_assign_roles,
       // RBAC03: Billing permissions — granular cascade writes *_granular only;
       // sidebar items "Usage & Quotas" / "Unit Disputes" read canViewUsage,
       // and "View Subscription & Billing" reads canViewBilling.
