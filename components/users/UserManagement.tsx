@@ -1061,17 +1061,31 @@ export default function UserManagement() {
     }
   };
 
-  // Select/Deselect all permissions for edit modal
+  // Select/Deselect all permissions for edit modal.
+  // NOTE: the actual checkbox/category UI and the save payload are both driven
+  // by `editSelectedPermissionCodes` (see toggleCategory / requestBody.permission_codes
+  // below) — not `editSelectedPermissionIds`, which nothing else reads. Toggling
+  // `editSelectedPermissionIds` here was a no-op that looked like it did nothing.
+  const getAllCustomPermissionCodes = (): string[] =>
+    CUSTOM_PERMISSION_CATEGORIES.flatMap(category => [
+      ...(category.viewCode ? [category.viewCode] : []),
+      ...(category.actions?.map(a => a.code) || []),
+      ...(category.subCategories?.flatMap(s => [
+        ...(s.viewCode ? [s.viewCode] : []),
+        ...s.actions.map(a => a.code),
+      ]) || []),
+    ]);
+
   const handleSelectAllEditPermissions = () => {
-    const allPermissionIds = allPermissions.map(p => p.id);
-    const allSelected = allPermissionIds.every(id => editSelectedPermissionIds.has(id));
+    const allCodes = getAllCustomPermissionCodes();
+    const allSelected = allCodes.every(code => editSelectedPermissionCodes.has(code));
 
     if (allSelected) {
       // Deselect all
-      setEditSelectedPermissionIds(new Set());
+      setEditSelectedPermissionCodes(new Set());
     } else {
       // Select all
-      setEditSelectedPermissionIds(new Set(allPermissionIds));
+      setEditSelectedPermissionCodes(new Set(allCodes));
     }
   };
 
@@ -2914,9 +2928,20 @@ export default function UserManagement() {
                       <Shield className="w-3.5 h-3.5 text-brand-blue" />
                       Permissions
                     </label>
-                    <span className="text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-0.5 rounded-full">
-                      {editSelectedPermissionCodes.size} active
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleSelectAllEditPermissions}
+                        className="text-2xs font-medium text-brand-blue hover:underline"
+                      >
+                        {getAllCustomPermissionCodes().every(code => editSelectedPermissionCodes.has(code))
+                          ? 'Deselect all'
+                          : 'Select all'}
+                      </button>
+                      <span className="text-xs font-semibold text-brand-blue bg-brand-blue/10 ring-1 ring-brand-blue/20 px-2 py-0.5 rounded-full">
+                        {editSelectedPermissionCodes.size} active
+                      </span>
+                    </div>
                   </div>
 
                   {isLoadingPermissions ? (

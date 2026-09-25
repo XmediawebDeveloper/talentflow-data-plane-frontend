@@ -109,8 +109,18 @@ export default function SelectSourceModal({
   // a hardcoded string (two instances would clobber each other's registration).
   const panelOwnerId = useId();
 
-  // Check if user has Internal DB access permission
-  const hasInternalDBAccess = user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false;
+  // Internal Database tab requires BOTH view access to Internal Database AND
+  // its own Score Resume sub-action (internal_db:score) — scoring is a
+  // distinct capability from browsing, same as My Resumes' own below, so an
+  // Owner can disable one source without touching the other (mirrors the
+  // per-source AI Talent Match permissions).
+  const hasInternalDBAccess =
+    (user?.permissions?.canAccessInternalDB || user?.permissions?.canViewInternalDB || false) &&
+    hasPermissionCode('internal_db:score');
+
+  // My Resumes tab used to be unconditional; now gated by its own Score
+  // Resume sub-action the same way.
+  const hasMyResumesScoreAccess = hasPermissionCode('my_resumes:score');
 
   // Check if user has scoring permission
   const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
@@ -127,7 +137,12 @@ export default function SelectSourceModal({
   const canShareMyResumes = isTenantAdmin || hasPermissionCode('my_resumes:share');
 
   // State
-  const [activeTab, setActiveTab] = useState<'my-resumes' | 'internal-db'>('my-resumes');
+  // Default to whichever source the Owner actually left enabled — falls
+  // back to 'internal-db' only when My Resumes' own Score Resume permission
+  // is off but Internal Database's is on.
+  const [activeTab, setActiveTab] = useState<'my-resumes' | 'internal-db'>(
+    hasMyResumesScoreAccess ? 'my-resumes' : (hasInternalDBAccess ? 'internal-db' : 'my-resumes')
+  );
   const [resumes, setResumes] = useState<Resume[]>([]);
   const [folders, setFolders] = useState<FolderType[]>([]);
   const [loading, setLoading] = useState(true);
@@ -994,6 +1009,8 @@ export default function SelectSourceModal({
         {/* Tabs */}
         <div className="border-b border-gray-100 dark:border-slate-700/60 px-3 sm:px-6 pt-3 sm:pt-4 bg-slate-50 dark:bg-slate-950 flex-shrink-0">
           <div className="flex gap-1 sm:gap-2">
+            {/* Only show My Resumes tab if the Owner granted its Score Resume sub-action */}
+            {hasMyResumesScoreAccess && (
             <button
               onClick={() => handleTabChange('my-resumes')}
               className={`px-3 sm:px-5 py-2 sm:py-3 text-xs sm:text-sm font-medium rounded-t-lg transition-all flex items-center gap-1.5 sm:gap-2 ${
@@ -1013,6 +1030,7 @@ export default function SelectSourceModal({
                 {tabCounts.myResumes ?? ''}
               </span>
             </button>
+            )}
             {/* Only show Internal Database tab if user has permission */}
             {hasInternalDBAccess && (
               <button
@@ -1046,6 +1064,7 @@ export default function SelectSourceModal({
             job-details page has no provider of its own. Nothing is actually
             draggable here (the table is rendered with `draggable={false}`);
             the provider only satisfies the hooks. */}
+        {(hasMyResumesScoreAccess || hasInternalDBAccess) ? (
         <DndProvider backend={HTML5Backend}>
         <div className="flex flex-1 overflow-hidden">
           {/* Left Sidebar — the My Resumes page's own FolderTree, so the
@@ -1278,6 +1297,11 @@ export default function SelectSourceModal({
           </div>
         </div>
         </DndProvider>
+        ) : (
+          <div className="flex-1 flex items-center justify-center p-10 text-center text-sm text-gray-500 dark:text-slate-400">
+            You don't have permission to score resumes from either source.
+          </div>
+        )}
 
         {/* Footer */}
         <div className="border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 px-4 sm:px-6 py-3 flex-shrink-0">

@@ -1,5 +1,6 @@
 import { Sparkles, MapPin, Briefcase, Building2, Calendar, FileText, User, Users, Clock, ArrowRight, History, DollarSign, Award, TrendingUp, Search, Filter, ChevronDown, X, LayoutGrid, List as ListIcon } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useAuth } from '@/lib/hooks/useAuth';
 import { formatISTDate } from '@/lib/utils/dateUtils';
 import type { Job as SharedJob } from '@/lib/types/types';
 /* The shared formatters, not local copies. Both fields arrive snake-cased from
@@ -110,6 +111,8 @@ export default function AITalentMatchPageJobsList({
   onViewHistory,
   onBack
 }: AITalentMatchPageJobsListProps) {
+  const { user, isTenantAdmin } = useAuth();
+  const canRunAiMatch = isTenantAdmin || (user?.permissions?.canRunAiMatch ?? false);
   const [showFilters, setShowFilters] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
@@ -535,7 +538,7 @@ export default function AITalentMatchPageJobsList({
                           but only appears once this job (or one of its
                           versions) is checked — every other row is disabled
                           until it's unchecked again. */}
-                      {isSelected && (
+                      {isSelected && canRunAiMatch && (
                         <div className="flex flex-col gap-2 flex-shrink-0 w-full sm:w-auto">
                           <Button
                             variant="primary"
