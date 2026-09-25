@@ -34,7 +34,7 @@ import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
 import api from '@/lib/services/api';
-import { formatISTDate } from '@/lib/utils/dateUtils';
+import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import ListPagination from '@/components/ListPagination';
 import RecordPager from '@/components/RecordPager';
@@ -1789,15 +1789,15 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                   </div>
                 </div>
                 <div className="flex items-center gap-4 text-sm text-gray-500 mt-2 ml-[60px]">
-                  <span className="flex items-center gap-1">
-                    <Clock className="w-3.5 h-3.5" />
-                    {formatDuration(eval_.duration_minutes || interview.duration_minutes)}
-                  </span>
                   {interview.completed_at && (
                     <span>
-                      Completed {formatISTDate(interview.completed_at)}
+                      Completed {formatISTDate(interview.completed_at)}, {formatISTTime(interview.completed_at).toLowerCase()}
                     </span>
                   )}
+                  <span className="flex items-center gap-1" title="Time taken">
+                    <Clock className="w-3.5 h-3.5" />
+                    Time taken: {formatDuration(eval_.duration_minutes || interview.duration_minutes)}
+                  </span>
                 </div>
               </div>
               {/* View Resume — always rendered, like the assessment result

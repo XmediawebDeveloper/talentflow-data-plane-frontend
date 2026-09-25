@@ -14,7 +14,7 @@ const ITEM_SUBTITLE: Record<string, string> = {
   'job-openings': 'Create & Manage JD',
   'resume-scoring': 'Score Candidates',
   'ai-talent-match': 'Rank Candidates',
-  'resume-database': 'My & Shared Resumes',
+  'resume-database': 'Resume Management',
   assessments: 'Test Skills & Coding',
   'ai-interviews': 'Live AI Interviews',
   'user-management': 'Manage Users',
