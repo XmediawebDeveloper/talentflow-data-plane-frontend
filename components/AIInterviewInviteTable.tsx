@@ -4,13 +4,15 @@ import { useState } from 'react';
 import type { LucideIcon } from 'lucide-react';
 import {
   X, Mail, Play, CheckCircle, Clock, Ban, Copy, Loader2, Users, Eye, Pencil,
-  MoreVertical, Check, Monitor, History, XCircle, FileText,
+  MoreVertical, Monitor, History, XCircle, FileText, Square, CheckSquare,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatIST } from '@/lib/utils/dateUtils';
-import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
+import { MENU_ITEM_SCALE_CLASS, MENU_ITEM_LIGHT_HIGHLIGHT_CLASS, MENU_ITEM_DESTRUCTIVE_HIGHLIGHT_CLASS, MENU_PANEL_BORDER_CLASS } from '@/lib/constants/menuAnimation';
 import { TRACKER_DIALOG_PLACEHOLDER_CLASS } from '@/lib/constants/trackerDialog';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -189,12 +191,13 @@ type TimelineEntry = { label: string; at: string; Icon: LucideIcon; tone: string
  *  silently collapsed a row's history down to just its latest state. The
  *  fallback inside buildFullTimeline still covers rows from before this
  *  field existed. */
-/** Compact view caps at the 4 most recent events (newest first, matching the
- *  full history) — older ones drop off the table cell but stay reachable via
- *  "View full history", which reads the uncapped trail separately. */
+/** Compact view caps at the 4 most recent events, still read oldest-first
+ *  (ascending, matching the full history) — older ones drop off the table
+ *  cell but stay reachable via "View full history", which reads the uncapped
+ *  trail separately. */
 const COMPACT_TIMELINE_LIMIT = 4;
 const timelineEvents = (inv: any): TimelineEntry[] =>
-  buildFullTimeline(inv, inv.timeline || []).slice(0, COMPACT_TIMELINE_LIMIT);
+  buildFullTimeline(inv, inv.timeline || []).slice(-COMPACT_TIMELINE_LIMIT);
 
 /** "View full history" only earns its place once something is actually
  *  hidden by the cap above — at 4 events or fewer the compact list already
@@ -388,10 +391,8 @@ const buildFullTimeline = (
   const merged = inferMissingExpiries(out, inv.expires_at && inv.invitation_sent_at ? new Date(inv.expires_at).getTime() - new Date(inv.invitation_sent_at).getTime() : 0, 'ai_interview_invite_expired').sort(
     compareTimelineEntries
   );
-  // Every derivation above (inference, dedup, collapse) assumes ascending
-  // input, so the reverse — most recent event first — happens only here, on
-  // the way out.
-  return collapseRepeatedExpiries(merged).reverse();
+  // Ascending — oldest event first, the order it happened in.
+  return collapseRepeatedExpiries(merged);
 };
 
 /** Badge wording and colours kept in one place so a recruiter reads the same
@@ -529,12 +530,12 @@ export interface AIInterviewInviteTableProps {
   showJobColumn?: boolean;
 
   /**
-   * Adds a "JD ID" column (desktop) / line (mobile) showing this job's short
-   * id next to every row — for a single-config tracker (the Track popup),
-   * where every invite shares the same job and `showJobColumn`'s per-row
-   * `_jd_short_id` is never populated.
+   * Job Version and Interview Version columns (desktop) / line (mobile) for a
+   * single-config tracker (the Track popup), where every invite belongs to the
+   * same interview and so shares both numbers. Omit both to show neither.
    */
-  jdShortId?: string;
+  jobVersion?: number;
+  interviewVersion?: number;
 
   /** Bulk selection. Omit both to render no checkbox column at all. */
   selectedIds?: Set<string>;
@@ -543,6 +544,10 @@ export interface AIInterviewInviteTableProps {
    *  Interviews page's bulk-revoke rule); the Job Details tracker passes its
    *  bulk-resend rule (Invited/Expired) instead. */
   isSelectable?: (inv: any) => boolean;
+  /** Optional Select All in the header (desktop table). Omit to leave the
+   *  header cell empty, as the Track dialogs do. */
+  allSelected?: boolean;
+  onToggleSelectAll?: () => void;
 
   /** Row actions. Each omitted callback simply drops that action from the menu,
    *  which is how the Job Details tracker stays read-only. */
@@ -561,10 +566,13 @@ export default function AIInterviewInviteTable({
   hasActiveFilters,
   emptyHint,
   showJobColumn = false,
-  jdShortId,
+  jobVersion,
+  interviewVersion,
   selectedIds,
   onToggleSelect,
   isSelectable,
+  allSelected = false,
+  onToggleSelectAll,
   onResend,
   onEdit,
   onRevoke,
@@ -668,8 +676,10 @@ export default function AIInterviewInviteTable({
     if (!selectable) return null;
     // A fixed-width slot even when this row can't be selected, so every avatar
     // below it stays on the same left edge.
-    if (!(isSelectable ?? isRevocableInvite)(inv)) return <span className="inline-block w-5 flex-shrink-0" />;
+    if (!(isSelectable ?? isRevocableInvite)(inv)) return <span className="inline-block w-6 flex-shrink-0" />;
     const checked = !!selectedIds?.has(inv.id);
+    // The CheckSquare / Square checkbox every AI Interviews tab uses, so the
+    // select column looks the same wherever it appears.
     return (
       <button
         type="button"
@@ -677,13 +687,13 @@ export default function AIInterviewInviteTable({
         aria-checked={checked}
         aria-label={`Select ${inv.candidate_name || inv.candidate_email || 'candidate'}`}
         onClick={(e) => { e.stopPropagation(); onToggleSelect?.(inv.id); }}
-        className={`w-5 h-5 rounded-full border flex items-center justify-center flex-shrink-0 transition-colors ${
-          checked
-            ? 'bg-brand-blue border-brand-blue'
-            : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-600 hover:border-brand-blue/50'
-        }`}
+        className="p-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700 flex-shrink-0"
       >
-        {checked && <Check className="w-3 h-3 text-white" />}
+        {checked ? (
+          <CheckSquare className="w-4 h-4 text-brand-blue" />
+        ) : (
+          <Square className="w-4 h-4 text-gray-400" />
+        )}
       </button>
     );
   };
@@ -755,7 +765,8 @@ export default function AIInterviewInviteTable({
                   {inv.candidate_cid && (
                     <p className="text-2xs font-medium text-gray-600 dark:text-slate-400 truncate">
                       {inv.candidate_cid}
-                      {jdShortId && <span className="text-gray-400 dark:text-slate-500"> &middot; {jdShortId}</span>}
+                      {jobVersion != null && <span className="text-gray-400 dark:text-slate-500"> &middot; Job V{jobVersion}</span>}
+                      {interviewVersion != null && <span className="text-gray-400 dark:text-slate-500"> &middot; Interview V{interviewVersion}</span>}
                     </p>
                   )}
                   {showJobColumn && inv._config_title && (
@@ -861,14 +872,46 @@ export default function AIInterviewInviteTable({
         <table className="w-max min-w-full">
           <thead>
             <tr className="border-b border-gray-200 dark:border-slate-700">
-              {selectable && <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left" aria-label="Select" />}
-              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">CID</th>
-              {jdShortId && (
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">JD ID</th>
+              {selectable && (
+                <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left" aria-label="Select">
+                  {onToggleSelectAll && (
+                    <button
+                      type="button"
+                      role="checkbox"
+                      aria-checked={allSelected}
+                      aria-label={allSelected ? 'Deselect all on this page' : 'Select all on this page'}
+                      title={allSelected ? 'Deselect all on this page' : 'Select all on this page'}
+                      onClick={onToggleSelectAll}
+                      className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800"
+                    >
+                      {allSelected ? (
+                        <CheckSquare className="w-4 h-4 text-brand-blue" />
+                      ) : (
+                        <Square className="w-4 h-4 text-gray-400" />
+                      )}
+                    </button>
+                  )}
+                </th>
               )}
+              <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">CID</th>
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Candidate</th>
+              {/* Track popup only: Job Version, then Interview Version. */}
+              {jobVersion != null && (
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Job Version</th>
+              )}
+              {interviewVersion != null && (
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Interview Version</th>
+              )}
+              {/* Four columns, not one compound cell — the Candidate Results
+                  tab's split: job id, job title, job version, interview
+                  version, each readable (and scannable) on its own. */}
               {showJobColumn && (
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Job / Interview</th>
+                <>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Job ID</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Job Title</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Job Version</th>
+                  <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider whitespace-nowrap">Interview Version</th>
+                </>
               )}
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Invite Source</th>
               <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 dark:text-slate-500 uppercase tracking-wider">Status</th>
@@ -911,12 +954,6 @@ export default function AIInterviewInviteTable({
                     {inv.candidate_cid || <span className="text-gray-400 dark:text-slate-500">—</span>}
                   </td>
 
-                  {jdShortId && (
-                    <td className="py-3 px-4 align-middle whitespace-nowrap text-xs font-medium text-gray-600 dark:text-slate-400">
-                      {jdShortId}
-                    </td>
-                  )}
-
                   <td className="py-3 px-4 align-middle whitespace-nowrap">
                     <div className="flex items-center gap-3">
                       <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center text-brand-blue font-medium text-xs flex-shrink-0">
@@ -935,15 +972,40 @@ export default function AIInterviewInviteTable({
                     </div>
                   </td>
 
-                  {showJobColumn && (
-                    <td className="py-3 px-4 align-middle max-w-[200px]">
-                      <p className="text-sm text-gray-700 dark:text-slate-300 truncate" title={inv._config_title || ''}>
-                        {inv._config_title || <span className="text-gray-400 dark:text-slate-500">—</span>}
-                      </p>
-                      {inv._jd_short_id && (
-                        <p className="text-xs text-gray-400 dark:text-slate-500 truncate">{inv._jd_short_id}</p>
-                      )}
+                  {jobVersion != null && (
+                    <td className="py-3 px-4 align-middle whitespace-nowrap">
+                      <VersionPill kind="job" version={jobVersion} />
                     </td>
+                  )}
+                  {interviewVersion != null && (
+                    <td className="py-3 px-4 align-middle whitespace-nowrap">
+                      <VersionPill kind="interview" version={interviewVersion} />
+                    </td>
+                  )}
+
+                  {showJobColumn && (
+                    <>
+                      <td className="py-3 px-4 align-middle whitespace-nowrap">
+                        {inv._jd_short_id
+                          ? <JobIdBadge>{inv._jd_short_id}</JobIdBadge>
+                          : <span className="text-gray-400 dark:text-slate-500">—</span>}
+                      </td>
+                      <td className="py-3 px-4 align-middle max-w-[200px]">
+                        <p className="text-sm text-gray-700 dark:text-slate-300 truncate" title={inv._config_title || ''}>
+                          {inv._config_title || <span className="text-gray-400 dark:text-slate-500">—</span>}
+                        </p>
+                      </td>
+                      <td className="py-3 px-4 align-middle whitespace-nowrap">
+                        {inv._jd_version != null
+                          ? <VersionPill kind="job" version={inv._jd_version} />
+                          : <span className="text-gray-400 dark:text-slate-500">—</span>}
+                      </td>
+                      <td className="py-3 px-4 align-middle whitespace-nowrap">
+                        {inv._interview_version != null
+                          ? <VersionPill kind="interview" version={inv._interview_version} />
+                          : <span className="text-gray-400 dark:text-slate-500">—</span>}
+                      </td>
+                    </>
                   )}
 
                   <td className="py-3 px-4 align-middle whitespace-nowrap text-xs font-medium text-gray-600 dark:text-slate-400">
@@ -1010,11 +1072,11 @@ export default function AIInterviewInviteTable({
                             <MoreVertical className="w-4 h-4" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-44">
+                        <DropdownMenuContent align="end" className={`w-44 ${MENU_PANEL_BORDER_CLASS}`}>
                           {actions.map(({ key, label, Icon, run, disabled, destructive, busy, iconClassName }) => (
                             <DropdownMenuItem
                               key={key}
-                              className="group"
+                              className={`group ${destructive ? MENU_ITEM_DESTRUCTIVE_HIGHLIGHT_CLASS : MENU_ITEM_LIGHT_HIGHLIGHT_CLASS}`}
                               disabled={disabled}
                               variant={destructive ? 'destructive' : 'default'}
                               onSelect={run}
@@ -1044,8 +1106,12 @@ export default function AIInterviewInviteTable({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Invitation History</DialogTitle>
-            <DialogDescription>
+            {/* Name, then the email — the Assessments history pop-up's header. */}
+            <DialogDescription className="break-words">
               {timelineTarget?.candidate_name || timelineTarget?.candidate_email || 'Candidate'}
+              {timelineTarget?.candidate_name && timelineTarget?.candidate_email && (
+                <span className="text-gray-400 dark:text-slate-500"> · {timelineTarget.candidate_email}</span>
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="overflow-y-auto max-h-[60vh] -mx-1 px-1">

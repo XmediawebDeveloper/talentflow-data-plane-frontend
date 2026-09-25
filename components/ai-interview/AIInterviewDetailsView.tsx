@@ -8,10 +8,11 @@ import {
   XCircle, Copy, Trash2, Archive, ArchiveRestore, GitBranch,
   Loader2, RefreshCw, Briefcase, Globe, ChevronRight, ChevronDown, Check, Brain, Sparkles,
   Layers, Pencil, Zap, Timer, FileText, Settings, CheckCircle2, Download,
-  QrCode, AlertCircle, ExternalLink, BarChart,
+  QrCode, AlertCircle, ExternalLink, BarChart, UserRound,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { jdService, type JDLineageVersion, type JDResponse } from '@/lib/services/jdService';
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
@@ -604,16 +605,6 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
     }
   }, []);
 
-  // Compute invitation stats from activity
-  const invitationStats = useMemo(() => {
-    const total = recentActivity.length;
-    const completed = recentActivity.filter(a => a.status === 'completed').length;
-    const inProgress = recentActivity.filter(a => a.status === 'in_progress').length;
-    const scores = recentActivity.filter(a => a.score != null).map(a => Number(a.score));
-    const avgScore = scores.length > 0 ? Math.round(scores.reduce((a, b) => a + b, 0) / scores.length) : null;
-    return { total, completed, inProgress, avgScore };
-  }, [recentActivity]);
-
   /* Interview Details → Configure Details, as one value so the Send Invite
      picker's preview (`configureOnly`) can render exactly this section. */
   const configureDetailsContent = (
@@ -1149,12 +1140,12 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
         <div className="bg-white dark:bg-slate-900 rounded-xl border border-brand-blue/30 dark:border-brand-blue/40 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
           <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
             <div className="flex-1 min-w-0">
-              {/* Row 1: AI-002  Title  Status */}
+              {/* Row 1: JD-151  Title  Status. The JD ID leads, in the badge
+                  every list uses for it — it replaced the AI-### interview id
+                  here, and with it the "Linked to JD-###" fact below. */}
               <div className="flex flex-wrap items-center gap-2 mb-2">
-                {config.display_id && (
-                  <span className="inline-flex items-center px-2 py-0.5 bg-blue-600 text-white rounded-md text-xs font-semibold font-mono tracking-wide">
-                    {config.display_id}
-                  </span>
+                {config.jd_short_id && (
+                  <JobIdBadge className="flex-shrink-0">{config.jd_short_id}</JobIdBadge>
                 )}
                 <h1 className="font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate">
                   {config.jd_title || config.position || 'Untitled'}
@@ -1162,15 +1153,15 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                 <Badge variant={getStatusVariant(config.status)}>{getStatusLabel(config.status)}</Badge>
               </div>
 
-              {/* Row 2: quiet bulleted facts */}
+              {/* Row 2: quiet bulleted facts. Experience level and the invite count
+                  are not repeated here: the Interview Info panel and the
+                  Invitation Status tab carry them. */}
               <div className="flex flex-wrap items-center gap-1.5 text-xs text-gray-600 dark:text-slate-400">
                 {([
-                  { key: 'linked-jd', icon: Briefcase, label: config.jd_short_id ? `Linked to ${config.jd_short_id}` : null },
-                  { key: 'level', icon: null, label: config.jd_experience_level || null },
                   { key: 'duration', icon: Clock, label: formattedDuration },
-                  { key: 'invites', icon: Users, label: `${invitationStats.total} invite${invitationStats.total !== 1 ? 's' : ''}` },
                   { key: 'created-at', icon: Calendar, label: config.created_at ? `Created ${formatIST(config.created_at)}` : null },
-                  { key: 'updated-at', icon: Calendar, label: config.updated_at ? `Updated ${formatIST(config.updated_at)}` : null },
+                  { key: 'created-by', icon: UserRound, label: config.created_by_name ? `By ${config.created_by_name}` : null },
+                  { key: 'updated-at', icon: Calendar, label: config.updated_at ? `Last Updated ${formatIST(config.updated_at)}` : null },
                 ] as { key: string; icon: typeof Clock | null; label: string | null }[])
                   .filter((fact) => !!fact.label)
                   .map((fact, i) => (
@@ -1184,9 +1175,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                   ))}
               </div>
 
-              {/* Row 3: mode/round/version badges, on their own line so they
-                  read as tags rather than crowding the plain-text facts
-                  above. */}
+              {/* Row 3: mode/round/version badges, on their own line below the facts. */}
               <div className="flex flex-wrap items-center gap-1.5 mt-2">
                 <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ring-1 ${
                   interviewMode === 'flexible'
@@ -1911,6 +1900,9 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               <TabHeading icon={BarChart} title="Results" />
               <AIInterviewResults
                 embedded
+                showStats
+                // This page is one interview version — the rows all share it.
+                hideVersionDetails
                 configId={config.id}
                 configTitle={config.position || config.jd_title || 'AI Interview'}
                 jdTitle={config.jd_title || ''}
@@ -1934,6 +1926,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               configId={config.id}
               jdTitle={config.jd_title || config.position || 'Untitled'}
               jdShortId={config.jd_short_id}
+              hideVersionDetails
               // Completed rows offer View Result — swap the popup for the
               // same inline candidate result view the Results tab opens.
               onViewResult={(inv) => handleCandidateClick(inv.id)}
@@ -1949,6 +1942,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
         <ShareAIInterviewModal
           isOpen={showShareModal}
           config={config}
+          interviewVersion={interviewVersionOrdinal}
           onClose={() => setShowShareModal(false)}
           onInviteSent={() => { loadActivity(); }}
         />

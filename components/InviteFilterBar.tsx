@@ -16,11 +16,25 @@ export interface InviteStatusOption {
   label: string;
 }
 
+/** An extra dropdown drawn after Status — the AI Interview tracker's JD ID and
+ *  Interview Version filters. '' is its "any" value. */
+export interface InviteFilterExtraSelect {
+  key: string;
+  ariaLabel: string;
+  anyLabel: string;
+  value: string;
+  options: InviteStatusOption[];
+  onChange: (value: string) => void;
+}
+
 interface InviteFilterBarProps {
   filters: InviteFilterState;
   onChange: (nextFilters: InviteFilterState) => void;
   statusOptions: InviteStatusOption[];
   searchPlaceholder?: string;
+  /** Extra dropdowns after Status. Clear Filters resets them via onClearExtras. */
+  extraSelects?: InviteFilterExtraSelect[];
+  onClearExtras?: () => void;
 }
 
 /**
@@ -59,6 +73,9 @@ export const AI_INTERVIEW_INVITE_STATUS_OPTIONS: InviteStatusOption[] = [
   { value: 'invited', label: 'Invited' },
   { value: 'in_progress', label: 'In Progress' },
   { value: 'completed', label: 'Completed' },
+  // Matches the trackers' Expired card, so picking the card never leaves this
+  // dropdown blank.
+  { value: 'expired', label: 'Expired' },
   { value: 'terminated', label: 'Terminated' },
 ];
 
@@ -82,6 +99,8 @@ export default function InviteFilterBar({
   onChange,
   statusOptions,
   searchPlaceholder = 'Search by candidate name or email...',
+  extraSelects = [],
+  onClearExtras,
 }: InviteFilterBarProps) {
   const [localSearch, setLocalSearch] = useState(filters.search);
   const debouncedSearch = useDebounce(localSearch, 300);
@@ -95,12 +114,30 @@ export default function InviteFilterBar({
     localSearch.trim() !== '' ||
     filters.status !== 'all' ||
     filters.dateFrom !== '' ||
-    filters.dateTo !== '';
+    filters.dateTo !== '' ||
+    extraSelects.some((select) => select.value !== '');
 
   const handleClear = () => {
     setLocalSearch('');
     onChange(EMPTY_INVITE_FILTERS);
+    onClearExtras?.();
   };
+
+  /* Tailwind needs whole class names, so the one-row lg template is picked
+     per extra-dropdown count rather than built up. */
+  /* Three or more extras: search takes its own full-width row and the seven
+     controls share the row below — one row would squeeze the search box to
+     nothing inside a dialog. */
+  const searchOwnRow = extraSelects.length >= 3;
+  // Status + the extras + two dates + Clear, one column each.
+  const lgColumns = searchOwnRow
+    ? (extraSelects.length >= 4 ? 'lg:grid-cols-8' : 'lg:grid-cols-7')
+    : extraSelects.length === 2
+    ? 'lg:grid-cols-[minmax(0,1fr)_150px_130px_130px_140px_140px_auto]'
+    : extraSelects.length === 1
+      ? 'lg:grid-cols-[minmax(0,1fr)_160px_140px_150px_150px_auto]'
+      : 'lg:grid-cols-[minmax(0,1fr)_170px_160px_160px_auto]';
+  const selectClass = 'min-w-0 h-10 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 text-sm text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/20 focus:border-brand-blue';
 
   return (
     <div className="px-2.5 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900/40">
@@ -108,8 +145,8 @@ export default function InviteFilterBar({
           from lg. The old grid-cols-1 fallback held until xl, so a 1100px
           laptop got four stacked filter rows inside the dialog and ate the
           height the invite table needs. */}
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-[minmax(0,1fr)_170px_160px_160px_auto] gap-2 sm:gap-3">
-        <div className="relative col-span-2 md:col-span-4 lg:col-span-1">
+      <div className={`grid grid-cols-2 md:grid-cols-4 ${lgColumns} gap-2 sm:gap-3`}>
+        <div className={`relative col-span-2 md:col-span-4 ${searchOwnRow ? 'lg:col-span-full' : 'lg:col-span-1'}`}>
           <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
           <input
             type="text"
@@ -144,6 +181,23 @@ export default function InviteFilterBar({
             </option>
           ))}
         </select>
+
+        {extraSelects.map((select) => (
+          <select
+            key={select.key}
+            value={select.value}
+            onChange={(e) => select.onChange(e.target.value)}
+            aria-label={select.ariaLabel}
+            className={selectClass}
+          >
+            <option value="">{select.anyLabel}</option>
+            {select.options.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
+          </select>
+        ))}
 
         <input
           type="date"

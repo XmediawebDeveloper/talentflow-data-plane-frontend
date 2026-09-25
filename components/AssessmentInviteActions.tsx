@@ -794,7 +794,14 @@ export function InvitationHistoryDialog({ target, onClose, getAssessmentId }: {
       <DialogContent className="w-[calc(100vw-2rem)] max-w-[calc(100vw-2rem)] sm:max-w-md p-4 sm:p-6">
         <DialogHeader>
           <DialogTitle>Invitation History</DialogTitle>
-          <DialogDescription className="break-words">{target?.candidate_name || target?.candidate_email || 'Candidate'}</DialogDescription>
+          {/* Name, then the email — two candidates can share a name, and the
+              email is what tells them apart. */}
+          <DialogDescription className="break-words">
+            {target?.candidate_name || target?.candidate_email || 'Candidate'}
+            {target?.candidate_name && target?.candidate_email && (
+              <span className="text-gray-400 dark:text-slate-500"> · {target.candidate_email}</span>
+            )}
+          </DialogDescription>
         </DialogHeader>
         <div className="overflow-y-auto max-h-[60dvh] -mx-1 px-1">
           {loading ? (

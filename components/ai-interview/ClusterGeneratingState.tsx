@@ -99,7 +99,7 @@ export default function ClusterGeneratingState() {
             const isLast = i === STAGES.length - 1;
             return (
               <div key={s.key} className="flex items-start">
-                <div className="flex flex-col items-center gap-2 w-24 sm:w-32">
+                <div className="flex flex-col items-center gap-2 w-16 sm:w-32">
                   <span
                     className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors duration-500 ${
                       done || current
@@ -122,7 +122,7 @@ export default function ClusterGeneratingState() {
                   </span>
                 </div>
                 {!isLast && (
-                  <div className="mt-3.5 h-0.5 w-6 sm:w-12 rounded-full bg-slate-200 overflow-hidden flex-shrink-0">
+                  <div className="mt-3.5 h-0.5 w-2 sm:w-12 rounded-full bg-slate-200 overflow-hidden flex-shrink-0">
                     <div
                       className={`h-full bg-brand-blue rounded-full transition-all duration-700 ${
                         done ? 'w-full' : 'w-0'

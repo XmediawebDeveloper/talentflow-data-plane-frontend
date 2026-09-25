@@ -29,6 +29,33 @@ import {
   formatDuration,
 } from './AIInterviewResults';
 import { InviteSourceValue, inviteSourceLabel } from '@/components/AIInterviewInviteTable';
+import SearchableSelect from '@/components/ui/searchable-select';
+import {
+  FilterSelect,
+  FilterDateRange,
+  jobFilterOptions,
+  versionFilterOptions,
+  INVITE_SOURCE_FILTER_OPTIONS,
+  RESULT_FILTER_OPTIONS,
+  matchesResultFilter,
+  matchesDateRange,
+} from './ColumnFilterFields';
+
+/** One filter per filterable column; '' means any. */
+const EMPTY_CANDIDATE_FILTERS = {
+  job: '',
+  jobVersion: '',
+  interviewVersion: '',
+  inviteSource: '',
+  status: '',
+  result: '',
+  risk: '',
+  completedFrom: '',
+  completedTo: '',
+};
+type CandidateFilters = typeof EMPTY_CANDIDATE_FILTERS;
+
+const RISK_FILTER_OPTIONS = ['High', 'Medium', 'Low', 'None'].map((level) => ({ value: level, label: level }));
 
 /**
  * Candidate Results — every candidate session across every AI interview, in one
@@ -50,6 +77,7 @@ const CANDIDATE_COLUMNS = [
   { id: 'jobTitle', label: 'Job Title' },
   { id: 'jobVersion', label: 'Job Version' },
   { id: 'interviewVersion', label: 'Interview Version' },
+  { id: 'inviteSource', label: 'Invite Source' },
   { id: 'status', label: 'Status' },
   { id: 'score', label: 'Score' },
   { id: 'timeline', label: 'Timeline' },
@@ -136,9 +164,15 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
   // (see loadAllSessions), so there is nothing left to filter by. `onChange`
   // returns to page 1 — narrowing from page 3 would otherwise strand the
   // user on a page that no longer exists.
-  const search = useListSearch({
-    initialFilters: {},
+  const [showFilters, setShowFilters] = useState(false);
+  const search = useListSearch<CandidateFilters>({
+    initialFilters: EMPTY_CANDIDATE_FILTERS,
     onChange: () => setCurrentPage(1),
+    // The completed-on range is one filter however many ends are set.
+    countFilters: (f) =>
+      (['job', 'jobVersion', 'interviewVersion', 'inviteSource', 'status', 'result', 'risk'] as const)
+        .filter((key) => !!f[key]).length
+      + (f.completedFrom || f.completedTo ? 1 : 0),
   });
 
   /**
@@ -249,13 +283,32 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
   // APPLIED query so the list doesn't rebuild on every keystroke.
   const filteredRows = useMemo(() => {
     const query = search.appliedQuery.trim().toLowerCase();
-    if (!query) return rows;
+    const f = search.filters;
 
-    return rows.filter((row) =>
-      [row.candidate_name, row.candidate_email, row.candidate_cid, row._config_title, row._job_id]
-        .some((field) => (field || '').toLowerCase().includes(query)),
-    );
-  }, [rows, search.appliedQuery]);
+    return rows.filter((row) => {
+      if (query && ![row.candidate_name, row.candidate_email, row.candidate_cid, row._config_title, row._job_id]
+        .some((field) => (field || '').toLowerCase().includes(query))) return false;
+      if (f.job && row._job_id !== f.job) return false;
+      if (f.jobVersion && String(row._job_version) !== f.jobVersion) return false;
+      if (f.interviewVersion && String(row._interview_version) !== f.interviewVersion) return false;
+      if (f.inviteSource && (row as any).invite_source !== f.inviteSource) return false;
+      if (f.status && row.status !== f.status) return false;
+      if (!matchesResultFilter(row.score, f.result)) return false;
+      if (f.risk && getProctoringRisk(row).level !== f.risk) return false;
+      if (!matchesDateRange(row.completed_at, f.completedFrom, f.completedTo)) return false;
+      return true;
+    });
+  }, [rows, search.appliedQuery, search.filters]);
+
+  /* Filter options come from the loaded rows, so every choice matches at
+     least one candidate. */
+  const jobOptions = useMemo(() => jobFilterOptions(rows, (r) => r._job_id, (r) => r._config_title), [rows]);
+  const jobVersionOptions = useMemo(() => versionFilterOptions(rows, (r) => r._job_version), [rows]);
+  const interviewVersionOptions = useMemo(() => versionFilterOptions(rows, (r) => r._interview_version), [rows]);
+  const statusOptions = useMemo(
+    () => [...new Set(rows.map((r) => r.status).filter(Boolean))].map((s) => ({ value: s as string, label: getStatusLabel(s as string) })),
+    [rows],
+  );
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const safePage = Math.min(currentPage, totalPages);
@@ -318,6 +371,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
         case 'jobTitle': return [row._config_title || ''];
         case 'jobVersion': return [`V${row._job_version}`];
         case 'interviewVersion': return [`V${row._interview_version}`];
+        case 'inviteSource': return [inviteSourceLabel(row) || ''];
         case 'status': return [getStatusLabel(row.status)];
         case 'score': return [row.score != null ? `${Math.round(row.score)}% (${row.score >= PASS_MARK ? 'Pass' : 'Fail'})` : ''];
         case 'timeline': return [
@@ -501,10 +555,57 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
         // keystrokes straight through.
         searchDebounceMs={0}
         searchPlaceholder="Search by name, email, CID, or interview..."
+        onToggleFilters={() => setShowFilters((open) => !open)}
+        filtersOpen={showFilters}
         activeFilterCount={search.activeFilterCount}
         filtersApplied={search.filtersApplied}
         onClearFilters={search.reset}
-        searchClassName="sm:flex-none sm:w-64 lg:w-80"
+        filterPanel={
+          /* One filter per column that has a fixed set of values; name,
+             email and CID are what the search box is for. Picks are drafts
+             until Done, as on the Activity Logs tab. */
+          <div className="rounded-xl border border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/30 p-3 sm:p-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+              <SearchableSelect
+                label="Job"
+                value={search.draftFilters.job}
+                onChange={(v) => search.setDraftFilter('job', v)}
+                options={jobOptions}
+                placeholder="All jobs"
+                searchPlaceholder="Search job ID or title..."
+                allLabel="All jobs"
+                emptyMessage="No jobs match"
+              />
+              <FilterSelect id="cr-job-version" label="Job Version" anyLabel="All versions"
+                value={search.draftFilters.jobVersion} onChange={(v) => search.setDraftFilter('jobVersion', v)}
+                options={jobVersionOptions} />
+              <FilterSelect id="cr-interview-version" label="Interview Version" anyLabel="All versions"
+                value={search.draftFilters.interviewVersion} onChange={(v) => search.setDraftFilter('interviewVersion', v)}
+                options={interviewVersionOptions} />
+              <FilterSelect id="cr-invite-source" label="Invite Source" anyLabel="All sources"
+                value={search.draftFilters.inviteSource} onChange={(v) => search.setDraftFilter('inviteSource', v)}
+                options={INVITE_SOURCE_FILTER_OPTIONS} />
+              <FilterSelect id="cr-status" label="Status" anyLabel="All statuses"
+                value={search.draftFilters.status} onChange={(v) => search.setDraftFilter('status', v)}
+                options={statusOptions} />
+              <FilterSelect id="cr-result" label="Result" anyLabel="Any result"
+                value={search.draftFilters.result} onChange={(v) => search.setDraftFilter('result', v)}
+                options={RESULT_FILTER_OPTIONS} />
+              <FilterSelect id="cr-risk" label="Proctoring Risk" anyLabel="Any risk"
+                value={search.draftFilters.risk} onChange={(v) => search.setDraftFilter('risk', v)}
+                options={RISK_FILTER_OPTIONS} />
+              <FilterDateRange idPrefix="cr-completed" label="Completed On"
+                from={search.draftFilters.completedFrom} to={search.draftFilters.completedTo}
+                onFromChange={(v) => search.setDraftFilter('completedFrom', v)}
+                onToChange={(v) => search.setDraftFilter('completedTo', v)} />
+            </div>
+            <div className="mt-4 pt-3 border-t border-gray-200 dark:border-slate-700/60 flex items-center justify-end gap-2">
+              <Button variant="primary" size="sm" onClick={() => { search.applyFilters(); setShowFilters(false); }}>
+                Done
+              </Button>
+            </div>
+          </div>
+        }
         countBadge={
           <ListCountBadge
             filtered={filteredRows.length}
@@ -585,7 +686,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                       {row._config_title}
                     </p>
 
-                    {inviteSourceLabel(row) && (
+                    {col('inviteSource') && inviteSourceLabel(row) && (
                       <p className="text-xs text-gray-600 dark:text-slate-400">
                         <InviteSourceValue inv={row} iconClassName="w-3 h-3" />
                       </p>
@@ -709,7 +810,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                     {col('jobTitle') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Job Title</th>}
                     {col('jobVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Job Version</th>}
                     {col('interviewVersion') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Interview Version</th>}
-                    <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>
+                    {col('inviteSource') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>}
                     {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Status</th>}
                     {col('score') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>}
                     {col('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
@@ -796,11 +897,13 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                             <VersionPill kind="interview" version={row._interview_version} />
                           </td>
                         )}
-                        <td className="px-4 py-3 whitespace-nowrap text-gray-700 dark:text-slate-300">
-                          {inviteSourceLabel(row)
-                            ? <InviteSourceValue inv={row} iconClassName="w-3.5 h-3.5" />
-                            : <span className="text-gray-400">—</span>}
-                        </td>
+                        {col('inviteSource') && (
+                          <td className="px-4 py-3 whitespace-nowrap text-gray-700 dark:text-slate-300">
+                            {inviteSourceLabel(row)
+                              ? <InviteSourceValue inv={row} iconClassName="w-3.5 h-3.5" />
+                              : <span className="text-gray-400">—</span>}
+                          </td>
+                        )}
                         {col('status') && (
                           <td className="px-4 py-3 whitespace-nowrap">
                             <div className="flex items-center gap-1.5 flex-wrap">
