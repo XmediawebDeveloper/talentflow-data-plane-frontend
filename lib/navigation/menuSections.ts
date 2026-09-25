@@ -4,7 +4,6 @@
 import {
   LayoutDashboard,
   FileSignature,
-  FolderOpen,
   Users,
   Database,
   ClipboardList,
@@ -68,24 +67,30 @@ export function buildMenuSections(isTenantAdmin: boolean): NavSection[] {
       ],
     },
 
-    // RESUME MANAGEMENT
-    {
-      id: 'resume-management',
-      label: 'RESUME MANAGEMENT',
-      items: [
-        { id: 'my-resumes', label: 'My Resumes', icon: FolderOpen, href: '/recruitment/my-resumes', permissions: ['canViewResumes', 'canUploadResumes', 'canUpdateResumes', 'canDeleteResumes'], planFeature: 'resume_upload' },
-        { id: 'resume-database', label: 'Internal Database', icon: Database, href: '/recruitment/resume-database', permissions: ['canAccessInternalDB', 'canViewInternalDB', 'canUpdateInternalDB', 'canDeleteInternalDB'], planFeature: 'resume_upload' },
-      ],
-    },
-
     // EVALUATION
     {
       id: 'evaluation',
       label: 'EVALUATION',
       items: [
-        { id: 'assessments', label: 'Assessments', icon: ClipboardList, href: '/recruitment/assessments', permissions: ['canViewAssessments', 'canCreateAssessments', 'canUpdateAssessments', 'canDeleteAssessments'], planFeature: 'assessment' },
+        { id: 'assessments', label: 'AI Assessments', icon: ClipboardList, href: '/recruitment/assessments', permissions: ['canViewAssessments', 'canCreateAssessments', 'canUpdateAssessments', 'canDeleteAssessments'], planFeature: 'assessment' },
         { id: 'ai-interviews', label: 'AI Interviews', icon: Video, href: '/recruitment/ai-interviews', permissions: ['canViewAIInterviews', 'canRunAiInterviews'], planFeature: 'ai_interview' },
         // HR Question Bank is reached from quick links on the Assessments (/recruitment/assessments) and AI Interviews (/recruitment/ai-interviews) pages.
+      ],
+    },
+
+    // RESUME MANAGEMENT
+    {
+      id: 'resume-management',
+      label: 'RESUME MANAGEMENT',
+      items: [
+        // My Resumes and Internal Database were two separate entries pointing at
+        // two routes. They are one dataset at two scopes (the API's `source`
+        // parameter), so they are now two tabs of this one page — see
+        // app/(dashboard)/recruitment/resume-database/page.tsx. The permission
+        // list is the union of both tabs': holding any one of them makes at
+        // least one tab reachable, and the page picks the first tab the user is
+        // entitled to.
+        { id: 'resume-database', label: 'Resume Database', icon: Database, href: '/recruitment/resume-database', permissions: ['canViewResumes', 'canUploadResumes', 'canUpdateResumes', 'canDeleteResumes', 'canAccessInternalDB', 'canViewInternalDB', 'canUpdateInternalDB', 'canDeleteInternalDB'], planFeature: 'resume_upload' },
       ],
     },
 

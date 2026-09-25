@@ -771,7 +771,7 @@ ${job.certifications?.join(', ') || 'N/A'}
                   <QuickActionButton
                     icon={<Plus className="w-4 h-4" />}
                     label="Add Applicants"
-                    onClick={() => router.push(`/recruitment/my-resumes?jd_id=${job.id}`)}
+                    onClick={() => router.push(`/recruitment/resume-database?tab=my-resumes&jd_id=${job.id}`)}
                   />
                 )}
 

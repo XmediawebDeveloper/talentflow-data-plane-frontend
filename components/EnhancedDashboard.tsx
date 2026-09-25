@@ -1023,7 +1023,7 @@ export default function EnhancedDashboard({ user, tenant }: EnhancedDashboardPro
                 <Button
                   variant="outline"
                   className="group h-auto flex-col gap-2 py-5 border-gray-100 dark:border-slate-700/60 bg-gradient-to-br from-white to-brand-cyan/[0.03] hover:border-brand-cyan/40 hover:shadow-md hover:shadow-brand-cyan/10 hover:-translate-y-0.5 transition-all"
-                  onClick={() => router.push('/recruitment/my-resumes')}
+                  onClick={() => router.push('/recruitment/resume-database?tab=my-resumes')}
                 >
                   <span className="flex h-10 w-10 items-center justify-center rounded-lg bg-brand-cyan/10 ring-1 ring-brand-cyan/15 group-hover:bg-brand-cyan/15 transition-colors">
                     <FileText className="h-5 w-5 text-brand-cyan" />

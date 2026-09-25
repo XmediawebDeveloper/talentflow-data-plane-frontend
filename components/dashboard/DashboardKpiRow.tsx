@@ -53,7 +53,7 @@ export default function DashboardKpiRow({
     {
       id: 'resumes',
       label: 'Resumes',
-      href: '/recruitment/my-resumes',
+      href: '/recruitment/resume-database?tab=my-resumes',
       icon: FileText,
       accent: 'text-brand-cyan bg-brand-cyan/10 ring-brand-cyan/15',
       value: totalResumes,
