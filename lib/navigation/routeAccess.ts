@@ -54,8 +54,13 @@ export const ROUTE_RULES: RouteRule[] = [
   { prefix: '/recruitment/job-details', permissions: ['canReadJD', 'canCreateJD', 'canUpdateJD', 'canDeleteJD'] },
   { prefix: '/recruitment/resume-scoring', permissions: ['canViewScoring', 'canRunScoring'] },
   { prefix: '/recruitment/ai-talent-match', permissions: ['canViewAiMatch', 'canRunAiMatch'] },
+  // Resume Database serves BOTH pools as tabs, so it takes the union of their
+  // permissions — gating it on the Internal DB keys alone would bounce a user
+  // who only has My Resumes. The page itself then shows just the tabs that
+  // user is entitled to. /recruitment/my-resumes is a redirect into it and
+  // keeps its own (narrower) rule so the old URL still means what it did.
   { prefix: '/recruitment/my-resumes', permissions: ['canViewResumes', 'canUploadResumes', 'canUpdateResumes', 'canDeleteResumes'] },
-  { prefix: '/recruitment/resume-database', permissions: ['canAccessInternalDB', 'canViewInternalDB', 'canUpdateInternalDB', 'canDeleteInternalDB'] },
+  { prefix: '/recruitment/resume-database', permissions: ['canViewResumes', 'canUploadResumes', 'canUpdateResumes', 'canDeleteResumes', 'canAccessInternalDB', 'canViewInternalDB', 'canUpdateInternalDB', 'canDeleteInternalDB'] },
   // Detail/view pages reachable from either My Resumes or Internal Database.
   { prefix: '/recruitment/resume-detail', permissions: ['canViewResumes', 'canUploadResumes', 'canUpdateResumes', 'canDeleteResumes', 'canAccessInternalDB', 'canViewInternalDB', 'canUpdateInternalDB', 'canDeleteInternalDB'] },
   { prefix: '/recruitment/resume-view', permissions: ['canViewResumes', 'canUploadResumes', 'canUpdateResumes', 'canDeleteResumes', 'canAccessInternalDB', 'canViewInternalDB', 'canUpdateInternalDB', 'canDeleteInternalDB'] },

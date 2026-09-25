@@ -212,7 +212,7 @@ export default function RecruiterDashboard({ user, tenant }: RecruiterDashboardP
             <QuickAction
               label="Upload Resumes"
               icon={<Upload className="w-5 h-5" />}
-              onClick={() => router.push('/recruitment/my-resumes')}
+              onClick={() => router.push('/recruitment/resume-database?tab=my-resumes')}
               accent="from-brand-cyan to-brand-teal"
             />
           )}

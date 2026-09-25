@@ -12,8 +12,7 @@ const shortcuts: Shortcut[] = [
   // Navigation
   { keys: ['Cmd/Ctrl', 'D'], description: 'Go to Dashboard', category: 'Navigation' },
   { keys: ['Cmd/Ctrl', 'J'], description: 'Go to Job Descriptions', category: 'Navigation' },
-  { keys: ['Cmd/Ctrl', 'R'], description: 'Go to My Resumes', category: 'Navigation' },
-  { keys: ['Cmd/Ctrl', 'I'], description: 'Go to Internal Database', category: 'Navigation' },
+  { keys: ['Cmd/Ctrl', 'R'], description: 'Go to Resume Database', category: 'Navigation' },
   { keys: ['Cmd/Ctrl', 'A'], description: 'Go to Assessments', category: 'Navigation' },
   
   // Actions

@@ -156,7 +156,7 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
                 <ActionTile
                   label="Upload resume"
                   icon={<Upload className="w-5 h-5" />}
-                  onClick={() => router.push('/recruitment/my-resumes')}
+                  onClick={() => router.push('/recruitment/resume-database?tab=my-resumes')}
                   tone="brand-blue"
                 />
               )}
@@ -195,7 +195,7 @@ export default function StandardUserDashboard({ user, tenant }: StandardUserDash
               <ActionTile
                 label="View candidates"
                 icon={<Users className="w-5 h-5" />}
-                onClick={() => router.push('/recruitment/my-resumes')}
+                onClick={() => router.push('/recruitment/resume-database?tab=my-resumes')}
                 tone="brand-cyan"
               />
             </div>
