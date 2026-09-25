@@ -465,6 +465,14 @@ const INVITE_SOURCES: Record<string, { label: string; Icon: LucideIcon }> = {
 };
 export const inviteSourceLabel = (inv: any): string | null => INVITE_SOURCES[inv.invite_source]?.label ?? null;
 
+/** Assessment invitations store no invite method of their own — their
+ *  invite_source names the page the invite was sent from ("Assessment", "JD").
+ *  resume_id is written only when the recruiter picked a resume, so it IS the
+ *  method: a resume invite, otherwise one typed in by e-mail. Returned in the
+ *  shape InviteSourceValue reads, so both modules render the same cell. */
+export const assessmentInviteSource = (row: { resume_id?: string | null } | null | undefined) =>
+  ({ invite_source: row?.resume_id ? 'resume' : 'email' });
+
 export const InviteSourceValue =({ inv, iconClassName }: { inv: any; iconClassName: string }) => {
   const source = INVITE_SOURCES[inv.invite_source];
   if (!source) return null;
