@@ -304,7 +304,7 @@ export default function PermissionsPage() {
     analytics: 'Analytics',
     settings: 'Settings',
     billing: 'Billing',
-    internal_db: 'Internal Database',
+    internal_db: 'Shared Database',
     ai_interview: 'AI Interview',
   };
 

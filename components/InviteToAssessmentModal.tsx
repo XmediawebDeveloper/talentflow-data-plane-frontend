@@ -114,7 +114,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
       const res = await api.get('/resumes', { params: { source: 'internal-db', page_size: 200 } });
       setInternalDbData((res.data?.items ?? []).map(mapResume));
       setInternalDbLoaded(true);
-    } catch { toast.error({ title: 'Error', description: 'Failed to load Internal Database' }); }
+    } catch { toast.error({ title: 'Error', description: 'Failed to load Shared Database' }); }
     finally { setIsLoadingResumes(false); }
   };
 
@@ -788,7 +788,7 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
                       className={`flex items-center gap-2 px-4 py-2.5 text-xs font-medium transition-colors border-b-2 ${dbTab === 'internal-db' ? 'border-gray-800 text-gray-900 dark:text-slate-50 bg-white dark:bg-slate-900' : 'border-transparent text-gray-500 dark:text-slate-500 hover:text-gray-700'}`}
                     >
                       <Database className="w-3.5 h-3.5" />
-                      Internal Database
+                      Shared Database
                       <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300">{internalDbData.length}</span>
                     </button>
                   )}

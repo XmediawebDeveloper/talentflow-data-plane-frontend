@@ -297,7 +297,7 @@ export default function ResumeViewPage() {
     ]
     : [
       { label: 'Resume Database', href: '/recruitment/resume-database?tab=internal-db' },
-      { label: 'Internal Database', href: '/recruitment/resume-database?tab=internal-db' },
+      { label: 'Shared Database', href: '/recruitment/resume-database?tab=internal-db' },
     ];
 
   // Apply to Job modal state
@@ -379,7 +379,7 @@ export default function ResumeViewPage() {
   const [shareAssessments, setShareAssessments] = useState<any[]>([]);
   const [showShareAssessmentModal, setShowShareAssessmentModal] = useState(false);
   /* AI Interview invite — the shared Invite to AI Interview popup (the same
-     one My Resumes and the Internal Database use): pick the interview, then
+     one My Resumes and the Shared Database use): pick the interview, then
      the share modal with this candidate prefilled. */
   const [showAIInviteFlow, setShowAIInviteFlow] = useState(false);
   const [inviteJobTitle, setInviteJobTitle] = useState('');

@@ -56,7 +56,7 @@ interface SearchFilters {
 }
 
 /**
- * The "Internal Database" tab of the Resume Database page — every resume in the
+ * The "Shared Database" tab of the Resume Database page — every resume in the
  * tenant, flat (no folders). Rendered by the tabbed shell at
  * app/(dashboard)/recruitment/resume-database/page.tsx, which owns the
  * breadcrumb and the tab strip and passes them down as `header`.
@@ -1013,13 +1013,13 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           </div>
           <div>
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mb-1">
-              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Internal Resume Database</h1>
+              <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Shared Resume Database</h1>
               <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 dark:bg-brand-blue/20 text-brand-blue ring-1 ring-brand-blue/20 dark:ring-brand-blue/30">
                 {resumes.length.toLocaleString()} Resumes
               </span>
             </div>
             <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
-              Search and filter resumes from your organization's database
+              Search and filter resumes shared across your organization
             </p>
           </div>
         </div>

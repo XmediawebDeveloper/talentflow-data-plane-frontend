@@ -119,7 +119,7 @@ export interface PermissionCheckResponse {
 export const PERMISSION_MODULES: Record<string, string> = {
   jd: 'Job Descriptions',
   resumes: 'Resumes',
-  internal_db: 'Internal Database',
+  internal_db: 'Shared Database',
   assessments: 'Assessments',
   analytics: 'Analytics',
   settings: 'Settings',

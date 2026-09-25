@@ -744,7 +744,7 @@ export default function BulkScoringProgressModal({
               >
                 <option value="all">All Sources</option>
                 {/* Only show Internal DB option if user has permission */}
-                {hasInternalDBAccess && <option value="internal-db">Internal DB</option>}
+                {hasInternalDBAccess && <option value="internal-db">Shared Database</option>}
                 <option value="my-resumes">My Resumes</option>
               </select>
             </div>

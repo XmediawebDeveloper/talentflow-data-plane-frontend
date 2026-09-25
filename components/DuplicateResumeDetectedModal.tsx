@@ -57,7 +57,7 @@ export function DuplicateResumeDetectedModal({
 
         <div className="py-3 sm:py-4 overflow-y-auto flex-1">
           <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-3 sm:mb-4">
-            This resume already exists in your Internal Resume Database.
+            This resume already exists in your Shared Resume Database.
             {jobTitle && (
               <> Do you still want to submit for scoring against <span className="font-medium text-gray-900 dark:text-slate-50">{jobTitle}</span>?</>
             )}

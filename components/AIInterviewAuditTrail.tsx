@@ -4,7 +4,7 @@ import {
   Download, CheckCircle, Clock,
   FileText, Eye, Mail, User, Activity,
   Plus, Edit, Trash2, Send, Play, Award, UserX, TimerOff, Archive, Loader2,
-  ChevronLeft, ChevronRight
+  ChevronLeft, ChevronRight, Square, CheckSquare
 } from 'lucide-react';
 import { aiInterviewService, AIInterviewAuditActivity } from '@/lib/services/aiInterviewService';
 import { formatIST } from '@/lib/utils/dateUtils';
@@ -102,6 +102,23 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
   const { dateFrom: filterDateFrom, dateTo: filterDateTo } = search.filters;
   const [selectedActivity, setSelectedActivity] = useState<string | null>(null);
 
+  // Row selection — the same CheckSquare / Square column every other AI
+  // Interviews tab opens with. Keyed by the row's position-qualified id, the
+  // same key the list renders with, since one activity id can repeat.
+  const activityKey = (activity: AIInterviewAuditActivity, index: number) => `${activity.id}-${index}`;
+  const [selectedKeys, setSelectedKeys] = useState<Set<string>>(() => new Set());
+  const toggleSelected = (key: string) =>
+    setSelectedKeys((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const pageKeys = activities.map(activityKey);
+  const allOnPageSelected = pageKeys.length > 0 && pageKeys.every((key) => selectedKeys.has(key));
+  const toggleAllOnPage = () =>
+    setSelectedKeys(() => (allOnPageSelected ? new Set<string>() : new Set(pageKeys)));
+
   const loadAuditTrail = async () => {
     setIsLoading(true);
     try {
@@ -114,6 +131,9 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
 
       if (response) {
         setActivities(response.items);
+        // A new page or filter is a new list — a selection made on the old
+        // one no longer points at anything on screen.
+        setSelectedKeys(new Set());
         setTotal(response.total);
         setStats({
           total_lifecycle_events: response.total_lifecycle_events,
@@ -151,7 +171,8 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
   }, [searchTerm, filterDateFrom, filterDateTo]);
 
   const handleExportAuditLogs = () => {
-    toast.info(`Exporting ${activities.length} audit log entries to CSV`);
+    const count = selectedKeys.size > 0 ? selectedKeys.size : activities.length;
+    toast.info(`Exporting ${count} audit log entries to CSV`);
   };
 
   const formatTimestamp = (timestamp: string) => {
@@ -292,7 +313,7 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
               onClick={handleExportAuditLogs}
               icon={<Download className="w-4 h-4" />}
             >
-              Export Logs
+              Export Logs{selectedKeys.size > 0 ? ` (${selectedKeys.size})` : ''}
             </Button>
           </div>
 
@@ -391,20 +412,55 @@ export default function AIInterviewAuditTrail({ toolbarSlot, refreshSignal }: AI
             />
           ) : (
             <div className="space-y-4">
+              {/* Select All — this page's entries, like the table tabs'
+                  header checkbox. */}
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={toggleAllOnPage}
+                  className="p-1 rounded hover:bg-gray-100 dark:hover:bg-slate-800"
+                  aria-label={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
+                  title={allOnPageSelected ? 'Deselect all on this page' : 'Select all on this page'}
+                >
+                  {allOnPageSelected ? (
+                    <CheckSquare className="w-4 h-4 text-brand-blue" />
+                  ) : (
+                    <Square className="w-4 h-4 text-gray-400" />
+                  )}
+                </button>
+                <span className="text-xs text-gray-500">
+                  {selectedKeys.size > 0 ? `${selectedKeys.size} selected` : 'Select all'}
+                </span>
+              </div>
               {activities.map((activity, index) => {
                 const colors = ACTIVITY_COLORS[activity.activity_type] || ACTIVITY_COLORS.config_created;
                 const icon = ACTIVITY_ICONS[activity.activity_type] || <Activity className="w-4 h-4" />;
                 const isExpanded = selectedActivity === activity.id;
+                const key = activityKey(activity, index);
+                const isSelected = selectedKeys.has(key);
 
                 return (
-                  <Fragment key={`${activity.id}-${index}`}>
+                  <Fragment key={key}>
                     <div
-                      className={`relative flex items-start gap-4 p-4 rounded-lg border ${colors.border} ${colors.bg} hover:shadow-sm transition-shadow cursor-pointer`}
+                      className={`relative flex items-start gap-3 sm:gap-4 p-4 rounded-lg border ${colors.border} ${colors.bg} hover:shadow-sm transition-shadow cursor-pointer`}
                       onClick={() => setSelectedActivity(isExpanded ? null : activity.id)}
                     >
                       {index < activities.length - 1 && (
-                        <div className="absolute left-[26px] top-[52px] w-0.5 h-[calc(100%+16px)] bg-gray-200" />
+                        <div className="absolute left-[54px] sm:left-[58px] top-[52px] w-0.5 h-[calc(100%+16px)] bg-gray-200" />
                       )}
+
+                      <button
+                        type="button"
+                        onClick={(e) => { e.stopPropagation(); toggleSelected(key); }}
+                        className="mt-2.5 p-1 -m-1 rounded hover:bg-gray-200 dark:hover:bg-slate-700 flex-shrink-0 relative z-10"
+                        aria-label={isSelected ? 'Deselect activity' : 'Select activity'}
+                      >
+                        {isSelected ? (
+                          <CheckSquare className="w-4 h-4 text-brand-blue" />
+                        ) : (
+                          <Square className="w-4 h-4 text-gray-400" />
+                        )}
+                      </button>
 
                       <div className={`flex-shrink-0 w-10 h-10 rounded-full ${colors.bg} border-2 ${colors.border} flex items-center justify-center ${colors.icon} relative z-10 bg-white`}>
                         {icon}

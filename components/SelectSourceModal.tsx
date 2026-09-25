@@ -796,7 +796,7 @@ export default function SelectSourceModal({
         if (existingResume) {
           return {
             success: false,
-            error: `A resume for ${existingResume.candidate_name || 'this candidate'} already exists in your Internal Resume Database.`,
+            error: `A resume for ${existingResume.candidate_name || 'this candidate'} already exists in your Shared Resume Database.`,
             existingResume: {
               id: existingResume.id,
               candidateName: existingResume.candidate_name || existingResume.file_name || 'Unknown',
@@ -1042,8 +1042,8 @@ export default function SelectSourceModal({
                 }`}
               >
                 <Database className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                <span className="hidden sm:inline">Internal Database</span>
-                <span className="sm:hidden">Internal DB</span>
+                <span className="hidden sm:inline">Shared Database</span>
+                <span className="sm:hidden">Shared DB</span>
                 <span className={`px-1.5 sm:px-2 py-0.5 rounded-full text-2xs sm:text-xs ${
                   activeTab === 'internal-db'
                     ? 'bg-brand-blue/10 ring-1 ring-brand-blue/15 text-brand-blue'
@@ -1170,7 +1170,7 @@ export default function SelectSourceModal({
                 Resume Database and My Resumes pages use — column set and
                 order, widths, sticky header, sticky Actions column,
                 separators, hover/selected states, checkbox styling,
-                pagination — so this popup's Internal Database tab looks
+                pagination — so this popup's Shared Database tab looks
                 exactly like the Resume Database page instead of a second,
                 hand-rolled implementation of it. */}
             <div className="flex-1 min-h-0 flex flex-col">
@@ -1222,7 +1222,7 @@ export default function SelectSourceModal({
                     })
                   }
                   /* Archive/Delete/Share/Tag stay My Resumes-only — the
-                     Internal Database tab never offered them (it's a shared,
+                     Shared Database tab never offered them (it's a shared,
                      org-wide list to pick candidates from, not one this
                      modal manages), so only the read-only Preview/Download
                      actions carry over onto it. */

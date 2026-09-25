@@ -2,7 +2,7 @@
 
 /**
  * Resume Database — the single entry point for both resume pools, following
- * UI-UX Guidelines §6 ("Two Clear Zones — My Resumes, Internal Database").
+ * UI-UX Guidelines §6 ("Two Clear Zones — My Resumes, Shared Database").
  *
  * The two used to be separate top-level menu items pointing at two routes.
  * They are the same records at two scopes: the API's `source` parameter is the
@@ -17,7 +17,8 @@
  * that view's white card, above its title row.
  */
 
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { Database, FolderOpen, Lock } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
@@ -27,6 +28,12 @@ import InternalDatabaseView from '@/components/resumes/InternalDatabaseView';
 import type { Permission } from '@/lib/types/tenant';
 
 export type ResumeTab = 'my-resumes' | 'internal-db';
+
+/** Tab labels, kept here so the strip and the breadcrumb can never disagree. */
+const TAB_LABEL: Record<ResumeTab, string> = {
+  'my-resumes': 'My Resumes',
+  'internal-db': 'Shared Database',
+};
 
 /* The same permission lists the nav entry is gated on (see
    lib/navigation/menuSections.ts) — holding ANY one of a tab's permissions is
@@ -47,9 +54,19 @@ const INTERNAL_DB_PERMISSIONS = [
 ] as const;
 
 export default function ResumeDatabasePage() {
-  const router = useRouter();
   const searchParams = useSearchParams();
-  const { user, isTenantAdmin } = useAuth();
+  const { user, isTenantAdmin, isLoading: authLoading } = useAuth();
+
+  /* The tab lives in React state, not in the router.
+     `router.replace('?tab=…')` is a real App Router navigation: it refetches
+     the route, tears the whole page down and rebuilds it, which read as a full
+     page refresh on every tab click. Switching a tab is an in-page state
+     change, so it is held here and the URL is rewritten with history.replaceState
+     — the address bar still carries `?tab=` for sharing and reloads, but
+     nothing navigates. Seeded from the URL once, on mount. */
+  const [requestedTab, setRequestedTab] = useState<ResumeTab>(() =>
+    searchParams.get('tab') === 'internal-db' ? 'internal-db' : 'my-resumes',
+  );
 
   const permissions = user?.permissions;
   const hasAnyPerm = (keys: readonly string[]): boolean =>
@@ -58,43 +75,67 @@ export default function ResumeDatabasePage() {
   const canSeeMyResumes = hasAnyPerm(MY_RESUMES_PERMISSIONS);
   const canSeeInternalDb = hasAnyPerm(INTERNAL_DB_PERMISSIONS);
 
-  /* Which tab to show. A `?tab=` the user isn't entitled to is treated as
-     absent rather than as an error — deep links are shared between colleagues
-     with different roles, and landing on the pool you CAN see beats a wall. */
-  const requestedTab = searchParams.get('tab');
+  /* Entitlement is applied on top of the request every render rather than
+     corrected into state by an effect, so there is no frame where the two
+     disagree. While auth is still loading nobody has permissions yet — trust
+     the requested tab rather than concluding "no access", which is what used
+     to blank the tab strip and strand the user on whichever tab they had
+     just opened. A `?tab=` the user isn't entitled to is treated as absent:
+     deep links get shared between colleagues with different roles, and landing
+     on the pool you CAN see beats a wall. */
   const activeTab: ResumeTab | null =
-    requestedTab === 'my-resumes' && canSeeMyResumes ? 'my-resumes'
+    authLoading ? requestedTab
+    : requestedTab === 'my-resumes' && canSeeMyResumes ? 'my-resumes'
     : requestedTab === 'internal-db' && canSeeInternalDb ? 'internal-db'
     : canSeeMyResumes ? 'my-resumes'
     : canSeeInternalDb ? 'internal-db'
     : null;
 
   const handleTabChange = (value: string) => {
-    if (value === activeTab) return;
-    router.replace(`/recruitment/resume-database?tab=${value}`, { scroll: false });
+    const next: ResumeTab = value === 'internal-db' ? 'internal-db' : 'my-resumes';
+    if (next === activeTab) return;
+    setRequestedTab(next);
+    // URL only — deliberately not router.replace(), see the note above.
+    window.history.replaceState(null, '', `/recruitment/resume-database?tab=${next}`);
   };
 
   /* One tab is not a tab strip — a user with only one of the two permissions
      sees the page without it, rather than a lone chip that looks broken. */
   const showTabs = canSeeMyResumes && canSeeInternalDb;
 
+  const crumbs = [
+    { label: 'Dashboard', href: '/dashboard' },
+    // No href: this page has no "both tabs" state to link to, and PageBreadcrumb
+    // renders a middle crumb without one as a muted grouping label.
+    { label: 'Resume Database' },
+    { label: activeTab ? TAB_LABEL[activeTab] : 'Resume Database' },
+  ];
+
   const header = (
     <>
-      <PageBreadcrumb
-        className={showTabs ? 'mb-3' : 'mb-4 md:mb-6'}
-        items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Resume Database' }]}
-      />
+      <PageBreadcrumb className={showTabs ? 'mb-3' : 'mb-4 md:mb-6'} items={crumbs} />
       {showTabs && (
-        <Tabs value={activeTab ?? undefined} onValueChange={handleTabChange} className="mb-4 md:mb-6">
-          <TabsList aria-label="Resume pool">
-            <TabsTrigger value="my-resumes" className="px-3 sm:px-4">
-              <FolderOpen className="h-3.5 w-3.5" />
-              My Resumes
-            </TabsTrigger>
-            <TabsTrigger value="internal-db" className="px-3 sm:px-4">
-              <Database className="h-3.5 w-3.5" />
-              Internal Database
-            </TabsTrigger>
+        <Tabs value={activeTab ?? undefined} onValueChange={handleTabChange} className="mb-5 md:mb-6">
+          {/* Sized to its labels and visibly grooved, so the selected pool reads
+              at a glance. The shared TabsList defaults stretch triggers to fill
+              the row (flex-1), which left two near-identical full-width slabs. */}
+          <TabsList
+            aria-label="Resume pool"
+            className="h-auto w-auto gap-1 rounded-xl bg-slate-100 p-1 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
+          >
+            {(['my-resumes', 'internal-db'] as const).map((tab) => {
+              const Icon = tab === 'my-resumes' ? FolderOpen : Database;
+              return (
+                <TabsTrigger
+                  key={tab}
+                  value={tab}
+                  className="h-9 flex-none gap-2 rounded-lg px-4 text-sm font-medium text-slate-600 hover:text-slate-900 data-[state=active]:bg-white data-[state=active]:font-semibold data-[state=active]:text-brand-blue data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-brand-blue/30 dark:text-slate-400 dark:hover:text-slate-100 dark:data-[state=active]:bg-slate-900"
+                >
+                  <Icon className="h-4 w-4" />
+                  {TAB_LABEL[tab]}
+                </TabsTrigger>
+              );
+            })}
           </TabsList>
         </Tabs>
       )}
@@ -120,7 +161,7 @@ export default function ResumeDatabasePage() {
               <h1 className="text-lg font-semibold text-gray-900">Access Restricted</h1>
               <p className="max-w-md text-sm text-gray-600">
                 You don&apos;t have permission to view the resume database. Ask your administrator
-                for access to My Resumes or the Internal Database.
+                for access to My Resumes or the Shared Database.
               </p>
             </div>
           </div>
