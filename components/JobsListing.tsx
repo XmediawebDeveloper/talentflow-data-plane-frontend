@@ -41,10 +41,10 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
-const viewVersionsMenuItemClass = 'group text-gray-700 hover:bg-gray-50 hover:text-gray-700 focus:!bg-gray-50 focus:!text-gray-700 data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700 dark:text-slate-200 dark:hover:bg-slate-800 dark:hover:text-slate-100 dark:focus:!bg-slate-800 dark:focus:!text-slate-100 dark:data-[highlighted]:!bg-slate-800 dark:data-[highlighted]:!text-slate-100';
-const viewVersionsMenuItemOrangeClass = 'group text-orange-700 hover:bg-orange-50 hover:text-orange-700 focus:!bg-orange-50 focus:!text-orange-700 data-[highlighted]:!bg-orange-50 data-[highlighted]:!text-orange-700 dark:text-orange-300 dark:hover:bg-orange-950/30 dark:hover:text-orange-200 dark:focus:!bg-orange-950/30 dark:focus:!text-orange-200 dark:data-[highlighted]:!bg-orange-950/30 dark:data-[highlighted]:!text-orange-200 [&_svg]:!text-current';
-const viewVersionsMenuItemGreenClass = 'group text-success hover:bg-success-subtle hover:text-success focus:!bg-success-subtle focus:!text-success data-[highlighted]:!bg-success-subtle data-[highlighted]:!text-success dark:focus:!bg-success-subtle/30 dark:focus:!text-success dark:data-[highlighted]:!bg-success-subtle/30 dark:data-[highlighted]:!text-success [&_svg]:!text-current';
-const viewVersionsMenuItemRedClass = 'group text-destructive hover:bg-destructive-subtle hover:text-destructive focus:!bg-destructive-subtle focus:!text-destructive data-[highlighted]:!bg-destructive-subtle data-[highlighted]:!text-destructive dark:focus:!bg-destructive-subtle/30 dark:focus:!text-destructive dark:data-[highlighted]:!bg-destructive-subtle/30 dark:data-[highlighted]:!text-destructive [&_svg]:!text-current';
+const viewVersionsMenuItemClass = 'group text-gray-700 dark:text-slate-200';
+const viewVersionsMenuItemOrangeClass = 'group text-orange-700 dark:text-orange-300 [&_svg]:!text-current';
+const viewVersionsMenuItemGreenClass = 'group text-success [&_svg]:!text-current';
+const viewVersionsMenuItemRedClass = 'group text-destructive [&_svg]:!text-current';
 /* Formatting, badge tokens, lineage grouping and the list sort all live in
    lib/utils/jobOpeningDisplay — this page is the reference listing, and the
    Apply to Job dialog renders the same jobs from the same helpers. */
@@ -1268,7 +1268,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                     (onViewApplicants || onViewJob)(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700"
                                 >
                                   <Users className="w-4 h-4 text-menu-icon-secondary" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>View Applicants</span>
@@ -1282,7 +1282,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                     setActiveDropdown(null);
                                     onAIMatch(job);
                                   }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700"
                                 >
                                   <Brain className="w-4 h-4 text-menu-icon-ai" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>AI Talent Match</span>
@@ -1295,7 +1295,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                     onScoreResumes(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700"
                                 >
                                   <ClipboardList className="w-4 h-4 text-menu-icon-score" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
@@ -1308,7 +1308,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                     e.stopPropagation();
                                     requestDisableJob(job);
                                   }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700"
                                 >
                                   <Ban className="w-4 h-4" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Disable Job</span>
@@ -1322,7 +1322,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                     onRepublishJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-success hover:bg-success-subtle"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-success"
                                 >
                                   <CheckCircle2 className="w-4 h-4" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
@@ -1336,7 +1336,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                     onArchiveJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700"
                                 >
                                   <Archive className="w-4 h-4 text-menu-icon-archive" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Archive Job</span>
@@ -1350,7 +1350,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                     onUnarchiveJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-success hover:bg-success-subtle"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-success"
                                 >
                                   <RefreshCw className="w-4 h-4" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Unarchive Job</span>
@@ -1364,7 +1364,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                     onDeleteJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive hover:bg-destructive-subtle"
+                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive"
                                 >
                                   <Trash2 className="w-4 h-4" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Delete Job</span>

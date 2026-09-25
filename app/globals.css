@@ -1098,6 +1098,29 @@ a:focus:not(:focus-visible) {
   outline: none;
 }
 
+/* Menu options (every ⋮ / dropdown option) never draw the ring above. Radix
+   gives the current option tabindex="0", so the [tabindex] rule matched it
+   and — being unlayered — beat the item's own `outline-hidden`, tracing a
+   border around the option on hover/focus. Their hover/focus state is the
+   label's scale (MENU_ITEM_SCALE_CLASS) instead; `.menu-item-label` is that
+   label's marker, which covers the hand-rolled (plain <button>) menus. */
+[role="menuitem"][tabindex]:focus-visible,
+[role="menuitemcheckbox"][tabindex]:focus-visible,
+[role="menuitemradio"][tabindex]:focus-visible,
+[role="menuitem"]:focus,
+[role="menuitemcheckbox"]:focus,
+[role="menuitemradio"]:focus,
+button:has(.menu-item-label):focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* The ⋮ trigger itself: closing its menu hands focus back to it, which drew
+   the same ring around the button after every click. */
+[aria-haspopup="menu"]:focus-visible {
+  outline: none;
+}
+
 /* Skip to content link for screen readers */
 .skip-to-content {
   position: absolute;

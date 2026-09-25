@@ -48,7 +48,7 @@ import {
 // not just keyboard) that global rule painted a visible ring around it. The
 // `data-[highlighted]` background above is this item's own focus indicator;
 // !important is what it takes to actually beat that global selector.
-const scoredResumesMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700 hover:!bg-gray-50 focus:!bg-gray-50 focus:!text-gray-700 focus-visible:!outline-none data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700';
+const scoredResumesMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700';
 const COLUMN_PREFERENCES_KEY = 'scoredResumesTableColumns';
 
 // The global "View All Candidates" host defaults this table's `jobId` prop to
@@ -1437,7 +1437,7 @@ Best regards`);
         </DropdownMenuTrigger>
         <DropdownMenuContent
           align="start"
-          className="w-48 !rounded-lg !border !border-gray-200 !bg-white !py-1 !px-0 !shadow-xl"
+          className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl"
         >
           {canCreateAssessments && (
             <DropdownMenuItem
