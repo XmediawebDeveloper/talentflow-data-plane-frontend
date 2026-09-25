@@ -1,5 +1,5 @@
-import { X, Mail, Plus, Trash2, Send, CheckCircle, Clock, FileText, Users, Upload, Database, AlertTriangle, ShieldAlert, Info, FolderOpen, Folder, ChevronRight, ChevronDown, Loader2 } from 'lucide-react';
-import React, { useState, useEffect } from 'react';
+import { X, Mail, Plus, Trash2, Send, CheckCircle, Clock, FileText, Users, Upload, Database, AlertTriangle, ShieldAlert, Info, FolderOpen, Folder, ChevronRight, ChevronDown, Loader2, FileSpreadsheet } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { assessmentService } from '@/lib/services';
@@ -11,6 +11,7 @@ import SuccessAnimation from '@/components/ui/success-animation';
 import { toast } from 'sonner';
 import { useQuota } from '@/contexts/QuotaContext';
 import { isValidEmailFormat } from '@/lib/utils/email';
+import readXlsxFile from 'read-excel-file/browser';
 
 // Delegates to the one shared, comprehensive format rule (lib/utils/email),
 // used everywhere else a candidate email is entered or edited, rather than
@@ -98,6 +99,10 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   const allAssessments = [assessment, ...(additionalAssessments || [])];
 
   const [inputMode, setInputMode] = useState<'manual' | 'database'>('manual');
+  /* Upload Excel's hidden file input — the Share AI Interview via Email
+     dialog's control, which this one now mirrors. Declared up here with the
+     other hooks, ahead of the `!isOpen` early return. */
+  const excelInputRef = useRef<HTMLInputElement>(null);
   const [candidates, setCandidates] = useState<CandidateEmail[]>(
     prefilledCandidates && prefilledCandidates.length > 0
       ? prefilledCandidates
@@ -260,6 +265,161 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   const [duplicateEmail, setDuplicateEmail] = useState('');
 
   if (!isOpen) return null;
+
+  /* Upload Excel — ported from the Share AI Interview via Email dialog, same
+     parsing and the same rules: .xlsx/.xls (every sheet) or .csv, an "Email"
+     column required and a "Name" column optional, invalid and duplicate
+     addresses skipped. Imported rows join the candidate list as ordinary
+     manual entries, so they are validated and sent exactly as typed ones. */
+  const parseCSV = (text: string): Record<string, string>[] => {
+    const lines = text.trim().split(/\r?\n/);
+    if (lines.length < 2) return [];
+    const parseRow = (line: string): string[] => {
+      const result: string[] = [];
+      let current = '';
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        if (line[i] === '"') {
+          if (inQuotes && line[i + 1] === '"') { current += '"'; i++; }
+          else inQuotes = !inQuotes;
+        } else if (line[i] === ',' && !inQuotes) {
+          result.push(current.trim());
+          current = '';
+        } else {
+          current += line[i];
+        }
+      }
+      result.push(current.trim());
+      return result;
+    };
+    const headers = parseRow(lines[0]);
+    return lines.slice(1).filter(l => l.trim()).map(line => {
+      const values = parseRow(line);
+      const obj: Record<string, string> = {};
+      headers.forEach((h, i) => { obj[h] = values[i] ?? ''; });
+      return obj;
+    });
+  };
+
+  const extractFromSheet = (rawRows: any[][]): CandidateEmail[] => {
+    if (rawRows.length < 2) return [];
+    const headers = rawRows[0].map((h: any) => String(h ?? '').trim());
+    const nameCol = headers.find((h: string) => /^(name|full.?name|candidate.?name|first.?name)$/i.test(h));
+    const emailCol = headers.find((h: string) => /^(email|e.?mail|candidate.?email|email.?address)$/i.test(h));
+    if (!emailCol) return [];
+    const results: CandidateEmail[] = [];
+    const seenInSheet = new Set<string>();
+    for (const row of rawRows.slice(1)) {
+      const rowObj: Record<string, string> = {};
+      headers.forEach((h: string, i: number) => { rowObj[h] = String(row[i] ?? '').trim(); });
+      const email = (rowObj[emailCol] || '').trim().toLowerCase();
+      const name = nameCol ? (rowObj[nameCol] || '').trim() : '';
+      if (email && isValidEmail(email) && !seenInSheet.has(email)) {
+        seenInSheet.add(email);
+        results.push({
+          id: Date.now().toString() + Math.random(),
+          name: name || email.split('@')[0],
+          email,
+          source: 'manual' as const,
+        });
+      }
+    }
+    return results;
+  };
+
+  const handleExcelUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (excelInputRef.current) excelInputRef.current.value = '';
+
+    try {
+      const parsed: CandidateEmail[] = [];
+
+      if (file.name.toLowerCase().endsWith('.csv')) {
+        const rows = parseCSV(await file.text());
+        if (rows.length === 0) { toast.error('No data found in the CSV file'); return; }
+        const headerKeys = Object.keys(rows[0]);
+        const emailCol = headerKeys.find(h => /^(email|e.?mail|candidate.?email|email.?address)$/i.test(h.trim()));
+        const nameCol = headerKeys.find(h => /^(name|full.?name|candidate.?name|first.?name)$/i.test(h.trim()));
+        if (!emailCol) {
+          toast.error(`Could not find an "Email" column. Found: ${headerKeys.join(', ')}`);
+          return;
+        }
+        for (const row of rows) {
+          const email = (row[emailCol] || '').trim().toLowerCase();
+          const name = nameCol ? (row[nameCol] || '').trim() : '';
+          if (email && isValidEmail(email)) {
+            parsed.push({ id: Date.now().toString() + Math.random(), name: name || email.split('@')[0], email, source: 'manual' });
+          }
+        }
+      } else {
+        // readXlsxFile returns { sheet: string, data: Row[][] }[] — all sheets at once
+        const allSheets = await readXlsxFile(file) as any[];
+
+        if (allSheets.length > 1) {
+          toast.info(`Found ${allSheets.length} sheets (${allSheets.map((sh: any) => sh.sheet).join(', ')}) — combining all.`);
+        }
+
+        const seenEmails = new Set<string>();
+        let sheetsWithData = 0;
+
+        for (const sheetObj of allSheets) {
+          const rows: any[][] = sheetObj.data ?? sheetObj;
+          const sheetCandidates = extractFromSheet(rows);
+          if (sheetCandidates.length > 0) sheetsWithData++;
+          for (const c of sheetCandidates) {
+            if (!seenEmails.has(c.email.toLowerCase())) {
+              seenEmails.add(c.email.toLowerCase());
+              parsed.push(c);
+            }
+          }
+        }
+
+        if (allSheets.length > 1 && sheetsWithData < allSheets.length) {
+          toast.info(`${allSheets.length - sheetsWithData} sheet(s) had no recognisable email column and were skipped.`);
+        }
+      }
+
+      if (parsed.length === 0) {
+        toast.error('No valid email addresses found. Make sure your file has a column named "Email" or "name".');
+        return;
+      }
+
+      // Deduplicate against candidates already in the list
+      const existingValid = candidates.filter(c => c.name.trim() && c.email.trim());
+      const existingEmails = new Set(existingValid.map(c => c.email.toLowerCase().trim()));
+      const newOnly = parsed.filter(c => !existingEmails.has(c.email.toLowerCase().trim()));
+      const duplicates = parsed.length - newOnly.length;
+
+      if (duplicates > 0) {
+        toast.warning(`${duplicates} duplicate email${duplicates > 1 ? 's' : ''} skipped — already in the list`);
+      }
+
+      if (newOnly.length === 0) {
+        toast.warning('All emails from the file are already in the list');
+        return;
+      }
+
+      // Quota warning: inform how many can actually be sent
+      if (quotaStats && quotaStats.total_quota < 999999) {
+        const totalAfterAdd = existingValid.length + newOnly.length;
+        if (totalAfterAdd > quotaStats.available) {
+          const canSend = Math.max(0, quotaStats.available - existingValid.length);
+          toast.warning(
+            `Quota: ${quotaStats.available} unit${quotaStats.available !== 1 ? 's' : ''} available. ` +
+            `${newOnly.length} candidates imported — only the first ${canSend} will be sent. Remove unwanted rows before sending.`
+          );
+        }
+      }
+
+      setCandidates(existingValid.length > 0 ? [...existingValid, ...newOnly] : newOnly);
+      toast.success(`${newOnly.length} candidate${newOnly.length !== 1 ? 's' : ''} imported from ${file.name}`);
+      setInputMode('manual');
+    } catch (err) {
+      console.error('Failed to parse file:', err);
+      toast.error('Failed to parse file. Please ensure it is a valid .xlsx or .csv file.');
+    }
+  };
 
   const addCandidate = () => {
     setCandidates([...candidates, { id: Date.now().toString(), name: '', email: '', source: 'manual' }]);
@@ -637,11 +797,6 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
-                  {assessment.short_id && (
-                    <span className="text-2xs sm:text-xs px-1.5 sm:px-2 py-0.5 bg-brand-blue text-white rounded font-semibold">
-                      {assessment.short_id}
-                    </span>
-                  )}
                   <span className="text-gray-900 dark:text-slate-50">{assessmentTitleForEmail}</span>
                   {/* Job version, then assessment version — the two are
                       different facts about this row and the banner used to show
@@ -716,7 +871,6 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       {allAssessments.map((a, idx) => (
                         <div key={idx} className="text-2xs sm:text-xs px-2 py-1 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] text-gray-700 dark:text-slate-300 rounded">
                           <div className="flex items-center gap-1 flex-wrap">
-                            {a.short_id && <span className="font-semibold">{a.short_id}</span>}
                             <span className="truncate">{stripVersionFromTitle(a.title)}</span>
                           </div>
                           {a.jd_short_id && (
@@ -852,9 +1006,26 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                   }`}
                 >
                   <Upload className="w-3 h-3 sm:w-4 sm:h-4" />
-                  <span className="hidden sm:inline">Type Manually</span>
-                  <span className="sm:hidden">Manual</span>
+                  Manually
                 </button>
+                {/* Upload Excel — beside Manually, as in the Share AI
+                    Interview via Email dialog. Opens the file picker; the rows
+                    it reads land in the Manually list, which is why it never
+                    shows as the active mode itself. */}
+                <button
+                  onClick={() => excelInputRef.current?.click()}
+                  className="flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm transition-colors bg-slate-100 text-gray-700 dark:text-slate-300 hover:bg-slate-200"
+                >
+                  <FileSpreadsheet className="w-3 h-3 sm:w-4 sm:h-4" />
+                  Upload Excel
+                </button>
+                <input
+                  ref={excelInputRef}
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  onChange={handleExcelUpload}
+                  className="hidden"
+                />
                 <button
                   onClick={() => setInputMode('database')}
                   className={`flex items-center gap-1 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-lg text-xs sm:text-sm transition-colors ${

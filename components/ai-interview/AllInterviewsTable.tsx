@@ -23,6 +23,7 @@ import { formatISTStamp, parseIST } from '@/lib/utils/dateUtils';
 import { useDebounce } from '@/lib/hooks/useDebounce';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 
 /** The page-size ladder this screen specifies (same ladder as the Assessments
  *  equivalent, so pagination reads the same across the two products). */
@@ -1013,7 +1014,7 @@ export default function AllInterviewsTable({ toolbarSlot, refreshSignal, fixedSt
                           {rowActions(row).map(({ key, label, icon: Icon, run }) => (
                             <DropdownMenuItem key={key} onClick={run} className="gap-2">
                               <Icon className="w-4 h-4" />
-                              {label}
+                              <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
                             </DropdownMenuItem>
                           ))}
                         </DropdownMenuContent>

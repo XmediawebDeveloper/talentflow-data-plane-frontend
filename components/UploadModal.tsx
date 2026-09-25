@@ -339,7 +339,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
         onMouseLeave={() => scheduleOpenPath(ancestors)}
         className={`group w-full text-left py-2 text-sm transition-colors flex items-center gap-2 ${
           isSelected ? 'text-brand-blue bg-brand-blue/[0.06]' : 'text-gray-700 dark:text-slate-300'
-        } ${isOpen ? 'bg-blue-50 dark:bg-slate-800' : 'hover:bg-blue-50 dark:hover:bg-slate-800'}`}
+        } ${isOpen ? 'bg-blue-50 dark:bg-slate-800' : ''}`}
         style={{ paddingLeft: 12 + depth * 16, paddingRight: 8, marginLeft: 4, marginRight: 4, width: 'calc(100% - 8px)' }}
       >
         <FolderInput className="w-4 h-4 text-brand-orange flex-shrink-0" />
@@ -1206,7 +1206,7 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
                                 className={`group w-full text-left py-2 text-sm transition-colors flex items-center gap-2 ${
                                   (selectedFolder || rootFolder?.id) === folder.id
                                     ? 'text-brand-blue bg-brand-blue/[0.06]'
-                                    : 'text-gray-700 dark:text-slate-300 hover:bg-blue-50 dark:hover:bg-slate-800'
+                                    : 'text-gray-700 dark:text-slate-300'
                                 }`}
                                 style={{ paddingLeft: 12, paddingRight: 8, marginLeft: 4, marginRight: 4, width: 'calc(100% - 8px)' }}
                               >

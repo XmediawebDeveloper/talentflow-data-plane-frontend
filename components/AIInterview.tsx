@@ -56,7 +56,7 @@ const QUICK_ACTION_BASE =
 /* One dropdown item's row, shared by every entry in the compact menu so they
    line up exactly as the Assessment page's do. */
 const VERSION_MENU_ITEM_CLASS =
-  'group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors';
+  'group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 transition-colors';
 /* Same row, greyed out — the look the menu's disabled Delete already uses. */
 const VERSION_MENU_ITEM_DISABLED_CLASS =
   'group w-full flex items-center gap-2 px-4 py-2.5 text-sm text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60';
@@ -1663,7 +1663,7 @@ export default function AIInterview() {
                   className={`group w-full flex items-center gap-2 px-4 py-2.5 text-sm transition-colors ${
                     hasBeenShared
                       ? 'text-gray-400 dark:text-slate-500 cursor-not-allowed opacity-60'
-                      : 'text-destructive hover:bg-destructive-subtle'
+                      : 'text-destructive'
                   }`}
                 >
                   <Trash2 className="w-4 h-4 flex-shrink-0" />

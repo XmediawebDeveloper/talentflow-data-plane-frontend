@@ -19,7 +19,7 @@ import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 /* Same three-dot menu convention as every other list in the app (Job
    Openings, Resume Scoring): Radix `DropdownMenu`, portaled so it isn't
    clipped by this table's `overflow-x-auto` wrapper. */
-const actionsMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700 hover:!bg-gray-50 focus:!bg-gray-50 focus:!text-gray-700 focus-visible:!outline-none data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700';
+const actionsMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700';
 
 export interface AIMatchSessionVersion {
   /**

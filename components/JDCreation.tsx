@@ -28,6 +28,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Button } from '@/components/ui/button';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import { PageSkeleton } from '@/components/ui/skeleton';
+import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 
 type CreationMode = 'ai' | 'manual';
 type Step = 'create' | 'extract' | 'review';
@@ -8129,7 +8130,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                                               onClick={() => handleResolvePossiblyMissed(phrase, t.category)}
                                               className="text-xs"
                                             >
-                                              {t.label}
+                                              <span className={MENU_ITEM_SCALE_CLASS}>{t.label}</span>
                                               {/* The JD said where it read this - under a
                                                   "preferred" heading or not - so the
                                                   likely list is marked rather than

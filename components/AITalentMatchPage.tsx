@@ -51,7 +51,7 @@ import JDVersionHistory from '@/components/JDVersionHistory';
 
 /* Shared row for both candidate tables' ⋮ Actions menu (Preview Resume /
    Score Resume / Invite Assessment / Invite AI Interview). */
-const actionsMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700 hover:!bg-gray-50 focus:!bg-gray-50 focus:!text-gray-700 focus-visible:!outline-none data-[highlighted]:!bg-gray-50 data-[highlighted]:!text-gray-700';
+const actionsMenuItemClass = 'group !rounded-none !px-4 !py-2.5 text-sm text-gray-700';
 
 /* Neutral-gray table skeleton whose columns mirror a specific matched-candidate
    table. `cols` is one width class (e.g. 'w-24') per column, in table order. */

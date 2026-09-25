@@ -96,7 +96,7 @@ import { scoringService } from '@/lib/services/scoringService';
 import { recordAssessment } from '@/lib/services/usageTrackingService';
 import api from '@/lib/services/api';
 import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/services/proctoringService';
-import { AlertTriangle, RefreshCw, Send, Ban, Layers, Briefcase, ChevronDown, Radar, Search, ChevronLeft } from 'lucide-react';
+import { AlertTriangle, RefreshCw, Send, Ban, Layers, Briefcase, ChevronDown, Radar, Search, ChevronLeft, ArrowUpDown } from 'lucide-react';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -105,7 +105,7 @@ import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { IS_PRODUCTION_ENV } from '@/lib/utils/env';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import QuotaBadge from '@/components/ui/quota-badge';
-import AllAssessmentsTable from '@/components/assessments/AllAssessmentsTable';
+import AllAssessmentsTable, { VersionPill } from '@/components/assessments/AllAssessmentsTable';
 import AssessmentVersionHistoryPanel, { type AssessmentVersionRow, VersionChip } from '@/components/assessments/AssessmentVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
 import { latestVersionNumber } from '@/lib/utils/jobOpeningDisplay';
@@ -532,6 +532,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     jobVersionId?: string;
     assessmentId: string;
   } | null>(null);
+  /* The Send Invite picker's own view state - the AI Interviews picker's:
+     Ungrouped (one row per sendable assessment) or Grouped (one card per
+     job), paged five at a time. UI only; the pick above is the same either
+     way. Reset whenever the picker opens or closes. */
+  const [invitePickerViewMode, setInvitePickerViewMode] = useState<'ungrouped' | 'grouped'>('ungrouped');
+  const [invitePickerPage, setInvitePickerPage] = useState(1);
+  const [invitePickerPageSize, setInvitePickerPageSize] = useState(5);
+  const invitePickerScrollRef = useRef<HTMLDivElement | null>(null);
   const [showPreviewModal, setShowPreviewModal] = useState(false);
   const [selectedAssessmentForPreview, setSelectedAssessmentForPreview] = useState<any>(null);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -681,6 +689,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [revokeInviteTarget, setRevokeInviteTarget] = useState<any | null>(null);
   const [editInviteTarget, setEditInviteTarget] = useState<any | null>(null);
   const [historyInviteTarget, setHistoryInviteTarget] = useState<any | null>(null);
+  /* Clear Sort for the All / Active / Draft / Archived tables: the button
+     (beside the Settings tab) bumps the signal, and the mounted table reports
+     whether its sort is off the default. Recorded as WHICH tab is sorted, not
+     a bare flag, so moving to another tab hides the button at once instead of
+     showing it until the new table reports in. */
+  const [clearAssessmentSortSignal, setClearAssessmentSortSignal] = useState(0);
+  const [sortedAssessmentTab, setSortedAssessmentTab] = useState<string | null>(null);
   // Clone confirmation state — simple confirm-only modal. The recruiter
   // invites V2 candidates manually via the normal invite flow.
   const [cloneTargetAssessment, setCloneTargetAssessment] = useState<any | null>(null);
@@ -1878,10 +1893,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      Pending keep their per-component red and slate — nothing else draws them
      yet, so there is nothing for them to stay in step with. */
   /* Drawing is split from deciding: `renderInviteBadgeForStatus` draws one
-     status key in its house badge; `resolveInviteFieldStatus` reads the key
-     off the row's own fields (the Track Invites popup's badge), and
-     `currentInviteStatus` reads it off the row's Timeline (the Invitation
-     Status tab) — so both readings share one set of badges. */
+     status key in its house badge; `currentInviteStatus` decides it from the
+     row's Timeline (both the Track Invites popup and the Invitation Status
+     tab), with `resolveInviteFieldStatus` — the row's own fields — only as
+     its fallback. */
   const renderInviteBadgeForStatus = (status: string, inv: { termination_code?: string | null }) => {
     const base = "inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs sm:text-xs font-medium whitespace-nowrap flex-shrink-0 ring-1";
     switch (status) {
@@ -1936,9 +1951,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     if (s === 'sent' || inv.sent_at) return 'sent';
     return 'pending';
   };
-
-  const renderInviteStatusBadge = (inv: any) =>
-    renderInviteBadgeForStatus(resolveInviteFieldStatus(inv), inv);
 
   /* The Invitation Status tab's one status rule: the latest status in the
      row's Timeline (`latestTimelineStatus`, which reads the same trail the
@@ -2828,7 +2840,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           }
         })
       );
-      const merged = perAssessment.flat();
+      /* One row per invitation: paging that shifts while it is being walked
+         can hand the same record back twice, and it would list as two rows. */
+      const seenInviteIds = new Set<string>();
+      const merged = perAssessment.flat().filter((inv: any) => {
+        if (!inv.id) return true;
+        if (seenInviteIds.has(inv.id)) return false;
+        seenInviteIds.add(inv.id);
+        return true;
+      });
       // Newest invite first: sent_at is the moment the recruiter cares about,
       // created_at covers a row that never made it out of the queue.
       merged.sort((x: any, y: any) => {
@@ -3347,6 +3367,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     }
     setInvitePickerQuery('');
     setInvitePickerSelection(null);
+    setInvitePickerViewMode('ungrouped');
+    setInvitePickerPage(1);
     setShowInvitePicker(true);
   };
 
@@ -3358,6 +3380,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     setShowInvitePicker(false);
     setInvitePickerQuery('');
     setInvitePickerSelection(null);
+    setInvitePickerViewMode('ungrouped');
+    setInvitePickerPage(1);
   };
 
   const reloadAssessments = async () => {
@@ -5359,7 +5383,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
                     buttonDisabled
                       ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-gray-700 hover:bg-gray-50'
+                      : 'text-gray-700'
                   }`}
                 >
                   <Copy className={`w-4 h-4 flex-shrink-0 ${buttonDisabled ? 'text-gray-300' : 'text-menu-icon-download'}`} />
@@ -5393,7 +5417,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
                     revokeDisabled
                       ? 'text-gray-400 cursor-not-allowed'
-                      : 'text-destructive hover:bg-destructive-subtle'
+                      : 'text-destructive'
                   }`}
                 >
                   <Ban className={`w-4 h-4 flex-shrink-0 ${revokeDisabled ? 'text-gray-300' : ''}`} />
@@ -5409,7 +5433,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             {canUpdateAssessment && assessment.status !== 'Active' && assessment.status !== 'Draft' && (
               <button
                 onClick={() => handleActivateAssessment(assessment.id)}
-                className="group w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 flex items-center gap-2 transition-colors"
+                className="group w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-slate-300 flex items-center gap-2 transition-colors"
               >
                 <Play className="w-4 h-4 text-menu-icon-activate flex-shrink-0" />
                 <span className={MENU_ITEM_SCALE_CLASS}>Activate</span>
@@ -5429,7 +5453,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 ${
                 !canDeleteAssessment
                   ? 'text-gray-400 cursor-not-allowed opacity-60'
-                  : 'text-gray-700 hover:bg-gray-50'
+                  : 'text-gray-700'
               }`}
             >
               <Archive className="w-4 h-4 text-menu-icon-archive flex-shrink-0" />
@@ -5461,7 +5485,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 ${
                     isDisabled
                       ? 'text-gray-400 cursor-not-allowed opacity-60'
-                      : 'text-destructive hover:bg-destructive-subtle'
+                      : 'text-destructive'
                   }`}
                 >
                   <Trash2 className="w-4 h-4 flex-shrink-0" />
@@ -6199,6 +6223,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
              divider. */
           const AFTER_DIVIDER: readonly string[] = ['audit', 'consent', 'settings'];
 
+          /* One pill class for the row — the tab pills and Clear Sort beside
+             Settings — so the button sits at exactly Settings' size. */
+          const TAB_PILL_CLASS = 'px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all whitespace-nowrap inline-flex items-center gap-1.5';
+          const TAB_PILL_IDLE_CLASS = 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue';
+          const TAB_PILL_ICON_CLASS = 'w-3.5 h-3.5 sm:w-4 sm:h-4';
+
           const renderTabPill = (tab: (typeof TABS)[number]) => {
             const TabIcon = 'icon' in tab ? tab.icon : undefined;
             const isActive = activeTab === tab.key;
@@ -6207,13 +6237,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 key={tab.key}
                 onClick={() => setActiveTab(tab.key)}
                 aria-current={isActive ? 'page' : undefined}
-                className={`px-3 py-1.5 rounded-lg text-xs sm:text-sm transition-all whitespace-nowrap inline-flex items-center gap-1.5 ${
+                className={`${TAB_PILL_CLASS} ${
                   isActive
                     ? 'bg-brand-blue text-white shadow-sm shadow-brand-blue/25'
-                    : 'bg-brand-blue/5 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/10 hover:text-brand-blue'
+                    : TAB_PILL_IDLE_CLASS
                 }`}
               >
-                {TabIcon && <TabIcon className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+                {TabIcon && <TabIcon className={TAB_PILL_ICON_CLASS} />}
                 {'short' in tab && tab.short ? (
                   <>
                     <span className="hidden sm:inline">{tab.label}</span>
@@ -6234,6 +6264,39 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               {visibleTabs.filter((tab) => !AFTER_DIVIDER.includes(tab.key)).map(renderTabPill)}
               <div className="flex items-center gap-2 flex-wrap sm:ml-2 sm:border-l sm:border-gray-200 dark:sm:border-slate-700/60 sm:pl-3">
                 {visibleTabs.filter((tab) => AFTER_DIVIDER.includes(tab.key)).map(renderTabPill)}
+                {/* Clear Sort — All / Active / Draft / Archived, right after
+                    Settings, in Settings' own pill styling. Shown only while
+                    this tab's table is sorted off its default — the same
+                    appear-when-there-is-something-to-undo rule as the
+                    toolbar's Reset. Puts the sort back to its default and
+                    nothing else: search and filters stay as they are. */}
+                {isFlatAssessmentTab(activeTab) && sortedAssessmentTab === activeTab && (
+                  <button
+                    type="button"
+                    onClick={() => setClearAssessmentSortSignal((n) => n + 1)}
+                    title="Return the table to its default order"
+                    className={`${TAB_PILL_CLASS} ${TAB_PILL_IDLE_CLASS}`}
+                  >
+                    <ArrowUpDown className={TAB_PILL_ICON_CLASS} />
+                    Clear Sort
+                  </button>
+                )}
+                {/* Invitation Status's Refresh — icon only, right after
+                    Settings. Same handler and spinner, and shown on the same
+                    terms the toolbar it came from was. */}
+                {activeTab === 'invitation-status' && !inviteStatusError && inviteStatusRows.length > 0 && (
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={loadAllInviteStatuses}
+                    disabled={isLoadingInviteStatus}
+                    title="Fetch the latest invite statuses"
+                    aria-label="Refresh"
+                    className="px-2"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isLoadingInviteStatus ? 'animate-spin' : ''}`} />
+                  </Button>
+                )}
               </div>
             </div>
           );
@@ -6263,6 +6326,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   key={`assessment-list-${activeTab}`}
                   embedded
                   fixedStatus={config.fixedStatus}
+                  clearSortSignal={clearAssessmentSortSignal}
+                  onSortDefaultChange={(isDefault) => setSortedAssessmentTab(isDefault ? null : activeTab)}
                 />
               );
             })() : activeTab === 'completed-candidates' ? (() => {
@@ -6875,7 +6940,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                  only with something selected: a part-finished invite has no
                  scores or completion date to put in a sheet, so exporting one
                  would produce mostly empty rows. */
-              const selectedInviteRows = filtered.filter((inv) => selectedInviteIds.has(inv.id));
+              /* The checkbox column exists only on the sub-tabs whose rows a
+                 bulk action can act on: Invited (Revoke), Expired (Resend) and
+                 Completed (Export). Total, Revoked and In Progress have no bulk
+                 action, so they get no column, no Select All and no selection
+                 — the rows below read nothing from a selection there. */
+              const showInviteSelection = ['sent', 'expired', 'completed'].includes(inviteStatusFilters.status);
+              const selectedInviteRows = showInviteSelection
+                ? filtered.filter((inv) => selectedInviteIds.has(inv.id))
+                : [];
               const selectableIds = filtered.map((inv) => inv.id);
               const allFilteredSelected = selectableIds.length > 0
                 && selectableIds.every((id) => selectedInviteIds.has(id));
@@ -6953,21 +7026,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         filtersApplied={inviteStatusFilterCount > 0}
                         onClearFilters={clearInviteStatusFilters}
                         className="mb-0"
-                        /* Refresh sits immediately right of More Filters —
-                           moved up from the list card's header row, same
-                           button, handler and spinner. */
-                        afterFiltersActions={
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={loadAllInviteStatuses}
-                            disabled={isLoadingInviteStatus}
-                            title="Fetch the latest invite statuses"
-                            icon={<RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isLoadingInviteStatus ? 'animate-spin' : ''}`} />}
-                          >
-                            Refresh
-                          </Button>
-                        }
                         countBadge={
                           <ListCountBadge
                             filtered={total}
@@ -7392,6 +7450,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     (a left-pinned Select-All cell on any
                                     table), so the checkbox stays put while the
                                     wide table scrolls sideways. */}
+                                {showInviteSelection && (
                                 <th className="text-left px-4 py-3 w-12 align-middle tf-sticky-col-left">
                                   <button
                                     onClick={toggleSelectAllInvites}
@@ -7406,6 +7465,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     )}
                                   </button>
                                 </th>
+                                )}
                                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">CID</th>
                                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Candidate</th>
                                 {/* One column for all four job/assessment
@@ -7415,7 +7475,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     it widened every row without telling a
                                     recruiter anything more. Same th classes as
                                     every other column. */}
-                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Job &amp; Assessment</th>
+                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Job ID</th>
+                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Job Role</th>
+                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Job Version</th>
+                                <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Assessment Version</th>
                                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Invite Source</th>
                                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Status</th>
                                 <th className="text-left px-4 py-3 text-xs font-semibold text-gray-600 dark:text-slate-400 uppercase tracking-wider whitespace-nowrap align-middle">Invited On</th>
@@ -7448,7 +7511,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             <tbody className="divide-y divide-gray-100 dark:divide-slate-700/60">
                               {total === 0 ? (
                                 <tr>
-                                  <td colSpan={11} className="p-0">
+                                  <td colSpan={showInviteSelection ? 14 : 13} className="p-0">
                                     <div className={`${TABLE_EMPTY_PANEL_CLASS} text-sm text-gray-500 dark:text-slate-500`}>
                                       No invitations match the current filters.
                                     </div>
@@ -7463,6 +7526,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   .slice(0, 2) || '??';
                                 return (
                                   <tr key={inv.id} className="transition-colors hover:bg-gray-50 dark:hover:bg-slate-800">
+                                    {showInviteSelection && (
                                     <td className="px-4 py-4 align-middle tf-sticky-col-left">
                                       <button
                                         onClick={() => toggleSelectInvite(inv.id)}
@@ -7476,6 +7540,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         )}
                                       </button>
                                     </td>
+                                    )}
                                     <td className="px-4 py-4 align-middle whitespace-nowrap">
                                       <span className="inline-block text-xs font-mono font-medium text-brand-blue bg-brand-blue/5 px-2 py-1 rounded ring-1 ring-brand-blue/20">
                                         {inv.candidate_display_id || '-'}
@@ -7486,47 +7551,67 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                         <div className="w-9 h-9 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-xs flex-shrink-0">
                                           {initials}
                                         </div>
-                                        <div className="min-w-0 max-w-[240px]">
-                                          <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={inv.candidate_name}>{inv.candidate_name || '-'}</p>
-                                          <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={inv.candidate_email}>{inv.candidate_email}</p>
-                                        </div>
+                                        {/* Invited / Expired name the email on the
+                                            name's own line ("Name — email"), so it
+                                            is not repeated on a second one; every
+                                            other tab keeps the two-line stack. */}
+                                        {(inviteStatusFilters.status === 'sent' || inviteStatusFilters.status === 'expired') ? (
+                                          <p
+                                            className="min-w-0 max-w-[360px] text-sm truncate"
+                                            title={[inv.candidate_name, inv.candidate_email].filter(Boolean).join(' — ')}
+                                          >
+                                            <span className="font-medium text-gray-900 dark:text-slate-50">{inv.candidate_name || '-'}</span>
+                                            {inv.candidate_email && (
+                                              <span className="text-xs text-gray-500 dark:text-slate-500"> — {inv.candidate_email}</span>
+                                            )}
+                                          </p>
+                                        ) : (
+                                          <div className="min-w-0 max-w-[240px]">
+                                            <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={inv.candidate_name}>{inv.candidate_name || '-'}</p>
+                                            <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={inv.candidate_email}>{inv.candidate_email}</p>
+                                          </div>
+                                        )}
                                       </div>
                                     </td>
-                                    {/* Job & Assessment — four fields in one
-                                        cell, in the two-line stack this table
-                                        already uses for its Candidate column:
-                                        identity on top, its detail beneath in
-                                        the muted size.
-
-                                        Line 1 says which job: the shared
-                                        JobIdBadge, which is how this identifier
-                                        is drawn on every list in the app, and
-                                        the job's name beside it — truncated,
-                                        with the full name on hover, so one long
-                                        title cannot set the column's width.
-
-                                        Line 2 is the two versions, each behind
-                                        its own word so neither can be taken for
-                                        the other, separated by the middot this
-                                        page already uses to join short facts.
-                                        Labelled rather than two bare `v3`s,
-                                        which is the one thing a shared cell
-                                        must not leave ambiguous. A missing
-                                        value is a dash, not an invented v1. */}
+                                    {/* Job ID / Job Role / Job Version /
+                                        Assessment Version — four columns, each
+                                        drawn exactly as the All Assessments
+                                        table draws it: the JobIdBadge, the job
+                                        name alone (truncated, full name on
+                                        hover), and that table's own blue / cyan
+                                        VersionPill. A missing value is a dash,
+                                        not an invented v1. */}
+                                    <td className="px-4 py-4 align-middle whitespace-nowrap">
+                                      {inv._jd_short_id ? (
+                                        <JobIdBadge>{inv._jd_short_id}</JobIdBadge>
+                                      ) : (
+                                        <span className="text-xs text-gray-400">—</span>
+                                      )}
+                                    </td>
                                     <td className="px-4 py-4 align-middle">
-                                      <div className="space-y-1">
-                                        <div className="flex items-center gap-2 min-w-0">
-                                          {inv._jd_short_id && (
-                                            <JobIdBadge className="inline-flex items-center flex-shrink-0">{inv._jd_short_id}</JobIdBadge>
-                                          )}
-                                          <p className="text-sm text-gray-900 dark:text-slate-50 truncate max-w-[220px]" title={inv._jd_title}>{inv._jd_title || '-'}</p>
-                                        </div>
-                                        <p className="text-xs text-gray-500 dark:text-slate-500 whitespace-nowrap">
-                                          Job {inv._jd_version ? `v${inv._jd_version}` : '-'}
-                                          <span className="mx-1.5 text-gray-300 dark:text-slate-600" aria-hidden="true">·</span>
-                                          Assessment {inv._assessment_version ? `v${inv._assessment_version}` : '-'}
-                                        </p>
-                                      </div>
+                                      {/* The cap sits on the span: a table cell's own
+                                          max-width is ignored, so on the td it let a
+                                          long title widen the column uncut. */}
+                                      <span
+                                        className="block max-w-[16rem] truncate text-sm font-medium text-gray-900 dark:text-slate-50"
+                                        title={inv._jd_title}
+                                      >
+                                        {inv._jd_title || '—'}
+                                      </span>
+                                    </td>
+                                    <td className="px-4 py-4 align-middle">
+                                      {inv._jd_version ? (
+                                        <VersionPill kind="job" version={inv._jd_version} />
+                                      ) : (
+                                        <span className="text-xs text-gray-400">—</span>
+                                      )}
+                                    </td>
+                                    <td className="px-4 py-4 align-middle">
+                                      {inv._assessment_version ? (
+                                        <VersionPill kind="assessment" version={inv._assessment_version} />
+                                      ) : (
+                                        <span className="text-xs text-gray-400">—</span>
+                                      )}
                                     </td>
                                     {/* The Timeline's latest status, on every
                                         tab — the same value that decided
@@ -7646,7 +7731,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       </div>
 
                       {total > INVITE_STATUS_PAGE_SIZE && (
-                        <div className="mt-4 flex items-center justify-between gap-3">
+                        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                           <span className="text-xs text-gray-600 dark:text-slate-400">
                             {total.toLocaleString()} total
                           </span>
@@ -8599,6 +8684,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 animate-in fade-in duration-200"
             onClick={closeInvitePicker}
           />
+          {/* Shell, header and footer are the AI Interviews page's Send Invite
+              picker's, class for class, and the body below is its layout -
+              search, Ungrouped/Grouped, the selection line, the single-pick
+              note, the list, the pager - so the two pages' Send Invite read
+              as one dialog. */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
             <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-6xl xl:max-w-7xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
               {/* Header */}
@@ -8609,7 +8699,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   </div>
                   <div className="min-w-0">
                     <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Send Invite</h2>
-                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Open a job&rsquo;s versions, then pick the assessment version to send</p>
+                    <p className="text-xs text-gray-500 dark:text-slate-500 mt-0.5">Pick the active assessment to send</p>
                   </div>
                 </div>
                 <Button
@@ -8624,7 +8714,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </div>
 
               {/* Content */}
-              <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
+              <div ref={invitePickerScrollRef} className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
                 {/* Search first, then the list — the reference's order and its
                     labelled, icon-led field, rather than a bare input. */}
                 <div className="mb-4">
@@ -8633,98 +8723,258 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
                     <input
                       type="text"
+                      autoFocus
                       value={invitePickerQuery}
-                      onChange={(e) => setInvitePickerQuery(e.target.value)}
+                      onChange={(e) => { setInvitePickerQuery(e.target.value); setInvitePickerPage(1); }}
                       placeholder="Search by job title, Job ID, assessment name or assessment ID..."
                       className="w-full pl-10 pr-4 py-2 text-sm text-black dark:text-slate-100 dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                     />
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between gap-2 mb-3">
-                  <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
-                    Select an Assessment
-                    {/* The SAME number the Total Jobs list prints in its
-                        "Job List (N)" heading, from the same collapse over the
-                        same array - not a second count of a narrower set.
-                        Counting `shareableAssessments` instead is what made
-                        the two disagree: it drops Drafts, Archived rows and
-                        revoked-invite rows, so the dialog reported fewer jobs
-                        than the page behind it. Those jobs are listed here now
-                        and disabled, which is why the counts can match. */}
-                    {assessments.length > 0 && (() => {
-                      const jobCount = collapseByLineage(assessments).length;
+                {/* Grouped/Ungrouped — the AI Interviews picker's toggle.
+                    Ungrouped: one row per sendable assessment. Grouped: one
+                    card per job, versions behind View Versions. Switching
+                    drops the pick, as it does there. */}
+                <div className="flex items-center gap-2 mb-4">
+                  <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
+                  <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
+                    {([
+                      { key: 'ungrouped', label: 'Ungrouped' },
+                      { key: 'grouped', label: 'Grouped' },
+                    ] as const).map((mode) => {
+                      const isActive = invitePickerViewMode === mode.key;
                       return (
-                        <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
-                          {jobCount} job{jobCount !== 1 ? 's' : ''}
-                        </span>
+                        <button
+                          key={mode.key}
+                          type="button"
+                          aria-pressed={isActive}
+                          onClick={() => { setInvitePickerViewMode(mode.key); setInvitePickerSelection(null); setInvitePickerPage(1); }}
+                          className={`px-2.5 sm:px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
+                            isActive
+                              ? 'bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue'
+                              : 'text-gray-600 dark:text-slate-400 hover:text-brand-blue'
+                          }`}
+                        >
+                          {mode.label}
+                        </button>
                       );
-                    })()}
-                  </label>
-                  {/* Back to nothing picked. Both, because the version list
-                      only exists under a picked job - clearing the version
-                      alone would leave that list open over no choice. */}
-                  {invitePickerSelection && (
-                    <button
-                      onClick={() => setInvitePickerSelection(null)}
-                      className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
-                    >
-                      Clear Selection
-                    </button>
-                  )}
+                    })}
+                  </div>
                 </div>
 
                 {(() => {
                   const query = invitePickerQuery.trim().toLowerCase();
-                  /* Narrowed BEFORE the collapse, so a job stays on screen when
-                     the version that matched is not the one representing it -
-                     searching an older version's assessment id still finds its
-                     job. The fields are the ones the old picker searched. */
-                  /* Narrowed BEFORE the collapse, so a job stays on screen
-                     when the version that matched is not the one representing
-                     it. Over `assessments` - the whole loaded set, the array
-                     the Total Jobs list collapses too - rather than only the
-                     sendable ones, so this list and that one hold the same
-                     jobs and can report the same count. */
-                  const matching = assessments.filter((assessment) =>
+                  const matchesQuery = (assessment: (typeof assessments)[number]) =>
                     !query ||
                     `${assessment.title || ''} ${assessment.short_id || ''} ${assessment.job?.title || ''} ${assessment.jd_short_id || ''}`
                       .toLowerCase()
-                      .includes(query)
-                  );
-                  /* One row per job, from `collapseByLineage` - the very
-                     function the Job List builds its rows with, so a job is
-                     represented here by the same assessment it is represented
-                     by there. */
-                  const jobRows = collapseByLineage(matching);
-                  /* Which jobs actually have something sendable. Not a
-                     filter any more - a job with only Drafts is listed and
-                     disabled rather than omitted, which is what lets this
-                     list hold the same jobs, and print the same count, as the
-                     Total Jobs list behind it. */
+                      .includes(query);
+
+                  /* Ungrouped: every assessment that can take an invite —
+                     `shareableAssessments`, the per-row Share button's rules —
+                     newest first, as the AI Interviews picker lists its
+                     active interviews. */
+                  const pickerRows = shareableAssessments
+                    .filter(matchesQuery)
+                    .slice()
+                    .sort((x, y) => new Date(y.created_at || 0).getTime() - new Date(x.created_at || 0).getTime());
+
+                  /* Grouped: narrowed BEFORE the collapse, so a job stays on
+                     screen when the version that matched is not the one
+                     representing it, over `assessments` — the whole loaded
+                     set the Total Jobs list collapses too — so this list and
+                     that one hold the same jobs and report the same count.
+                     One row per job from `collapseByLineage`, the function the
+                     Job List builds its rows with. */
+                  const jobRows = collapseByLineage(assessments.filter(matchesQuery));
+                  const jobCount = collapseByLineage(assessments).length;
+                  /* Which jobs actually have something sendable. A job with
+                     only Drafts is listed and disabled rather than omitted. */
                   const invitableJobKeys = new Set(
                     shareableAssessments.map((a) => lineageKeyOf(a)),
                   );
                   /* Per-job figures over the very set these rows are built
-                     from, so a card's metrics describe the job as this list
-                     shows it. Not `jobRowTotals`, which is summed over
-                     `filteredAssessments` and therefore moves with the page's
-                     active tab - on the Draft tab it would report 0
-                     assessments beside every job in this dialog. */
+                     from — not `jobRowTotals`, which moves with the page's
+                     active tab. */
                   const pickerJobTotals = buildJobRowTotals(assessments);
-                  if (jobRows.length === 0) {
-                    return (
-                      <div className="text-center py-8 text-gray-500 dark:text-slate-400">
-                        <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-slate-700" />
-                        <p>{query ? 'No jobs match your search' : 'No jobs found'}</p>
-                        <p className="text-sm">{query ? 'Try a different job title or Job ID.' : 'Create an assessment against a job first.'}</p>
-                      </div>
-                    );
-                  }
+
+                  const isUngrouped = invitePickerViewMode === 'ungrouped';
+                  const pickerTotal = isUngrouped ? pickerRows.length : jobRows.length;
+                  const pickerTotalPages = Math.max(1, Math.ceil(pickerTotal / invitePickerPageSize));
+                  const pickerSafePage = Math.min(Math.max(1, invitePickerPage), pickerTotalPages);
+                  const pageSlice = <T,>(list: T[]) =>
+                    list.slice((pickerSafePage - 1) * invitePickerPageSize, pickerSafePage * invitePickerPageSize);
+                  const pagedPickerRows = pageSlice(pickerRows);
+                  const pagedJobRows = pageSlice(jobRows);
                   const selection = invitePickerSelection;
+                  const PICKER_TH = 'px-3 py-2.5 text-left text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-slate-400 whitespace-nowrap bg-slate-50 dark:bg-slate-800';
+
                   return (
-                    <div className="space-y-3 max-h-[28rem] overflow-y-auto pr-0.5">
-                      {jobRows.map((assessment) => {
+                    <>
+                      <div className="flex items-center justify-between gap-2 mb-3">
+                        <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
+                          Select an Assessment
+                          <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
+                            {isUngrouped
+                              ? `${pickerRows.length} active assessment${pickerRows.length !== 1 ? 's' : ''}`
+                              : `${jobCount} job${jobCount !== 1 ? 's' : ''}`}
+                          </span>
+                        </label>
+                        {selection && (
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                              <CheckCircle className="w-3 h-3" />
+                              1 selected
+                            </span>
+                            <button
+                              onClick={() => setInvitePickerSelection(null)}
+                              className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
+                            >
+                              Clear Selection
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Why the pick is single — the AI Interviews picker's note. */}
+                      <div className="mb-3 flex items-start gap-2 rounded-lg bg-brand-blue/[0.06] border border-brand-blue/20 px-3 py-2.5">
+                        <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">One assessment per invite</p>
+                          <p className="mt-0.5 text-xs text-gray-700 dark:text-slate-300">
+                            You can pick only one assessment at a time, so everyone you invite gets the same assessment. To invite people to a different assessment, send another invite.
+                          </p>
+                        </div>
+                      </div>
+
+                      {isUngrouped ? (
+                        pickerRows.length === 0 ? (
+                          <div className="text-center py-8 text-gray-500 dark:text-slate-400">
+                            <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-slate-700" />
+                            <p>{query ? 'No active assessments match your search' : 'No active assessments'}</p>
+                            <p className="text-sm">{query ? 'Try a different job title or Job ID.' : 'Publish an assessment to invite candidates to it.'}</p>
+                          </div>
+                        ) : (
+                          <div className="rounded-xl border border-gray-200 dark:border-slate-700 overflow-hidden">
+                            <div className="overflow-x-auto scrollbar-visible">
+                              <table className="w-full text-sm border-collapse">
+                                <thead className="sticky top-0 z-[6]">
+                                  <tr className="border-b border-gray-200 dark:border-slate-700">
+                                    <th className={`${PICKER_TH} w-14 tf-sticky-col-left !bg-slate-50 dark:!bg-slate-800`}>Select</th>
+                                    <th className={PICKER_TH}>Job ID</th>
+                                    <th className={PICKER_TH}>Job Name</th>
+                                    <th className={PICKER_TH}>Job Version</th>
+                                    <th className={PICKER_TH}>Assessment Version</th>
+                                    <th className={PICKER_TH}>Status</th>
+                                    <th className={PICKER_TH}>Invitations Sent</th>
+                                    <th className={PICKER_TH}>Created On</th>
+                                    <th className={`${PICKER_TH} pr-6`}>Created By</th>
+                                    <th className={`${PICKER_TH} !text-center tf-sticky-col !bg-slate-50 dark:!bg-slate-800`}>Preview</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {pagedPickerRows.map((assessment) => {
+                                    const isSelected = selection?.assessmentId === assessment.id;
+                                    const jobTitle = assessment.job?.title || stripVersionFromTitle(assessment.title);
+                                    const jobVersion = jobVersionOfAssessment(assessment, jobVersionByJdIdRef.current) ?? 1;
+                                    /* The same fields a pick in a Grouped card's
+                                       version panel records, so Continue hands the
+                                       Share modal the same thing from either view. */
+                                    const pick = () => setInvitePickerSelection(
+                                      isSelected
+                                        ? null
+                                        : {
+                                            jobKey: lineageKeyOf(assessment),
+                                            jdId: assessment.jd_id,
+                                            jdShortId: assessment.jd_short_id,
+                                            jobTitle,
+                                            jobVersion,
+                                            jobVersionId: assessment.jd_id,
+                                            assessmentId: assessment.id,
+                                          },
+                                    );
+                                    return (
+                                      <tr
+                                        key={assessment.id}
+                                        onClick={pick}
+                                        aria-selected={isSelected}
+                                        data-row-selected={isSelected ? 'true' : undefined}
+                                        className={`border-b border-gray-100 dark:border-slate-700/60 last:border-b-0 cursor-pointer transition-colors ${
+                                          isSelected ? 'bg-brand-blue/[0.06] dark:bg-brand-blue/15' : 'hover:bg-brand-blue/5 dark:hover:bg-brand-blue/10'
+                                        }`}
+                                      >
+                                        <td className="px-3 py-2.5 align-middle tf-sticky-col-left">
+                                          <input
+                                            type="radio"
+                                            name="assessment-invite-picker-selection"
+                                            checked={isSelected}
+                                            onChange={pick}
+                                            onClick={(e) => e.stopPropagation()}
+                                            aria-label={`Select ${jobTitle || assessment.title || 'assessment'}`}
+                                            className="w-4 h-4 accent-brand-blue cursor-pointer"
+                                          />
+                                        </td>
+                                        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                                          {assessment.jd_short_id ? <JobIdBadge>{assessment.jd_short_id}</JobIdBadge> : <span className="text-xs text-gray-400">—</span>}
+                                        </td>
+                                        <td className="px-3 py-2.5 align-middle">
+                                          <span className="block max-w-[16rem] truncate font-medium text-gray-900 dark:text-slate-50" title={jobTitle || 'Untitled'}>
+                                            {jobTitle || 'Untitled'}
+                                          </span>
+                                        </td>
+                                        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                                          <VersionPill kind="job" version={jobVersion} />
+                                        </td>
+                                        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                                          <VersionPill kind="assessment" version={assessment.version ?? 1} />
+                                        </td>
+                                        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                                          <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-medium ring-1 bg-success-subtle text-success ring-success-line">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-current flex-shrink-0" />
+                                            Active
+                                          </span>
+                                        </td>
+                                        <td className="px-3 py-2.5 align-middle whitespace-nowrap">
+                                          <span className="tabular-nums text-gray-900 dark:text-slate-100">{(assessment.invitations_count ?? 0).toLocaleString()}</span>
+                                          <span className="text-xs text-gray-400 ml-1">sent</span>
+                                        </td>
+                                        <td className="px-3 py-2.5 align-middle whitespace-nowrap text-gray-600 dark:text-slate-400 tabular-nums">
+                                          {assessment.created_at ? formatIST(assessment.created_at) : '—'}
+                                        </td>
+                                        <td className="px-3 pr-6 py-2.5 align-middle whitespace-nowrap text-gray-600 dark:text-slate-400">
+                                          {assessment.created_by_name || 'System'}
+                                        </td>
+                                        <td className="px-3 py-2.5 align-middle text-center tf-sticky-col" onClick={(e) => e.stopPropagation()}>
+                                          {/* The page's own assessment preview — the one a
+                                              Grouped card's version panel opens. */}
+                                          <button
+                                            type="button"
+                                            onClick={() => { setSelectedAssessmentForPreview(assessment); setShowPreviewModal(true); }}
+                                            className="h-7 w-7 inline-flex items-center justify-center rounded-md border border-gray-300 dark:border-slate-700 text-gray-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-brand-blue/10 hover:text-brand-blue hover:border-brand-blue/40 transition-colors"
+                                            aria-label="Preview assessment"
+                                            title="Preview"
+                                          >
+                                            <Eye className="w-3.5 h-3.5" />
+                                          </button>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          </div>
+                        )
+                      ) : jobRows.length === 0 ? (
+                        <div className="text-center py-8 text-gray-500 dark:text-slate-400">
+                          <Briefcase className="w-12 h-12 mx-auto mb-3 text-gray-300 dark:text-slate-700" />
+                          <p>{query ? 'No jobs match your search' : 'No jobs found'}</p>
+                          <p className="text-sm">{query ? 'Try a different job title or Job ID.' : 'Create an assessment against a job first.'}</p>
+                        </div>
+                      ) : (
+                    <div className="space-y-3">
+                      {pagedJobRows.map((assessment) => {
                         const jobKey = lineageKeyOf(assessment);
                         const ownsSelection = selection?.jobKey === jobKey;
                         /* Two different reasons a card can be out of play, and
@@ -8796,6 +9046,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         );
                       })}
                     </div>
+                      )}
+
+                      {pickerTotal > 0 && (
+                        <ListPagination
+                          currentPage={pickerSafePage}
+                          itemsPerPage={invitePickerPageSize}
+                          totalItems={pickerTotal}
+                          onPageChange={setInvitePickerPage}
+                          onItemsPerPageChange={(size) => { setInvitePickerPageSize(size); setInvitePickerPage(1); }}
+                          itemLabel={isUngrouped ? 'assessments' : 'jobs'}
+                          scrollContainerRef={invitePickerScrollRef}
+                          compact
+                          alwaysShow
+                        />
+                      )}
+                    </>
                   );
                 })()}
               </div>
@@ -9386,12 +9652,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               <InviteSourceValue inv={assessmentInviteSource(invitation)} iconClassName="w-3.5 h-3.5" />
                             </td>
                             <td className="py-3 px-4 align-top">
-                              {/* Status is the badge alone. Expiry is resolved inside
-                                  renderInviteStatusBadge, so a lapsed invite renders one Expired
-                                  badge — not its old status with a chip beside it — and
-                                  the failed row's "Incorrect Email" note now lives only
-                                  in the Edit Email flow. */}
-                              {renderInviteStatusBadge(invitation)}
+                              {/* Status is the badge alone: the latest status in the
+                                  row's Timeline (the bottom status line beside it),
+                                  so the two cannot disagree. The failed row's
+                                  "Incorrect Email" note lives only in the Edit
+                                  Email flow. */}
+                              {renderInviteBadgeForStatus(currentInviteStatus(invitation), invitation)}
                             </td>
                                 <td className="py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 hidden md:table-cell">
                                   <div className="space-y-1">

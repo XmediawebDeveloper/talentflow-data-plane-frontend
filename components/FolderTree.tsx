@@ -13,8 +13,8 @@ import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 // JobsListing), rather than this menu's old text-turns-blue-on-hover
 // treatment, whose dark-mode variant left a light-blue pill with black text
 // floating in an otherwise dark popover.
-const folderMenuItemClass = 'group w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors flex items-center gap-2';
-const folderMenuItemRedClass = 'group w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors flex items-center gap-2';
+const folderMenuItemClass = 'group w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-slate-300 transition-colors flex items-center gap-2';
+const folderMenuItemRedClass = 'group w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 transition-colors flex items-center gap-2';
 
 // Max folder depth (root → level1 → level2 → level3 = 3 levels of nesting).
 // Exported so the card view's create control enforces the same ceiling as the
@@ -683,7 +683,7 @@ export default function FolderTree({
               disabled={!canCreateSubfolder}
               className={`group w-full text-left px-4 py-2 text-sm transition-colors flex items-center gap-2 ${
                 canCreateSubfolder
-                  ? 'text-gray-700 dark:text-slate-300 hover:bg-gray-50 dark:hover:bg-slate-800'
+                  ? 'text-gray-700 dark:text-slate-300'
                   : 'text-gray-400 dark:text-slate-600 cursor-not-allowed'
               }`}
               title={!canCreateSubfolder ? `Maximum folder depth reached (${MAX_FOLDER_DEPTH} levels)` : ''}
