@@ -5,6 +5,8 @@ import { Brain, CheckCircle, Loader2, Mail, X } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService, type AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import AIInterviewPicker, { type AIInterviewPickerSelection } from '@/components/ai-interview/AIInterviewPicker';
+import JobInterviewVersionPicker from '@/components/ai-interview/JobInterviewVersionPicker';
+import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import ShareAIInterviewModal from '@/components/ai-interview/ShareAIInterviewModal';
 import SelectedCandidatesPanel from '@/components/SelectedCandidatesPanel';
 import type { Resume } from '@/lib/types/types';
@@ -27,6 +29,10 @@ interface InviteToAIInterviewFlowProps {
    *  the shared Candidates Selected panel — untick to drop someone, see the
    *  resume version, read a resume — instead of a bare count. */
   resumes?: Resume[];
+  /** The JD the candidates were matched against (AI Talent Match). Given it,
+   *  the dialog lists only THAT job's interview versions to pick from, rather
+   *  than every interview across all jobs. */
+  jobId?: string;
 }
 
 /**
@@ -43,7 +49,11 @@ export default function InviteToAIInterviewFlow({
   candidates,
   onInvited,
   resumes,
+  jobId,
 }: InviteToAIInterviewFlowProps) {
+  /** Escape hatch from the job-scoped picker to the full list. */
+  const [browseAll, setBrowseAll] = useState(false);
+  const jobScoped = !!jobId && !browseAll;
   const [configs, setConfigs] = useState<AIInterviewResponse[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -56,6 +66,9 @@ export default function InviteToAIInterviewFlow({
   const [excludedIds, setExcludedIds] = useState<string[]>([]);
 
   const invitees = candidates.filter((candidate) => !excludedIds.includes(candidate.id));
+  /* Opened with nobody preset (a job page's Invite): pick the interview here,
+     then add the candidates in the share step, as that page always did. */
+  const noPresetCandidates = candidates.length === 0;
 
   // Every config, archived included — the shared picker lists only the active
   // ones, but needs the rest to number interview versions and group jobs the
@@ -89,11 +102,17 @@ export default function InviteToAIInterviewFlow({
 
   const closePicker = () => {
     setSelection(null);
+    setBrowseAll(false);
     setExcludedIds([]);
     onClose();
   };
 
   const proceedToShare = () => {
+    if (noPresetCandidates) {
+      setPrefilled([]);
+      setIsSharing(true);
+      return;
+    }
     // Only candidates with an email can be invited — the rest would fail
     // server-side with nothing to send to.
     const withEmail = invitees
@@ -119,6 +138,7 @@ export default function InviteToAIInterviewFlow({
 
   const closeShare = () => {
     setIsSharing(false);
+    setBrowseAll(false);
     setSelection(null);
     setPrefilled([]);
     setExcludedIds([]);
@@ -130,7 +150,7 @@ export default function InviteToAIInterviewFlow({
       <ShareAIInterviewModal
         isOpen
         config={selectedConfig}
-        initialCandidates={prefilled}
+        initialCandidates={prefilled.length > 0 ? prefilled : undefined}
         onClose={closeShare}
         onInviteSent={() => {
           closeShare();
@@ -195,14 +215,43 @@ export default function InviteToAIInterviewFlow({
               <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
                 <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
               </div>
+            ) : jobScoped ? (
+              <div className="mt-5">
+                {/* Opened from a job (AI Talent Match): only that job's
+                    interview versions, as selectable cards. */}
+                <JobInterviewVersionPicker
+                  configs={configs}
+                  jobId={jobId as string}
+                  selection={selection}
+                  onSelectionChange={setSelection}
+                />
+                <button
+                  type="button"
+                  onClick={() => { setSelection(null); setBrowseAll(true); }}
+                  className="mt-3 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
+                >
+                  Browse all AI interviews instead
+                </button>
+              </div>
             ) : (
-              <AIInterviewPicker
-                configs={configs}
-                selection={selection}
-                onSelectionChange={setSelection}
-                scrollContainerRef={bodyScrollRef}
-                searchLabel="Search AI Interviews"
-              />
+              <>
+                {jobId && (
+                  <button
+                    type="button"
+                    onClick={() => { setSelection(null); setBrowseAll(false); }}
+                    className="mt-4 mb-1 text-xs font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2"
+                  >
+                    ← Back to this job&apos;s interview versions
+                  </button>
+                )}
+                <AIInterviewPicker
+                  configs={configs}
+                  selection={selection}
+                  onSelectionChange={setSelection}
+                  scrollContainerRef={bodyScrollRef}
+                  searchLabel="Search AI Interviews"
+                />
+              </>
             )}
           </div>
 
@@ -210,14 +259,18 @@ export default function InviteToAIInterviewFlow({
             {/* Same footer sentence as the job dialog: what is missing, then
                 what is about to happen. */}
             <div className="min-w-0 truncate whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-slate-300">
-              {invitees.length === 0
+              {noPresetCandidates
+                ? (!selectedConfig
+                    ? (jobScoped ? 'Select an interview version to continue' : 'Select one AI interview to continue')
+                    : 'Next: add the candidates to invite')
+                : invitees.length === 0
                 ? 'Select at least one candidate to continue'
                 : !selectedConfig
-                  ? 'Select one AI interview to continue'
+                  ? (jobScoped ? 'Select an interview version to continue' : 'Select one AI interview to continue')
                   : (
                     <span className="inline-flex items-center gap-1.5 align-middle">
                       <CheckCircle className="w-4 h-4 text-brand-blue flex-shrink-0" />
-                      Ready to invite {invitees.length} candidate{invitees.length === 1 ? '' : 's'} to 1 AI interview
+                      Ready to invite {invitees.length} candidate{invitees.length === 1 ? '' : 's'} to {jobScoped ? `Interview V${interviewVersionOrdinal(selectedConfig, configs)}` : '1 AI interview'}
                     </span>
                   )}
             </div>
@@ -230,11 +283,13 @@ export default function InviteToAIInterviewFlow({
               </button>
               <button
                 onClick={proceedToShare}
-                disabled={!selectedConfig || invitees.length === 0}
+                disabled={!selectedConfig || (!noPresetCandidates && invitees.length === 0)}
                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Mail className="w-4 h-4" />
-                Send Invitations
+                {noPresetCandidates
+                  ? (jobScoped && selectedConfig ? `Continue with V${interviewVersionOrdinal(selectedConfig, configs)}` : 'Continue')
+                  : jobScoped && selectedConfig ? `Send with V${interviewVersionOrdinal(selectedConfig, configs)}` : 'Send Invitations'}
               </button>
             </div>
           </div>

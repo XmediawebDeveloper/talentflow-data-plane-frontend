@@ -10,12 +10,12 @@ import ListEmptyState from '@/components/ui/list-empty-state';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import InviteShareModal from './InviteShareModal';
-import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
+import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
+import type { Resume } from '@/lib/types/types';
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { scoringService } from '@/lib/services/scoringService';
 import { assessmentService } from '@/lib/services/assessmentService';
-import { aiInterviewService, AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { resumeService } from '@/lib/services/resumeService';
 import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 import ScoreTableModal from './ScoreTableModal';
@@ -523,40 +523,11 @@ Best regards`);
   const [inviteCandidate, setInviteCandidate] = useState<ScoredResume | null>(null);
 
   // Self-contained "Invite -> AI Interview" flow for a row whose host didn't
-  // supply its own `onInviteAIInterview` (the cross-job global list) —
-  // resolves the CLICKED ROW's own job's live AI interview config, the same
-  // "resolve then share, or explain why not" pattern InviteShareModal already
-  // uses for Assessment just below. Never runs when a host DOES supply
-  // `onInviteAIInterview` — that path is untouched.
+  // supply its own `onInviteAIInterview` (Resume Scoring) — opens the shared
+  // Invite to AI Interview dialog scoped to the CLICKED ROW's own job: the
+  // candidate, then that job's active interview versions to pick from. Never
+  // runs when a host DOES supply `onInviteAIInterview` — that path is untouched.
   const [aiInterviewInviteCandidate, setAiInterviewInviteCandidate] = useState<ScoredResume | null>(null);
-  const [resolvedAIInterviewConfig, setResolvedAIInterviewConfig] = useState<AIInterviewResponse | null>(null);
-  const [resolvingAIInterviewInvite, setResolvingAIInterviewInvite] = useState(false);
-
-  useEffect(() => {
-    if (!aiInterviewInviteCandidate) return;
-    let cancelled = false;
-    const targetJdId = aiInterviewInviteCandidate.jdId || jobId;
-    setResolvingAIInterviewInvite(true);
-    (async () => {
-      try {
-        const liveConfig = targetJdId ? await aiInterviewService.findLiveConfigForJd(targetJdId) : null;
-        if (cancelled) return;
-        if (!liveConfig) {
-          toast.error('No published AI interview for this job yet.');
-          setAiInterviewInviteCandidate(null);
-          return;
-        }
-        setResolvedAIInterviewConfig(liveConfig);
-      } catch {
-        if (cancelled) return;
-        toast.error('Could not load the AI interview for this job. Please try again.');
-        setAiInterviewInviteCandidate(null);
-      } finally {
-        if (!cancelled) setResolvingAIInterviewInvite(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [aiInterviewInviteCandidate, jobId]);
   const [showBulkInviteModal, setShowBulkInviteModal] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(20);
@@ -1468,7 +1439,7 @@ Best regards`);
               className={scoredResumesMenuItemClass}
               /* Same rule on the interview side: nothing live on
                  this JD means nothing to invite the candidate to. */
-              disabled={!rowCanInviteAIInterview || resolvingAIInterviewInvite}
+              disabled={!rowCanInviteAIInterview}
               title={
                 !rowCanInviteAIInterview
                   ? 'No published AI interview for this job yet'
@@ -2752,26 +2723,24 @@ Best regards`);
 
       {/* Invite to AI Interview — self-contained counterpart to the Assessment
           modal above, for a row whose host didn't supply its own
-          onInviteAIInterview (see aiInterviewInviteCandidate's effect above). */}
-      {resolvedAIInterviewConfig && aiInterviewInviteCandidate && (
-        <ShareAIInterviewModal
-          isOpen
-          config={resolvedAIInterviewConfig}
-          onClose={() => {
-            setResolvedAIInterviewConfig(null);
-            setAiInterviewInviteCandidate(null);
-          }}
-          onInviteSent={() => {
-            setResolvedAIInterviewConfig(null);
-            setAiInterviewInviteCandidate(null);
-          }}
-          initialCandidates={[{
-            name: aiInterviewInviteCandidate.candidateName || 'Unknown',
-            email: aiInterviewInviteCandidate.email || '',
-            resumeId: aiInterviewInviteCandidate.resumeId,
-          }]}
-        />
-      )}
+          onInviteAIInterview: the shared dialog, scoped to the row's own job. */}
+      <InviteToAIInterviewFlow
+        open={!!aiInterviewInviteCandidate}
+        onClose={() => setAiInterviewInviteCandidate(null)}
+        jobId={aiInterviewInviteCandidate ? (aiInterviewInviteCandidate.jdId || (jobId && jobId !== 'global' ? jobId : undefined)) : undefined}
+        candidates={aiInterviewInviteCandidate ? [{
+          id: aiInterviewInviteCandidate.resumeId || aiInterviewInviteCandidate.id,
+          name: aiInterviewInviteCandidate.candidateName || 'Unknown',
+          email: aiInterviewInviteCandidate.email || undefined,
+        }] : []}
+        resumes={aiInterviewInviteCandidate ? [{
+          id: aiInterviewInviteCandidate.resumeId || aiInterviewInviteCandidate.id,
+          name: aiInterviewInviteCandidate.candidateName || 'Unknown',
+          email: aiInterviewInviteCandidate.email,
+          phone: aiInterviewInviteCandidate.phone,
+        } as unknown as Resume] : undefined}
+        onInvited={() => setAiInterviewInviteCandidate(null)}
+      />
 
       {/* Share Resume — the same dialog the resume table and the resume page
           open: the attachment with an eye to read it, then recipient, subject

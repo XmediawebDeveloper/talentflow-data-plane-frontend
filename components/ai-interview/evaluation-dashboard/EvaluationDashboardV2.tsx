@@ -239,10 +239,15 @@ export function SkillsView({ data }: { data: DashboardData }) {
   return (
     <div className="space-y-4">
       {/* Header banner */}
-      <div className="rounded-2xl p-6 bg-brand-blue text-white">
-        <div className="text-xl font-bold mb-2">Skill-by-Skill Analysis</div>
-        <div className="text-sm text-white/95">
-          Detailed breakdown of candidate performance across all evaluated skills with AI-powered insights and per-skill scoring.
+      <div className="rounded-2xl p-6 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 text-gray-900 dark:text-slate-50">
+        <div className="flex items-start gap-3">
+          <div className="w-11 h-11 rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0"><Brain className="w-5 h-5" /></div>
+          <div className="min-w-0 flex-1">
+            <div className="text-xl font-bold mb-2">Skill-by-Skill Analysis</div>
+            <div className="text-sm text-gray-600 dark:text-slate-400">
+              Detailed breakdown of candidate performance across all evaluated skills with AI-powered insights and per-skill scoring.
+            </div>
+          </div>
         </div>
       </div>
       {isPartialEvaluation && (
@@ -1037,23 +1042,28 @@ function _QuestionsView_DISABLED_DEAD_CODE({ data }: { data: DashboardData }) {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl p-6 bg-brand-blue text-white">
-        <div className="text-xl font-bold mb-2">Question-by-Question Analysis</div>
-        <div className="text-sm text-white/95 mb-3">
-          Detailed evaluation of each interview question with skill scoring, weighted contributions, and AI-derived rationale.
-        </div>
-        <div className="flex gap-6 flex-wrap text-sm">
-          <div>
-            <div className="text-white/70">Total Questions</div>
-            <div className="font-bold">{data.perQuestionDetails.length}</div>
-          </div>
-          <div>
-            <div className="text-white/70">Must-Have</div>
-            <div className="font-bold">{mhQs.length}</div>
-          </div>
-          <div>
-            <div className="text-white/70">Nice-to-Have</div>
-            <div className="font-bold">{nhQs.length}</div>
+      <div className="rounded-2xl p-6 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 text-gray-900 dark:text-slate-50">
+        <div className="flex items-start gap-3">
+          <div className="w-11 h-11 rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0"><MessageSquare className="w-5 h-5" /></div>
+          <div className="min-w-0 flex-1">
+            <div className="text-xl font-bold mb-2">Question-by-Question Analysis</div>
+            <div className="text-sm text-gray-600 dark:text-slate-400 mb-3">
+              Detailed evaluation of each interview question with skill scoring, weighted contributions, and AI-derived rationale.
+            </div>
+            <div className="flex gap-6 flex-wrap text-sm">
+              <div>
+                <div className="text-gray-500 dark:text-slate-400">Total Questions</div>
+                <div className="font-bold">{data.perQuestionDetails.length}</div>
+              </div>
+              <div>
+                <div className="text-gray-500 dark:text-slate-400">Must-Have</div>
+                <div className="font-bold">{mhQs.length}</div>
+              </div>
+              <div>
+                <div className="text-gray-500 dark:text-slate-400">Nice-to-Have</div>
+                <div className="font-bold">{nhQs.length}</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1486,10 +1496,15 @@ export function FormulaView() {
 
   return (
     <div className="space-y-4">
-      <div className="rounded-2xl p-6 bg-brand-blue text-white">
-        <div className="text-xl font-bold mb-2">Scoring Formula & Example Scenarios</div>
-        <div className="text-sm text-white/95">
-          Reference card explaining how skill scores roll up into question scores, section scores, and the final Pass/Fail decision — plus the worked scenarios from the evaluation spec.
+      <div className="rounded-2xl p-6 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 text-gray-900 dark:text-slate-50">
+        <div className="flex items-start gap-3">
+          <div className="w-11 h-11 rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0"><Calculator className="w-5 h-5" /></div>
+          <div className="min-w-0 flex-1">
+            <div className="text-xl font-bold mb-2">Scoring Formula & Example Scenarios</div>
+            <div className="text-sm text-gray-600 dark:text-slate-400">
+              Reference card explaining how skill scores roll up into question scores, section scores, and the final Pass/Fail decision — plus the worked scenarios from the evaluation spec.
+            </div>
+          </div>
         </div>
       </div>
 
