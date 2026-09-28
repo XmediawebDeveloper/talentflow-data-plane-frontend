@@ -233,7 +233,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             style={{ paddingLeft: `${level * 16 + 12}px` }}
           >
             {hasChildren ? (
-              <button onClick={e => { e.stopPropagation(); toggleExpandFolder(folder.id); }} className="p-0.5 hover:bg-slate-200 rounded">
+              <button onClick={e => { e.stopPropagation(); toggleExpandFolder(folder.id); }} className="p-0.5 shrink-0 hover:bg-slate-200 rounded">
                 {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
               </button>
             ) : <div className="w-5" />}
@@ -242,8 +242,8 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             ) : (
               <Folder className={`w-4 h-4 ${isSelected ? '' : 'text-gray-400 dark:text-slate-500'}`} />
             )}
-            <span className="flex-1 text-left truncate">{folder.name}</span>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-slate-200 text-gray-600 dark:text-slate-400">{count}</span>
+            <span className="flex-1 min-w-0 text-left truncate" title={folder.name}>{folder.name}</span>
+            <span className="shrink-0 text-xs px-2 py-0.5 rounded-full bg-slate-200 text-gray-600 dark:text-slate-400">{count}</span>
           </button>
           {isExpanded && hasChildren && <div>{renderFolderTree(folder.id, level + 1)}</div>}
         </div>
@@ -767,28 +767,28 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-3xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-slate-50 dark:bg-slate-800/50 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-3 min-w-0 flex-1">
             <div className="w-9 h-9 rounded-lg bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center shrink-0">
               <Mail className="w-4 h-4 text-white" />
             </div>
-            <div>
+            <div className="min-w-0 flex-1">
               <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Share Assessment via Email</h2>
-              <div className="flex items-center gap-2">
-                <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 truncate">{assessmentTitleForEmail}</p>
-                <VersionBadge version={assessment.version} size="sm" variant="success" />
+              <div className="flex items-center gap-2 min-w-0">
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 truncate min-w-0" title={assessmentTitleForEmail}>{assessmentTitleForEmail}</p>
+                <span className="shrink-0"><VersionBadge version={assessment.version} size="sm" variant="success" /></span>
               </div>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg p-2 transition-colors"
+            className="text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg p-2 transition-colors shrink-0"
            aria-label="Close">
             <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-3 sm:p-5">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-5">
           {/* Assessment Info Banner */}
           <div className="bg-slate-50 dark:bg-slate-950 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-lg p-3 mb-3 sm:mb-4">
             <div className="flex items-start gap-3">
@@ -797,7 +797,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 sm:gap-2 mb-1 flex-wrap">
-                  <span className="text-gray-900 dark:text-slate-50">{assessmentTitleForEmail}</span>
+                  <span className="text-gray-900 dark:text-slate-50 min-w-0 [overflow-wrap:anywhere]">{assessmentTitleForEmail}</span>
                   {/* Job version, then assessment version — the two are
                       different facts about this row and the banner used to show
                       only the second, so "V4" read as the job's version to
@@ -871,10 +871,10 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       {allAssessments.map((a, idx) => (
                         <div key={idx} className="text-2xs sm:text-xs px-2 py-1 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] text-gray-700 dark:text-slate-300 rounded">
                           <div className="flex items-center gap-1 flex-wrap">
-                            <span className="truncate">{stripVersionFromTitle(a.title)}</span>
+                            <span className="truncate min-w-0">{stripVersionFromTitle(a.title)}</span>
                           </div>
                           {a.jd_short_id && (
-                            <div className="text-gray-500 dark:text-slate-500 mt-0.5">
+                            <div className="text-gray-500 dark:text-slate-500 mt-0.5 [overflow-wrap:anywhere]">
                               Linked: {a.jd_short_id}
                               {a.jd_title && ` - ${a.jd_title}`}
                               {a.jd_version && ` v${a.jd_version}`}
@@ -934,7 +934,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       ? <ShieldAlert className="w-4 h-4 mt-0.5 flex-shrink-0" />
                       : <Info className="w-4 h-4 mt-0.5 flex-shrink-0" />
                     }
-                    <div className="flex-1">
+                    <div className="flex-1 min-w-0">
                       <div className="font-medium mb-1">
                         {isInsufficient
                           ? 'No assessment units available'
@@ -1068,7 +1068,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                           </div>
                         </div>
                       )}
-                      <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                      <div className="flex-1 min-w-0 grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
                         <div>
                           <label className="text-2xs sm:text-xs text-gray-600 dark:text-slate-400 mb-0.5 sm:mb-1 block">Full Name</label>
                           <input
@@ -1106,7 +1106,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                       {(candidates.length > 1 || candidate.source === 'database') && (
                         <button
                           onClick={() => removeCandidate(candidate.id)}
-                          className="p-1.5 text-destructive hover:bg-destructive-subtle rounded-lg transition-colors shrink-0"
+                          className="p-1.5 min-w-8 min-h-8 inline-flex items-center justify-center text-destructive hover:bg-destructive-subtle rounded-lg transition-colors shrink-0"
                         >
                           <Trash2 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
                         </button>
@@ -1121,11 +1121,11 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             {inputMode === 'database' && (
               <div className="border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-lg overflow-hidden">
                 {/* Tabs */}
-                <div className="flex border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950">
+                <div className="flex overflow-x-auto border-b border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950">
                   {hasMyResumesAccess && (
                     <button
                       onClick={() => setDbTab('my-resumes')}
-                      className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
+                      className={`flex items-center gap-2 px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium whitespace-nowrap shrink-0 transition-colors border-b-2 ${
                         dbTab === 'my-resumes'
                           ? 'border-brand-blue text-brand-blue bg-white dark:bg-slate-900'
                           : 'border-transparent text-gray-500 dark:text-slate-500 hover:text-gray-700'
@@ -1139,7 +1139,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                   {(hasInternalDBAccess || (!hasMyResumesAccess && !hasInternalDBAccess)) && (
                     <button
                       onClick={() => setDbTab('internal-db')}
-                      className={`flex items-center gap-2 px-4 py-3 text-sm font-medium transition-colors border-b-2 ${
+                      className={`flex items-center gap-2 px-3 sm:px-4 py-3 text-xs sm:text-sm font-medium whitespace-nowrap shrink-0 transition-colors border-b-2 ${
                         dbTab === 'internal-db'
                           ? 'border-brand-blue text-brand-blue bg-white dark:bg-slate-900'
                           : 'border-transparent text-gray-500 dark:text-slate-500 hover:text-gray-700'
@@ -1164,15 +1164,15 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
                         className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm mb-1 ${selectedFolder === 'all' ? 'bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 font-medium' : 'text-gray-700 dark:text-slate-300 hover:bg-slate-100'}`}
                       >
                         <FolderOpen className="w-4 h-4" />
-                        <span className="flex-1 text-left">All Resumes</span>
-                        <span className="text-xs px-1.5 py-0.5 rounded-full bg-slate-200 text-gray-600 dark:text-slate-400">{myResumesData.length}</span>
+                        <span className="flex-1 min-w-0 truncate text-left">All Resumes</span>
+                        <span className="shrink-0 text-xs px-1.5 py-0.5 rounded-full bg-slate-200 text-gray-600 dark:text-slate-400">{myResumesData.length}</span>
                       </button>
                       <div className="space-y-0.5">{renderFolderTree(undefined, 0)}</div>
                     </div>
                   )}
 
                   {/* Resume List */}
-                  <div className="flex-1 flex flex-col overflow-hidden">
+                  <div className="flex-1 min-w-0 min-h-0 flex flex-col overflow-hidden">
                     {/* Search + Select All */}
                     <div className="flex flex-wrap items-center gap-2 p-3 border-b border-gray-100 dark:border-slate-700/60">
                       <input
@@ -1327,13 +1327,13 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               {/* Email Body */}
               <div className="p-4 sm:p-5">
                 {/* Greeting and Message */}
-                <div className="mb-3 sm:mb-4 text-gray-700 dark:text-slate-300 text-xs sm:text-sm leading-relaxed whitespace-pre-line">
+                <div className="mb-3 sm:mb-4 text-gray-700 dark:text-slate-300 text-xs sm:text-sm leading-relaxed whitespace-pre-line [overflow-wrap:anywhere]">
                   {customMessage.replace('[Candidate Name]', candidates[0].name || '[Candidate Name]')}
                 </div>
 
                 {/* Assessment Title Box */}
                 <div className="bg-brand-blue/5 border border-brand-blue/20 rounded-lg p-3 sm:p-4 text-center mb-3 sm:mb-4">
-                  <div className="text-sm font-semibold text-brand-blue break-words">
+                  <div className="text-sm font-semibold text-brand-blue [overflow-wrap:anywhere]">
                     {assessmentTitleForEmail}
                   </div>
                 </div>
@@ -1362,7 +1362,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
 
         {/* Footer */}
         <div className="px-4 sm:px-5 py-3 bg-slate-50 dark:bg-slate-950 border-t border-gray-100 dark:border-slate-700/60 flex flex-wrap items-center justify-between gap-3 shrink-0">
-          <div className="text-sm text-gray-600 dark:text-slate-400">
+          <div className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 min-w-0">
             {(() => {
               const validCount = candidates.filter(c => c.name.trim() && c.email.trim()).length;
               const needed = validCount * allAssessments.length;
@@ -1379,7 +1379,7 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               );
             })()}
           </div>
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 ml-auto shrink-0">
             <button
               onClick={onClose}
               className="px-3 sm:px-5 py-1.5 sm:py-2 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-slate-100 transition-colors text-xs sm:text-sm"

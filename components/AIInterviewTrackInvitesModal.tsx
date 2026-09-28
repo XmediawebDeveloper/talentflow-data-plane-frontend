@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS, matchesResultFilter } from '@/components/ai-interview/ColumnFilterFields';
+import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from '@/components/ai-interview/ColumnFilterFields';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 import { Button } from '@/components/ui/button';
 import InviteFilterBar, {
@@ -21,6 +21,7 @@ import TabEmptyState from '@/components/ui/tab-empty-state';
 import AIInterviewInviteTable, {
   isExpiredForActions,
   displayInviteScore,
+  matchesInviteResultFilter,
 } from '@/components/AIInterviewInviteTable';
 
 /* Bulk resend eligibility — Expired rows only, and never once the candidate
@@ -261,7 +262,7 @@ export default function AIInterviewTrackInvitesModal({
 
       if (fetchAllForClientFilters) {
         const matching = (result.items || []).filter((inv: any) =>
-          (!sourceFilter || inv.invite_source === sourceFilter) && matchesResultFilter(displayInviteScore(inv), resultFilter));
+          (!sourceFilter || inv.invite_source === sourceFilter) && matchesInviteResultFilter(inv, displayInviteScore(inv), resultFilter));
         const pages = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
         const safePage = Math.min(page, pages);
         setInvitations(matching.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE));

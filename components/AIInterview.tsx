@@ -29,7 +29,7 @@ import AIInterviewPicker from '@/components/ai-interview/AIInterviewPicker';
 import AIInterviewCandidateResults from '@/components/ai-interview/AIInterviewCandidateResults';
 import InviteFilterBar, { EMPTY_INVITE_FILTERS, AI_INTERVIEW_INVITE_STATUS_OPTIONS, hasActiveInviteFilters, type InviteFilterState, type InviteStatusOption } from '@/components/InviteFilterBar';
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
-import AIInterviewInviteTable, { isRevocableInvite, isExpiredForActions, resolveInviteStatus, displayInviteScore } from '@/components/AIInterviewInviteTable';
+import AIInterviewInviteTable, { isRevocableInvite, isExpiredForActions, resolveInviteStatus, displayInviteScore, matchesInviteResultFilter } from '@/components/AIInterviewInviteTable';
 import SearchableSelect from '@/components/ui/searchable-select';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
 import {
@@ -38,7 +38,6 @@ import {
   versionFilterOptions,
   INVITE_SOURCE_FILTER_OPTIONS,
   RESULT_FILTER_OPTIONS,
-  matchesResultFilter,
 } from '@/components/ai-interview/ColumnFilterFields';
 import { formatIST } from '@/lib/utils/dateUtils';
 import { modeFromConfig } from '@/lib/constants/aiInterviewMode';
@@ -348,6 +347,10 @@ export default function AIInterview() {
      rest of the list state below so coming back from an interview page finds
      the panel as it was left, which is what that list does. */
   const [openVersionsFor, setOpenVersionsFor] = useState<string | null>(null);
+  /** Completed-session count per interview config — filled when its job's
+   *  versions are opened (see the effect beside `interviewVersionRows`). */
+  const [completedCounts, setCompletedCounts] = useState<Record<string, number>>({});
+  const completedCountsRequested = useRef<Set<string>>(new Set());
   /* The chosen interview version, one per job, exactly as the Assessments Job
      List holds its own pick (`selectedAssessmentVersionByJob`): the panel's
      radio group already enforces "one at a time" in the markup, and keying the
@@ -679,7 +682,7 @@ export default function AIInterview() {
           page_size: 1000,
         });
         const matching = (all.items || []).filter((inv: any) =>
-          (!source || inv.invite_source === source) && matchesResultFilter(displayInviteScore(inv), resultFilter));
+          (!source || inv.invite_source === source) && matchesInviteResultFilter(inv, displayInviteScore(inv), resultFilter));
         const totalPages = Math.max(1, Math.ceil(matching.length / INVITATION_PAGE_SIZE));
         const safePage = Math.min(page, totalPages);
         setInvitations(matching.slice((safePage - 1) * INVITATION_PAGE_SIZE, safePage * INVITATION_PAGE_SIZE));
@@ -794,7 +797,9 @@ export default function AIInterview() {
         new Date(a.invitation_sent_at || a.created_at || 0).getTime(),
       );
       setInviteStatusRows(merged);
-      setInviteStatusPage(1);
+      // Page is NOT reset here: it's restored from the persisted snapshot when
+      // coming back from a candidate / job page, and the render clamps it
+      // (safePage) if the reload left fewer pages.
     } catch (err: any) {
       console.error('Failed to load invitation statuses:', err);
       setInviteStatusError(err?.message || 'Failed to load invitation statuses');
@@ -878,6 +883,9 @@ export default function AIInterview() {
       creatorFilter, dateFilter, customDateFrom, customDateTo,
       configListPage, configListItemsPerPage, processingPage, processingItemsPerPage,
       openVersionsFor, configListViewMode,
+      // Invitation Status tab — its page, page size and filters, so coming
+      // back from a candidate or job lands on the same page, not page 1.
+      inviteStatusPage, inviteStatusItemsPerPage, inviteStatusFilters, inviteStatusColumnFilters,
       // The cards<->list drill-in. Without it the tab, filters and page were
       // all restored but pageView fell back to 'cards', so returning from an
       // interview page showed only the stat tiles — the list looked gone.
@@ -900,6 +908,10 @@ export default function AIInterview() {
       if (typeof s.processingPage === 'number') setProcessingPage(s.processingPage);
       if (typeof s.processingItemsPerPage === 'number') setProcessingItemsPerPage(s.processingItemsPerPage);
       if (s.configListViewMode === 'grouped' || s.configListViewMode === 'ungrouped') setConfigListViewMode(s.configListViewMode);
+      if (s.inviteStatusFilters && typeof s.inviteStatusFilters === 'object') setInviteStatusFilters({ ...EMPTY_INVITE_FILTERS, ...s.inviteStatusFilters });
+      if (s.inviteStatusColumnFilters && typeof s.inviteStatusColumnFilters === 'object') setInviteStatusColumnFilters({ ...EMPTY_INVITE_COLUMN_FILTERS, ...s.inviteStatusColumnFilters });
+      if (typeof s.inviteStatusItemsPerPage === 'number') setInviteStatusItemsPerPage(s.inviteStatusItemsPerPage);
+      if (typeof s.inviteStatusPage === 'number') setInviteStatusPage(s.inviteStatusPage);
     },
   );
 
@@ -1497,15 +1509,30 @@ export default function AIInterview() {
      currently select. */
   const configLineageKeyOf = (c: AIInterviewResponse) =>
     c.jd_short_id || c.jd_id || `__unlinked__:${c.id}`;
-  const jobRowTotals = new Map<string, { interviews: number; active: number; invitations: number }>();
+  const jobRowTotals = new Map<string, { interviews: number; active: number; invitations: number; completed: number; completedKnown: boolean }>();
   for (const config of filteredConfigs) {
     const key = configLineageKeyOf(config);
-    const entry = jobRowTotals.get(key) ?? { interviews: 0, active: 0, invitations: 0 };
+    const entry = jobRowTotals.get(key) ?? { interviews: 0, active: 0, invitations: 0, completed: 0, completedKnown: true };
     entry.interviews += 1;
     if (normalizeConfigStatus(config.status) === 'published') entry.active += 1;
     entry.invitations += config.invitations_count ?? 0;
+    // Completed candidates — known only once every interview's count landed.
+    if (typeof completedCounts[config.id] === 'number') entry.completed += completedCounts[config.id];
+    else entry.completedKnown = false;
     jobRowTotals.set(key, entry);
   }
+
+  /** Fetch the completed-session count of each given interview not yet asked
+   *  for — a page_size-1 page of `completed` sessions, keeping its total. */
+  const requestCompletedCounts = (list: AIInterviewResponse[]) => {
+    list.forEach((c) => {
+      if (completedCountsRequested.current.has(c.id)) return;
+      completedCountsRequested.current.add(c.id);
+      aiInterviewService.getConfigInvitations(c.id, { page: 1, page_size: 1, compact: true, status: 'completed' })
+        .then((res) => setCompletedCounts((prev) => ({ ...prev, [c.id]: res.total || 0 })))
+        .catch(() => { completedCountsRequested.current.delete(c.id); });
+    });
+  };
   /** Job versions: the fetched lineage once loaded, else the newest known version. */
   const getJobVersionCount = (config: AIInterviewResponse) => {
     const fetched = config.jd_id ? jdLineage.lineages[config.jd_id] : undefined;
@@ -1539,6 +1566,17 @@ export default function AIInterview() {
     (configListPage - 1) * configListItemsPerPage,
     configListPage * configListItemsPerPage,
   );
+
+  /* The job cards' Completed figure: completed-session counts for every
+     interview in the lineage of each job ON THIS PAGE — fetched as the page
+     comes into view, each interview once, so paging never re-asks. */
+  const visibleLineageKeys = [...new Set(paginatedConfigs.map(configLineageKeyOf))].join('|');
+  useEffect(() => {
+    if (!visibleLineageKeys) return;
+    const keys = new Set(visibleLineageKeys.split('|'));
+    requestCompletedCounts([...configs, ...archivedConfigs].filter((c) => keys.has(configLineageKeyOf(c))));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleLineageKeys, configs, archivedConfigs]);
   /* ── View Versions: interview configs as the version panel's child rows ──
      The panel joins a child to a job version on `jd_id` — every job version is
      a JD row of its own, so that id names one version exactly. Configs are
@@ -1565,9 +1603,10 @@ export default function AIInterview() {
    * same rule the panel documents for assessments, whose numbers likewise
    * restart per job version, applied to the one fact this data does have.
    *
-   * `completed_count` is left unset: the list endpoint returns no
-   * finished-session figure, and a zero would read as "nobody finished" rather
-   * than "not counted".
+   * `completed_count` comes from `completedCounts`, fetched per interview when
+   * its job's versions are opened — the list endpoint returns no
+   * finished-session figure. It stays unset until then, because a zero would
+   * read as "nobody finished" rather than "not counted".
    */
   const toInterviewVersionRow = (config: AIInterviewResponse, ordinal: number): AssessmentVersionRow => ({
     id: config.id,
@@ -1578,6 +1617,8 @@ export default function AIInterview() {
     created_at: config.created_at,
     created_by_name: config.created_by_name,
     invitations_count: config.invitations_count,
+    // Undefined until fetched — the cell shows a dash rather than a false 0.
+    completed_count: completedCounts[config.id],
     jd_id: config.jd_id,
     jd_version: config.jd_version,
   });
@@ -1618,6 +1659,21 @@ export default function AIInterview() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openVersionsFor, configs, archivedConfigs]);
 
+  /* The Interview Versions table's Completed column. The list endpoint carries
+     no finished-session figure, so when a job's versions are opened, each of
+     its interviews asks for a page_size-1 page of completed sessions and keeps
+     the total — a handful of requests, once per interview, only for the job
+     being looked at. Until one lands its cell shows a dash, not a false 0. */
+  useEffect(() => {
+    if (!openVersionsFor) return;
+    const all = [...configs, ...archivedConfigs];
+    const row = all.find((config) => config.id === openVersionsFor);
+    if (!row) return;
+    const key = configLineageKeyOf(row);
+    requestCompletedCounts(all.filter((c) => configLineageKeyOf(c) === key));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openVersionsFor, configs, archivedConfigs]);
+
   /* The panel's wording for this page. Everything else about it — columns,
      spacing, chips, date format, the nesting — is the Assessments page's and is
      not restated here. */
@@ -1629,6 +1685,7 @@ export default function AIInterview() {
     childNone: 'No interview',
     detailColumn: { label: 'Mode', minW: 'min-w-[130px]' },
     extraDetailColumn: { label: 'Rounds', minW: 'min-w-[170px]' },
+    childCompletedColumn: true,
     statusLabel: (status?: string) => getStatusLabel(String(status ?? '')),
   };
 
@@ -2517,7 +2574,7 @@ export default function AIInterview() {
                       || 'bg-slate-100 text-gray-700 ring-gray-200 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-700';
                     const statusPillLabel = statusPillLabels[normalizedStatus] || getStatusLabel(config.status);
                     const totals = jobRowTotals.get(configLineageKeyOf(config))
-                      ?? { interviews: 0, active: 0, invitations: 0 };
+                      ?? { interviews: 0, active: 0, invitations: 0, completed: 0, completedKnown: false };
                     /* The Assessments Job List's four figures, in its order and
                        colours, for interviews. The fourth is Active Interviews
                        where that row has Completed: an interview config carries
@@ -2526,7 +2583,12 @@ export default function AIInterview() {
                       { key: 'job-versions', icon: Layers, iconClass: 'text-brand-blue', value: getJobVersionCount(config), label: 'Job Versions' },
                       { key: 'interviews', icon: Video, iconClass: 'text-brand-cyan', value: totals.interviews, label: 'Interviews' },
                       { key: 'invitations', icon: Send, iconClass: 'text-brand-orange', value: totals.invitations, label: 'Invitations Sent' },
-                      { key: 'active', icon: CheckCircle, iconClass: 'text-menu-icon-activate', value: totals.active, label: 'Completed' },
+                      /* Candidates who COMPLETED an interview for this job —
+                         summed from each interview's completed-session count
+                         (requestCompletedCounts). It once showed the published-
+                         interview count under this label, which contradicted a
+                         0 under Invitations Sent. A dash until every count lands. */
+                      { key: 'completed', icon: CheckCircle, iconClass: 'text-menu-icon-activate', value: totals.completedKnown ? totals.completed : '—', label: 'Completed' },
                     ];
                     const hasVersionHistory = !!config.jd_id;
                     const toggleVersions = () => {
@@ -2980,7 +3042,7 @@ export default function AIInterview() {
                   if (col.jobVersion && String(inv._jd_version) !== col.jobVersion) return false;
                   if (col.interviewVersion && String(inv._interview_version) !== col.interviewVersion) return false;
                   if (col.inviteSource && inv.invite_source !== col.inviteSource) return false;
-                  if (!matchesResultFilter(displayInviteScore(inv), col.result)) return false;
+                  if (!matchesInviteResultFilter(inv, displayInviteScore(inv), col.result)) return false;
                   return true;
                 });
                 const total = filtered.length;

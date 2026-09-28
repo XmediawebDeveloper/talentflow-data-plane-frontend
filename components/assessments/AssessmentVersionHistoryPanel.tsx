@@ -497,6 +497,10 @@ export interface VersionHistoryVocabulary {
   /** An optional second descriptive column, right after `detailColumn`,
    *  filled by `renderChildExtraDetail`. */
   extraDetailColumn?: { label: string; minW: string };
+  /** Adds a Completed column after Invitations Sent in the child table, read
+   *  from each row's `completed_count` (a dash while it is unknown). Opt-in:
+   *  the AI Interviews page turns it on; the Assessments page is unchanged. */
+  childCompletedColumn?: boolean;
   /**
    * One child's status, in the words its own list uses. Keyed straight into
    * `STATUS_STYLES` by the chip, so a word outside Active / Draft / Completed /
@@ -541,6 +545,7 @@ const childColumnsFor = (vocabulary: VersionHistoryVocabulary): { label: string;
   vocabulary.detailColumn,
   ...(vocabulary.extraDetailColumn ? [vocabulary.extraDetailColumn] : []),
   { label: 'Invitations Sent', minW: 'min-w-[120px]' },
+  ...(vocabulary.childCompletedColumn ? [{ label: 'Completed', minW: 'min-w-[120px]' }] : []),
 ];
 
 interface JobVersionGroup {
@@ -999,7 +1004,7 @@ export default function AssessmentVersionHistoryPanel({
         <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 overflow-hidden">
           {/* Heading left, the host's control right - the table's own top
               corner, above the rows it acts on. */}
-          <div className="px-3 sm:px-4 pt-3 pb-2 flex items-center justify-between gap-2">
+          <div className="px-3 sm:px-4 pt-3 pb-2 flex flex-wrap items-center justify-between gap-2">
             <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
               Job Versions{' '}
               <span className="font-normal text-gray-500 dark:text-slate-400">({groups.length})</span>
@@ -1476,6 +1481,13 @@ export default function AssessmentVersionHistoryPanel({
                                                 <td className="py-2.5 px-3 whitespace-nowrap align-middle">
                                                   <MetricCell value={invitations} label={invitations === 1 ? 'Invitation' : 'Invitations'} />
                                                 </td>
+                                                {vocabulary.childCompletedColumn && (
+                                                  <td className="py-2.5 px-3 whitespace-nowrap align-middle">
+                                                    {typeof assessment.completed_count === 'number'
+                                                      ? <MetricCell value={assessment.completed_count} label={assessment.completed_count === 1 ? 'Candidate' : 'Candidates'} />
+                                                      : <span className="text-sm text-gray-400">—</span>}
+                                                  </td>
+                                                )}
                                                 {/* Cell and header are gated
                                                     on the same flag, so the
                                                     row can never carry one

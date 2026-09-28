@@ -312,7 +312,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors flex-shrink-0 ml-2"
+            className="p-2 sm:p-1.5 text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors flex-shrink-0 ml-2"
            aria-label="Close">
             <X className="w-4 h-4 sm:w-5 sm:h-5" />
           </button>
@@ -413,9 +413,9 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                         </div>
                         <div className="min-w-0 flex-1">
                           <p className="font-medium text-gray-900 dark:text-slate-50 text-xs truncate">{invitation.candidate_name}</p>
-                          <p className="text-2xs text-gray-500 dark:text-slate-500 truncate break-all">{invitation.candidate_email}</p>
+                          <p className="text-2xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                         </div>
-                        {getStatusBadge(invitation)}
+                        <div className="shrink-0">{getStatusBadge(invitation)}</div>
                       </div>
 
                       {/* CID + Assessment + the secondary Expired flag the
@@ -454,8 +454,8 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                       {/* Progress + Actions */}
                       <div className="pt-1.5 border-t border-gray-100 dark:border-slate-700/60">
                         {/* Score/Progress row */}
-                        <div className="flex items-center justify-between mb-1.5">
-                          <div>
+                        <div className="flex items-center justify-between gap-2 mb-1.5">
+                          <div className="min-w-0">
                             {getEffectiveStatus(invitation) === 'completed' ? (
                               <div className="flex items-center gap-1 text-2xs">
                                 <span className="text-gray-600 dark:text-slate-400">Score:</span>
@@ -482,7 +482,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                           {getEffectiveStatus(invitation) === 'completed' && invitation.attempt_id && (
                             <button
                               onClick={() => openResult(invitation)}
-                              className="flex items-center gap-1 px-1.5 py-0.5 text-2xs text-brand-blue hover:bg-brand-blue/5 rounded transition-colors"
+                              className="flex items-center gap-1 px-1.5 py-0.5 text-2xs text-brand-blue hover:bg-brand-blue/5 rounded transition-colors shrink-0"
                             >
                               <Eye className="w-3 h-3" />
                               View
