@@ -10071,7 +10071,7 @@ export default function JDCreation({ onBack, selectedJob, onPublish, editingJD, 
                       Allow Overqualified Candidates <span className="text-destructive">*</span>
                     </h3>
                     <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
-                      Should candidates who significantly exceed this role's experience requirement be scored favorably, or treated as a mismatch?
+                      Should candidates with more experience than the maximum for this role be scored favorably (Yes), or treated as a mismatch (No)? With No, any experience above the To value fails the Experience criterion.
                     </p>
                   </div>
                   <div className="flex items-center gap-2" role="radiogroup" aria-label="Allow Overqualified Candidates">

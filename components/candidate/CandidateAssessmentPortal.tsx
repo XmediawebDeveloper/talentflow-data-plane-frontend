@@ -522,13 +522,20 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
   useEffect(() => {
     if (step !== 'completed' || !token) return;
+    // The SERVER decides (2026-09-28): localStorage only knows about this
+    // browser, so reopening the same link in another browser / incognito used
+    // to re-ask for feedback and store a second answer over the first.
+    if (assessmentInfo?.feedback_submitted) {
+      setShowFeedback(false);
+      return;
+    }
     try {
       if (window.localStorage.getItem(`tf_assess_feedback_done_${token}`)) return;
     } catch {
       /* private mode / storage blocked — fall through and just show it */
     }
     setShowFeedback(true);
-  }, [step, token]);
+  }, [step, token, assessmentInfo?.feedback_submitted]);
 
   const dismissFeedback = useCallback(() => {
     setShowFeedback(false);
@@ -2578,7 +2585,14 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
               token={token}
               prompts={ASSESSMENT_RATING_PROMPTS}
               hints={ASSESSMENT_RATING_HINTS}
-              onSubmit={(payload) => candidateService.submitFeedback(token, payload)}
+              onSubmit={async (payload) => {
+                const response = await candidateService.submitFeedback(token, payload);
+                // Remember locally too, so this browser never re-asks even
+                // before the next info fetch returns feedback_submitted.
+                try { window.localStorage.setItem(`tf_assess_feedback_done_${token}`, '1'); } catch { /* ignore */ }
+                setAssessmentInfo(prev => (prev ? { ...prev, feedback_submitted: true } : prev));
+                return response;
+              }}
               onClose={dismissFeedback}
             />
           )}

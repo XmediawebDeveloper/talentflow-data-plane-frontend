@@ -14,6 +14,7 @@ import { formatISTWithSeconds } from '@/lib/utils/dateUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
+import { formatScore } from '@/lib/utils/score';
 
 // AS-24: localStorage key for column preferences (v2 with new columns)
 const COLUMN_PREFERENCES_KEY = 'assessment_results_jd_column_preferences_v2';
@@ -916,7 +917,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                             <td key={col.id} className="py-3 px-4">
                               <div className="flex items-center gap-2">
                                 <span className={`text-sm ${getScoreColor(result.scorePercentage)}`}>
-                                  {Math.round(result.scorePercentage)}%
+                                  {formatScore(result.scorePercentage)}%
                                 </span>
                                 <span className="text-xs text-gray-400">
                                   ({result.totalScore}/{result.maxScore})
@@ -1249,7 +1250,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         />
                       </div>
                       <span className={`font-medium text-xs shrink-0 ${getScoreColor(result.scorePercentage)}`}>
-                        {Math.round(result.scorePercentage)}%
+                        {formatScore(result.scorePercentage)}%
                       </span>
                     </div>
                   )}

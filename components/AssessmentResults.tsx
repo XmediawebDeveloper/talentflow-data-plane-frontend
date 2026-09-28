@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
 import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
+import { toOneDecimalScore } from '@/lib/utils/score';
 
 interface AssessmentResultsProps {
   onBack: () => void;
@@ -934,9 +935,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             // Results page and 69% in the Track Invites popup; rounding here
             // keeps it consistent everywhere.
             const scoringDone = scoringStatus === 'completed';
-            const tech_score = scoringDone && item.technical_score != null ? Math.round(Number(item.technical_score)) : undefined;
-            const coding_score = scoringDone && item.coding_score != null ? Math.round(Number(item.coding_score)) : undefined;
-            const hr_score = scoringDone && item.hr_score != null ? Math.round(Number(item.hr_score)) : undefined;
+            const tech_score = scoringDone && item.technical_score != null ? toOneDecimalScore(item.technical_score) : undefined;
+            const coding_score = scoringDone && item.coding_score != null ? toOneDecimalScore(item.coding_score) : undefined;
+            const hr_score = scoringDone && item.hr_score != null ? toOneDecimalScore(item.hr_score) : undefined;
 
             // Format duration properly
             let duration = '-';

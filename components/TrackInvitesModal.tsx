@@ -26,6 +26,7 @@ import {
   ViewFullHistoryLink,
   InvitationHistoryDialog,
 } from '@/components/AssessmentInviteActions';
+import { formatScore } from '@/lib/utils/score';
 
 /* This popup is deliberately READ-ONLY beyond Resend/Copy Link, matching the
    AI Interview module's Job-Details tracker: Edit (name+email, revoked-only)
@@ -460,7 +461,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                               <div className="flex items-center gap-1 text-2xs">
                                 <span className="text-gray-600 dark:text-slate-400">Score:</span>
                                 <span className={`font-medium ${invitation.passed ? 'text-brand-blue' : 'text-red-600'}`}>
-                                  {invitation.overall_score != null ? `${Math.round(invitation.overall_score)}%` : 'N/A'}
+                                  {invitation.overall_score != null ? `${formatScore(invitation.overall_score)}%` : 'N/A'}
                                 </span>
                                 {invitation.passed !== null && (
                                   <span className={`text-2xs px-1 py-0.5 rounded ring-1 ${invitation.passed ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-red-50 text-red-600 ring-red-200'}`}>

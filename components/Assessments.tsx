@@ -123,6 +123,7 @@ import {
   type JobAssessmentHierarchy,
 } from '@/lib/utils/jobAssessmentHierarchy';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
+import { formatScore } from '@/lib/utils/score';
 
 
 /** What the version-history helpers below read off an assessment row — the
@@ -2010,7 +2011,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       <td className="px-4 py-4 align-middle text-sm text-center">
         <div className="flex flex-col items-center gap-0.5">
           <span className={`font-medium ${passed ? 'text-brand-blue' : 'text-destructive'}`}>
-            {Math.round(score)}%
+            {formatScore(score)}%
           </span>
           <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${passed ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
             {passed ? 'Pass' : 'Fail'}
@@ -2188,13 +2189,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     {
       label: 'Tech Score',
       value: (inv) => (inv.technical_score != null && inv.scoring_status !== 'pending' && inv.scoring_status !== 'processing'
-        ? `${Math.round(inv.technical_score)}%`
+        ? `${formatScore(inv.technical_score)}%`
         : ''),
     },
     {
       label: 'Coding Score',
       value: (inv) => (inv.coding_score != null && inv.scoring_status !== 'pending' && inv.scoring_status !== 'processing'
-        ? `${Math.round(inv.coding_score)}%`
+        ? `${formatScore(inv.coding_score)}%`
         : ''),
     },
   ];
@@ -6771,7 +6772,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <td className="px-4 py-4 align-middle text-center">
                                     <div className="flex flex-col items-center gap-1">
                                       <span className={`text-lg font-semibold ${typeof result.technical_score === 'number' ? (result.technical_score >= RESULT_PASS_MARK ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
-                                        {typeof result.technical_score === 'number' ? `${Math.round(result.technical_score)}%` : '-'}
+                                        {typeof result.technical_score === 'number' ? `${formatScore(result.technical_score)}%` : '-'}
                                       </span>
                                       {typeof result.technical_score === 'number' && (
                                         <span className={`text-xs font-medium ${result.technical_score >= RESULT_PASS_MARK ? 'text-success' : 'text-destructive'}`}>
@@ -6783,7 +6784,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <td className="px-4 py-4 align-middle text-center">
                                     <div className="flex flex-col items-center gap-1">
                                       <span className={`text-lg font-semibold ${typeof result.coding_score === 'number' ? (result.coding_score >= RESULT_PASS_MARK ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
-                                        {typeof result.coding_score === 'number' ? `${Math.round(result.coding_score)}%` : '-'}
+                                        {typeof result.coding_score === 'number' ? `${formatScore(result.coding_score)}%` : '-'}
                                       </span>
                                       {typeof result.coding_score === 'number' && (
                                         <span className={`text-xs font-medium ${result.coding_score >= RESULT_PASS_MARK ? 'text-success' : 'text-destructive'}`}>
@@ -9733,7 +9734,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   {techReady ? (
                                     <div className="flex flex-col items-center gap-0.5">
                                       <span className={`font-medium ${invitation.technical_score >= 70 ? 'text-brand-blue' : 'text-destructive'}`}>
-                                        {Math.round(invitation.technical_score)}%
+                                        {formatScore(invitation.technical_score)}%
                                       </span>
                                       <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.technical_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
                                         {invitation.technical_score >= 70 ? 'Pass' : 'Fail'}
@@ -9755,7 +9756,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   {codingReady ? (
                                     <div className="flex flex-col items-center gap-0.5">
                                       <span className={`font-medium ${invitation.coding_score >= 70 ? 'text-brand-blue' : 'text-destructive'}`}>
-                                        {Math.round(invitation.coding_score)}%
+                                        {formatScore(invitation.coding_score)}%
                                       </span>
                                       <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.coding_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
                                         {invitation.coding_score >= 70 ? 'Pass' : 'Fail'}

@@ -36,6 +36,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import LanguageLogo, { logoLabelForId } from '@/components/assessments/LanguageLogo';
+import { formatScore } from '@/lib/utils/score';
 
 interface AssessmentDetailsViewProps {
   assessment: any;
@@ -2892,13 +2893,13 @@ export default function AssessmentDetailsView({
                                   {assessment.technical_enabled && activity.technical_score != null && (
                                     <div className="flex items-center gap-1.5">
                                       <span className="text-xs text-gray-600">Tech:</span>
-                                      <span className="text-sm font-semibold text-gray-900">{Math.round(activity.technical_score)}%</span>
+                                      <span className="text-sm font-semibold text-gray-900">{formatScore(activity.technical_score)}%</span>
                                     </div>
                                   )}
                                   {assessment.coding_enabled && activity.coding_score != null && (
                                     <div className="flex items-center gap-1.5">
                                       <span className="text-xs text-gray-600">Coding:</span>
-                                      <span className="text-sm font-semibold text-gray-900">{Math.round(activity.coding_score)}%</span>
+                                      <span className="text-sm font-semibold text-gray-900">{formatScore(activity.coding_score)}%</span>
                                     </div>
                                   )}
                                   {activity.passed != null && (

@@ -2719,7 +2719,7 @@ Best regards`);
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
                           {jdDetails.allow_overqualified === false
-                            ? 'Experience well above the range scores lower'
+                            ? 'Experience above the maximum of the range fails Experience'
                             : 'Extra relevant experience is not penalised'}
                         </p>
                       </div>

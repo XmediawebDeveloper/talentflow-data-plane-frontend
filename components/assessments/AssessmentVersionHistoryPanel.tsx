@@ -8,6 +8,7 @@ import type { JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 import { getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
 import { isStandardExperienceLevel } from '@/lib/utils/jobExperience';
+import { toOneDecimalScore } from '@/lib/utils/score';
 
 /**
  * Job Versions for an assessment row, expanded in place beneath it.
@@ -678,7 +679,7 @@ function RoundWeightageCell({ assessment }: { assessment: AssessmentVersionRow }
       label,
       enabled,
       hideAtZero,
-      percentage: Math.round(percentage ?? 0),
+      percentage: toOneDecimalScore(percentage ?? 0),
     }))
     .filter(({ enabled, percentage, hideAtZero }) => {
       if (hideAtZero && percentage === 0) return false;

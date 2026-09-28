@@ -57,6 +57,7 @@ import RecordPager from '@/components/RecordPager';
 import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
+import { toOneDecimalScore } from '@/lib/utils/score';
 
 // Legacy aliases — both now use the centralized IST formatter
 const formatToIST = formatIST;
@@ -1563,7 +1564,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             if (result.hr_score !== null && result.hr_score !== undefined) {
               roundScores.push({
                 roundName: 'HR',
-                score: Math.round(Number(result.hr_score)),
+                score: toOneDecimalScore(result.hr_score),
                 maxScore: 100,
                 passFail: result.hr_score >= 60 ? 'Pass' : 'Fail'
               });
@@ -1571,7 +1572,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             if (result.technical_score !== null && result.technical_score !== undefined) {
               roundScores.push({
                 roundName: 'Technical',
-                score: Math.round(Number(result.technical_score)),
+                score: toOneDecimalScore(result.technical_score),
                 maxScore: 100,
                 passFail: result.technical_score >= 60 ? 'Pass' : 'Fail'
               });
@@ -1579,7 +1580,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             if (result.coding_score !== null && result.coding_score !== undefined) {
               roundScores.push({
                 roundName: 'Coding',
-                score: Math.round(Number(result.coding_score)),
+                score: toOneDecimalScore(result.coding_score),
                 maxScore: 100,
                 passFail: result.coding_score >= 60 ? 'Pass' : 'Fail'
               });

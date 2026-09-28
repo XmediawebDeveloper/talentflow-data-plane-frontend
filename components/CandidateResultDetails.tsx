@@ -22,6 +22,7 @@ import JDOverviewSections from '@/components/jobs/JDOverviewSections';
 import AssessmentInfoPanel from '@/components/assessments/AssessmentInfoPanel';
 import { jdService, JDResponse } from '@/lib/services/jdService';
 import { Skeleton } from '@/components/ui/skeleton';
+import { formatScore, toOneDecimalScore } from '@/lib/utils/score';
 
 interface CandidateResultDetailsProps {
   onBack: () => void;
@@ -119,26 +120,10 @@ function getCodingEvaluationState(q: QuestionEvaluation) {
   };
 }
 
-/** A mark at one decimal — the stored value, never rounded to a whole mark.
- *
- *  2026-09-28: this used to round up whenever the fraction passed .5, so a
- *  judged coding answer worth 7.6/10 was displayed as 8/10 AND summed as 8
- *  for the section percentage — the header read 80% while the card above it
- *  read the stored 76%. Marks are shown exactly as scored now.
- *  Math.round on a ×10 value (not truncation) so float noise like
- *  1.5999999999 cannot drop a mark to 1.5. */
-function toOneDecimalMark(value: number | string | null | undefined) {
-  const numeric = Number(value ?? 0);
-  if (!Number.isFinite(numeric)) return 0;
-  return Math.round(numeric * 10) / 10;
-}
-
-/** The same value as text. A whole mark keeps no decimal ("3/3", not
- *  "3.0/3.0"); a partial one shows it ("1.6/4"). */
-function formatMark(value: number | string | null | undefined) {
-  const mark = toOneDecimalMark(value);
-  return Number.isInteger(mark) ? String(mark) : mark.toFixed(1);
-}
+// Marks and percentages are shown at one decimal, never rounded to a whole
+// number — see lib/utils/score.ts for why, and for the backend counterpart.
+const toOneDecimalMark = toOneDecimalScore;
+const formatMark = formatScore;
 
 function getCandidateCodingInput(q: QuestionEvaluation) {
   if (q.candidate_code_input && q.candidate_code_input.trim()) {

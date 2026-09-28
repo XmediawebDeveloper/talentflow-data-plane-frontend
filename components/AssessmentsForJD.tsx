@@ -37,6 +37,7 @@ import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { formatScore } from '@/lib/utils/score';
 
 interface AssessmentsForJDProps {
   jdId: string;
@@ -416,7 +417,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                         <div className="text-sm">
                           {assessment.average_score != null ? (
                             <span className="text-gray-900 font-medium">
-                              {Math.round(assessment.average_score)}%
+                              {formatScore(assessment.average_score)}%
                             </span>
                           ) : (
                             <span className="text-gray-400">-</span>
