@@ -29,8 +29,11 @@ import { jdService } from '@/lib/services/jdService';
 import { toast } from 'sonner';
 import { assessmentService } from '@/lib/services';
 import ShareAssessmentModal from './ShareAssessmentModal';
-import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
-import { aiInterviewService, AIInterviewResponse } from '@/lib/services/aiInterviewService';
+import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
+import type { Resume } from '@/lib/types/types';
+
+/** One candidate handed to the Invite to AI Interview dialog. */
+type AIInviteSeed = { name: string; email: string; resumeId?: string; phone?: string; title?: string };
 import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
@@ -869,12 +872,10 @@ export default function AITalentMatchPage({
      away to the full resume-view page. */
   const [previewResume, setPreviewResume] = useState<{ id: string; name: string; fileName?: string } | null>(null);
 
-  /* Invite AI Interview from a row's ⋮ menu — same "resolve this job's live
-     config, then open the share modal" flow JobDetailView uses for its own
-     Scored Resumes row invite. */
-  const [shareAIInterviewConfig, setShareAIInterviewConfig] = useState<AIInterviewResponse | null>(null);
-  const [aiInterviewInviteSeed, setAiInterviewInviteSeed] = useState<{ name: string; email: string; resumeId?: string }[] | null>(null);
-  const [resolvingInviteConfig, setResolvingInviteConfig] = useState(false);
+  /* The shared Invite to AI Interview dialog, scoped to this job — the same
+     popup the resume page opens: Candidates Selected, then only this job's
+     active interview versions to pick from. */
+  const [aiInviteFlow, setAiInviteFlow] = useState<{ jobId: string; seed: AIInviteSeed[] } | null>(null);
 
   // AI match version history — all match runs for one job, not just the latest.
   // Inline expand-in-place under the job card, one open at a time (like the
@@ -1709,40 +1710,16 @@ export default function AITalentMatchPage({
     }
   };
 
-  /* Invite AI Interview — resolves this job's live (published) AI interview
-     config, same lookup JobDetailView's own Scored Resumes row invite uses,
-     then opens the AI Interviews module's own share modal pre-filled with
-     one candidate. */
-  const handleInviteAIInterview = async (seed: { name: string; email: string; resumeId?: string }[]) => {
-    if (resolvingInviteConfig) return;
-    const jobId = selectedJob || selectedHistoryItem?.jobId;
+  /* Invite AI Interview — opens the shared Invite to AI Interview dialog for
+     this job: the candidates listed (untick to leave out), then this job's
+     active interview versions to choose from, then the share modal. */
+  const handleInviteAIInterview = (seed: AIInviteSeed[], jobIdOverride?: string) => {
+    const jobId = jobIdOverride || selectedJob || selectedHistoryItem?.jobId;
     if (!jobId) {
       toast.error('Job ID not found');
       return;
     }
-    setAiInterviewInviteSeed(seed);
-    setResolvingInviteConfig(true);
-    try {
-      const liveConfig = await aiInterviewService.findLiveConfigForJd(jobId);
-      if (!liveConfig) {
-        const draftResult = await aiInterviewService
-          .listConfigs({ status: 'draft', page_size: 50, compact: true })
-          .catch(() => null);
-        const hasDraft = (draftResult?.items ?? []).some((c: AIInterviewResponse) => c.jd_id === jobId);
-        toast.error(
-          hasDraft
-            ? 'This job’s AI interview is still a draft. Publish it before inviting candidates.'
-            : 'No AI interview has been created for this job yet.',
-          { duration: 6000 }
-        );
-        return;
-      }
-      setShareAIInterviewConfig(liveConfig);
-    } catch {
-      toast.error('Could not load the AI interview for this job. Please try again.');
-    } finally {
-      setResolvingInviteConfig(false);
-    }
+    setAiInviteFlow({ jobId, seed });
   };
 
   /* Bulk "Invite AI Interview" — the per-row entry point already builds a
@@ -1759,13 +1736,13 @@ export default function AITalentMatchPage({
       : getResolvedHistoryCandidates(selectedHistoryItem);
     const seed = currentCandidates
       .filter(c => selectedCandidates.includes(c.id))
-      .map(c => ({ name: c.name, email: c.email || '', resumeId: c.resumeId }))
+      .map(c => ({ name: c.name, email: c.email || '', resumeId: c.resumeId, phone: c.phone, title: c.title }))
       .filter(c => c.email);
     if (seed.length === 0) {
       toast.error('Selected candidates must have email addresses');
       return;
     }
-    void handleInviteAIInterview(seed);
+    handleInviteAIInterview(seed);
   };
 
   const getFilteredCandidates = (): MatchedCandidateWithVersions[] => {
@@ -1947,6 +1924,23 @@ export default function AITalentMatchPage({
 
   // Search sits outside the panel, so — like job-openings — it is not counted.
   const activeFiltersCount = historySearch.activeFilterCount;
+
+  /* Invite to AI Interview — the shared dialog, scoped to this job. Rendered
+     in EVERY view branch below that offers the action (history, results and
+     the default view): each branch returns its own tree, so a dialog placed in
+     only one of them never opened from the others. */
+  const aiInviteDialog = (
+    <InviteToAIInterviewFlow
+      open={!!aiInviteFlow}
+      onClose={() => setAiInviteFlow(null)}
+      jobId={aiInviteFlow?.jobId}
+      candidates={(aiInviteFlow?.seed ?? []).map((c, i) => ({ id: c.resumeId || `seed-${i}`, name: c.name, email: c.email }))}
+      resumes={(aiInviteFlow?.seed ?? []).map((c, i) => ({
+        id: c.resumeId || `seed-${i}`, name: c.name, email: c.email, phone: c.phone, title: c.title,
+      }) as unknown as Resume)}
+      onInvited={() => { setAiInviteFlow(null); setSelectedCandidates([]); }}
+    />
+  );
 
   // View: Matching in Progress (direct flow from resume-view / deep link)
   if (viewMode === 'matching') {
@@ -2264,7 +2258,7 @@ export default function AITalentMatchPage({
         toast.error('Selected candidates must have email addresses');
         return;
       }
-      void handleInviteAIInterview(seed);
+      handleInviteAIInterview(seed, item?.jobId);
     };
 
     return (
@@ -4718,6 +4712,7 @@ export default function AITalentMatchPage({
         );
       })()}
 
+      {aiInviteDialog}
       </>
     );
   }
@@ -4785,6 +4780,8 @@ export default function AITalentMatchPage({
       (loadingHistorySessionId === selectedHistoryItem?.id || loadingHistorySessionId === historyItemForSelectedJob?.id);
 
     return (
+      <>
+      {aiInviteDialog}
       <main className="flex-1 overflow-x-clip bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
@@ -4805,7 +4802,13 @@ export default function AITalentMatchPage({
                   <Sparkles className="h-4 w-4 text-brand-blue" />
                 </div>
                 <div className="min-w-0">
-                  <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 mb-1 tracking-tight truncate">{selectedJobData?.title}</h1>
+                  {/* JD ID badge before the title — the same badge the job list rows use. */}
+                  <div className="flex items-center gap-2 mb-1 min-w-0">
+                    {selectedJobData?.jobId && (
+                      <JobIdBadge className="inline-flex h-7 items-center flex-shrink-0">{selectedJobData.jobId}</JobIdBadge>
+                    )}
+                    <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-slate-50 tracking-tight truncate min-w-0">{selectedJobData?.title}</h1>
+                  </div>
                   <div className="flex flex-wrap items-center gap-2 text-xs text-gray-600 dark:text-slate-400">
                     <span className="inline-flex items-center gap-1">
                       <User className="w-3.5 h-3.5" />
@@ -5265,11 +5268,11 @@ export default function AITalentMatchPage({
                           {canCreateAIInterviews && (
                             <DropdownMenuItem
                               className={actionsMenuItemClass}
-                              disabled={!candidate.email || resolvingInviteConfig}
+                              disabled={!candidate.email}
                               title={!candidate.email ? 'Candidate has no email on file' : undefined}
                               onSelect={() => {
                                 if (!candidate.email) return;
-                                handleInviteAIInterview([{ name: candidate.name || 'Candidate', email: candidate.email, resumeId: candidate.resumeId }]);
+                                handleInviteAIInterview([{ name: candidate.name || 'Candidate', email: candidate.email, resumeId: candidate.resumeId, phone: candidate.phone, title: candidate.title }]);
                               }}
                             >
                               <Video className="w-4 h-4 text-menu-icon-share" />
@@ -5398,6 +5401,7 @@ export default function AITalentMatchPage({
         </div>
         </div>
       </main>
+      </>
     );
   }
 
@@ -5453,17 +5457,8 @@ export default function AITalentMatchPage({
         />
       )}
 
-      {/* Send AI Interview via Email — opened from a row's ⋮ "Invite AI
-          Interview" once its job's live config resolves. */}
-      {shareAIInterviewConfig && (
-        <ShareAIInterviewModal
-          isOpen={!!shareAIInterviewConfig}
-          onClose={() => { setShareAIInterviewConfig(null); setAiInterviewInviteSeed(null); }}
-          config={shareAIInterviewConfig}
-          initialCandidates={aiInterviewInviteSeed ?? undefined}
-          onInviteSent={() => toast.success('AI interview invitation sent')}
-        />
-      )}
+      {aiInviteDialog}
+
 
       {/* Version Selection Modal for Scoring (single candidate) */}
       {showVersionSelectForScoring && scoringCandidate && (

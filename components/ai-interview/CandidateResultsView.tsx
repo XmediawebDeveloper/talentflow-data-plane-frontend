@@ -9,7 +9,7 @@ import {
   ShieldAlert, Monitor, Clipboard, MousePointer, Eye, UserX,
   Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight, Smartphone,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
-  Download, Loader2, Sparkles, SkipForward, Play, X,
+  Download, Loader2, Sparkles, SkipForward, Play, X, Timer,
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -30,6 +30,7 @@ import { SkillsView, QuestionsView, FormulaView } from './evaluation-dashboard/E
 import { buildSkipReasoner } from './evaluation-dashboard/skipReason';
 import { CoverageV2 } from './evaluation-dashboard/CoverageV2';
 import { buildDashboardData } from './evaluation-dashboard/adapter';
+import { downloadSessionReport, hasEvaluationReport } from './evaluation-dashboard/downloadSessionReport';
 import type { AIInterviewResponse } from '@/lib/services/aiInterviewService';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { toast } from 'sonner';
@@ -656,6 +657,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
     });
   }, []);
   const [identityPhotoUrl, setIdentityPhotoUrl] = useState<string | null>(null);
+  const [reportDownloading, setReportDownloading] = useState(false);
   const [identityPhotoError, setIdentityPhotoError] = useState(false);
 
   // liveSession must be declared before any useEffect that references it in its
@@ -1740,8 +1742,12 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
             <div className="flex items-start justify-between">
               <div>
                 <div className="flex items-center gap-3 mb-2">
-                  <div className="w-12 h-12 rounded-full bg-brand-blue shadow-md shadow-brand-blue/25 ring-1 ring-white/20 flex items-center justify-center text-white font-semibold text-base">
-                    {(interview.candidate_name || 'U')[0].toUpperCase()}
+                  {/* The identity-check photo when there is one (it used to sit
+                      only in the Eval tab's banner), else the initial. */}
+                  <div className="w-12 h-12 rounded-full overflow-hidden bg-brand-blue shadow-md shadow-brand-blue/25 ring-1 ring-white/20 flex items-center justify-center text-white font-semibold text-base shrink-0">
+                    {identityPhotoUrl
+                      ? <img src={identityPhotoUrl} alt={interview.candidate_name || 'Candidate'} className="w-full h-full object-cover" />
+                      : (interview.candidate_name || 'U')[0].toUpperCase()}
                   </div>
                   <div>
                     <div className="flex items-center gap-2 flex-wrap">
@@ -1788,7 +1794,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                     </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-4 text-sm text-gray-500 mt-2 ml-[60px]">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 mt-2 ml-[60px]">
                   {interview.completed_at && (
                     <span>
                       Completed {formatISTDate(interview.completed_at)}, {formatISTTime(interview.completed_at).toLowerCase()}
@@ -1798,8 +1804,33 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                     <Clock className="w-3.5 h-3.5" />
                     Time taken: {formatDuration(eval_.duration_minutes || interview.duration_minutes)}
                   </span>
+                  {/* How long the candidate actually attended: started →
+                      completed, else the evaluation's recorded length. Shown
+                      as h/m/s so a short session reads "18s", not "0.3 min". */}
+                  {(() => {
+                    const start = liveSession.started_at || interview.started_at;
+                    const end = liveSession.completed_at || interview.completed_at;
+                    let secs = start && end ? Math.round((new Date(end).getTime() - new Date(start).getTime()) / 1000) : NaN;
+                    if (!Number.isFinite(secs) || secs <= 0) {
+                      const mins = Number(eval_.duration_minutes);
+                      secs = Number.isFinite(mins) && mins > 0 ? Math.round(mins * 60) : NaN;
+                    }
+                    if (!Number.isFinite(secs) || secs <= 0) return null;
+                    const h = Math.floor(secs / 3600);
+                    const m = Math.floor((secs % 3600) / 60);
+                    const s = secs % 60;
+                    const label = h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m${s ? ` ${s}s` : ''}` : `${s}s`;
+                    return (
+                      <span className="flex items-center gap-1" title="How long the candidate attended the interview">
+                        <Timer className="w-3.5 h-3.5" />
+                        Duration: {label}
+                      </span>
+                    );
+                  })()}
                 </div>
               </div>
+              {/* View Resume, with Download Report stacked under it. */}
+              <div className="flex flex-col items-stretch gap-2 flex-shrink-0">
               {/* View Resume — always rendered, like the assessment result
                   page. Once the load-time lookup finds no resume it's
                   disabled, and hovering explains why. A disabled button
@@ -1826,6 +1857,31 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 // look clickable and then flip to disabled.
                 <ViewResumeButton onClick={handleViewResume} loading className="flex-shrink-0" />
               )}
+              {/* Download Report — the evaluation report PDF (moved here from
+                  the Eval tab's card, so it's reachable from every tab). Shown
+                  once there is an evaluation to download. */}
+              {!evaluationPending && hasEvaluationReport(liveSession) && (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setReportDownloading(true);
+                    try {
+                      await downloadSessionReport(liveSession.id);
+                    } catch (err) {
+                      console.error('[CandidateResultsView] report download failed:', err);
+                      toast.error('Could not download the report. Please try again.');
+                    } finally {
+                      setReportDownloading(false);
+                    }
+                  }}
+                  disabled={reportDownloading}
+                  className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-brand-blue hover:bg-brand-blue-2 disabled:opacity-60 text-white text-sm font-medium shadow-sm shadow-brand-blue/25 transition-colors"
+                >
+                  {reportDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  {reportDownloading ? 'Preparing…' : 'Download Report'}
+                </button>
+              )}
+              </div>
             </div>
           </div>
 

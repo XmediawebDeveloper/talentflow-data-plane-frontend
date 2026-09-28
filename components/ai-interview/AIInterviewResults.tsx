@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import ListViewToggle, { ListDisplayMode } from '@/components/ui/list-view-toggle';
 import { useListSearch } from '@/lib/hooks/useListSearch';
+import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import ResultRowActions, { DownloadPdfsButton, isPhoneWidth } from './ResultRowActions';
 import { useRouter } from 'next/navigation';
 import {
   ChevronLeft, ChevronRight, Eye, Loader2,
@@ -23,8 +25,8 @@ import { formatISTDate, formatIST, parseIST } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
-import { INVITE_SOURCE_FILTER_OPTIONS } from './ColumnFilterFields';
-import { InviteSourceValue, inviteSourceLabel, isRevocableInvite, isExpiredForActions } from '@/components/AIInterviewInviteTable';
+import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from './ColumnFilterFields';
+import { InviteSourceValue, inviteSourceLabel, isRevocableInvite, isExpiredForActions, displayInviteScore, inviteResult, matchesInviteResultFilter, ResultBadge } from '@/components/AIInterviewInviteTable';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 interface AIInterviewResultsProps {
@@ -95,6 +97,7 @@ const RESULT_COLUMNS = [
   { id: 'inviteSource', label: 'Invite Source' },
   { id: 'status', label: 'Status' },
   { id: 'score', label: 'Score' },
+  { id: 'result', label: 'Result' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'proctoring', label: 'Proctoring Risk' },
 ] as const;
@@ -116,16 +119,6 @@ function VersionPill({ kind, version }: { kind: 'job' | 'interview'; version: nu
     </span>
   );
 }
-
-const STATUS_OPTIONS = [
-  { value: 'all', label: 'All Statuses' },
-  { value: 'invited', label: 'Invited' },
-  { value: 'in_progress', label: 'In Progress' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'terminated', label: 'Terminated' },
-  { value: 'expired', label: 'Expired' },
-  { value: 'revoked', label: 'Revoked' },
-];
 
 export function getStatusBadge(status: string) {
   switch (status) {
@@ -218,6 +211,10 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   const [totalSessions, setTotalSessions] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [summary, setSummary] = useState({
+    /* The server's count, before the Source / Result / Score Range filters
+       applied here — so the Total card never drops to 0 because a Pass or
+       Fail pick matched nothing. */
+    total: 0,
     invited: 0,
     completed: 0,
     inProgress: 0,
@@ -314,12 +311,33 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   // so `appliedQuery` matters twice over: it keeps one request per pause rather
   // than per keystroke, and it is what the request is built from.
   const search = useListSearch({
-    initialFilters: { status: 'all', scoreMin: '', scoreMax: '', dateFrom: '', dateTo: '', jobVersion: '', interviewVersion: '', inviteSource: '' },
+    initialFilters: { status: 'all', scoreMin: '', scoreMax: '', dateFrom: '', dateTo: '', jobVersion: '', interviewVersion: '', inviteSource: '', result: '' },
     onChange: () => setCurrentPage(1),
     // Score min/max is one logical range filter, and so is the date range.
     countFilters: (f) =>
       [f.scoreMin || f.scoreMax, f.dateFrom || f.dateTo, f.jobVersion, f.interviewVersion, f.inviteSource].filter(Boolean).length,
   });
+
+  /* Opening a candidate and coming back (breadcrumb or browser Back) remounts
+     this view — restore its page, search, filters and view, per interview, so
+     the user lands where they left off, not on page 1. Page is applied last:
+     restoring the search and filters calls onChange, which resets it to 1. */
+  // Phones open on the cards — the table's dozen columns only scroll
+  // sideways there. Before the restore below, which still wins on larger
+  // screens; the toggle switches back to the table any time.
+  useEffect(() => {
+    if (isPhoneWidth()) setDisplayMode('grid');
+  }, []);
+  useListStatePersistence(
+    `ai-interview-results:${configId}`,
+    { currentPage, query: search.query, filters: search.filters, displayMode },
+    (s) => {
+      if (typeof s.query === 'string' && s.query) search.setQuery(s.query);
+      if (s.filters && typeof s.filters === 'object') search.setFilters({ ...search.filters, ...s.filters });
+      if ((s.displayMode === 'list' || s.displayMode === 'grid') && !isPhoneWidth()) setDisplayMode(s.displayMode);
+      if (typeof s.currentPage === 'number' && s.currentPage >= 1) setCurrentPage(s.currentPage);
+    },
+  );
   const {
     status: statusFilter,
     scoreMin,
@@ -329,36 +347,50 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     jobVersion: jobVersionFilter,
     interviewVersion: interviewVersionFilter,
     inviteSource: sourceFilter,
+    result: resultFilter,
   } = search.filters;
+
+  /* Score, Score Range and Result all follow the AI Interview rule — the
+     Must-Have Skills % (displayInviteScore), 60% or above is a Pass — the
+     same figures every other AI Interview list shows. The server's
+     score_min/max filters the legacy blended score instead, so Score Range
+     is applied here, like Source and Result, which have no server filter. */
+  const needsClientFilter = !!(sourceFilter || resultFilter || scoreMin !== '' || scoreMax !== '');
+  const matchesClientFilters = useCallback((s: AIInterviewResponse) => {
+    if (sourceFilter && (s as any).invite_source !== sourceFilter) return false;
+    const score = displayInviteScore(s);
+    if (!matchesInviteResultFilter(s, score, resultFilter)) return false;
+    if (scoreMin !== '' && (score == null || score < parseFloat(scoreMin))) return false;
+    if (scoreMax !== '' && (score == null || score > parseFloat(scoreMax))) return false;
+    return true;
+  }, [sourceFilter, resultFilter, scoreMin, scoreMax]);
 
   const requestParams = useMemo(() => ({
     search: search.appliedQuery || undefined,
     status: statusFilter !== 'all' ? statusFilter : undefined,
-    score_min: scoreMin !== '' ? parseFloat(scoreMin) : undefined,
-    score_max: scoreMax !== '' ? parseFloat(scoreMax) : undefined,
     date_from: dateFrom || undefined,
     date_to: dateTo || undefined,
     /* Source (email / resume) has no server-side filter, so with one set the
        whole matching list is fetched and filtered and paged here — see
        pageBySource. */
-    page: sourceFilter ? 1 : currentPage,
-    page_size: sourceFilter ? SOURCE_FETCH_LIMIT : PAGE_SIZE,
+    page: needsClientFilter ? 1 : currentPage,
+    page_size: needsClientFilter ? SOURCE_FETCH_LIMIT : PAGE_SIZE,
     compact: true,
-  }), [search.appliedQuery, statusFilter, scoreMin, scoreMax, dateFrom, dateTo, currentPage, sourceFilter]);
+  }), [search.appliedQuery, statusFilter, dateFrom, dateTo, currentPage, needsClientFilter]);
 
   /* The rows, total and page count to show for one list response: the
      server's own page as it is, or — with a Source filter — this page of the
      rows from that source, so the pagination and counts describe what is
      actually listed. */
   const pageBySource = useCallback((res: AIInterviewInvitationListResponse) => {
-    if (!sourceFilter) {
+    if (!needsClientFilter) {
       return { items: res.items, total: res.total, pages: Math.max(1, res.total_pages || 1) };
     }
-    const matching = res.items.filter((s) => (s as any).invite_source === sourceFilter);
+    const matching = res.items.filter(matchesClientFilters);
     const pages = Math.max(1, Math.ceil(matching.length / PAGE_SIZE));
     const page = Math.min(currentPage, pages);
     return { items: matching.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE), total: matching.length, pages };
-  }, [sourceFilter, currentPage]);
+  }, [needsClientFilter, matchesClientFilters, currentPage]);
 
   const loadSessions = useCallback(async () => {
     setIsLoading(true);
@@ -375,10 +407,17 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'invited', page: 1, page_size: 1 }),
       ]);
       const shown = pageBySource(result);
+      // A restored page past the end (rows removed since) — step back to the
+      // last real page; that change re-runs this load.
+      if (currentPage > shown.pages) {
+        setCurrentPage(shown.pages);
+        return;
+      }
       setSessions(shown.items);
       setTotalSessions(shown.total);
       setTotalPages(shown.pages);
       setSummary({
+        total: result.total || 0,
         invited: invitedProbe.total || 0,
         completed: result.completed || 0,
         inProgress: result.in_progress || 0,
@@ -391,7 +430,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     } finally {
       setIsLoading(false);
     }
-  }, [configId, requestParams, pageBySource]);
+  }, [configId, requestParams, pageBySource, currentPage]);
 
   useEffect(() => {
     loadSessions();
@@ -414,6 +453,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           setTotalSessions(shown.total);
           setTotalPages(shown.pages);
           setSummary({
+            total: r.total || 0,
             invited: invitedProbe.total || 0,
             completed: r.completed || 0,
             inProgress: r.in_progress || 0,
@@ -439,8 +479,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   // dropdown and More Filters would all be narrowing nothing, so the whole bar
   // comes off and the empty state carries the actions instead. A search or
   // filter that happens to match nothing is NOT this case — the bar has to stay
-  // put so it can be cleared, and `isNarrowed` is what tells the two apart.
-  const isUnstarted = !isLoading && sessions.length === 0 && !search.isNarrowed;
+  // put so it can be cleared. `isNarrowed` covers search and More Filters;
+  // the status cards and the toolbar Result dropdown aren't in its count,
+  // so they're checked here too — otherwise a Pass / Fail pick (or a status
+  // card) with no matches hid the whole bar and left no way back.
+  const isUnstarted = !isLoading && sessions.length === 0 && !search.isNarrowed
+    && statusFilter === 'all' && !resultFilter;
 
   // Without the version columns in the list at all, the table, the Customize
   // Columns modal and the export all drop them together.
@@ -469,7 +513,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         case 'interviewVersion': return [interviewVersion != null ? `V${interviewVersion}` : ''];
         case 'inviteSource': return [inviteSourceLabel(session) || ''];
         case 'status': return [getStatusLabel(session.status)];
-        case 'score': return [session.score != null ? `${Math.round(session.score)}%` : ''];
+        case 'score': { const score = displayInviteScore(session); return [score != null ? `${score}%` : '']; }
+        case 'result': return [inviteResult(session, displayInviteScore(session)) || ''];
         case 'timeline': return [
           session.started_at ? formatIST(session.started_at) : '',
           session.completed_at ? formatIST(session.completed_at) : '',
@@ -482,18 +527,23 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
 
   // Exports the selected rows when any are picked; otherwise every row
   // matching the current search/filters, not just this page.
+  // Shared with Download PDFs, so both cover exactly the same candidates.
+  const collectExportRows = async (): Promise<AIInterviewResponse[]> => {
+    if (selected.size > 0) return Array.from(selected.values());
+    if (!versionMatches) return [];
+    const all: AIInterviewResponse[] = [];
+    for (let page = 1; ; page += 1) {
+      const res = await aiInterviewService.getConfigInvitations(configId, { ...requestParams, page, page_size: 100 });
+      all.push(...(needsClientFilter ? res.items.filter(matchesClientFilters) : res.items));
+      if (res.items.length < 100 || page >= (res.total_pages || 1)) break;
+    }
+    return all;
+  };
+
   const handleExport = async () => {
     setIsExporting(true);
     try {
-      const all: AIInterviewResponse[] = selected.size > 0 ? Array.from(selected.values()) : [];
-      if (selected.size === 0) {
-        for (let page = 1; ; page += 1) {
-          const res = await aiInterviewService.getConfigInvitations(configId, { ...requestParams, page, page_size: 100 });
-          all.push(...(sourceFilter ? res.items.filter((s) => (s as any).invite_source === sourceFilter) : res.items));
-          if (res.items.length < 100 || page >= (res.total_pages || 1)) break;
-        }
-      }
-      const rows = selected.size > 0 ? all : versionMatches ? all : [];
+      const rows = await collectExportRows();
       if (rows.length === 0) {
         toast.warning('No candidates to export');
         return;
@@ -661,7 +711,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           ? 'grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3 mb-5 px-0.5 pt-0.5'
           : 'grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4 mb-6'}>
           {([
-            { key: 'all', label: 'Total', value: totalSessions, Icon: Users,
+            { key: 'all', label: 'Total', value: summary.total, Icon: Users,
               iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15', iconColor: 'text-brand-blue', activeRing: 'ring-brand-blue/50 border-brand-blue/40' },
             { key: 'invited', label: 'Invited', value: summary.invited, Icon: Mail,
               iconBg: 'bg-brand-cyan/10 ring-1 ring-brand-cyan/20', iconColor: 'text-brand-blue', activeRing: 'ring-brand-cyan/50 border-brand-cyan/40' },
@@ -730,12 +780,33 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           // The hook debounces into `appliedQuery`, so keystrokes pass through.
           searchDebounceMs={0}
           searchPlaceholder="Search by name, email, or CID..."
+          // Six controls beside the search — lay out by the toolbar's own
+          // width, since beside the details page's nav it's far narrower
+          // than the screen.
+          fitToContainer
           onToggleFilters={() => setShowFilters((v) => !v)}
           filtersOpen={showFilters}
           activeFilterCount={search.activeFilterCount}
           filtersApplied={search.filtersApplied}
           onClearFilters={search.reset}
-          leadingActions={toolbarActions}
+          leadingActions={
+            <>
+              {toolbarActions}
+              {/* Result (Pass / Fail) first, ahead of More Filters; status is
+                  still picked from the cards above. */}
+              <select
+                value={resultFilter}
+                onChange={(e) => search.setFilter('result', e.target.value)}
+                aria-label="Result"
+                className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"
+              >
+                <option value="">All Results</option>
+                {RESULT_FILTER_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+            </>
+          }
           className="mb-0"
         >
           {revocableSelected.length > 0 && (
@@ -774,8 +845,16 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             <span className="hidden md:inline">Customize Columns</span>
             <span className="md:hidden">Columns</span>
           </Button>
+          {/* Download PDF acts on the ticked rows only (disabled until one is
+              selected); Export is always on — the ticked rows, else every
+              row matching the search and filters. */}
+          <DownloadPdfsButton
+            getRows={() => Array.from(selected.values())}
+            selectedCount={selected.size}
+            zipName={`${(configTitle || jdTitle || 'AI_Interview').replace(/\s+/g, '_')}_Reports_${new Date().toISOString().slice(0, 10)}.zip`}
+          />
           <Button
-            variant="secondary"
+            variant="primary"
             size="sm"
             onClick={() => setShowExportModal(true)}
             icon={<FileDown className="w-4 h-4" />}
@@ -783,16 +862,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           >
             Export{selected.size > 0 ? ` (${selected.size})` : ''}
           </Button>
-          <select
-            value={statusFilter}
-            onChange={(e) => search.setFilter('status', e.target.value)}
-            aria-label="Interview status"
-            className="px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"
-          >
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>{opt.label}</option>
-            ))}
-          </select>
           <ListViewToggle value={displayMode} onChange={setDisplayMode} />
         </ListToolbar>
 
@@ -1023,14 +1092,12 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                       )}
                     </div>
 
-                    {session.score != null && (
+                    {displayInviteScore(session) != null && (
                       <div className="flex items-center gap-2">
-                        <span className={`font-semibold text-sm shrink-0 ${
-                          session.score >= 70 ? 'text-success' :
-                          session.score >= 50 ? 'text-brand-orange-deep' : 'text-destructive'
-                        }`}>
-                          {Math.round(session.score)}%
+                        <span className={`font-semibold text-sm shrink-0 ${displayInviteScore(session)! >= 60 ? 'text-success' : 'text-destructive'}`}>
+                          {displayInviteScore(session)}%
                         </span>
+                        <ResultBadge result={inviteResult(session, displayInviteScore(session))} />
                       </div>
                     )}
 
@@ -1128,6 +1195,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                     {col('inviteSource') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>}
                     {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide">Status</th>}
                     {col('score') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>}
+                    {col('result') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Result</th>}
                     {col('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
                     {col('proctoring') && <th className="text-left px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>}
                     <th className="text-right px-4 py-3 font-medium text-gray-600 text-xs uppercase tracking-wide tf-sticky-col">Actions</th>
@@ -1240,15 +1308,19 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         )}
                         {col('score') && (
                           <td className="px-4 py-3 whitespace-nowrap">
-                            {session.score != null ? (
-                              <div className="flex items-center gap-2">
-                                <span className={`font-semibold text-sm ${
-                                  session.score >= 70 ? 'text-success' :
-                                  session.score >= 50 ? 'text-brand-orange-deep' : 'text-destructive'
-                                }`}>
-                                  {Math.round(session.score)}%
-                                </span>
-                              </div>
+                            {displayInviteScore(session) != null ? (
+                              <span className={`font-semibold text-sm ${displayInviteScore(session)! >= 60 ? 'text-success' : 'text-destructive'}`}>
+                                {displayInviteScore(session)}%
+                              </span>
+                            ) : (
+                              <span className="text-gray-400">—</span>
+                            )}
+                          </td>
+                        )}
+                        {col('result') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {inviteResult(session, displayInviteScore(session)) ? (
+                              <ResultBadge result={inviteResult(session, displayInviteScore(session))} />
                             ) : (
                               <span className="text-gray-400">—</span>
                             )}
@@ -1275,16 +1347,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                           </td>
                         )}
                         <td className="px-4 py-3 text-right whitespace-nowrap tf-sticky-col">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={(e) => { e.stopPropagation(); handleViewDetails(session); }}
-                            icon={<Eye className="w-3.5 h-3.5" />}
-                            title="View Details"
-                            aria-label="View Details"
-                          >
-                            <span className="hidden sm:inline">View Details</span>
-                          </Button>
+                          <ResultRowActions session={session} onView={() => handleViewDetails(session)} />
                         </td>
                       </tr>
                     );
