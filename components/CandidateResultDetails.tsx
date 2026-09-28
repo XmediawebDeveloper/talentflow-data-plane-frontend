@@ -118,12 +118,25 @@ function getCodingEvaluationState(q: QuestionEvaluation) {
   };
 }
 
-function roundBreakdownMark(value: number | string | null | undefined) {
+/** A mark at one decimal — the stored value, never rounded to a whole mark.
+ *
+ *  2026-09-28: this used to round up whenever the fraction passed .5, so a
+ *  judged coding answer worth 7.6/10 was displayed as 8/10 AND summed as 8
+ *  for the section percentage — the header read 80% while the card above it
+ *  read the stored 76%. Marks are shown exactly as scored now.
+ *  Math.round on a ×10 value (not truncation) so float noise like
+ *  1.5999999999 cannot drop a mark to 1.5. */
+function toOneDecimalMark(value: number | string | null | undefined) {
   const numeric = Number(value ?? 0);
   if (!Number.isFinite(numeric)) return 0;
-  const whole = Math.floor(numeric);
-  const fraction = numeric - whole;
-  return fraction > 0.5 ? Math.ceil(numeric) : whole;
+  return Math.round(numeric * 10) / 10;
+}
+
+/** The same value as text. A whole mark keeps no decimal ("3/3", not
+ *  "3.0/3.0"); a partial one shows it ("1.6/4"). */
+function formatMark(value: number | string | null | undefined) {
+  const mark = toOneDecimalMark(value);
+  return Number.isInteger(mark) ? String(mark) : mark.toFixed(1);
 }
 
 function getCandidateCodingInput(q: QuestionEvaluation) {
@@ -168,14 +181,15 @@ function getNormalizedQuestionPossiblePoints(q: QuestionEvaluation) {
 
 function getDisplayedQuestionEarnedPoints(q: QuestionEvaluation) {
   const normalizedEarned = q.points_possible === 100 ? (q.points_earned || 0) / 10 : (q.points_earned || 0);
-  return roundBreakdownMark(normalizedEarned);
+  return toOneDecimalMark(normalizedEarned);
 }
 
 function getDisplaySectionPercentage(questions: QuestionEvaluation[]) {
   const totalPossible = questions.reduce((sum, q) => sum + getNormalizedQuestionPossiblePoints(q), 0);
   const totalDisplayedEarned = questions.reduce((sum, q) => sum + getDisplayedQuestionEarnedPoints(q), 0);
   if (totalPossible <= 0) return 0;
-  return Math.round((totalDisplayedEarned / totalPossible) * 100);
+  // One decimal, like every other mark on this page: 17/180 reads 9.4%, not 9%.
+  return toOneDecimalMark((totalDisplayedEarned / totalPossible) * 100);
 }
 
 /* ── The summary card at the top of the result ──────────────────────────
@@ -505,7 +519,7 @@ export default function CandidateResultDetails({
             q => q.round_type === round.round_type
           );
           const percentage = round.round_type === 'hr'
-            ? Math.round(round.raw_score ?? 0)
+            ? toOneDecimalMark(round.raw_score ?? 0)
             : getDisplaySectionPercentage(questionsForRound);
           return {
             name: `${round.round_type.charAt(0).toUpperCase() + round.round_type.slice(1)} Section`,
@@ -796,7 +810,7 @@ export default function CandidateResultDetails({
             );
             const percentage = Math.min(
               round.round_type === 'hr'
-                ? Math.round(round.raw_score ?? 0)
+                ? toOneDecimalMark(round.raw_score ?? 0)
                 : getDisplaySectionPercentage(questionsForRound),
               100,
             );
@@ -1391,7 +1405,7 @@ export default function CandidateResultDetails({
                   }`}
                 >
                   {summaryRounds.map((round) => {
-                    const score = Math.round(round.raw_score ?? 0);
+                    const score = toOneDecimalMark(round.raw_score ?? 0);
                     const passed = score >= ROUND_PASS_MARK;
                     return (
                       <div
@@ -2048,7 +2062,7 @@ export default function CandidateResultDetails({
                     q => q.round_type === round.round_type
                   );
                   const displayedSectionPercentage = isHRRound
-                    ? Math.round(round.raw_score ?? 0)
+                    ? toOneDecimalMark(round.raw_score ?? 0)
                     : getDisplaySectionPercentage(questionsForRound);
                   const displayedSectionPoints = questionsForRound.reduce(
                     (sum, q) => sum + getDisplayedQuestionEarnedPoints(q),
@@ -2090,7 +2104,7 @@ export default function CandidateResultDetails({
                                 <span>
                                   {isHRRound ? 'Informational only' : (
                                     <>
-                                      {displayedSectionPoints}/{displayedSectionPossible} points
+                                      {formatMark(displayedSectionPoints)}/{formatMark(displayedSectionPossible)} points
                                     </>
                                   )}
                                 </span>
@@ -2267,7 +2281,7 @@ export default function CandidateResultDetails({
                                           return (
                                             <>
                                               <div className={`text-lg sm:text-2xl font-bold tracking-tight ${getScoreColor(percentage)}`}>
-                                                {Math.round(normalizedEarned)}
+                                                {formatMark(normalizedEarned)}
                                               </div>
                                               <div className="text-gray-400">/</div>
                                               <div className="text-base sm:text-xl text-gray-600 font-medium">{normalizedPossible}</div>
@@ -2523,19 +2537,19 @@ export default function CandidateResultDetails({
                                       </div>
                                       <div className="rounded-xl border border-brand-blue/20 bg-brand-blue/5 ring-1 ring-brand-blue/10 p-4 space-y-2 text-sm text-gray-800">
                                         <div>
-                                          Syntax: {roundBreakdownMark(q.candidate_test_results.marks_breakdown.syntax?.earned)}/{roundBreakdownMark(q.candidate_test_results.marks_breakdown.syntax?.total)}
+                                          Syntax: {formatMark(q.candidate_test_results.marks_breakdown.syntax?.earned)}/{formatMark(q.candidate_test_results.marks_breakdown.syntax?.total)}
                                           {q.candidate_test_results.marks_breakdown.syntax?.reason ? ` - ${q.candidate_test_results.marks_breakdown.syntax.reason}` : ''}
                                         </div>
                                         <div>
-                                          Execution: {roundBreakdownMark(q.candidate_test_results.marks_breakdown.execution?.earned)}/{roundBreakdownMark(q.candidate_test_results.marks_breakdown.execution?.total)}
+                                          Execution: {formatMark(q.candidate_test_results.marks_breakdown.execution?.earned)}/{formatMark(q.candidate_test_results.marks_breakdown.execution?.total)}
                                           {q.candidate_test_results.marks_breakdown.execution?.reason ? ` - ${q.candidate_test_results.marks_breakdown.execution.reason}` : ''}
                                         </div>
                                         <div>
-                                          Output: {roundBreakdownMark(q.candidate_test_results.marks_breakdown.output?.earned)}/{roundBreakdownMark(q.candidate_test_results.marks_breakdown.output?.total)}
+                                          Output: {formatMark(q.candidate_test_results.marks_breakdown.output?.earned)}/{formatMark(q.candidate_test_results.marks_breakdown.output?.total)}
                                           {q.candidate_test_results.marks_breakdown.output?.reason ? ` - ${q.candidate_test_results.marks_breakdown.output.reason}` : ''}
                                         </div>
                                         <div className="font-semibold pt-2 border-t border-brand-blue/20 text-brand-blue">
-                                          Final: {roundBreakdownMark(q.points_earned)}/{roundBreakdownMark(q.points_possible)} ({roundBreakdownMark(q.score)}%)
+                                          Final: {formatMark(q.points_earned)}/{formatMark(q.points_possible)} ({formatMark(q.score)}%)
                                         </div>
                                       </div>
                                     </div>
