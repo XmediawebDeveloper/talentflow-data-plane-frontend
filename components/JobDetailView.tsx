@@ -3611,7 +3611,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       icon={<UserPlus className="w-4 h-4" />}
                       label="Invite"
                       accent="orange"
-                      onClick={handleInviteAIInterview}
+                      onClick={() => handleInviteAIInterview()}
                       disabled={!canInviteToAIInterview}
                       disabledTooltip={
                         !features.ai_interview
