@@ -94,6 +94,14 @@ export interface ListToolbarProps {
    *  to give it a fixed width instead of filling the row. */
   searchClassName?: string;
 
+  /**
+   * Desktop (`lg` and up) only: sit the controls right after the search box,
+   * spaced exactly as they are spaced from each other, instead of pushing them
+   * to the far end of the row. For a search box with a capped width, where the
+   * far-end layout leaves a wide hole after it. Smaller screens are unchanged.
+   */
+  controlsFollowSearch?: boolean;
+
   className?: string;
 }
 
@@ -113,6 +121,7 @@ export default function ListToolbar({
   countBadge,
   filterPanel,
   searchClassName,
+  controlsFollowSearch = false,
   className,
 }: ListToolbarProps) {
   /* ---- Debounced search -------------------------------------------------
@@ -160,6 +169,8 @@ export default function ListToolbar({
     <div
       className={cn(
         'flex flex-col sm:flex-row sm:items-center gap-3 mb-3',
+        // The group's own gap, so search → first control matches control → control.
+        controlsFollowSearch && 'lg:gap-2',
         filterPanel ? undefined : className
       )}
     >
@@ -176,7 +187,7 @@ export default function ListToolbar({
 
       {/* ml-auto keeps the controls right-aligned when the search box is given
           a fixed width; with the default flex-1 box it has no effect. */}
-      <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+      <div className={cn('flex flex-wrap items-center gap-2 sm:ml-auto', controlsFollowSearch && 'lg:ml-0')}>
         {leadingActions}
 
         {onToggleFilters && (

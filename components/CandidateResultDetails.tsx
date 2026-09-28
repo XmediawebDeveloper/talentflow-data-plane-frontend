@@ -2,6 +2,7 @@
 
 import { ChevronLeft, ChevronRight, User, UserX, Clock, Award, CheckCircle, XCircle, ChevronDown, ChevronUp, FileText, Briefcase, AlertCircle, Info, Loader2, ShieldAlert, Eye, Clipboard, MousePointer, Volume2, Monitor, Maximize, Activity, Camera } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, type ComponentType } from 'react';
+import { useRouter } from 'next/navigation';
 import { assessmentService, DetailedResultResponse, InvitationResponse, QuestionEvaluation, RoundScore } from '@/lib/services';
 import { proctoringService, ProctoringEvent } from '@/lib/services/proctoringService';
 import { RecordingPlayer, EMPTY_RECORDING_SOURCE, type RecordingSource } from '@/components/recording/RecordingPlayer';
@@ -274,6 +275,7 @@ export default function CandidateResultDetails({
   onCandidateLoaded,
   onResumeViewChange,
 }: CandidateResultDetailsProps) {
+  const router = useRouter();
   const [detailedResult, setDetailedResult] = useState<DetailedResultResponse | null>(null);
   const [isLoadingDetails, setIsLoadingDetails] = useState(true);
   const [detailsError, setDetailsError] = useState<string | null>(null);
@@ -1040,8 +1042,8 @@ export default function CandidateResultDetails({
           </div>
 
           {/* Two-column body: left nav rail + right content card */}
-          <div className="grid grid-cols-[180px_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[220px_minmax(0,1fr)] sm:gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
-            <aside className="self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700">
+          <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4 md:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
+            <aside className="min-w-0 self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700">
               <div className="p-2 sm:p-3">
                 <div className="flex flex-col gap-1.5">
                   {Array.from({ length: 5 }).map((_, i) => (
@@ -1167,6 +1169,45 @@ export default function CandidateResultDetails({
     );
   }
 
+
+  /* The Export PDF download's name: "JD-001 - Python Developer - John Doe -
+     2026-09-28.pdf". Only the name is built here; the file is the backend's.
+
+     JD ID and name come from the assessment record first (`jd_short_id`,
+     `jd_title`), then from the host's props: the results route passes the
+     human "JD-014" and the title, but Job Details passes the JD's database id
+     and no title, and a UUID is not a JD ID to print. A part that is missing
+     is left out rather than leaving an empty " -  - " in the name. The date
+     is the day of the download, in the viewer's own calendar.
+
+     Sanitised for every OS: characters Windows / macOS / Linux refuse
+     (\ / : * ? " < > |) and control characters are dropped, whitespace is
+     collapsed, and trailing dots or spaces (which Windows strips or rejects)
+     are trimmed. */
+  const buildResultPdfFilename = () => {
+    const clean = (value: unknown) =>
+      String(value ?? '')
+        .replace(/[\\/:*?"<>|\u0000-\u001F\u007F]/g, '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .replace(/[. ]+$/, '');
+    const looksLikeDbId = (value: string) => /[0-9a-f]{8}-[0-9a-f]{4}-/i.test(value);
+    const propJdId = jdId && !looksLikeDbId(jdId) ? jdId : '';
+    const now = new Date();
+    const date = [
+      now.getFullYear(),
+      String(now.getMonth() + 1).padStart(2, '0'),
+      String(now.getDate()).padStart(2, '0'),
+    ].join('-');
+    const parts = [
+      assessmentMeta?.jd_short_id || propJdId,
+      assessmentMeta?.jd_title || jdTitle || jdData?.title,
+      detailedResult?.candidate_name || candidateData?.name || candidateDisplayId,
+      date,
+    ].map(clean).filter(Boolean);
+    return `${parts.join(' - ').slice(0, 200)}.pdf`;
+  };
+
   return (
     <div className="flex-1 bg-slate-50">
       {breadcrumbItems && breadcrumbItems.length > 0 && (
@@ -1209,18 +1250,38 @@ export default function CandidateResultDetails({
                 {(candidateData?.name || 'U').split(' ').map(n => n[0]).join('')}
               </div>
               <div className="min-w-0">
-                <h1 className="text-sm sm:text-base md:text-lg text-gray-900 mb-0.5 sm:mb-1 truncate tracking-tight font-semibold">{candidateData?.name || 'Unknown'}</h1>
+                <div className="flex items-center gap-2 mb-0.5 sm:mb-1 min-w-0">
+                  <h1 className="min-w-0 text-sm md:text-base text-gray-900 truncate tracking-tight font-semibold">{candidateData?.name || 'Unknown'}</h1>
+                  {/* Status Badge — beside the name it describes, on the same
+                      line; moved from the end of the action buttons, same
+                      badge. `shrink-0` so a long name truncates, not the
+                      badge. */}
+                  {(() => {
+                    let displayStatus = candidateData?.status || 'In Progress';
+                    if (detailedResult && detailedResult.scoring_status === 'completed') {
+                      displayStatus = 'Completed';
+                    } else if (detailedResult && detailedResult.scoring_status === 'processing') {
+                      displayStatus = 'In Progress';
+                    } else if (detailedResult && detailedResult.scoring_status === 'pending') {
+                      displayStatus = 'Pending';
+                    }
+                    return (
+                      <Badge variant={getStatusVariant(displayStatus)} className="shrink-0 px-2 py-0.5 rounded-md text-xs font-medium">
+                        {displayStatus}
+                      </Badge>
+                    );
+                  })()}
+                </div>
                 <p className="text-xs sm:text-sm text-gray-600 truncate">{candidateData?.email}</p>
                 <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs font-mono font-medium mt-0.5">
                   {candidateDisplayId || detailedResult?.candidate_display_id || `CID-${candidateId}`}
                 </span>
               </div>
             </div>
-            {/* The candidate's two document actions and their status.
-                `flex-wrap` because this row gained a third control: on a narrow
-                phone the badge drops to its own line instead of squeezing the
-                buttons or pushing them off the edge. */}
-            <div className="flex flex-wrap items-center gap-2 sm:gap-3 self-start sm:self-auto">
+            {/* The candidate's two document actions. The status badge that
+                used to end this row now sits beside the candidate's name.
+                `flex-wrap` so a narrow phone wraps rather than overflows. */}
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 self-start sm:self-auto sm:shrink-0">
               {/* View Resume — always rendered. With a resume, hovering shows
                   a preview of it and clicking opens it in full. Without one
                   it's disabled and hovering explains why; a disabled button
@@ -1266,10 +1327,7 @@ export default function CandidateResultDetails({
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    const candidateSlug = (candidateData?.name || candidateDisplayId || candidateId)
-                      .toString()
-                      .replace(/\s+/g, '_');
-                    a.download = `${assessmentTitle.replace(/\s+/g, '_')}_${candidateSlug}_result.pdf`;
+                    a.download = buildResultPdfFilename();
                     document.body.appendChild(a);
                     a.click();
                     window.URL.revokeObjectURL(url);
@@ -1282,25 +1340,9 @@ export default function CandidateResultDetails({
                 className="px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium text-brand-blue bg-white dark:bg-slate-900 border border-brand-blue/40 rounded-lg hover:bg-brand-blue/5 transition-colors flex items-center gap-1.5 whitespace-nowrap"
               >
                 <FileText className="w-4 h-4" />
-                <span className="hidden sm:inline">Export (PDF)</span>
+                <span className="hidden sm:inline">Export Result PDF</span>
                 <span className="sm:hidden">PDF</span>
               </button>
-              {/* Status Badge */}
-              {(() => {
-                let displayStatus = candidateData?.status || 'In Progress';
-                if (detailedResult && detailedResult.scoring_status === 'completed') {
-                  displayStatus = 'Completed';
-                } else if (detailedResult && detailedResult.scoring_status === 'processing') {
-                  displayStatus = 'In Progress';
-                } else if (detailedResult && detailedResult.scoring_status === 'pending') {
-                  displayStatus = 'Pending';
-                }
-                return (
-                  <Badge variant={getStatusVariant(displayStatus)} className="px-4 py-2 rounded-lg text-sm font-medium">
-                    {displayStatus}
-                  </Badge>
-                );
-              })()}
             </div>
           </div>
         </div>
@@ -1455,20 +1497,20 @@ export default function CandidateResultDetails({
         </div>
 
         {/* Unified detail layout: vertical navigation on the left, selected content on the right. */}
-        <div className="grid grid-cols-[180px_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[220px_minmax(0,1fr)] sm:gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
-          <aside className="sticky top-20 self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700">
+        <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4 md:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
+          <aside className="min-w-0 sm:sticky sm:top-20 self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-200 dark:border-slate-700">
           {/* No border-b here — the card's own border already draws the
               baseline the active tab's underline sits on. Adding one gave a
               doubled 2px rule under the row. */}
           <div className="p-2 sm:p-3">
-            <div className="flex flex-col gap-1.5">
+            <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-col">
               {detailTabs.map(tab => {
                 const isActive = currentDetailTab === tab.id;
                 return (
                   <button
                     key={tab.id}
                     onClick={() => handleDetailTabClick(tab)}
-                    className={`w-full rounded-lg px-3 py-2.5 text-left text-xs sm:text-sm transition-colors flex items-center justify-between gap-2 ${
+                    className={`w-full min-w-0 rounded-lg px-2.5 sm:px-3 py-2.5 text-left text-xs sm:text-sm transition-colors flex items-center justify-between gap-2 ${
                       isActive
                         ? tab.danger
                           ? 'bg-destructive-subtle text-destructive font-medium ring-1 ring-destructive-line'
@@ -1480,7 +1522,7 @@ export default function CandidateResultDetails({
                   >
                     <span className="flex min-w-0 items-center gap-2">
                       <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                      <span className="min-w-0 leading-snug">{tab.label}</span>
+                      <span className="min-w-0 break-words leading-snug">{tab.label}</span>
                     </span>
                     {typeof tab.count === 'number' && (
                       <span className={`shrink-0 px-2 py-0.5 rounded-full text-xs font-medium ${
@@ -1587,7 +1629,28 @@ export default function CandidateResultDetails({
                         the same number the info card's Job Title chip shows, so
                         the two cannot disagree. Falls back to the JD record's
                         own `current_version` when the page has none. */}
-                    <JDIdentityHeader jd={jdData} versionNumber={jdVersion ?? undefined} />
+                    {/* The header opens the JD's own page — except where this
+                        view is embedded in that page already (`breadcrumbItems`
+                        comes from Job Details), where it would only reopen it.
+                        The Job Details page is told where it was opened from,
+                        so its breadcrumb continues this page's trail —
+                        Assessments › <assessment> › <candidate> › <job> —
+                        instead of dropping to the Job Descriptions one. */}
+                    <JDIdentityHeader
+                      jd={jdData}
+                      versionNumber={jdVersion ?? undefined}
+                      onOpen={breadcrumbItems && breadcrumbItems.length > 0 ? undefined : () => {
+                        const params = new URLSearchParams({
+                          id: jdData.id,
+                          from: 'assessment-result',
+                          assessment_id: assessmentId,
+                          assessment_title: assessmentTitle || '',
+                          candidate_name: detailedResult?.candidate_name || candidateDisplayId || '',
+                          return_to: `${window.location.pathname}${window.location.search}`,
+                        });
+                        router.push(`/recruitment/job-details?${params.toString()}`);
+                      }}
+                    />
                     <JDOverviewSections jd={jdData} />
                   </>
                 )}
@@ -2551,7 +2614,7 @@ export default function CandidateResultDetails({
                                         </div>
                                         <div className="space-y-3">
                                           {q.candidate_test_results.details.map((testCase, testCaseIdx) => (
-                                            <div key={testCaseIdx} className="rounded-xl border border-gray-100 bg-slate-50 ring-1 ring-black/[0.02] p-4">
+                                            <div key={testCaseIdx} className="rounded-xl border border-gray-100 bg-slate-50 ring-1 ring-black/[0.02] p-3 sm:p-4">
                                               <div className="mb-3 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                                                 <div className="text-sm font-medium text-gray-900">
                                                   Test Case {testCase.test_number}
@@ -2572,7 +2635,7 @@ export default function CandidateResultDetails({
                                                     Test Case Input
                                                   </div>
                                                   <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-200 dark:border-slate-700">
-                                                    <pre className="whitespace-pre-wrap">{testCase.input || (testCase.is_hidden ? 'Hidden test input' : 'No input')}</pre>
+                                                    <pre className="whitespace-pre-wrap [overflow-wrap:anywhere]">{testCase.input || (testCase.is_hidden ? 'Hidden test input' : 'No input')}</pre>
                                                   </div>
                                                 </div>
                                                 <div>
@@ -2580,7 +2643,7 @@ export default function CandidateResultDetails({
                                                     Expected Output
                                                   </div>
                                                   <div className="rounded bg-white p-3 font-mono text-sm text-gray-800 border border-gray-200 dark:border-slate-700">
-                                                    <pre className="whitespace-pre-wrap">{testCase.expected_output || (testCase.is_hidden ? 'Hidden expected output' : 'No expected output')}</pre>
+                                                    <pre className="whitespace-pre-wrap [overflow-wrap:anywhere]">{testCase.expected_output || (testCase.is_hidden ? 'Hidden expected output' : 'No expected output')}</pre>
                                                   </div>
                                                 </div>
                                               </div>
@@ -2593,7 +2656,7 @@ export default function CandidateResultDetails({
                                                         Why It Failed
                                                       </div>
                                                       <div className="rounded border border-destructive-line ring-1 ring-destructive-line bg-destructive-subtle p-3 font-mono text-sm text-destructive-strong">
-                                                        <pre className="whitespace-pre-wrap">{testCase.error}</pre>
+                                                        <pre className="whitespace-pre-wrap [overflow-wrap:anywhere]">{testCase.error}</pre>
                                                       </div>
                                                     </div>
                                                   )}
@@ -2753,7 +2816,7 @@ export default function CandidateResultDetails({
                           {detailedResult.proctoring_stats.total_violations} total violation{detailedResult.proctoring_stats.total_violations !== 1 ? 's' : ''} detected during the assessment
                         </p>
                       </div>
-                      <div className="text-right">
+                      <div className="text-left sm:text-right">
                         <div className="text-sm text-gray-600 mb-1">Integrity Status</div>
                         <span className={`inline-flex items-center px-4 py-2 rounded-lg text-sm font-medium ring-1 ${
                           detailedResult.proctoring_stats.integrity_status === 'clean'
@@ -2771,27 +2834,29 @@ export default function CandidateResultDetails({
                     </div>
 
                     {/* Violations Grid */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2.5 sm:gap-3">
                       {/* Window Focus Lost */}
-                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
+                      <div className={`rounded-xl p-3 border ring-1 ${
                         detailedResult.proctoring_stats.window_blur_count > 0
                           ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
-                          detailedResult.proctoring_stats.window_blur_count > 0
-                            ? 'bg-destructive-subtle ring-destructive-line'
-                            : 'bg-slate-100 ring-slate-200'
-                        }`}>
-                          <Eye className={`w-6 h-6 ${
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ring-1 ${
                             detailedResult.proctoring_stats.window_blur_count > 0
-                              ? 'text-destructive'
-                              : 'text-gray-400'
-                          }`} />
+                              ? 'bg-destructive-subtle ring-destructive-line'
+                              : 'bg-slate-100 ring-slate-200'
+                          }`}>
+                            <Eye className={`w-4 h-4 ${
+                              detailedResult.proctoring_stats.window_blur_count > 0
+                                ? 'text-destructive'
+                                : 'text-gray-400'
+                            }`} />
+                          </div>
+                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Window Focus Lost</div>
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Window Focus Lost</div>
                         <div className="flex items-center gap-2">
-                          <div className={`text-3xl font-bold tracking-tight ${
+                          <div className={`text-2xl font-bold tracking-tight ${
                             detailedResult.proctoring_stats.window_blur_count > 0
                               ? 'text-destructive'
                               : 'text-gray-400'
@@ -2803,25 +2868,27 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Mouse Movement */}
-                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
+                      <div className={`rounded-xl p-3 border ring-1 ${
                         (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
                           ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
-                          (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
-                            ? 'bg-destructive-subtle ring-destructive-line'
-                            : 'bg-slate-100 ring-slate-200'
-                        }`}>
-                          <MousePointer className={`w-6 h-6 ${
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ring-1 ${
                             (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
-                              ? 'text-destructive'
-                              : 'text-gray-400'
-                          }`} />
+                              ? 'bg-destructive-subtle ring-destructive-line'
+                              : 'bg-slate-100 ring-slate-200'
+                          }`}>
+                            <MousePointer className={`w-4 h-4 ${
+                              (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
+                                ? 'text-destructive'
+                                : 'text-gray-400'
+                            }`} />
+                          </div>
+                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Mouse Movement</div>
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Mouse Movement</div>
                         <div className="flex items-center gap-2">
-                          <div className={`text-3xl font-bold tracking-tight ${
+                          <div className={`text-2xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.mouse_movement_count || 0) > 0
                               ? 'text-destructive'
                               : 'text-gray-400'
@@ -2833,25 +2900,27 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Tab Switch */}
-                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
+                      <div className={`rounded-xl p-3 border ring-1 ${
                         detailedResult.proctoring_stats.tab_switch_count > 0
                           ? 'bg-brand-orange/10 border-brand-orange/30 ring-brand-orange/15'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
-                          detailedResult.proctoring_stats.tab_switch_count > 0
-                            ? 'bg-brand-orange/20 ring-brand-orange/30'
-                            : 'bg-slate-100 ring-slate-200'
-                        }`}>
-                          <Monitor className={`w-6 h-6 ${
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ring-1 ${
                             detailedResult.proctoring_stats.tab_switch_count > 0
-                              ? 'text-brand-orange-deep'
-                              : 'text-gray-400'
-                          }`} />
+                              ? 'bg-brand-orange/20 ring-brand-orange/30'
+                              : 'bg-slate-100 ring-slate-200'
+                          }`}>
+                            <Monitor className={`w-4 h-4 ${
+                              detailedResult.proctoring_stats.tab_switch_count > 0
+                                ? 'text-brand-orange-deep'
+                                : 'text-gray-400'
+                            }`} />
+                          </div>
+                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Tab Switch</div>
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Tab Switch</div>
                         <div className="flex items-center gap-2">
-                          <div className={`text-3xl font-bold tracking-tight ${
+                          <div className={`text-2xl font-bold tracking-tight ${
                             detailedResult.proctoring_stats.tab_switch_count > 0
                               ? 'text-brand-orange-deep'
                               : 'text-gray-400'
@@ -2863,25 +2932,27 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Copy Count */}
-                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
+                      <div className={`rounded-xl p-3 border ring-1 ${
                         (detailedResult.proctoring_stats.copy_count || 0) > 0
                           ? 'bg-brand-orange/10 border-brand-orange/30 ring-brand-orange/15'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
-                          (detailedResult.proctoring_stats.copy_count || 0) > 0
-                            ? 'bg-brand-orange/20 ring-brand-orange/30'
-                            : 'bg-slate-100 ring-slate-200'
-                        }`}>
-                          <Clipboard className={`w-6 h-6 ${
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ring-1 ${
                             (detailedResult.proctoring_stats.copy_count || 0) > 0
-                              ? 'text-brand-orange-deep'
-                              : 'text-gray-400'
-                          }`} />
+                              ? 'bg-brand-orange/20 ring-brand-orange/30'
+                              : 'bg-slate-100 ring-slate-200'
+                          }`}>
+                            <Clipboard className={`w-4 h-4 ${
+                              (detailedResult.proctoring_stats.copy_count || 0) > 0
+                                ? 'text-brand-orange-deep'
+                                : 'text-gray-400'
+                            }`} />
+                          </div>
+                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Copy Attempts</div>
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Copy Attempts</div>
                         <div className="flex items-center gap-2">
-                          <div className={`text-3xl font-bold tracking-tight ${
+                          <div className={`text-2xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.copy_count || 0) > 0
                               ? 'text-brand-orange-deep'
                               : 'text-gray-400'
@@ -2893,25 +2964,27 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Paste Count */}
-                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
+                      <div className={`rounded-xl p-3 border ring-1 ${
                         (detailedResult.proctoring_stats.paste_count || 0) > 0
                           ? 'bg-brand-orange/10 border-brand-orange/30 ring-brand-orange/15'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
-                          (detailedResult.proctoring_stats.paste_count || 0) > 0
-                            ? 'bg-brand-orange/20 ring-brand-orange/30'
-                            : 'bg-slate-100 ring-slate-200'
-                        }`}>
-                          <MousePointer className={`w-6 h-6 ${
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ring-1 ${
                             (detailedResult.proctoring_stats.paste_count || 0) > 0
-                              ? 'text-brand-orange-deep'
-                              : 'text-gray-400'
-                          }`} />
+                              ? 'bg-brand-orange/20 ring-brand-orange/30'
+                              : 'bg-slate-100 ring-slate-200'
+                          }`}>
+                            <MousePointer className={`w-4 h-4 ${
+                              (detailedResult.proctoring_stats.paste_count || 0) > 0
+                                ? 'text-brand-orange-deep'
+                                : 'text-gray-400'
+                            }`} />
+                          </div>
+                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Paste Attempts</div>
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Paste Attempts</div>
                         <div className="flex items-center gap-2">
-                          <div className={`text-3xl font-bold tracking-tight ${
+                          <div className={`text-2xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.paste_count || 0) > 0
                               ? 'text-brand-orange-deep'
                               : 'text-gray-400'
@@ -2923,25 +2996,27 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Camera Obstructed / Off */}
-                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
+                      <div className={`rounded-xl p-3 border ring-1 ${
                         (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
                           ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
-                          (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
-                            ? 'bg-destructive-subtle ring-destructive-line'
-                            : 'bg-slate-100 ring-slate-200'
-                        }`}>
-                          <Eye className={`w-6 h-6 ${
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ring-1 ${
                             (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
-                              ? 'text-destructive'
-                              : 'text-gray-400'
-                          }`} />
+                              ? 'bg-destructive-subtle ring-destructive-line'
+                              : 'bg-slate-100 ring-slate-200'
+                          }`}>
+                            <Eye className={`w-4 h-4 ${
+                              (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
+                                ? 'text-destructive'
+                                : 'text-gray-400'
+                            }`} />
+                          </div>
+                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Camera Obstructed / Off</div>
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Camera Obstructed / Off</div>
                         <div className="flex items-center gap-2">
-                          <div className={`text-3xl font-bold tracking-tight ${
+                          <div className={`text-2xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.camera_obstructed_count || 0) > 0
                               ? 'text-destructive'
                               : 'text-gray-400'
@@ -2953,25 +3028,27 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Face Not Detected */}
-                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
+                      <div className={`rounded-xl p-3 border ring-1 ${
                         (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
                           ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
-                          (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
-                            ? 'bg-destructive-subtle ring-destructive-line'
-                            : 'bg-slate-100 ring-slate-200'
-                        }`}>
-                          <UserX className={`w-6 h-6 ${
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ring-1 ${
                             (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
-                              ? 'text-destructive'
-                              : 'text-gray-400'
-                          }`} />
+                              ? 'bg-destructive-subtle ring-destructive-line'
+                              : 'bg-slate-100 ring-slate-200'
+                          }`}>
+                            <UserX className={`w-4 h-4 ${
+                              (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
+                                ? 'text-destructive'
+                                : 'text-gray-400'
+                            }`} />
+                          </div>
+                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Face Not Detected</div>
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Face Not Detected</div>
                         <div className="flex items-center gap-2">
-                          <div className={`text-3xl font-bold tracking-tight ${
+                          <div className={`text-2xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.face_not_visible_count || 0) > 0
                               ? 'text-destructive'
                               : 'text-gray-400'
@@ -2983,25 +3060,27 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Voice Violations */}
-                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
+                      <div className={`rounded-xl p-3 border ring-1 ${
                         detailedResult.proctoring_stats.voice_violation_count > 0
                           ? 'bg-brand-orange/10 border-brand-orange/30 ring-brand-orange/15'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
-                          detailedResult.proctoring_stats.voice_violation_count > 0
-                            ? 'bg-brand-orange/20 ring-brand-orange/30'
-                            : 'bg-slate-100 ring-slate-200'
-                        }`}>
-                          <Volume2 className={`w-6 h-6 ${
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ring-1 ${
                             detailedResult.proctoring_stats.voice_violation_count > 0
-                              ? 'text-brand-orange-deep'
-                              : 'text-gray-400'
-                          }`} />
+                              ? 'bg-brand-orange/20 ring-brand-orange/30'
+                              : 'bg-slate-100 ring-slate-200'
+                          }`}>
+                            <Volume2 className={`w-4 h-4 ${
+                              detailedResult.proctoring_stats.voice_violation_count > 0
+                                ? 'text-brand-orange-deep'
+                                : 'text-gray-400'
+                            }`} />
+                          </div>
+                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Voice Violations</div>
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Voice Violations</div>
                         <div className="flex items-center gap-2">
-                          <div className={`text-3xl font-bold tracking-tight ${
+                          <div className={`text-2xl font-bold tracking-tight ${
                             detailedResult.proctoring_stats.voice_violation_count > 0
                               ? 'text-brand-orange-deep'
                               : 'text-gray-400'
@@ -3013,25 +3092,27 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Multiple Faces */}
-                      <div className={`rounded-xl p-5 border ring-1 ${
+                      <div className={`rounded-xl p-3 border ring-1 ${
                         (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
                           ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
-                          (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
-                            ? 'bg-destructive-subtle ring-destructive-line'
-                            : 'bg-slate-100 ring-slate-200'
-                        }`}>
-                          <User className={`w-6 h-6 ${
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ring-1 ${
                             (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
-                              ? 'text-destructive'
-                              : 'text-gray-400'
-                          }`} />
+                              ? 'bg-destructive-subtle ring-destructive-line'
+                              : 'bg-slate-100 ring-slate-200'
+                          }`}>
+                            <User className={`w-4 h-4 ${
+                              (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
+                                ? 'text-destructive'
+                                : 'text-gray-400'
+                            }`} />
+                          </div>
+                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Multiple Faces</div>
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Multiple Faces</div>
                         <div className="flex items-center gap-2">
-                          <div className={`text-3xl font-bold tracking-tight ${
+                          <div className={`text-2xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.multiple_faces_count || 0) > 0
                               ? 'text-destructive'
                               : 'text-gray-400'
@@ -3043,25 +3124,27 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Fullscreen Exit */}
-                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
+                      <div className={`rounded-xl p-3 border ring-1 ${
                         (detailedResult.proctoring_stats.fullscreen_exit_count || 0) > 0
                           ? 'bg-brand-blue/5 border-brand-blue/20 ring-brand-blue/10'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
-                          (detailedResult.proctoring_stats.fullscreen_exit_count || 0) > 0
-                            ? 'bg-brand-blue/10 ring-brand-blue/20'
-                            : 'bg-slate-100 ring-slate-200'
-                        }`}>
-                          <Maximize className={`w-6 h-6 ${
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ring-1 ${
                             (detailedResult.proctoring_stats.fullscreen_exit_count || 0) > 0
-                              ? 'text-brand-blue'
-                              : 'text-gray-400'
-                          }`} />
+                              ? 'bg-brand-blue/10 ring-brand-blue/20'
+                              : 'bg-slate-100 ring-slate-200'
+                          }`}>
+                            <Maximize className={`w-4 h-4 ${
+                              (detailedResult.proctoring_stats.fullscreen_exit_count || 0) > 0
+                                ? 'text-brand-blue'
+                                : 'text-gray-400'
+                            }`} />
+                          </div>
+                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Fullscreen Exit</div>
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Fullscreen Exit</div>
                         <div className="flex items-center gap-2">
-                          <div className={`text-3xl font-bold tracking-tight ${
+                          <div className={`text-2xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.fullscreen_exit_count || 0) > 0
                               ? 'text-brand-blue'
                               : 'text-gray-400'
@@ -3073,25 +3156,27 @@ export default function CandidateResultDetails({
                       </div>
 
                       {/* Screen capture attempts (screenshots + screen recording) */}
-                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
+                      <div className={`rounded-xl p-3 border ring-1 ${
                         (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
                           ? 'bg-brand-orange/10 border-brand-orange/30 ring-brand-orange/15'
                           : 'bg-slate-50 border-gray-100 ring-black/[0.02]'
                       }`}>
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
-                          (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
-                            ? 'bg-brand-orange/20 ring-brand-orange/30'
-                            : 'bg-slate-100 ring-slate-200'
-                        }`}>
-                          <Camera className={`w-6 h-6 ${
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ring-1 ${
                             (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
-                              ? 'text-brand-orange-deep'
-                              : 'text-gray-400'
-                          }`} />
+                              ? 'bg-brand-orange/20 ring-brand-orange/30'
+                              : 'bg-slate-100 ring-slate-200'
+                          }`}>
+                            <Camera className={`w-4 h-4 ${
+                              (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
+                                ? 'text-brand-orange-deep'
+                                : 'text-gray-400'
+                            }`} />
+                          </div>
+                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Screen Capture Attempt</div>
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Screen Capture Attempt</div>
                         <div className="flex items-center gap-2">
-                          <div className={`text-3xl font-bold tracking-tight ${
+                          <div className={`text-2xl font-bold tracking-tight ${
                             (detailedResult.proctoring_stats.screen_capture_count || 0) > 0
                               ? 'text-brand-orange-deep'
                               : 'text-gray-400'
@@ -3117,25 +3202,27 @@ export default function CandidateResultDetails({
                       )} */}
 
                       {/* Total Violations */}
-                      <div className={`rounded-xl p-3 sm:p-5 border ring-1 ${
+                      <div className={`rounded-xl p-3 border ring-1 ${
                         detailedResult.proctoring_stats.total_violations > 0
                           ? 'bg-destructive-subtle border-destructive-line ring-destructive-line'
                           : 'bg-success-subtle border-success-line ring-success-line'
                       }`}>
-                        <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-3 ring-1 ${
-                          detailedResult.proctoring_stats.total_violations > 0
-                            ? 'bg-destructive-subtle ring-destructive-line'
-                            : 'bg-success-subtle ring-success-line'
-                        }`}>
-                          <ShieldAlert className={`w-6 h-6 ${
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ring-1 ${
                             detailedResult.proctoring_stats.total_violations > 0
-                              ? 'text-destructive'
-                              : 'text-success'
-                          }`} />
+                              ? 'bg-destructive-subtle ring-destructive-line'
+                              : 'bg-success-subtle ring-success-line'
+                          }`}>
+                            <ShieldAlert className={`w-4 h-4 ${
+                              detailedResult.proctoring_stats.total_violations > 0
+                                ? 'text-destructive'
+                                : 'text-success'
+                            }`} />
+                          </div>
+                          <div className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 leading-snug">Total Violations</div>
                         </div>
-                        <div className="text-sm text-gray-600 mb-1">Total Violations</div>
                         <div className="flex items-center gap-2">
-                          <div className={`text-3xl font-bold tracking-tight ${
+                          <div className={`text-2xl font-bold tracking-tight ${
                             detailedResult.proctoring_stats.total_violations > 0
                               ? 'text-destructive'
                               : 'text-success'
@@ -3149,8 +3236,8 @@ export default function CandidateResultDetails({
 
                     {/* Event Log / Timeline */}
                     <div className="mt-2">
-                      <div className="flex items-center gap-2 mb-4">
-                        <Activity className="w-5 h-5 text-brand-blue" />
+                      <div className="flex flex-wrap items-center gap-2 mb-4">
+                        <Activity className="w-5 h-5 text-brand-blue shrink-0" />
                         <h4 className="text-base font-semibold text-gray-900 tracking-tight">Event Log</h4>
                         {!isLoadingEvents && proctoringEvents.length > 0 && (
                           <span className="ml-auto text-xs text-brand-blue bg-brand-blue/5 ring-1 ring-brand-blue/20 px-2 py-0.5 rounded-full font-medium">
@@ -3163,15 +3250,15 @@ export default function CandidateResultDetails({
                         /* Mirrors the Event Log table that replaces it: the same
                            S.No / Event / Timestamp / Severity / Count column grid,
                            in the same bordered container, with a few skeleton rows. */
-                        <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
-                          <div className="grid grid-cols-[40px_2fr_1fr_1fr_80px] bg-slate-50 border-b border-gray-100 px-4 py-2">
+                        <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-x-auto">
+                          <div className="grid min-w-[560px] grid-cols-[40px_2fr_1fr_1fr_80px] bg-slate-50 border-b border-gray-100 px-4 py-2">
                             <Skeleton className="h-3 w-8" />
                             <Skeleton className="h-3 w-16" />
                             <Skeleton className="h-3 w-16" />
                             <Skeleton className="h-3 w-14" />
                             <Skeleton className="h-3 w-10 justify-self-center" />
                           </div>
-                          <div className="divide-y divide-gray-100">
+                          <div className="min-w-[560px] divide-y divide-gray-100">
                             {Array.from({ length: 6 }).map((_, i) => (
                               <div key={i} className="grid grid-cols-[40px_2fr_1fr_1fr_80px] items-center px-4 py-3">
                                 <Skeleton className="h-3 w-5" />
@@ -3201,8 +3288,9 @@ export default function CandidateResultDetails({
                         </div>
                       ) : (
                         <div className="border border-gray-200 dark:border-slate-700 rounded-xl overflow-hidden">
+                          <div className="overflow-x-auto">
                           {/* Table header */}
-                          <div className="grid grid-cols-[40px_2fr_1fr_1fr_80px] bg-slate-50 border-b border-gray-100 px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                          <div className="grid min-w-[560px] grid-cols-[40px_2fr_1fr_1fr_80px] bg-slate-50 border-b border-gray-100 px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wide">
                             <span>S.No</span>
                             <span>Event</span>
                             <span>Timestamp</span>
@@ -3211,7 +3299,7 @@ export default function CandidateResultDetails({
                           </div>
 
                           {/* Rows — current page only */}
-                          <div className="divide-y divide-gray-100">
+                          <div className="min-w-[560px] divide-y divide-gray-100">
                             {eventsPageItems.map((row, idx) => {
                               const globalIdx = (eventsPage - 1) * EVENTS_PER_PAGE + idx + 1;
 
@@ -3267,9 +3355,9 @@ export default function CandidateResultDetails({
                                   <span className="text-gray-400 text-xs font-medium">{globalIdx}</span>
 
                                   {/* Event */}
-                                  <div className="flex items-center gap-2">
+                                  <div className="flex min-w-0 items-center gap-2">
                                     <span className={`flex-shrink-0 ${cfg.color}`}>{cfg.icon}</span>
-                                    <span className={`font-medium ${cfg.color}`}>{cfg.label}</span>
+                                    <span className={`min-w-0 font-medium [overflow-wrap:anywhere] ${cfg.color}`}>{cfg.label}</span>
                                   </div>
 
                                   {/* Timestamp — minute only */}
@@ -3294,6 +3382,7 @@ export default function CandidateResultDetails({
                               );
                             })}
                           </div>
+                          </div>
 
                           {/* Pagination footer */}
                           {eventsTotalPages > 1 && (
@@ -3301,7 +3390,7 @@ export default function CandidateResultDetails({
                               <span className="text-xs text-gray-500">
                                 Showing {(eventsPage - 1) * EVENTS_PER_PAGE + 1}–{Math.min(eventsPage * EVENTS_PER_PAGE, groupedEvents.length)} of {groupedEvents.length} rows ({proctoringEvents.length} total events)
                               </span>
-                              <div className="flex items-center justify-center sm:justify-end gap-2">
+                              <div className="flex flex-wrap items-center justify-center sm:justify-end gap-2">
                                 <div className="flex items-center gap-1.5">
                                   <span className="text-xs text-gray-600 whitespace-nowrap">Go to</span>
                                   <input

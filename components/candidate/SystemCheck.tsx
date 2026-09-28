@@ -1258,59 +1258,62 @@ export function SystemCheck({ token, onComplete, onRegisterFace, onBack }: Syste
 
               <div className="space-y-4">
                 {/* Browser */}
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`${ICON_TILE} bg-brand-blue/10 text-brand-blue`}>
                       <Monitor className={ICON} />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className={T_CARD_TITLE}>Browser</p>
-                      <p className="text-sm text-gray-500">{browserCheck.message}</p>
+                      <p className="text-sm text-gray-500 [overflow-wrap:anywhere]">{browserCheck.message}</p>
                     </div>
                   </div>
-                  <StatusIcon status={browserCheck.status} />
+                  <span className="flex shrink-0"><StatusIcon status={browserCheck.status} /></span>
                 </div>
 
                 {/* Internet */}
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`${ICON_TILE} bg-success-subtle text-success`}>
                       <Wifi className={ICON} />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className={T_CARD_TITLE}>Internet Connection</p>
-                      <p className="text-sm text-gray-500">{internetCheck.message}</p>
+                      <p className="text-sm text-gray-500 [overflow-wrap:anywhere]">{internetCheck.message}</p>
                     </div>
                   </div>
-                  <StatusIcon status={internetCheck.status} />
+                  <span className="flex shrink-0"><StatusIcon status={internetCheck.status} /></span>
                 </div>
 
                 {/* Camera */}
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
                   <div className="flex items-center gap-3 min-w-0">
                     <div className={`${ICON_TILE} bg-brand-cyan/10 text-brand-cyan`}>
                       <Camera className={ICON} />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className={T_CARD_TITLE}>Camera</p>
-                      <p className="text-sm text-gray-500">{cameraCheck.message}</p>
+                      <p className="text-sm text-gray-500 [overflow-wrap:anywhere]">{cameraCheck.message}</p>
                     </div>
                   </div>
-                  <StatusIcon status={cameraCheck.status} />
+                  <span className="flex shrink-0"><StatusIcon status={cameraCheck.status} /></span>
                 </div>
 
                 {/* Microphone */}
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-4">
-                  <div className="flex items-center gap-4">
-                    <div className="w-12 h-12 bg-warning-subtle rounded-xl flex items-center justify-center">
-                      <Mic className="w-6 h-6 text-warning" />
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-gray-200 bg-gray-50 p-3 sm:p-4">
+                  <div className="flex items-center gap-3 min-w-0">
+                    {/* The same bordered icon tile as Browser, Internet and
+                        Camera above (`ICON_TILE`), in the Microphone's own
+                        warning colour. */}
+                    <div className={`${ICON_TILE} bg-warning-subtle text-warning`}>
+                      <Mic className={ICON} />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className={T_CARD_TITLE}>Microphone</p>
-                      <p className="text-sm text-gray-500">{micCheck.message}</p>
+                      <p className="text-sm text-gray-500 [overflow-wrap:anywhere]">{micCheck.message}</p>
                     </div>
                   </div>
-                  <StatusIcon status={micCheck.status} />
+                  <span className="flex shrink-0"><StatusIcon status={micCheck.status} /></span>
                 </div>
 
               </div>

@@ -374,7 +374,7 @@ export default function AssessmentInviteTable({
                         {/* Capped rather than free: under auto layout a
                             single long email would otherwise set the
                             column width for the whole table. */}
-                        <div className="min-w-0 max-w-[240px]">
+                        <div className="min-w-0 max-w-[180px] sm:max-w-[240px]">
                           <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
                           <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                         </div>
@@ -595,7 +595,7 @@ export default function AssessmentInviteTable({
                               <button
                                 aria-label="Actions"
                                 title="Actions"
-                                className="p-1.5 text-gray-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 rounded transition-colors"
+                                className="p-2 text-gray-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 rounded transition-colors"
                               >
                                 <MoreVertical className="w-4 h-4" />
                               </button>

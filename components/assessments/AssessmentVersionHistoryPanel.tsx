@@ -999,7 +999,7 @@ export default function AssessmentVersionHistoryPanel({
         <div className="rounded-xl border border-gray-200 dark:border-slate-700 bg-slate-50/60 dark:bg-slate-800/30 overflow-hidden">
           {/* Heading left, the host's control right - the table's own top
               corner, above the rows it acts on. */}
-          <div className="px-3 sm:px-4 pt-3 pb-2 flex items-center justify-between gap-2">
+          <div className="px-3 sm:px-4 pt-3 pb-2 flex flex-wrap items-center justify-between gap-2">
             <h4 className="text-sm font-semibold text-gray-900 dark:text-slate-100">
               Job Versions{' '}
               <span className="font-normal text-gray-500 dark:text-slate-400">({groups.length})</span>
