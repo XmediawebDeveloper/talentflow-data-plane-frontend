@@ -207,6 +207,8 @@ import ScoringJobProgressModal, { JobScoringProgress } from '@/components/Scorin
 import ShareAssessmentModal from '@/components/ShareAssessmentModal';
 import ResumeTextPreviewModal from '@/components/ResumeTextPreviewModal';
 import InviteToAIInterviewFlow from '@/components/InviteToAIInterviewFlow';
+import InviteToAssessmentFlow from '@/components/InviteToAssessmentFlow';
+import type { AssessmentResponse } from '@/lib/services/assessmentService';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -386,6 +388,13 @@ export default function ResumeViewPage() {
      one My Resumes and the Shared Database use): pick the interview, then
      the share modal with this candidate prefilled. */
   const [showAIInviteFlow, setShowAIInviteFlow] = useState(false);
+  /* Assessment invite — the shared Invite to Assessment popup (the same one
+     AI Talent Match opens): pick one or more assessments, then the share
+     modal with this candidate prefilled, exactly as before. */
+  const [showAssessmentInviteFlow, setShowAssessmentInviteFlow] = useState(false);
+  const [inviteAssessmentOptions, setInviteAssessmentOptions] = useState<AssessmentResponse[]>([]);
+  const [pickedInviteAssessments, setPickedInviteAssessments] = useState<AssessmentResponse[]>([]);
+  const [loadingInviteAssessments, setLoadingInviteAssessments] = useState(false);
   const [inviteJobTitle, setInviteJobTitle] = useState('');
 
   useEffect(() => {
@@ -406,6 +415,33 @@ export default function ResumeViewPage() {
     setShowInviteMenu(false);
     if (intent === 'ai-interview') {
       setShowAIInviteFlow(true);
+      return;
+    }
+    if (intent === 'assessment') {
+      /* Straight into the shared popup, as AI Interview does. Only published,
+         non-revoked assessments can be invited to — the rule this page's
+         job-scoped load has always applied, now across every job, since the
+         popup lists and groups them by job itself. */
+      setPickedInviteAssessments([]);
+      setInviteAssessmentOptions([]);
+      setShowAssessmentInviteFlow(true);
+      setLoadingInviteAssessments(true);
+      try {
+        const { assessmentService } = await import('@/lib/services/assessmentService');
+        const { isAssessmentRevoked, getLocallyRevokedAssessmentIds } = await import('@/lib/utils/assessmentUtils');
+        const resp = await assessmentService.list({ status: 'published', page_size: 100 });
+        const revokedIds = getLocallyRevokedAssessmentIds();
+        setInviteAssessmentOptions((resp?.items || []).filter((a) => {
+          const status = String(a?.status || '').toLowerCase();
+          if (status !== 'published' && status !== 'active') return false;
+          return !isAssessmentRevoked(a, revokedIds);
+        }));
+      } catch (err) {
+        console.error('[ResumeView] Failed to load assessments:', err);
+        toast.error('Could not load assessments. Please try again.');
+      } finally {
+        setLoadingInviteAssessments(false);
+      }
       return;
     }
     setInviteIntent(intent);
@@ -2580,6 +2616,36 @@ Best regards`);
 
       {/* Invite to AI Interview — the shared picker popup, this candidate
           prefilled, then the share modal. */}
+      <InviteToAssessmentFlow
+        open={showAssessmentInviteFlow}
+        onClose={() => {
+          setShowAssessmentInviteFlow(false);
+          setPickedInviteAssessments([]);
+        }}
+        assessments={inviteAssessmentOptions}
+        loading={loadingInviteAssessments}
+        multiple
+        selectedAssessments={pickedInviteAssessments}
+        onSelectedAssessmentsChange={setPickedInviteAssessments}
+        candidates={resume ? [{ id: resumeId, name: getCandidateName(), email: resume.email || undefined }] : []}
+        resumes={resume ? [resume] : undefined}
+        onProceed={() => {
+          /* The existing share step: the picked assessments, the first as
+             the primary and the rest as additional, with this candidate
+             prefilled — the same Share Assessment modal as before. */
+          setShareAssessments(pickedInviteAssessments);
+          setInviteJobTitle(pickedInviteAssessments[0]?.jd_title || '');
+          setShowAssessmentInviteFlow(false);
+          setPickedInviteAssessments([]);
+          setShowShareAssessmentModal(true);
+        }}
+        /* Opened from AI Talent Match: the job the candidate was matched
+           against, exactly as Invite → AI Interview below is given it — so
+           the popup opens on that job's assessment version cards, with
+           "Browse all assessments instead" for the rest. */
+        jobId={viewSource === 'ai-talent-match' && aiMatchJobId ? aiMatchJobId : undefined}
+      />
+
       <InviteToAIInterviewFlow
         open={showAIInviteFlow}
         onClose={() => setShowAIInviteFlow(false)}

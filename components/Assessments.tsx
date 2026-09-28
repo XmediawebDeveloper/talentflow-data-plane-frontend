@@ -4888,7 +4888,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                      otherwise land on whichever single version was selected
                      last time. The row is the job; its Result must read as the
                      job. */
-                  router.push(`/recruitment/assessments/${assessment.id}/results?job_version_id=all&assessment_version=all`);
+                  router.push(`/recruitment/assessments/${assessment.id}/results?job_version_id=all&assessment_version=all&view=total`);
                 }}
                 /* Same rule, with the version panel's Result colour. */
                 icon={<BarChart className={`w-3.5 h-3.5${hasBeenShared ? ' text-menu-icon-score' : ''}`} />}

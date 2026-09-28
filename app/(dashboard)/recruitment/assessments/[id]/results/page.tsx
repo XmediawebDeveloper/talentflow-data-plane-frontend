@@ -169,6 +169,10 @@ export default function AssessmentResultsPage() {
         jdVersion={jdVersion}
         /* Back from a candidate's result, the saved scope wins over the
            link's — see resultReturnContext. */
+        /* `?view=total` (the Total Jobs "Result" button) opens on Total
+           Candidates — except back from a candidate's result, where the
+           saved view is what the reader left. */
+        openOnTotalCandidates={searchParams.get('view') === 'total' && !isResultRestoreArrival(searchParams)}
         jobVersionScope={isResultRestoreArrival(searchParams) ? null : jobVersionScopeParam}
         assessmentVersionScope={isResultRestoreArrival(searchParams) ? null : assessmentVersionScopeParam}
         canDownloadPDF={canDownloadPDF}
