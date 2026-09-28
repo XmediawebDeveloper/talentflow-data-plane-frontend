@@ -138,7 +138,7 @@ function StatusBadge({ status }: { status: string }) {
 export function VersionPill({ kind, version }: { kind: 'job' | 'assessment'; version: number }) {
   return (
     <span
-      className={`inline-flex items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 ${
+      className={`inline-flex shrink-0 whitespace-nowrap items-center justify-center min-w-[2.25rem] px-1.5 py-0.5 rounded-md text-xs font-semibold tabular-nums ring-1 ${
         kind === 'job'
           ? 'text-brand-blue bg-brand-blue/10 ring-brand-blue/20 dark:bg-brand-blue/20 dark:text-blue-300 dark:ring-brand-blue/35'
           : 'text-brand-cyan bg-brand-cyan/10 ring-brand-cyan/20 dark:bg-brand-cyan/20 dark:text-cyan-200 dark:ring-brand-cyan/35'
@@ -260,7 +260,8 @@ const hasAnyFilter = (f: Filters) => Object.values(f).some((v) => v !== '');
    job-grouped list it used to draw — and the table already knew the status in
    every other respect: `STATUS_LABEL` names it, `STATUS_BADGE` has its slate
    pill, the Status sort puts it last in lifecycle order, and `rowActions`
-   offers an archived row View and View History but not Edit. */
+   offers an archived row View but not Edit (nor, on the Archived tab,
+   View History). */
 type FixedAssessmentStatus = 'published' | 'draft' | 'archived';
 
 interface AllAssessmentsTableProps {
@@ -650,10 +651,15 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
         run: () => router.push(`/recruitment/assessments/create?edit=${row.id}`),
       });
     }
-    actions.push({
-      key: 'history', label: 'View History', icon: History, iconClassName: 'text-menu-icon-secondary',
-      run: () => router.push(`/recruitment/assessments/${row.id}?tab=versions`),
-    });
+    /* Not on the Archived tab: its menu is View only. Keyed on the tab
+       (`fixedStatus`), not the row, so an archived row listed under All keeps
+       View History there. */
+    if (fixedStatus !== 'archived') {
+      actions.push({
+        key: 'history', label: 'View History', icon: History, iconClassName: 'text-menu-icon-secondary',
+        run: () => router.push(`/recruitment/assessments/${row.id}?tab=versions`),
+      });
+    }
     return actions;
   };
 
@@ -671,7 +677,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
   return (
     <div className={embedded ? 'w-full' : 'flex-1 overflow-x-clip bg-slate-50'}>
       <div className={embedded ? 'w-full' : 'mx-auto w-full max-w-[1400px]'}>
-        <div className={embedded ? 'w-full' : 'p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl'}>
+        <div className={embedded ? 'w-full' : 'p-3 sm:p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl'}>
           {!embedded && (
             <PageBreadcrumb
               className="mb-4 md:mb-6"
@@ -1020,7 +1026,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                               max-width is ignored, so on the td it let a long
                               job name widen the column uncut. */}
                           <span
-                            className="block max-w-[16rem] truncate font-medium text-gray-900 dark:text-slate-50"
+                            className="block max-w-[12rem] sm:max-w-[16rem] truncate font-medium text-gray-900 dark:text-slate-50"
                             title={row.jobName}
                           >
                             {row.jobName}
@@ -1091,7 +1097,7 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
                             <DropdownMenuTrigger asChild>
                               <button
                                 type="button"
-                                className="h-7 w-7 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
+                                className="h-8 w-8 inline-flex items-center justify-center rounded-md text-gray-500 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue transition-colors focus:outline-none focus:ring-2 focus:ring-brand-blue/30"
                                 aria-label={`Actions for ${row.title}`}
                                 title="Actions"
                               >

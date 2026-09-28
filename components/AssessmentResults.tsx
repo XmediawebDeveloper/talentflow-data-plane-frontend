@@ -1,9 +1,8 @@
-import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, Search, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye } from 'lucide-react';
+import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService, jdService } from '@/lib/services';
 import { formatISTDate, formatISTWithSeconds } from '@/lib/utils/dateUtils';
-import VersionBadge from './VersionBadge';
 import JobIdBadge from './jobs/JobIdBadge';
 import { toast } from 'sonner';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
@@ -21,7 +20,10 @@ import AssessmentResultsSkeleton from '@/components/AssessmentResultsSkeleton';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
 import EmptySearchIllustration from '@/components/ui/empty-search-illustration';
 import { Button } from '@/components/ui/button';
+import { currentResultReturnTo, rememberResultReturn, resultReturnQuery } from '@/lib/utils/resultReturnContext';
 import { Badge } from '@/components/ui/badge';
+import ListToolbar from '@/components/ui/list-toolbar';
+import ListFilterPanel from '@/components/ui/list-filter-panel';
 import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
 
 interface AssessmentResultsProps {
@@ -118,7 +120,7 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
     "inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors";
 
   return (
-    <div className="flex items-center gap-2 sm:gap-3">
+    <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
       <div className="flex items-center gap-1.5">
         <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
         <input
@@ -300,6 +302,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // AS-24: Column customization
   const COLUMN_PREFERENCES_KEY = 'assessment_results_columns_v2';
   const [showColumnSelector, setShowColumnSelector] = useState(false);
+  // The toolbar's More Filters panel, which holds every filter.
+  const [showMoreFilters, setShowMoreFilters] = useState(false);
 
   // Export format modal state
   const [showExportModal, setShowExportModal] = useState(false);
@@ -318,20 +322,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   // Dynamic columns based on assessment details
   const getDefaultColumns = (): ColumnConfig[] => {
+    /* The order the table draws its columns in, so the column picker lists
+       them the same way: who the candidate is, how they were invited and where
+       their result stands, their scores and timeline, then the job / version
+       detail and completion columns. */
     const baseColumns: ColumnConfig[] = [
-      { id: 'cid', label: 'CID', enabled: true },
       { id: 'candidate', label: 'Candidate', enabled: true },
       { id: 'email', label: 'Email', enabled: true },
-      { id: 'jdId', label: 'JD ID', enabled: true },
-      { id: 'jdTitle', label: 'JD Title', enabled: true },
-      { id: 'jobVersion', label: 'Job Version', enabled: true },
-      /* Beside the job version, in the order the two read as a pair: which
-         version of the JOB the assessment belongs to, then which version of the
-         ASSESSMENT the candidate sat. A column added here is enabled for
-         everyone, including recruiters with saved preferences — the merge below
-         only carries over the `enabled` flag of ids a saved set already had. */
-      { id: 'assessmentVersion', label: 'Assessment Version', enabled: true },
       { id: 'phone', label: 'Phone', enabled: true },
+      { id: 'inviteSource', label: 'Invite Source', enabled: true },
+      { id: 'status', label: 'Result Status', enabled: true },
     ];
 
     // Add score columns only if those rounds are enabled for this assessment
@@ -343,9 +343,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     }
 
     baseColumns.push(
-      { id: 'inviteSource', label: 'Invite Source', enabled: true },
-      { id: 'status', label: 'Result Status', enabled: true },
       { id: 'timeline', label: 'Timeline', enabled: true },
+      { id: 'cid', label: 'CID', enabled: true },
+      { id: 'jdId', label: 'JD ID', enabled: true },
+      { id: 'jdTitle', label: 'JD Title', enabled: true },
+      { id: 'jobVersion', label: 'Job Version', enabled: true },
+      /* Beside the job version, in the order the two read as a pair: which
+         version of the JOB the assessment belongs to, then which version of the
+         ASSESSMENT the candidate sat. A column added here is enabled for
+         everyone, including recruiters with saved preferences — the merge below
+         only carries over the `enabled` flag of ids a saved set already had. */
+      { id: 'assessmentVersion', label: 'Assessment Version', enabled: true },
       { id: 'completed', label: 'Completed', enabled: true },
       { id: 'duration', label: 'Duration', enabled: true }
     );
@@ -739,6 +747,32 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
    *  revision made "All Assessment Versions" and "Assessment V1" the same set.
    *  See `showsJobVersionSelect`. */
   const showsAssessmentVersionSelect = assessmentVersionOptions.length > 1;
+
+  /* The More Filters badge: one per filter in the panel that is narrowing the
+     list. The date range counts once, From and To together. A version scope
+     counts only where its select is on offer. `roundFilters` values, not keys:
+     picking "All" leaves the key behind as `undefined`. */
+  const activeFilterCount =
+    (showsJobVersionSelect && effectiveJobVersion !== 'all' ? 1 : 0) +
+    (showsAssessmentVersionSelect && effectiveAssessmentVersion !== 'all' ? 1 : 0) +
+    (statusFilter !== 'all' ? 1 : 0) +
+    (passFailFilter !== 'all' ? 1 : 0) +
+    Object.values(roundFilters).filter(Boolean).length +
+    (dateFrom || dateTo ? 1 : 0);
+  /* What the panel's Clear All resets — the same set, and the same handler,
+     the filter row's Clear button always had (search included). */
+  const hasAnyFilterOrSearch =
+    Object.keys(roundFilters).length > 0 || !!searchQuery || statusFilter !== 'all' ||
+    passFailFilter !== 'all' || !!dateFrom || !!dateTo;
+  const clearAllFilters = () => {
+    setRoundFilters({});
+    setSearchQuery('');
+    setStatusFilter('all');
+    setPassFailFilter('all');
+    setDateFrom('');
+    setDateTo('');
+    setCurrentPage(1);
+  };
 
   /** The assessments whose results the current selection covers. */
   const scopedAssessmentIds = useMemo(() => {
@@ -1543,7 +1577,16 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           .map(c => ({ id: c.id, cid: c.candidateDisplayId || '' }))
       ));
     } catch { /* ignore quota errors */ }
-    router.push(`/recruitment/assessments/${candidate.assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`);
+    /* The details route is the CANDIDATE's assessment, which under a widened
+       version scope is not this page's. So this page names itself as the way
+       back: its own path (the Results tab when embedded in an assessment's
+       page) and its title — see resultReturnContext. */
+    const returnTo = currentResultReturnTo(embedded ? 'results' : undefined);
+    rememberResultReturn(returnTo);
+    router.push(
+      `/recruitment/assessments/${candidate.assessmentId}/results/details?candidate_id=${candidate.id}${candidate.candidateDisplayId ? `&cid=${encodeURIComponent(candidate.candidateDisplayId)}` : ''}`
+      + resultReturnQuery(returnTo, assessmentTitle),
+    );
   };
 
   const startIndex = pageStartIndex;
@@ -1614,7 +1657,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   Dropped when embedded: the host page's own header already
                   names this job, with the same badge, directly above the tab. */}
               {!embedded && (
-              <div className="flex items-center gap-2 mb-1 sm:mb-2 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap">
                 {jdShortId && (
                   /* The app's one Job ID badge — see JobIdBadge. */
                   <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>
@@ -1624,27 +1667,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 </h1>
               </div>
               )}
-              <p className="text-xs sm:text-sm text-gray-600 flex items-center gap-1.5 flex-wrap">
-                {/* The assessment the page was opened on, with its own version
-                    — named only while the selection is that one assessment,
-                    since a wider scope's rows span several of them. */}
-                {scopedAssessmentIds.length === 1 && scopedAssessmentIds[0] === assessmentId && assessmentTitle && (
-                  <span className="inline-flex items-center gap-1.5">
-                    {assessmentTitle}
-                    {assessmentVersion != null && (
-                      <VersionBadge version={assessmentVersion} size="sm" variant="primary" />
-                    )}
-                    <span className="text-gray-300" aria-hidden="true">•</span>
-                  </span>
-                )}
-                <span>Assessment Results - {totalItems} total candidates</span>
-                {selectedRows.length > 0 && (
-                  <span className="text-brand-blue font-medium">
-                    • {selectedRows.length} selected
-                  </span>
-                )}
-              </p>
             </div>
+            {/* Outside the list view only: in the list, Download PDF and Export
+                Results sit in the Candidate Results toolbar, after More
+                Filters. The cards view has no toolbar, so it keeps them here. */}
+            {pageView !== 'list' && (
             <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
               {/* AS-26: Bulk PDF Download Button — only for users with download_pdf permission */}
               {canBatchDownload && selectedRows.length > 0 && (
@@ -1669,11 +1696,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 className="whitespace-nowrap"
                 icon={<FileText className="w-4 h-4 sm:w-5 sm:h-5" />}
               >
-                <span className="hidden sm:inline">Export Results</span>
-                <span className="sm:hidden">Export</span>
+                Export
               </Button>
 
             </div>
+            )}
           </div>
         </div>
       </div>
@@ -1687,8 +1714,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             onClick={() => openCandidateList('all')}
             className="text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all"
           >
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
                 <div className="text-gray-600 text-xs sm:text-sm mb-1">Total Candidates</div>
                 {/* The scoped set, not the filtered one: `displayResults` is
                     every candidate of this job / job version / assessment. The
@@ -1696,7 +1723,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     total and the way back to all of them. */}
                 <div className="text-xl sm:text-2xl text-gray-900 tracking-tight">{displayResults.length}</div>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex shrink-0 items-center justify-center">
                 <Users className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
               </div>
             </div>
@@ -1707,12 +1734,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             onClick={() => openCandidateList('In Progress')}
             className="text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 hover:border-brand-cyan/40 hover:shadow-md hover:shadow-brand-cyan/10 transition-all"
           >
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
                 <div className="text-gray-600 text-xs sm:text-sm mb-1">In Progress</div>
                 <div className="text-xl sm:text-2xl text-brand-cyan tracking-tight">{inProgressCount}</div>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex items-center justify-center">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex shrink-0 items-center justify-center">
                 <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 text-brand-cyan" />
               </div>
             </div>
@@ -1723,12 +1750,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             onClick={() => openCandidateList('Completed')}
             className="text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 hover:border-green-300 hover:shadow-md hover:shadow-green-500/10 transition-all"
           >
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
                 <div className="text-gray-600 text-xs sm:text-sm mb-1">Completed</div>
                 <div className="text-xl sm:text-2xl text-green-600 tracking-tight">{completedCount}</div>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 flex items-center justify-center">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 flex shrink-0 items-center justify-center">
                 <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
               </div>
             </div>
@@ -1742,12 +1769,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             onClick={() => openCandidateList('Pending')}
             className="text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 hover:border-brand-orange/40 hover:shadow-md hover:shadow-brand-orange/10 transition-all"
           >
-            <div className="flex items-center justify-between">
-              <div>
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
                 <div className="text-gray-600 text-xs sm:text-sm mb-1">{PENDING_STATUS_LABEL}</div>
                 <div className="text-xl sm:text-2xl text-brand-orange-deep tracking-tight">{pendingCount}</div>
               </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-orange/10 to-brand-orange/5 ring-1 ring-brand-orange/20 flex items-center justify-center">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-orange/10 to-brand-orange/5 ring-1 ring-brand-orange/20 flex shrink-0 items-center justify-center">
                 <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-brand-orange-deep" />
               </div>
             </div>
@@ -1761,259 +1788,55 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             "Candidate Results" heading it counts — see the table card's header
             below — which is where it says what it is without needing a row. */}
 
-        {/* AS-23: Search and Filter Bar */}
-        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-3 sm:mb-4 space-y-3 sm:space-y-4">
-          {/* Search, with the two VERSION SCOPES on its right.
-
-              One row from `md` up — the search field takes the slack, the two
-              scopes sit at the right end and keep their own width. Below `md`
-              the row stacks: a phone cannot hold a usable search field and two
-              version dropdowns side by side, so the field keeps the full width
-              and the scopes take the line under it, where they share it evenly
-              (`flex-1`) rather than one squeezing the other.
-
-              `md:items-center` with matching `py-2` / `text-sm sm:text-base` on
-              all three controls is what lines them up: the selects are the
-              search field's own height and type scale, not the filter row's
-              smaller one, because they sit on the field's row rather than in
-              that row. */}
-          <div className="flex flex-col md:flex-row md:items-center gap-2 sm:gap-3">
-            <div className="relative flex-1 min-w-0">
-              <label htmlFor="assessment-results-search" className="sr-only">
-                Search candidate results
-              </label>
-              <Search className="w-4 h-4 sm:w-5 sm:h-5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-              <input
-                id="assessment-results-search"
-                type="text"
-                placeholder="Search by name, email, phone, or JD title..."
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setCurrentPage(1);
-                }}
-                className="w-full pl-9 sm:pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm sm:text-base text-black"
-              />
-            </div>
-
-            {/* The two version scopes — each rendered only where it is a choice
-                the recruiter actually has. See `showsJobVersionSelect`: the
-                individual-assessment view has nothing to choose, so neither
-                control appears and the search field takes the whole row.
-
-                Every other arrival keeps both, fully selectable, whichever
-                Results button was clicked — the link decides what they open on,
-                not whether they are there. */}
-            {(showsJobVersionSelect || showsAssessmentVersionSelect) && (
-              <div className="flex items-center gap-2 sm:gap-3 w-full md:w-auto md:flex-shrink-0">
-                {/* Job Version scope.
-                    The label is `sr-only` because every option names its own
-                    dimension ("Job Version V2"), unlike the filter row's selects
-                    whose options read "All" / "Completed" and need the "Status:"
-                    caption to mean anything. Screen readers still get it. */}
-                {showsJobVersionSelect && (
-                  <>
-                    <label htmlFor="assessment-results-job-version" className="sr-only">Job Version</label>
-                    <select
-                      id="assessment-results-job-version"
-                      value={effectiveJobVersion === 'all' ? 'all' : String(effectiveJobVersion)}
-                      onChange={(e) => {
-                        setSelectedJobVersion(e.target.value === 'all' ? 'all' : Number(e.target.value));
-                        setCurrentPage(1);
-                        /* A selection made under the old scope would go on driving
-                           the bulk actions for rows that are no longer listed. */
-                        setSelectedRows([]);
-                      }}
-                      disabled={!jobVersionsLoaded}
-                      className="flex-1 md:flex-none min-w-0 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm sm:text-base text-black cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      <option value="all">All Versions</option>
-                      {jobVersionScopes.map(scope => (
-                        <option key={scope.versionNumber} value={scope.versionNumber}>
-                          Job Version V{scope.versionNumber}
-                        </option>
-                      ))}
-                    </select>
-                  </>
-                )}
-
-                {/* Assessment Version scope — narrows within the job version
-                    above. Same rule: shown only where the scope holds more than
-                    one revision to choose between. */}
-                {showsAssessmentVersionSelect && (
-                  <>
-                    <label htmlFor="assessment-results-assessment-version" className="sr-only">Assessment Version</label>
-                    <select
-                      id="assessment-results-assessment-version"
-                      value={effectiveAssessmentVersion === 'all' ? 'all' : String(effectiveAssessmentVersion)}
-                      onChange={(e) => {
-                        setSelectedAssessmentVersion(e.target.value === 'all' ? 'all' : Number(e.target.value));
-                        setCurrentPage(1);
-                        /* Same reason as the job version's above. */
-                        setSelectedRows([]);
-                      }}
-                      disabled={!jobVersionsLoaded}
-                      className="flex-1 md:flex-none min-w-0 px-3 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-sm sm:text-base text-black cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      <option value="all">All Assessment Versions</option>
-                      {assessmentVersionOptions.map(version => (
-                        <option key={version} value={version}>
-                          Assessment V{version}
-                        </option>
-                      ))}
-                    </select>
-                  </>
-                )}
-              </div>
-            )}
-          </div>
-
-          {/* Filters Row - wraps when needed, aligned baseline */}
-          <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-              {/* Status Filter */}
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <label htmlFor="assessment-results-status-filter" className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Status:</label>
-                <select
-                  id="assessment-results-status-filter"
-                  value={statusFilter}
-                  onChange={(e) => {
-                    setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Pending');
-                    setCurrentPage(1);
-                  }}
-                  className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
-                >
-                  <option value="all">All</option>
-                  <option value="Completed">Completed</option>
-                  <option value="In Progress">In Progress</option>
-                  <option value="Pending">{PENDING_STATUS_LABEL}</option>
-                </select>
-              </div>
-
-              {/* Pass/Fail Filter */}
-              <div className="flex items-center gap-1.5 sm:gap-2">
-                <label htmlFor="assessment-results-pass-fail-filter" className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Result:</label>
-                <select
-                  id="assessment-results-pass-fail-filter"
-                  value={passFailFilter}
-                  onChange={(e) => {
-                    setPassFailFilter(e.target.value as 'all' | 'pass' | 'fail');
-                    setCurrentPage(1);
-                  }}
-                  className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
-                >
-                  <option value="all">All</option>
-                  <option value="pass">Pass</option>
-                  <option value="fail">Fail</option>
-                </select>
-              </div>
-
-              {/* Round-based Filters */}
-              {assessmentDetails?.technical_enabled && (
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <label htmlFor="assessment-results-tech-filter" className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Tech:</label>
-                  <select
-                    id="assessment-results-tech-filter"
-                    value={roundFilters.technical || 'all'}
-                    onChange={(e) => {
-                      const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
-                      setRoundFilters(prev => value === 'all' ? { ...prev, technical: undefined } : { ...prev, technical: value });
-                      setCurrentPage(1);
-                    }}
-                    className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
-                  >
-                    <option value="all">All</option>
-                    <option value="50-70">50-70%</option>
-                    <option value="70-90">70-90%</option>
-                    <option value="90+">90%+</option>
-                  </select>
-                </div>
-              )}
-
-              {assessmentDetails?.coding_enabled && (
-                <div className="flex items-center gap-1.5 sm:gap-2">
-                  <label htmlFor="assessment-results-coding-filter" className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Coding:</label>
-                  <select
-                    id="assessment-results-coding-filter"
-                    value={roundFilters.coding || 'all'}
-                    onChange={(e) => {
-                      const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
-                      setRoundFilters(prev => value === 'all' ? { ...prev, coding: undefined } : { ...prev, coding: value });
-                      setCurrentPage(1);
-                    }}
-                    className="min-w-0 flex-1 sm:flex-none px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
-                  >
-                    <option value="all">All</option>
-                    <option value="50-70">50-70%</option>
-                    <option value="70-90">70-90%</option>
-                    <option value="90+">90%+</option>
-                  </select>
-                </div>
-              )}
-
-              {/* Date Range Filter - full width on mobile */}
-              <div className="col-span-2 flex items-center gap-1.5 sm:gap-2 min-w-0">
-                <Calendar className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500 flex-shrink-0" />
-                <label htmlFor="assessment-results-date-from" className="sr-only">Filter from date</label>
-                <input
-                  id="assessment-results-date-from"
-                  type="date"
-                  value={dateFrom}
-                  max={dateTo || undefined}
-                  onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
-                  className="min-w-0 flex-1 px-1.5 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
-                  title="From date"
-                  aria-label="Filter from date"
-                />
-                <span className="text-xs text-gray-400">–</span>
-                <label htmlFor="assessment-results-date-to" className="sr-only">Filter to date</label>
-                <input
-                  id="assessment-results-date-to"
-                  type="date"
-                  value={dateTo}
-                  min={dateFrom || undefined}
-                  onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
-                  className="min-w-0 flex-1 px-1.5 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
-                  title="To date"
-                  aria-label="Filter to date"
-                />
-              </div>
-
-              {/* Clear Filters & Columns - full width on mobile */}
-              <div className="col-span-2 sm:col-span-1 flex items-center gap-2 sm:gap-3">
-                {/* Clear Filters Button */}
-                {(Object.keys(roundFilters).length > 0 || searchQuery || statusFilter !== 'all' || passFailFilter !== 'all' || dateFrom || dateTo) && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setRoundFilters({});
-                      setSearchQuery('');
-                      setStatusFilter('all');
-                      setPassFailFilter('all');
-                      setDateFrom('');
-                      setDateTo('');
-                      setCurrentPage(1);
-                    }}
-                    icon={<X className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-                  >
-                    Clear
-                  </Button>
-                )}
-
-              {/* AS-24: Customize Columns Button */}
+        {/* AS-23: Search and Filter Bar.
+            One row, left to right: Search → More Filters → Columns →
+            Download PDF → Export — the shared `ListToolbar`, as on the
+            AI Interview results page and the Assessments tabs. Every filter the row used to
+            hold (the two version scopes, Status, Result, the Tech / Coding
+            score bands, the From / To dates) now opens in the More Filters
+            panel under it; the Columns picker is its own button beside it.
+            The filters commit as they change, exactly as they did on the row,
+            so the panel's footer is Clear All + Done rather than an Apply. */}
+        <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 mb-3 sm:mb-4">
+          <ListToolbar
+            searchValue={searchQuery}
+            /* Keystroke-by-keystroke, as the search field always was. */
+            searchDebounceMs={0}
+            onSearchChange={(value) => {
+              setSearchQuery(value);
+              setCurrentPage(1);
+            }}
+            searchPlaceholder="Search by name, email, phone, or JD title..."
+            /* Tablet: a fixed 256px, controls at the far end, as before.
+               Desktop: the box grows toward 576px from a 320px floor and the
+               controls follow straight after it, evenly spaced, so the row
+               reads as one group with no hole after the search. */
+            searchClassName="sm:flex-none sm:w-64 lg:flex-1 lg:w-auto lg:min-w-[20rem] lg:max-w-xl"
+            controlsFollowSearch
+            onToggleFilters={() => setShowMoreFilters((open) => !open)}
+            filtersOpen={showMoreFilters}
+            activeFilterCount={activeFilterCount}
+            filtersApplied={activeFilterCount > 0}
+            afterFiltersActions={
+              /* AS-24: Customize Columns — its own button, right of More
+                 Filters, rather than a field inside that panel. Same toggle,
+                 same picker. The picker opens from the button's right edge, at every
+                 width: once the row wraps, the button sits mid-row beside
+                 Filters, where a left-anchored menu ran off a 320–375px
+                 screen (measured). */
               <div className="relative">
-                <button
+                <Button
+                  variant="secondary"
+                  size="sm"
                   onClick={() => setShowColumnSelector(!showColumnSelector)}
                   aria-expanded={showColumnSelector}
                   aria-haspopup="dialog"
                   aria-controls="assessment-results-column-selector"
-                  className="flex items-center gap-1.5 sm:gap-2 px-2.5 sm:px-4 py-1.5 sm:py-2 border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors text-xs sm:text-sm"
+                  icon={<Columns3 className="w-4 h-4" />}
+                  className="whitespace-nowrap !h-[38px] !text-sm"
                 >
-                  <Columns3 className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-                  <span className="hidden sm:inline">Columns ({enabledColumnsCount})</span>
-                  <span className="sm:hidden">{enabledColumnsCount}</span>
-                </button>
-
+                  Customize Columns ({enabledColumnsCount})
+                </Button>
                 {showColumnSelector && (
                   <>
                     <div
@@ -2024,7 +1847,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       id="assessment-results-column-selector"
                       role="dialog"
                       aria-label="Select visible result columns"
-                      className="absolute right-0 top-full mt-2 w-56 sm:w-64 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-20 max-h-80 sm:max-h-96 overflow-y-auto"
+                      className="absolute right-0 top-full mt-2 w-56 sm:w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-20 max-h-80 sm:max-h-96 overflow-y-auto"
                     >
                       <div className="px-3 sm:px-4 py-2 border-b border-gray-100">
                         <div className="text-xs sm:text-sm font-medium text-gray-900">Select Columns</div>
@@ -2050,15 +1873,230 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   </>
                 )}
               </div>
-            </div>
-          </div>
+            }
+            className="mb-0"
+          >
+            {/* AS-26: Bulk PDF download — only for users with the download_pdf
+                permission. Always on the row for them; it acts on the ticked
+                rows, so it is disabled until at least one is ticked. */}
+            {canBatchDownload && (
+              <Button
+                variant="primary"
+                size="sm"
+                onClick={handleDownloadBulkPDFs}
+                disabled={downloadingBulkPDF || selectedRows.length === 0}
+                title={selectedRows.length === 0 ? 'Select candidates to download their PDF reports' : undefined}
+                className="whitespace-nowrap !h-[38px] !text-sm"
+                icon={downloadingBulkPDF ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Download className="w-4 h-4" />
+                )}
+              >
+                {downloadingBulkPDF
+                  ? 'Downloading...'
+                  : `Download PDF${selectedRows.length > 0 ? ` (${selectedRows.length})` : ''}`}
+              </Button>
+            )}
+            <Button
+              variant="primary"
+              size="sm"
+              onClick={() => setShowExportModal(true)}
+              className="whitespace-nowrap !h-[38px] !text-sm"
+              icon={<FileText className="w-4 h-4" />}
+            >
+              Export
+            </Button>
+          </ListToolbar>
+
+          {showMoreFilters && (
+            <ListFilterPanel
+              footer={
+                <>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={clearAllFilters}
+                    disabled={!hasAnyFilterOrSearch}
+                    icon={<X className="w-4 h-4" />}
+                  >
+                    Clear All
+                  </Button>
+                  <Button variant="primary" size="sm" onClick={() => setShowMoreFilters(false)}>
+                    Done
+                  </Button>
+                </>
+              }
+            >
+              {/* The two version scopes — each rendered only where it is a
+                  choice the recruiter actually has (see
+                  `showsJobVersionSelect`). */}
+              {showsJobVersionSelect && (
+                <div>
+                  <label htmlFor="assessment-results-job-version" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Job Version</label>
+                  <select
+                    id="assessment-results-job-version"
+                    value={effectiveJobVersion === 'all' ? 'all' : String(effectiveJobVersion)}
+                    onChange={(e) => {
+                      setSelectedJobVersion(e.target.value === 'all' ? 'all' : Number(e.target.value));
+                      setCurrentPage(1);
+                      /* A selection made under the old scope would go on driving
+                         the bulk actions for rows that are no longer listed. */
+                      setSelectedRows([]);
+                    }}
+                    disabled={!jobVersionsLoaded}
+                    className="w-full min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <option value="all">All Versions</option>
+                    {jobVersionScopes.map(scope => (
+                      <option key={scope.versionNumber} value={scope.versionNumber}>
+                        Job Version V{scope.versionNumber}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {showsAssessmentVersionSelect && (
+                <div>
+                  <label htmlFor="assessment-results-assessment-version" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Assessment Version</label>
+                  <select
+                    id="assessment-results-assessment-version"
+                    value={effectiveAssessmentVersion === 'all' ? 'all' : String(effectiveAssessmentVersion)}
+                    onChange={(e) => {
+                      setSelectedAssessmentVersion(e.target.value === 'all' ? 'all' : Number(e.target.value));
+                      setCurrentPage(1);
+                      /* Same reason as the job version's above. */
+                      setSelectedRows([]);
+                    }}
+                    disabled={!jobVersionsLoaded}
+                    className="w-full min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    <option value="all">All Assessment Versions</option>
+                    {assessmentVersionOptions.map(version => (
+                      <option key={version} value={version}>
+                        Assessment V{version}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Status Filter */}
+              <div>
+                <label htmlFor="assessment-results-status-filter" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Status</label>
+                <select
+                  id="assessment-results-status-filter"
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Pending');
+                    setCurrentPage(1);
+                  }}
+                  className="w-full min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                >
+                  <option value="all">All</option>
+                  <option value="Completed">Completed</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Pending">{PENDING_STATUS_LABEL}</option>
+                </select>
+              </div>
+
+              {/* Pass/Fail Filter */}
+              <div>
+                <label htmlFor="assessment-results-pass-fail-filter" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Result</label>
+                <select
+                  id="assessment-results-pass-fail-filter"
+                  value={passFailFilter}
+                  onChange={(e) => {
+                    setPassFailFilter(e.target.value as 'all' | 'pass' | 'fail');
+                    setCurrentPage(1);
+                  }}
+                  className="w-full min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                >
+                  <option value="all">All</option>
+                  <option value="pass">Pass</option>
+                  <option value="fail">Fail</option>
+                </select>
+              </div>
+
+              {/* Round-based Filters */}
+              {assessmentDetails?.technical_enabled && (
+                <div>
+                  <label htmlFor="assessment-results-tech-filter" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Tech Score</label>
+                  <select
+                    id="assessment-results-tech-filter"
+                    value={roundFilters.technical || 'all'}
+                    onChange={(e) => {
+                      const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
+                      setRoundFilters(prev => value === 'all' ? { ...prev, technical: undefined } : { ...prev, technical: value });
+                      setCurrentPage(1);
+                    }}
+                    className="w-full min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                  >
+                    <option value="all">All</option>
+                    <option value="50-70">50-70%</option>
+                    <option value="70-90">70-90%</option>
+                    <option value="90+">90%+</option>
+                  </select>
+                </div>
+              )}
+
+              {assessmentDetails?.coding_enabled && (
+                <div>
+                  <label htmlFor="assessment-results-coding-filter" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Coding Score</label>
+                  <select
+                    id="assessment-results-coding-filter"
+                    value={roundFilters.coding || 'all'}
+                    onChange={(e) => {
+                      const value = e.target.value as 'all' | '50-70' | '70-90' | '90+';
+                      setRoundFilters(prev => value === 'all' ? { ...prev, coding: undefined } : { ...prev, coding: value });
+                      setCurrentPage(1);
+                    }}
+                    className="w-full min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                  >
+                    <option value="all">All</option>
+                    <option value="50-70">50-70%</option>
+                    <option value="70-90">70-90%</option>
+                    <option value="90+">90%+</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Date range — From / To, each bounding the other. */}
+              <div className="sm:col-span-2">
+                <label htmlFor="assessment-results-date-from" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Date</label>
+                <div className="flex flex-col min-[400px]:flex-row min-[400px]:items-center gap-2">
+                  <input
+                    id="assessment-results-date-from"
+                    type="date"
+                    value={dateFrom}
+                    max={dateTo || undefined}
+                    onChange={(e) => { setDateFrom(e.target.value); setCurrentPage(1); }}
+                    className="w-full min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue min-[400px]:flex-1"
+                    title="From date"
+                    aria-label="Filter from date"
+                  />
+                  <span className="text-xs text-gray-400 flex-shrink-0">to</span>
+                  <input
+                    id="assessment-results-date-to"
+                    type="date"
+                    value={dateTo}
+                    min={dateFrom || undefined}
+                    onChange={(e) => { setDateTo(e.target.value); setCurrentPage(1); }}
+                    className="w-full min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue min-[400px]:flex-1"
+                    title="To date"
+                    aria-label="Filter to date"
+                  />
+                </div>
+              </div>
+            </ListFilterPanel>
+          )}
         </div>
 
         {/* Candidates Results Table */}
         <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 overflow-hidden">
           <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 bg-slate-50 flex items-center justify-between gap-2">
             <div className="flex items-center gap-2 min-w-0">
-              <h2 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Candidate Results</h2>
+              <h2 className="truncate text-sm sm:text-base font-medium text-gray-900 tracking-tight">Candidate Results</h2>
               {isFetching && (
                 <Loader2 className="w-4 h-4 text-brand-blue animate-spin flex-shrink-0" />
               )}
@@ -2260,9 +2298,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                     />
                   </th>
-                  {isColumnEnabled('cid') && (
-                    <th className={`w-24 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>CID</th>
-                  )}
                   {isColumnEnabled('candidate') && (
                     <th
                       className={`w-48 text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
@@ -2282,34 +2317,25 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       </div>
                     </th>
                   )}
-                  {isColumnEnabled('jdId') && (
-                    <th className={`w-28 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>JD ID</th>
-                  )}
-                  {isColumnEnabled('jdTitle') && (
-                    <th className={`w-56 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
-                      <div className="flex items-center gap-1">
-                        <Briefcase className="w-3 h-3" />
-                        JD Title
-                      </div>
-                    </th>
-                  )}
-                  {isColumnEnabled('jobVersion') && (
-                    <th className={`w-28 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Job Version</th>
-                  )}
-                  {isColumnEnabled('assessmentVersion') && (
-                    /* `w-40` rather than the Job Version column's `w-28`: the
-                       heading is half again as long, the table lays out on fixed
-                       column widths, and every th here is `whitespace-nowrap` —
-                       so a cell too narrow for its own heading spills over the
-                       column instead of wrapping inside it. 160px holds
-                       "Assessment Version" at text-xs with the px-4 gutters. */
-                    <th className={`w-40 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Assessment Version</th>
-                  )}
                   {isColumnEnabled('phone') && (
                     <th className={`w-36 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
                       <div className="flex items-center gap-1">
                         <Phone className="w-3 h-3" />
                         Phone
+                      </div>
+                    </th>
+                  )}
+                  {isColumnEnabled('inviteSource') && (
+                    <th className={`w-36 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Invite Source</th>
+                  )}
+                  {isColumnEnabled('status') && (
+                    <th
+                      className={`w-28 text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
+                      onClick={() => handleSort('status')}
+                    >
+                      <div className="flex items-center justify-center gap-1">
+                        Result Status
+                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'status' ? 'text-brand-blue' : 'text-gray-400'}`} />
                       </div>
                     </th>
                   )}
@@ -2335,20 +2361,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       </div>
                     </th>
                   )}
-                  {isColumnEnabled('inviteSource') && (
-                    <th className={`w-36 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Invite Source</th>
-                  )}
-                  {isColumnEnabled('status') && (
-                    <th
-                      className={`w-28 text-center px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
-                      onClick={() => handleSort('status')}
-                    >
-                      <div className="flex items-center justify-center gap-1">
-                        Result Status
-                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'status' ? 'text-brand-blue' : 'text-gray-400'}`} />
-                      </div>
-                    </th>
-                  )}
                   {isColumnEnabled('timeline') && (
                     <th className={`w-96 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
                       <div className="flex items-center gap-1">
@@ -2356,6 +2368,32 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                         Timeline
                       </div>
                     </th>
+                  )}
+                  {isColumnEnabled('cid') && (
+                    <th className={`w-24 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>CID</th>
+                  )}
+                  {isColumnEnabled('jdId') && (
+                    <th className={`w-28 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>JD ID</th>
+                  )}
+                  {isColumnEnabled('jdTitle') && (
+                    <th className={`w-56 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
+                      <div className="flex items-center gap-1">
+                        <Briefcase className="w-3 h-3" />
+                        JD Title
+                      </div>
+                    </th>
+                  )}
+                  {isColumnEnabled('jobVersion') && (
+                    <th className={`w-28 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Job Version</th>
+                  )}
+                  {isColumnEnabled('assessmentVersion') && (
+                    /* `w-40` rather than the Job Version column's `w-28`: the
+                       heading is half again as long, the table lays out on fixed
+                       column widths, and every th here is `whitespace-nowrap` —
+                       so a cell too narrow for its own heading spills over the
+                       column instead of wrapping inside it. 160px holds
+                       "Assessment Version" at text-xs with the px-4 gutters. */
+                    <th className={`w-40 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Assessment Version</th>
                   )}
                   {isColumnEnabled('completed') && (
                     <th
@@ -2424,13 +2462,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           className="w-4 h-4 rounded border-gray-300 text-brand-blue focus:ring-brand-blue/40"
                         />
                       </td>
-                      {isColumnEnabled('cid') && (
-                        <td className="px-4 py-4 whitespace-nowrap">
-                          <span className="inline-flex items-center whitespace-nowrap text-xs font-mono font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-2 py-1 rounded">
-                            {candidate.candidateDisplayId || '-'}
-                          </span>
-                        </td>
-                      )}
                       {isColumnEnabled('candidate') && (
                         <td className="px-4 py-4">
                           <div className="flex min-w-0 items-center gap-3">
@@ -2444,6 +2475,95 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       {isColumnEnabled('email') && (
                         <td className="px-4 py-4">
                           <div className="truncate text-sm text-gray-600" title={candidate.email || '-'}>{candidate.email || '-'}</div>
+                        </td>
+                      )}
+                      {isColumnEnabled('phone') && (
+                        <td className="px-4 py-4">
+                          <div className="truncate text-sm text-gray-600" title={candidate.phone || '-'}>{candidate.phone || '-'}</div>
+                        </td>
+                      )}
+                      {isColumnEnabled('inviteSource') && (
+                        <td className="px-4 py-4 text-sm text-gray-700 whitespace-nowrap">
+                          <InviteSourceValue inv={{ invite_source: candidate.inviteSource }} iconClassName="w-3.5 h-3.5" />
+                        </td>
+                      )}
+                      {isColumnEnabled('status') && (
+                        <td className="px-4 py-4 text-center">
+                          <Badge variant={getStatusVariant(candidate.status)}>
+                            {statusLabel(candidate.status)}
+                          </Badge>
+                        </td>
+                      )}
+                      {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
+                        <td className="px-4 py-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            {/* Tech Score: green when ≥ threshold, red below.
+                                The 4-band gradient (red/yellow/gray/green)
+                                was confusing because 69% rendered gray even
+                                though it failed the 70% threshold. Now color
+                                matches the Pass/Fail outcome consistently. */}
+                            <span className={`text-lg font-semibold ${candidate.tech_score !== undefined ? (candidate.tech_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
+                              {candidate.tech_score !== undefined ? `${candidate.tech_score}%` : '-'}
+                            </span>
+                            {candidate.tech_score !== undefined && (
+                              <span className={`text-xs font-medium ${candidate.tech_score >= passingThreshold ? 'text-success' : 'text-destructive'}`}>
+                                {candidate.tech_score >= passingThreshold ? 'Pass' : 'Fail'}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                      {isColumnEnabled('codingScore') && assessmentDetails?.coding_enabled && (
+                        <td className="px-4 py-4 text-center">
+                          <div className="flex items-center justify-center gap-2">
+                            <span className={`text-lg font-semibold ${candidate.coding_score !== undefined ? (candidate.coding_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
+                              {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
+                            </span>
+                            {candidate.coding_score !== undefined && (
+                              <span className={`text-xs font-medium ${candidate.coding_score >= passingThreshold ? 'text-success' : 'text-destructive'}`}>
+                                {candidate.coding_score >= passingThreshold ? 'Pass' : 'Fail'}
+                              </span>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                      {isColumnEnabled('timeline') && (
+                        <td className="px-4 py-4 overflow-hidden text-xs text-gray-500">
+                          {/* One event per line, in chronological order — the events
+                              read as a timeline rather than a single run-on row. */}
+                          <div className="flex min-w-0 flex-col gap-1 overflow-hidden" title={getTimelineSummary(candidate)}>
+                            {candidate.sent_at && (
+                              <div className="flex min-w-0 items-center gap-2">
+                                <Mail className="w-3 h-3 shrink-0 text-brand-blue" />
+                                <span className="truncate">Sent: {formatTimelineDate(candidate.sent_at)}</span>
+                              </div>
+                            )}
+                            {candidate.started_at && (
+                              <div className="flex min-w-0 items-center gap-2">
+                                <Play className="w-3 h-3 shrink-0 text-brand-orange-deep" />
+                                <span className="truncate">Started: {formatTimelineDate(candidate.started_at)}</span>
+                              </div>
+                            )}
+                            {candidate.completed_at && (
+                              <div className="flex min-w-0 items-center gap-2">
+                                <CheckCircle className="w-3 h-3 shrink-0 text-success" />
+                                <span className="truncate">Completed: {formatTimelineDate(candidate.completed_at)}</span>
+                              </div>
+                            )}
+                            {!candidate.sent_at && !candidate.started_at && !candidate.completed_at && (
+                              <div className="flex min-w-0 items-center gap-2">
+                                <Clock className="w-3 h-3 shrink-0 text-gray-400" />
+                                <span className="truncate">{candidate.created_at ? `Created: ${formatTimelineDate(candidate.created_at)}` : '-'}</span>
+                              </div>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                      {isColumnEnabled('cid') && (
+                        <td className="px-4 py-4 whitespace-nowrap">
+                          <span className="inline-flex items-center whitespace-nowrap text-xs font-mono font-medium bg-brand-blue/5 text-brand-blue ring-1 ring-brand-blue/20 px-2 py-1 rounded">
+                            {candidate.candidateDisplayId || '-'}
+                          </span>
                         </td>
                       )}
                       {isColumnEnabled('jdId') && (
@@ -2493,88 +2613,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           ) : (
                             <span className="text-sm text-gray-400">-</span>
                           )}
-                        </td>
-                      )}
-                      {isColumnEnabled('phone') && (
-                        <td className="px-4 py-4">
-                          <div className="truncate text-sm text-gray-600" title={candidate.phone || '-'}>{candidate.phone || '-'}</div>
-                        </td>
-                      )}
-                      {isColumnEnabled('techScore') && assessmentDetails?.technical_enabled && (
-                        <td className="px-4 py-4 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            {/* Tech Score: green when ≥ threshold, red below.
-                                The 4-band gradient (red/yellow/gray/green)
-                                was confusing because 69% rendered gray even
-                                though it failed the 70% threshold. Now color
-                                matches the Pass/Fail outcome consistently. */}
-                            <span className={`text-lg font-semibold ${candidate.tech_score !== undefined ? (candidate.tech_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
-                              {candidate.tech_score !== undefined ? `${candidate.tech_score}%` : '-'}
-                            </span>
-                            {candidate.tech_score !== undefined && (
-                              <span className={`text-xs font-medium ${candidate.tech_score >= passingThreshold ? 'text-success' : 'text-destructive'}`}>
-                                {candidate.tech_score >= passingThreshold ? 'Pass' : 'Fail'}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      )}
-                      {isColumnEnabled('codingScore') && assessmentDetails?.coding_enabled && (
-                        <td className="px-4 py-4 text-center">
-                          <div className="flex items-center justify-center gap-2">
-                            <span className={`text-lg font-semibold ${candidate.coding_score !== undefined ? (candidate.coding_score >= passingThreshold ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
-                              {candidate.coding_score !== undefined ? `${candidate.coding_score}%` : '-'}
-                            </span>
-                            {candidate.coding_score !== undefined && (
-                              <span className={`text-xs font-medium ${candidate.coding_score >= passingThreshold ? 'text-success' : 'text-destructive'}`}>
-                                {candidate.coding_score >= passingThreshold ? 'Pass' : 'Fail'}
-                              </span>
-                            )}
-                          </div>
-                        </td>
-                      )}
-                      {isColumnEnabled('inviteSource') && (
-                        <td className="px-4 py-4 text-sm text-gray-700 whitespace-nowrap">
-                          <InviteSourceValue inv={{ invite_source: candidate.inviteSource }} iconClassName="w-3.5 h-3.5" />
-                        </td>
-                      )}
-                      {isColumnEnabled('status') && (
-                        <td className="px-4 py-4 text-center">
-                          <Badge variant={getStatusVariant(candidate.status)}>
-                            {statusLabel(candidate.status)}
-                          </Badge>
-                        </td>
-                      )}
-                      {isColumnEnabled('timeline') && (
-                        <td className="px-4 py-4 overflow-hidden text-xs text-gray-500">
-                          {/* One event per line, in chronological order — the events
-                              read as a timeline rather than a single run-on row. */}
-                          <div className="flex min-w-0 flex-col gap-1 overflow-hidden" title={getTimelineSummary(candidate)}>
-                            {candidate.sent_at && (
-                              <div className="flex min-w-0 items-center gap-2">
-                                <Mail className="w-3 h-3 shrink-0 text-brand-blue" />
-                                <span className="truncate">Sent: {formatTimelineDate(candidate.sent_at)}</span>
-                              </div>
-                            )}
-                            {candidate.started_at && (
-                              <div className="flex min-w-0 items-center gap-2">
-                                <Play className="w-3 h-3 shrink-0 text-brand-orange-deep" />
-                                <span className="truncate">Started: {formatTimelineDate(candidate.started_at)}</span>
-                              </div>
-                            )}
-                            {candidate.completed_at && (
-                              <div className="flex min-w-0 items-center gap-2">
-                                <CheckCircle className="w-3 h-3 shrink-0 text-success" />
-                                <span className="truncate">Completed: {formatTimelineDate(candidate.completed_at)}</span>
-                              </div>
-                            )}
-                            {!candidate.sent_at && !candidate.started_at && !candidate.completed_at && (
-                              <div className="flex min-w-0 items-center gap-2">
-                                <Clock className="w-3 h-3 shrink-0 text-gray-400" />
-                                <span className="truncate">{candidate.created_at ? `Created: ${formatTimelineDate(candidate.created_at)}` : '-'}</span>
-                              </div>
-                            )}
-                          </div>
                         </td>
                       )}
                       {isColumnEnabled('completed') && (
@@ -2632,7 +2670,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           {/* AS-23: Pagination Controls */}
           {totalPages > 1 && (
             <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="text-xs sm:text-sm text-gray-600">
+              <div className="text-center sm:text-left text-xs sm:text-sm text-gray-600">
                 Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} results
               </div>
               <InlinePageNav
@@ -2650,17 +2688,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
       {/* Export Format & Scope Selection Modal */}
       {showExportModal && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+          <div className="bg-white rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto">
             {/* Step 1: Format Selection */}
             {exportStep === 'format' && (
               <>
-                <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100 bg-gray-50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
+                <div className="flex items-center justify-between gap-3 p-4 sm:p-5 border-b border-gray-100 bg-gray-50">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="w-10 h-10 shrink-0 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
                       <FileText className="w-5 h-5 text-white" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="text-base sm:text-lg font-medium text-gray-900 tracking-tight">Export Assessment Results</h3>
                       <p className="text-xs sm:text-sm text-gray-500 mt-1">Step 1 of 2: Choose format</p>
                     </div>
@@ -2670,7 +2708,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       setShowExportModal(false);
                       setExportStep('format');
                     }}
-                    className="p-1 text-gray-400 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center text-gray-400 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
                    aria-label="Close">
                     <X className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>
@@ -2725,12 +2763,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             {/* Step 2: Scope Selection */}
             {exportStep === 'scope' && (
               <>
-                <div className="flex items-center justify-between p-4 sm:p-5 border-b border-gray-100 bg-gray-50">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
+                <div className="flex items-center justify-between gap-3 p-4 sm:p-5 border-b border-gray-100 bg-gray-50">
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div className="w-10 h-10 shrink-0 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
                       <Layers className="w-5 h-5 text-white" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="text-base sm:text-lg font-medium text-gray-900 tracking-tight">Export Scope</h3>
                       <p className="text-xs sm:text-sm text-gray-500 mt-1">
                         Step 2 of 2: Choose what to export ({selectedFormat === 'csv' ? 'CSV' : 'Excel'})
@@ -2742,7 +2780,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       setShowExportModal(false);
                       setExportStep('format');
                     }}
-                    className="p-1 text-gray-400 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
+                    className="inline-flex h-8 w-8 shrink-0 items-center justify-center text-gray-400 hover:text-brand-blue rounded-md hover:bg-brand-blue/5 transition-colors"
                    aria-label="Close">
                     <X className="w-4 h-4 sm:w-5 sm:h-5" />
                   </button>

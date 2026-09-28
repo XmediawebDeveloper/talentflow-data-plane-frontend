@@ -1,6 +1,6 @@
 'use client';
 
-import { MapPin } from 'lucide-react';
+import { ExternalLink, MapPin } from 'lucide-react';
 import type { JDResponse } from '@/lib/services/jdService';
 import { formatJobExperienceBadge, formatExperienceRange } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
@@ -79,9 +79,15 @@ export interface JDIdentityHeaderProps {
    * `current_version`.
    */
   versionNumber?: number;
+  /**
+   * Makes the whole card a link to the JD's own page: the host decides where
+   * that is and what trail it arrives with. Omit it and the card stays the
+   * read-only block described above.
+   */
+  onOpen?: () => void;
 }
 
-export default function JDIdentityHeader({ jd, versionNumber }: JDIdentityHeaderProps) {
+export default function JDIdentityHeader({ jd, versionNumber, onOpen }: JDIdentityHeaderProps) {
   const version = versionNumber ?? jd.current_version;
   const status = displayStatus(jd.status, jd.current_version);
   const employment = employmentTypeLabel(jd.employment_type);
@@ -96,7 +102,27 @@ export default function JDIdentityHeader({ jd, versionNumber }: JDIdentityHeader
   const hasFactsBefore = Boolean(jd.location || employment || workMode || salary);
 
   return (
-    <div className="bg-white dark:bg-slate-900 rounded-xl border border-brand-blue/30 dark:border-brand-blue/40 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 shadow-sm shadow-brand-blue/10 p-4 sm:p-5">
+    <div
+      className={`bg-white dark:bg-slate-900 rounded-xl border border-brand-blue/30 dark:border-brand-blue/40 ring-1 ring-brand-blue/10 dark:ring-brand-blue/20 shadow-sm shadow-brand-blue/10 p-4 sm:p-5${
+        onOpen
+          ? ' group cursor-pointer transition-all hover:border-brand-blue/50 hover:shadow-md hover:shadow-brand-blue/15 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40'
+          : ''
+      }`}
+      {...(onOpen
+        ? {
+            role: 'link',
+            tabIndex: 0,
+            title: `Open ${jd.title || 'job'} details`,
+            onClick: onOpen,
+            onKeyDown: (e: React.KeyboardEvent) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onOpen();
+              }
+            },
+          }
+        : {})}
+    >
       <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
         <div className="flex-1 min-w-0">
           {/* Row 1: JD ID + Job Title + Status */}
@@ -106,10 +132,10 @@ export default function JDIdentityHeader({ jd, versionNumber }: JDIdentityHeader
                 {jd.job_id}
               </span>
             )}
-            <h1 className="font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate">
+            <h1 className={`min-w-0 max-w-full font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate${onOpen ? ' group-hover:text-brand-blue transition-colors' : ''}`}>
               {jd.title}
             </h1>
-            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border whitespace-nowrap ${statusBadgeClass(status)}`}>
+            <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs border whitespace-nowrap shrink-0 ${statusBadgeClass(status)}`}>
               {status}
             </span>
           </div>
@@ -120,7 +146,7 @@ export default function JDIdentityHeader({ jd, versionNumber }: JDIdentityHeader
             {jd.location && (
               <>
                 <div className="flex items-center gap-1.5">
-                  <MapPin className="w-4 h-4 text-purple-600" />
+                  <MapPin className="w-4 h-4 shrink-0 text-purple-600" />
                   <span>{jd.location}</span>
                 </div>
                 <span className="text-gray-300">&bull;</span>
@@ -181,6 +207,12 @@ export default function JDIdentityHeader({ jd, versionNumber }: JDIdentityHeader
             )}
           </div>
         </div>
+        {onOpen && (
+          <span className="inline-flex items-center gap-1.5 text-xs sm:text-sm text-brand-blue whitespace-nowrap shrink-0">
+            View Job Details
+            <ExternalLink className="w-3.5 h-3.5" />
+          </span>
+        )}
       </div>
     </div>
   );

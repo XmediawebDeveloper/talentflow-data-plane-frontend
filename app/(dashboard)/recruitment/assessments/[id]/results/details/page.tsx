@@ -10,6 +10,7 @@ import { resolveJobVersionsByJdId } from '@/lib/utils/jobAssessmentHierarchy';
 import CandidateResultDetails from '@/components/CandidateResultDetails';
 import FeatureGate from '@/components/shared/FeatureGate';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { RESULT_RETURN_LABEL_PARAM, RESULT_RETURN_TO_PARAM, resultReturnQuery, safeResultReturnTo } from '@/lib/utils/resultReturnContext';
 import RecordPager from '@/components/RecordPager';
 
 function DetailsContent() {
@@ -30,6 +31,16 @@ function DetailsContent() {
   // assessment. Only carried across Prev/Next now, so paging keeps the origin —
   // the trail itself names the assessment either way.
   const fromCandidateResults = searchParams.get('from') === 'candidate-results';
+  /* The page this result was opened from — an assessment's Results / Invite
+     Status / Recent Activity tab, or the standalone results page — named by
+     the opener (see resultReturnContext). The assessment crumb and Back return
+     there, so the reader lands on the same assessment id and tab they left,
+     not on this candidate's own assessment, which under a widened version
+     scope is a different one. Absent (a bookmark, an older link) falls back
+     to this assessment's results page, as before. */
+  const returnTo = safeResultReturnTo(searchParams.get(RESULT_RETURN_TO_PARAM));
+  const returnLabel = searchParams.get(RESULT_RETURN_LABEL_PARAM) || '';
+  const backHref = returnTo || `/recruitment/assessments/${assessmentId}/results`;
 
   const [assessmentTitle, setAssessmentTitle] = useState<string>('');
   const [jdId, setJdId] = useState<string>('');
@@ -64,7 +75,9 @@ function DetailsContent() {
   // candidate would silently re-add the assessment crumb mid-session.
   const buildNavUrl = (entry: { id: string; cid: string }) =>
     `/recruitment/assessments/${assessmentId}/results/details?candidate_id=${entry.id}${entry.cid ? `&cid=${encodeURIComponent(entry.cid)}` : ''}` +
-    (fromCandidateResults ? '&from=candidate-results' : '');
+    (fromCandidateResults ? '&from=candidate-results' : '') +
+    // Prev / Next keep the way back, so paging never loses it.
+    resultReturnQuery(returnTo, returnLabel);
 
   useEffect(() => {
     const fetchAssessmentInfo = async () => {
@@ -110,8 +123,8 @@ function DetailsContent() {
   }, [assessmentId]);
 
   const handleBack = () => {
-    // Go back to results list page
-    router.push(`/recruitment/assessments/${assessmentId}/results`);
+    // Back to where the result was opened from (see `returnTo`).
+    router.push(backHref);
   };
 
   const showRecordPagerRow = navList.length > 0 && !resumeView.viewing && !isPending;
@@ -144,8 +157,8 @@ function DetailsContent() {
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Assessments', href: '/recruitment/assessments' },
           {
-            label: assessmentTitle || 'Assessment',
-            href: `/recruitment/assessments/${assessmentId}/results`,
+            label: returnLabel || assessmentTitle || 'Assessment',
+            href: backHref,
           },
           // onClick, not href: the candidate crumb points at the route we're
           // already on, so a link couldn't switch the body back.

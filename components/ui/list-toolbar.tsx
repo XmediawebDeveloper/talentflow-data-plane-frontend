@@ -103,6 +103,14 @@ export interface ListToolbarProps {
    */
   fitToContainer?: boolean;
 
+  /**
+   * Desktop (`lg` and up) only: sit the controls right after the search box,
+   * spaced exactly as they are spaced from each other, instead of pushing them
+   * to the far end of the row. For a search box with a capped width, where the
+   * far-end layout leaves a wide hole after it. Smaller screens are unchanged.
+   */
+  controlsFollowSearch?: boolean;
+
   className?: string;
 }
 
@@ -123,6 +131,7 @@ export default function ListToolbar({
   filterPanel,
   searchClassName,
   fitToContainer = false,
+  controlsFollowSearch = false,
   className,
 }: ListToolbarProps) {
   /* ---- Debounced search -------------------------------------------------
@@ -172,6 +181,8 @@ export default function ListToolbar({
         fitToContainer
           ? 'flex flex-col @5xl/toolbar:flex-row @5xl/toolbar:items-center gap-3 mb-3'
           : 'flex flex-col sm:flex-row sm:items-center gap-3 mb-3',
+        // The group's own gap, so search → first control matches control → control.
+        controlsFollowSearch && 'lg:gap-2',
         filterPanel ? undefined : className
       )}
     >
@@ -188,7 +199,14 @@ export default function ListToolbar({
 
       {/* ml-auto keeps the controls right-aligned when the search box is given
           a fixed width; with the default flex-1 box it has no effect. */}
-      <div className={fitToContainer ? 'flex flex-wrap items-center gap-2 @5xl/toolbar:ml-auto' : 'flex flex-wrap items-center gap-2 sm:ml-auto'}>
+      <div
+        className={cn(
+          'flex flex-wrap items-center gap-2',
+          fitToContainer ? '@5xl/toolbar:ml-auto' : 'sm:ml-auto',
+          // Controls follow the search box on desktop — see `controlsFollowSearch`.
+          controlsFollowSearch && 'lg:ml-0',
+        )}
+      >
         {leadingActions}
 
         {onToggleFilters && (
