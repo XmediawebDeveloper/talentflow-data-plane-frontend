@@ -1910,6 +1910,8 @@ export default function ResumeScoringPage({
     <SelectSourceModal
       jobId={selectedJob}
       jobTitle={selectedJobData.title}
+      jobShortId={selectedJobData.job_id}
+      jobVersion={selectedJobData.current_version && selectedJobData.current_version > 0 ? selectedJobData.current_version : null}
       onClose={() => setShowResumeSelectionModal(false)}
       onScoringFinished={() => goToResultsFor(selectedJob)}
       onScoringComplete={async () => {

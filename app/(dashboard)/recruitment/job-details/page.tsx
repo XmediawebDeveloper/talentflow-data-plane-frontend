@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import JobDetailView from '@/components/JobDetailView';
-import JDEditBlockedModal from '@/components/JDEditBlockedModal';
+import JDEditBlockedModal, { type JobDetailsTab } from '@/components/JDEditBlockedModal';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
 import DisableJobModal from '@/components/DisableJobModal';
 import { Job } from '@/lib/types/types';
@@ -192,6 +192,8 @@ function JobDetailsContent() {
   /* Set when Edit is refused: the modules holding the JD, plus whatever reason
      the backend gave if it blocked for something other than module usage. */
   const [editBlock, setEditBlock] = useState<{ modules: JDUsageModule[]; reason?: string } | null>(null);
+  /** A tab the edit-blocked dialog asked to open on this page. */
+  const [tabOverride, setTabOverride] = useState<{ tab: JobDetailsTab; n: number } | null>(null);
   const [checkingEditUsage, setCheckingEditUsage] = useState(false);
   const [creatingVersion, setCreatingVersion] = useState(false);
   /* Whether the JD on screen is an EARLIER version of its lineage.
@@ -678,6 +680,11 @@ function JobDetailsContent() {
         open={!!editBlock}
         modules={editBlock?.modules ?? []}
         reason={editBlock?.reason}
+        jdId={jobId || undefined}
+        onOpenJobTab={(tab) => {
+          setEditBlock(null);
+          setTabOverride({ tab, n: Date.now() });
+        }}
         creating={creatingVersion}
         onClose={() => setEditBlock(null)}
         onCreateNewVersion={handleCreateNewVersion}
@@ -693,10 +700,12 @@ function JobDetailsContent() {
            state (result tabs, counts, cached config lookups, drill-down views)
            is rebuilt for the selected version, so nothing from the previously
            viewed version can leak into this one. */
-        key={job.id}
+        /* Re-keyed when the edit-blocked dialog opens a tab, so the view
+           remounts on it (the view owns its tab; a URL push alone is undone). */
+        key={tabOverride ? `${job.id}:${tabOverride.n}` : job.id}
         job={job}
         onBack={handleBack}
-        initialTab={tabParam || undefined}
+        initialTab={tabOverride?.tab || tabParam || undefined}
         initialAction={actionParam || undefined}
         onEdit={isTenantAdmin || hasPermission('canUpdateJD') ? handleEdit : undefined}
         /* Only the latest version keeps a live Edit — see

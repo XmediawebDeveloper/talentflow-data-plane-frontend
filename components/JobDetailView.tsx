@@ -42,6 +42,8 @@ import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import TrackInvitesModal from './TrackInvitesModal';
 import AIInterviewTrackInvitesModal from './AIInterviewTrackInvitesModal';
 import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
+import AIInterviewVersionHistoryModal from './ai-interview/AIInterviewVersionHistoryModal';
+import AssessmentVersionHistoryModal from './assessments/AssessmentVersionHistoryModal';
 import type { Resume as ResumeRecord } from '@/lib/types/types';
 import AIInterviewResults from './ai-interview/AIInterviewResults';
 import CandidateResultsView from './ai-interview/CandidateResultsView';
@@ -114,7 +116,7 @@ const QUICK_ACTION_HOVER_EASE = 'duration-200 ease-in-out motion-reduce:transiti
  * section below it — the chevron flips and the bottom margin drops away while
  * collapsed so the three groups stack tightly.
  */
-function QuickActionHeader({ icon, title, accent, open, onToggle, controls }: {
+function QuickActionHeader({ icon, title, accent, open, onToggle, controls, titleAction }: {
   icon: React.ReactNode;
   title: string;
   accent: QuickActionAccent;
@@ -122,6 +124,9 @@ function QuickActionHeader({ icon, title, accent, open, onToggle, controls }: {
   onToggle?: () => void;
   /** id of the panel this heading opens, for aria-controls. */
   controls?: string;
+  /** A control right after the title (e.g. a history icon). Kept outside the
+   *  toggle button — a button can't nest another. */
+  titleAction?: React.ReactNode;
 }) {
   const disc = (
     <span className={`w-8 h-8 rounded-full flex items-center justify-center text-white shrink-0 ${QUICK_ACTION_ACCENTS[accent].badge}`}>
@@ -138,26 +143,49 @@ function QuickActionHeader({ icon, title, accent, open, onToggle, controls }: {
     );
   }
 
+  const chevron = (
+    // Rotation follows the panel's timing; the nudge down on hover is the
+    // faster hover curve, so both read as intended.
+    <ChevronDown
+      className={`w-4 h-4 ml-auto shrink-0 text-gray-400 dark:text-slate-500 transition-transform ${QUICK_ACTION_EASE} motion-reduce:transition-none group-hover:translate-y-0.5 ${open ? 'rotate-180' : ''}`}
+    />
+  );
+  const toggleClass = `group flex items-center gap-2.5 text-left rounded-lg cursor-pointer transition-opacity ${QUICK_ACTION_HOVER_EASE} hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40`;
+
   return (
     // The margin is transitioned along with the panel below, so the heading
     // slides down to meet the group divider instead of snapping into place.
     <h3 className={`transition-[margin] ${QUICK_ACTION_EASE} motion-reduce:transition-none ${open ? 'mb-3' : 'mb-0'}`}>
-      <button
-        type="button"
-        onClick={onToggle}
-        aria-expanded={open}
-        aria-controls={controls}
-        title={open ? `Collapse ${title}` : `Expand ${title}`}
-        className={`group w-full flex items-center gap-2.5 text-left rounded-lg cursor-pointer transition-opacity ${QUICK_ACTION_HOVER_EASE} hover:opacity-80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40`}
-      >
-        {disc}
-        <span className="text-base font-semibold text-gray-900 dark:text-slate-50">{title}</span>
-        {/* Rotation follows the panel's timing; the nudge down on hover is the
-            faster hover curve, so both read as intended. */}
-        <ChevronDown
-          className={`w-4 h-4 ml-auto shrink-0 text-gray-400 dark:text-slate-500 transition-transform ${QUICK_ACTION_EASE} motion-reduce:transition-none group-hover:translate-y-0.5 ${open ? 'rotate-180' : ''}`}
-        />
-      </button>
+      {titleAction ? (
+        /* With a title action the row is split — a button can't nest another:
+           disc + title toggle, the action right after the title, then the
+           chevron as a second toggle filling the rest of the row. */
+        <div className="flex items-center gap-2">
+          <button type="button" onClick={onToggle} aria-expanded={open} aria-controls={controls}
+            title={open ? `Collapse ${title}` : `Expand ${title}`} className={toggleClass}>
+            {disc}
+            <span className="text-base font-semibold text-gray-900 dark:text-slate-50">{title}</span>
+          </button>
+          {titleAction}
+          <button type="button" onClick={onToggle} aria-expanded={open} aria-controls={controls}
+            aria-label={open ? `Collapse ${title}` : `Expand ${title}`} className={`${toggleClass} flex-1 justify-end self-stretch`}>
+            {chevron}
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={open}
+          aria-controls={controls}
+          title={open ? `Collapse ${title}` : `Expand ${title}`}
+          className={`${toggleClass} w-full`}
+        >
+          {disc}
+          <span className="text-base font-semibold text-gray-900 dark:text-slate-50">{title}</span>
+          {chevron}
+        </button>
+      )}
     </h3>
   );
 }
@@ -880,6 +908,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // / quick-action Invite — candidates are added in the share step), a seed =
   // a Scored Resumes row's candidate, listed first.
   const [aiInviteSeed, setAiInviteSeed] = useState<{ name: string; email: string; resumeId?: string }[] | null>(null);
+  // AI Interview Version History dialog (history icon on the AI Interview heading).
+  const [showAIVersionHistory, setShowAIVersionHistory] = useState(false);
+  // Assessment Version History dialog (history icon on the Assessment heading).
+  const [showAssessmentVersionHistory, setShowAssessmentVersionHistory] = useState(false);
   // AI Interview Results tab. The config is fetched lazily on first open rather
   // than on mount — resolving it pages through the tenant's configs, which
   // isn't worth doing on every Job Details load for a tab most visits skip.
@@ -3485,6 +3517,17 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   icon={<BarChart3 className="w-4 h-4" />}
                   title="Assessment"
                   accent="cyan"
+                  titleAction={
+                    <button
+                      type="button"
+                      onClick={() => setShowAssessmentVersionHistory(true)}
+                      title="Assessment version history"
+                      aria-label="Assessment version history"
+                      className="w-7 h-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-brand-cyan hover:bg-brand-cyan/10 transition-colors shrink-0"
+                    >
+                      <History className="w-4 h-4" />
+                    </button>
+                  }
                   open={openActionGroups.assessment}
                   onToggle={() => toggleActionGroup('assessment')}
                   controls="quick-actions-assessment-panel"
@@ -3584,6 +3627,17 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   open={openActionGroups.aiInterview}
                   onToggle={() => toggleActionGroup('aiInterview')}
                   controls="quick-actions-ai-interview-panel"
+                  titleAction={
+                    <button
+                      type="button"
+                      onClick={() => setShowAIVersionHistory(true)}
+                      title="AI Interview version history"
+                      aria-label="AI Interview version history"
+                      className="w-7 h-7 inline-flex items-center justify-center rounded-md text-gray-400 hover:text-brand-orange-deep hover:bg-brand-orange/10 transition-colors shrink-0"
+                    >
+                      <History className="w-4 h-4" />
+                    </button>
+                  }
                 />
                 <QuickActionPanel
                   id="quick-actions-ai-interview-panel"
@@ -4599,6 +4653,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         <SelectSourceModal
           jobTitle={job.title}
           jobId={job.id}
+          jobShortId={job.job_id}
+          jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
           onClose={() => setShowSelectSourceModal(false)}
           onScoringFinished={() => {
             // Run settled, popup still up: bring Scored Resumes in behind it.
@@ -4703,6 +4759,24 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           <Loader2 className="w-8 h-8 animate-spin text-brand-blue" />
         </div>
       )}
+
+      <AssessmentVersionHistoryModal
+        open={showAssessmentVersionHistory}
+        onClose={() => setShowAssessmentVersionHistory(false)}
+        jobId={job.id}
+        jobTitle={job.title}
+        jobShortId={job.job_id}
+        jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
+      />
+
+      <AIInterviewVersionHistoryModal
+        open={showAIVersionHistory}
+        onClose={() => setShowAIVersionHistory(false)}
+        jobId={job.id}
+        jobTitle={job.title}
+        jobShortId={job.job_id}
+        jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
+      />
 
       {/* Invite to AI Interview — the shared dialog, scoped to this job. */}
       <InviteToAIInterviewFlow
