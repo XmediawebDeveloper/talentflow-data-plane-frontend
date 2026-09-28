@@ -1,11 +1,12 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { X, FileText, ChevronRight, Loader2, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 import { assessmentService } from '@/lib/services/assessmentService';
-import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
+import { isAssessmentRevoked, getLocallyRevokedAssessmentIds } from '@/lib/utils/assessmentUtils';
+import InviteToAssessmentFlow from './InviteToAssessmentFlow';
 import ShareAssessmentModal from './ShareAssessmentModal';
+import type { Resume } from '@/lib/types/types';
 
 // Shape ShareAssessmentModal expects for an assessment.
 interface ShareAssessment {
@@ -42,6 +43,7 @@ interface InviteShareModalProps {
 
 // Map a raw assessment API item into the shape ShareAssessmentModal consumes.
 // Mirrors mapAssessmentFromApi in Assessments.tsx (only the fields the modal reads).
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function toShareAssessment(a: any): ShareAssessment {
   return {
     id: a.id,
@@ -60,54 +62,54 @@ function toShareAssessment(a: any): ShareAssessment {
   };
 }
 
-type Phase = 'loading' | 'no-assessment' | 'picker';
-
 /**
- * Wrapper that opens the SAME ShareAssessmentModal used in the Assessment
- * module from the resume-scoring Invite button. Because the resume-scoring
- * flow only knows the JD (not a specific assessment), this first resolves
- * the JD's published assessments:
- *   - 0  → "no published assessment" message
- *   - 1  → opens ShareAssessmentModal directly
- *   - 2+ → shows a lightweight picker, then opens ShareAssessmentModal
+ * The resume-scoring Invite → Assessment action: the shared Invite to
+ * Assessment dialog (InviteToAssessmentFlow — the Invite to AI Interview
+ * dialog's layout), opened on the row's own job so it lists that job
+ * version's assessments as cards, with "Browse all assessments instead" for
+ * the rest; then the SAME ShareAssessmentModal the Assessment module uses,
+ * with this candidate prefilled.
+ *
+ * One assessment per invite, as this action has always sent. Only published,
+ * non-archived, non-revoked assessments are offered — the rule this action
+ * has always applied — loaded across every job (like AI Talent Match's and a
+ * resume's Invite → Assessment) so "Browse all" really is all of them.
  */
-export default function InviteShareModal({ candidate, jobId, jobTitle, onClose }: InviteShareModalProps) {
-  const [phase, setPhase] = useState<Phase>('loading');
-  const [assessments, setAssessments] = useState<ShareAssessment[]>([]);
+export default function InviteShareModal({ candidate, jobId, onClose }: InviteShareModalProps) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [assessments, setAssessments] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [picked, setPicked] = useState<any[]>([]);
   const [selected, setSelected] = useState<ShareAssessment | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       try {
-        const response = await assessmentService.list({ jd_id: jobId });
+        const response = await assessmentService.list({ status: 'published', page_size: 100 });
         const revokedIds = getLocallyRevokedAssessmentIds();
         const active = (response.items || []).filter(
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (a: any) =>
             a.status === 'published' &&
             !a.is_archived &&
             !isAssessmentRevoked(a, revokedIds)
         );
-        if (cancelled) return;
-        const mapped = active.map(toShareAssessment);
-        setAssessments(mapped);
-        if (mapped.length === 0) {
-          setPhase('no-assessment');
-        } else if (mapped.length === 1) {
-          setSelected(mapped[0]);
-        } else {
-          setPhase('picker');
-        }
+        if (!cancelled) setAssessments(active);
       } catch (error) {
         console.error('Failed to load assessments for invite:', error);
         if (cancelled) return;
         toast.error('Failed to load assessments');
         onClose();
+      } finally {
+        if (!cancelled) setLoading(false);
       }
     })();
     return () => {
       cancelled = true;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobId]);
 
   // Only email is actually required to prefill — a candidate scored without a
@@ -115,10 +117,11 @@ export default function InviteShareModal({ candidate, jobId, jobTitle, onClose }
   // this required both, when only the email is what an invite can't be sent
   // without. Missing just the name shouldn't cost the email too.
   const candidateName = candidate.candidateName || candidate.name || '';
+  const candidateId = candidate.resumeId || candidate.id || '1';
   const prefilledCandidates =
     candidate.email
       ? [{
-          id: candidate.resumeId || candidate.id || '1',
+          id: candidateId,
           name: candidateName,
           email: candidate.email,
           phone: candidate.phone,
@@ -127,8 +130,7 @@ export default function InviteShareModal({ candidate, jobId, jobTitle, onClose }
         }]
       : undefined;
 
-  // Once an assessment is resolved (auto-selected single, or picked), hand off
-  // to the shared ShareAssessmentModal.
+  // Once an assessment is picked, hand off to the shared ShareAssessmentModal.
   if (selected) {
     return (
       <ShareAssessmentModal
@@ -141,97 +143,25 @@ export default function InviteShareModal({ candidate, jobId, jobTitle, onClose }
     );
   }
 
-  if (phase === 'loading') {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-        <div className="bg-white rounded-xl p-8 flex flex-col items-center gap-3 shadow-xl">
-          <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
-          <p className="text-sm text-gray-600">Checking for published assessments…</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (phase === 'no-assessment') {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-        <div className="bg-white rounded-xl max-w-[95vw] sm:max-w-md w-full shadow-xl max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
-          <div className="flex-shrink-0 flex items-center justify-between px-6 py-4 border-b border-gray-100">
-            <h3 className="text-base font-semibold text-gray-900">No Published Assessment</h3>
-            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-              <X className="w-5 h-5" />
-            </button>
-          </div>
-          <div className="flex-1 min-h-0 overflow-y-auto px-6 py-6 flex items-start gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-500 flex-shrink-0 mt-0.5" />
-            <p className="text-sm text-gray-600">
-              There is no published assessment for <span className="font-medium">{jobTitle}</span> yet.
-              Please create and publish an assessment before inviting candidates.
-            </p>
-          </div>
-          <div className="flex-shrink-0 px-6 py-4 border-t border-gray-100 flex justify-end">
-            <button
-              onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-gray-100 rounded-lg hover:bg-gray-200"
-            >
-              Close
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // phase === 'picker' — JD has multiple published assessments; choose one.
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl max-w-[95vw] sm:max-w-2xl w-full shadow-xl max-h-[80dvh] flex flex-col">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
-          <div>
-            <h3 className="text-base font-semibold text-gray-900">Select an Assessment</h3>
-            <p className="text-xs text-gray-500 mt-0.5">
-              {jobTitle} has multiple published assessments. Choose one to invite to.
-            </p>
-          </div>
-          <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-        <div className="px-4 py-4 overflow-y-auto space-y-2">
-          {assessments.map((a) => {
-            const parsed = parseAssessmentTitle(a.title || '');
-            const base = parsed.cleanTitle || a.short_id || 'Untitled assessment';
-            const sections = [
-              a.hr_enabled && 'HR',
-              a.technical_enabled && 'Technical',
-              a.coding_enabled && 'Coding',
-            ].filter(Boolean).join(' • ');
-            return (
-              <button
-                key={a.id}
-                onClick={() => setSelected(a)}
-                className="w-full flex items-center justify-between gap-3 p-3 rounded-lg border border-gray-200 hover:border-blue-400 hover:bg-blue-50/50 transition-colors text-left"
-              >
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-lg bg-blue-50 flex items-center justify-center flex-shrink-0">
-                    <FileText className="w-4 h-4 text-blue-600" />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="text-sm font-medium text-gray-900 truncate">
-                      {base}
-                      {typeof a.version === 'number' ? ` (v${a.version})` : ''}
-                    </div>
-                    <div className="text-xs text-gray-500 truncate">
-                      {a.short_id ? `${a.short_id} · ` : ''}{sections || a.type} · {a.duration}
-                    </div>
-                  </div>
-                </div>
-                <ChevronRight className="w-4 h-4 text-gray-400 flex-shrink-0" />
-              </button>
-            );
-          })}
-        </div>
-      </div>
-    </div>
+    <InviteToAssessmentFlow
+      open
+      onClose={onClose}
+      assessments={assessments}
+      loading={loading}
+      selectedAssessments={picked}
+      onSelectedAssessmentsChange={setPicked}
+      candidates={[{ id: candidateId, name: candidateName || 'Unknown', email: candidate.email || undefined }]}
+      resumes={[{
+        id: candidateId,
+        name: candidateName || 'Unknown',
+        email: candidate.email,
+        phone: candidate.phone,
+      } as unknown as Resume]}
+      onProceed={() => {
+        if (picked[0]) setSelected(toShareAssessment(picked[0]));
+      }}
+      jobId={jobId && jobId !== 'global' ? jobId : undefined}
+    />
   );
 }

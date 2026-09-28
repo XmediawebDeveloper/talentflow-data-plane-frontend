@@ -30,16 +30,17 @@ import { toast } from 'sonner';
 import { assessmentService } from '@/lib/services';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
+import InviteToAssessmentFlow, { type AssessmentInviteCandidate } from './InviteToAssessmentFlow';
 import type { Resume } from '@/lib/types/types';
 
 /** One candidate handed to the Invite to AI Interview dialog. */
 type AIInviteSeed = { name: string; email: string; resumeId?: string; phone?: string; title?: string };
-import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
+import { isAssessmentRevoked, getLocallyRevokedAssessmentIds } from '@/lib/utils/assessmentUtils';
 import { splitPhoneNumbers } from '@/lib/utils/phoneUtils';
 import SkillsList from '@/components/ui/SkillsList';
 import { useAuth } from '@/lib/hooks/useAuth';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
-import { formatISTDate, formatIST, formatISTTime } from '@/lib/utils/dateUtils';
+import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
 /* The shared formatters, so a JD's industry and employment type read the same
    here as on the Resume Scoring rows this list is modelled on. */
 import { formatEmploymentType, formatIndustryType, getDisplayStatus, getStatusConfig } from '@/lib/utils/jobOpeningDisplay';
@@ -311,7 +312,6 @@ export default function AITalentMatchPage({
   const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
   const [assessments, setAssessments] = useState<any[]>([]);
   const [selectedAssessments, setSelectedAssessments] = useState<any[]>([]); // Changed to store full assessment objects
-  const [assessmentSearchQuery, setAssessmentSearchQuery] = useState('');
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [currentAssessmentForShare, setCurrentAssessmentForShare] = useState<any>(null);
   const [prefilledCandidates, setPrefilledCandidates] = useState<any[]>([]);
@@ -1617,18 +1617,11 @@ export default function AITalentMatchPage({
     }
   };
 
-  const handleAssessmentSelect = (assessment: any) => {
-    setSelectedAssessments(prev => {
-      const isSelected = prev.some(a => a.id === assessment.id);
-      if (isSelected) {
-        return prev.filter(a => a.id !== assessment.id);
-      } else {
-        return [...prev, assessment];
-      }
-    });
-  };
 
-  const handleProceedToInvite = () => {
+  const handleProceedToInvite = (invitees?: AssessmentInviteCandidate[]) => {
+    /* The candidates still ticked in the invite dialog's Candidates Selected
+       panel — unticking someone there has to mean they are left out. */
+    const keep = invitees ? new Set(invitees.map((i) => i.id)) : null;
     if (selectedAssessments.length === 0) {
       toast.error('Please select at least one assessment');
       return;
@@ -1638,12 +1631,14 @@ export default function AITalentMatchPage({
     // Assessment action — already IS the final recipient list (built from a
     // cross-job selection, not `selectedCandidates`); everything below only
     // runs for the normal single-job selection path.
-    const candidateData = pendingInviteRecipients ?? (() => {
+    const candidateData = pendingInviteRecipients
+      ? pendingInviteRecipients.filter(r => !keep || keep.has(r.id))
+      : (() => {
       const currentCandidates = viewMode === 'results'
         ? matchedCandidates
         : getResolvedHistoryCandidates(selectedHistoryItem);
       return currentCandidates
-        .filter(c => selectedCandidates.includes(c.id))
+        .filter(c => selectedCandidates.includes(c.id) && (!keep || keep.has(c.id)))
         .map((c, index) => ({
           id: `${Date.now()}-${index}`,
           name: c.name,
@@ -1702,7 +1697,6 @@ export default function AITalentMatchPage({
       setSelectedAssessments([]);
       setSelectedCandidates([]);
       setPrefilledCandidates([]);
-      setAssessmentSearchQuery('');
       setPendingInviteRecipients(null);
     } catch (error: any) {
       console.error('Failed to send invitations:', error);
@@ -1940,6 +1934,96 @@ export default function AITalentMatchPage({
       }) as unknown as Resume)}
       onInvited={() => { setAiInviteFlow(null); setSelectedCandidates([]); }}
     />
+  );
+
+
+  /* Invite to Assessment and its Share step — like `aiInviteDialog` above,
+     rendered in EVERY view branch that offers Invite Assessment (history,
+     results and the default view). Each branch returns its own tree, and the
+     two used to be mounted in the default view only, so the action did
+     nothing from the results or history views. */
+  const assessmentInviteDialogs = (
+    <>
+        {/* Invite to Assessment — the shared dialog (InviteToAssessmentFlow),
+            the same one a resume's Invite → Assessment opens: the Invite to AI
+            Interview dialog's layout, with this page's own assessment list,
+            multi-select and Send step. The candidates are the ones the action
+            was started for — the All Resumes selection when it seeded
+            `pendingInviteRecipients`, else the selected matches. */}
+        {(() => {
+          const inviteCandidates: { id: string; name: string; email?: string; phone?: string; title?: string }[] =
+            pendingInviteRecipients
+              ? pendingInviteRecipients.map(r => ({ id: r.id, name: r.name, email: r.email }))
+              : (viewMode === 'results' ? matchedCandidates : getResolvedHistoryCandidates(selectedHistoryItem))
+                  .filter(c => selectedCandidates.includes(c.id))
+                  .map(c => ({ id: c.id, name: c.name, email: c.email || undefined, phone: c.phone, title: c.title }));
+          return (
+            <InviteToAssessmentFlow
+              open={isAssessmentModalOpen}
+              onClose={() => {
+                setIsAssessmentModalOpen(false);
+                setSelectedAssessments([]);
+                setPendingInviteRecipients(null);
+              }}
+              assessments={assessments}
+              multiple
+              selectedAssessments={selectedAssessments}
+              onSelectedAssessmentsChange={setSelectedAssessments}
+              candidates={inviteCandidates.map(c => ({ id: c.id, name: c.name, email: c.email }))}
+              resumes={inviteCandidates.map(c => ({
+                id: c.id, name: c.name, email: c.email, phone: c.phone, title: c.title,
+              }) as unknown as Resume)}
+              onProceed={handleProceedToInvite}
+              /* The job the candidates were matched against — the same one the
+                 Invite AI Interview dialog is scoped to — so this opens on that
+                 job's assessment versions. None for the cross-job All Resumes
+                 selection, which gets the full list. */
+              jobId={pendingInviteRecipients ? undefined : (selectedJob || selectedHistoryItem?.jobId || undefined)}
+            />
+          );
+        })()}
+
+        {/* Share Assessment Modal */}
+        {isShareModalOpen && selectedAssessments.length > 0 && (
+          <ShareAssessmentModal
+            isOpen={isShareModalOpen}
+            onClose={() => {
+              setIsShareModalOpen(false);
+              setCurrentAssessmentForShare(null);
+              setSelectedAssessments([]);
+              setPrefilledCandidates([]);
+            }}
+            assessment={{
+              id: selectedAssessments[0].id,
+              title: selectedAssessments[0].title,
+              duration: `${selectedAssessments[0].duration_minutes || 0} min`,
+              questions: (selectedAssessments[0].hr_enabled ? 1 : 0) +
+                        (selectedAssessments[0].technical_enabled ? 1 : 0) +
+                        (selectedAssessments[0].coding_enabled ? 1 : 0),
+              type: 'AI-Generated',
+              short_id: selectedAssessments[0].short_id,
+              version: selectedAssessments[0].version,
+              jd_short_id: selectedAssessments[0].jd_short_id,
+              jd_title: selectedAssessments[0].jd_title,
+              jd_version: selectedAssessments[0].jd_version,
+            }}
+            additionalAssessments={selectedAssessments.map(a => ({
+              id: a.id,
+              title: a.title,
+              duration: `${a.duration_minutes || 0} min`,
+              questions: (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0),
+              type: 'AI-Generated',
+              short_id: a.short_id,
+              version: a.version,
+              jd_short_id: a.jd_short_id,
+              jd_title: a.jd_title,
+              jd_version: a.jd_version
+            }))}
+            prefilledCandidates={prefilledCandidates}
+            inviteSource="Resume Scoring"
+          />
+        )}
+    </>
   );
 
   // View: Matching in Progress (direct flow from resume-view / deep link)
@@ -4713,6 +4797,7 @@ export default function AITalentMatchPage({
       })()}
 
       {aiInviteDialog}
+      {assessmentInviteDialogs}
       </>
     );
   }
@@ -4782,6 +4867,7 @@ export default function AITalentMatchPage({
     return (
       <>
       {aiInviteDialog}
+      {assessmentInviteDialogs}
       <main className="flex-1 overflow-x-clip bg-slate-50">
         <div className="mx-auto w-full max-w-[1400px]">
         <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
@@ -5500,275 +5586,7 @@ export default function AITalentMatchPage({
         />
       )}
 
-      {/* Assessment Selection Modal */}
-      {isAssessmentModalOpen && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4" onClick={(e) => {
-          if (e.target === e.currentTarget) {
-            setIsAssessmentModalOpen(false);
-            setSelectedAssessments([]);
-            setAssessmentSearchQuery('');
-          }
-        }}>
-          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-4xl max-h-[calc(100dvh-2rem)] overflow-hidden flex flex-col">
-            <div className="p-4 sm:p-5 border-b border-gray-200 dark:border-slate-700 shrink-0">
-              <div className="flex items-center justify-between mb-2">
-                <h2 className="text-base sm:text-lg font-bold text-gray-900 dark:text-slate-50">Select Active Assessments</h2>
-                <button
-                  onClick={() => {
-                    setIsAssessmentModalOpen(false);
-                    setSelectedAssessments([]);
-                    setAssessmentSearchQuery('');
-                  }}
-                  className="text-gray-400 dark:text-slate-500 hover:text-gray-600 p-1"
-                 aria-label="Close">
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 mb-3">
-                Select one or more assessments to send to {selectedCandidates.length} candidate{selectedCandidates.length !== 1 ? 's' : ''}
-              </p>
-
-              {/* Search Bar */}
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
-                <input
-                  type="text"
-                  value={assessmentSearchQuery}
-                  onChange={(e) => setAssessmentSearchQuery(e.target.value)}
-                  placeholder="Search assessments..."
-                  className="w-full pl-9 pr-4 py-2 border border-gray-300 dark:border-slate-700 rounded-lg text-sm text-black placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
-                />
-              </div>
-
-              {/* Select All / Clear All */}
-              {assessments.length > 0 && (() => {
-                const filteredAssessments = assessments.filter(assessment => {
-                  if (!assessmentSearchQuery.trim()) return true;
-                  const query = assessmentSearchQuery.toLowerCase();
-                  return (
-                    assessment.short_id?.toLowerCase().includes(query) ||
-                    assessment.title?.toLowerCase().includes(query) ||
-                    assessment.jd_short_id?.toLowerCase().includes(query) ||
-                    assessment.jd_title?.toLowerCase().includes(query)
-                  );
-                });
-                return filteredAssessments.length > 0 && (
-                  <button
-                    onClick={() => {
-                      if (selectedAssessments.length === filteredAssessments.length) {
-                        setSelectedAssessments([]);
-                      } else {
-                        setSelectedAssessments(filteredAssessments);
-                      }
-                    }}
-                    className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium mt-3"
-                  >
-                    {selectedAssessments.length === filteredAssessments.length && selectedAssessments.length > 0 ? 'Clear All' : 'Select All'}
-                  </button>
-                );
-              })()}
-            </div>
-
-            <div className="flex-1 overflow-y-auto p-4 sm:p-5">
-              {(() => {
-                const filteredAssessments = assessments.filter(assessment => {
-                  if (!assessmentSearchQuery.trim()) return true;
-                  const query = assessmentSearchQuery.toLowerCase();
-                  return (
-                    assessment.short_id?.toLowerCase().includes(query) ||
-                    assessment.title?.toLowerCase().includes(query) ||
-                    assessment.jd_short_id?.toLowerCase().includes(query) ||
-                    assessment.jd_title?.toLowerCase().includes(query)
-                  );
-                });
-
-                return filteredAssessments.length === 0 ? (
-                  <div className="text-center py-10">
-                    <BarChart3 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-sm text-gray-500 dark:text-slate-500">{assessmentSearchQuery ? 'No assessments match your search' : 'No active assessments available'}</p>
-                    <p className="text-xs text-gray-400 dark:text-slate-500 mt-1">{assessmentSearchQuery ? 'Try different search terms' : 'Create and publish an assessment first'}</p>
-                  </div>
-                ) : (
-                  <div className="space-y-2">
-                    {filteredAssessments.map((assessment) => {
-                      const isSelected = selectedAssessments.some(a => a.id === assessment.id);
-                      return (
-                        <button
-                          key={assessment.id}
-                          onClick={() => handleAssessmentSelect(assessment)}
-                          className={`w-full text-left border-2 rounded-lg p-3 transition-all ${
-                            isSelected
-                              ? 'border-brand-blue/50 bg-brand-blue/5 shadow-sm shadow-brand-blue/10'
-                              : 'border-gray-200 dark:border-slate-700 hover:border-brand-blue/30 hover:bg-brand-blue/5'
-                          }`}
-                        >
-                          <div className="flex items-start gap-2">
-                            {/* Checkbox */}
-                            <div className="flex-shrink-0 mt-1">
-                              <div className={`w-5 h-5 rounded border-2 flex items-center justify-center transition-colors ${
-                                isSelected
-                                  ? 'bg-brand-blue border-brand-blue'
-                                  : 'bg-white dark:bg-slate-900 border-gray-300 dark:border-slate-700'
-                              }`}>
-                                {isSelected && (
-                                  <CheckCircle className="w-4 h-4 text-white" />
-                                )}
-                              </div>
-                            </div>
-
-                            <div className="flex-1">
-                              {/* Assessment ID, Title, Version + Active Badge */}
-                              <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                                {assessment.short_id && (
-                                  <span className="text-xs px-2 py-0.5 bg-brand-blue text-white rounded font-semibold">
-                                    {assessment.short_id}
-                                  </span>
-                                )}
-                                {(() => {
-                                  // Strip any "- Version N" baked into the stored title
-                                  // and render the live version (from `version`, falling
-                                  // back to the parsed title version) as its own badge.
-                                  const parsed = parseAssessmentTitle(assessment.title || '');
-                                  const displayVersion = typeof assessment.version === 'number'
-                                    ? assessment.version
-                                    : parsed.version;
-                                  const base = parsed.cleanTitle || 'Untitled assessment';
-                                  return (
-                                    <>
-                                      <h5 className="text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{base}</h5>
-                                      {displayVersion && (
-                                        <span className="text-xs px-2 py-0.5 bg-brand-cyan/15 text-brand-cyan ring-1 ring-brand-cyan/30 rounded font-semibold">
-                                          V{displayVersion}
-                                        </span>
-                                      )}
-                                    </>
-                                  );
-                                })()}
-                                <span className="text-xs px-2 py-0.5 bg-success-subtle text-success rounded-full font-medium">
-                                  Active
-                                </span>
-                              </div>
-
-                              {/* Linked JD Information */}
-                              {assessment.jd_short_id && (
-                                <div className="text-xs text-gray-600 dark:text-slate-400 mb-1.5">
-                                  <span className="font-medium">Linked to: </span>
-                                  <span className="text-gray-800 dark:text-slate-100">{assessment.jd_short_id}</span>
-                                  {assessment.jd_title && (
-                                    <span className="ml-1">- {assessment.jd_title}</span>
-                                  )}
-                                  {assessment.jd_version && (
-                                    <span className="ml-1 text-gray-500 dark:text-slate-500">v{assessment.jd_version}</span>
-                                  )}
-                                </div>
-                              )}
-
-                              {/* Duration and Sections */}
-                              <div className="flex items-center gap-3 text-sm text-gray-500 dark:text-slate-500">
-                                <span className="flex items-center gap-1">
-                                  <Clock className="w-3 h-3" />
-                                  {assessment.duration_minutes || 0} min
-                                </span>
-                              </div>
-
-                              {/* Created By and Date */}
-                              <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-slate-500 mt-1.5">
-                                {assessment.created_by_name && (
-                                  <>
-                                    <span>Created by: <span className="text-gray-700 dark:text-slate-300 font-medium">{assessment.created_by_name}</span></span>
-                                    <span>•</span>
-                                  </>
-                                )}
-                                {assessment.created_at && (
-                                  <span>
-                                    {formatIST(assessment.created_at)}
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between px-4 py-3 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700 gap-3 sm:gap-0 shrink-0">
-              <div className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 text-center sm:text-left">
-                {selectedAssessments.length} assessment{selectedAssessments.length !== 1 ? 's' : ''} selected
-              </div>
-              <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="md"
-                  onClick={() => {
-                    setIsAssessmentModalOpen(false);
-                    setSelectedAssessments([]);
-                    setAssessmentSearchQuery('');
-                    setPendingInviteRecipients(null);
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="primary"
-                  size="md"
-                  onClick={handleProceedToInvite}
-                  disabled={selectedAssessments.length === 0}
-                  icon={<Mail className="w-4 h-4" />}
-                >
-                  <span className="hidden sm:inline">Proceed to Send Invitations</span>
-                  <span className="sm:hidden">Send Invitations</span>
-                </Button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Share Assessment Modal */}
-      {isShareModalOpen && selectedAssessments.length > 0 && (
-        <ShareAssessmentModal
-          isOpen={isShareModalOpen}
-          onClose={() => {
-            setIsShareModalOpen(false);
-            setCurrentAssessmentForShare(null);
-            setSelectedAssessments([]);
-            setPrefilledCandidates([]);
-            setAssessmentSearchQuery('');
-          }}
-          assessment={{
-            id: selectedAssessments[0].id,
-            title: selectedAssessments[0].title,
-            duration: `${selectedAssessments[0].duration_minutes || 0} min`,
-            questions: (selectedAssessments[0].hr_enabled ? 1 : 0) +
-                      (selectedAssessments[0].technical_enabled ? 1 : 0) +
-                      (selectedAssessments[0].coding_enabled ? 1 : 0),
-            type: 'AI-Generated',
-            short_id: selectedAssessments[0].short_id,
-            version: selectedAssessments[0].version,
-            jd_short_id: selectedAssessments[0].jd_short_id,
-            jd_title: selectedAssessments[0].jd_title,
-            jd_version: selectedAssessments[0].jd_version,
-          }}
-          additionalAssessments={selectedAssessments.map(a => ({
-            id: a.id,
-            title: a.title,
-            duration: `${a.duration_minutes || 0} min`,
-            questions: (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0),
-            type: 'AI-Generated',
-            short_id: a.short_id,
-            version: a.version,
-            jd_short_id: a.jd_short_id,
-            jd_title: a.jd_title,
-            jd_version: a.jd_version
-          }))}
-          prefilledCandidates={prefilledCandidates}
-          inviteSource="Resume Scoring"
-        />
-      )}
+      {assessmentInviteDialogs}
 
     </>
   );

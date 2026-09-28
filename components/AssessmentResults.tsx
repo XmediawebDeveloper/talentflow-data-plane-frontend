@@ -27,6 +27,14 @@ import ListFilterPanel from '@/components/ui/list-filter-panel';
 import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
 
 interface AssessmentResultsProps {
+  /**
+   * Open on the Total Candidates list — the candidate table with every status
+   * — rather than on the stat cards or the view last left. What a click on the
+   * Total Candidates card does, done on arrival; for the Assessments page's
+   * Total Jobs "Result" button. The saved view / status / page do not restore
+   * over it; every other saved filter still does.
+   */
+  openOnTotalCandidates?: boolean;
   onBack: () => void;
   assessmentId: string;
   assessmentTitle: string;
@@ -247,7 +255,7 @@ interface QuestionResult {
   type: 'multiple-choice' | 'text' | 'coding';
 }
 
-export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount }: AssessmentResultsProps) {
+export default function AssessmentResults({ onBack, assessmentId, assessmentTitle, assessmentVersion, jdTitle, jdId, jdShortId, jdVersion, jobVersionScope = null, assessmentVersionScope = null, embedded = false, openOnTotalCandidates = false, canDownloadPDF = false, canBatchDownload = false, prevId, nextId, currentIndex, totalCount }: AssessmentResultsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
   const [expandedSection, setExpandedSection] = useState<string | null>(null);
@@ -276,7 +284,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // filters, and the candidate table. Mirrors the Job Openings page pattern
   // — a fresh visit lands on cards; clicking a stat card drills into the list
   // with the matching status filter applied.
-  const [pageView, setPageView] = useState<'cards' | 'list'>('cards');
+  const [pageView, setPageView] = useState<'cards' | 'list'>(openOnTotalCandidates ? 'list' : 'cards');
   const openCandidateList = (filter: 'all' | 'Completed' | 'In Progress' | 'Pending') => {
     setStatusFilter(filter);
     setCurrentPage(1);
@@ -810,7 +818,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     persistKey,
     { pageView, statusFilter, searchQuery, sortField, sortDirection, currentPage, passFailFilter, dateFrom, dateTo, roundFilters, selectedJobVersion, selectedAssessmentVersion },
     (s) => {
-      if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
+      /* Arriving on Total Candidates (`openOnTotalCandidates`) keeps that view,
+         every status and page 1 over the snapshot — see the prop. */
+      if (!openOnTotalCandidates && (s.pageView === 'cards' || s.pageView === 'list')) setPageView(s.pageView);
       /* Everything else restores as before. The job version does not when the
          link named one: the snapshot is for "I opened a candidate and came
          back", while a Results button that named its scope has just asked for
@@ -826,11 +836,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       if (!namesAssessmentVersionScope && (s.selectedAssessmentVersion === 'all' || typeof s.selectedAssessmentVersion === 'number')) {
         setSelectedAssessmentVersion(s.selectedAssessmentVersion);
       }
-      if (typeof s.statusFilter === 'string') setStatusFilter(s.statusFilter as typeof statusFilter);
+      if (!openOnTotalCandidates && typeof s.statusFilter === 'string') setStatusFilter(s.statusFilter as typeof statusFilter);
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
       if (typeof s.sortField === 'string') setSortField(s.sortField as typeof sortField);
       if (s.sortDirection === 'asc' || s.sortDirection === 'desc') setSortDirection(s.sortDirection);
-      if (typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
+      if (!openOnTotalCandidates && typeof s.currentPage === 'number') setCurrentPage(s.currentPage);
       if (typeof s.passFailFilter === 'string') setPassFailFilter(s.passFailFilter as typeof passFailFilter);
       if (typeof s.dateFrom === 'string') setDateFrom(s.dateFrom);
       if (typeof s.dateTo === 'string') setDateTo(s.dateTo);
@@ -1666,6 +1676,15 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   {jdTitle || assessmentTitle}
                 </h1>
               </div>
+              )}
+              {/* Which job version the page is reading — the Job Version
+                  selector's own effective value, so it changes the moment that
+                  selector does: All Versions → "Showing all versions", a
+                  version → "Showing Version N". */}
+              {!embedded && (
+                <p className="mt-1 text-xs sm:text-sm text-gray-600">
+                  {effectiveJobVersion === 'all' ? 'Showing all versions' : `Showing Version ${effectiveJobVersion}`}
+                </p>
               )}
             </div>
             {/* Outside the list view only: in the list, Download PDF and Export
