@@ -4888,7 +4888,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                      otherwise land on whichever single version was selected
                      last time. The row is the job; its Result must read as the
                      job. */
-                  router.push(`/recruitment/assessments/${assessment.id}/results?job_version_id=all&assessment_version=all`);
+                  router.push(`/recruitment/assessments/${assessment.id}/results?job_version_id=all&assessment_version=all&view=total`);
                 }}
                 /* Same rule, with the version panel's Result colour. */
                 icon={<BarChart className={`w-3.5 h-3.5${hasBeenShared ? ' text-menu-icon-score' : ''}`} />}
@@ -9931,7 +9931,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     Gated exactly as every other Share on this page is. */}
                 {(() => {
                   const target = selectedAssessmentForTracking;
-                  const canShare = hasPermission('canUpdateAssessments') || isTenantAdmin;
+                  const canShare = isTenantAdmin || hasPermissionCode('assessments:share');
                   const status = String(target?.status ?? '').toLowerCase();
                   const blockedReason = !target ? 'No assessment selected'
                     : !canShare ? 'You do not have permission to invite candidates'

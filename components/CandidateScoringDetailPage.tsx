@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/tooltip';
 import ShareAssessmentModal from './ShareAssessmentModal';
 import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
+import InviteToAssessmentFlow from './InviteToAssessmentFlow';
 import type { Resume as ResumeRecord } from '@/lib/types/types';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
@@ -248,10 +249,13 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   // Invite flows — both render their existing modal over this page.
   const [shareAssessments, setShareAssessments] = useState<any[]>([]);
   const [showShareAssessmentModal, setShowShareAssessmentModal] = useState(false);
+  /* The shared Invite to Assessment dialog (the Invite to AI Interview
+     dialog's layout): what it offers, what is picked, and whether it is
+     loading. Several can be picked, as this page always allowed. */
   const [pickerAssessments, setPickerAssessments] = useState<any[]>([]);
-  const [pickerSelectedIds, setPickerSelectedIds] = useState<string[]>([]);
+  const [pickedAssessments, setPickedAssessments] = useState<any[]>([]);
   const [showAssessmentPicker, setShowAssessmentPicker] = useState(false);
-  const [loadingInvite, setLoadingInvite] = useState<'assessment' | 'ai-interview' | null>(null);
+  const [loadingPickerAssessments, setLoadingPickerAssessments] = useState(false);
   const [showAIInviteFlow, setShowAIInviteFlow] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'scoretable' | 'personalinfo' | 'viewjd'>('overview');
   // The tabs + panels block, so opening the JD from the job title can bring the
@@ -912,57 +916,51 @@ Best regards`);
     }
   };
 
-  // Invite for assessment — same selection rules the JD page uses: only
-  // published, non-revoked assessments for this JD are invitable.
+  // Invite for assessment — opens the shared Invite to Assessment dialog
+  // scoped to this JD, as Invite for AI interview below does: this candidate,
+  // then the job's assessment versions as cards (the dialog says so when there
+  // are none), with "Browse all assessments instead" for the rest. Same
+  // selection rule as before: only published, non-revoked assessments are
+  // invitable — loaded across every job, like the other Invite → Assessment
+  // entry points, so "Browse all" really is all of them.
   const handleInviteForAssessment = async () => {
     setShowInviteMenu(false);
-    if (loadingInvite) return;
 
-    setLoadingInvite('assessment');
+    setPickedAssessments([]);
+    setPickerAssessments([]);
+    setShowAssessmentPicker(true);
+    setLoadingPickerAssessments(true);
     try {
       const { assessmentService } = await import('@/lib/services/assessmentService');
       const { isAssessmentRevoked, getLocallyRevokedAssessmentIds } = await import('@/lib/utils/assessmentUtils');
 
-      const resp = await assessmentService.list({ jd_id: jobId, status: 'published', page_size: 100 });
+      const resp = await assessmentService.list({ status: 'published', page_size: 100 });
       const revokedIds = getLocallyRevokedAssessmentIds();
       const items: any[] = (resp?.items || []).filter((a: any) => {
         const status = String(a?.status || '').toLowerCase();
         if (status !== 'published' && status !== 'active') return false;
         return !isAssessmentRevoked(a, revokedIds);
       });
-
-      if (items.length === 0) {
-        toast.error(
-          'No invitable assessment is available for this job. Published assessments whose invites have been revoked are excluded — duplicate one to start a fresh invite round.',
-          { duration: 6000 }
-        );
-        return;
-      }
-
-      if (items.length === 1) {
-        setShareAssessments(items);
-        setShowShareAssessmentModal(true);
-        return;
-      }
-
       setPickerAssessments(items);
-      setPickerSelectedIds([]);
-      setShowAssessmentPicker(true);
     } catch (err) {
       console.error('[CandidateScoringDetailPage] Failed to load assessments:', err);
       toast.error('Could not load assessments. Please try again.');
     } finally {
-      setLoadingInvite(null);
+      setLoadingPickerAssessments(false);
     }
   };
 
+  /* Send Invitations in the dialog: the picked assessments into the same
+     Share Assessment modal as before — the first as primary, the rest as
+     additional. */
   const handleConfirmAssessmentPick = () => {
-    if (pickerSelectedIds.length === 0) {
+    if (pickedAssessments.length === 0) {
       toast.error('Please select at least one assessment.');
       return;
     }
-    setShareAssessments(pickerAssessments.filter(a => pickerSelectedIds.includes(a.id)));
+    setShareAssessments(pickedAssessments);
     setShowAssessmentPicker(false);
+    setPickedAssessments([]);
     setShowShareAssessmentModal(true);
   };
 
@@ -1245,13 +1243,13 @@ Best regards`);
                     variant="primary"
                     size="sm"
                     onClick={() => setShowInviteMenu(!showInviteMenu)}
-                    disabled={!!loadingInvite || inviteDisabled}
+                    disabled={inviteDisabled}
                     title={inviteDisabled ? 'No published assessment or AI interview for this job yet' : undefined}
                     aria-haspopup="menu"
                     aria-expanded={showInviteMenu}
                     className="whitespace-nowrap"
                   >
-                    {loadingInvite ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserPlus className="w-4 h-4" />}
+                    <UserPlus className="w-4 h-4" />
                     Invite
                     <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showInviteMenu ? 'rotate-180' : ''}`} />
                   </Button>
@@ -2746,88 +2744,34 @@ Best regards`);
       </div>
           </>
 
-          {/* Assessment picker — only when this JD has more than one invitable
-              published assessment. */}
-          {showAssessmentPicker && pickerAssessments.length > 0 && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-              <div className="bg-white rounded-xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[80dvh] flex flex-col">
-                <div className="flex items-center justify-between p-5 border-b border-gray-200 shrink-0">
-                  <div>
-                    <h3 className="text-lg font-semibold text-gray-900">Choose an assessment</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      This job has {pickerAssessments.length} published assessments. Select which one(s) to invite {resume.candidateName} to.
-                    </p>
-                  </div>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => setShowAssessmentPicker(false)}
-                    className="px-2"
-                    aria-label="Close"
-                  >
-                    <XCircle className="w-5 h-5 text-gray-500" />
-                  </Button>
-                </div>
-                <div className="flex-1 overflow-y-auto p-3">
-                  {pickerAssessments.map((a: any) => {
-                    const isPicked = pickerSelectedIds.includes(a.id);
-                    const sections = (a.hr_enabled ? 1 : 0) + (a.technical_enabled ? 1 : 0) + (a.coding_enabled ? 1 : 0);
-                    return (
-                      <label
-                        key={a.id}
-                        className={`flex items-start gap-3 p-3 rounded-lg cursor-pointer border mb-2 transition-colors ${
-                          isPicked ? 'border-brand-blue bg-brand-blue/5' : 'border-gray-200 hover:bg-gray-50'
-                        }`}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={isPicked}
-                          onChange={() => {
-                            setPickerSelectedIds(prev =>
-                              prev.includes(a.id) ? prev.filter(id => id !== a.id) : [...prev, a.id]
-                            );
-                          }}
-                          className="mt-1"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm font-medium text-gray-900 truncate">
-                            {a.title || a.short_id || 'Untitled assessment'}
-                            {typeof a.version === 'number' ? ` - Version ${a.version}` : ''}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
-                            {a.short_id && <span>{a.short_id}</span>}
-                            <span>{a.duration_minutes || 30} min</span>
-                            <span>{sections} section{sections !== 1 ? 's' : ''}</span>
-                            {a.jd_version && <span>JD v{a.jd_version}</span>}
-                          </div>
-                        </div>
-                      </label>
-                    );
-                  })}
-                </div>
-                <div className="p-4 border-t border-gray-200 flex items-center justify-between gap-3 shrink-0">
-                  <span className="text-xs text-gray-600">
-                    {pickerSelectedIds.length} of {pickerAssessments.length} selected
-                  </span>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="secondary"
-                      onClick={() => setShowAssessmentPicker(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      variant="primary"
-                      onClick={handleConfirmAssessmentPick}
-                      disabled={pickerSelectedIds.length === 0}
-                    >
-                      Continue
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
+          {/* Invite to Assessment — the shared dialog (the same one AI Talent
+              Match, a resume's Invite and Resume Scoring's Invite open),
+              scoped to this JD and prefilled with THIS candidate. */}
+          <InviteToAssessmentFlow
+            open={showAssessmentPicker}
+            onClose={() => {
+              setShowAssessmentPicker(false);
+              setPickedAssessments([]);
+            }}
+            assessments={pickerAssessments}
+            loading={loadingPickerAssessments}
+            multiple
+            selectedAssessments={pickedAssessments}
+            onSelectedAssessmentsChange={setPickedAssessments}
+            candidates={[{
+              id: fullResumeData.resumeId || resume.resumeId || resume.id,
+              name: fullResumeData.candidateName || resume.candidateName || 'Unknown',
+              email: fullResumeData.email || resume.email || undefined,
+            }]}
+            resumes={[{
+              id: fullResumeData.resumeId || resume.resumeId || resume.id,
+              name: fullResumeData.candidateName || resume.candidateName || 'Unknown',
+              email: fullResumeData.email || resume.email,
+              phone: fullResumeData.phone || resume.phone,
+            } as unknown as ResumeRecord]}
+            onProceed={handleConfirmAssessmentPick}
+            jobId={jobId || undefined}
+          />
 
           {/* Share Resume — the same dialog the resume table and the resume
               page open. The eye reuses View Resume, whose preview sits at

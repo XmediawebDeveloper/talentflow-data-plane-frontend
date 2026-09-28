@@ -213,6 +213,14 @@ interface AssessmentVersionHistoryPanelProps {
    */
   selectedAssessmentId?: string | null;
   /**
+   * Opt-in MULTI-select: pass the picked ids and the select column becomes
+   * checkboxes, each click reported through `onSelectAssessment` for the host
+   * to toggle. For the invite flows that send several assessments at once
+   * (AI Talent Match). Omitted, the panel is the single-choice radio group
+   * described above, unchanged.
+   */
+  selectedAssessmentIds?: string[];
+  /**
    * Reports the pick together with the JOB VERSION it was made under.
    *
    * The version matters as much as the assessment: assessment version numbers
@@ -770,6 +778,7 @@ export default function AssessmentVersionHistoryPanel({
   menuOnlyActions = false,
   singleActionControl = false,
   selectedAssessmentId,
+  selectedAssessmentIds,
   onSelectAssessment,
   activeSelection,
   expandedJobVersions: controlledExpandedJobVersions,
@@ -818,6 +827,9 @@ export default function AssessmentVersionHistoryPanel({
   /* The Select column exists only where a host reads the selection. Same rule
      as the Actions column below it: no consumer, no column. */
   const showsAssessmentSelect = !!onSelectAssessment;
+  const multiSelect = Array.isArray(selectedAssessmentIds);
+  const isAssessmentPicked = (id: string) =>
+    multiSelect ? selectedAssessmentIds!.includes(id) : selectedAssessmentId === id;
 
   /* The Actions column exists if EITHER control does. It used to be gated on
      `renderAction` alone, which meant a host offering only the eye - the Send
@@ -1088,8 +1100,8 @@ export default function AssessmentVersionHistoryPanel({
                      read. This tints that row, so the branch the reader left
                      from is the one they return to visually as well. */
                   const holdsSelection =
-                    !!selectedAssessmentId
-                    && group.assessments.some((child) => child.id === selectedAssessmentId);
+                    (multiSelect ? selectedAssessmentIds!.length > 0 : !!selectedAssessmentId)
+                    && group.assessments.some((child) => isAssessmentPicked(child.id));
                   /* The newest assessment version in this group — the one its
                      inner table badges Latest. Read off the sorted list rather
                      than recomputed, so the badge and the ordering agree. */
@@ -1376,7 +1388,7 @@ export default function AssessmentVersionHistoryPanel({
                                             const isCurrent = !!currentAssessmentId && assessment.id === currentAssessmentId;
                                             const statusLabel = vocabulary.statusLabel(assessment.status);
                                             const invitations = assessment.invitations_count ?? 0;
-                                            const isPicked = selectedAssessmentId === assessment.id;
+                                            const isPicked = isAssessmentPicked(assessment.id);
                                             /* The one row still in play once a
                                                pick exists. Matched on the row's
                                                own id under an already-matching
@@ -1438,8 +1450,11 @@ export default function AssessmentVersionHistoryPanel({
                                                     onClick={(e) => e.stopPropagation()}
                                                   >
                                                     <input
-                                                      type="radio"
-                                                      name={selectionGroupName}
+                                                      /* Checkboxes in multi-select
+                                                         mode (`selectedAssessmentIds`),
+                                                         where the host toggles. */
+                                                      type={multiSelect ? 'checkbox' : 'radio'}
+                                                      name={multiSelect ? undefined : selectionGroupName}
                                                       value={assessment.id}
                                                       checked={isPicked}
                                                       onChange={() =>

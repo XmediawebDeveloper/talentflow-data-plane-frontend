@@ -60,8 +60,12 @@ const MODULE_UNITS: Record<string, { one: string; many: string }> = {
   applicants_count: { one: 'Applicant', many: 'Applicants' },
 };
 
-/** Aggregates, not modules — counting them would double up the list. */
-const NON_MODULE_KEYS = new Set(['total_usage_count']);
+/** Aggregates, not modules — counting them would double up the list.
+ *  `scoring_runs_count` counts the batch runs behind Resume Scoring, which is
+ *  already listed with its own scores ("22 active Resume Scores") — shown on
+ *  its own it read as a separate "Scoring Runs" module ("3 active Scoring
+ *  Runses"). The backend's `can_edit` verdict still gates editing either way. */
+const NON_MODULE_KEYS = new Set(['total_usage_count', 'scoring_runs_count', 'scoring_runs']);
 
 /**
  * Plural of a module name the table above doesn't cover — an English rule good

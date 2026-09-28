@@ -656,7 +656,14 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
       await navigator.clipboard.writeText(result.link);
       toast.success(`Link copied for ${candidate.name}! Expires in ${expiryDays} day${expiryDays !== 1 ? 's' : ''}. Share via WhatsApp, SMS, or send via email.`);
     } catch (err: any) {
-      const msg = err?.response?.data?.detail?.message || err?.response?.data?.detail || err?.message || 'Failed to generate link';
+      const detail = err?.response?.data?.detail;
+      // Team-member emails are blocked here exactly as on Send Invitation —
+      // no link is minted, so a later Send hits the same check.
+      if (err?.response?.status === 400 && detail?.error === 'TENANT_USER_EMAIL') {
+        toast.error(detail.message || `Cannot invite '${candidate.email.trim()}' — this email belongs to an existing team member. AI Interview invitations are for external candidates only.`);
+        return;
+      }
+      const msg = detail?.message || detail || err?.message || 'Failed to generate link';
       toast.error(typeof msg === 'string' ? msg : 'Failed to generate link');
     } finally {
       setGeneratingLinkFor(null);

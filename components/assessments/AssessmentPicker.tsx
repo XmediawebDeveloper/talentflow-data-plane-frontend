@@ -37,9 +37,19 @@ type PickerAssessment = any;
 
 interface AssessmentPickerProps {
   assessments: PickerAssessment[];
-  /** The picked assessment's id, or null. */
-  selectedId: string | null;
-  onSelect: (assessment: PickerAssessment | null) => void;
+  /** Single-select: the picked assessment's id, or null. */
+  selectedId?: string | null;
+  onSelect?: (assessment: PickerAssessment | null) => void;
+  /**
+   * Opt-in MULTI-select, for the invite flows that send several assessments
+   * at once (AI Talent Match): checkboxes instead of radios, an "N selected"
+   * chip, Select All / Clear All over the filtered list, and the Grouped
+   * view's version panel in checkbox mode. Everything else — layout, search,
+   * Grouped/Ungrouped, paging, preview — is identical to single-select.
+   */
+  multiple?: boolean;
+  selectedIds?: string[];
+  onSelectionChange?: (assessments: PickerAssessment[]) => void;
   /** The host dialog's scroller — pagination scrolls it back to the top. */
   scrollContainerRef?: RefObject<HTMLDivElement | null>;
   searchLabel?: string;
@@ -57,8 +67,11 @@ const PICKER_TH = 'px-3 py-2.5 text-left text-xs font-semibold uppercase trackin
 
 export default function AssessmentPicker({
   assessments,
-  selectedId,
+  selectedId = null,
   onSelect,
+  multiple = false,
+  selectedIds,
+  onSelectionChange,
   scrollContainerRef,
   searchLabel = 'Search Assessments',
   searchPlaceholder = 'Search by assessment ID, name, JD ID or JD name...',
@@ -178,8 +191,25 @@ export default function AssessmentPicker({
     return jobTotals.get(lineageKeyOf(a))?.maxJobVersion ?? 1;
   };
 
-  const selectedAssessment = selectedId ? assessments.find((a) => a.id === selectedId) ?? null : null;
-  const selectedJobKey = selectedAssessment ? lineageKeyOf(selectedAssessment) : null;
+  /* One selection model for both modes: single-select is a list of at most
+     one, reported back through `onSelect`; multi-select toggles through
+     `onSelectionChange`. */
+  const pickedIds = multiple ? (selectedIds ?? []) : (selectedId ? [selectedId] : []);
+  const isPicked = (id: string) => pickedIds.includes(id);
+  const pickedCount = pickedIds.length;
+  const pickedAssessments = () => assessments.filter((x) => isPicked(x.id));
+  const toggle = (a: PickerAssessment) => {
+    if (multiple) {
+      const picked = pickedAssessments();
+      onSelectionChange?.(isPicked(a.id) ? picked.filter((x) => x.id !== a.id) : [...picked, a]);
+    } else {
+      onSelect?.(isPicked(a.id) ? null : a);
+    }
+  };
+  const clearSelection = () => (multiple ? onSelectionChange?.([]) : onSelect?.(null));
+  /* Grouped: the jobs holding a pick — one in single-select, any number in
+     multi-select. */
+  const pickedJobKeys = new Set(pickedAssessments().map(lineageKeyOf));
 
   const total = viewMode === 'ungrouped' ? pickerRows.length : jobRows.length;
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
@@ -224,7 +254,7 @@ export default function AssessmentPicker({
                 key={mode.key}
                 type="button"
                 aria-pressed={isActive}
-                onClick={() => { setViewMode(mode.key); onSelect(null); setPage(1); }}
+                onClick={() => { setViewMode(mode.key); clearSelection(); setPage(1); }}
                 className={`px-2.5 sm:px-3 py-1.5 min-h-[32px] rounded-lg text-xs sm:text-sm font-medium transition-all duration-200 whitespace-nowrap ${
                   isActive
                     ? 'bg-white dark:bg-slate-900 shadow-sm shadow-brand-blue/10 ring-1 ring-brand-blue/20 text-brand-blue'
@@ -240,37 +270,63 @@ export default function AssessmentPicker({
 
       <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <label className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
-          Select an Assessment
+          {multiple ? 'Select Assessments' : 'Select an Assessment'}
           <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
             {viewMode === 'ungrouped'
               ? `${pickerRows.length} active assessment${pickerRows.length !== 1 ? 's' : ''}`
               : `${jobCount} job${jobCount !== 1 ? 's' : ''}`}
           </span>
         </label>
-        {selectedId && (
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
-              <CheckCircle className="w-3 h-3" />
-              1 selected
-            </span>
-            <button
-              onClick={() => onSelect(null)}
-              className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
-            >
-              Clear Selection
-            </button>
+        {(pickedCount > 0 || (multiple && pickerRows.length > 0)) && (
+          <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+            {pickedCount > 0 && (
+              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                <CheckCircle className="w-3 h-3" />
+                {pickedCount} selected
+              </span>
+            )}
+            {/* Multi-select keeps the Select All the dialog always had, over
+                the assessments the search leaves listed. */}
+            {multiple && pickerRows.some((a) => !isPicked(a.id)) && (
+              <button
+                onClick={() => onSelectionChange?.([...pickedAssessments(), ...pickerRows.filter((a) => !isPicked(a.id))])}
+                className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
+              >
+                Select All
+              </button>
+            )}
+            {pickedCount > 0 && (
+              <button
+                onClick={clearSelection}
+                className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
+              >
+                {multiple ? 'Clear All' : 'Clear Selection'}
+              </button>
+            )}
           </div>
         )}
       </div>
 
-      {/* Why the pick is single — the AI Interview picker's note. */}
+      {/* How many can be picked — the AI Interview picker's note, in its
+          banner style, worded for the mode. */}
       <div className="mb-3 flex items-start gap-2 rounded-lg bg-brand-blue/[0.06] border border-brand-blue/20 px-3 py-2.5">
         <Info className="w-4 h-4 text-brand-blue flex-shrink-0 mt-0.5" />
         <div className="min-w-0">
-          <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">One assessment per invite</p>
-          <p className="mt-0.5 text-xs text-gray-700 dark:text-slate-300">
-            You can pick only one assessment at a time, so everyone you invite gets the same assessment. To invite people to a different assessment, send another invite.
-          </p>
+          {multiple ? (
+            <>
+              <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">One or more assessments per invite</p>
+              <p className="mt-0.5 text-xs text-gray-700 dark:text-slate-300">
+                You can pick several assessments, and everyone you invite gets each of them. To send different assessments to different people, send separate invites.
+              </p>
+            </>
+          ) : (
+            <>
+              <p className="text-xs font-semibold text-gray-900 dark:text-slate-100">One assessment per invite</p>
+              <p className="mt-0.5 text-xs text-gray-700 dark:text-slate-300">
+                You can pick only one assessment at a time, so everyone you invite gets the same assessment. To invite people to a different assessment, send another invite.
+              </p>
+            </>
+          )}
         </div>
       </div>
 
@@ -304,10 +360,10 @@ export default function AssessmentPicker({
                 </thead>
                 <tbody>
                   {pagedRows.map((a) => {
-                    const isSelected = selectedId === a.id;
+                    const isSelected = isPicked(a.id);
                     const version = versionOf(a);
                     const rounds = ROUND_CHIPS.filter((r) => a[`${r.key}_enabled`]);
-                    const pick = () => onSelect(isSelected ? null : a);
+                    const pick = () => toggle(a);
                     return (
                       <tr
                         key={a.id}
@@ -320,7 +376,7 @@ export default function AssessmentPicker({
                       >
                         <td className="px-3 py-2.5 align-middle tf-sticky-col-left">
                           <input
-                            type="radio"
+                            type={multiple ? 'checkbox' : 'radio'}
                             name="assessment-invite-picker-selection"
                             checked={isSelected}
                             onChange={pick}
@@ -419,8 +475,10 @@ export default function AssessmentPicker({
           {pagedJobRows.map((a) => {
             const jobKey = lineageKeyOf(a);
             const jdId: string | undefined = a.jd_id;
-            const ownsSelection = selectedJobKey === jobKey;
-            const dimmed = !!selectedId && !ownsSelection;
+            const ownsSelection = pickedJobKeys.has(jobKey);
+            /* Other jobs fade only in single-select, where a pick elsewhere
+               would replace this one; multi-select can hold picks in many. */
+            const dimmed = !multiple && pickedCount > 0 && !ownsSelection;
             const expanded = expandedKey === jobKey;
             const totals = jobTotals.get(jobKey) ?? { assessments: 0, invitations: 0, completed: 0, maxJobVersion: 1 };
             /* The job card's four figures, in the AI picker's order and colours. */
@@ -506,7 +564,7 @@ export default function AssessmentPicker({
                       /* No job behind this assessment — pick it directly. */
                       <button
                         type="button"
-                        onClick={() => onSelect(ownsSelection ? null : a)}
+                        onClick={() => toggle(a)}
                         className={`h-8 px-3 inline-flex items-center gap-1.5 whitespace-nowrap border rounded-lg text-xs font-medium transition-all ${
                           ownsSelection
                             ? 'bg-brand-blue text-white border-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10'
@@ -535,10 +593,14 @@ export default function AssessmentPicker({
                       currentAssessmentId={a.id}
                       vocabulary={ASSESSMENT_VOCABULARY}
                       selectionGroupName="assessment-invite-picker-selection"
-                      selectedAssessmentId={ownsSelection ? selectedId : undefined}
-                      onSelectAssessment={(assessmentId) =>
-                        onSelect(assessments.find((x) => x.id === assessmentId) ?? null)
-                      }
+                      selectedAssessmentId={!multiple && ownsSelection ? selectedId : undefined}
+                      selectedAssessmentIds={multiple ? pickedIds : undefined}
+                      onSelectAssessment={(assessmentId) => {
+                        const picked = assessments.find((x) => x.id === assessmentId);
+                        if (!picked) return;
+                        if (multiple) toggle(picked);
+                        else onSelect?.(picked);
+                      }}
                       /* Same preview as the Ungrouped eye. */
                       onViewAssessment={(child) =>
                         setPreviewAssessment(assessments.find((x) => x.id === child.id) ?? null)

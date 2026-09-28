@@ -1,6 +1,7 @@
 'use client';
 
 import { X, Users, Database, Search, CheckSquare, Square, MinusSquare, Loader2, ClipboardList, Upload, Trash2, ShieldAlert, Lock, AlertCircle, HelpCircle } from 'lucide-react';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { useState, useEffect, useMemo, useId } from 'react';
 import { useRouter } from 'next/navigation';
 import { DndProvider } from 'react-dnd';
@@ -80,6 +81,9 @@ interface SelectSourceModalProps {
   onClose: () => void;
   jobTitle: string;
   jobId: string;
+  /** The JD's short id (e.g. "JD-198") and job version, for the subtitle. */
+  jobShortId?: string;
+  jobVersion?: number | null;
   /** The run has settled and the progress popup is still up: bring the
    *  results in BEHIND it (refresh, switch view/tab) without unmounting this
    *  modal, so Close only dismisses and Minimise lands on the results. */
@@ -97,6 +101,8 @@ export default function SelectSourceModal({
   onClose,
   jobTitle,
   jobId,
+  jobShortId,
+  jobVersion,
   onScoringFinished,
   onScoringComplete,
   onViewResult
@@ -993,9 +999,14 @@ export default function SelectSourceModal({
                 <span className="hidden sm:inline">Select Applicants to Score</span>
                 <span className="sm:hidden">Select Applicants</span>
               </h2>
-              <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400 truncate">
-                Job: <span className="font-medium text-gray-900 dark:text-slate-50">{jobTitle}</span>
-              </p>
+              {/* JD ID · job name · job version */}
+              <div className="flex items-center gap-2 min-w-0 flex-wrap">
+                {jobShortId && <JobIdBadge className="inline-flex items-center flex-shrink-0">{jobShortId}</JobIdBadge>}
+                <span className="text-xs sm:text-sm font-medium text-gray-900 dark:text-slate-50 truncate">{jobTitle}</span>
+                {jobVersion != null && jobVersion > 0 && (
+                  <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 flex-shrink-0" title="Job version">V{jobVersion}</span>
+                )}
+              </div>
             </div>
           </div>
           <button
