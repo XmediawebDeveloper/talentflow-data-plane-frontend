@@ -25,6 +25,7 @@ import { Badge } from '@/components/ui/badge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListFilterPanel from '@/components/ui/list-filter-panel';
 import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
+import { timelineEvents } from '@/components/AssessmentInviteActions';
 import { toOneDecimalScore } from '@/lib/utils/score';
 
 interface AssessmentResultsProps {
@@ -190,6 +191,12 @@ interface CandidateResult {
   started_at?: string;
   completed_at?: string;
   created_at?: string;
+  /** The invitation-shaped record (lifecycle columns + audit trail) the
+   *  shared `timelineEvents` builder reads — the same one Track Invites
+   *  renders, so the two Timelines cannot disagree. Kept separate from the
+   *  row because this row's `status` is the attempt status, not the
+   *  invitation's. */
+  timelineSource: Record<string, any>;
   sections: SectionResult[];
   round: number; // Added round tracking
   roundName?: string; // Optional round name
@@ -977,6 +984,19 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               started_at: item.started_at || undefined,
               completed_at: item.completed_at || undefined,
               created_at: item.created_at || undefined,
+              timelineSource: {
+                status: item.invitation_status,
+                sent_at: item.sent_at,
+                email_read_at: item.email_read_at,
+                bounced_at: item.bounced_at,
+                opened_at: item.opened_at,
+                started_at: item.started_at,
+                completed_at: item.completed_at,
+                terminated_at: item.terminated_at,
+                expires_at: item.expires_at,
+                created_at: item.created_at,
+                timeline: item.timeline || [],
+              },
               completedDate: (() => {
                 const dateStr = item.completed_at || item.started_at;
                 if (!dateStr) return status === 'Pending' ? 'Not started' : 'N/A';
@@ -1089,14 +1109,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   };
 
   const getTimelineSummary = (candidate: CandidateResult) => {
-    const entries: string[] = [];
-    if (candidate.sent_at) entries.push(`Sent: ${formatTimelineDate(candidate.sent_at)}`);
-    if (candidate.started_at) entries.push(`Started: ${formatTimelineDate(candidate.started_at)}`);
-    if (candidate.completed_at) entries.push(`Completed: ${formatTimelineDate(candidate.completed_at)}`);
-    if (entries.length === 0) {
-      entries.push(candidate.created_at ? `Created: ${formatTimelineDate(candidate.created_at)}` : '-');
-    }
-    return entries.join(' | ');
+    const entries = timelineEvents(candidate.timelineSource).map(
+      ({ label, at }) => `${label}: ${formatTimelineDate(at)}`
+    );
+    return entries.length ? entries.join(' | ') : '-';
   };
 
   const canDownloadResultPdf = (candidate: CandidateResult): boolean => {
@@ -2533,28 +2549,18 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           {/* One event per line, in chronological order — the events
                               read as a timeline rather than a single run-on row. */}
                           <div className="flex min-w-0 flex-col gap-1 overflow-hidden" title={getTimelineSummary(candidate)}>
-                            {candidate.sent_at && (
-                              <div className="flex min-w-0 items-center gap-2">
-                                <Mail className="w-3 h-3 shrink-0 text-brand-blue" />
-                                <span className="truncate">Sent: {formatTimelineDate(candidate.sent_at)}</span>
+                            {/* Same trail as Track Invites (Invited / System Check /
+                                Started / Completed …), from the shared builder. */}
+                            {timelineEvents(candidate.timelineSource).map(({ label, at, Icon, tone }, i) => (
+                              <div key={`${label}-${i}`} className="flex min-w-0 items-center gap-2">
+                                <Icon className={`w-3 h-3 shrink-0 ${tone}`} />
+                                <span className="truncate">{label}: {formatTimelineDate(at)}</span>
                               </div>
-                            )}
-                            {candidate.started_at && (
-                              <div className="flex min-w-0 items-center gap-2">
-                                <Play className="w-3 h-3 shrink-0 text-brand-orange-deep" />
-                                <span className="truncate">Started: {formatTimelineDate(candidate.started_at)}</span>
-                              </div>
-                            )}
-                            {candidate.completed_at && (
-                              <div className="flex min-w-0 items-center gap-2">
-                                <CheckCircle className="w-3 h-3 shrink-0 text-success" />
-                                <span className="truncate">Completed: {formatTimelineDate(candidate.completed_at)}</span>
-                              </div>
-                            )}
-                            {!candidate.sent_at && !candidate.started_at && !candidate.completed_at && (
+                            ))}
+                            {timelineEvents(candidate.timelineSource).length === 0 && (
                               <div className="flex min-w-0 items-center gap-2">
                                 <Clock className="w-3 h-3 shrink-0 text-gray-400" />
-                                <span className="truncate">{candidate.created_at ? `Created: ${formatTimelineDate(candidate.created_at)}` : '-'}</span>
+                                <span className="truncate">-</span>
                               </div>
                             )}
                           </div>

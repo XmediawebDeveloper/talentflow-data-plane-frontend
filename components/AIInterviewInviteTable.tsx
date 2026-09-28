@@ -205,7 +205,7 @@ type TimelineEntry = { label: string; at: string; Icon: LucideIcon; tone: string
  *  cell but stay reachable via "View full history", which reads the uncapped
  *  trail separately. */
 const COMPACT_TIMELINE_LIMIT = 4;
-const timelineEvents = (inv: any): TimelineEntry[] =>
+export const timelineEvents = (inv: any): TimelineEntry[] =>
   buildFullTimeline(inv, inv.timeline || []).slice(-COMPACT_TIMELINE_LIMIT);
 
 /** "View full history" only earns its place once something is actually

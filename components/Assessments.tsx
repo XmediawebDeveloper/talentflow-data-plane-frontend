@@ -9931,7 +9931,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     Gated exactly as every other Share on this page is. */}
                 {(() => {
                   const target = selectedAssessmentForTracking;
-                  const canShare = hasPermission('canUpdateAssessments') || isTenantAdmin;
+                  const canShare = isTenantAdmin || hasPermissionCode('assessments:share');
                   const status = String(target?.status ?? '').toLowerCase();
                   const blockedReason = !target ? 'No assessment selected'
                     : !canShare ? 'You do not have permission to invite candidates'
