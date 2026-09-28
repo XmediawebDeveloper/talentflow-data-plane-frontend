@@ -6,7 +6,8 @@ import ViewResumeButton from '@/components/ui/view-resume-button';
 import { Button } from '@/components/ui/button';
 import { Tooltip } from '@/components/ui/tooltip';
 import ShareAssessmentModal from './ShareAssessmentModal';
-import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
+import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
+import type { Resume as ResumeRecord } from '@/lib/types/types';
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { usePlanFeatures } from '@/lib/hooks/usePlanFeature';
@@ -210,7 +211,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   };
   const mayInviteAssessment = hasPermission('canCreateAssessments') && hasPlanFeature('assessment');
   const mayInviteAIInterview =
-    (hasPermission('canShareAIInterviews') || hasPermission('canInviteAIInterviews')) && hasPlanFeature('ai_interview');
+    hasPermission('canInviteAIInterviews') && hasPlanFeature('ai_interview');
   const canInvite = mayInviteAssessment || mayInviteAIInterview;
 
   /* What this JD can actually invite to. Job Details hands both flags down —
@@ -251,7 +252,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   const [pickerSelectedIds, setPickerSelectedIds] = useState<string[]>([]);
   const [showAssessmentPicker, setShowAssessmentPicker] = useState(false);
   const [loadingInvite, setLoadingInvite] = useState<'assessment' | 'ai-interview' | null>(null);
-  const [shareAIConfig, setShareAIConfig] = useState<any>(null);
+  const [showAIInviteFlow, setShowAIInviteFlow] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'scoretable' | 'personalinfo' | 'viewjd'>('overview');
   // The tabs + panels block, so opening the JD from the job title can bring the
   // tab strip to the top rather than jumping the whole page back to its header.
@@ -965,34 +966,12 @@ Best regards`);
     setShowShareAssessmentModal(true);
   };
 
-  // Invite for AI interview — needs a published interview config on this JD,
-  // the same precondition the AI Interviews page enforces.
-  const handleInviteForAIInterview = async () => {
+  // Invite for AI interview — opens the shared Invite to AI Interview dialog
+  // scoped to this JD: this candidate, then the job's active interview
+  // versions to pick from (the dialog says so when there are none).
+  const handleInviteForAIInterview = () => {
     setShowInviteMenu(false);
-    if (loadingInvite) return;
-
-    setLoadingInvite('ai-interview');
-    try {
-      const { aiInterviewService } = await import('@/lib/services/aiInterviewService');
-      const resp = await aiInterviewService.list({ page_size: 100 });
-      const forThisJd = (resp?.items || []).filter((c: any) => c.jd_id === jobId);
-      const published = forThisJd.find((c: any) => {
-        const status = String(c?.status || '').toLowerCase();
-        return status === 'published' || status === 'active';
-      });
-
-      if (!published) {
-        toast.error('Create and publish an AI interview for this job before inviting candidates.', { duration: 6000 });
-        return;
-      }
-
-      setShareAIConfig(published);
-    } catch (err) {
-      console.error('[CandidateScoringDetailPage] Failed to load AI interviews:', err);
-      toast.error('Could not load AI interviews. Please try again.');
-    } finally {
-      setLoadingInvite(null);
-    }
+    setShowAIInviteFlow(true);
   };
 
   /* The scorecard PDF, fetched once and used by both the download and the
@@ -2740,7 +2719,7 @@ Best regards`);
                         </p>
                         <p className="text-xs text-gray-500 mt-1">
                           {jdDetails.allow_overqualified === false
-                            ? 'Experience well above the range scores lower'
+                            ? 'Experience above the maximum of the range fails Experience'
                             : 'Extra relevant experience is not penalised'}
                         </p>
                       </div>
@@ -3122,26 +3101,25 @@ Best regards`);
             />
           )}
 
-          {/* Share AI Interview — same modal the AI Interviews page opens.
-              Prefilled with THIS candidate, same reasoning as the Assessment
-              modal above. */}
-          {shareAIConfig && (
-            <ShareAIInterviewModal
-              isOpen={!!shareAIConfig}
-              onClose={() => setShareAIConfig(null)}
-              config={shareAIConfig}
-              onInviteSent={() => setShareAIConfig(null)}
-              initialCandidates={
-                (fullResumeData.email || resume.email)
-                  ? [{
-                      name: fullResumeData.candidateName || resume.candidateName || 'Unknown',
-                      email: fullResumeData.email || resume.email || '',
-                      resumeId: fullResumeData.resumeId || resume.resumeId,
-                    }]
-                  : undefined
-              }
-            />
-          )}
+          {/* Invite to AI Interview — the shared dialog, scoped to this JD and
+              prefilled with THIS candidate. */}
+          <InviteToAIInterviewFlow
+            open={showAIInviteFlow}
+            onClose={() => setShowAIInviteFlow(false)}
+            jobId={jobId || undefined}
+            candidates={[{
+              id: fullResumeData.resumeId || resume.resumeId || resume.id,
+              name: fullResumeData.candidateName || resume.candidateName || 'Unknown',
+              email: fullResumeData.email || resume.email || undefined,
+            }]}
+            resumes={[{
+              id: fullResumeData.resumeId || resume.resumeId || resume.id,
+              name: fullResumeData.candidateName || resume.candidateName || 'Unknown',
+              email: fullResumeData.email || resume.email,
+              phone: fullResumeData.phone || resume.phone,
+            } as unknown as ResumeRecord]}
+            onInvited={() => setShowAIInviteFlow(false)}
+          />
 
           {/* View JD tab: confirm before leaving the candidate scorecard for
               the standalone JD Details page. */}

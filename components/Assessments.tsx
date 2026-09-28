@@ -97,7 +97,7 @@ import { recordAssessment } from '@/lib/services/usageTrackingService';
 import api from '@/lib/services/api';
 import { proctoringService, ProctoringSettings, ProctoringEvent } from '@/lib/services/proctoringService';
 import { AlertTriangle, RefreshCw, Send, Ban, Layers, Briefcase, ChevronDown, Radar, Search, ChevronLeft, ArrowUpDown } from 'lucide-react';
-import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
+import { stripVersionFromTitle, isAssessmentRevoked } from '@/lib/utils/assessmentUtils';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import { useGlobalDialog } from '@/components/providers/GlobalDialogProvider';
 import { toast } from 'sonner';
@@ -123,6 +123,7 @@ import {
   type JobAssessmentHierarchy,
 } from '@/lib/utils/jobAssessmentHierarchy';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
+import { formatScore } from '@/lib/utils/score';
 
 
 /** What the version-history helpers below read off an assessment row — the
@@ -153,7 +154,7 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
     "inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors";
 
   return (
-    <div className="flex items-center gap-2 sm:gap-3">
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
       <div className="flex items-center gap-1.5">
         <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
         <input
@@ -442,17 +443,18 @@ type CandidateResultRow = AssessmentAttemptResponse & {
 export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation, autoOpenCreate, preSelectedJdId, preSelectedJdTitle, initialListTab }: AssessmentsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
-  const { user, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
+  const { user, isTenantAdmin, hasPermissionCode } = useAuth();
 
   // Permission checks for CRUD operations (bypass for tenant admin)
   const canCreateAssessment = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
   const canDeleteAssessment = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
   const canDownloadAssessmentPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
-  const canBatchDownloadAssessmentPDF = isTenantAdmin || hasPermissionCode('assessments:batch_download') || (user?.permissions?.canExport ?? false);
-  /* Download Report on an invitation row — the page's existing per-result PDF
-     right, plus the permission code the catalogue names for it. */
-  const canDownloadInviteReport = canDownloadAssessmentPDF || hasPermissionCode('assessments:download_report');
+  const canBatchDownloadAssessmentPDF = isTenantAdmin || hasPermissionCode('assessments:batch_download');
+  /* Download Report on an invitation row — gated on its own permission code only
+     (a generic canDownloadAssessmentPDF/canExport fallback would default this on
+     for most roles and defeat the specific toggle). */
+  const canDownloadInviteReport = isTenantAdmin || hasPermissionCode('assessments:download_report');
   // HR Question Bank is reached via a quick link here (moved out of the sidebar)
   const canAccessHRQuestionBank = isTenantAdmin || !!(user?.permissions?.canViewHRQuestionBank || user?.permissions?.canCreateHRQuestionBank || user?.permissions?.canUpdateHRQuestionBank || user?.permissions?.canDeleteHRQuestionBank);
 
@@ -662,6 +664,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     jobVersionByJdId: Map<string, number>;
   } | null>(null);
   const [selectedAssessmentForTracking, setSelectedAssessmentForTracking] = useState<any>(null);
+  /* When Share is opened from the tracking popup's Invite More, the popup it
+     came from — its assessment and, for a job-wide Track, its job — so closing
+     Share reopens that popup rather than dropping the user on the list. The AI
+     Interview page's Invite More works the same way (`shareReturnToInvites`). */
+  const [shareReturnToTracking, setShareReturnToTracking] = useState<{ assessment: typeof selectedAssessmentForTracking; job: typeof trackingJob } | null>(null);
   const [trackingInvitations, setTrackingInvitations] = useState<any[]>([]);
   const [isLoadingInvitations, setIsLoadingInvitations] = useState(false);
   const [isRefreshingTracking, setIsRefreshingTracking] = useState(false);
@@ -2005,7 +2012,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       <td className="px-4 py-4 align-middle text-sm text-center">
         <div className="flex flex-col items-center gap-0.5">
           <span className={`font-medium ${passed ? 'text-brand-blue' : 'text-destructive'}`}>
-            {Math.round(score)}%
+            {formatScore(score)}%
           </span>
           <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${passed ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
             {passed ? 'Pass' : 'Fail'}
@@ -2183,13 +2190,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     {
       label: 'Tech Score',
       value: (inv) => (inv.technical_score != null && inv.scoring_status !== 'pending' && inv.scoring_status !== 'processing'
-        ? `${Math.round(inv.technical_score)}%`
+        ? `${formatScore(inv.technical_score)}%`
         : ''),
     },
     {
       label: 'Coding Score',
       value: (inv) => (inv.coding_score != null && inv.scoring_status !== 'pending' && inv.scoring_status !== 'processing'
-        ? `${Math.round(inv.coding_score)}%`
+        ? `${formatScore(inv.coding_score)}%`
         : ''),
     },
   ];
@@ -4060,7 +4067,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             setSelectedAssessmentForPreview(selectedAssessmentForDetails);
             setShowPreviewModal(true);
           }}
-          onShare={(hasPermission('canUpdateAssessments') || isTenantAdmin) ? () => {
+          onShare={(isTenantAdmin || hasPermissionCode('assessments:share')) ? () => {
             // Keep details view open, modal will overlay on top
             setSelectedAssessmentForShare(selectedAssessmentForDetails);
             setShowShareModal(true);
@@ -4748,7 +4755,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
         {/* Actions */}
         <div
-          className="flex items-center gap-2 flex-shrink-0 self-start @4xl/job-row:self-auto @4xl/job-row:ml-auto"
+          className="flex flex-wrap items-center gap-2 max-w-full flex-shrink-0 self-start @4xl/job-row:flex-nowrap @4xl/job-row:self-auto @4xl/job-row:ml-auto"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Trigger only - the panel it opens is untouched. */}
@@ -4831,7 +4838,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   if (!hasInvitations) return;
                   void handleTrackJob(assessment);
                 }}
-                icon={<Radar className="w-3.5 h-3.5" />}
+                /* Coloured only while enabled - the same token the version
+                   panel's Track menu item uses; a disabled button keeps the
+                   button's own grey. */
+                icon={<Radar className={`w-3.5 h-3.5${hasInvitations ? ' text-menu-icon-secondary' : ''}`} />}
                 aria-label={reason}
                 title={reason}
               >
@@ -4880,7 +4890,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                      job. */
                   router.push(`/recruitment/assessments/${assessment.id}/results?job_version_id=all&assessment_version=all`);
                 }}
-                icon={<BarChart className="w-3.5 h-3.5" />}
+                /* Same rule, with the version panel's Result colour. */
+                icon={<BarChart className={`w-3.5 h-3.5${hasBeenShared ? ' text-menu-icon-score' : ''}`} />}
                 aria-label={reason}
                 title={reason}
               >
@@ -5327,7 +5338,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                closes on any scroll or resize (see the
                dismissal effect), so these coordinates cannot
                go stale while it is open. */
-            className="fixed w-52 bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999] max-h-[70dvh] overflow-y-auto"
+            className="fixed w-52 max-w-[calc(100vw-1rem)] bg-white rounded-lg shadow-xl border border-gray-200 py-1 z-[9999] max-h-[70dvh] overflow-y-auto"
             style={{
               top: menuDropUp ? undefined : menuAnchor.bottom + 4,
               bottom: menuDropUp ? Math.max(8, window.innerHeight - menuAnchor.top + 4) : undefined,
@@ -5342,7 +5353,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <div className="border-t border-gray-100 dark:border-slate-700/60 my-1"></div>
               </>
             )}
-            {assessment.status !== 'Archived' && canCreateAssessment && (() => {
+            {assessment.status !== 'Archived' && (() => {
               // Gating computed FRONT-END, on the lineage this page has
               // actually loaded, so it does not depend on which of the
               // backend's clone_* flags a deployment happens to return.
@@ -5365,8 +5376,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               //     record for other readers; they just do not gate here.
               const isDraft = assessment.status === 'Draft';
               const capReached = isVersionCapReached(assessment);
-              const buttonDisabled = isDraft || capReached;
-              const disabledReason = isDraft
+              const buttonDisabled = !canCreateAssessment || isDraft || capReached;
+              const disabledReason = !canCreateAssessment
+                ? 'You do not have permission to create assessments'
+                : isDraft
                 ? 'Publish the assessment before duplicating.'
                 : capReached
                 ? `Maximum ${MAX_ASSESSMENT_VERSIONS} versions reached. Archive a version to duplicate again.`
@@ -5374,7 +5387,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               return (
                 <button
                   onClick={() => {
-                    if (buttonDisabled) return;
+                    if (buttonDisabled) {
+                      if (!canCreateAssessment) toast.error(disabledReason);
+                      return;
+                    }
                     setOpenMenuId(null);
                     handleOpenCloneModal(assessment);
                   }}
@@ -5391,7 +5407,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 </button>
               );
             })()}
-            {assessment.status === 'Active' && canUpdateAssessment && (() => {
+            {assessment.status === 'Active' && (() => {
               // Revoke is only meaningful once at least one invite
               // exists, AND only once. After a recruiter has already
               // revoked invites on this assessment the action is
@@ -5399,8 +5415,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               // a fresh invite round, not re-run revoke.
               const hasInvites = (assessment.invitations_count || 0) > 0;
               const alreadyRevoked = !!assessment.has_revoked_invites;
-              const revokeDisabled = !hasInvites || alreadyRevoked;
-              const revokeReason = !hasInvites
+              const revokeDisabled = !canUpdateAssessment || !hasInvites || alreadyRevoked;
+              const revokeReason = !canUpdateAssessment
+                ? 'You do not have permission to edit assessments'
+                : !hasInvites
                 ? 'No invites have been sent yet.'
                 : alreadyRevoked
                 ? 'Invites for this assessment have already been revoked.'
@@ -5408,7 +5426,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               return (
                 <button
                   onClick={() => {
-                    if (revokeDisabled) return;
+                    if (revokeDisabled) {
+                      if (!canUpdateAssessment) toast.error(revokeReason as string);
+                      return;
+                    }
                     setOpenMenuId(null);
                     handleOpenRevokeModal(assessment);
                   }}
@@ -5430,12 +5451,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 go through the configure-page Publish button,
                 and an unpublished row has nothing meaningful
                 to archive. */}
-            {canUpdateAssessment && assessment.status !== 'Active' && assessment.status !== 'Draft' && (
+            {assessment.status !== 'Active' && assessment.status !== 'Draft' && (
               <button
-                onClick={() => handleActivateAssessment(assessment.id)}
-                className="group w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-slate-300 flex items-center gap-2 transition-colors"
+                onClick={() => {
+                  if (!canUpdateAssessment) {
+                    toast.error('You do not have permission to edit assessments');
+                    return;
+                  }
+                  handleActivateAssessment(assessment.id);
+                }}
+                aria-disabled={!canUpdateAssessment}
+                title={!canUpdateAssessment ? 'You do not have permission to edit assessments' : ''}
+                className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
+                  canUpdateAssessment ? 'text-gray-700 dark:text-slate-300' : 'text-gray-400 cursor-not-allowed opacity-60'
+                }`}
               >
-                <Play className="w-4 h-4 text-menu-icon-activate flex-shrink-0" />
+                <Play className={`w-4 h-4 flex-shrink-0 ${canUpdateAssessment ? 'text-menu-icon-activate' : 'text-gray-300'}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>Activate</span>
               </button>
             )}
@@ -5448,7 +5479,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 }
                 handleArchiveAssessment(assessment.id);
               }}
-              disabled={!canDeleteAssessment}
+              aria-disabled={!canDeleteAssessment}
               title={!canDeleteAssessment ? 'You do not have permission to archive assessments' : ''}
               className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 ${
                 !canDeleteAssessment
@@ -5463,7 +5494,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             {assessment.status !== 'Archived' && (
               <div className="border-t border-gray-100 dark:border-slate-700/60 my-1"></div>
             )}
-            {assessment.status !== 'Archived' && (hasPermission('canDeleteAssessments') || isTenantAdmin) && (() => {
+            {assessment.status !== 'Archived' && (() => {
               const hasCandidates = assessment.invitations_count > 0;
               const isDisabled = !canDeleteAssessment || hasCandidates;
               const disabledReason = !canDeleteAssessment
@@ -5529,7 +5560,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     const iconClass = (disabled: boolean, enabledColor: string) =>
       `w-4 h-4 flex-shrink-0 ${disabled ? 'text-gray-300' : enabledColor}`;
 
-    const canShare = hasPermission('canUpdateAssessments') || isTenantAdmin;
+    const canShare = isTenantAdmin || hasPermissionCode('assessments:share');
     const shareBlockedReason =
       assessment.status === 'Draft' ? 'Publish assessment first to share' :
       assessment.status === 'Archived' ? 'Archived assessments cannot be shared' :
@@ -5557,7 +5588,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             className={itemClass(false)}
           >
             <Eye className={iconClass(false, 'text-menu-icon-view')} />
-            <span className={MENU_ITEM_SCALE_CLASS}>View</span>
+            <span className={MENU_ITEM_SCALE_CLASS}>View Details</span>
           </button>
         )}
 
@@ -5565,22 +5596,26 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             what decides whether it can be shared is unchanged: a Draft has
             nothing published to send, an Archived one is out of circulation,
             and one whose invites were revoked is sealed until duplicated. */}
-        {canShare && (
-          <button
-            onClick={() => {
-              if (isShareBlocked) return;
+        <button
+          onClick={() => {
+            if (!canShare) {
               setOpenMenuId(null);
-              setSelectedAssessmentForShare(assessment);
-              setShowShareModal(true);
-            }}
-            disabled={isShareBlocked}
-            title={shareBlockedReason || 'Share via email'}
-            className={itemClass(isShareBlocked)}
-          >
-            <Send className={iconClass(isShareBlocked, 'text-menu-icon-share')} />
-            <span className={MENU_ITEM_SCALE_CLASS}>Send</span>
-          </button>
-        )}
+              toast.error('You do not have permission to share assessments');
+              return;
+            }
+            if (isShareBlocked) return;
+            setOpenMenuId(null);
+            setSelectedAssessmentForShare(assessment);
+            setShowShareModal(true);
+          }}
+          disabled={isShareBlocked}
+          aria-disabled={!canShare}
+          title={!canShare ? 'You do not have permission to share assessments' : (shareBlockedReason || 'Share via email')}
+          className={itemClass(isShareBlocked || !canShare)}
+        >
+          <Send className={iconClass(isShareBlocked || !canShare, 'text-menu-icon-share')} />
+          <span className={MENU_ITEM_SCALE_CLASS}>Share/Invite</span>
+        </button>
 
         {/* Track Invites — always offered, enabled once the assessment has been
             shared with at least one candidate. */}
@@ -5618,7 +5653,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           className={itemClass(!hasBeenShared)}
         >
           <BarChart className={iconClass(!hasBeenShared, 'text-menu-icon-score')} />
-          <span className={MENU_ITEM_SCALE_CLASS}>Result</span>
+          <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
         </button>
       </>
     );
@@ -5635,20 +5670,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             <div className="hidden sm:flex w-9 h-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 items-center justify-center shrink-0">
               <ClipboardList className="w-4 h-4 text-brand-blue" />
             </div>
-            <div>
+            <div className="min-w-0">
               <h1 className="text-lg sm:text-xl text-gray-900 dark:text-slate-50 mb-0.5 tracking-tight font-semibold">Assessment Management</h1>
               <p className="text-xs sm:text-sm text-gray-600 dark:text-slate-400">
                 Create and manage skill assessments for candidates
               </p>
               {/* JD Filter Indicator */}
               {preSelectedJdId && preSelectedJdTitle && (
-                <div className="mt-2 flex items-center gap-2">
-                  <div className="inline-flex items-center gap-2 bg-brand-blue/5 text-brand-blue px-3 py-1.5 rounded-lg ring-1 ring-brand-blue/20">
-                    <Info className="w-4 h-4" />
-                    <span className="text-sm font-medium">Filtered by JD: {preSelectedJdTitle}</span>
+                <div className="mt-2 flex items-center gap-2 min-w-0">
+                  <div className="inline-flex items-center gap-2 max-w-full min-w-0 bg-brand-blue/5 text-brand-blue px-3 py-1.5 rounded-lg ring-1 ring-brand-blue/20">
+                    <Info className="w-4 h-4 shrink-0" />
+                    <span className="text-sm font-medium min-w-0 truncate" title={preSelectedJdTitle}>Filtered by JD: {preSelectedJdTitle}</span>
                     <button
                       onClick={() => router.push('/recruitment/assessments')}
-                      className="ml-1 hover:bg-brand-blue/10 rounded p-0.5 transition-colors"
+                      className="ml-1 shrink-0 hover:bg-brand-blue/10 rounded p-0.5 transition-colors"
                       aria-label="Clear filter" title="Clear filter"
                     >
                       <X className="w-3.5 h-3.5" />
@@ -5683,48 +5718,55 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <span className="sm:hidden">Questions</span>
               </Button>
             )}
-            {/* Send Invite — same permission as the per-row Share action. */}
-            {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={handleSendInvite}
-                disabled={shareableAssessments.length === 0}
-                title={
-                  shareableAssessments.length === 0
+            {/* Send Invite — same permission as the per-row Share action. Always visible; disabled without permission. */}
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => {
+                if (!canUpdateAssessment) {
+                  toast.error('You do not have permission to edit assessments');
+                  return;
+                }
+                handleSendInvite();
+              }}
+              disabled={shareableAssessments.length === 0}
+              aria-disabled={!canUpdateAssessment}
+              title={
+                !canUpdateAssessment
+                  ? 'You do not have permission to edit assessments'
+                  : shareableAssessments.length === 0
                     ? 'Publish an assessment before inviting candidates'
                     : 'Send an assessment invitation'
-                }
-                icon={<Mail className="w-4 h-4" />}
-              >
-                <span className="hidden sm:inline">Send Invite</span>
-                <span className="sm:hidden">Invite</span>
-              </Button>
-            )}
+              }
+              icon={<Mail className="w-4 h-4" />}
+            >
+              <span className="hidden sm:inline">Send Invite</span>
+              <span className="sm:hidden">Invite</span>
+            </Button>
             {onOpenCandidateView && (
               <Button variant="secondary" size="md" onClick={onOpenCandidateView} icon={<Eye className="w-4 h-4" />}>
                 Preview Candidate View
               </Button>
             )}
-            {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
-              <Button
-                variant="primary"
-                size="md"
-                onClick={() => {
-                  if (!canCreateAssessment) {
-                    toast.error('You do not have permission to create assessments');
-                    return;
-                  }
-                  handleOpenCreation();
-                }}
-                disabled={!canCreateAssessment || (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0)}
-                title={!canCreateAssessment ? 'You do not have permission to create assessments' : (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0 ? 'No assessment units available' : '')}
-                icon={<Sparkles className="w-4 h-4" />}
-              >
-                <span className="hidden sm:inline">Create Assessment</span>
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => {
+                if (!canCreateAssessment) {
+                  toast.error('You do not have permission to create assessments');
+                  return;
+                }
+                handleOpenCreation();
+              }}
+              disabled={!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0}
+              aria-disabled={!canCreateAssessment}
+              title={!canCreateAssessment ? 'You do not have permission to create assessments' : (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0 ? 'No assessment units available' : '')}
+              icon={<Sparkles className="w-4 h-4" />}
+              className={!canCreateAssessment ? 'opacity-50 cursor-not-allowed' : ''}
+            >
+              <span className="hidden sm:inline">Create Assessment</span>
                 <span className="sm:hidden">Create</span>
               </Button>
-            )}
           </div>
         </div>
 
@@ -6691,13 +6733,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-brand-blue text-white text-xs font-semibold">
                                         {(result.candidate_name || 'U').charAt(0).toUpperCase()}
                                       </span>
-                                      <span className="text-sm font-medium text-gray-900 dark:text-slate-50">
+                                      <span className="block max-w-[14rem] truncate text-sm font-medium text-gray-900 dark:text-slate-50" title={result.candidate_name || 'Unknown'}>
                                         {result.candidate_name || 'Unknown'}
                                       </span>
                                     </div>
                                   </td>
                                   <td className="px-4 py-4 align-middle text-sm text-gray-600 dark:text-slate-400 whitespace-nowrap">
-                                    {result.candidate_email || '-'}
+                                    <span className="block max-w-[16rem] truncate" title={result.candidate_email || undefined}>{result.candidate_email || '-'}</span>
                                   </td>
                                   {/* Job ID — the shared `JobIdBadge`, which is
                                       the one definition of this identifier in
@@ -6720,30 +6762,27 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     )}
                                   </td>
                                   <td className="px-4 py-4 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
-                                    {result.jd_title || result._assessment_title || '-'}
+                                    <span className="block max-w-[16rem] truncate" title={result.jd_title || result._assessment_title || undefined}>{result.jd_title || result._assessment_title || '-'}</span>
                                   </td>
-                                  {/* Job Version — plain `v3`, the same
-                                      treatment the Scored Resumes table gives
-                                      its own Job Version column, so a job
-                                      version reads identically in both. */}
-                                  <td className="px-4 py-4 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
-                                    {result._jd_version ? `v${result._jd_version}` : '-'}
+                                  {/* Job Version / Assessment Version — the
+                                      All Assessments table's blue / cyan
+                                      VersionPill, as the Invitation Status
+                                      rows draw the same two fields. A dash
+                                      when the record carries no version,
+                                      rather than an invented v1. */}
+                                  <td className="px-4 py-4 align-middle whitespace-nowrap">
+                                    {result._jd_version ? (
+                                      <VersionPill kind="job" version={result._jd_version} />
+                                    ) : (
+                                      <span className="text-gray-400 text-sm">-</span>
+                                    )}
                                   </td>
-                                  {/* Assessment Version — plain `v3` in the
-                                      same cell classes as Job Version beside
-                                      it. Two readings of "which version" that
-                                      sit together have to look alike, and it
-                                      is also how this page already writes an
-                                      assessment version everywhere else it
-                                      shows one (the Invitation Status rows and
-                                      the invite export both render `v${n}`).
-
-                                      A dash when the record carries no version
-                                      — same rule as Job Version, rather than
-                                      defaulting to v1, which would state
-                                      something the row does not know. */}
-                                  <td className="px-4 py-4 align-middle text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
-                                    {result._assessment_version ? `v${result._assessment_version}` : '-'}
+                                  <td className="px-4 py-4 align-middle whitespace-nowrap">
+                                    {result._assessment_version ? (
+                                      <VersionPill kind="assessment" version={result._assessment_version} />
+                                    ) : (
+                                      <span className="text-gray-400 text-sm">-</span>
+                                    )}
                                   </td>
                                   {/* Resume Version — the blue pill that
                                       table uses for the same field. A dash
@@ -6765,7 +6804,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <td className="px-4 py-4 align-middle text-center">
                                     <div className="flex flex-col items-center gap-1">
                                       <span className={`text-lg font-semibold ${typeof result.technical_score === 'number' ? (result.technical_score >= RESULT_PASS_MARK ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
-                                        {typeof result.technical_score === 'number' ? `${Math.round(result.technical_score)}%` : '-'}
+                                        {typeof result.technical_score === 'number' ? `${formatScore(result.technical_score)}%` : '-'}
                                       </span>
                                       {typeof result.technical_score === 'number' && (
                                         <span className={`text-xs font-medium ${result.technical_score >= RESULT_PASS_MARK ? 'text-success' : 'text-destructive'}`}>
@@ -6777,7 +6816,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <td className="px-4 py-4 align-middle text-center">
                                     <div className="flex flex-col items-center gap-1">
                                       <span className={`text-lg font-semibold ${typeof result.coding_score === 'number' ? (result.coding_score >= RESULT_PASS_MARK ? 'text-success' : 'text-destructive') : 'text-gray-400'}`}>
-                                        {typeof result.coding_score === 'number' ? `${Math.round(result.coding_score)}%` : '-'}
+                                        {typeof result.coding_score === 'number' ? `${formatScore(result.coding_score)}%` : '-'}
                                       </span>
                                       {typeof result.coding_score === 'number' && (
                                         <span className={`text-xs font-medium ${result.coding_score >= RESULT_PASS_MARK ? 'text-success' : 'text-destructive'}`}>
@@ -6847,7 +6886,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         </div>
                       </div>
                       {total > COMPLETED_PAGE_SIZE && (
-                        <div className="mt-4 flex items-center justify-between gap-3">
+                        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
                           <span className="text-xs text-gray-600 dark:text-slate-400">
                             {total.toLocaleString()} total
                           </span>
@@ -7367,7 +7406,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             when one of them does. */}
                         {(showInviteBulkResend || showInviteBulkRevoke || showInviteExport) && (
                         <div className="px-4 sm:px-6 py-3 border-b border-gray-100 dark:border-slate-700/60 flex flex-wrap items-center justify-end gap-2 sm:gap-3">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center justify-end gap-2">
                             {/* Export — the Resume Scoring page's control:
                                 FileDown, the green "you have a selection"
                                 treatment, and a click that opens the format
@@ -7673,7 +7712,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       {(() => {
                                         const hasResult = inviteHasResult(inv);
                                         const scored = inv.scoring_status !== 'pending' && inv.scoring_status !== 'processing';
-                                        const canDownload = hasResult && scored && canDownloadInviteReport;
                                         // Edit Email/Change Email (the pre-existing
                                         // failed/bounced "fix the address" flow)
                                         // isn't wired on this tab — it never had
@@ -7703,11 +7741,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                                 this row, it is just not ready yet,
                                                 and hiding it would read as "this
                                                 row has no report". */}
-                                            {hasResult && canDownloadInviteReport && (
+                                            {hasResult && (
                                               <DropdownMenuItem
-                                                className={assessmentDropdownMenuItemClass}
-                                                disabled={!canDownload || downloadingInviteReportId === inv.id}
-                                                onSelect={() => downloadInviteReport(inv)}
+                                                className={`${assessmentDropdownMenuItemClass} ${!canDownloadInviteReport ? 'opacity-50' : ''}`}
+                                                disabled={!scored || downloadingInviteReportId === inv.id}
+                                                title={!canDownloadInviteReport ? 'You do not have permission to download assessment reports' : undefined}
+                                                onSelect={() => {
+                                                  if (!canDownloadInviteReport) {
+                                                    toast.error('You do not have permission to download assessment reports');
+                                                    return;
+                                                  }
+                                                  downloadInviteReport(inv);
+                                                }}
                                               >
                                                 {downloadingInviteReportId === inv.id
                                                   ? <Loader2 className="w-3.5 h-3.5 text-menu-icon-download animate-spin" />
@@ -7755,15 +7800,15 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           button counts, so what the dialog says and what the
                           file holds cannot disagree. */}
                       {showInviteExportModal && (
-                        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-                          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] flex flex-col">
-                            <div className="flex items-start justify-between gap-3 p-5 border-b border-gray-200 dark:border-slate-700 shrink-0">
-                              <div className="flex items-start gap-3">
+                        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+                          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-1.5rem)] flex flex-col">
+                            <div className="flex items-start justify-between gap-3 p-4 sm:p-5 border-b border-gray-200 dark:border-slate-700 shrink-0">
+                              <div className="flex items-start gap-3 min-w-0">
                                 <div className="w-11 h-11 rounded-full bg-blue-50 dark:bg-blue-500/15 flex items-center justify-center flex-shrink-0">
                                   <FileDown className="w-5 h-5 text-blue-600 dark:text-blue-300" />
                                 </div>
                                 <div>
-                                  <h3 className="text-lg font-bold text-gray-900 dark:text-slate-50">Export Completed Invitations</h3>
+                                  <h3 className="text-base sm:text-lg font-bold text-gray-900 dark:text-slate-50">Export Completed Invitations</h3>
                                   <p className="text-sm text-gray-500 dark:text-slate-500 mt-1 flex items-center gap-1.5">
                                     {selectedInviteRows.length} selected record{selectedInviteRows.length === 1 ? '' : 's'}
                                     <span className="w-1 h-1 rounded-full bg-blue-500" />
@@ -7782,13 +7827,13 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </Button>
                             </div>
 
-                            <div className="p-5 overflow-y-auto flex-1">
+                            <div className="p-4 sm:p-5 overflow-y-auto flex-1 min-h-0">
                               <p className="text-sm font-bold text-gray-900 dark:text-slate-50 mb-3">Choose export format</p>
 
                               <div className="space-y-3">
                                 <button
                                   onClick={() => setInviteExportFormat('csv')}
-                                  className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
+                                  className={`w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border-2 transition-all text-left ${
                                     inviteExportFormat === 'csv'
                                       ? 'border-blue-500 bg-blue-50/60 dark:bg-blue-500/10'
                                       : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800'
@@ -7810,7 +7855,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
                                 <button
                                   onClick={() => setInviteExportFormat('xls')}
-                                  className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
+                                  className={`w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border-2 transition-all text-left ${
                                     inviteExportFormat === 'xls'
                                       ? 'border-blue-500 bg-blue-50/60 dark:bg-blue-500/10'
                                       : 'border-gray-200 dark:border-slate-700 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800'
@@ -7840,7 +7885,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                               </div>
                             </div>
 
-                            <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200 dark:border-slate-700 shrink-0">
+                            <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 p-4 sm:p-5 border-t border-gray-200 dark:border-slate-700 shrink-0">
                               <Button variant="secondary" size="md" onClick={() => setShowInviteExportModal(false)}>
                                 Cancel
                               </Button>
@@ -8025,13 +8070,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 {topicSettings.hr_enabled ? 'ON' : 'OFF'}
                               </span>
                               <button
-                                onClick={() => updateTopicSettings({ hr_enabled: !topicSettings.hr_enabled })}
-                                disabled={isSavingTopics}
+                                onClick={() => {
+                                  if (!canUpdateAssessment) {
+                                    toast.error('You do not have permission to edit assessment settings');
+                                    return;
+                                  }
+                                  updateTopicSettings({ hr_enabled: !topicSettings.hr_enabled });
+                                }}
+                                disabled={isSavingTopics || !canUpdateAssessment}
+                                title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : ''}
                                 className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.hr_enabled
                                     ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
                                     : 'bg-gray-300'
-                                } ${isSavingTopics ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                } ${(isSavingTopics || !canUpdateAssessment) ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
                                 <div className={`absolute top-0.5 sm:top-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
                                   topicSettings.hr_enabled
@@ -8072,13 +8124,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 {topicSettings.technical_enabled ? 'ON' : 'OFF'}
                               </span>
                               <button
-                                onClick={() => updateTopicSettings({ technical_enabled: !topicSettings.technical_enabled })}
-                                disabled={isSavingTopics}
+                                onClick={() => {
+                                  if (!canUpdateAssessment) {
+                                    toast.error('You do not have permission to edit assessment settings');
+                                    return;
+                                  }
+                                  updateTopicSettings({ technical_enabled: !topicSettings.technical_enabled });
+                                }}
+                                disabled={isSavingTopics || !canUpdateAssessment}
+                                title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : ''}
                                 className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.technical_enabled
                                     ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
                                     : 'bg-gray-300'
-                                } ${isSavingTopics ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                } ${(isSavingTopics || !canUpdateAssessment) ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
                                 <div className={`absolute top-0.5 sm:top-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
                                   topicSettings.technical_enabled
@@ -8119,13 +8178,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 {topicSettings.coding_enabled ? 'ON' : 'OFF'}
                               </span>
                               <button
-                                onClick={() => updateTopicSettings({ coding_enabled: !topicSettings.coding_enabled })}
-                                disabled={isSavingTopics}
+                                onClick={() => {
+                                  if (!canUpdateAssessment) {
+                                    toast.error('You do not have permission to edit assessment settings');
+                                    return;
+                                  }
+                                  updateTopicSettings({ coding_enabled: !topicSettings.coding_enabled });
+                                }}
+                                disabled={isSavingTopics || !canUpdateAssessment}
+                                title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : ''}
                                 className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.coding_enabled
                                     ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
                                     : 'bg-gray-300'
-                                } ${isSavingTopics ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                } ${(isSavingTopics || !canUpdateAssessment) ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
                                 <div className={`absolute top-0.5 sm:top-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
                                   topicSettings.coding_enabled
@@ -8363,19 +8429,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     {/* Masking */}
                     <div className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5 rounded-xl p-4 sm:p-6">
                       <h3 className="text-sm font-medium text-gray-900 dark:text-slate-50 mb-4 tracking-tight">Masking</h3>
-                      <div className="flex items-start justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
-                        <div className="flex items-start gap-3">
+                      <div className="flex items-start justify-between gap-3 p-3 sm:p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg">
+                        <div className="flex items-start gap-3 min-w-0">
                           <div className="w-8 h-8 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
                             <Mail className="w-4 h-4 text-brand-blue" />
                           </div>
-                          <div>
+                          <div className="min-w-0">
                             <div className="text-sm font-medium text-gray-900 dark:text-slate-50">Email Masking in PDF</div>
-                            <div className="text-xs text-gray-500 dark:text-slate-500">
+                            <div className="text-xs text-gray-500 dark:text-slate-500 [overflow-wrap:anywhere]">
                               When enabled, candidate emails are masked (e.g. j******e@example.com) in downloaded Assessment PDFs.
                             </div>
                           </div>
                         </div>
-                        <div className="flex flex-col items-center gap-1">
+                        <div className="flex flex-col items-center gap-1 shrink-0">
                           <button
                             onClick={() => updateProctoringSettings({ email_masking_enabled: !proctoringSettings.email_masking_enabled })}
                             disabled={isSavingProctoring}
@@ -8540,7 +8606,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         ))}
                       </div>
                       {/* Actions */}
-                      <div className="flex items-center gap-2 flex-shrink-0 self-start lg:self-auto lg:ml-auto">
+                      <div className="flex flex-wrap items-center gap-2 flex-shrink-0 self-start lg:self-auto lg:ml-auto">
                         <Skeleton className="h-8 w-28 rounded-lg" />
                         <Skeleton className="h-8 w-20 rounded-lg" />
                       </div>
@@ -8588,7 +8654,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         }
                         handleOpenCreation();
                       }}
-                      disabled={!canCreateAssessment}
+                      aria-disabled={!canCreateAssessment}
+                      className={!canCreateAssessment ? 'opacity-50 cursor-not-allowed' : ''}
                       title={!canCreateAssessment ? 'You do not have permission to create assessments' : ''}
                       icon={<Sparkles className="w-4 h-4" />}
                     >
@@ -8736,7 +8803,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     Ungrouped: one row per sendable assessment. Grouped: one
                     card per job, versions behind View Versions. Switching
                     drops the pick, as it does there. */}
-                <div className="flex items-center gap-2 mb-4">
+                <div className="flex flex-wrap items-center gap-2 mb-4">
                   <span className="text-sm text-gray-600 dark:text-slate-400">View:</span>
                   <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800/60 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02]">
                     {([
@@ -8812,8 +8879,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
                   return (
                     <>
-                      <div className="flex items-center justify-between gap-2 mb-3">
-                        <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                        <label className="min-w-0 text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
                           Select an Assessment
                           <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
                             {isUngrouped
@@ -9070,7 +9137,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700">
                 {/* One line, always: it sits beside the buttons, and a second
                     line would push the footer taller. */}
-                <div className="min-w-0 truncate whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                <div className="min-w-0 sm:truncate sm:whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-slate-300">
                   {/* Names the VERSION that will be sent, or says why the
                       picked one cannot be - the table offers every version of
                       a job, Drafts and Archived among them, so "selected" and
@@ -9170,6 +9237,19 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             // Refresh the list so invitation counts / Track Invites
             // badges reflect the just-sent invites.
             reloadAssessments();
+            /* Opened from the tracking popup's Invite More: reopen that popup,
+               on the same assessment and (for a job-wide Track) the same job,
+               the way handleTrackInvites opens it. Its effect refetches the
+               invitations, so the ones just sent are listed. */
+            if (shareReturnToTracking) {
+              setIsLoadingInvitations(true);
+              setTrackingJob(shareReturnToTracking.job);
+              setSelectedAssessmentForTracking(shareReturnToTracking.assessment);
+              setTrackingFilters(EMPTY_INVITE_FILTERS);
+              setTrackingCurrentPage(1);
+              setShowTrackInvitesModal(true);
+              setShareReturnToTracking(null);
+            }
           }}
           // See the other ShareAssessmentModal above — onClose's
           // reloadAssessments() doesn't touch the Track Invites /
@@ -9239,7 +9319,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             {...trackingHeightLock.dialogProps}
             className={TRACKER_DIALOG_PANEL_CLASS}>
             {/* Modal Header */}
-            <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0">
+            <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between gap-2 flex-shrink-0">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2 sm:gap-3">
                   <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
@@ -9384,7 +9464,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 height change in the stack of them. Its own contents come from
                 `trackingInvitations`, which the refresh keeps. */}
             {!showTrackingInitialLoader && trackingSelectableIds.length > 0 && (
-              <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
                 <button
                   type="button"
                   onClick={toggleTrackingSelectAll}
@@ -9714,7 +9794,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   {techReady ? (
                                     <div className="flex flex-col items-center gap-0.5">
                                       <span className={`font-medium ${invitation.technical_score >= 70 ? 'text-brand-blue' : 'text-destructive'}`}>
-                                        {Math.round(invitation.technical_score)}%
+                                        {formatScore(invitation.technical_score)}%
                                       </span>
                                       <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.technical_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
                                         {invitation.technical_score >= 70 ? 'Pass' : 'Fail'}
@@ -9736,7 +9816,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   {codingReady ? (
                                     <div className="flex flex-col items-center gap-0.5">
                                       <span className={`font-medium ${invitation.coding_score >= 70 ? 'text-brand-blue' : 'text-destructive'}`}>
-                                        {Math.round(invitation.coding_score)}%
+                                        {formatScore(invitation.coding_score)}%
                                       </span>
                                       <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.coding_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
                                         {invitation.coding_score >= 70 ? 'Pass' : 'Fail'}
@@ -9844,6 +9924,41 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     onPageChange={setTrackingCurrentPage}
                   />
                 )}
+                {/* Invite More — the AI Interview tracking popup's button (primary,
+                    sm, Send icon first) and its interaction: this popup closes,
+                    the Share dialog opens on the SAME assessment, and closing
+                    Share brings this popup back (see `shareReturnToTracking`).
+                    Gated exactly as every other Share on this page is. */}
+                {(() => {
+                  const target = selectedAssessmentForTracking;
+                  const canShare = isTenantAdmin || hasPermissionCode('assessments:share');
+                  const status = String(target?.status ?? '').toLowerCase();
+                  const blockedReason = !target ? 'No assessment selected'
+                    : !canShare ? 'You do not have permission to invite candidates'
+                    : status === 'draft' ? 'Publish assessment first to share'
+                    : status === 'archived' ? 'Archived assessments cannot be shared'
+                    : isAssessmentRevoked(target) ? 'Invites for this assessment have been revoked. Duplicate it to start fresh.'
+                    : '';
+                  return (
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      disabled={!!blockedReason}
+                      title={blockedReason || 'Invite more candidates to this assessment'}
+                      onClick={() => {
+                        if (blockedReason) return;
+                        // Remember where we came from so closing Share returns here.
+                        setShareReturnToTracking({ assessment: target, job: trackingJob });
+                        closeTrackInvitesModal();
+                        setSelectedAssessmentForShare(target);
+                        setShowShareModal(true);
+                      }}
+                      icon={<Send className="w-3.5 h-3.5" />}
+                    >
+                      Invite More
+                    </Button>
+                  );
+                })()}
                 <Button variant="secondary" size="sm" onClick={closeTrackInvitesModal}>
                   Close
                 </Button>
@@ -9992,11 +10107,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         const closeIfIdle = () => { if (!isCloning) setCloneTargetAssessment(null); };
 
         return (
-        <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden">
+        <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-2xl max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden">
             {/* Header and the two panels scroll together, so the actions stay
                 reachable on a short viewport. */}
-            <div className="flex-1 min-h-0 overflow-y-auto px-5 sm:px-7 pt-5 sm:pt-7 pb-5 sm:pb-6">
+            <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-7 pt-5 sm:pt-7 pb-5 sm:pb-6">
               <div className="flex items-start gap-3 sm:gap-4">
                 <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-full bg-blue-50 dark:bg-blue-500/15 flex items-center justify-center flex-shrink-0">
                   <Copy className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue dark:text-blue-300" />
@@ -10084,7 +10199,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             </div>
 
             {/* Actions */}
-            <div className="flex-shrink-0 border-t border-gray-200 dark:border-slate-700 px-5 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
+            <div className="flex-shrink-0 border-t border-gray-200 dark:border-slate-700 px-4 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
               <Button variant="secondary" size="md" onClick={closeIfIdle} disabled={isCloning}>
                 Cancel
               </Button>
@@ -10128,9 +10243,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         const jobVersion = target?.jd_version ?? draft.jd_version ?? 1;
         const draftVersion = draft.version ?? 1;
         return (
-          <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4 sm:p-6">
-            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-lg overflow-hidden">
-              <div className="px-5 sm:px-7 pt-5 sm:pt-7 pb-5 sm:pb-6">
+          <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+            <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 w-full max-w-[95vw] sm:max-w-lg max-h-[calc(100dvh-1.5rem)] flex flex-col overflow-hidden">
+              <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-7 pt-5 sm:pt-7 pb-5 sm:pb-6">
                 <div className="flex justify-end">
                   <Button
                     variant="secondary"
@@ -10194,7 +10309,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 </div>
               </div>
 
-              <div className="border-t border-gray-200 dark:border-slate-700 px-5 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
+              <div className="shrink-0 border-t border-gray-200 dark:border-slate-700 px-4 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
                 <Button variant="secondary" size="md" onClick={closeConflict}>
                   Cancel
                 </Button>

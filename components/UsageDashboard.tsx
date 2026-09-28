@@ -16,6 +16,7 @@ import api from '@/lib/services/api';
 import { useScrollRestoration } from '@/lib/hooks/useListViewPersistence';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 
 // Addon interface
 interface Addon {
@@ -1074,6 +1075,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                               key={quota.quota_type}
                               onClick={() => {
                                 if (!canPurchaseAddons) {
+                                  toast.error('You do not have permission to purchase add-ons');
                                   return;
                                 }
                                 if (isAddonPurchaseBlocked) {
@@ -1093,7 +1095,7 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
                                   }
                                 }
                               }}
-                              disabled={!canPurchaseAddons}
+                              aria-disabled={!canPurchaseAddons}
                               title={!canPurchaseAddons ? 'You do not have permission to purchase add-ons' : isAddonPurchaseBlocked ? addonBlockedMessage : ""}
                               className={`px-2.5 py-1.5 text-xs font-semibold rounded-lg transition-colors inline-flex items-center gap-1.5 ring-1 ${
                                 !canPurchaseAddons

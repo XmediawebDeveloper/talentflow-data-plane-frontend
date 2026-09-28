@@ -465,16 +465,21 @@ export default function UnitDisputesPage() {
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            {canExportDisputes && (
-              <button
-                onClick={handleExportCSV}
-                disabled={loading || filteredDisputes.length === 0}
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/25 hover:text-brand-blue disabled:opacity-60"
-              >
-                <Download className="h-4 w-4" />
-                <span className="hidden sm:inline">Export CSV</span>
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (!canExportDisputes) {
+                  toast.error('You do not have permission to export disputes');
+                  return;
+                }
+                handleExportCSV();
+              }}
+              disabled={loading || filteredDisputes.length === 0 || !canExportDisputes}
+              title={!canExportDisputes ? 'You do not have permission to export disputes' : ''}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-[border-color,box-shadow,color,background-color] hover:border-brand-blue/25 hover:text-brand-blue disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <Download className="h-4 w-4" />
+              <span className="hidden sm:inline">Export CSV</span>
+            </button>
             <button
               onClick={fetchDisputes}
               disabled={loading}
@@ -483,15 +488,25 @@ export default function UnitDisputesPage() {
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
               <span className="hidden sm:inline">Refresh</span>
             </button>
-            {canFileDispute && (
-              <button
-                onClick={openFileModal}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
-              >
-                <Plus className="h-4 w-4" />
-                File Dispute
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (!canFileDispute) {
+                  toast.error('You do not have permission to file disputes');
+                  return;
+                }
+                openFileModal();
+              }}
+              aria-disabled={!canFileDispute}
+              title={!canFileDispute ? 'You do not have permission to file disputes' : ''}
+              className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium shadow-md transition-all ${
+                canFileDispute
+                  ? 'bg-brand-blue text-white shadow-brand-blue/25 hover:-translate-y-0.5 hover:shadow-lg'
+                  : 'bg-gray-200 text-gray-400 shadow-none cursor-not-allowed opacity-60'
+              }`}
+            >
+              <Plus className="h-4 w-4" />
+              File Dispute
+            </button>
           </div>
         </div>
 
@@ -688,10 +703,22 @@ export default function UnitDisputesPage() {
                 Clear all filters
               </button>
             )}
-            {!hasActiveFilters && canFileDispute && (
+            {!hasActiveFilters && (
               <button
-                onClick={openFileModal}
-                className="mt-6 inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                onClick={() => {
+                  if (!canFileDispute) {
+                    toast.error('You do not have permission to file disputes');
+                    return;
+                  }
+                  openFileModal();
+                }}
+                aria-disabled={!canFileDispute}
+                title={!canFileDispute ? 'You do not have permission to file disputes' : ''}
+                className={`mt-6 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium shadow-md transition-all ${
+                  canFileDispute
+                    ? 'bg-brand-blue text-white shadow-brand-blue/25 hover:-translate-y-0.5 hover:shadow-lg'
+                    : 'bg-gray-200 text-gray-400 shadow-none cursor-not-allowed opacity-60'
+                }`}
               >
                 <Plus className="h-4 w-4" />
                 File a Dispute

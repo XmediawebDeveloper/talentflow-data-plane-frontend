@@ -31,6 +31,12 @@ export interface NavItem {
   adminOnly?: boolean;
   internalUserOnly?: boolean;    // Show only to non-admin users (for internal help desk)
   planFeature?: PlanFeatureKey;  // Plan-level feature gate
+  /** Set by filterMenuSections when the item fails its permission check.
+   *  The tile stays in the list (visible) but the renderer must show it as
+   *  disabled/non-clickable instead of a working link — permission is not
+   *  the same kind of gate as adminOnly/internalUserOnly/planFeature below,
+   *  which are audience/plan-tier gates and stay hard hides. */
+  disabled?: boolean;
 }
 
 export interface NavSection {
@@ -166,29 +172,37 @@ interface FilterOptions {
 }
 
 /**
- * Apply permission / admin / plan-feature filters and drop empty sections.
+ * Apply admin / audience / plan-feature filters (hard hides) and permission
+ * filters (soft: item stays, flagged `disabled`), then drop empty sections.
  * Mirrors the filtering used by the sidebar render loop.
+ *
+ * Permission gating deliberately does NOT remove the item — a module whose
+ * permission is off should render visible-but-disabled, the same rule
+ * applied to in-page action icons. adminOnly/internalUserOnly/planFeature
+ * are a different kind of gate (audience targeting, plan-tier availability),
+ * not an owner-togglable permission, so those stay hard hides.
  */
 export function filterMenuSections(sections: NavSection[], opts: FilterOptions): NavSection[] {
   const { isTenantAdmin, hasPermission, hasAnyPermission, hasPlanFeature, planFeaturesLoading } = opts;
   return sections
     .map(section => {
-      const filteredItems = section.items.filter(item => {
-        if (item.adminOnly && !isTenantAdmin) return false;
-        if (item.internalUserOnly && isTenantAdmin) return false;
-        if (item.permissions && item.permissions.length > 0) {
-          if (!hasAnyPermission(item.permissions)) return false;
-        } else if (item.permission && !hasPermission(item.permission)) {
-          return false;
-        }
-        // Hide plan-gated items once we know the plan doesn't include the feature.
-        if (item.planFeature && !planFeaturesLoading && !hasPlanFeature(item.planFeature)) {
-          return false;
-        }
-        return true;
-      });
+      const items = section.items
+        .filter(item => {
+          if (item.adminOnly && !isTenantAdmin) return false;
+          if (item.internalUserOnly && isTenantAdmin) return false;
+          // Hide plan-gated items once we know the plan doesn't include the feature.
+          if (item.planFeature && !planFeaturesLoading && !hasPlanFeature(item.planFeature)) return false;
+          return true;
+        })
+        .map(item => {
+          const lacksPermission =
+            item.permissions && item.permissions.length > 0
+              ? !hasAnyPermission(item.permissions)
+              : !!(item.permission && !hasPermission(item.permission));
+          return lacksPermission ? { ...item, disabled: true } : item;
+        });
 
-      return { ...section, items: filteredItems };
+      return { ...section, items };
     })
     .filter(section => {
       if (section.items.length === 0) return false;

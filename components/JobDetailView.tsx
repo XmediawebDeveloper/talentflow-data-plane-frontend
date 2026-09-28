@@ -41,7 +41,8 @@ import { aiMatchService, AIMatchResultItem, AIMatchSessionResponse, MatchedCandi
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
 import TrackInvitesModal from './TrackInvitesModal';
 import AIInterviewTrackInvitesModal from './AIInterviewTrackInvitesModal';
-import ShareAIInterviewModal from './ai-interview/ShareAIInterviewModal';
+import InviteToAIInterviewFlow from './InviteToAIInterviewFlow';
+import type { Resume as ResumeRecord } from '@/lib/types/types';
 import AIInterviewResults from './ai-interview/AIInterviewResults';
 import CandidateResultsView from './ai-interview/CandidateResultsView';
 import { aiInterviewService, AIInterviewResponse, AIInterviewVersionHistoryItem } from '@/lib/services/aiInterviewService';
@@ -49,6 +50,7 @@ import { formatJobExperienceBadge } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { toast } from 'sonner';
 import { usePlanFeature, usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
@@ -56,6 +58,7 @@ import RecordPager from '@/components/RecordPager';
 import { criterionScoringLabel, requirementBadge } from '@/lib/utils/scoringCriteria';
 import { Skeleton } from '@/components/ui/skeleton';
 import { TABLE_EMPTY_PANEL_CLASS } from '@/lib/constants/tableEmptyPanel';
+import { toOneDecimalScore } from '@/lib/utils/score';
 
 // Legacy aliases — both now use the centralized IST formatter
 const formatToIST = formatIST;
@@ -855,9 +858,14 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     canUploadResumes: hasPermission('canUploadResumes'),
     canRunScoring: hasPermission('canRunScoring'),
     canCreateAIInterviews: hasPermission('canCreateAIInterviews'),
-    canShareAIInterviews: hasPermission('canShareAIInterviews') || hasPermission('canInviteAIInterviews'),
+    canShareAIInterviews: hasPermission('canInviteAIInterviews'),
     canViewAIInterviews: hasPermission('canViewAIInterviews') || hasPermission('canRunAiInterviews') || hasPermission('canInviteAIInterviews'),
   };
+
+  // jd:invite has no typed field on the Permission interface, so it's read via
+  // the raw permission code instead of the local hasPermission() helper above.
+  const { hasPermissionCode } = useAuth();
+  const canInviteJd = isTenantAdmin || hasPermissionCode('jd:invite');
 
   // ✅ PERMISSIONS: Get feature flags for Quick Actions
   const features = {
@@ -874,17 +882,11 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   const [trackAIInterviewConfig, setTrackAIInterviewConfig] = useState<AIInterviewResponse | null>(null);
   const [resolvingTrackInvitesConfig, setResolvingTrackInvitesConfig] = useState(false);
 
-  // "Send AI Interview via Email" modal — opened in place from the Send Invite
-  // quick action, so the recruiter never leaves this page to invite candidates.
-  const [shareAIInterviewConfig, setShareAIInterviewConfig] = useState<AIInterviewResponse | null>(null);
-  const [resolvingInviteConfig, setResolvingInviteConfig] = useState(false);
-  /* Candidate seeded into "Send AI Interview via Email" when the invite is
-     started from a Scored Resumes row, so the recruiter lands on a filled
-     form instead of retyping the name and email they just looked at. Null for
-     the page-level Invite button, which opens the form empty as before. */
-  const [aiInterviewInviteSeed, setAiInterviewInviteSeed] = useState<
-    { name: string; email: string; resumeId?: string }[] | null
-  >(null);
+  // The Invite to AI Interview dialog, opened in place so the recruiter never
+  // leaves this page: null = closed, [] = opened with nobody preset (the header
+  // / quick-action Invite — candidates are added in the share step), a seed =
+  // a Scored Resumes row's candidate, listed first.
+  const [aiInviteSeed, setAiInviteSeed] = useState<{ name: string; email: string; resumeId?: string }[] | null>(null);
   // AI Interview Results tab. The config is fetched lazily on first open rather
   // than on mount — resolving it pages through the tenant's configs, which
   // isn't worth doing on every Job Details load for a tab most visits skip.
@@ -1132,43 +1134,17 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
      button passes nothing and gets the empty form; a Scored Resumes row passes
      that candidate. Everything after the lookup is identical either way, so
      both entry points resolve the same config and open the same modal. */
-  const handleInviteAIInterview = async (
+  /* Invite — the shared Invite to AI Interview dialog for this job: its active
+     interview versions to pick from, then the share step. `seed` (a Scored
+     Resumes row) lists that candidate first; without it the candidates are
+     added in the share step, as this page's Invite always worked. */
+  const handleInviteAIInterview = (
     seed?: { name: string; email: string; resumeId?: string }[],
   ) => {
-    if (resolvingInviteConfig) return;
-    setAiInterviewInviteSeed(seed ?? null);
-    setResolvingInviteConfig(true);
-    try {
-      // The invite modal needs the live config for this JD. Resolving it here
-      // opens "Send AI Interview via Email" in place, instead of bouncing to
-      // the AI Interviews page just to reach the same modal.
-      const liveConfig = await aiInterviewService.findLiveConfigForJd(job.id);
-      if (!liveConfig) {
-        // "Create and publish…" was wrong whenever a draft already existed — it
-        // told the recruiter to make something they'd already made. Check for a
-        // draft so the message names the step that's actually outstanding.
-        const draftResult = await aiInterviewService
-          .listConfigs({ status: 'draft', page_size: 50, compact: true })
-          .catch(() => null);
-        const hasDraft = (draftResult?.items ?? []).some(
-          (c: AIInterviewResponse) => c.jd_id === job.id
-        );
-        toast.error(
-          hasDraft
-            ? 'This job’s AI interview is still a draft. Publish it before inviting candidates.'
-            : 'No AI interview has been created for this job yet. Use Create to add one.',
-          { duration: 6000 }
-        );
-        return;
-      }
-      setShareAIInterviewConfig(liveConfig);
-    } catch {
-      // Distinct from "none found" — the lookup itself failed, so don't tell
-      // the recruiter to go publish an interview that may already exist.
-      toast.error('Could not load the AI interview for this job. Please try again.');
-    } finally {
-      setResolvingInviteConfig(false);
-    }
+    // Only a real candidate list counts as a seed: the quick-action tile hands
+    // this straight to onClick, so it can arrive as a click event, which must
+    // open the dialog with nobody preset — not crash the page on `.map`.
+    setAiInviteSeed(Array.isArray(seed) ? seed : []);
   };
 
   const handleAIInterviewStatus = () => {
@@ -1594,7 +1570,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             if (result.hr_score !== null && result.hr_score !== undefined) {
               roundScores.push({
                 roundName: 'HR',
-                score: Math.round(Number(result.hr_score)),
+                score: toOneDecimalScore(result.hr_score),
                 maxScore: 100,
                 passFail: result.hr_score >= 60 ? 'Pass' : 'Fail'
               });
@@ -1602,7 +1578,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             if (result.technical_score !== null && result.technical_score !== undefined) {
               roundScores.push({
                 roundName: 'Technical',
-                score: Math.round(Number(result.technical_score)),
+                score: toOneDecimalScore(result.technical_score),
                 maxScore: 100,
                 passFail: result.technical_score >= 60 ? 'Pass' : 'Fail'
               });
@@ -1610,7 +1586,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             if (result.coding_score !== null && result.coding_score !== undefined) {
               roundScores.push({
                 roundName: 'Coding',
-                score: Math.round(Number(result.coding_score)),
+                score: toOneDecimalScore(result.coding_score),
                 maxScore: 100,
                 passFail: result.coding_score >= 60 ? 'Pass' : 'Fail'
               });
@@ -2470,7 +2446,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         /* Wrapped so the click event isn't passed through as the candidate
            seed — this entry point opens the form empty. */
         onClick={() => handleInviteAIInterview()}
-        disabled={!canInviteToAIInterview || resolvingInviteConfig}
+        disabled={!canInviteToAIInterview}
         title={
           !features.ai_interview
             ? 'AI Interviews not enabled'
@@ -2483,9 +2459,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   : undefined
         }
       >
-        {resolvingInviteConfig
-          ? <Loader2 className="w-4 h-4 animate-spin" />
-          : <UserPlus className="w-4 h-4" />}
+        <UserPlus className="w-4 h-4" />
         Send Invite
       </Button>
     ) : null;
@@ -3549,15 +3523,17 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         accent="cyan"
                         onClick={handleOpenShareAssessment}
                         loading={isLoadingShareAssessments}
-                        disabled={!canInviteToAssessment}
+                        disabled={!canInviteJd || !canInviteToAssessment}
                         disabledTooltip={
-                          !features.assessment
-                            ? 'Assessments not enabled'
-                            : job.status === 'Disabled'
-                              ? 'JD is disabled'
-                              : !hasAnyAssessment
-                                ? 'Create an assessment first'
-                                : 'Publish the assessment first'
+                          !canInviteJd
+                            ? 'You do not have permission to invite candidates from a job description'
+                            : !features.assessment
+                              ? 'Assessments not enabled'
+                              : job.status === 'Disabled'
+                                ? 'JD is disabled'
+                                : !hasAnyAssessment
+                                  ? 'Create an assessment first'
+                                  : 'Publish the assessment first'
                         }
                       />
                     </>
@@ -3644,8 +3620,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       icon={<UserPlus className="w-4 h-4" />}
                       label="Invite"
                       accent="orange"
-                      onClick={handleInviteAIInterview}
-                      loading={resolvingInviteConfig}
+                      onClick={() => handleInviteAIInterview()}
                       disabled={!canInviteToAIInterview}
                       disabledTooltip={
                         !features.ai_interview
@@ -4041,7 +4016,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             toolbarActions={assessmentTabActions}
             emptyStateAction={assessmentEmptyActions}
             canDownloadPDF={isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false)}
-            canBatchDownload={isTenantAdmin || (user?.permissions?.canExport ?? false)}
+            canBatchDownload={isTenantAdmin || hasPermissionCode('assessments:batch_download')}
             onViewResultDetail={(result) => {
               // Pending means invited but never started, so no attempt exists
               // and `result.id` fell back to the invitation id when this list
@@ -4738,21 +4713,21 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
         </div>
       )}
 
-      {/* Send AI Interview via Email — same modal the AI Interviews page opens
-          from its own Share action, rendered here so Send Invite resolves in
-          place instead of navigating. */}
-      {shareAIInterviewConfig && (
-        <ShareAIInterviewModal
-          isOpen={!!shareAIInterviewConfig}
-          onClose={() => { setShareAIInterviewConfig(null); setAiInterviewInviteSeed(null); }}
-          config={shareAIInterviewConfig}
-          initialCandidates={aiInterviewInviteSeed ?? undefined}
-          onInviteSent={() => {
-            setAiInterviewCount((prev) => Math.max(prev + 1, 1));
-            toast.success('AI interview invitation sent');
-          }}
-        />
-      )}
+      {/* Invite to AI Interview — the shared dialog, scoped to this job. */}
+      <InviteToAIInterviewFlow
+        open={aiInviteSeed !== null}
+        onClose={() => setAiInviteSeed(null)}
+        jobId={job.id}
+        candidates={(aiInviteSeed ?? []).map((c, i) => ({ id: c.resumeId || `seed-${i}`, name: c.name, email: c.email }))}
+        resumes={aiInviteSeed && aiInviteSeed.length > 0
+          ? aiInviteSeed.map((c, i) => ({ id: c.resumeId || `seed-${i}`, name: c.name, email: c.email }) as unknown as ResumeRecord)
+          : undefined}
+        onInvited={() => {
+          setAiInviteSeed(null);
+          setAiInterviewCount((prev) => Math.max(prev + 1, 1));
+          toast.success('AI interview invitation sent');
+        }}
+      />
       </div>
       </div>
     </main>

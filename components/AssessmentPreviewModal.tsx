@@ -49,8 +49,8 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
   const sections = getSections();
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl w-full max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-4xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="bg-slate-50 dark:bg-slate-950 border-b border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 sm:py-4 flex items-start sm:items-center justify-between gap-3 flex-shrink-0">
           <div className="min-w-0 flex-1 flex items-start sm:items-center gap-3">
@@ -81,10 +81,10 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
         </div>
 
         {/* Content */}
-        <div className="flex-1 overflow-y-auto p-4 sm:p-6">
+        <div className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6">
           {/* Assessment Summary */}
           <div className="bg-white dark:bg-slate-900 rounded-lg border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm p-4 sm:p-6 mb-4 sm:mb-6">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3 sm:mb-4">{assessment.title}</h2>
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight mb-3 sm:mb-4 [overflow-wrap:anywhere]">{assessment.title}</h2>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
               <div className="p-3 sm:p-4 bg-slate-50 dark:bg-slate-800/50 rounded-lg flex sm:block items-center justify-between">
                 <div className="text-xs sm:text-sm text-gray-700 dark:text-slate-300 sm:mb-1">Total Duration</div>
@@ -212,7 +212,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
             {sections.map((section, idx) => (
               <div key={idx} className="bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] rounded-lg p-4 sm:p-6">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 sm:gap-4 mb-3 sm:mb-4">
-                  <div className="flex items-center gap-2 sm:gap-3">
+                  <div className="flex items-center gap-2 sm:gap-3 min-w-0">
                     {section.name === 'HR' && <Users className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />}
                     {section.name === 'Technical' && <Brain className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue flex-shrink-0" />}
                     {section.name === 'Coding' && <Code className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan flex-shrink-0" />}
@@ -247,7 +247,7 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
                     <div className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Topics Covered:</div>
                     <div className="flex flex-wrap gap-1.5 sm:gap-2">
                       {section.topics.map((topic: any, tidx: number) => (
-                        <span key={tidx} className="px-2 sm:px-3 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-lg text-xs sm:text-sm">
+                        <span key={tidx} className="px-2 sm:px-3 py-0.5 sm:py-1 bg-slate-100 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-lg text-xs sm:text-sm max-w-full [overflow-wrap:anywhere]">
                           {typeof topic === 'string' ? topic : (topic?.text || topic?.name || '')}
                         </span>
                       ))}

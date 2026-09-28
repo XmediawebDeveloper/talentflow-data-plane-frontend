@@ -29,7 +29,8 @@ import ShareAIInterviewModal from './ShareAIInterviewModal';
 import AIInterviewTrackInvitesModal from '../AIInterviewTrackInvitesModal';
 import { QuestionDistributionPopover } from './QuestionDistributionPopover';
 import { PROXY_INTEGRITY_VERIFICATION_ENABLED } from '@/lib/constants/featureFlags';
-import { formatIST, formatISTDate, parseIST } from '@/lib/utils/dateUtils';
+import { formatIST, formatISTDate, formatISTTime, parseIST } from '@/lib/utils/dateUtils';
+import { displayInviteScore, inviteResult, ResultBadge } from '@/components/AIInterviewInviteTable';
 import { getPriorityLabel } from '@/lib/constants/aiInterviewPriority';
 import { modeFromConfig, modeFromDuration } from '@/lib/constants/aiInterviewMode';
 import PageBreadcrumb, { type BreadcrumbCrumb } from '@/components/PageBreadcrumb';
@@ -165,7 +166,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   const canUpdateAIInterviews = isTenantAdmin || !!user?.permissions?.canUpdateAIInterviews;
   const canArchiveAIInterviews = isTenantAdmin || !!user?.permissions?.canArchiveAIInterviews;
   const canDeleteAIInterviews = isTenantAdmin || !!user?.permissions?.canDeleteAIInterviews;
-  const canShareAIInterviews = isTenantAdmin || !!user?.permissions?.canShareAIInterviews;
+  // Share and Invite are the same action (both open ShareAIInterviewModal to
+  // send a candidate their interview link) — checked via the Invite
+  // permission so both entry points across the app agree on one gate.
+  const canShareAIInterviews = isTenantAdmin || !!user?.permissions?.canInviteAIInterviews;
   const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'versions' | 'viewjd' | 'results' | 'invites'>('overview');
   /* Interview Details' own sub-tabs — Configure Details (what the tab used to
      show outright) and Interview Info (the former standalone "AI Interview
@@ -1103,7 +1107,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
 
   return (
     <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
-      <div className="mx-auto w-full max-w-[1400px]">
+      <div className="mx-auto w-full max-w-[1600px]">
         <div className="p-4 md:p-8 w-full min-h-[calc(100dvh-7rem)] bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl">
           {/* Previous / Next rides inside the breadcrumb bar, as on
               job-details, so it stays reachable while the sticky crumb is
@@ -1319,26 +1323,41 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             <div className="flex items-center gap-2 flex-shrink-0 self-start flex-wrap">
               {/* Share — a dialog now, not a tab; same slot & styling the
                   Assessment Details header's Share button uses. */}
-              {config.status === 'published' && canShareAIInterviews && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setShowShareModal(true)}
-                  icon={<Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-                >
-                  Share
-                </Button>
-              )}
-              {config.status === 'draft' && config.jd_id && canUpdateAIInterviews && (
+              {config.status === 'published' && (
                 <Button
                   variant="primary"
                   size="sm"
                   onClick={() => {
+                    if (!canShareAIInterviews) {
+                      toast.error('You do not have permission to invite candidates to an AI interview');
+                      return;
+                    }
+                    setShowShareModal(true);
+                  }}
+                  aria-disabled={!canShareAIInterviews}
+                  className={!canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
+                  title={!canShareAIInterviews ? 'You do not have permission to invite candidates to an AI interview' : ''}
+                  icon={<Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+                >
+                  Invite
+                </Button>
+              )}
+              {config.status === 'draft' && config.jd_id && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    if (!canUpdateAIInterviews) {
+                      toast.error('You do not have permission to edit AI interviews');
+                      return;
+                    }
                     const url = `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`;
                     router.push(url);
                   }}
+                  aria-disabled={!canUpdateAIInterviews}
+                  title={!canUpdateAIInterviews ? 'You do not have permission to edit AI interviews' : ''}
                   icon={<Pencil className="w-3.5 h-3.5 flex-shrink-0" />}
-                  className="gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm"
+                  className={`gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm ${!canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <span className="hidden sm:inline">Continue Editing</span>
                   <span className="sm:hidden">Edit</span>
@@ -1377,10 +1396,14 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
           was horizontal and scrolled sideways (`overflow-x-auto
           scrollbar-hide`), so with seven tabs the last of them was
           off-screen and undiscoverable under a wide desktop. */}
-      <div className="grid grid-cols-[180px_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[220px_minmax(0,1fr)] sm:gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
-        <aside className="sticky top-20 self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+      {/* Below md the nav stacks ABOVE the content as a 2–3 column grid of
+          the same buttons — a fixed side column there left a phone's table
+          ~150px wide. From md it is the side column again, narrower until xl
+          so the Results table keeps its width on laptops. */}
+      <div className="grid grid-cols-1 items-start gap-3 md:grid-cols-[200px_minmax(0,1fr)] md:gap-4 lg:grid-cols-[220px_minmax(0,1fr)] xl:grid-cols-[260px_minmax(0,1fr)] xl:gap-6">
+        <aside className="md:sticky md:top-20 self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
           <nav className="p-2 sm:p-3" aria-label="Interview details sections">
-            <div className="flex flex-col gap-1.5">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:flex md:flex-col gap-1.5">
               {([
                 { key: 'overview', label: 'Interview Details', icon: FileText },
                 { key: 'invites', label: 'Invitation Status', icon: Mail },
@@ -1409,6 +1432,19 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
               })}
             </div>
           </nav>
+          {/* Straight through to the job's own page, under the tabs. */}
+          {config.jd_id && (
+            <div className="border-t border-gray-100 dark:border-slate-700/60 px-2 sm:px-3 py-2.5">
+              <button
+                type="button"
+                onClick={() => router.push(`/recruitment/job-details?id=${config.jd_id}`)}
+                className="w-full inline-flex items-center justify-center md:justify-start gap-1.5 rounded-lg px-3 py-2 text-xs sm:text-sm font-medium text-brand-blue hover:text-brand-blue-2 hover:underline underline-offset-2 hover:bg-brand-blue/5 transition-colors"
+              >
+                Go to JD
+                <ExternalLink className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
         </aside>
 
         {/* Content — `min-w-0` so a wide table inside a tab scrolls in its own
@@ -1724,10 +1760,27 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
                             </Badge>
                           </div>
                           <div className="text-sm text-gray-500 truncate">{activity.candidate_email}</div>
+                          {/* Score + Pass/Fail — the same Must-Have % and
+                              result the invite tables show; only once scored. */}
+                          {(() => {
+                            const score = displayInviteScore(activity);
+                            if (score == null) return null;
+                            return (
+                              <div className="flex items-center gap-2 mt-1.5">
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-medium bg-slate-50 ring-1 ring-gray-200 text-gray-600">
+                                  Score:
+                                  <span className={`font-semibold ${score >= 60 ? 'text-success' : 'text-destructive'}`}>{score}%</span>
+                                </span>
+                                <ResultBadge result={inviteResult(activity, score)} />
+                              </div>
+                            );
+                          })()}
                         </div>
                         <div className="flex items-center gap-4 flex-shrink-0">
-                          <div className="text-xs text-gray-400">
-                            {formatISTDate(activity.completed_at || activity.started_at || activity.created_at)}
+                          {/* Time above the date. */}
+                          <div className="text-xs text-gray-400 text-right leading-snug">
+                            <div>{formatISTTime(activity.completed_at || activity.started_at || activity.created_at).toLowerCase()}</div>
+                            <div>{formatISTDate(activity.completed_at || activity.started_at || activity.created_at)}</div>
                           </div>
                           <ChevronRight className="w-4 h-4 text-brand-blue" />
                         </div>

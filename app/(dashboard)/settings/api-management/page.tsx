@@ -206,12 +206,22 @@ export default function ApiManagementPage() {
                 <p className="mt-2 max-w-2xl text-sm text-gray-600 dark:text-slate-400 sm:text-base">Provision, rotate, and revoke keys used to call the TalentFlow API.</p>
               </div>
             </div>
-            {canManage && (
-              <Button variant="primary" onClick={() => setShowCreateModal(true)}>
-                <Plus className="w-4 h-4" />
-                Create API Key
-              </Button>
-            )}
+            <Button
+              variant="primary"
+              onClick={() => {
+                if (!canManage) {
+                  toast.error('You do not have permission to create API keys');
+                  return;
+                }
+                setShowCreateModal(true);
+              }}
+              aria-disabled={!canManage}
+              className={!canManage ? 'opacity-50 cursor-not-allowed' : ''}
+              title={!canManage ? 'You do not have permission to create API keys' : ''}
+            >
+              <Plus className="w-4 h-4" />
+              Create API Key
+            </Button>
           </div>
         </section>
 
@@ -224,12 +234,22 @@ export default function ApiManagementPage() {
               </span>
               <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50 mb-2">No API Keys</h3>
               <p className="text-gray-500 dark:text-slate-500 mb-4">Create your first API key to start using the TalentFlow API.</p>
-              {canManage && (
-                <Button variant="primary" onClick={() => setShowCreateModal(true)}>
-                  <Plus className="w-4 h-4" />
-                  Create API Key
-                </Button>
-              )}
+              <Button
+                variant="primary"
+                onClick={() => {
+                  if (!canManage) {
+                    toast.error('You do not have permission to create API keys');
+                    return;
+                  }
+                  setShowCreateModal(true);
+                }}
+                aria-disabled={!canManage}
+                className={!canManage ? 'opacity-50 cursor-not-allowed' : ''}
+                title={!canManage ? 'You do not have permission to create API keys' : ''}
+              >
+                <Plus className="w-4 h-4" />
+                Create API Key
+              </Button>
             </div>
           ) : (
             apiKeys.map((apiKey) => (
@@ -273,34 +293,44 @@ export default function ApiManagementPage() {
                       )}
                     </div>
                   </div>
-                  {canManage && (
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => regenerateKey(apiKey.id)}
-                        disabled={regeneratingId === apiKey.id}
-                        className="px-2"
-                        aria-label="Regenerate key" title="Regenerate key"
-                      >
-                        <RefreshCw className={`w-4 h-4 ${regeneratingId === apiKey.id ? 'animate-spin' : ''}`} />
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => deleteKey(apiKey.id)}
-                        disabled={deletingId === apiKey.id}
-                        className="px-2"
-                        aria-label="Delete key" title="Delete key"
-                      >
-                        {deletingId === apiKey.id ? (
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                        ) : (
-                          <Trash2 className="w-4 h-4" />
-                        )}
-                      </Button>
-                    </div>
-                  )}
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        if (!canManage) {
+                          toast.error('You do not have permission to regenerate API keys');
+                          return;
+                        }
+                        regenerateKey(apiKey.id);
+                      }}
+                      disabled={regeneratingId === apiKey.id || !canManage}
+                      className="px-2"
+                      aria-label="Regenerate key" title={!canManage ? 'You do not have permission to regenerate API keys' : 'Regenerate key'}
+                    >
+                      <RefreshCw className={`w-4 h-4 ${regeneratingId === apiKey.id ? 'animate-spin' : ''}`} />
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => {
+                        if (!canManage) {
+                          toast.error('You do not have permission to delete API keys');
+                          return;
+                        }
+                        deleteKey(apiKey.id);
+                      }}
+                      disabled={deletingId === apiKey.id || !canManage}
+                      className="px-2"
+                      aria-label="Delete key" title={!canManage ? 'You do not have permission to delete API keys' : 'Delete key'}
+                    >
+                      {deletingId === apiKey.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-4 h-4" />
+                      )}
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))

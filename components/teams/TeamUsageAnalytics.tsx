@@ -603,8 +603,8 @@ async function exportUsersCSV(teams: TeamUsageSummary[], fromDate: string, toDat
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export default function TeamUsageAnalytics() {
-  const { isTenantAdmin, user } = useAuth();
-  const canExport = isTenantAdmin || !!user?.permissions?.canExport;
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canExport = isTenantAdmin || hasPermissionCode('teams:export');
   const [fromDate, setFromDate] = useState(() => {
     const d = new Date(); d.setDate(d.getDate() - 30); return d.toISOString().split('T')[0];
   });
@@ -690,12 +690,18 @@ export default function TeamUsageAnalytics() {
               className="px-3 py-1.5 border border-gray-300 dark:border-slate-700 rounded-lg text-sm focus:ring-2 focus:ring-gray-500"
             />
           </div>
-          {canExport && (
-            <div className="relative" ref={exportMenuRef}>
+          <div className="relative" ref={exportMenuRef}>
               <button
-                onClick={() => teams.length > 0 && !loading && setShowExportMenu(v => !v)}
-                disabled={teams.length === 0 || loading}
-                className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-40"
+                onClick={() => {
+                  if (!canExport) {
+                    toast.error({ title: 'You do not have permission to export team usage data' });
+                    return;
+                  }
+                  if (teams.length > 0 && !loading) setShowExportMenu(v => !v);
+                }}
+                disabled={teams.length === 0 || loading || !canExport}
+                title={!canExport ? 'You do not have permission to export team usage data' : ''}
+                className="flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-900 border border-gray-300 dark:border-slate-700 rounded-lg text-sm font-medium hover:bg-gray-50 dark:hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <Download className="w-4 h-4" />
                 Export
@@ -731,7 +737,6 @@ export default function TeamUsageAnalytics() {
                 </div>
               )}
             </div>
-          )}
         </div>
       </div>
 

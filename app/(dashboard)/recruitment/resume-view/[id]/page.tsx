@@ -247,6 +247,9 @@ export default function ResumeViewPage() {
   const [jobDetailsTitle, setJobDetailsTitle] = useState('');
   const [aiMatchDetailsReturnUrl, setAiMatchDetailsReturnUrl] = useState<string | null>(null);
   const [aiMatchJobTitle, setAiMatchJobTitle] = useState('');
+  /** The job this resume was opened from in AI Talent Match — scopes the
+   *  Invite to AI Interview picker to that job's interview versions. */
+  const [aiMatchJobId, setAiMatchJobIdState] = useState<string | null>(null);
   useEffect(() => {
     try {
       const s = sessionStorage.getItem('resumeNavSource');
@@ -264,6 +267,7 @@ export default function ResumeViewPage() {
 
       const aiMatchJobId = sessionStorage.getItem('resumeNavAIMatchJobId');
       if (aiMatchJobId) {
+        setAiMatchJobIdState(aiMatchJobId);
         setAiMatchDetailsReturnUrl(`/recruitment/ai-talent-match?jdId=${encodeURIComponent(aiMatchJobId)}&view=details`);
         // The crumb reads as the job the candidate was matched against.
         setAiMatchJobTitle(sessionStorage.getItem('resumeNavAIMatchJobTitle') || '');
@@ -366,7 +370,7 @@ export default function ResumeViewPage() {
   // job context here, so the user picks the JD first.
   const canInviteAssessment = (isTenantAdmin || hasPermission('canCreateAssessments')) && hasPlanFeature('assessment');
   const canInviteAIInterview =
-    (isTenantAdmin || hasPermission('canShareAIInterviews') || hasPermission('canInviteAIInterviews')) &&
+    (isTenantAdmin || hasPermission('canInviteAIInterviews')) &&
     hasPlanFeature('ai_interview');
   const canInvite = canInviteAssessment || canInviteAIInterview;
 
@@ -1183,35 +1187,29 @@ Best regards`);
                 </button>
 
                 {showInviteMenu && (
-                  <div role="menu" className="absolute left-0 top-full mt-2 w-64 bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-[60]">
+                  <div role="menu" className="absolute left-0 top-full mt-2 w-52 bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-[60]">
                     {canInviteAssessment && (
                       <button
                         role="menuitem"
                         onClick={() => startInvite('assessment')}
-                        className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors"
+                        className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-brand-blue/5 transition-colors"
                       >
-                        <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                        <span className="w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
                           <Mail className="w-4 h-4 text-brand-blue" />
                         </span>
-                        <span className="min-w-0">
-                          <span className="block text-sm font-medium text-gray-900">Assessment Invite</span>
-                          <span className="block text-xs text-gray-500">Pick a job, then send its assessment</span>
-                        </span>
+                        <span className="min-w-0 text-sm font-medium text-gray-900">Assessment</span>
                       </button>
                     )}
                     {canInviteAIInterview && (
                       <button
                         role="menuitem"
                         onClick={() => startInvite('ai-interview')}
-                        className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors"
+                        className="w-full flex items-center gap-3 px-3 py-2 text-left hover:bg-brand-blue/5 transition-colors"
                       >
-                        <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
+                        <span className="w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
                           <Sparkles className="w-4 h-4 text-brand-cyan" />
                         </span>
-                        <span className="min-w-0">
-                          <span className="block text-sm font-medium text-gray-900">AI Interview</span>
-                          <span className="block text-xs text-gray-500">Pick an interview, then send the invite</span>
-                        </span>
+                        <span className="min-w-0 text-sm font-medium text-gray-900">AI Interview</span>
                       </button>
                     )}
                   </div>
@@ -2588,6 +2586,7 @@ Best regards`);
         candidates={resume ? [{ id: resumeId, name: getCandidateName(), email: resume.email || undefined }] : []}
         resumes={resume ? [resume] : undefined}
         onInvited={() => setShowAIInviteFlow(false)}
+        jobId={viewSource === 'ai-talent-match' && aiMatchJobId ? aiMatchJobId : undefined}
       />
 
       {/* Share via Email Modal */}

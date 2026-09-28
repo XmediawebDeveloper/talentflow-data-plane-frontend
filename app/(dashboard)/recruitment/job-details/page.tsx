@@ -169,6 +169,21 @@ function JobDetailsContent() {
      page"), which anchors the breadcrumb to that flow instead of resetting to
      the Job Descriptions trail. Same mechanism as `from=ai-interview`. */
   const fromAssessment = searchParams.get('from') === 'assessment';
+  /* Opened from a candidate's assessment result (the View JD tab's JD header).
+     The trail continues that page's own: Assessments › <assessment> ›
+     <candidate> › this job. `return_to` is only honoured as a path inside the
+     Assessments module, so the link cannot be pointed anywhere else. */
+  const fromAssessmentResult = searchParams.get('from') === 'assessment-result';
+  /* Opened from an assessment's own details page (its Go to JD link): the
+     trail is Assessments › <assessment> › this job. */
+  const fromAssessmentDetails = searchParams.get('from') === 'assessment-details';
+  const resultAssessmentId = searchParams.get('assessment_id') || '';
+  const resultAssessmentTitle = searchParams.get('assessment_title') || '';
+  const resultCandidateName = searchParams.get('candidate_name') || '';
+  const resultReturnTo = (() => {
+    const to = searchParams.get('return_to') || '';
+    return to.startsWith('/recruitment/assessments/') ? to : '';
+  })();
   const tabParam = searchParams.get('tab') as 'overview' | 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | 'ai-interview-results' | null;
   const actionParam = searchParams.get('action') as 'ai-talent-match' | 'score-resumes' | 'invite-assessment' | 'assessment-status' | 'create-ai-interview' | 'invite-ai-interview' | 'ai-interview-status' | null;
 
@@ -624,7 +639,34 @@ function JobDetailsContent() {
       ? jobNavList[jobNavCurrentIndex + 1].id
       : null;
 
-  const breadcrumbItems = fromAiInterview
+  const breadcrumbItems = fromAssessmentResult
+    ? [
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'Assessments', href: '/recruitment/assessments' },
+        ...(resultAssessmentId
+          ? [{
+              label: resultAssessmentTitle || 'Assessment',
+              href: `/recruitment/assessments/${encodeURIComponent(resultAssessmentId)}/results`,
+            }]
+          : []),
+        ...(resultReturnTo
+          ? [{ label: resultCandidateName || 'Candidate Details', href: resultReturnTo }]
+          : []),
+        { label: job.title || 'Job Details' },
+      ]
+    : fromAssessmentDetails
+    ? [
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'Assessments', href: '/recruitment/assessments' },
+        ...(resultAssessmentId
+          ? [{
+              label: resultAssessmentTitle || 'Assessment',
+              href: `/recruitment/assessments/${encodeURIComponent(resultAssessmentId)}`,
+            }]
+          : []),
+        { label: job.title || 'Job Details' },
+      ]
+    : fromAiInterview
     ? [
         { label: 'Dashboard', href: '/dashboard' },
         { label: 'AI Interviews', href: '/recruitment/ai-interviews' },

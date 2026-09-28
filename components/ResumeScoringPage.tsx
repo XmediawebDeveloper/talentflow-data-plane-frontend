@@ -2263,46 +2263,50 @@ export default function ResumeScoringPage({
 
               <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:w-auto sm:flex-shrink-0">
                 {/* Prev/Next — placed before the Score New Resumes action */}
-                {canRunScoring && (
-                  <Button
-                    variant="primary"
-                    onClick={() => {
-                      /* Already on this job's own page — skip the job
-                         picker entirely and land straight on "Select
-                         Applicants to Score" for it, instead of making the
-                         user search for and re-pick the same job they're
-                         already looking at. Built from this page's own JD
-                         fields (the same stand-in the version-history rows
-                         already use) rather than looked up from `jobs`,
-                         since that list only carries one row per lineage's
-                         LATEST published version — this job's own record
-                         either way. */
-                      const jobForPicker: LineageJob = {
-                        id: selectedHistoryItem.jobId,
-                        job_id: selectedHistoryItem.jdJobId,
-                        title: selectedHistoryItem.jobTitle,
-                        status: mapJdStatusToJobStatus(selectedHistoryItem.jdStatus),
-                        location: selectedHistoryItem.jdLocation || '',
-                        daysActive: 0,
-                        requiredMatch: 0,
-                        industry_type: selectedHistoryItem.jdIndustryType,
-                        employmentType: selectedHistoryItem.jdEmploymentType,
-                        workMode: selectedHistoryItem.jdRemoteType,
-                        postedBy: selectedHistoryItem.jdCreatedByName,
-                        postedDate: selectedHistoryItem.jdPublishedAt,
-                        creation_method: selectedHistoryItem.jdCreationMethod as LineageJob['creation_method'],
-                        currentVersion: selectedHistoryItem.jdCurrentVersion,
-                      };
-                      setViewMode('new');
-                      handleJobPicked({ job: jobForPicker, lineage: lineageKey(jobForPicker) });
-                      setShowResumeSelectionModal(true);
-                    }}
-                    className="w-full sm:w-auto"
-                  >
-                    <ClipboardList className="w-4 h-4" />
-                    Score New Resumes
-                  </Button>
-                )}
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    if (!canRunScoring) {
+                      toast.error('You do not have permission to score resumes');
+                      return;
+                    }
+                    /* Already on this job's own page — skip the job
+                       picker entirely and land straight on "Select
+                       Applicants to Score" for it, instead of making the
+                       user search for and re-pick the same job they're
+                       already looking at. Built from this page's own JD
+                       fields (the same stand-in the version-history rows
+                       already use) rather than looked up from `jobs`,
+                       since that list only carries one row per lineage's
+                       LATEST published version — this job's own record
+                       either way. */
+                    const jobForPicker: LineageJob = {
+                      id: selectedHistoryItem.jobId,
+                      job_id: selectedHistoryItem.jdJobId,
+                      title: selectedHistoryItem.jobTitle,
+                      status: mapJdStatusToJobStatus(selectedHistoryItem.jdStatus),
+                      location: selectedHistoryItem.jdLocation || '',
+                      daysActive: 0,
+                      requiredMatch: 0,
+                      industry_type: selectedHistoryItem.jdIndustryType,
+                      employmentType: selectedHistoryItem.jdEmploymentType,
+                      workMode: selectedHistoryItem.jdRemoteType,
+                      postedBy: selectedHistoryItem.jdCreatedByName,
+                      postedDate: selectedHistoryItem.jdPublishedAt,
+                      creation_method: selectedHistoryItem.jdCreationMethod as LineageJob['creation_method'],
+                      currentVersion: selectedHistoryItem.jdCurrentVersion,
+                    };
+                    setViewMode('new');
+                    handleJobPicked({ job: jobForPicker, lineage: lineageKey(jobForPicker) });
+                    setShowResumeSelectionModal(true);
+                  }}
+                  aria-disabled={!canRunScoring}
+                  title={!canRunScoring ? 'You do not have permission to score resumes' : ''}
+                  className={`w-full sm:w-auto ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  <ClipboardList className="w-4 h-4" />
+                  Score New Resumes
+                </Button>
               </div>
             </div>
           </div>
@@ -2342,7 +2346,11 @@ export default function ResumeScoringPage({
              separate from `onScoreResumes` (the table's persistent header
              button) so this doesn't also add a redundant button once
              resumes exist — the header above already has one. */
-          onScoreResumesFromEmptyState={canRunScoring ? () => {
+          onScoreResumesFromEmptyState={() => {
+            if (!canRunScoring) {
+              toast.error('You do not have permission to score resumes');
+              return;
+            }
             const jobForPicker: LineageJob = {
               id: selectedHistoryItem.jobId,
               job_id: selectedHistoryItem.jdJobId,
@@ -2362,7 +2370,8 @@ export default function ResumeScoringPage({
             setViewMode('new');
             handleJobPicked({ job: jobForPicker, lineage: lineageKey(jobForPicker) });
             setShowResumeSelectionModal(true);
-          } : undefined}
+          }}
+          scoreResumesDisabled={!canRunScoring}
           onViewCandidate={(resume) => {
             setSelectedCandidateForView(resume);
             setViewMode('candidateView');
@@ -2711,22 +2720,27 @@ export default function ResumeScoringPage({
               </button>
             )} */}
 
-            {/* Score Resumes Button - only shown to users with run scoring permission */}
-            {canRunScoring && (
-              <Button
-                variant="primary"
-                onClick={() => {
-                  setViewMode('new');
-                  setSelectedJob('');
-                  setResumeSource(null);
-                  setSelectedResumes([]);
-                  requestJobPickerScroll();
-                }}
-                icon={<ClipboardList className="w-4 h-4" />}
-              >
-                Score Resumes
-              </Button>
-            )}
+            {/* Score Resumes Button — visible to everyone, disabled without the run-scoring permission */}
+            <Button
+              variant="primary"
+              onClick={() => {
+                if (!canRunScoring) {
+                  toast.error('You do not have permission to score resumes');
+                  return;
+                }
+                setViewMode('new');
+                setSelectedJob('');
+                setResumeSource(null);
+                setSelectedResumes([]);
+                requestJobPickerScroll();
+              }}
+              aria-disabled={!canRunScoring}
+              className={!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}
+              title={!canRunScoring ? 'You do not have permission to score resumes' : ''}
+              icon={<ClipboardList className="w-4 h-4" />}
+            >
+              Score Resumes
+            </Button>
           </div>
         </div>
 
@@ -3541,20 +3555,25 @@ export default function ResumeScoringPage({
               <p className="text-gray-600 dark:text-slate-400 text-sm mb-4">
                 Start scoring resumes against job descriptions to see your results here. Our AI will analyze and rank candidates based on job fit.
               </p>
-              {canRunScoring && (
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    setViewMode('new');
-                    setSelectedJob('');
-                    setResumeSource(null);
-                    setSelectedResumes([]);
-                  }}
-                  icon={<ClipboardList className="w-4 h-4" />}
-                >
-                  Score Resumes Now
-                </Button>
-              )}
+              <Button
+                variant="primary"
+                onClick={() => {
+                  if (!canRunScoring) {
+                    toast.error('You do not have permission to score resumes');
+                    return;
+                  }
+                  setViewMode('new');
+                  setSelectedJob('');
+                  setResumeSource(null);
+                  setSelectedResumes([]);
+                }}
+                aria-disabled={!canRunScoring}
+                className={!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}
+                title={!canRunScoring ? 'You do not have permission to score resumes' : ''}
+                icon={<ClipboardList className="w-4 h-4" />}
+              >
+                Score Resumes Now
+              </Button>
             </div>
           </div>
         ) : (
@@ -4235,7 +4254,14 @@ export default function ResumeScoringPage({
           listAnchorRef={jobPickerListRef}
           selection={pickerSelection}
           onSelectionChange={handleJobPicked}
-          onProceed={canRunScoring ? () => setShowResumeSelectionModal(true) : undefined}
+          onProceed={() => {
+            if (!canRunScoring) {
+              toast.error('You do not have permission to score resumes');
+              return;
+            }
+            setShowResumeSelectionModal(true);
+          }}
+          proceedDisabled={!canRunScoring}
           proceedLabel="Select Resumes"
           showAllStatuses
         />

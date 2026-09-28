@@ -34,6 +34,7 @@ import type { Job } from '@/lib/types/types';
 import { formatIndustryType } from '@/lib/utils/jobOpeningDisplay';
 import { getSttModelOption } from '@/lib/constants/aiInterviewSttModels';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 /* ─────────────────────────────────────────────────────────────────────── */
 /*  Types                                                                  */
@@ -228,6 +229,8 @@ function HRQuestionStageBadge({ stage }: { stage?: string }) {
 
 export default function AIInterviewPreview() {
   const router = useRouter();
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canPublishAIInterview = isTenantAdmin || hasPermissionCode('ai_interview:publish');
   const searchParams = useSearchParams();
   const id = searchParams.get('id') || '';
   // Carried from Clusters when the flow started on a JD's Job Details page, so
@@ -1153,9 +1156,17 @@ export default function AIInterviewPreview() {
             <Button
               variant="primary"
               size="md"
-              onClick={() => setShowConfirm(true)}
+              onClick={() => {
+                if (!canPublishAIInterview) {
+                  toast.error('You do not have permission to publish AI interviews');
+                  return;
+                }
+                setShowConfirm(true);
+              }}
               disabled={publishing}
-              className="w-full sm:w-auto justify-center"
+              aria-disabled={!canPublishAIInterview}
+              title={!canPublishAIInterview ? 'You do not have permission to publish AI interviews' : undefined}
+              className={`w-full sm:w-auto justify-center ${!canPublishAIInterview ? 'opacity-50 cursor-not-allowed' : ''}`}
               icon={publishing ? <Loader2 className="w-4 h-4 animate-spin" /> : undefined}
             >
               {publishing ? 'Publishing...' : (

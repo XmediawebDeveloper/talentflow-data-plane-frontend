@@ -404,16 +404,26 @@ export default function RoleManagement() {
                   <div className="mt-1 font-semibold">{managedPermissionsCount}</div>
                 </div>
               </div>
-              {canManageRoles && (
               <button
-                onClick={() => setCreateOpen(true)}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
+                onClick={() => {
+                  if (!canManageRoles) {
+                    toast.error('You do not have permission to manage roles');
+                    return;
+                  }
+                  setCreateOpen(true);
+                }}
+                aria-disabled={!canManageRoles}
+                title={!canManageRoles ? 'You do not have permission to manage roles' : ''}
+                className={`inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium shadow-md transition-all ${
+                  canManageRoles
+                    ? 'bg-white text-brand-blue hover:-translate-y-0.5 hover:shadow-lg'
+                    : 'bg-white/60 text-brand-blue/50 cursor-not-allowed'
+                }`}
               >
                 <Plus className="h-4 w-4" />
                 Create Role
                 <ArrowUpRight className="h-4 w-4" />
               </button>
-              )}
             </div>
           </div>
         </section>
@@ -667,11 +677,22 @@ export default function RoleManagement() {
                                 >
                                   <Eye className="h-4 w-4" />
                                 </button>
-                                {canManageRoles && !protectedRoleCodes.includes(role.code) ? (
+                                {!protectedRoleCodes.includes(role.code) ? (
                                   <button
-                                    onClick={() => handleEditRole(role)}
-                                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 transition-[border-color,box-shadow,color,background-color] hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
-                                    title={`Edit ${role.name}`}
+                                    onClick={() => {
+                                      if (!canManageRoles) {
+                                        toast.error('You do not have permission to manage roles');
+                                        return;
+                                      }
+                                      handleEditRole(role);
+                                    }}
+                                    aria-disabled={!canManageRoles}
+                                    className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-[border-color,box-shadow,color,background-color] ${
+                                      canManageRoles
+                                        ? 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-600 dark:text-slate-400 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue'
+                                        : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-300 cursor-not-allowed'
+                                    }`}
+                                    title={!canManageRoles ? 'You do not have permission to manage roles' : `Edit ${role.name}`}
                                     aria-label={`Edit ${role.name}`}
                                   >
                                     <Pencil className="h-4 w-4" />
@@ -681,11 +702,22 @@ export default function RoleManagement() {
                                     <Lock className="h-4 w-4" />
                                   </span>
                                 )}
-                                {canManageRoles && !role.is_system ? (
+                                {!role.is_system ? (
                                   <button
-                                    onClick={() => handleDeleteRole(role.id)}
-                                    className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-destructive-line/15 bg-destructive/[0.05] text-destructive transition-all hover:-translate-y-0.5 hover:bg-destructive/[0.1]"
-                                    title={`Delete ${role.name}`}
+                                    onClick={() => {
+                                      if (!canManageRoles) {
+                                        toast.error('You do not have permission to manage roles');
+                                        return;
+                                      }
+                                      handleDeleteRole(role.id);
+                                    }}
+                                    aria-disabled={!canManageRoles}
+                                    className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-all ${
+                                      canManageRoles
+                                        ? 'border-destructive-line/15 bg-destructive/[0.05] text-destructive hover:-translate-y-0.5 hover:bg-destructive/[0.1]'
+                                        : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-300 cursor-not-allowed'
+                                    }`}
+                                    title={!canManageRoles ? 'You do not have permission to manage roles' : `Delete ${role.name}`}
                                     aria-label={`Delete ${role.name}`}
                                   >
                                     <Ban className="h-4 w-4" />
@@ -759,19 +791,43 @@ export default function RoleManagement() {
                             <Eye className="h-4 w-4" />
                             View permissions
                           </button>
-                          {canManageRoles && !protectedRoleCodes.includes(role.code) && (
+                          {!protectedRoleCodes.includes(role.code) && (
                             <button
-                              onClick={() => handleEditRole(role)}
-                              className="inline-flex items-center gap-2 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-brand-cyan/20 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
+                              onClick={() => {
+                                if (!canManageRoles) {
+                                  toast.error('You do not have permission to manage roles');
+                                  return;
+                                }
+                                handleEditRole(role);
+                              }}
+                              aria-disabled={!canManageRoles}
+                              title={!canManageRoles ? 'You do not have permission to manage roles' : ''}
+                              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
+                                canManageRoles
+                                  ? 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:border-brand-cyan/20 hover:bg-brand-cyan/[0.04] hover:text-brand-blue'
+                                  : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-300 cursor-not-allowed'
+                              }`}
                             >
                               <Pencil className="h-4 w-4" />
                               Edit
                             </button>
                           )}
-                          {canManageRoles && !role.is_system && (
+                          {!role.is_system && (
                             <button
-                              onClick={() => handleDeleteRole(role.id)}
-                              className="inline-flex items-center gap-2 rounded-xl border border-destructive-line/15 bg-destructive/[0.05] px-3 py-2 text-sm font-medium text-destructive transition-all hover:bg-destructive/[0.1]"
+                              onClick={() => {
+                                if (!canManageRoles) {
+                                  toast.error('You do not have permission to manage roles');
+                                  return;
+                                }
+                                handleDeleteRole(role.id);
+                              }}
+                              aria-disabled={!canManageRoles}
+                              title={!canManageRoles ? 'You do not have permission to manage roles' : ''}
+                              className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
+                                canManageRoles
+                                  ? 'border-destructive-line/15 bg-destructive/[0.05] text-destructive hover:bg-destructive/[0.1]'
+                                  : 'border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 text-gray-300 cursor-not-allowed'
+                              }`}
                             >
                               <Ban className="h-4 w-4" />
                               Delete

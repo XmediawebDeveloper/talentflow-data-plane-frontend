@@ -14,6 +14,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Button } from '@/components/ui/button';
 import { InviteSourceValue, assessmentInviteSource } from '@/components/AIInterviewInviteTable';
+import { formatScore } from '@/lib/utils/score';
 
 /**
  * The candidate list for an ASSESSMENT invite tracker.
@@ -374,7 +375,7 @@ export default function AssessmentInviteTable({
                         {/* Capped rather than free: under auto layout a
                             single long email would otherwise set the
                             column width for the whole table. */}
-                        <div className="min-w-0 max-w-[240px]">
+                        <div className="min-w-0 max-w-[180px] sm:max-w-[240px]">
                           <p className="font-medium text-gray-900 dark:text-slate-50 text-sm truncate" title={invitation.candidate_name}>{invitation.candidate_name}</p>
                           <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                         </div>
@@ -490,7 +491,7 @@ export default function AssessmentInviteTable({
                           {techReady ? (
                             <div className="flex flex-col items-center gap-0.5">
                               <span className={`font-medium ${invitation.technical_score >= 70 ? 'text-brand-blue' : 'text-destructive'}`}>
-                                {Math.round(invitation.technical_score)}%
+                                {formatScore(invitation.technical_score)}%
                               </span>
                               <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.technical_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
                                 {invitation.technical_score >= 70 ? 'Pass' : 'Fail'}
@@ -512,7 +513,7 @@ export default function AssessmentInviteTable({
                           {codingReady ? (
                             <div className="flex flex-col items-center gap-0.5">
                               <span className={`font-medium ${invitation.coding_score >= 70 ? 'text-brand-blue' : 'text-destructive'}`}>
-                                {Math.round(invitation.coding_score)}%
+                                {formatScore(invitation.coding_score)}%
                               </span>
                               <span className={`text-2xs font-medium px-1.5 py-0.5 rounded ring-1 ${invitation.coding_score >= 70 ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20' : 'bg-destructive-subtle text-destructive ring-destructive-line'}`}>
                                 {invitation.coding_score >= 70 ? 'Pass' : 'Fail'}
@@ -595,7 +596,7 @@ export default function AssessmentInviteTable({
                               <button
                                 aria-label="Actions"
                                 title="Actions"
-                                className="p-1.5 text-gray-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 rounded transition-colors"
+                                className="p-2 text-gray-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-gray-700 dark:hover:text-slate-200 rounded transition-colors"
                               >
                                 <MoreVertical className="w-4 h-4" />
                               </button>

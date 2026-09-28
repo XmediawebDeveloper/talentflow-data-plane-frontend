@@ -34,10 +34,10 @@ import AITalentMatchSelectJobModal from '@/components/AITalentMatchSelectJobModa
 import BulkVersionResolutionModal from '@/components/BulkVersionResolutionModal';
 import type { VersionedBatchItem } from '@/components/BulkVersionResolutionModal';
 import ShareAssessmentModal from '@/components/ShareAssessmentModal';
-import VersionBadge from '@/components/VersionBadge';
+import AssessmentPicker from '@/components/assessments/AssessmentPicker';
 import InviteToAIInterviewFlow from '@/components/InviteToAIInterviewFlow';
 import { useListSearch } from '@/lib/hooks/useListSearch';
-import { isAssessmentRevoked, getLocallyRevokedAssessmentIds, parseAssessmentTitle } from '@/lib/utils/assessmentUtils';
+import { isAssessmentRevoked, getLocallyRevokedAssessmentIds } from '@/lib/utils/assessmentUtils';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import { Resume, Folder as FolderType, Job } from '@/lib/types/types';
 import { resumeService, folderService } from '@/lib/services/resumeService';
@@ -1023,6 +1023,8 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
   const [isAssessmentModalOpen, setIsAssessmentModalOpen] = useState(false);
   const [selectedJobForAssessment, setSelectedJobForAssessment] = useState<string | null>(null);
   const [activeAssessments, setActiveAssessments] = useState<any[]>([]);
+  // The Invite to Assessment dialog's scroller — the picker's paging scrolls it to the top.
+  const assessmentBodyScrollRef = useRef<HTMLDivElement>(null);
   const [loadingAssessments, setLoadingAssessments] = useState(false);
   const [selectedAssessments, setSelectedAssessments] = useState<any[]>([]); // Changed to array for multi-select
 
@@ -1033,7 +1035,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
      assessment and AI-interview flows can drop someone without disturbing the
      page's own selection. */
   const [excludedInviteIds, setExcludedInviteIds] = useState<string[]>([]);
-  const [assessmentSearchQuery, setAssessmentSearchQuery] = useState('');
 
   // AI Talent Match modal state
   const [isAITalentMatchModalOpen, setIsAITalentMatchModalOpen] = useState(false);
@@ -2584,13 +2585,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
     }
   };
 
-  /* One assessment at a time, the rule the Score Resume dialog applies to jobs:
-     candidates are invited to a single assessment, so picking a second would be
-     two answers to one question. Clicking the picked one lets go of it. */
-  const toggleAssessmentSelection = (assessment: any) => {
-    setSelectedAssessments(prev => (prev[0]?.id === assessment.id ? [] : [assessment]));
-  };
-
   // Handle AI Talent Match button click
   const handleAIInterview = () => {
     if (selectedResumes.length === 0) {
@@ -3945,16 +3939,26 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               )}
             </button>
           )}
-          {canUploadMyResumes && (
-            <button
-              onClick={() => openUploadToFolder(undefined)}
-              className="flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-md transition-all text-sm flex-1 sm:flex-initial bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Upload Resume</span>
-              <span className="sm:hidden">Upload</span>
-            </button>
-          )}
+          <button
+            onClick={() => {
+              if (!canUploadMyResumes) {
+                toast.error('You do not have permission to upload resumes');
+                return;
+              }
+              openUploadToFolder(undefined);
+            }}
+            aria-disabled={!canUploadMyResumes}
+            title={!canUploadMyResumes ? 'You do not have permission to upload resumes' : undefined}
+            className={`flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-md transition-all text-sm flex-1 sm:flex-initial shadow-sm ring-1 ${
+              canUploadMyResumes
+                ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-brand-blue/25 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer'
+                : 'bg-gray-200 text-gray-400 shadow-none ring-transparent cursor-not-allowed opacity-60'
+            }`}
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Upload Resume</span>
+            <span className="sm:hidden">Upload</span>
+          </button>
         </div>
       </div>
 
@@ -3978,18 +3982,34 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           <BulkActionsBar
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
-            onMoveToFolder={canMoveMyResumes ? (folderId) => handleMoveToFolder(selectedResumes, folderId) : undefined}
-            onApplyToJob={!isArchivedContext && hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleApplyToJob : undefined}
+            onMoveToFolder={(folderId) => handleMoveToFolder(selectedResumes, folderId)}
+            onMoveToFolderDisabled={!canMoveMyResumes}
+            onMoveToFolderDisabledReason="You do not have permission to move resumes to a folder"
+            onApplyToJob={!isArchivedContext && hasPlanFeature('resume_scoring') ? handleApplyToJob : undefined}
+            onApplyToJobDisabled={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')))}
+            onApplyToJobDisabledReason="You do not have permission to score resumes"
             onDownload={handleBulkDownload}
-            onDelete={canDeleteMyResumes ? () => handleDeleteResumes(selectedResumes) : undefined}
+            onDelete={() => handleDeleteResumes(selectedResumes)}
+            onDeleteDisabled={!canDeleteMyResumes}
+            onDeleteDisabledReason="You do not have permission to delete resumes"
             folders={folders.filter(f => f.id !== 'all')}
-            onAssessment={!isArchivedContext && hasPlanFeature('assessment') && (isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment'))) ? handleAssessment : undefined}
-            onArchive={!isArchivedContext && canArchiveMyResumes ? () => setIsArchiveModalOpen(true) : undefined}
-            onUnarchive={isArchivedContext && canArchiveMyResumes ? () => handleUnarchiveResumes(selectedResumes) : undefined}
-            onAITalentMatch={!isArchivedContext && hasPlanFeature('ai_talent_match') && (isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('my_resumes:ai_match'))) ? handleAITalentMatch : undefined}
+            onAssessment={!isArchivedContext && hasPlanFeature('assessment') ? handleAssessment : undefined}
+            onAssessmentDisabled={!(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment')))}
+            onAssessmentDisabledReason="You do not have permission to invite candidates to an assessment"
+            onArchive={!isArchivedContext ? () => setIsArchiveModalOpen(true) : undefined}
+            onArchiveDisabled={!canArchiveMyResumes}
+            onArchiveDisabledReason="You do not have permission to archive resumes"
+            onUnarchive={isArchivedContext ? () => handleUnarchiveResumes(selectedResumes) : undefined}
+            onUnarchiveDisabled={!canArchiveMyResumes}
+            onUnarchiveDisabledReason="You do not have permission to unarchive resumes"
+            onAITalentMatch={!isArchivedContext && hasPlanFeature('ai_talent_match') ? handleAITalentMatch : undefined}
+            onAITalentMatchDisabled={!(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('my_resumes:ai_match')))}
+            onAITalentMatchDisabledReason="You do not have permission to run AI talent match"
             // No `my_resumes:ai_interview` action code exists yet, so this
             // follows the AI Interviews module's own share permission.
-            onAIInterview={!isArchivedContext && hasPlanFeature('ai_interview') && (isTenantAdmin || hasPermission('canShareAIInterviews')) ? handleAIInterview : undefined}
+            onAIInterview={!isArchivedContext && hasPlanFeature('ai_interview') ? handleAIInterview : undefined}
+            onAIInterviewDisabled={!(isTenantAdmin || hasPermission('canInviteAIInterviews'))}
+            onAIInterviewDisabledReason="You do not have permission to invite candidates to an AI interview"
           />
           );
         })()}
@@ -4133,11 +4153,17 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               folders={folders}
               selectedFolder={selectedFolder}
               onSelectFolder={(folderId: string) => { setSelectedFolder(folderId); setCurrentPage(1); }}
-              onCreateFolder={canUploadMyResumes ? handleCreateFolder : undefined}
-              onRenameFolder={canUpdateMyResumes ? handleRenameFolder : undefined}
-              onDeleteFolder={canDeleteMyResumes ? handleDeleteFolder : undefined}
+              onCreateFolder={handleCreateFolder}
+              canCreateFolder={canUploadMyResumes}
+              onRenameFolder={handleRenameFolder}
+              canRenameFolder={canUpdateMyResumes}
+              onDeleteFolder={handleDeleteFolder}
+              canDeleteFolder={canDeleteMyResumes}
               onUploadToFolder={(folderId) => {
-                if (!canUploadMyResumes) return;
+                if (!canUploadMyResumes) {
+                  toast.error('You do not have permission to upload resumes');
+                  return;
+                }
                 setSelectedFolder(folderId);
                 openUploadToFolder(folderId);
               }}
@@ -4190,8 +4216,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   onSelectResume={handleSelectResume}
                   onSelectAll={handleSelectAll}
                   onQuickView={(resume) => setQuickViewResume(resume)}
-                  onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleSingleResumeApplyToJob : undefined}
-                  onDelete={canDeleteMyResumes ? (id) => handleDelete(id) : undefined}
+                  onApplyToJob={hasPlanFeature('resume_scoring') ? handleSingleResumeApplyToJob : undefined}
+                  onApplyToJobDisabled={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')))}
+                  onApplyToJobDisabledReason="You do not have permission to score resumes"
+                  onDelete={(id) => handleDelete(id)}
+                  onDeleteDisabled={!canDeleteMyResumes}
+                  onDeleteDisabledReason="You do not have permission to delete resumes"
                   onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
                   folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
                   onViewDetails={(resume) => {
@@ -4205,7 +4235,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                      resume, and now drops onto a row to place it. */
                   enableRowReorder
                   reorderScopeKey={selectedFolder || 'all'}
-                  onArchive={canArchiveMyResumes ? (resumeId) => handleArchiveResumes([resumeId]) : undefined}
+                  onArchive={(resumeId) => handleArchiveResumes([resumeId])}
+                  onArchiveDisabled={!canArchiveMyResumes}
+                  onArchiveDisabledReason="You do not have permission to archive resumes"
                   canShare={canShareMyResumes}
                   canTag={canUpdateMyResumes}
                   disablePagination={true}
@@ -4570,16 +4602,26 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
                           <div className="flex items-center justify-between mb-2 sm:mb-3">
                             <h3 className="text-gray-900">My Folders</h3>
-                            {canUploadMyResumes && (
-                              <button
-                                type="button"
-                                onClick={() => openCardFolderInput(null)}
-                                className="text-blue-600 hover:text-blue-700 text-sm flex items-center gap-1 cursor-pointer"
-                              >
-                                <Plus className="w-4 h-4" />
-                                New Folder
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!canUploadMyResumes) {
+                                  toast.error('You do not have permission to upload resumes');
+                                  return;
+                                }
+                                openCardFolderInput(null);
+                              }}
+                              aria-disabled={!canUploadMyResumes}
+                              title={!canUploadMyResumes ? 'You do not have permission to upload resumes' : undefined}
+                              className={`text-sm flex items-center gap-1 ${
+                                canUploadMyResumes
+                                  ? 'text-blue-600 hover:text-blue-700 cursor-pointer'
+                                  : 'text-gray-400 cursor-not-allowed opacity-60'
+                              }`}
+                            >
+                              <Plus className="w-4 h-4" />
+                              New Folder
+                            </button>
                           </div>
 
                           {cardFolderParentId === null && (
@@ -4708,8 +4750,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                               }
                             }}
                             onQuickView={(resume) => setQuickViewResume(resume)}
-                            onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleSingleResumeApplyToJob : undefined}
-                            onDelete={canDeleteMyResumes ? (id) => handleDelete(id) : undefined}
+                            onApplyToJob={hasPlanFeature('resume_scoring') ? handleSingleResumeApplyToJob : undefined}
+                            onApplyToJobDisabled={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')))}
+                            onApplyToJobDisabledReason="You do not have permission to score resumes"
+                            onDelete={(id) => handleDelete(id)}
+                            onDeleteDisabled={!canDeleteMyResumes}
+                            onDeleteDisabledReason="You do not have permission to delete resumes"
                             onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
                             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
                             onViewDetails={(resume) => {
@@ -6160,17 +6206,17 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm z-50 animate-in fade-in duration-200"
             onClick={() => {
               setIsAssessmentModalOpen(false);
-              setAssessmentSearchQuery('');
               setSelectedAssessments([]);
               setExcludedInviteIds([]);
             }}
           />
-          {/* Shell, header, body and footer are the Apply to Job / Score Resume
-              dialog's, so the candidate actions all read as one dialog. */}
+          {/* Shell, header, body and footer are the Invite to AI Interview
+              dialog's (InviteToAIInterviewFlow), width included, so the two
+              invite actions read as one dialog wearing different labels. */}
           <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-lg md:max-w-2xl lg:max-w-6xl xl:max-w-7xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col animate-in zoom-in-95 duration-200">
               {/* Header */}
-              <div className="flex-shrink-0 flex items-center justify-between px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
+              <div className="flex-shrink-0 flex items-center justify-between gap-2 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60">
                 <div className="flex items-center gap-3 min-w-0 flex-1">
                   <div className="hidden sm:flex h-9 w-9 items-center justify-center rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex-shrink-0">
                     <ClipboardCheck className="w-4 h-4 text-brand-blue" />
@@ -6185,7 +6231,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 <button
                   onClick={() => {
                     setIsAssessmentModalOpen(false);
-                    setAssessmentSearchQuery('');
                     setSelectedAssessments([]);
                   }}
                   className="p-1.5 text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-md transition-colors flex-shrink-0"
@@ -6195,7 +6240,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               </div>
 
               {/* Content */}
-              <div className="flex-1 min-h-0 overflow-y-auto p-4 sm:p-6">
+              <div ref={assessmentBodyScrollRef} className="flex-1 min-h-0 overflow-y-auto p-3 sm:p-6">
                 {/* The same Candidates Selected panel the Score Resume and
                     Apply to Job dialogs use — full list, untick to drop
                     someone, resume version, and the eye to read a resume. */}
@@ -6210,187 +6255,28 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   tip="Invitations go to each candidate's email address — untick anyone you want to leave out."
                 />
 
-                {/* Assessment Selection. Search first, then the list, in the
-                    order and wording the job dialog uses. */}
-                <div>
-                  <div className="mb-4">
-                    <label className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 mb-2">Search Assessments</label>
-                    <div className="relative">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 dark:text-slate-500" />
-                      <input
-                        type="text"
-                        value={assessmentSearchQuery}
-                        onChange={(e) => setAssessmentSearchQuery(e.target.value)}
-                        placeholder="Search by assessment ID, name, JD ID or JD name..."
-                        className="w-full pl-10 pr-4 py-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
-                      />
-                    </div>
+                {/* The assessment list — the shared AssessmentPicker, which is
+                    the Invite to AI Interview dialog's picker with assessments
+                    in it: search, Grouped/Ungrouped, the one-at-a-time note,
+                    paging and the preview. It lists exactly the assessments
+                    this dialog loads (published, not revoked) and hands the
+                    one picked back to the same selection as before. */}
+                {loadingAssessments ? (
+                  <div className="flex items-center justify-center py-12 tf-loader-center tf-loader-center--compact">
+                    <Loader2 className="w-6 h-6 animate-spin text-brand-blue" />
                   </div>
-
-                  <div className="flex items-center justify-between gap-2 mb-3">
-                    <label className="text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300">
-                      Select an Active Assessment
-                      {activeAssessments.length > 0 && (
-                        <span className="ml-2 font-normal text-gray-500 dark:text-slate-400">
-                          {activeAssessments.length} available
-                        </span>
-                      )}
-                    </label>
-                    {/* Same escape hatch the job list offers: the only way back
-                        to "nothing picked" once the others have gone inert. */}
-                    {selectedAssessments.length > 0 && (
-                      <button
-                        onClick={() => setSelectedAssessments([])}
-                        className="text-xs text-brand-blue hover:text-brand-blue-2 font-medium"
-                      >
-                        Clear Selection
-                      </button>
-                    )}
-                  </div>
-
-                  {loadingAssessments ? (
-                    <div className="flex items-center justify-center py-8 tf-loader-center tf-loader-center--compact">
-                      <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
-                    </div>
-                  ) : (() => {
-                    // Filter assessments based on search query
-                    const filteredAssessments = activeAssessments.filter(assessment => {
-                      if (!assessmentSearchQuery.trim()) return true;
-                      const query = assessmentSearchQuery.toLowerCase();
-                      return (
-                        assessment.short_id?.toLowerCase().includes(query) ||
-                        assessment.title?.toLowerCase().includes(query) ||
-                        assessment.jd_short_id?.toLowerCase().includes(query) ||
-                        assessment.jd_title?.toLowerCase().includes(query)
-                      );
-                    });
-
-                    return filteredAssessments.length === 0 ? (
-                      <div className="text-center py-8 text-gray-500">
-                        <ClipboardCheck className="w-12 h-12 mx-auto mb-3 text-gray-300" />
-                        <p>{assessmentSearchQuery ? 'No assessments match your search' : 'No active assessments found'}</p>
-                        <p className="text-sm">{assessmentSearchQuery ? 'Try different search terms' : 'Create and publish an assessment first to send invitations'}</p>
-                      </div>
-                    ) : (
-                      <div className="space-y-2 max-h-64 overflow-y-auto">
-                        {filteredAssessments.map(assessment => {
-                          const isSelected = selectedAssessments.some(a => a.id === assessment.id);
-                          /* Once one is picked the rest go inert, with the
-                             reason on the row — the same treatment the job list
-                             gives the roles you didn't choose. */
-                          const blockedByOtherPick = selectedAssessments.length > 0 && !isSelected;
-                          return (
-                            <label
-                              key={assessment.id}
-                              title={blockedByOtherPick
-                                ? 'Only one assessment can be sent at a time — clear the current selection to choose this one'
-                                : undefined}
-                              aria-disabled={blockedByOtherPick}
-                              className={`block w-full text-left p-4 rounded-lg border-2 transition-all ${
-                                blockedByOtherPick
-                                  ? 'border-gray-200 bg-gray-50 opacity-60 cursor-not-allowed'
-                                  : isSelected
-                                    ? 'border-brand-blue/50 bg-brand-blue/5 shadow-sm shadow-brand-blue/10 cursor-pointer'
-                                    : 'border-gray-200 hover:border-brand-blue/30 hover:bg-brand-blue/5 cursor-pointer'
-                              }`}
-                            >
-                              <div className="flex items-start gap-3">
-                                {/* A radio, because exactly one assessment is sent. */}
-                                <input
-                                  type="radio"
-                                  name="invite-to-assessment-selection"
-                                  checked={isSelected}
-                                  disabled={blockedByOtherPick}
-                                  onChange={() => !blockedByOtherPick && toggleAssessmentSelection(assessment)}
-                                  onClick={() => isSelected && toggleAssessmentSelection(assessment)}
-                                  className="w-4 h-4 mt-1 flex-shrink-0 text-brand-blue border-gray-300 focus:ring-brand-blue/40 disabled:cursor-not-allowed"
-                                />
-
-                                <div className="flex-1">
-                                  {/* Assessment ID, Title, Version */}
-                                  <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                                    {/* Same ID chip the Assessments page uses. */}
-                                    {assessment.short_id && (
-                                      <span className="inline-flex items-center px-2.5 py-1 bg-brand-blue text-white rounded text-xs font-semibold shadow-sm shadow-brand-blue/25 ring-1 ring-white/10">
-                                        {assessment.short_id}
-                                      </span>
-                                    )}
-                                    {/* Title with the inline "- Version N" suffix stripped,
-                                        so the version isn't rendered twice. */}
-                                    <h5 className="font-medium text-gray-900">
-                                      {parseAssessmentTitle(assessment.title || '').cleanTitle || 'Untitled assessment'}
-                                    </h5>
-                                    {/* The shared badge, rather than a chip of this
-                                        screen's own — it falls back to the version in
-                                        the title when the API omits the field. */}
-                                    <VersionBadge
-                                      version={typeof assessment.version === 'number' ? assessment.version : undefined}
-                                      title={assessment.title}
-                                      size="sm"
-                                      variant="secondary"
-                                    />
-                                    {/* Status, worded and coloured as on the
-                                        Assessments page: the API's "published"
-                                        is shown there as a green "Active". */}
-                                    <span className="px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap ring-1 bg-green-100 text-green-700 ring-green-200">
-                                      {assessment.status === 'published' ? 'Active' : assessment.status}
-                                    </span>
-                                    {/* Selected indicator, as on a picked job row */}
-                                    {isSelected && (
-                                      <CheckCircle className="w-5 h-5 text-brand-blue ml-auto flex-shrink-0" />
-                                    )}
-                                  </div>
-
-                                  {/* Linked JD, written as the Assessments page writes it. */}
-                                  {assessment.jd_short_id && (
-                                    <div className="text-xs text-gray-700 font-medium mb-1.5">
-                                      <span>{assessment.jd_short_id}</span>
-                                      {assessment.jd_title && (
-                                        <span className="ml-2">{assessment.jd_title}</span>
-                                      )}
-                                      {assessment.jd_version && (
-                                        <span className="ml-1 text-gray-500">v{assessment.jd_version}</span>
-                                      )}
-                                    </div>
-                                  )}
-
-                                  {/* Duration and Sections */}
-                                  <div className="flex items-center gap-3 text-sm text-gray-500">
-                                    <span className="flex items-center gap-1">
-                                      <Clock className="w-3 h-3" />
-                                      {assessment.duration_minutes || 0} min
-                                    </span>
-                                    <span>•</span>
-                                    <span>{assessment.sections?.length || 0} section{assessment.sections?.length !== 1 ? 's' : ''}</span>
-                                  </div>
-
-                                  {/* Created By and Date */}
-                                  <div className="flex items-center gap-3 text-xs text-gray-500 mt-1.5">
-                                    {assessment.created_by_name && (
-                                      <>
-                                        <span>Created by: <span className="text-gray-700 font-medium">{assessment.created_by_name}</span></span>
-                                        <span>•</span>
-                                      </>
-                                    )}
-                                    {assessment.created_at && (
-                                      <span>
-                                        {formatIST(assessment.created_at)}
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </label>
-                          );
-                        })}
-                      </div>
-                    );
-                  })()}
-                </div>
+                ) : (
+                  <AssessmentPicker
+                    assessments={activeAssessments}
+                    selectedId={selectedAssessments[0]?.id ?? null}
+                    onSelect={(assessment) => setSelectedAssessments(assessment ? [assessment] : [])}
+                    scrollContainerRef={assessmentBodyScrollRef}
+                  />
+                )}
               </div>
 
               {/* Footer */}
-              <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-4 sm:p-6 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700">
+              <div className="shrink-0 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 p-3 sm:p-6 bg-gray-50 dark:bg-slate-800/50 border-t border-gray-200 dark:border-slate-700">
                 {/* Reads like the Score Resume footer: what is still missing,
                     and once nothing is, what is about to happen. */}
                 {(() => {
@@ -6398,7 +6284,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   // One line, always: it sits beside the buttons, and a second
                   // line would push the footer taller.
                   return (
-                    <div className="min-w-0 truncate whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+                    <div className="min-w-0 sm:truncate sm:whitespace-nowrap text-xs sm:text-sm text-gray-700 dark:text-slate-300">
                       {inviteeCount === 0
                         ? 'Select at least one candidate to continue'
                         : selectedAssessments.length === 0
@@ -6416,7 +6302,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   <button
                     onClick={() => {
                       setIsAssessmentModalOpen(false);
-                      setAssessmentSearchQuery('');
                       setSelectedAssessments([]);
                     }}
                     className="flex-1 sm:flex-none px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
@@ -6494,7 +6379,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             setSelectedAssessments([]);
             setPrefilledCandidates([]);
             setSelectedResumes([]);
-            setAssessmentSearchQuery('');
           }}
           assessment={{
             id: selectedAssessments[0].id,

@@ -216,7 +216,13 @@ interface ResumeTableProps {
   onSelectAll: (selected: boolean) => void;
   onQuickView: (resume: Resume) => void;
   onApplyToJob?: (resume: Resume) => void;
+  /** True when Apply to Job applies here but the viewer's permission is off —
+   * the menu item stays visible but disabled with this reason instead of firing. */
+  onApplyToJobDisabled?: boolean;
+  onApplyToJobDisabledReason?: string;
   onDelete?: (id: string) => void;
+  onDeleteDisabled?: boolean;
+  onDeleteDisabledReason?: string;
   onMoveToFolder?: (resumeIds: string[], folderId: string) => void;
   folders?: Folder[];
   selectionMode?: boolean;
@@ -227,6 +233,10 @@ interface ResumeTableProps {
   onVersion?: (resume: Resume) => void;
   highlightQuery?: string;
   onArchive?: (resumeId: string) => void;
+  /** True when Archive applies here but the viewer's permission is off — the
+   * menu item stays visible but disabled with this reason instead of firing. */
+  onArchiveDisabled?: boolean;
+  onArchiveDisabledReason?: string;
   disablePagination?: boolean;
   isArchivedFolder?: boolean;
   archivedFolderId?: string;
@@ -294,7 +304,11 @@ export default function ResumeTable({
   onSelectAll,
   onQuickView,
   onApplyToJob,
+  onApplyToJobDisabled,
+  onApplyToJobDisabledReason,
   onDelete,
+  onDeleteDisabled,
+  onDeleteDisabledReason,
   onMoveToFolder,
   folders,
   selectionMode = false,
@@ -305,6 +319,8 @@ export default function ResumeTable({
   onVersion,
   highlightQuery,
   onArchive,
+  onArchiveDisabled,
+  onArchiveDisabledReason,
   disablePagination = false,
   isArchivedFolder = false,
   archivedFolderId,
@@ -985,42 +1001,59 @@ export default function ResumeTable({
                                 <span className={MENU_ITEM_SCALE_CLASS}>Download Resume</span>
                               </button>
                             )}
-                            {canShare && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openShareModal(resume);
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!canShare) {
+                                  toast.error('You do not have permission to share resumes');
                                   closeActionMenu();
-                                }}
-                                className={resumeActionMenuItemClass}
-                              >
-                                <Share2 className="w-4 h-4 text-menu-icon-share" />
-                                <span className={MENU_ITEM_SCALE_CLASS}>Share Resume</span>
-                              </button>
-                            )}
-                            {canTag && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedResumeForAction(resume);
-                                  setShowAddTagsModal(true);
+                                  return;
+                                }
+                                openShareModal(resume);
+                                closeActionMenu();
+                              }}
+                              aria-disabled={!canShare}
+                              title={!canShare ? 'You do not have permission to share resumes' : ''}
+                              className={!canShare ? `${resumeActionMenuItemClass} !text-gray-400 cursor-not-allowed` : resumeActionMenuItemClass}
+                            >
+                              <Share2 className="w-4 h-4 text-menu-icon-share" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Share Resume</span>
+                            </button>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (!canTag) {
+                                  toast.error('You do not have permission to tag resumes');
                                   closeActionMenu();
-                                }}
-                                className={resumeActionMenuItemClass}
-                              >
-                                <Tag className="w-4 h-4 text-menu-icon-edit" />
-                                <span className={MENU_ITEM_SCALE_CLASS}>Add Tags</span>
-                              </button>
-                            )}
-                            {!!onArchive && (
+                                  return;
+                                }
+                                setSelectedResumeForAction(resume);
+                                setShowAddTagsModal(true);
+                                closeActionMenu();
+                              }}
+                              aria-disabled={!canTag}
+                              title={!canTag ? 'You do not have permission to tag resumes' : ''}
+                              className={!canTag ? `${resumeActionMenuItemClass} !text-gray-400 cursor-not-allowed` : resumeActionMenuItemClass}
+                            >
+                              <Tag className="w-4 h-4 text-menu-icon-edit" />
+                              <span className={MENU_ITEM_SCALE_CLASS}>Add Tags</span>
+                            </button>
+                            {onArchive && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  if (onArchiveDisabled) {
+                                    toast.error(onArchiveDisabledReason || 'You do not have permission to archive resumes');
+                                    closeActionMenu();
+                                    return;
+                                  }
                                   setSelectedResumeForAction(resume);
                                   setShowArchiveModal(true);
                                   closeActionMenu();
                                 }}
-                                className={resumeActionMenuItemClass}
+                                disabled={onArchiveDisabled}
+                                title={onArchiveDisabled ? (onArchiveDisabledReason || 'You do not have permission to archive resumes') : ''}
+                                className={onArchiveDisabled ? `${resumeActionMenuItemClass} !text-gray-400 cursor-not-allowed` : resumeActionMenuItemClass}
                               >
                                 <Archive className="w-4 h-4 text-menu-icon-archive" />
                                 <span className={MENU_ITEM_SCALE_CLASS}>Archive Resume</span>
@@ -1030,10 +1063,17 @@ export default function ResumeTable({
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
+                                  if (onDeleteDisabled) {
+                                    toast.error(onDeleteDisabledReason || 'You do not have permission to delete resumes');
+                                    closeActionMenu();
+                                    return;
+                                  }
                                   onDelete?.(resume.id);
                                   closeActionMenu();
                                 }}
-                                className={resumeActionMenuItemRedClass}
+                                disabled={onDeleteDisabled}
+                                title={onDeleteDisabled ? (onDeleteDisabledReason || 'You do not have permission to delete resumes') : ''}
+                                className={onDeleteDisabled ? `${resumeActionMenuItemRedClass} !text-gray-400 cursor-not-allowed` : resumeActionMenuItemRedClass}
                               >
                                 <Trash2 className="w-4 h-4" />
                                 <span className={MENU_ITEM_SCALE_CLASS}>Delete Resume</span>
@@ -1153,9 +1193,15 @@ export default function ResumeTable({
           versions={(versionHistoryResume.versions as any[]) || []}
           onClose={() => setVersionHistoryResume(null)}
           onApplyToJob={onApplyToJob ? () => {
+            if (onApplyToJobDisabled) {
+              toast.error(onApplyToJobDisabledReason || 'You do not have permission to score resumes');
+              return;
+            }
             setVersionHistoryResume(null);
             onApplyToJob(versionHistoryResume);
           } : undefined}
+          onApplyToJobDisabled={onApplyToJobDisabled}
+          onApplyToJobDisabledReason={onApplyToJobDisabledReason}
         />
       )}
 

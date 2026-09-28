@@ -429,15 +429,25 @@ export default function HRQuestionBank() {
             </p>
           </div>
         </div>
-        {canCreateHRQuestionBank && (
-          <button
-            onClick={() => { setShowAddForm(true); setEditingId(null); setFormData(EMPTY_QUESTION); }}
-            className="flex items-center gap-1.5 px-3 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm font-medium shrink-0 transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-          >
-            <Plus className="w-4 h-4" />
-            Add Question
-          </button>
-        )}
+        <button
+          onClick={() => {
+            if (!canCreateHRQuestionBank) {
+              toast.error({ title: 'You do not have permission to add questions' });
+              return;
+            }
+            setShowAddForm(true); setEditingId(null); setFormData(EMPTY_QUESTION);
+          }}
+          aria-disabled={!canCreateHRQuestionBank}
+          title={!canCreateHRQuestionBank ? 'You do not have permission to add questions' : ''}
+          className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium shrink-0 transition-all ${
+            canCreateHRQuestionBank
+              ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+              : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+          }`}
+        >
+          <Plus className="w-4 h-4" />
+          Add Question
+        </button>
       </div>
 
       {/* Info */}
@@ -715,24 +725,46 @@ export default function HRQuestionBank() {
                   </div>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  {canUpdateHRQuestionBank && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleEdit(question); }}
-                      className="p-2 text-gray-400 hover:text-brand-blue rounded-lg hover:bg-brand-blue/10 transition-colors"
-                      aria-label="Edit question" title="Edit question"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
-                  )}
-                  {canDeleteHRQuestionBank && (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); handleDelete(question.id); }}
-                      className="p-2 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-                      aria-label="Delete question" title="Delete question"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!canUpdateHRQuestionBank) {
+                        toast.error({ title: 'You do not have permission to edit questions' });
+                        return;
+                      }
+                      handleEdit(question);
+                    }}
+                    aria-disabled={!canUpdateHRQuestionBank}
+                    className={`p-2 rounded-lg transition-colors ${
+                      canUpdateHRQuestionBank
+                        ? 'text-gray-400 hover:text-brand-blue hover:bg-brand-blue/10'
+                        : 'text-gray-300 cursor-not-allowed opacity-60'
+                    }`}
+                    aria-label="Edit question"
+                    title={!canUpdateHRQuestionBank ? 'You do not have permission to edit questions' : 'Edit question'}
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (!canDeleteHRQuestionBank) {
+                        toast.error({ title: 'You do not have permission to delete questions' });
+                        return;
+                      }
+                      handleDelete(question.id);
+                    }}
+                    aria-disabled={!canDeleteHRQuestionBank}
+                    className={`p-2 rounded-lg transition-colors ${
+                      canDeleteHRQuestionBank
+                        ? 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+                        : 'text-gray-300 cursor-not-allowed opacity-60'
+                    }`}
+                    aria-label="Delete question"
+                    title={!canDeleteHRQuestionBank ? 'You do not have permission to delete questions' : 'Delete question'}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             </div>

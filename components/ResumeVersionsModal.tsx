@@ -46,6 +46,10 @@ interface ResumeVersionsModalProps {
   /** Scores a version against a job. Renders the briefcase action when given —
    *  the My Resumes list offers it, AI Talent Match does not. */
   onApplyToJob?: (version: ResumeVersion) => void;
+  /** True when Apply to Job applies here but the viewer's permission is off —
+   * the button stays visible but disabled with this reason instead of firing. */
+  onApplyToJobDisabled?: boolean;
+  onApplyToJobDisabledReason?: string;
   /** The version currently in use. With `onSelectVersion` and without
    *  `selectionMode`, each row gains a "Use this version" action and this one
    *  is marked as in use — so the list both reads and chooses. */
@@ -60,6 +64,8 @@ export default function ResumeVersionsModal({
   onSelectVersion,
   selectionMode = false,
   onApplyToJob,
+  onApplyToJobDisabled,
+  onApplyToJobDisabledReason,
   selectedVersionId,
 }: ResumeVersionsModalProps) {
   /* Choosing is offered whenever a handler exists and the whole dialog isn't
@@ -367,10 +373,20 @@ export default function ResumeVersionsModal({
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
+                              if (onApplyToJobDisabled) {
+                                toast.error(onApplyToJobDisabledReason || 'You do not have permission to score resumes');
+                                return;
+                              }
                               onApplyToJob(version);
                             }}
-                            className="p-2 text-gray-600 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue rounded-lg transition-colors"
-                            aria-label="Apply to Job" title="Apply to Job"
+                            disabled={onApplyToJobDisabled}
+                            className={`p-2 rounded-lg transition-colors ${
+                              onApplyToJobDisabled
+                                ? 'text-gray-400 dark:text-slate-600 cursor-not-allowed opacity-60'
+                                : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/10 hover:text-brand-blue'
+                            }`}
+                            aria-label="Apply to Job"
+                            title={onApplyToJobDisabled ? (onApplyToJobDisabledReason || 'You do not have permission to score resumes') : 'Apply to Job'}
                           >
                             <Briefcase className="w-4 h-4" />
                           </button>
