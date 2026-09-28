@@ -153,12 +153,12 @@ export function CoverageV2({ data }: Props) {
   return (
     <div className="space-y-6">
       {/* Header banner */}
-      <div className="rounded-2xl p-6 bg-brand-blue text-white">
+      <div className="rounded-2xl p-6 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 text-gray-900 dark:text-slate-50">
         <div className="flex items-center gap-3">
-          <Layers className="w-8 h-8" />
+          <div className="w-11 h-11 rounded-xl bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/15 flex items-center justify-center shrink-0"><Layers className="w-5 h-5" /></div>
           <div>
             <div className="text-xl font-bold mb-0.5">Cluster Coverage Analysis</div>
-            <div className="text-sm text-white/95">
+            <div className="text-sm text-gray-600 dark:text-slate-400">
               Shows which skill clusters and skills were covered in the interview questions.
             </div>
           </div>
@@ -211,23 +211,23 @@ export function CoverageV2({ data }: Props) {
       </div>
 
       {/* Coverage Summary */}
-      <div className="rounded-2xl p-6 bg-brand-blue text-white">
+      <div className="rounded-2xl p-6 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700/60 shadow-sm shadow-brand-blue/5 text-gray-900 dark:text-slate-50">
         <div className="text-lg font-bold mb-4">Coverage Summary</div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {data.sectionsPresent.mustHave && (
             <div>
-              <div className="text-sm text-white/90 mb-1">Must-Have Skills Coverage:</div>
+              <div className="text-sm text-gray-600 dark:text-slate-400 mb-1">Must-Have Skills Coverage:</div>
               <div className="text-2xl font-bold mb-1">{mhCov} / {mhTotal} covered</div>
-              <div className="text-sm text-white/80 mb-1">{mhDemo} demonstrated</div>
-              <div className="text-4xl font-bold">{mhPct}%</div>
+              <div className="text-sm text-gray-500 dark:text-slate-400 mb-1">{mhDemo} demonstrated</div>
+              <div className="text-4xl font-bold text-brand-blue">{mhPct}%</div>
             </div>
           )}
           {data.sectionsPresent.niceToHave && (
             <div>
-              <div className="text-sm text-white/90 mb-1">Nice-to-Have Skills Coverage:</div>
+              <div className="text-sm text-gray-600 dark:text-slate-400 mb-1">Nice-to-Have Skills Coverage:</div>
               <div className="text-2xl font-bold mb-1">{nhCov} / {nhTotal} covered</div>
-              <div className="text-sm text-white/80 mb-1">{nhDemo} demonstrated</div>
-              <div className="text-4xl font-bold">{nhPct}%</div>
+              <div className="text-sm text-gray-500 dark:text-slate-400 mb-1">{nhDemo} demonstrated</div>
+              <div className="text-4xl font-bold text-brand-orange-deep">{nhPct}%</div>
             </div>
           )}
         </div>

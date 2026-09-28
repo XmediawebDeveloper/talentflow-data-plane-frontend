@@ -151,8 +151,17 @@ export const inviteResult = (inv: any, score: number | null): 'Pass' | 'Fail' | 
   return score >= 60 ? 'Pass' : 'Fail';
 };
 
+/** The Result filter ('pass' | 'fail' | 'unscored', '' = any) matched against
+ *  the same Pass/Fail the badge shows, so a filter never disagrees with it. */
+export const matchesInviteResultFilter = (inv: any, score: number | null, filter: string): boolean => {
+  if (!filter) return true;
+  const result = inviteResult(inv, score);
+  if (filter === 'unscored') return result == null;
+  return result?.toLowerCase() === filter;
+};
+
 /** Same pill as the Candidate Results tab's PassFailBadge — tick/cross inside. */
-const ResultBadge = ({ result }: { result: 'Pass' | 'Fail' | null }) =>
+export const ResultBadge = ({ result }: { result: 'Pass' | 'Fail' | null }) =>
   result ? (
     <span
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium ring-1 whitespace-nowrap ${

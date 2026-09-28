@@ -3,6 +3,8 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { useListSearch } from '@/lib/hooks/useListSearch';
+import { useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import ResultRowActions, { DownloadPdfsButton, isPhoneWidth } from './ResultRowActions';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import { useRouter } from 'next/navigation';
 import {
@@ -28,7 +30,7 @@ import {
   getProctoringRisk,
   formatDuration,
 } from './AIInterviewResults';
-import { InviteSourceValue, inviteSourceLabel } from '@/components/AIInterviewInviteTable';
+import { InviteSourceValue, inviteSourceLabel, displayInviteScore, inviteResult, matchesInviteResultFilter } from '@/components/AIInterviewInviteTable';
 import SearchableSelect from '@/components/ui/searchable-select';
 import {
   FilterSelect,
@@ -37,7 +39,6 @@ import {
   versionFilterOptions,
   INVITE_SOURCE_FILTER_OPTIONS,
   RESULT_FILTER_OPTIONS,
-  matchesResultFilter,
   matchesDateRange,
 } from './ColumnFilterFields';
 
@@ -80,6 +81,7 @@ const CANDIDATE_COLUMNS = [
   { id: 'inviteSource', label: 'Invite Source' },
   { id: 'status', label: 'Status' },
   { id: 'score', label: 'Score' },
+  { id: 'result', label: 'Result' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'proctoring', label: 'Proctoring Risk' },
 ] as const;
@@ -113,12 +115,15 @@ function VersionPill({ kind, version }: { kind: 'job' | 'interview'; version: nu
 
 const PAGE_SIZE = 15;
 
-/** 60% — the same pass mark the invite tracker's own Score column uses
- *  (see AIInterviewInviteTable's ScoreCell). */
-const PASS_MARK = 60;
+/** The AI Interview rule: Must-Have Skills 60% or above is a Pass. Score is
+ *  the MHS% the invite trackers show (displayInviteScore), and Result is the
+ *  same Pass/Fail their badge shows (backend `final_result`, else that 60%
+ *  mark), so a candidate reads the same on every tab. null = not scored. */
+const mhsScore = (row: AIInterviewResponse) => displayInviteScore(row);
+const sessionResult = (row: AIInterviewResponse) => inviteResult(row, mhsScore(row));
 
-function PassFailBadge({ score }: { score: number }) {
-  const passed = score >= PASS_MARK;
+function PassFailBadge({ result }: { result: 'Pass' | 'Fail' }) {
+  const passed = result === 'Pass';
   return (
     <span
       className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-2xs font-medium ring-1 ${
@@ -170,10 +175,31 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
     onChange: () => setCurrentPage(1),
     // The completed-on range is one filter however many ends are set.
     countFilters: (f) =>
-      (['job', 'jobVersion', 'interviewVersion', 'inviteSource', 'status', 'result', 'risk'] as const)
+      // Result isn't counted — it's the toolbar dropdown, not a More Filters pick.
+      (['job', 'jobVersion', 'interviewVersion', 'inviteSource', 'status', 'risk'] as const)
         .filter((key) => !!f[key]).length
       + (f.completedFrom || f.completedTo ? 1 : 0),
   });
+
+  /* Opening a candidate or job and coming back (breadcrumb or browser Back)
+     remounts this list — restore its page, search, filters and view so the
+     user lands where they left off, not on page 1. Page is applied last:
+     restoring the search and filters calls onChange, which resets it to 1. */
+  // Phones open on the cards — the table only scrolls sideways there.
+  // Before the restore below, which still wins on larger screens.
+  useEffect(() => {
+    if (isPhoneWidth()) setDisplayMode('grid');
+  }, []);
+  useListStatePersistence(
+    'ai-interview-candidate-results',
+    { currentPage, query: search.query, filters: search.filters, displayMode },
+    (s) => {
+      if (typeof s.query === 'string' && s.query) search.setQuery(s.query);
+      if (s.filters && typeof s.filters === 'object') search.setFilters({ ...EMPTY_CANDIDATE_FILTERS, ...s.filters });
+      if ((s.displayMode === 'list' || s.displayMode === 'grid') && !isPhoneWidth()) setDisplayMode(s.displayMode);
+      if (typeof s.currentPage === 'number' && s.currentPage >= 1) setCurrentPage(s.currentPage);
+    },
+  );
 
   /**
    * One request per config, fanned out in parallel. There is no cross-config
@@ -252,7 +278,9 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
       });
 
       setRows(merged);
-      setCurrentPage(1);
+      // Page is NOT reset here — it may have just been restored (see
+      // useListStatePersistence above), and safePage clamps it if the
+      // reload left fewer pages.
     } catch (err: any) {
       setError(err?.message || 'Failed to load candidate results');
       setRows([]);
@@ -293,7 +321,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
       if (f.interviewVersion && String(row._interview_version) !== f.interviewVersion) return false;
       if (f.inviteSource && (row as any).invite_source !== f.inviteSource) return false;
       if (f.status && row.status !== f.status) return false;
-      if (!matchesResultFilter(row.score, f.result)) return false;
+      if (!matchesInviteResultFilter(row, mhsScore(row), f.result)) return false;
       if (f.risk && getProctoringRisk(row).level !== f.risk) return false;
       if (!matchesDateRange(row.completed_at, f.completedFrom, f.completedTo)) return false;
       return true;
@@ -305,10 +333,6 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
   const jobOptions = useMemo(() => jobFilterOptions(rows, (r) => r._job_id, (r) => r._config_title), [rows]);
   const jobVersionOptions = useMemo(() => versionFilterOptions(rows, (r) => r._job_version), [rows]);
   const interviewVersionOptions = useMemo(() => versionFilterOptions(rows, (r) => r._interview_version), [rows]);
-  const statusOptions = useMemo(
-    () => [...new Set(rows.map((r) => r.status).filter(Boolean))].map((s) => ({ value: s as string, label: getStatusLabel(s as string) })),
-    [rows],
-  );
 
   const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
   const safePage = Math.min(currentPage, totalPages);
@@ -373,7 +397,8 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
         case 'interviewVersion': return [`V${row._interview_version}`];
         case 'inviteSource': return [inviteSourceLabel(row) || ''];
         case 'status': return [getStatusLabel(row.status)];
-        case 'score': return [row.score != null ? `${Math.round(row.score)}% (${row.score >= PASS_MARK ? 'Pass' : 'Fail'})` : ''];
+        case 'score': { const score = mhsScore(row); return [score != null ? `${score}%` : '']; }
+        case 'result': return [sessionResult(row) || ''];
         case 'timeline': return [
           row.started_at ? formatIST(row.started_at) : '',
           row.completed_at ? formatIST(row.completed_at) : '',
@@ -555,11 +580,28 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
         // keystrokes straight through.
         searchDebounceMs={0}
         searchPlaceholder="Search by name, email, CID, or interview..."
+        // Many controls beside the search — lay out by the toolbar's own width.
+        fitToContainer
         onToggleFilters={() => setShowFilters((open) => !open)}
         filtersOpen={showFilters}
         activeFilterCount={search.activeFilterCount}
         filtersApplied={search.filtersApplied}
         onClearFilters={search.reset}
+        leadingActions={
+          /* Result (Pass / Fail) first, ahead of More Filters — the same
+             toolbar order as the per-interview results view. */
+          <select
+            value={search.filters.result}
+            onChange={(e) => search.setFilter('result', e.target.value)}
+            aria-label="Result"
+            className="px-3 py-2 text-sm border border-gray-300 dark:border-slate-700 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white dark:bg-slate-900 text-black dark:text-slate-100"
+          >
+            <option value="">All Results</option>
+            {RESULT_FILTER_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>{opt.label}</option>
+            ))}
+          </select>
+        }
         filterPanel={
           /* One filter per column that has a fixed set of values; name,
              email and CID are what the search box is for. Picks are drafts
@@ -585,12 +627,6 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
               <FilterSelect id="cr-invite-source" label="Invite Source" anyLabel="All sources"
                 value={search.draftFilters.inviteSource} onChange={(v) => search.setDraftFilter('inviteSource', v)}
                 options={INVITE_SOURCE_FILTER_OPTIONS} />
-              <FilterSelect id="cr-status" label="Status" anyLabel="All statuses"
-                value={search.draftFilters.status} onChange={(v) => search.setDraftFilter('status', v)}
-                options={statusOptions} />
-              <FilterSelect id="cr-result" label="Result" anyLabel="Any result"
-                value={search.draftFilters.result} onChange={(v) => search.setDraftFilter('result', v)}
-                options={RESULT_FILTER_OPTIONS} />
               <FilterSelect id="cr-risk" label="Proctoring Risk" anyLabel="Any risk"
                 value={search.draftFilters.risk} onChange={(v) => search.setDraftFilter('risk', v)}
                 options={RISK_FILTER_OPTIONS} />
@@ -624,8 +660,16 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
           <span className="hidden md:inline">Customize Columns</span>
           <span className="md:hidden">Columns</span>
         </Button>
+        {/* Download PDF acts on the ticked rows only (disabled until one is
+            selected); Export is always on — the ticked rows, else every
+            filtered row. */}
+        <DownloadPdfsButton
+          getRows={() => selectedRows}
+          selectedCount={selectedRows.length}
+          zipName={`AI_Interview_Candidate_Reports_${new Date().toISOString().slice(0, 10)}.zip`}
+        />
         <Button
-          variant="secondary"
+          variant="primary"
           size="sm"
           onClick={() => setShowExportModal(true)}
           icon={<FileDown className="w-4 h-4" />}
@@ -707,15 +751,12 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                       )}
                     </div>
 
-                    {row.score != null && (
+                    {mhsScore(row) != null && (
                       <div className="flex items-center gap-1.5">
-                        <span className={`font-medium text-xs ${
-                          row.score >= 70 ? 'text-success' :
-                          row.score >= 50 ? 'text-brand-orange-deep' : 'text-destructive'
-                        }`}>
-                          {Math.round(row.score)}%
+                        <span className={`font-medium text-xs ${mhsScore(row)! >= 60 ? 'text-success' : 'text-destructive'}`}>
+                          {mhsScore(row)}%
                         </span>
-                        <PassFailBadge score={row.score} />
+                        {sessionResult(row) && <PassFailBadge result={sessionResult(row)!} />}
                       </div>
                     )}
 
@@ -813,6 +854,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                     {col('inviteSource') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Invite Source</th>}
                     {col('status') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide">Status</th>}
                     {col('score') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Score</th>}
+                    {col('result') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Result</th>}
                     {col('timeline') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Timeline</th>}
                     {col('proctoring') && <th className="text-left px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide whitespace-nowrap">Proctoring Risk</th>}
                     <th className="text-right px-4 py-3 font-medium text-gray-600 dark:text-slate-400 text-xs uppercase tracking-wide tf-sticky-col">Actions</th>
@@ -919,19 +961,18 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                         )}
                         {col('score') && (
                           <td className="px-4 py-3 whitespace-nowrap">
-                            {row.score != null ? (
-                              <div className="flex items-center gap-1.5">
-                                <span className={`font-medium text-xs ${
-                                  row.score >= 70 ? 'text-success' :
-                                  row.score >= 50 ? 'text-brand-orange-deep' : 'text-destructive'
-                                }`}>
-                                  {Math.round(row.score)}%
-                                </span>
-                                <PassFailBadge score={row.score} />
-                              </div>
+                            {mhsScore(row) != null ? (
+                              <span className={`font-medium text-xs ${mhsScore(row)! >= 60 ? 'text-success' : 'text-destructive'}`}>
+                                {mhsScore(row)}%
+                              </span>
                             ) : (
                               <span className="text-gray-400">—</span>
                             )}
+                          </td>
+                        )}
+                        {col('result') && (
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            {sessionResult(row) ? <PassFailBadge result={sessionResult(row)!} /> : <span className="text-gray-400">—</span>}
                           </td>
                         )}
                         {col('timeline') && (
@@ -955,16 +996,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                           </td>
                         )}
                         <td className="px-4 py-3 text-right whitespace-nowrap tf-sticky-col">
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            onClick={(e) => { e.stopPropagation(); openSession(row); }}
-                            icon={<Eye className="w-3.5 h-3.5" />}
-                            title="View Details"
-                            aria-label="View Details"
-                          >
-                            <span className="hidden sm:inline">View Details</span>
-                          </Button>
+                          <ResultRowActions session={row} onView={() => openSession(row)} />
                         </td>
                       </tr>
                     );

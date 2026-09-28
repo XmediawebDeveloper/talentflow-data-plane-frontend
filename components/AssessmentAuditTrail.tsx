@@ -18,6 +18,7 @@ import ListEmptyState from '@/components/ui/list-empty-state';
 import { useListSearch } from '@/lib/hooks/useListSearch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
+import { formatScore } from '@/lib/utils/score';
 
 type CategoryFilter = 'all' | 'assessment_lifecycle' | 'candidate_activity';
 
@@ -587,7 +588,7 @@ export default function AssessmentAuditTrail() {
                               {activity.score !== null && activity.score !== undefined && (
                                 <span className="flex items-center gap-1">
                                   <Award className="w-3 h-3 flex-shrink-0" />
-                                  Score: {Math.round(activity.score)}%
+                                  Score: {formatScore(activity.score)}%
                                 </span>
                               )}
                             </div>

@@ -18,6 +18,7 @@ import AssessmentConfigureModal from '@/components/AssessmentConfigureModal';
 import AssessmentResults from '@/components/AssessmentResults';
 import JDOverviewSections from '@/components/jobs/JDOverviewSections';
 import JDIdentityHeader from '@/components/jobs/JDIdentityHeader';
+import { currentResultReturnTo, isResultRestoreArrival, rememberResultReturn, resultReturnQuery } from '@/lib/utils/resultReturnContext';
 import AssessmentInfoPanel from '@/components/assessments/AssessmentInfoPanel';
 import api from '@/lib/services/api';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
@@ -35,6 +36,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import LanguageLogo, { logoLabelForId } from '@/components/assessments/LanguageLogo';
+import { formatScore } from '@/lib/utils/score';
 
 interface AssessmentDetailsViewProps {
   assessment: any;
@@ -102,7 +104,7 @@ function InlinePageNav({ page, totalPages, onPageChange }: { page: number; total
     "inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors";
 
   return (
-    <div className="flex items-center gap-2 sm:gap-3">
+    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
       <div className="flex items-center gap-1.5">
         <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
         <input
@@ -911,10 +913,15 @@ export default function AssessmentDetailsView({
         .map((inv: any) => ({ id: inv.attempt_id, cid: inv.candidate_display_id || '' }));
       sessionStorage.setItem('assessmentResultNavList', JSON.stringify(navList));
     } catch { /* ignore quota errors */ }
+    /* Back to this assessment's Invite Status tab — breadcrumb and browser
+       Back alike. See resultReturnContext. */
+    const returnTo = currentResultReturnTo('invitations');
+    rememberResultReturn(returnTo);
     router.push(
       `/recruitment/assessments/${assessment.id}/results/details`
       + `?candidate_id=${invitation.attempt_id}`
       + `${invitation.candidate_display_id ? `&cid=${encodeURIComponent(invitation.candidate_display_id)}` : ''}`
+      + resultReturnQuery(returnTo, stripVersionFromTitle(assessment.title))
     );
   };
 
@@ -1396,7 +1403,7 @@ export default function AssessmentDetailsView({
                     the fallback for rows with no `jd_title`, and only removes
                     a "Version N" suffix baked into an old stored title; it
                     does not touch the API value. */}
-                <h1 className="font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate">
+                <h1 className="min-w-0 max-w-full font-normal text-gray-900 dark:text-slate-50 text-base sm:text-lg truncate">
                   {assessment.jd_title || stripVersionFromTitle(assessment.title)}
                 </h1>
                 {assessment.status && (
@@ -1839,10 +1846,10 @@ export default function AssessmentDetailsView({
           (`overflow-x-auto scrollbar-hide`), so with six tabs the last of them
           was off-screen and undiscoverable at anything under a wide desktop.
           Stacked vertically they are all visible at once. */}
-      <div className="grid grid-cols-[180px_minmax(0,1fr)] items-start gap-3 sm:grid-cols-[220px_minmax(0,1fr)] sm:gap-4 lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
-        <aside className="sticky top-20 self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
+      <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4 md:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
+        <aside className="min-w-0 sm:sticky sm:top-20 sm:self-start bg-white dark:bg-slate-900 rounded-xl border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] shadow-sm shadow-brand-blue/5">
           <nav className="p-2 sm:p-3" aria-label="Assessment details sections">
-            <div className="flex flex-col gap-1.5">
+            <div className="grid grid-cols-2 gap-1.5 sm:flex sm:flex-col">
               {detailTabs.map((tab) => {
                 const isActive = activeTab === tab.id;
                 return (
@@ -1851,18 +1858,46 @@ export default function AssessmentDetailsView({
                     type="button"
                     onClick={() => setActiveTab(tab.id)}
                     aria-current={isActive ? 'page' : undefined}
-                    className={`w-full rounded-lg px-3 py-2.5 text-left text-xs sm:text-sm transition-colors flex items-center gap-2 ${
+                    className={`w-full min-w-0 rounded-lg px-2.5 sm:px-3 py-2.5 text-left text-xs sm:text-sm transition-colors flex items-center gap-2 ${
                       isActive
                         ? 'bg-brand-blue/5 text-brand-blue font-medium ring-1 ring-brand-blue/20'
                         : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/5 hover:text-brand-blue'
                     }`}
                   >
                     <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
-                    <span className="min-w-0 leading-snug">{tab.label}</span>
+                    <span className="min-w-0 break-words leading-snug">{tab.label}</span>
                   </button>
                 );
               })}
             </div>
+            {/* Go to JD — last in the menu, under a divider because it leaves
+                the page rather than switching a section. Opens the job
+                version this assessment was built on (`jd_id`) on its own Job
+                Details page, which is told it came from here so its breadcrumb
+                reads Assessments › <this assessment> › <job> and leads back. */}
+            {assessment.jd_id && (
+              <div className="mt-1.5 pt-1.5 border-t border-gray-100 dark:border-slate-700/60">
+                <button
+                  type="button"
+                  onClick={() => {
+                    const params = new URLSearchParams({
+                      id: assessment.jd_id,
+                      from: 'assessment-details',
+                      assessment_id: assessment.id,
+                      assessment_title: assessment.title || '',
+                    });
+                    router.push(`/recruitment/job-details?${params.toString()}`);
+                  }}
+                  className="w-full rounded-lg px-3 py-2.5 text-left text-xs sm:text-sm font-medium text-brand-blue underline underline-offset-2 hover:bg-brand-blue/5 hover:text-brand-blue-2 transition-colors flex items-center gap-2"
+                >
+                  <Briefcase className="w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0" />
+                  <span className="min-w-0 leading-snug">Go to JD</span>
+                  {/* The "leaves this page" glyph the View JD tab's own
+                      "Open full JD page" link carries. */}
+                  <ExternalLink className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                </button>
+              </div>
+            )}
           </nav>
         </aside>
 
@@ -1878,7 +1913,7 @@ export default function AssessmentDetailsView({
             <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
               <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
                 <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2 tracking-tight">
-                  <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                  <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                     <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                   </div>
                   Assessment Details
@@ -1929,9 +1964,9 @@ export default function AssessmentDetailsView({
                 {detailsSubTab === 'configure' && (
                   <>
                     {/* Total Duration Card */}
-                    <div className="bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 border border-brand-blue/15 rounded-xl p-4 mb-6 flex items-center justify-between">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
+                    <div className="bg-gradient-to-r from-brand-blue/5 to-brand-cyan/5 border border-brand-blue/15 rounded-xl p-3 sm:p-4 mb-6 flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 flex-shrink-0 rounded-xl bg-brand-blue shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex items-center justify-center">
                           <Clock className="w-5 h-5 text-white" />
                         </div>
                         <div>
@@ -1939,7 +1974,7 @@ export default function AssessmentDetailsView({
                           <div className="text-xl font-semibold text-gray-900 tracking-tight">{formattedDuration}</div>
                         </div>
                       </div>
-                      <span className="px-4 py-2 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded-lg">
+                      <span className="shrink-0 px-3 sm:px-4 py-2 bg-brand-blue text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 text-sm font-medium rounded-lg">
                         100%
                       </span>
                     </div>
@@ -2129,7 +2164,7 @@ export default function AssessmentDetailsView({
                     <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
                       <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
                         <div className="flex items-center gap-2 mb-1">
-                          <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                          <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                             <Info className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                           </div>
                           <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Assessment Info</h3>
@@ -2150,7 +2185,7 @@ export default function AssessmentDetailsView({
                             {/* Job Complexity Level */}
                             <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
                               <div className="flex items-center gap-2 mb-2">
-                                <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                                <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                                   <Layers className="w-4 h-4 text-brand-blue" />
                                 </div>
                                 <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Job Complexity</span>
@@ -2167,7 +2202,7 @@ export default function AssessmentDetailsView({
                             {/* Experience Level */}
                             <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
                               <div className="flex items-center gap-2 mb-2">
-                                <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                                <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                                   <TrendingUp className="w-4 h-4 text-brand-cyan" />
                                 </div>
                                 <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Experience Level</span>
@@ -2184,7 +2219,7 @@ export default function AssessmentDetailsView({
                             {/* Primary Domain */}
                             <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
                               <div className="flex items-center gap-2 mb-2">
-                                <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                                <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                                   <Globe className="w-4 h-4 text-brand-blue" />
                                 </div>
                                 <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Primary Domain</span>
@@ -2199,7 +2234,7 @@ export default function AssessmentDetailsView({
                             {/* Coding Requirement */}
                             <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4">
                               <div className="flex items-center gap-2 mb-2">
-                                <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                                <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                                   <Code className="w-4 h-4 text-brand-cyan" />
                                 </div>
                                 <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Coding Requirement</span>
@@ -2212,7 +2247,7 @@ export default function AssessmentDetailsView({
                             {/* Eligible Programming Languages */}
                             <div className="rounded-xl border border-gray-200 ring-1 ring-black/[0.02] bg-white shadow-sm shadow-brand-blue/5 p-4 sm:col-span-2">
                               <div className="flex items-center gap-2 mb-2">
-                                <div className="w-9 h-9 rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
+                                <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-orange/10 ring-1 ring-brand-orange/20 flex items-center justify-center">
                                   <Zap className="w-4 h-4 text-brand-orange-deep" />
                                 </div>
                                 <span className="text-xs font-medium text-gray-500 uppercase tracking-wide">Eligible Programming Languages</span>
@@ -2240,7 +2275,7 @@ export default function AssessmentDetailsView({
                               matching pair instead of "Skill Depth" + "Nice-to-Have". */}
                           {skillDepth.length > 0 && (
                             <div>
-                              <div className="flex items-center gap-2 mb-3">
+                              <div className="flex flex-wrap items-center gap-2 mb-3">
                                 <Star className="w-4 h-4 text-brand-blue" />
                                 <h4 className="text-sm font-medium text-gray-900 tracking-tight">Must-Have Skills</h4>
                                 <span className="text-xs text-gray-500">(Required skills extracted from JD)</span>
@@ -2271,7 +2306,7 @@ export default function AssessmentDetailsView({
                               instead of hiding the heading entirely (which made
                               recruiters think NHS support was missing). */}
                           <div>
-                            <div className="flex items-center gap-2 mb-3">
+                            <div className="flex flex-wrap items-center gap-2 mb-3">
                               <Star className="w-4 h-4 text-brand-cyan" />
                               <h4 className="text-sm font-medium text-gray-900 tracking-tight">Nice-to-Have Skills</h4>
                               <span className="text-xs text-gray-500">(Preferred skills extracted from JD)</span>
@@ -2462,7 +2497,7 @@ export default function AssessmentDetailsView({
               <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
                 <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
                   <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2 tracking-tight">
-                    <div className="w-9 h-9 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
+                    <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center">
                       <Info className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
                     </div>
                     Assessment Guidance
@@ -2501,7 +2536,7 @@ export default function AssessmentDetailsView({
                 already labelled by the nav entry that opened it. */}
             <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0">
               <h3 className="text-sm sm:text-base font-medium text-gray-900 flex items-center gap-2 tracking-tight">
-                <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <Mail className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
                 </div>
                 Invitation Status
@@ -2580,7 +2615,7 @@ export default function AssessmentDetailsView({
                 `inviteInitialLoading` rather than the plain loading flag so it
                 does not disappear and come back during a refresh. */}
             {!inviteInitialLoading && inviteSelectableIds.length > 0 && (
-              <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
+              <div className="flex flex-wrap items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
                 <button
                   type="button"
                   onClick={toggleInviteSelectAll}
@@ -2716,9 +2751,14 @@ export default function AssessmentDetailsView({
             jdId={assessment.jd_id}
             jdShortId={assessment.jd_short_id}
             jdVersion={assessment.jd_version ?? null}
-            jobVersionScope={assessment.jd_id ?? null}
+            /* Back from a candidate's result (`results_restore`), name no
+               scope: the list restores the versions the recruiter left it on
+               instead of snapping back to this record's own pair. */
+            jobVersionScope={isResultRestoreArrival(searchParams) ? null : assessment.jd_id ?? null}
             assessmentVersionScope={
-              typeof assessment.version === 'number' ? String(assessment.version) : null
+              isResultRestoreArrival(searchParams)
+                ? null
+                : typeof assessment.version === 'number' ? String(assessment.version) : null
             }
             canDownloadPDF={canDownloadResultPDF}
             canBatchDownload={canBatchDownloadResults}
@@ -2730,7 +2770,7 @@ export default function AssessmentDetailsView({
           <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
             <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
               <h3 className="text-sm sm:text-base lg:text-lg text-gray-900 tracking-tight flex items-center gap-2">
-                <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <BarChart className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
                 </div>
                 Recent Activity
@@ -2745,10 +2785,10 @@ export default function AssessmentDetailsView({
                       <Skeleton className="w-8 h-8 sm:w-10 sm:h-10 rounded-full flex-shrink-0" />
                       <div className="flex-1 min-w-0">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-0.5 sm:gap-0">
-                          <Skeleton className="h-4 w-56" />
+                          <Skeleton className="h-4 w-56 max-w-full" />
                           <Skeleton className="h-3.5 w-24" />
                         </div>
-                        <Skeleton className="h-3.5 w-48 mt-1" />
+                        <Skeleton className="h-3.5 w-48 max-w-full mt-1" />
                       </div>
                     </div>
                   </div>
@@ -2776,10 +2816,14 @@ export default function AssessmentDetailsView({
                     .map((e: any) => ({ id: e.attempt_id, cid: e.candidate_display_id || '' }));
                   sessionStorage.setItem('assessmentResultNavList', JSON.stringify(navList));
                 } catch { /* ignore quota errors */ }
+                /* Back to this assessment's Recent Activity tab. */
+                const returnTo = currentResultReturnTo('activity');
+                rememberResultReturn(returnTo);
                 router.push(
                   `/recruitment/assessments/${assessment.id}/results/details`
                   + `?candidate_id=${activity.attempt_id}`
                   + `${activity.candidate_display_id ? `&cid=${encodeURIComponent(activity.candidate_display_id)}` : ''}`
+                  + resultReturnQuery(returnTo, stripVersionFromTitle(assessment.title))
                 );
               };
               return (
@@ -2840,21 +2884,21 @@ export default function AssessmentDetailsView({
                                   <span className="font-medium text-gray-900 text-xs sm:text-sm">{activity.candidate_name || 'Unknown'}</span>
                                   <span className="text-gray-500 ml-1 sm:ml-2 text-xs sm:text-sm">{info.label}</span>
                                 </div>
-                                <span className="text-xs sm:text-sm text-gray-500">{formattedDate}</span>
+                                <span className="text-xs sm:text-sm text-gray-500 sm:shrink-0">{formattedDate}</span>
                               </div>
                               <p className="text-xs sm:text-sm text-gray-600 mt-0.5 truncate">{activity.candidate_email}</p>
                               {showScores && (
-                                <div className="flex items-center gap-3 mt-2">
+                                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-2">
                                   {assessment.technical_enabled && activity.technical_score != null && (
                                     <div className="flex items-center gap-1.5">
                                       <span className="text-xs text-gray-600">Tech:</span>
-                                      <span className="text-sm font-semibold text-gray-900">{Math.round(activity.technical_score)}%</span>
+                                      <span className="text-sm font-semibold text-gray-900">{formatScore(activity.technical_score)}%</span>
                                     </div>
                                   )}
                                   {assessment.coding_enabled && activity.coding_score != null && (
                                     <div className="flex items-center gap-1.5">
                                       <span className="text-xs text-gray-600">Coding:</span>
-                                      <span className="text-sm font-semibold text-gray-900">{Math.round(activity.coding_score)}%</span>
+                                      <span className="text-sm font-semibold text-gray-900">{formatScore(activity.coding_score)}%</span>
                                     </div>
                                   )}
                                   {activity.passed != null && (
@@ -2873,7 +2917,7 @@ export default function AssessmentDetailsView({
 
                   {/* Pagination — 10 events per page. */}
                   {recentActivity.length > ACTIVITY_PAGE_SIZE && (
-                    <div className="px-3 sm:px-4 lg:px-6 py-3 border-t border-gray-200 flex items-center justify-between text-xs sm:text-sm text-gray-600">
+                    <div className="px-3 sm:px-4 lg:px-6 py-3 border-t border-gray-200 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 text-xs sm:text-sm text-gray-600">
                       <span>
                         Showing {startIdx + 1}–{Math.min(startIdx + ACTIVITY_PAGE_SIZE, recentActivity.length)} of {recentActivity.length}
                       </span>
@@ -2895,7 +2939,7 @@ export default function AssessmentDetailsView({
           <div className="bg-white rounded-xl border border-gray-200 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
             <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-200">
               <div className="flex items-center gap-2 mb-1">
-                <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+                <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
                 </div>
                 <h3 className="text-sm sm:text-base font-medium text-gray-900 tracking-tight">Version History</h3>
@@ -3024,8 +3068,8 @@ export default function AssessmentDetailsView({
         {activeTab === 'newversions' && (
           <div className="bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5">
             <div className="px-3 sm:px-4 lg:px-6 py-3 sm:py-4 border-b border-gray-100">
-              <div className="flex items-center gap-2 mb-1">
-                <div className="w-9 h-9 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
+              <div className="flex flex-wrap items-center gap-2 mb-1">
+                <div className="w-9 h-9 flex-shrink-0 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/15 flex items-center justify-center">
                   <Layers className="w-4 h-4 sm:w-5 sm:h-5 text-brand-cyan" />
                 </div>
                 {/* The nav entry's own label, so the panel cannot be
@@ -3112,7 +3156,7 @@ export default function AssessmentDetailsView({
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2 mb-1.5">
-                            <h4 className="text-sm sm:text-base font-semibold text-gray-900 tracking-tight truncate">
+                            <h4 className="min-w-0 text-sm sm:text-base font-semibold text-gray-900 tracking-tight truncate">
                               {stripVersionFromTitle(sibling.title || '') || sibling.short_id || 'Untitled assessment'}
                               {sibling.version ? ` - Version ${sibling.version}` : ''}
                             </h4>
@@ -3129,9 +3173,9 @@ export default function AssessmentDetailsView({
                           </div>
 
                           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs sm:text-sm text-gray-700 mt-2">
-                            <div className="flex items-center gap-1.5">
+                            <div className="flex items-center gap-1.5 min-w-0">
                               <Users className="w-3.5 h-3.5 text-gray-500 flex-shrink-0" />
-                              <span>Created by</span>
+                              <span className="shrink-0">Created by</span>
                               <span className="font-medium truncate">{sibling.created_by_name || 'Unknown'}</span>
                             </div>
                             <div className="flex items-center gap-1.5">

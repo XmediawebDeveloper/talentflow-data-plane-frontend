@@ -6,6 +6,7 @@ import AssessmentResults from '@/components/AssessmentResults';
 import AssessmentResultsSkeleton from '@/components/AssessmentResultsSkeleton';
 import { assessmentService } from '@/lib/services';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
+import { isResultRestoreArrival } from '@/lib/utils/resultReturnContext';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { useAuth } from '@/lib/hooks/useAuth';
 
@@ -166,8 +167,10 @@ export default function AssessmentResultsPage() {
         jdId={jdId}
         jdShortId={jdShortId}
         jdVersion={jdVersion}
-        jobVersionScope={jobVersionScopeParam}
-        assessmentVersionScope={assessmentVersionScopeParam}
+        /* Back from a candidate's result, the saved scope wins over the
+           link's — see resultReturnContext. */
+        jobVersionScope={isResultRestoreArrival(searchParams) ? null : jobVersionScopeParam}
+        assessmentVersionScope={isResultRestoreArrival(searchParams) ? null : assessmentVersionScopeParam}
         canDownloadPDF={canDownloadPDF}
         canBatchDownload={canBatchDownload}
         prevId={prevId}
