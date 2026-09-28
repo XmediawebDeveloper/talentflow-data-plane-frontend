@@ -45,7 +45,7 @@ interface AIInterviewPickerProps {
   searchLabel?: string;
 }
 
-const ROUND_LABELS: Record<string, string> = {
+export const ROUND_LABELS: Record<string, string> = {
   hr: 'HR',
   technical: 'Technical',
   behavioral: 'Behavioral',
@@ -56,7 +56,7 @@ const ROUND_LABELS: Record<string, string> = {
   nice_to_have_skills: 'Nice-to-Have Skills',
 };
 
-const ROUND_SHORT_LABELS: Record<string, string> = {
+export const ROUND_SHORT_LABELS: Record<string, string> = {
   hr: 'HR',
   technical: 'TECH',
   behavioral: 'BEH',

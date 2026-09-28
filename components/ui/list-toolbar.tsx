@@ -94,6 +94,15 @@ export interface ListToolbarProps {
    *  to give it a fixed width instead of filling the row. */
   searchClassName?: string;
 
+  /**
+   * Lay the row out by the TOOLBAR's own width (a container query) instead of
+   * the viewport's. For a toolbar with many controls inside a narrower column
+   * (e.g. beside a detail page's side nav): the search box takes its own full
+   * row until the toolbar is 64rem wide, rather than being squeezed to an
+   * icon because the viewport passed `sm`. Opt-in; default is unchanged.
+   */
+  fitToContainer?: boolean;
+
   className?: string;
 }
 
@@ -113,6 +122,7 @@ export default function ListToolbar({
   countBadge,
   filterPanel,
   searchClassName,
+  fitToContainer = false,
   className,
 }: ListToolbarProps) {
   /* ---- Debounced search -------------------------------------------------
@@ -156,14 +166,16 @@ export default function ListToolbar({
 
   // Without a panel the markup is exactly what it always was — the wrapper only
   // appears when there is something to put under the row.
-  const toolbarRow = (
+  const row = (
     <div
       className={cn(
-        'flex flex-col sm:flex-row sm:items-center gap-3 mb-3',
+        fitToContainer
+          ? 'flex flex-col @5xl/toolbar:flex-row @5xl/toolbar:items-center gap-3 mb-3'
+          : 'flex flex-col sm:flex-row sm:items-center gap-3 mb-3',
         filterPanel ? undefined : className
       )}
     >
-      <div className={cn('flex-1 relative', searchClassName)}>
+      <div className={cn(fitToContainer ? 'relative w-full @5xl/toolbar:flex-1 @5xl/toolbar:min-w-[220px]' : 'flex-1 relative', searchClassName)}>
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
         <input
           type="text"
@@ -176,7 +188,7 @@ export default function ListToolbar({
 
       {/* ml-auto keeps the controls right-aligned when the search box is given
           a fixed width; with the default flex-1 box it has no effect. */}
-      <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
+      <div className={fitToContainer ? 'flex flex-wrap items-center gap-2 @5xl/toolbar:ml-auto' : 'flex flex-wrap items-center gap-2 sm:ml-auto'}>
         {leadingActions}
 
         {onToggleFilters && (
@@ -230,6 +242,11 @@ export default function ListToolbar({
       </div>
     </div>
   );
+
+  // Container mode needs an ancestor to query — the row can't measure itself.
+  const toolbarRow = fitToContainer
+    ? <div className="@container/toolbar">{row}</div>
+    : row;
 
   if (!filterPanel) return toolbarRow;
 
