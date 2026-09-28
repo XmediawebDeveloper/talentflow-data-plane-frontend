@@ -26,7 +26,7 @@ import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from './ColumnFilterFields';
-import { InviteSourceValue, inviteSourceLabel, isRevocableInvite, isExpiredForActions, displayInviteScore, inviteResult, matchesInviteResultFilter, ResultBadge } from '@/components/AIInterviewInviteTable';
+import { InviteSourceValue, inviteSourceLabel, isRevocableInvite, isExpiredForActions, displayInviteScore, inviteResult, matchesInviteResultFilter, ResultBadge, timelineEvents } from '@/components/AIInterviewInviteTable';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 interface AIInterviewResultsProps {
@@ -1328,9 +1328,16 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         )}
                         {col('timeline') && (
                           <td className="px-4 py-3 whitespace-nowrap text-gray-600">
+                            {/* Same trail as Track Invites (Invited / System Check /
+                                Started / Completed …), from the shared builder. */}
                             <div className="flex flex-col gap-0.5 text-xs">
-                              <span><span className="text-gray-400">Started at:</span> {session.started_at ? formatIST(session.started_at) : '—'}</span>
-                              <span><span className="text-gray-400">Completed at:</span> {session.completed_at ? formatIST(session.completed_at) : '—'}</span>
+                              {timelineEvents(session).map(({ label, at, Icon, tone }, i) => (
+                                <span key={`${label}-${i}`} className="flex items-center gap-1.5">
+                                  <Icon className={`w-3 h-3 shrink-0 ${tone}`} />
+                                  <span>{label}: {formatIST(at)}</span>
+                                </span>
+                              ))}
+                              {timelineEvents(session).length === 0 && <span>—</span>}
                               <span><span className="text-gray-400">Duration:</span> {formatDuration(session)}</span>
                             </div>
                           </td>
