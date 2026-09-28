@@ -17,7 +17,7 @@
  * that view's white card, above its title row.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Database, FolderOpen, Lock } from 'lucide-react';
 import { useAuth } from '@/lib/hooks/useAuth';
@@ -25,6 +25,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import MyResumesView from '@/components/resumes/MyResumesView';
 import InternalDatabaseView from '@/components/resumes/InternalDatabaseView';
+import { resumeService } from '@/lib/services/resumeService';
 import type { Permission } from '@/lib/types/tenant';
 
 export type ResumeTab = 'my-resumes' | 'internal-db';
@@ -103,6 +104,28 @@ export default function ResumeDatabasePage() {
      sees the page without it, rather than a lone chip that looks broken. */
   const showTabs = canSeeMyResumes && canSeeInternalDb;
 
+  /* Per-pool totals for the tab badges. One page_size=1 request each — the
+     same probe the views use for their own totals — so switching tabs never
+     waits on a full listing. Active resumes only, matching the My Resumes
+     "All Resumes" badge. Refetched when the tab changes so a count picks up
+     uploads/deletes made on the other tab. */
+  const [tabCounts, setTabCounts] = useState<Partial<Record<ResumeTab, number>>>({});
+  useEffect(() => {
+    if (!showTabs) return;
+    let cancelled = false;
+    (['my-resumes', 'internal-db'] as const).forEach((tab) => {
+      resumeService
+        .list({ source: tab, page: 1, page_size: 1, include_archived: false })
+        .then((res) => {
+          if (!cancelled) setTabCounts((prev) => ({ ...prev, [tab]: res.total }));
+        })
+        .catch(() => {
+          // Keep the last known figure (or none) rather than showing a wrong one.
+        });
+    });
+    return () => { cancelled = true; };
+  }, [showTabs, activeTab]);
+
   const crumbs = [
     { label: 'Dashboard', href: '/dashboard' },
     // No href: this page has no "both tabs" state to link to, and PageBreadcrumb
@@ -121,18 +144,32 @@ export default function ResumeDatabasePage() {
               the row (flex-1), which left two near-identical full-width slabs. */}
           <TabsList
             aria-label="Resume pool"
-            className="h-auto w-auto gap-1 rounded-xl bg-slate-100 p-1 ring-1 ring-slate-200 dark:bg-slate-800 dark:ring-slate-700"
+            className="h-auto w-auto gap-1 rounded-xl bg-white p-1 ring-1 ring-slate-200 shadow-sm dark:bg-slate-900 dark:ring-slate-700"
           >
             {(['my-resumes', 'internal-db'] as const).map((tab) => {
               const Icon = tab === 'my-resumes' ? FolderOpen : Database;
+              // Own colour per pool — orange like the folder icons in the
+              // tree, cyan like the system folders — so the two read apart.
+              const iconColor = tab === 'my-resumes' ? 'text-brand-orange' : 'text-brand-cyan';
               return (
                 <TabsTrigger
                   key={tab}
                   value={tab}
-                  className="h-9 flex-none gap-2 rounded-lg px-4 text-sm font-medium text-slate-600 hover:text-slate-900 data-[state=active]:bg-white data-[state=active]:font-semibold data-[state=active]:text-brand-blue data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-brand-blue/30 dark:text-slate-400 dark:hover:text-slate-100 dark:data-[state=active]:bg-slate-900"
+                  className="h-9 flex-none gap-2 rounded-lg px-4 text-sm font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-50 data-[state=active]:bg-slate-100 data-[state=active]:font-semibold data-[state=active]:text-brand-blue data-[state=active]:shadow-sm data-[state=active]:ring-1 data-[state=active]:ring-brand-blue/30 dark:text-slate-400 dark:hover:text-slate-100 dark:hover:bg-slate-800 dark:data-[state=active]:bg-slate-800"
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className={`h-4 w-4 ${iconColor}`} />
                   {TAB_LABEL[tab]}
+                  {tabCounts[tab] !== undefined && (
+                    <span
+                      className={`rounded-full px-2 py-0.5 text-xs font-medium ring-1 ${
+                        activeTab === tab
+                          ? 'bg-brand-blue/10 text-brand-blue ring-brand-blue/20'
+                          : 'bg-slate-100 text-slate-500 ring-slate-200 dark:bg-slate-800 dark:text-slate-400 dark:ring-slate-700'
+                      }`}
+                    >
+                      {tabCounts[tab]}
+                    </span>
+                  )}
                 </TabsTrigger>
               );
             })}
