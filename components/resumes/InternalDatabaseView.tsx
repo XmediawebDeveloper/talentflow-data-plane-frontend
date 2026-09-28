@@ -1120,8 +1120,9 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           onApplyToJob={hasPlanFeature('resume_scoring') ? handleApplyToJob : undefined}
           onApplyToJobDisabled={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:apply_job')))}
           onApplyToJobDisabledReason="You do not have permission to score resumes"
+          canShare={isTenantAdmin || hasPermissionCode('internal_db:share')}
           onDelete={(id) => handleDelete(id)}
-          onDeleteDisabled={!isTenantAdmin}
+          onDeleteDisabled={!(isTenantAdmin || hasPermissionCode('internal_db:delete'))}
           onDeleteDisabledReason="You do not have permission to delete resumes"
           onViewDetails={(resume) => {
             sessionStorage.setItem('resumeNavList', JSON.stringify(paginatedResumes.map((r) => r.id)));
@@ -1221,7 +1222,7 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           resume={viewingResume}
           onClose={() => setViewingResume(null)}
           onDelete={(id) => handleDelete(id)}
-          onDeleteDisabled={!isTenantAdmin}
+          onDeleteDisabled={!(isTenantAdmin || hasPermissionCode('internal_db:delete'))}
           onDeleteDisabledReason="You do not have permission to delete resumes"
         />
       )}

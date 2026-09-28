@@ -368,7 +368,13 @@ export default function ResumeViewPage() {
   // ── Invite (Assessment / AI Interview) ──────────────────────────────────
   // Same two flows the Resume Scoring candidate page offers. A resume has no
   // job context here, so the user picks the JD first.
-  const canInviteAssessment = (isTenantAdmin || hasPermission('canCreateAssessments')) && hasPlanFeature('assessment');
+  const canInviteAssessment = (
+    isTenantAdmin || (
+      hasPermission('canCreateAssessments') && hasPermissionCode(
+        viewSource === 'resume-database' ? 'internal_db:assessment' : 'my_resumes:assessment'
+      )
+    )
+  ) && hasPlanFeature('assessment');
   const canInviteAIInterview =
     (isTenantAdmin || hasPermission('canInviteAIInterviews')) &&
     hasPlanFeature('ai_interview');
