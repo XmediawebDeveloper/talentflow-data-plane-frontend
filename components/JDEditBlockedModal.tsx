@@ -28,7 +28,22 @@ interface JDEditBlockedModalProps {
   onCreateNewVersion: () => void;
   /** Defaults to opening a blank JD; override to keep extra query params. */
   onCreateNewJD?: () => void;
+  /** The blocked JD. Given it, each module card opens THIS JD's Job Details
+   *  page on that module's tab instead of the module's own list. */
+  jdId?: string;
+  /** For a host already showing that JD's Job Details page: switch its tab
+   *  in place (a same-page `?tab=` push would be overwritten by the page). */
+  onOpenJobTab?: (tab: JobDetailsTab) => void;
 }
+
+/** The Job Details tab each usage module lives on. */
+export type JobDetailsTab = 'scored-resumes' | 'assessment-results' | 'ai-talent-match' | 'ai-interview-results';
+const JOB_TAB_BY_MODULE: Record<string, JobDetailsTab> = {
+  resume_scores_count: 'scored-resumes',
+  assessments_count: 'assessment-results',
+  ai_matches_count: 'ai-talent-match',
+  ai_interview_count: 'ai-interview-results',
+};
 
 export default function JDEditBlockedModal({
   open,
@@ -38,6 +53,8 @@ export default function JDEditBlockedModal({
   onClose,
   onCreateNewVersion,
   onCreateNewJD,
+  jdId,
+  onOpenJobTab,
 }: JDEditBlockedModalProps) {
   const router = useRouter();
 
@@ -135,14 +152,21 @@ export default function JDEditBlockedModal({
                     </>
                   );
 
+                  // This JD's own tab for the module, when the host said which JD.
+                  const jobTab = jdId || onOpenJobTab ? JOB_TAB_BY_MODULE[module.key] : undefined;
                   /* A link only where the module has somewhere to go. An
                      unrecognised module has no navigation entry, and a
                      chevron leading nowhere is a broken promise. */
                   return (
                     <li key={module.key}>
-                      {module.href ? (
+                      {(jobTab || module.href) ? (
                         <button
-                          onClick={() => router.push(module.href as string)}
+                          onClick={() => {
+                            if (jobTab && onOpenJobTab) { onOpenJobTab(jobTab); return; }
+                            if (jobTab && jdId) { router.push(`/recruitment/job-details?id=${encodeURIComponent(jdId)}&tab=${jobTab}`); return; }
+                            router.push(module.href as string);
+                          }}
+                          title={jobTab ? `Open this JD's ${module.name} tab` : undefined}
                           className="w-full text-left flex items-center gap-3 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2.5 hover:border-brand-blue/40 hover:bg-brand-blue/[0.03] transition-colors"
                         >
                           {rowBody}

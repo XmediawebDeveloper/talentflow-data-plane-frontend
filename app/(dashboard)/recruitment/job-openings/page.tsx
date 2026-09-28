@@ -4,6 +4,9 @@ import { useState, useEffect } from 'react';
 import { Loader2, AlertTriangle, X, Clock, GraduationCap, Factory, FolderOpen, FileSearch, ClipboardCheck, Users, Video, Info, ShieldCheck } from 'lucide-react';
 import JobsListing from '@/components/JobsListing';
 import JDEditBlockedModal from '@/components/JDEditBlockedModal';
+import AITalentMatchConfirmModal from '@/components/AITalentMatchConfirmModal';
+import AITalentMatchProgressPanel from '@/components/AITalentMatchProgressPanel';
+import SelectSourceModal from '@/components/SelectSourceModal';
 import ArchiveJobModal from '@/components/ArchiveJobModal';
 import DisableJobModal from '@/components/DisableJobModal';
 import { Job } from '@/lib/types/types';
@@ -346,18 +349,20 @@ export default function JobOpeningsPage() {
     router.push(`/recruitment/job-details?id=${job.id}&tab=scored-resumes`);
   };
 
-  // Same deep-link pattern as handleScoreResumes below: land on the job's own
-  // detail page, not the standalone AI Talent Match picker. JobDetailView's
-  // `initialAction === 'ai-talent-match'` effect picks this up and opens the
-  // same confirm prompt Run AI Match uses there, then — on Yes — runs the
-  // match inline and switches to that job's own "AI Talent Match Results"
-  // tab, instead of navigating away to a different page entirely.
+  /* AI Talent Match and Score Resumes open IN PLACE on this list — like
+     Disable / Archive / Delete — with the same pieces the job's own page uses:
+     the "Run AI Match?" confirm then the progress panel, and the "Select
+     Applicants to Score" popup. Results link through to that job's tab. */
+  const [aiMatchConfirmJob, setAiMatchConfirmJob] = useState<Job | null>(null);
+  const [aiMatchRunJob, setAiMatchRunJob] = useState<Job | null>(null);
+  const [scoreResumesJob, setScoreResumesJob] = useState<Job | null>(null);
+
   const handleAIMatch = (job: Job) => {
-    router.push(`/recruitment/job-details?id=${job.id}&action=ai-talent-match`);
+    setAiMatchConfirmJob(job);
   };
 
   const handleScoreResumes = (job: Job) => {
-    router.push(`/recruitment/job-details?id=${job.id}&action=score-resumes`);
+    setScoreResumesJob(job);
   };
 
   const handleUpdateJobStatus = async (jobId: string, status: string) => {
@@ -685,10 +690,59 @@ export default function JobOpeningsPage() {
 
       {/* Edit Warning Dialog — same component the JD detail page uses, so the
           grid and list views cannot drift from it again. */}
+      {/* AI Talent Match — confirm, then the progress panel, on this page */}
+      <AITalentMatchConfirmModal
+        isOpen={!!aiMatchConfirmJob}
+        jobTitle={aiMatchConfirmJob ? formatJobVersionLabel(aiMatchConfirmJob) : ''}
+        onConfirm={() => { setAiMatchRunJob(aiMatchConfirmJob); setAiMatchConfirmJob(null); }}
+        onCancel={() => setAiMatchConfirmJob(null)}
+      />
+      {aiMatchRunJob && (
+        <AITalentMatchProgressPanel
+          jobTitle={aiMatchRunJob.title}
+          jobId={aiMatchRunJob.id}
+          onComplete={(results) => {
+            const job = aiMatchRunJob;
+            setAiMatchRunJob(null);
+            toast.success(`AI Talent Match completed for "${job.title}" — ${results.length} matching candidate${results.length === 1 ? '' : 's'}.`, {
+              action: { label: 'View results', onClick: () => router.push(`/recruitment/job-details?id=${job.id}&tab=ai-talent-match`) },
+            });
+          }}
+          onError={(error) => {
+            setAiMatchRunJob(null);
+            toast.error(error || 'Failed to run AI Talent Match');
+          }}
+        />
+      )}
+
+      {/* Score Resumes — the "Select Applicants to Score" popup, on this page */}
+      {scoreResumesJob && (
+        <SelectSourceModal
+          jobTitle={scoreResumesJob.title}
+          jobId={scoreResumesJob.id}
+          jobShortId={scoreResumesJob.job_id}
+          jobVersion={scoreResumesJob.versionNumber && scoreResumesJob.versionNumber > 0 ? scoreResumesJob.versionNumber : null}
+          onClose={() => setScoreResumesJob(null)}
+          onScoringFinished={() => {
+            const job = scoreResumesJob;
+            toast.success(`Scoring finished for "${job.title}".`, {
+              action: { label: 'View scored resumes', onClick: () => router.push(`/recruitment/job-details?id=${job.id}&tab=scored-resumes`) },
+            });
+          }}
+          onScoringComplete={() => setScoreResumesJob(null)}
+          onViewResult={(item) => {
+            const job = scoreResumesJob;
+            setScoreResumesJob(null);
+            router.push(`/recruitment/job-details?id=${job.id}&tab=scored-resumes&resume=${encodeURIComponent(item.resumeId)}`);
+          }}
+        />
+      )}
+
       <JDEditBlockedModal
         open={editWarningDialog.open}
         modules={editWarningDialog.modules}
         reason={editWarningDialog.reason}
+        jdId={editWarningDialog.jobId}
         creating={!!editWarningDialog.creating}
         onClose={() => setEditWarningDialog({ open: false, jobTitle: '', modules: [] })}
         onCreateNewVersion={handleCreateNewVersion}
