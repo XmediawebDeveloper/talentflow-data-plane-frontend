@@ -1035,12 +1035,22 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
             // `handleBulkApplyToJob` (same modal, same job picker), so the bar
             // showed "Score Resume" and "Resume Scoring" as two buttons doing
             // one thing.
-            onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:apply_job'))) ? handleBulkApplyToJob : undefined}
-            onAssessment={hasPlanFeature('assessment') && (isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('internal_db:assessment'))) ? handleBulkAssessment : undefined}
-            onAIInterview={hasPlanFeature('ai_interview') && (isTenantAdmin || hasPermission('canShareAIInterviews')) ? handleBulkAIInterview : undefined}
-            onAITalentMatch={hasPlanFeature('ai_talent_match') && (isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('internal_db:ai_match'))) ? handleBulkAITalentMatch : undefined}
+            onApplyToJob={hasPlanFeature('resume_scoring') ? handleBulkApplyToJob : undefined}
+            onApplyToJobDisabled={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:apply_job')))}
+            onApplyToJobDisabledReason="You do not have permission to score resumes"
+            onAssessment={hasPlanFeature('assessment') ? handleBulkAssessment : undefined}
+            onAssessmentDisabled={!(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('internal_db:assessment')))}
+            onAssessmentDisabledReason="You do not have permission to invite candidates to an assessment"
+            onAIInterview={hasPlanFeature('ai_interview') ? handleBulkAIInterview : undefined}
+            onAIInterviewDisabled={!(isTenantAdmin || hasPermission('canInviteAIInterviews'))}
+            onAIInterviewDisabledReason="You do not have permission to invite candidates to an AI interview"
+            onAITalentMatch={hasPlanFeature('ai_talent_match') ? handleBulkAITalentMatch : undefined}
+            onAITalentMatchDisabled={!(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('internal_db:ai_match')))}
+            onAITalentMatchDisabledReason="You do not have permission to run AI talent match"
             onDownload={handleBulkDownload}
-            onDelete={isTenantAdmin || hasPermissionCode('internal_db:delete') ? () => handleDeleteResumes(selectedResumes) : undefined}
+            onDelete={() => handleDeleteResumes(selectedResumes)}
+            onDeleteDisabled={!(isTenantAdmin || hasPermissionCode('internal_db:delete'))}
+            onDeleteDisabledReason="You do not have permission to delete resumes"
           />
         </div>
       )}
@@ -1107,8 +1117,12 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
           onSelectResume={handleSelectResume}
           onSelectAll={handleSelectAll}
           onQuickView={(resume) => setQuickViewResume(resume)}
-          onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:apply_job'))) ? handleApplyToJob : undefined}
-          onDelete={isTenantAdmin ? (id) => handleDelete(id) : undefined}
+          onApplyToJob={hasPlanFeature('resume_scoring') ? handleApplyToJob : undefined}
+          onApplyToJobDisabled={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('internal_db:apply_job')))}
+          onApplyToJobDisabledReason="You do not have permission to score resumes"
+          onDelete={(id) => handleDelete(id)}
+          onDeleteDisabled={!isTenantAdmin}
+          onDeleteDisabledReason="You do not have permission to delete resumes"
           onViewDetails={(resume) => {
             sessionStorage.setItem('resumeNavList', JSON.stringify(paginatedResumes.map((r) => r.id)));
             sessionStorage.setItem('resumeNavSource', 'resume-database');
@@ -1206,7 +1220,9 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
         <ResumeDetailView
           resume={viewingResume}
           onClose={() => setViewingResume(null)}
-          onDelete={isTenantAdmin ? (id) => handleDelete(id) : undefined}
+          onDelete={(id) => handleDelete(id)}
+          onDeleteDisabled={!isTenantAdmin}
+          onDeleteDisabledReason="You do not have permission to delete resumes"
         />
       )}
 

@@ -69,6 +69,11 @@ export interface JobOpeningPickerListProps {
   onProceed?: () => void;
   /** Label for the `onProceed` button. Defaults to "Select Resumes". */
   proceedLabel?: string;
+  /** When true, the proceed button stays visible (once a job is picked) but
+   *  renders disabled — the host lacks the permission to proceed, but
+   *  `onProceed` is still supplied (guarded internally) so the button is
+   *  never removed from the DOM. */
+  proceedDisabled?: boolean;
   /**
    * List a lineage by its latest PUBLISHED version, not strictly its latest
    * version overall. A job being re-drafted (a draft v3 sitting over a
@@ -110,6 +115,7 @@ export default function JobOpeningPickerList({
   scrollContainerRef,
   onProceed,
   proceedLabel = 'Select Resumes',
+  proceedDisabled = false,
   showAllStatuses = false,
   listAnchorRef,
 }: JobOpeningPickerListProps) {
@@ -560,7 +566,13 @@ export default function JobOpeningPickerList({
                             e.stopPropagation();
                             onProceed();
                           }}
-                          className="h-7 px-2.5 rounded-md transition-all text-xs font-medium flex items-center justify-center gap-1 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 whitespace-nowrap"
+                          disabled={proceedDisabled}
+                          title={proceedDisabled ? 'You do not have permission to proceed' : undefined}
+                          className={`h-7 px-2.5 rounded-md transition-all text-xs font-medium flex items-center justify-center gap-1 whitespace-nowrap ${
+                            proceedDisabled
+                              ? 'bg-gray-200 text-gray-400 cursor-not-allowed dark:bg-slate-700 dark:text-slate-500'
+                              : 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30'
+                          }`}
                         >
                           {proceedLabel}
                         </button>

@@ -82,6 +82,72 @@ function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
   const Icon = item.icon;
   const href = item.href || '#';
   const subtitle = ITEM_SUBTITLE[item.id];
+  const disabled = item.disabled === true;
+
+  const inner = (
+    <>
+      <span
+        className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[14px] ring-1 backdrop-blur-sm transition-transform sm:h-11 sm:w-11 ${
+          disabled
+            ? 'bg-slate-100 text-slate-400 ring-slate-200 dark:bg-slate-800 dark:text-slate-500 dark:ring-slate-700'
+            : `${tone.iconChip} group-hover:scale-105`
+        }`}
+      >
+        {!disabled && (
+          <>
+            {/* Specular highlight across the top-left — the "wet" edge of the bead. */}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/70 via-white/15 to-transparent dark:from-transparent dark:via-transparent"
+            />
+            {/* Light pooling under the glass, offset so it reads as depth rather
+                than a second gradient. */}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute -bottom-3 -right-2 h-8 w-8 rounded-full bg-white/40 blur-lg dark:bg-transparent"
+            />
+            {/* Inner rim: a hairline of white along the top edge, catching the light. */}
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-0 rounded-[14px] shadow-[inset_0_1px_0_rgba(255,255,255,0.75),inset_0_-6px_12px_-8px_rgba(15,23,42,0.25)] dark:shadow-[inset_0_1px_0_rgba(148,163,184,0.18),inset_0_-6px_12px_-8px_rgba(0,0,0,0.45)]"
+            />
+          </>
+        )}
+        <Icon className="relative h-[18px] w-[18px]" />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p
+          className={`truncate text-sm font-semibold ${
+            disabled ? 'text-slate-400 dark:text-slate-500' : `text-slate-900 dark:text-slate-50 ${tone.hoverText}`
+          }`}
+        >
+          {item.label}
+        </p>
+        {subtitle && (
+          <p className={`mt-0.5 line-clamp-1 text-xs ${disabled ? 'text-slate-400 dark:text-slate-600' : 'text-slate-500 dark:text-slate-400'}`}>
+            {subtitle}
+          </p>
+        )}
+      </div>
+      {!disabled && (
+        <ArrowUpRight
+          className={`h-4 w-4 shrink-0 text-slate-300 dark:text-slate-500 transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 ${tone.hoverText}`}
+        />
+      )}
+    </>
+  );
+
+  if (disabled) {
+    return (
+      <div
+        aria-disabled="true"
+        title="You do not have permission to access this"
+        className="group relative flex cursor-not-allowed items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 p-3 opacity-70 dark:border-slate-700/60 dark:bg-slate-800/40 sm:gap-3 sm:p-4"
+      >
+        {inner}
+      </div>
+    );
+  }
 
   return (
     <Link
@@ -89,32 +155,7 @@ function TileCard({ item, tone }: { item: NavItem; tone: TileTone }) {
       prefetch={false}
       className={`group relative flex items-center gap-2.5 rounded-xl border border-slate-200 dark:border-slate-700/80 p-3 transition-[border-color,box-shadow,color,background-color] hover:shadow-[0_10px_28px_-14px_rgba(15,23,42,0.28)] dark:hover:shadow-[0_10px_28px_-18px_rgba(0,0,0,0.45)] sm:gap-3 sm:p-4 ${tone.card} ${tone.hoverBorder}`}
     >
-      <span
-        className={`relative flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-[14px] ring-1 backdrop-blur-sm transition-transform sm:h-11 sm:w-11 ${tone.iconChip} group-hover:scale-105`}
-      >
-        {/* Specular highlight across the top-left — the "wet" edge of the bead. */}
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 bg-gradient-to-br from-white/70 via-white/15 to-transparent dark:from-transparent dark:via-transparent"
-        />
-        {/* Light pooling under the glass, offset so it reads as depth rather
-            than a second gradient. */}
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute -bottom-3 -right-2 h-8 w-8 rounded-full bg-white/40 blur-lg dark:bg-transparent"
-        />
-        {/* Inner rim: a hairline of white along the top edge, catching the light. */}
-        <span
-          aria-hidden="true"
-          className="pointer-events-none absolute inset-0 rounded-[14px] shadow-[inset_0_1px_0_rgba(255,255,255,0.75),inset_0_-6px_12px_-8px_rgba(15,23,42,0.25)] dark:shadow-[inset_0_1px_0_rgba(148,163,184,0.18),inset_0_-6px_12px_-8px_rgba(0,0,0,0.45)]"
-        />
-        <Icon className="relative h-[18px] w-[18px]" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className={`truncate text-sm font-semibold text-slate-900 dark:text-slate-50 ${tone.hoverText}`}>{item.label}</p>
-        {subtitle && <p className="mt-0.5 line-clamp-1 text-xs text-slate-500 dark:text-slate-400">{subtitle}</p>}
-      </div>
-      <ArrowUpRight className={`h-4 w-4 shrink-0 text-slate-300 dark:text-slate-500 transition-all group-hover:-translate-y-0.5 group-hover:translate-x-0.5 ${tone.hoverText}`} />
+      {inner}
     </Link>
   );
 }

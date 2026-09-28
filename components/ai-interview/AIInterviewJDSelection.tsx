@@ -216,18 +216,24 @@ export default function AIInterviewJDSelection() {
                       Choose the JD that this AI interview will be based on
                     </p>
                   </div>
-                  {canCreateJD && (
-                    <Button
-                      variant="primary"
-                      size="md"
-                      onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
-                      icon={<Plus className="w-4 h-4" />}
-                      className="flex-shrink-0"
-                    >
-                      <span className="hidden sm:inline">Create New Job</span>
-                      <span className="sm:hidden">New Job</span>
-                    </Button>
-                  )}
+                  <Button
+                    variant="primary"
+                    size="md"
+                    onClick={() => {
+                      if (!canCreateJD) {
+                        toast.error('You do not have permission to create job descriptions');
+                        return;
+                      }
+                      router.push('/recruitment/jd-creation?from=ai-interview');
+                    }}
+                    aria-disabled={!canCreateJD}
+                    title={!canCreateJD ? 'You do not have permission to create job descriptions' : ''}
+                    icon={<Plus className="w-4 h-4" />}
+                    className={`flex-shrink-0 ${!canCreateJD ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  >
+                    <span className="hidden sm:inline">Create New Job</span>
+                    <span className="sm:hidden">New Job</span>
+                  </Button>
                 </div>
               </div>
 
@@ -514,13 +520,21 @@ export default function AIInterviewJDSelection() {
                               ? 'Every published job already has an AI interview. Publish a new job to create another one.'
                               : 'Create and publish a Job first to create AI interviews'}
                         </p>
-                        {canCreateJD && selectableJds.length === 0 && (
+                        {selectableJds.length === 0 && (
                           <Button
                             variant="primary"
                             size="md"
-                            onClick={() => router.push('/recruitment/jd-creation?from=ai-interview')}
+                            onClick={() => {
+                              if (!canCreateJD) {
+                                toast.error('You do not have permission to create job descriptions');
+                                return;
+                              }
+                              router.push('/recruitment/jd-creation?from=ai-interview');
+                            }}
+                            aria-disabled={!canCreateJD}
+                            title={!canCreateJD ? 'You do not have permission to create job descriptions' : ''}
                             icon={<Plus className="w-4 h-4" />}
-                            className="mx-auto"
+                            className={`mx-auto ${!canCreateJD ? 'opacity-50 cursor-not-allowed' : ''}`}
                           >
                             Create New Job
                           </Button>

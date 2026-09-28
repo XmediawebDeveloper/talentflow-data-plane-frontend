@@ -50,6 +50,7 @@ import { formatJobExperienceBadge } from '@/lib/utils/jobExperience';
 import { formatSalaryRange } from '@/lib/utils/salary';
 import { toast } from 'sonner';
 import { usePlanFeature, usePlanFeatures } from '@/lib/hooks/usePlanFeature';
+import { useAuth } from '@/components/providers/AuthProvider';
 import { useScoringProgress } from '@/contexts/ScoringProgressContext';
 import { formatIST, formatISTDate } from '@/lib/utils/dateUtils';
 import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
@@ -857,9 +858,14 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
     canUploadResumes: hasPermission('canUploadResumes'),
     canRunScoring: hasPermission('canRunScoring'),
     canCreateAIInterviews: hasPermission('canCreateAIInterviews'),
-    canShareAIInterviews: hasPermission('canShareAIInterviews') || hasPermission('canInviteAIInterviews'),
+    canShareAIInterviews: hasPermission('canInviteAIInterviews'),
     canViewAIInterviews: hasPermission('canViewAIInterviews') || hasPermission('canRunAiInterviews') || hasPermission('canInviteAIInterviews'),
   };
+
+  // jd:invite has no typed field on the Permission interface, so it's read via
+  // the raw permission code instead of the local hasPermission() helper above.
+  const { hasPermissionCode } = useAuth();
+  const canInviteJd = isTenantAdmin || hasPermissionCode('jd:invite');
 
   // ✅ PERMISSIONS: Get feature flags for Quick Actions
   const features = {
@@ -3517,15 +3523,17 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                         accent="cyan"
                         onClick={handleOpenShareAssessment}
                         loading={isLoadingShareAssessments}
-                        disabled={!canInviteToAssessment}
+                        disabled={!canInviteJd || !canInviteToAssessment}
                         disabledTooltip={
-                          !features.assessment
-                            ? 'Assessments not enabled'
-                            : job.status === 'Disabled'
-                              ? 'JD is disabled'
-                              : !hasAnyAssessment
-                                ? 'Create an assessment first'
-                                : 'Publish the assessment first'
+                          !canInviteJd
+                            ? 'You do not have permission to invite candidates from a job description'
+                            : !features.assessment
+                              ? 'Assessments not enabled'
+                              : job.status === 'Disabled'
+                                ? 'JD is disabled'
+                                : !hasAnyAssessment
+                                  ? 'Create an assessment first'
+                                  : 'Publish the assessment first'
                         }
                       />
                     </>
@@ -4008,7 +4016,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
             toolbarActions={assessmentTabActions}
             emptyStateAction={assessmentEmptyActions}
             canDownloadPDF={isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false)}
-            canBatchDownload={isTenantAdmin || (user?.permissions?.canExport ?? false)}
+            canBatchDownload={isTenantAdmin || hasPermissionCode('assessments:batch_download')}
             onViewResultDetail={(result) => {
               // Pending means invited but never started, so no attempt exists
               // and `result.id` fell back to the invitation id when this list

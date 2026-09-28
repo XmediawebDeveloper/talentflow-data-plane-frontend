@@ -230,6 +230,11 @@ interface ScoredResumesTableProps {
    * exist.
    */
   onScoreResumesFromEmptyState?: () => void;
+  /** When true, the empty-state "Score Resumes" button stays visible but
+   *  renders disabled — the host lacks the scoring permission but the
+   *  handler above is still provided (guarded internally) so the button
+   *  is never removed from the DOM. */
+  scoreResumesDisabled?: boolean;
   /**
    * Opens the host's "Send AI Interview via Email" flow for one candidate —
    * the AI Interview entry in each row's Invite menu. Omitted where the host
@@ -287,6 +292,7 @@ export default function ScoredResumesTable({
   groupByEmail = false,
   onScoreResumes,
   onScoreResumesFromEmptyState,
+  scoreResumesDisabled,
   onInviteAIInterview,
   enableInternalAIInterviewInvite = false,
   assessmentConfigured,
@@ -305,8 +311,13 @@ export default function ScoredResumesTable({
     return (tenant.features as any)[feature] === true;
   };
 
+  // Gates "Invite [to Assessment]" from a scored resume — the Resume Scoring
+  // module's own `scoring:invite` toggle, not the Assessments module's
+  // canCreateAssessments (creating a brand-new assessment is a different
+  // action). Previously this checked canCreateAssessments, so disabling
+  // Resume Scoring's "Invite" permission had no effect on this button.
   const canCreateAssessments =
-    (isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false)) &&
+    (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
     hasPlanFeature('assessment') &&
     isFeatureEnabled('assessment');
   // Whether the viewer may invite to AI Interview AT ALL (permission + plan +
@@ -318,7 +329,7 @@ export default function ScoredResumesTable({
   // fallback, since that could silently bypass a host-specific gate.
   const mayInviteAIInterview =
     (!!onInviteAIInterview || enableInternalAIInterviewInvite) &&
-    (hasPermission('canShareAIInterviews') || hasPermission('canInviteAIInterviews')) &&
+    hasPermission('canInviteAIInterviews') &&
     hasPlanFeature('ai_interview') &&
     isFeatureEnabled('ai_interview');
 
@@ -371,7 +382,11 @@ export default function ScoredResumesTable({
     canCreateAssessments || mayInviteAIInterview
       ? 'No published assessment or AI interview for this job yet'
       : undefined;
-  const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
+  // Resume Scoring's own Export / Download Scorecard toggles — previously both
+  // checked the generic, module-agnostic canExport flag (which defaults true
+  // for most roles), so disabling either one here had no effect.
+  const canExport = isTenantAdmin || hasPermissionCode('scoring:export');
+  const canDownloadScorecard = isTenantAdmin || hasPermissionCode('scoring:download');
   const canShareResume = isTenantAdmin || hasPermissionCode('my_resumes:share');
 
   /* Share Resume — the dialog the resume table and the resume page open, so a
@@ -1410,42 +1425,51 @@ Best regards`);
           align="start"
           className="w-48 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl"
         >
-          {canCreateAssessments && (
-            <DropdownMenuItem
-              className={scoredResumesMenuItemClass}
-              /* Off unless this JD has a published assessment —
-                 and assessment invites spend a unit, so the entry
-                 also goes quiet when there are none left rather
-                 than opening a form that cannot be submitted. */
-              disabled={!rowCanInviteAssessment || availableUnits === 0}
-              title={
-                !rowCanInviteAssessment
+          <DropdownMenuItem
+            className={scoredResumesMenuItemClass}
+            /* Off unless this JD has a published assessment —
+               and assessment invites spend a unit, so the entry
+               also goes quiet when there are none left rather
+               than opening a form that cannot be submitted. */
+            disabled={!canCreateAssessments || !rowCanInviteAssessment || availableUnits === 0}
+            title={
+              !canCreateAssessments
+                ? 'You do not have permission to invite candidates to an assessment'
+                : !rowCanInviteAssessment
                   ? 'No published assessment for this job yet'
                   : availableUnits === 0
                     ? 'No assessment units available'
                     : undefined
+            }
+            onSelect={() => {
+              if (!canCreateAssessments) {
+                toast.error('You do not have permission to invite candidates to an assessment');
+                return;
               }
-              onSelect={() => {
-                setInviteCandidate(resume);
-                setShowInviteModal(true);
-              }}
-            >
-              <FileText className="w-4 h-4 text-menu-icon-view" />
-              <span className={MENU_ITEM_SCALE_CLASS}>Assessment</span>
-            </DropdownMenuItem>
-          )}
-          {mayInviteAIInterview && (
-            <DropdownMenuItem
-              className={scoredResumesMenuItemClass}
-              /* Same rule on the interview side: nothing live on
-                 this JD means nothing to invite the candidate to. */
-              disabled={!rowCanInviteAIInterview}
-              title={
-                !rowCanInviteAIInterview
+              setInviteCandidate(resume);
+              setShowInviteModal(true);
+            }}
+          >
+            <FileText className="w-4 h-4 text-menu-icon-view" />
+            <span className={MENU_ITEM_SCALE_CLASS}>Assessment</span>
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            className={scoredResumesMenuItemClass}
+            /* Same rule on the interview side: nothing live on
+               this JD means nothing to invite the candidate to. */
+            disabled={!mayInviteAIInterview || !rowCanInviteAIInterview}
+            title={
+              !mayInviteAIInterview
+                ? 'You do not have permission to invite candidates to an AI interview'
+                : !rowCanInviteAIInterview
                   ? 'No published AI interview for this job yet'
                   : undefined
+            }
+            onSelect={() => {
+              if (!mayInviteAIInterview) {
+                toast.error('You do not have permission to invite candidates to an AI interview');
+                return;
               }
-              onSelect={() => {
                 if (onInviteAIInterview) {
                   onInviteAIInterview({
                     name: resume.candidateName || 'Unknown',
@@ -1462,7 +1486,6 @@ Best regards`);
               <Video className="w-4 h-4 text-menu-icon-share" />
               <span className={MENU_ITEM_SCALE_CLASS}>AI Interview</span>
             </DropdownMenuItem>
-          )}
         </DropdownMenuContent>
       </DropdownMenu>
     );
@@ -1500,26 +1523,45 @@ Best regards`);
         </DropdownMenuItem>
       )}
       {/* Only scores that still point at a resume can be shared. */}
-      {canShareResume && resume.resumeId && (
-        <DropdownMenuItem className={scoredResumesMenuItemClass} onSelect={() => openShareModal(resume)}>
+      {resume.resumeId && (
+        <DropdownMenuItem
+          className={`${scoredResumesMenuItemClass} ${!canShareResume ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
+          aria-disabled={!canShareResume}
+          title={!canShareResume ? 'You do not have permission to share resumes' : undefined}
+          onSelect={(e) => {
+            if (!canShareResume) {
+              e.preventDefault();
+              toast.error('You do not have permission to share resumes');
+              return;
+            }
+            openShareModal(resume);
+          }}
+        >
           <Share2 className="w-4 h-4 text-menu-icon-share" />
           <span className={MENU_ITEM_SCALE_CLASS}>Share via Email</span>
         </DropdownMenuItem>
       )}
-      {canExport && (
-        <DropdownMenuItem
-          className={scoredResumesMenuItemClass}
-          disabled={downloadingId === resume.id}
-          onSelect={() => handleDownloadScorecard(resume.id)}
-        >
-          {downloadingId === resume.id ? (
-            <Loader2 className="w-4 h-4 animate-spin text-menu-icon-download" />
-          ) : (
-            <Download className="w-4 h-4 text-menu-icon-download" />
-          )}
-          <span className={MENU_ITEM_SCALE_CLASS}>Download Scorecard</span>
-        </DropdownMenuItem>
-      )}
+      <DropdownMenuItem
+        className={`${scoredResumesMenuItemClass} ${!canDownloadScorecard ? 'text-gray-400 cursor-not-allowed opacity-60' : ''}`}
+        disabled={downloadingId === resume.id}
+        aria-disabled={!canDownloadScorecard}
+        title={!canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
+        onSelect={(e) => {
+          if (!canDownloadScorecard) {
+            e.preventDefault();
+            toast.error('You do not have permission to download the scorecard');
+            return;
+          }
+          handleDownloadScorecard(resume.id);
+        }}
+      >
+        {downloadingId === resume.id ? (
+          <Loader2 className="w-4 h-4 animate-spin text-menu-icon-download" />
+        ) : (
+          <Download className="w-4 h-4 text-menu-icon-download" />
+        )}
+        <span className={MENU_ITEM_SCALE_CLASS}>Download Scorecard</span>
+      </DropdownMenuItem>
     </>
   );
 
@@ -1608,17 +1650,23 @@ Best regards`);
           {/* One Export for both states — handleExportExcel already exports the
               selection, and asks for one when there isn't any. It just leads
               more strongly once rows are picked. */}
-          {canExport && (
-            <Button
-              variant="secondary"
-              size="sm"
-              onClick={handleExportExcel}
-              icon={<FileDown className="w-4 h-4" />}
-              className="whitespace-nowrap"
-            >
-              Export
-            </Button>
-          )}
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={() => {
+              if (!canExport) {
+                toast.error('You do not have permission to export');
+                return;
+              }
+              handleExportExcel();
+            }}
+            aria-disabled={!canExport}
+            title={!canExport ? 'You do not have permission to export' : undefined}
+            icon={<FileDown className="w-4 h-4" />}
+            className={`whitespace-nowrap ${!canExport ? 'opacity-50 cursor-not-allowed' : ''}`}
+          >
+            Export
+          </Button>
           <ListViewToggle value={displayMode} onChange={setDisplayMode} />
         </ListToolbar>
 
@@ -1840,39 +1888,52 @@ Best regards`);
 
             {selectedResumes.length > 0 && (
               <>
-                {canExport && (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={handleDownloadBulkScorecards}
-                    disabled={bulkDownloading}
-                    className="rounded-full"
-                    icon={bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                  >
-                    {bulkDownloading ? 'Downloading...' : `Download (${selectedResumes.length})`}
-                  </Button>
-                )}
-                {canCreateAssessments && (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setShowBulkInviteModal(true)}
-                    /* Bulk Invite goes to assessments too, so it takes the same
-                       "is there one on this JD" gate as the per-row entry. */
-                    disabled={!canInviteAssessment || availableUnits === 0}
-                    className="rounded-full"
-                    icon={<Send className="w-4 h-4" />}
-                    title={
-                      !canInviteAssessment
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    if (!canDownloadScorecard) {
+                      toast.error('You do not have permission to download the scorecard');
+                      return;
+                    }
+                    handleDownloadBulkScorecards();
+                  }}
+                  disabled={bulkDownloading}
+                  aria-disabled={!canDownloadScorecard}
+                  title={!canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
+                  className={`rounded-full ${!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  icon={bulkDownloading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                >
+                  {bulkDownloading ? 'Downloading...' : `Download (${selectedResumes.length})`}
+                </Button>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    if (!canCreateAssessments) {
+                      toast.error('You do not have permission to invite candidates to an assessment');
+                      return;
+                    }
+                    setShowBulkInviteModal(true);
+                  }}
+                  /* Bulk Invite goes to assessments too, so it takes the same
+                     "is there one on this JD" gate as the per-row entry. */
+                  disabled={assessmentConfigured === false || availableUnits === 0}
+                  aria-disabled={!canCreateAssessments}
+                  className={`rounded-full ${!canCreateAssessments ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  icon={<Send className="w-4 h-4" />}
+                  title={
+                    !canCreateAssessments
+                      ? 'You do not have permission to invite candidates to an assessment'
+                      : !canInviteAssessment
                         ? 'No published assessment for this job yet'
                         : availableUnits === 0
                           ? 'No assessment units available'
                           : `Bulk invite ${selectedResumes.length} candidates`
-                    }
-                  >
-                    Bulk Invite ({selectedResumes.length})
-                  </Button>
-                )}
+                  }
+                >
+                  Bulk Invite ({selectedResumes.length})
+                </Button>
               </>
             )}
           </div>
@@ -1927,7 +1988,14 @@ Best regards`);
               imageSrc="/scored-resumes-empty-state.webp"
               imageAlt="Scored resumes illustration"
               action={onScoreResumesFromEmptyState ? (
-                <Button variant="primary" size="md" onClick={onScoreResumesFromEmptyState} icon={<ClipboardList className="w-4 h-4" />}>
+                <Button
+                  variant="primary"
+                  size="md"
+                  onClick={onScoreResumesFromEmptyState}
+                  disabled={scoreResumesDisabled}
+                  title={scoreResumesDisabled ? 'You do not have permission to score resumes' : undefined}
+                  icon={<ClipboardList className="w-4 h-4" />}
+                >
                   Score Resumes
                 </Button>
               ) : undefined}
@@ -2466,7 +2534,14 @@ Best regards`);
             imageSrc="/scored-resumes-empty-state.webp"
             imageAlt="Scored resumes illustration"
             action={onScoreResumesFromEmptyState ? (
-              <Button variant="primary" size="md" onClick={onScoreResumesFromEmptyState} icon={<ClipboardList className="w-4 h-4" />}>
+              <Button
+                variant="primary"
+                size="md"
+                onClick={onScoreResumesFromEmptyState}
+                disabled={scoreResumesDisabled}
+                title={scoreResumesDisabled ? 'You do not have permission to score resumes' : undefined}
+                icon={<ClipboardList className="w-4 h-4" />}
+              >
                 Score Resumes
               </Button>
             ) : undefined}
@@ -2575,14 +2650,18 @@ Best regards`);
               {/* Invite Button - For Exact Match & Partial Match + assessment permission.
                   Same two blockers as the table row's Assessment entry: no
                   published assessment on this JD, or no units left. */}
-              {canCreateAssessments && (resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') && (
+              {(resume.matchStatus === 'Exact Match' || resume.matchStatus === 'Partial Match') && (
                 <div className="relative group">
                   <Button
                     variant="primary"
                     size="md"
-                    disabled={!canInviteAssessment || availableUnits === 0}
+                    disabled={!canCreateAssessments || !canInviteAssessment || availableUnits === 0}
                     onClick={(e) => {
                       e.stopPropagation();
+                      if (!canCreateAssessments) {
+                        toast.error('You do not have permission to invite candidates to an assessment');
+                        return;
+                      }
                       setInviteCandidate(resume);
                       setShowInviteModal(true);
                     }}
@@ -2591,15 +2670,17 @@ Best regards`);
                   >
                     Invite for Assessment
                   </Button>
-                  {(!canInviteAssessment || availableUnits === 0) && (
+                  {(!canCreateAssessments || !canInviteAssessment || availableUnits === 0) && (
                     <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-30">
                       <div className="bg-gray-900 text-white text-xs rounded-lg py-2 px-3 whitespace-nowrap shadow-lg">
                         <div className="flex items-center gap-2">
                           <AlertCircle className="w-3.5 h-3.5 text-destructive" />
                           <span>
-                            {!canInviteAssessment
-                              ? 'No published assessment for this job yet'
-                              : 'No assessment units available'}
+                            {!canCreateAssessments
+                              ? 'You do not have permission to invite candidates to an assessment'
+                              : !canInviteAssessment
+                                ? 'No published assessment for this job yet'
+                                : 'No assessment units available'}
                           </span>
                         </div>
                         <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-1">
@@ -2611,21 +2692,25 @@ Best regards`);
                 </div>
               )}
 
-              {canExport && (
               <Button
                 variant="secondary"
                 size="md"
                 onClick={(e) => {
                   e.stopPropagation();
+                  if (!canDownloadScorecard) {
+                    toast.error('You do not have permission to download the scorecard');
+                    return;
+                  }
                   handleDownloadScorecard(resume.id);
                 }}
                 disabled={downloadingId === resume.id}
-                className="w-full"
+                aria-disabled={!canDownloadScorecard}
+                title={!canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
+                className={`w-full ${!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : ''}`}
                 icon={downloadingId === resume.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
               >
                 {downloadingId === resume.id ? 'Downloading...' : 'Download Scorecard'}
               </Button>
-              )}
 
               {resume.resumeId && (
                 <Button
@@ -2642,16 +2727,22 @@ Best regards`);
                 </Button>
               )}
 
-              {canShareResume && resume.resumeId && (
+              {resume.resumeId && (
                 <Button
                   variant="secondary"
                   size="md"
                   onClick={(e) => {
                     e.stopPropagation();
+                    if (!canShareResume) {
+                      toast.error('You do not have permission to share resumes');
+                      return;
+                    }
                     openShareModal(resume);
                   }}
+                  aria-disabled={!canShareResume}
+                  title={!canShareResume ? 'You do not have permission to share resumes' : undefined}
                   icon={<Share2 className="w-4 h-4" />}
-                  className="w-full"
+                  className={`w-full ${!canShareResume ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   Share Resume
                 </Button>
@@ -2672,7 +2763,14 @@ Best regards`);
             imageSrc="/scored-resumes-empty-state.webp"
             imageAlt="Scored resumes illustration"
             action={onScoreResumesFromEmptyState ? (
-              <Button variant="primary" size="md" onClick={onScoreResumesFromEmptyState} icon={<ClipboardList className="w-4 h-4" />}>
+              <Button
+                variant="primary"
+                size="md"
+                onClick={onScoreResumesFromEmptyState}
+                disabled={scoreResumesDisabled}
+                title={scoreResumesDisabled ? 'You do not have permission to score resumes' : undefined}
+                icon={<ClipboardList className="w-4 h-4" />}
+              >
                 Score Resumes
               </Button>
             ) : undefined}
@@ -2949,8 +3047,17 @@ Best regards`);
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => handleDownloadScorecard(shareCandidate.id)}
+                  onClick={() => {
+                    if (!canDownloadScorecard) {
+                      toast.error('You do not have permission to download the scorecard');
+                      return;
+                    }
+                    handleDownloadScorecard(shareCandidate.id);
+                  }}
                   disabled={downloadingId === shareCandidate.id}
+                  aria-disabled={!canDownloadScorecard}
+                  title={!canDownloadScorecard ? 'You do not have permission to download the scorecard' : undefined}
+                  className={!canDownloadScorecard ? 'opacity-50 cursor-not-allowed' : ''}
                   icon={<Download className="w-4 h-4" />}
                 >
                   <span className="hidden sm:inline">Download</span>

@@ -3939,16 +3939,26 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               )}
             </button>
           )}
-          {canUploadMyResumes && (
-            <button
-              onClick={() => openUploadToFolder(undefined)}
-              className="flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-md transition-all text-sm flex-1 sm:flex-initial bg-brand-blue hover:bg-brand-blue-2 text-white shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer"
-            >
-              <Plus className="w-4 h-4" />
-              <span className="hidden sm:inline">Upload Resume</span>
-              <span className="sm:hidden">Upload</span>
-            </button>
-          )}
+          <button
+            onClick={() => {
+              if (!canUploadMyResumes) {
+                toast.error('You do not have permission to upload resumes');
+                return;
+              }
+              openUploadToFolder(undefined);
+            }}
+            aria-disabled={!canUploadMyResumes}
+            title={!canUploadMyResumes ? 'You do not have permission to upload resumes' : undefined}
+            className={`flex items-center justify-center gap-1.5 px-3 sm:px-4 py-2 rounded-md transition-all text-sm flex-1 sm:flex-initial shadow-sm ring-1 ${
+              canUploadMyResumes
+                ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-brand-blue/25 ring-white/10 hover:shadow-md hover:shadow-brand-blue/30 cursor-pointer'
+                : 'bg-gray-200 text-gray-400 shadow-none ring-transparent cursor-not-allowed opacity-60'
+            }`}
+          >
+            <Plus className="w-4 h-4" />
+            <span className="hidden sm:inline">Upload Resume</span>
+            <span className="sm:hidden">Upload</span>
+          </button>
         </div>
       </div>
 
@@ -3972,18 +3982,34 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
           <BulkActionsBar
             selectedCount={selectedResumes.length}
             onCancel={() => setSelectedResumes([])}
-            onMoveToFolder={canMoveMyResumes ? (folderId) => handleMoveToFolder(selectedResumes, folderId) : undefined}
-            onApplyToJob={!isArchivedContext && hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleApplyToJob : undefined}
+            onMoveToFolder={(folderId) => handleMoveToFolder(selectedResumes, folderId)}
+            onMoveToFolderDisabled={!canMoveMyResumes}
+            onMoveToFolderDisabledReason="You do not have permission to move resumes to a folder"
+            onApplyToJob={!isArchivedContext && hasPlanFeature('resume_scoring') ? handleApplyToJob : undefined}
+            onApplyToJobDisabled={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')))}
+            onApplyToJobDisabledReason="You do not have permission to score resumes"
             onDownload={handleBulkDownload}
-            onDelete={canDeleteMyResumes ? () => handleDeleteResumes(selectedResumes) : undefined}
+            onDelete={() => handleDeleteResumes(selectedResumes)}
+            onDeleteDisabled={!canDeleteMyResumes}
+            onDeleteDisabledReason="You do not have permission to delete resumes"
             folders={folders.filter(f => f.id !== 'all')}
-            onAssessment={!isArchivedContext && hasPlanFeature('assessment') && (isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment'))) ? handleAssessment : undefined}
-            onArchive={!isArchivedContext && canArchiveMyResumes ? () => setIsArchiveModalOpen(true) : undefined}
-            onUnarchive={isArchivedContext && canArchiveMyResumes ? () => handleUnarchiveResumes(selectedResumes) : undefined}
-            onAITalentMatch={!isArchivedContext && hasPlanFeature('ai_talent_match') && (isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('my_resumes:ai_match'))) ? handleAITalentMatch : undefined}
+            onAssessment={!isArchivedContext && hasPlanFeature('assessment') ? handleAssessment : undefined}
+            onAssessmentDisabled={!(isTenantAdmin || (hasPermission('canCreateAssessments') && hasPermissionCode('my_resumes:assessment')))}
+            onAssessmentDisabledReason="You do not have permission to invite candidates to an assessment"
+            onArchive={!isArchivedContext ? () => setIsArchiveModalOpen(true) : undefined}
+            onArchiveDisabled={!canArchiveMyResumes}
+            onArchiveDisabledReason="You do not have permission to archive resumes"
+            onUnarchive={isArchivedContext ? () => handleUnarchiveResumes(selectedResumes) : undefined}
+            onUnarchiveDisabled={!canArchiveMyResumes}
+            onUnarchiveDisabledReason="You do not have permission to unarchive resumes"
+            onAITalentMatch={!isArchivedContext && hasPlanFeature('ai_talent_match') ? handleAITalentMatch : undefined}
+            onAITalentMatchDisabled={!(isTenantAdmin || (hasPermission('canRunAiMatch') && hasPermissionCode('my_resumes:ai_match')))}
+            onAITalentMatchDisabledReason="You do not have permission to run AI talent match"
             // No `my_resumes:ai_interview` action code exists yet, so this
             // follows the AI Interviews module's own share permission.
-            onAIInterview={!isArchivedContext && hasPlanFeature('ai_interview') && (isTenantAdmin || hasPermission('canShareAIInterviews')) ? handleAIInterview : undefined}
+            onAIInterview={!isArchivedContext && hasPlanFeature('ai_interview') ? handleAIInterview : undefined}
+            onAIInterviewDisabled={!(isTenantAdmin || hasPermission('canInviteAIInterviews'))}
+            onAIInterviewDisabledReason="You do not have permission to invite candidates to an AI interview"
           />
           );
         })()}
@@ -4127,11 +4153,17 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               folders={folders}
               selectedFolder={selectedFolder}
               onSelectFolder={(folderId: string) => { setSelectedFolder(folderId); setCurrentPage(1); }}
-              onCreateFolder={canUploadMyResumes ? handleCreateFolder : undefined}
-              onRenameFolder={canUpdateMyResumes ? handleRenameFolder : undefined}
-              onDeleteFolder={canDeleteMyResumes ? handleDeleteFolder : undefined}
+              onCreateFolder={handleCreateFolder}
+              canCreateFolder={canUploadMyResumes}
+              onRenameFolder={handleRenameFolder}
+              canRenameFolder={canUpdateMyResumes}
+              onDeleteFolder={handleDeleteFolder}
+              canDeleteFolder={canDeleteMyResumes}
               onUploadToFolder={(folderId) => {
-                if (!canUploadMyResumes) return;
+                if (!canUploadMyResumes) {
+                  toast.error('You do not have permission to upload resumes');
+                  return;
+                }
                 setSelectedFolder(folderId);
                 openUploadToFolder(folderId);
               }}
@@ -4184,8 +4216,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   onSelectResume={handleSelectResume}
                   onSelectAll={handleSelectAll}
                   onQuickView={(resume) => setQuickViewResume(resume)}
-                  onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleSingleResumeApplyToJob : undefined}
-                  onDelete={canDeleteMyResumes ? (id) => handleDelete(id) : undefined}
+                  onApplyToJob={hasPlanFeature('resume_scoring') ? handleSingleResumeApplyToJob : undefined}
+                  onApplyToJobDisabled={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')))}
+                  onApplyToJobDisabledReason="You do not have permission to score resumes"
+                  onDelete={(id) => handleDelete(id)}
+                  onDeleteDisabled={!canDeleteMyResumes}
+                  onDeleteDisabledReason="You do not have permission to delete resumes"
                   onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
                   folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
                   onViewDetails={(resume) => {
@@ -4199,7 +4235,9 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                      resume, and now drops onto a row to place it. */
                   enableRowReorder
                   reorderScopeKey={selectedFolder || 'all'}
-                  onArchive={canArchiveMyResumes ? (resumeId) => handleArchiveResumes([resumeId]) : undefined}
+                  onArchive={(resumeId) => handleArchiveResumes([resumeId])}
+                  onArchiveDisabled={!canArchiveMyResumes}
+                  onArchiveDisabledReason="You do not have permission to archive resumes"
                   canShare={canShareMyResumes}
                   canTag={canUpdateMyResumes}
                   disablePagination={true}
@@ -4564,16 +4602,26 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
                           <div className="flex items-center justify-between mb-2 sm:mb-3">
                             <h3 className="text-gray-900">My Folders</h3>
-                            {canUploadMyResumes && (
-                              <button
-                                type="button"
-                                onClick={() => openCardFolderInput(null)}
-                                className="text-blue-600 hover:text-blue-700 text-sm flex items-center gap-1 cursor-pointer"
-                              >
-                                <Plus className="w-4 h-4" />
-                                New Folder
-                              </button>
-                            )}
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (!canUploadMyResumes) {
+                                  toast.error('You do not have permission to upload resumes');
+                                  return;
+                                }
+                                openCardFolderInput(null);
+                              }}
+                              aria-disabled={!canUploadMyResumes}
+                              title={!canUploadMyResumes ? 'You do not have permission to upload resumes' : undefined}
+                              className={`text-sm flex items-center gap-1 ${
+                                canUploadMyResumes
+                                  ? 'text-blue-600 hover:text-blue-700 cursor-pointer'
+                                  : 'text-gray-400 cursor-not-allowed opacity-60'
+                              }`}
+                            >
+                              <Plus className="w-4 h-4" />
+                              New Folder
+                            </button>
                           </div>
 
                           {cardFolderParentId === null && (
@@ -4702,8 +4750,12 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                               }
                             }}
                             onQuickView={(resume) => setQuickViewResume(resume)}
-                            onApplyToJob={hasPlanFeature('resume_scoring') && (isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job'))) ? handleSingleResumeApplyToJob : undefined}
-                            onDelete={canDeleteMyResumes ? (id) => handleDelete(id) : undefined}
+                            onApplyToJob={hasPlanFeature('resume_scoring') ? handleSingleResumeApplyToJob : undefined}
+                            onApplyToJobDisabled={!(isTenantAdmin || (hasPermission('canRunScoring') && hasPermissionCode('my_resumes:apply_job')))}
+                            onApplyToJobDisabledReason="You do not have permission to score resumes"
+                            onDelete={(id) => handleDelete(id)}
+                            onDeleteDisabled={!canDeleteMyResumes}
+                            onDeleteDisabledReason="You do not have permission to delete resumes"
                             onMoveToFolder={canMoveMyResumes ? handleMoveToFolder : undefined}
                             folders={folders.filter(f => f.id !== 'all' && !(f.name.toLowerCase() === 'root' && !f.parentId))}
                             onViewDetails={(resume) => {

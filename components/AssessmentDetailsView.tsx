@@ -223,13 +223,12 @@ export default function AssessmentDetailsView({
   const dialog = useGlobalDialog();
   const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const canCreateAssessments = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
-  const canExport = isTenantAdmin || (user?.permissions?.canExport ?? false);
   /* Read the same way the results ROUTE reads them, so a recruiter who can
      download a report from that page can download it from this tab — the tab
      renders that page's own component, and a permission that disagreed between
      the two would put the same button on one and not the other. */
   const canDownloadResultPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
-  const canBatchDownloadResults = isTenantAdmin || hasPermissionCode('assessments:batch_download') || canExport;
+  const canBatchDownloadResults = isTenantAdmin || hasPermissionCode('assessments:batch_download');
   /* 'info' is gone from this union: Assessment Info is a horizontal view
      inside Assessment Details now (`DetailsSubTab`), not a destination the
      vertical nav can select. */

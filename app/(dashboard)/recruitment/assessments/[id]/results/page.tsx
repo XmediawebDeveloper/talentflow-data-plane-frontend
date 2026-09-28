@@ -40,7 +40,7 @@ export default function AssessmentResultsPage() {
      same view for either — these choose where its two selectors start. */
   const assessmentVersionScopeParam = searchParams.get('assessment_version');
   const canDownloadPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
-  const canBatchDownload = isTenantAdmin || hasPermissionCode('assessments:batch_download') || (user?.permissions?.canExport ?? false);
+  const canBatchDownload = isTenantAdmin || hasPermissionCode('assessments:batch_download');
 
   const [assessmentTitle, setAssessmentTitle] = useState<string>('');
   const [assessmentVersion, setAssessmentVersion] = useState<number | null>(null);

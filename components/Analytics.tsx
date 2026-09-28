@@ -2,11 +2,15 @@
 
 import { BarChart3, TrendingUp, TrendingDown, Users, Briefcase, Clock, Target, Award, Calendar, Download, Filter, Eye, CheckCircle, XCircle, Activity, AlertCircle, ThumbsUp, MessageSquare, Zap, TrendingDown as Down } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
 import { Button } from '@/components/ui/button';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 export default function Analytics() {
+  const { isTenantAdmin, hasPermissionCode } = useAuth();
+  const canExportAnalytics = isTenantAdmin || hasPermissionCode('analytics:export');
   const [timeRange, setTimeRange] = useState('30days');
   const [selectedMetric, setSelectedMetric] = useState('overview');
 
@@ -77,7 +81,19 @@ export default function Analytics() {
               <option value="90days">Last 90 days</option>
               <option value="1year">Last year</option>
             </select>
-            <Button variant="primary" icon={<Download className="w-4 h-4" />}>
+            <Button
+              variant="primary"
+              icon={<Download className="w-4 h-4" />}
+              onClick={() => {
+                if (!canExportAnalytics) {
+                  toast.error('You do not have permission to export analytics reports');
+                  return;
+                }
+              }}
+              aria-disabled={!canExportAnalytics}
+              title={!canExportAnalytics ? 'You do not have permission to export analytics reports' : undefined}
+              className={!canExportAnalytics ? 'opacity-50 cursor-not-allowed' : ''}
+            >
               Export Report
             </Button>
           </div>

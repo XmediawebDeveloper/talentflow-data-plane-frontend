@@ -15,13 +15,17 @@ interface ResumeDetailViewProps {
   onClose: () => void;
   onEdit?: (resume: Resume) => void;
   onDelete?: (resumeId: string) => void;
+  /** True when Delete applies here but the viewer's permission is off — the
+   *  button stays visible but disabled with this reason instead of firing. */
+  onDeleteDisabled?: boolean;
+  onDeleteDisabledReason?: string;
   onApplyToJob?: (resume: Resume) => void;
   /** When true, render in the page flow (no backdrop / fixed overlay) so it can
    *  live under a breadcrumb instead of floating over the page. */
   embedded?: boolean;
 }
 
-export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, onApplyToJob, embedded = false }: ResumeDetailViewProps) {
+export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, onDeleteDisabled = false, onDeleteDisabledReason, onApplyToJob, embedded = false }: ResumeDetailViewProps) {
   const dialog = useGlobalDialog();
   const [showVersionSelector, setShowVersionSelector] = useState(false);
   
@@ -34,6 +38,10 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
   };
 
   const handleDelete = async () => {
+    if (onDeleteDisabled) {
+      toast.error(onDeleteDisabledReason || 'You do not have permission to delete resumes');
+      return;
+    }
     if (await dialog.confirm({
       title: 'Delete Resume',
       message: 'Are you sure you want to delete this resume?\nThis action cannot be undone.',
@@ -163,6 +171,8 @@ export default function ResumeDetailView({ resume, onClose, onEdit, onDelete, on
                 variant="destructive"
                 size="sm"
                 onClick={handleDelete}
+                disabled={onDeleteDisabled}
+                title={onDeleteDisabled ? (onDeleteDisabledReason || 'You do not have permission to delete resumes') : undefined}
                 icon={<Trash2 className="w-4 h-4" />}
               >
                 Delete
