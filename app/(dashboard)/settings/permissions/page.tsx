@@ -4,6 +4,7 @@ import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { Shield, Users, Check, X, Edit2, Save, Plus, Loader2, AlertCircle, RefreshCw, Sparkles } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { handleUnauthorized } from '@/lib/services/api';
+import { toast } from 'sonner';
 import { useAuth } from '@/lib/hooks/useAuth';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
@@ -395,8 +396,20 @@ export default function PermissionsPage() {
                     <p className="text-xs sm:text-sm text-gray-500 dark:text-slate-500 truncate">{selectedRole.description || 'No description'}</p>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
-                    {canManage && !selectedRole.is_system && !isEditing && selectedRole.code !== 'recruiter' && (
-                      <Button variant="primary" onClick={startEditing}>
+                    {!selectedRole.is_system && !isEditing && selectedRole.code !== 'recruiter' && (
+                      <Button
+                        variant="primary"
+                        onClick={() => {
+                          if (!canManage) {
+                            toast.error('You do not have permission to manage roles');
+                            return;
+                          }
+                          startEditing();
+                        }}
+                        aria-disabled={!canManage}
+                        className={!canManage ? 'opacity-50 cursor-not-allowed' : ''}
+                        title={!canManage ? 'You do not have permission to manage roles' : ''}
+                      >
                         <Edit2 className="w-4 h-4 flex-shrink-0" />
                         Edit
                       </Button>

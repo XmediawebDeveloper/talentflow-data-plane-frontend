@@ -318,17 +318,27 @@ export default function PaymentMethodsPage() {
         <PageBreadcrumb className="mb-4 md:mb-6" items={[{ label: 'Dashboard', href: '/dashboard' }, { label: 'Current Plan', href: '/subscription/current-plan' }, { label: 'Payment Methods' }]} />
 
         {/* Header — title + add button */}
-        {canAdd && (
-          <div className="flex items-center justify-end mb-4">
-            <button
-              onClick={() => setShowAddModal(true)}
-              className="inline-flex items-center justify-center gap-2 rounded-lg bg-brand-blue px-4 py-2 text-sm font-medium text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors hover:bg-brand-blue-2"
-            >
-              <Plus className="h-4 w-4" />
-              Add Payment Method
-            </button>
-          </div>
-        )}
+        <div className="flex items-center justify-end mb-4">
+          <button
+            onClick={() => {
+              if (!canAdd) {
+                toast.error('You do not have permission to add payment methods');
+                return;
+              }
+              setShowAddModal(true);
+            }}
+            aria-disabled={!canAdd}
+            title={!canAdd ? 'You do not have permission to add payment methods' : ''}
+            className={`inline-flex items-center justify-center gap-2 rounded-lg px-4 py-2 text-sm font-medium shadow-md ring-1 transition-colors ${
+              canAdd
+                ? 'bg-brand-blue text-white shadow-brand-blue/25 ring-white/10 hover:bg-brand-blue-2'
+                : 'bg-gray-200 text-gray-400 shadow-none ring-transparent cursor-not-allowed opacity-60'
+            }`}
+          >
+            <Plus className="h-4 w-4" />
+            Add Payment Method
+          </button>
+        </div>
 
         {/* Loading State — mirrors the stacked payment-method cards (card icon, type/last-four, cardholder line, actions) */}
         {loading && (
@@ -364,15 +374,25 @@ export default function PaymentMethodsPage() {
             </div>
             <h3 className="text-lg font-semibold text-gray-900 dark:text-slate-50">No payment methods</h3>
             <p className="mt-1 text-sm text-gray-500 dark:text-slate-500">Add a payment method to manage your subscription</p>
-            {canAdd && (
-              <button
-                onClick={() => setShowAddModal(true)}
-                className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
-              >
-                <Plus className="h-4 w-4" />
-                Add Payment Method
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (!canAdd) {
+                  toast.error('You do not have permission to add payment methods');
+                  return;
+                }
+                setShowAddModal(true);
+              }}
+              aria-disabled={!canAdd}
+              title={!canAdd ? 'You do not have permission to add payment methods' : ''}
+              className={`mt-5 inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium shadow-md transition-all ${
+                canAdd
+                  ? 'bg-brand-blue text-white shadow-brand-blue/25 hover:-translate-y-0.5 hover:shadow-lg'
+                  : 'bg-gray-200 text-gray-400 shadow-none cursor-not-allowed opacity-60'
+              }`}
+            >
+              <Plus className="h-4 w-4" />
+              Add Payment Method
+            </button>
           </div>
         )}
 
@@ -411,28 +431,48 @@ export default function PaymentMethodsPage() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
-                    {canEdit && !method.is_default && (
+                    {!method.is_default && (
                       <button
-                        onClick={() => setAsDefault(method.id)}
-                        className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
+                        onClick={() => {
+                          if (!canEdit) {
+                            toast.error('You do not have permission to edit payment methods');
+                            return;
+                          }
+                          setAsDefault(method.id);
+                        }}
+                        aria-disabled={!canEdit}
+                        title={!canEdit ? 'You do not have permission to edit payment methods' : ''}
+                        className={`inline-flex items-center justify-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-all ${
+                          canEdit
+                            ? 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:border-brand-cyan/25 hover:bg-brand-cyan/[0.04] hover:text-brand-blue'
+                            : 'border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-gray-400 cursor-not-allowed opacity-60'
+                        }`}
                       >
                         Set as Default
                       </button>
                     )}
-                    {canDelete && (
-                      <button
-                        onClick={() => deleteMethod(method.id)}
-                        disabled={deleting === method.id}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-xl border border-brand-orange/15 bg-brand-orange/[0.05] text-brand-orange-deep transition-all hover:-translate-y-0.5 hover:bg-brand-orange/[0.1] disabled:translate-y-0 disabled:opacity-50"
-                        aria-label="Delete payment method" title="Delete payment method"
-                      >
+                    <button
+                      onClick={() => {
+                        if (!canDelete) {
+                          toast.error('You do not have permission to delete payment methods');
+                          return;
+                        }
+                        deleteMethod(method.id);
+                      }}
+                      disabled={deleting === method.id || !canDelete}
+                      className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border transition-all disabled:translate-y-0 ${
+                        canDelete
+                          ? 'border-brand-orange/15 bg-brand-orange/[0.05] text-brand-orange-deep hover:-translate-y-0.5 hover:bg-brand-orange/[0.1] disabled:opacity-50'
+                          : 'border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-900 text-gray-400 cursor-not-allowed opacity-60'
+                      }`}
+                      aria-label="Delete payment method" title={!canDelete ? 'You do not have permission to delete payment methods' : 'Delete payment method'}
+                    >
                         {deleting === method.id ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
                         ) : (
                           <Trash2 className="h-4 w-4" />
                         )}
                       </button>
-                    )}
                   </div>
                 </div>
               </div>

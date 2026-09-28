@@ -366,7 +366,7 @@ export default function ResumeViewPage() {
   // job context here, so the user picks the JD first.
   const canInviteAssessment = (isTenantAdmin || hasPermission('canCreateAssessments')) && hasPlanFeature('assessment');
   const canInviteAIInterview =
-    (isTenantAdmin || hasPermission('canShareAIInterviews') || hasPermission('canInviteAIInterviews')) &&
+    (isTenantAdmin || hasPermission('canInviteAIInterviews')) &&
     hasPlanFeature('ai_interview');
   const canInvite = canInviteAssessment || canInviteAIInterview;
 

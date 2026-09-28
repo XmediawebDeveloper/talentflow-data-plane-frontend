@@ -20,9 +20,15 @@ export default function OrganizationTabs() {
   const { hasPlanFeature } = usePlanFeaturesContext();
 
   const tabs = [
-    { id: 'users', label: 'Users', href: '/organization/user-management', visible: isTenantAdmin },
-    { id: 'usage-history', label: 'Usage History', href: '/organization/usage-history', visible: isTenantAdmin },
-    { id: 'role-management', label: 'Roles & Permissions', href: '/organization/role-management', visible: isTenantAdmin },
+    // Visibility mirrors each destination page's own access guard exactly —
+    // UserManagement.tsx checks canManageUsers/canViewUsers, UsageHistory.tsx
+    // checks canViewUsage (also declared in lib/navigation/routeAccess.ts for
+    // this same route prefix), RoleManagement.tsx checks canManageUsers. This
+    // used to be isTenantAdmin-only for all three, hiding tabs a non-owner
+    // admin with the right granular permissions could actually open.
+    { id: 'users', label: 'Users', href: '/organization/user-management', visible: isTenantAdmin || hasPermission('canManageUsers') || hasPermission('canViewUsers') },
+    { id: 'usage-history', label: 'Usage History', href: '/organization/usage-history', visible: isTenantAdmin || hasPermission('canViewUsage') },
+    { id: 'role-management', label: 'Roles & Permissions', href: '/organization/role-management', visible: isTenantAdmin || hasPermission('canManageUsers') },
     { id: 'team-management', label: 'Teams', href: '/organization/team-management', visible: (isTenantAdmin || hasPermission('canViewTeams')) && hasPlanFeature('teams') },
     { id: 'team-chat', label: 'Chat', href: '/organization/team-chat', visible: true },
   ].filter(tab => tab.visible);

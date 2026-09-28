@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { toast } from 'sonner';
 import {
   Users,
   FileText,
@@ -246,10 +247,22 @@ export default function TeamMemberUsage({ team, userRole, onClose }: TeamMemberU
               className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-gray-800 focus:border-transparent outline-none"
             />
           </div>
-          {canExport && membersUsage?.members && membersUsage.members.length > 0 && (
+          {membersUsage?.members && membersUsage.members.length > 0 && (
             <button
-              onClick={handleExport}
-              className="flex items-center gap-2 px-3 py-1.5 border border-gray-300 rounded-lg text-sm hover:bg-gray-50 transition-colors"
+              onClick={() => {
+                if (!canExport) {
+                  toast.error('You do not have permission to export');
+                  return;
+                }
+                handleExport();
+              }}
+              aria-disabled={!canExport}
+              title={!canExport ? 'You do not have permission to export' : ''}
+              className={`flex items-center gap-2 px-3 py-1.5 border rounded-lg text-sm transition-colors ${
+                canExport
+                  ? 'border-gray-300 hover:bg-gray-50'
+                  : 'border-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+              }`}
             >
               <Download className="w-4 h-4" />
               Export CSV

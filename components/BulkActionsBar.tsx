@@ -19,34 +19,68 @@ interface BulkActionsBarProps {
   selectedCount?: number;
   onCancel?: () => void;
   onMoveToFolder?: (folderId: string) => void;
+  /** True when the feature applies here but the viewer's permission is off —
+   * the button stays visible and shows this reason instead of firing. */
+  onMoveToFolderDisabled?: boolean;
+  onMoveToFolderDisabledReason?: string;
   /** Scores the selected resumes against a job — surfaced as "Score Resume". */
   onApplyToJob?: () => void;
+  onApplyToJobDisabled?: boolean;
+  onApplyToJobDisabledReason?: string;
   onDelete?: () => void;
+  onDeleteDisabled?: boolean;
+  onDeleteDisabledReason?: string;
   onDownload?: () => void;
   folders?: Folder[];
   onResumeScoring?: () => void;
   onAssessment?: () => void;
+  onAssessmentDisabled?: boolean;
+  onAssessmentDisabledReason?: string;
   onArchive?: () => void;
+  onArchiveDisabled?: boolean;
+  onArchiveDisabledReason?: string;
   /** When provided, replaces the Archive button with an Unarchive button —
    * used when the current folder context is "Archived Resumes". */
   onUnarchive?: () => void;
+  onUnarchiveDisabled?: boolean;
+  onUnarchiveDisabledReason?: string;
   onAITalentMatch?: () => void;
+  onAITalentMatchDisabled?: boolean;
+  onAITalentMatchDisabledReason?: string;
   /** Invites the selected candidates to a published AI interview. */
   onAIInterview?: () => void;
+  onAIInterviewDisabled?: boolean;
+  onAIInterviewDisabledReason?: string;
 }
 
 export default function BulkActionsBar({
   onMoveToFolder,
+  onMoveToFolderDisabled,
+  onMoveToFolderDisabledReason,
   onApplyToJob,
+  onApplyToJobDisabled,
+  onApplyToJobDisabledReason,
   onDelete,
+  onDeleteDisabled,
+  onDeleteDisabledReason,
   onDownload,
   folders,
   onResumeScoring,
   onAssessment,
+  onAssessmentDisabled,
+  onAssessmentDisabledReason,
   onArchive,
+  onArchiveDisabled,
+  onArchiveDisabledReason,
   onUnarchive,
+  onUnarchiveDisabled,
+  onUnarchiveDisabledReason,
   onAITalentMatch,
+  onAITalentMatchDisabled,
+  onAITalentMatchDisabledReason,
   onAIInterview,
+  onAIInterviewDisabled,
+  onAIInterviewDisabledReason,
 }: BulkActionsBarProps) {
   const [showFolderMenu, setShowFolderMenu] = useState(false);
   /* The currently open chain of flyout submenus, root first — e.g. hovering
@@ -253,6 +287,10 @@ export default function BulkActionsBar({
             <div className="relative shrink-0">
               <button
                 onClick={(e) => {
+                  if (onMoveToFolderDisabled) {
+                    toast.error(onMoveToFolderDisabledReason || 'You do not have permission to move resumes to a folder');
+                    return;
+                  }
                   if (showFolderMenu) {
                     closeFolderMenu();
                     return;
@@ -262,8 +300,9 @@ export default function BulkActionsBar({
                   setFolderMenuPosition(null);
                   setShowFolderMenu(true);
                 }}
-                className={actionBtn}
-                aria-label="Move to Folder" title="Move to Folder"
+                disabled={onMoveToFolderDisabled}
+                className={`${actionBtn} ${onMoveToFolderDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                aria-label="Move to Folder" title={onMoveToFolderDisabled ? (onMoveToFolderDisabledReason || 'You do not have permission to move resumes to a folder') : 'Move to Folder'}
               >
                 <FolderInput className="w-3.5 h-3.5" />
                 <span className="hidden xl:inline">Move to Folder</span>
@@ -393,9 +432,16 @@ export default function BulkActionsBar({
 
           {onApplyToJob && (
             <button
-              onClick={onApplyToJob}
-              className={actionBtn}
-              aria-label="Score Resume" title="Score Resume"
+              onClick={() => {
+                if (onApplyToJobDisabled) {
+                  toast.error(onApplyToJobDisabledReason || 'You do not have permission to score resumes');
+                  return;
+                }
+                onApplyToJob();
+              }}
+              disabled={onApplyToJobDisabled}
+              className={`${actionBtn} ${onApplyToJobDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              aria-label="Score Resume" title={onApplyToJobDisabled ? (onApplyToJobDisabledReason || 'You do not have permission to score resumes') : 'Score Resume'}
             >
               <ClipboardList className="w-3.5 h-3.5" />
               <span className="hidden xl:inline">Score Resume</span>
@@ -417,9 +463,16 @@ export default function BulkActionsBar({
 
           {onAssessment && (
             <button
-              onClick={onAssessment}
-              className={actionBtn}
-              aria-label="Invite Assessment" title="Invite Assessment"
+              onClick={() => {
+                if (onAssessmentDisabled) {
+                  toast.error(onAssessmentDisabledReason || 'You do not have permission to invite candidates to an assessment');
+                  return;
+                }
+                onAssessment();
+              }}
+              disabled={onAssessmentDisabled}
+              className={`${actionBtn} ${onAssessmentDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              aria-label="Invite Assessment" title={onAssessmentDisabled ? (onAssessmentDisabledReason || 'You do not have permission to invite candidates to an assessment') : 'Invite Assessment'}
             >
               <ClipboardCheck className="w-3.5 h-3.5" />
               <span className="hidden xl:inline">Invite Assessment</span>
@@ -429,9 +482,16 @@ export default function BulkActionsBar({
 
           {onAIInterview && (
             <button
-              onClick={onAIInterview}
-              className={actionBtn}
-              aria-label="Invite AI Interview" title="Invite AI Interview"
+              onClick={() => {
+                if (onAIInterviewDisabled) {
+                  toast.error(onAIInterviewDisabledReason || 'You do not have permission to invite candidates to an AI interview');
+                  return;
+                }
+                onAIInterview();
+              }}
+              disabled={onAIInterviewDisabled}
+              className={`${actionBtn} ${onAIInterviewDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              aria-label="Invite AI Interview" title={onAIInterviewDisabled ? (onAIInterviewDisabledReason || 'You do not have permission to invite candidates to an AI interview') : 'Invite AI Interview'}
             >
               <Brain className="w-3.5 h-3.5" />
               <span className="hidden xl:inline">Invite AI Interview</span>
@@ -442,9 +502,16 @@ export default function BulkActionsBar({
 
           {onAITalentMatch && (
             <button
-              onClick={onAITalentMatch}
-              className={actionBtn}
-              aria-label="AI Talent Match" title="AI Talent Match"
+              onClick={() => {
+                if (onAITalentMatchDisabled) {
+                  toast.error(onAITalentMatchDisabledReason || 'You do not have permission to run AI talent match');
+                  return;
+                }
+                onAITalentMatch();
+              }}
+              disabled={onAITalentMatchDisabled}
+              className={`${actionBtn} ${onAITalentMatchDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              aria-label="AI Talent Match" title={onAITalentMatchDisabled ? (onAITalentMatchDisabledReason || 'You do not have permission to run AI talent match') : 'AI Talent Match'}
             >
               <Sparkles className="w-3.5 h-3.5" />
               <span className="hidden xl:inline">AI Talent Match</span>
@@ -465,18 +532,32 @@ export default function BulkActionsBar({
 
           {onUnarchive ? (
             <button
-              onClick={onUnarchive}
-              className={`${toneBtn('bg-emerald-500/90 hover:bg-emerald-600')} border border-emerald-400/30`}
-              aria-label="Unarchive" title="Unarchive"
+              onClick={() => {
+                if (onUnarchiveDisabled) {
+                  toast.error(onUnarchiveDisabledReason || 'You do not have permission to unarchive resumes');
+                  return;
+                }
+                onUnarchive();
+              }}
+              disabled={onUnarchiveDisabled}
+              className={`${toneBtn('bg-emerald-500/90 hover:bg-emerald-600')} border border-emerald-400/30 ${onUnarchiveDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              aria-label="Unarchive" title={onUnarchiveDisabled ? (onUnarchiveDisabledReason || 'You do not have permission to unarchive resumes') : 'Unarchive'}
             >
               <ArchiveRestore className="w-3.5 h-3.5" />
               <span className="hidden xl:inline">Unarchive</span>
             </button>
           ) : onArchive && (
             <button
-              onClick={onArchive}
-              className={`${toneBtn('bg-amber-500/90 hover:bg-amber-600')} border border-amber-400/30`}
-              aria-label="Archive" title="Archive"
+              onClick={() => {
+                if (onArchiveDisabled) {
+                  toast.error(onArchiveDisabledReason || 'You do not have permission to archive resumes');
+                  return;
+                }
+                onArchive();
+              }}
+              disabled={onArchiveDisabled}
+              className={`${toneBtn('bg-amber-500/90 hover:bg-amber-600')} border border-amber-400/30 ${onArchiveDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+              aria-label="Archive" title={onArchiveDisabled ? (onArchiveDisabledReason || 'You do not have permission to archive resumes') : 'Archive'}
             >
               <Archive className="w-3.5 h-3.5" />
               <span className="hidden xl:inline">Archive</span>
@@ -489,9 +570,16 @@ export default function BulkActionsBar({
                   would be squeezed to nothing. */}
               <div className="hidden sm:block shrink-0 self-center w-px h-5 bg-white/20" />
               <button
-                onClick={onDelete}
-                className={`${toneBtn('bg-red-500/90 hover:bg-red-600')} border border-red-400/30`}
-                aria-label="Delete" title="Delete"
+                onClick={() => {
+                  if (onDeleteDisabled) {
+                    toast.error(onDeleteDisabledReason || 'You do not have permission to delete resumes');
+                    return;
+                  }
+                  onDelete();
+                }}
+                disabled={onDeleteDisabled}
+                className={`${toneBtn('bg-red-500/90 hover:bg-red-600')} border border-red-400/30 ${onDeleteDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+                aria-label="Delete" title={onDeleteDisabled ? (onDeleteDisabledReason || 'You do not have permission to delete resumes') : 'Delete'}
               >
                 <Trash2 className="w-3.5 h-3.5" />
                 <span className="hidden xl:inline">Delete</span>

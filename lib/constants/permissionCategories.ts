@@ -66,11 +66,15 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'scoring:invite', label: 'Invite' },
       { code: 'scoring:download', label: 'Download Scorecard' },
     ],
-    // Rule: Enable Score Resumes → auto-enable My Resumes upload + Internal DB view + JD Add Applicants
+    // Rule: Enable Score Resumes → auto-enable My Resumes view + upload + Internal DB view + JD Add Applicants
+    // 'my_resumes:read' matches what the backend actually requires to run scoring
+    // (app/services/permission_dependencies.py: scoring:score → jd:read, resumes:read);
+    // 'my_resumes:upload' is kept as an additional, deliberate UX auto-enable
+    // (scoring flow lets you upload resumes directly), not a substitute for view access.
     // Rule: Scoring Invite also requires Assessment Share
     // NOTE: Export, Invite, Download Scorecard do NOT block disabling Score Resumes
     dependencies: {
-      'scoring:score': ['my_resumes:upload', 'internal_db:read', 'jd:add_applicants'],
+      'scoring:score': ['my_resumes:read', 'my_resumes:upload', 'internal_db:read', 'jd:add_applicants'],
       'scoring:invite': ['assessments:share'],
     },
   },
@@ -148,7 +152,6 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     actions: [
       { code: 'ai_interview:create', label: 'Create' },
       { code: 'ai_interview:update', label: 'Edit' },
-      { code: 'ai_interview:share', label: 'Share' },
       { code: 'ai_interview:invite', label: 'Invite' },
       { code: 'ai_interview:publish', label: 'Publish' },
       { code: 'ai_interview:archive', label: 'Archive' },

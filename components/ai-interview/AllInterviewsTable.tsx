@@ -674,16 +674,19 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
      button checks. It routes to the JD-selection config builder — AI
      interviews have no `create?edit=` route the way Assessments does. */
   const rowActions = (row: InterviewRow) => {
-    const actions: { key: string; label: string; icon: typeof Eye; run: () => void }[] = [
+    const actions: { key: string; label: string; icon: typeof Eye; run: () => void; disabled?: boolean }[] = [
       {
         key: 'view', label: 'View', icon: Eye,
         run: () => router.push(`/recruitment/ai-interviews/${row.id}`),
       },
     ];
-    if (row.rawStatus === 'draft' && canUpdateAIInterviews && row.jdId) {
+    // Draft-only and jdId are business conditions (stay a real hide); the
+    // permission itself must not remove the item — visible but disabled.
+    if (row.rawStatus === 'draft' && row.jdId) {
       actions.push({
         key: 'edit', label: 'Edit', icon: Pencil,
         run: () => router.push(`/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${row.jdId}&config_id=${row.id}`),
+        disabled: !canUpdateAIInterviews,
       });
     }
     return actions;
@@ -1119,8 +1122,14 @@ export default function AllInterviewsTable({ toolbarSlot, sortActionSlot, refres
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className={`w-44 ${MENU_PANEL_BORDER_CLASS}`}>
-                          {rowActions(row).map(({ key, label, icon: Icon, run }) => (
-                            <DropdownMenuItem key={key} onClick={run} className={`group gap-2 ${MENU_ITEM_LIGHT_HIGHLIGHT_CLASS}`}>
+                          {rowActions(row).map(({ key, label, icon: Icon, run, disabled }) => (
+                            <DropdownMenuItem
+                              key={key}
+                              onClick={run}
+                              disabled={disabled}
+                              title={disabled ? 'You do not have permission to edit AI interviews' : undefined}
+                              className={`group gap-2 ${MENU_ITEM_LIGHT_HIGHLIGHT_CLASS}`}
+                            >
                               <Icon className="w-4 h-4" />
                               <span className={MENU_ITEM_SCALE_CLASS}>{label}</span>
                             </DropdownMenuItem>

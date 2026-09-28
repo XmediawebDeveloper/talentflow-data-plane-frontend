@@ -210,7 +210,7 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
   };
   const mayInviteAssessment = hasPermission('canCreateAssessments') && hasPlanFeature('assessment');
   const mayInviteAIInterview =
-    (hasPermission('canShareAIInterviews') || hasPermission('canInviteAIInterviews')) && hasPlanFeature('ai_interview');
+    hasPermission('canInviteAIInterviews') && hasPlanFeature('ai_interview');
   const canInvite = mayInviteAssessment || mayInviteAIInterview;
 
   /* What this JD can actually invite to. Job Details hands both flags down —

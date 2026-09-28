@@ -2314,21 +2314,25 @@ export default function AITalentMatchPage({
             )}
             */}
             
-            {canRunAiMatch && (
-              <Button
-                variant="primary"
-                onClick={() => {
-                  setViewMode('new');
-                  setSelectedJob('');
-                  setSelectedCandidates([]);
-                  router.push('/recruitment/ai-talent-match', { scroll: false });
-                }}
-                className="w-full sm:w-auto"
-              >
-                <Sparkles className="w-3.5 h-3.5" />
-                Run AI Match
-              </Button>
-            )}
+            <Button
+              variant="primary"
+              onClick={() => {
+                if (!canRunAiMatch) {
+                  toast.error('You do not have permission to run AI Talent Match');
+                  return;
+                }
+                setViewMode('new');
+                setSelectedJob('');
+                setSelectedCandidates([]);
+                router.push('/recruitment/ai-talent-match', { scroll: false });
+              }}
+              aria-disabled={!canRunAiMatch}
+              title={!canRunAiMatch ? 'You do not have permission to run AI Talent Match' : ''}
+              className={`w-full sm:w-auto ${!canRunAiMatch ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              <Sparkles className="w-3.5 h-3.5" />
+              Run AI Match
+            </Button>
           </div>
         </div>
 
@@ -2871,16 +2875,21 @@ export default function AITalentMatchPage({
                                                         <Eye className="w-4 h-4 text-menu-icon-view" />
                                                         <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
                                                       </DropdownMenuItem>
-                                                      {canRunScoring && (
-                                                        <DropdownMenuItem
-                                                          className={actionsMenuItemClass}
-                                                          disabled={!job.resumeId}
-                                                          onSelect={() => { void scoreJobMatchCandidate(job); }}
-                                                        >
-                                                          <ClipboardList className="w-4 h-4 text-menu-icon-score" />
-                                                          <span className={MENU_ITEM_SCALE_CLASS}>Score Resume</span>
-                                                        </DropdownMenuItem>
-                                                      )}
+                                                      <DropdownMenuItem
+                                                        className={`${actionsMenuItemClass} ${!canRunScoring ? 'opacity-50' : ''}`}
+                                                        disabled={!job.resumeId}
+                                                        title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
+                                                        onSelect={() => {
+                                                          if (!canRunScoring) {
+                                                            toast.error('You do not have permission to score resumes');
+                                                            return;
+                                                          }
+                                                          void scoreJobMatchCandidate(job);
+                                                        }}
+                                                      >
+                                                        <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+                                                        <span className={MENU_ITEM_SCALE_CLASS}>Score Resume</span>
+                                                      </DropdownMenuItem>
                                                     </DropdownMenuContent>
                                                   </DropdownMenu>
                                                 </td>
@@ -3144,39 +3153,62 @@ export default function AITalentMatchPage({
 
                 {selectedAllResumeEntries.length > 0 && (
                   <div className="flex flex-wrap items-center gap-2">
-                    {canRunScoring && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => { void handleScoreSelectedAllResumes(); }}
-                        icon={<ClipboardList className="w-3.5 h-3.5" />}
-                      >
-                        Score ({selectedAllResumeEntries.length})
-                      </Button>
-                    )}
-                    {(hasPermission('canCreateAssessments') || isTenantAdmin || canCreateAIInterviews) && (
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5" />}>
-                            Invite ({selectedAllResumeEntries.length})
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="w-56 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                          {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
-                            <DropdownMenuItem className={actionsMenuItemClass} onSelect={handleInviteAssessmentSelectedAllResumes}>
-                              <BarChart3 className="w-4 h-4 text-menu-icon-score" />
-                              <span className={MENU_ITEM_SCALE_CLASS}>Invite Assessment</span>
-                            </DropdownMenuItem>
-                          )}
-                          {canCreateAIInterviews && (
-                            <DropdownMenuItem className={actionsMenuItemClass} onSelect={handleInviteAIInterviewSelectedAllResumes}>
-                              <Video className="w-4 h-4 text-menu-icon-view" />
-                              <span className={MENU_ITEM_SCALE_CLASS}>Invite AI Interview</span>
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    )}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        if (!canRunScoring) {
+                          toast.error('You do not have permission to score resumes');
+                          return;
+                        }
+                        void handleScoreSelectedAllResumes();
+                      }}
+                      aria-disabled={!canRunScoring}
+                      className={!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}
+                      title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
+                      icon={<ClipboardList className="w-3.5 h-3.5" />}
+                    >
+                      Score ({selectedAllResumeEntries.length})
+                    </Button>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="primary" size="sm" icon={<Send className="w-3.5 h-3.5" />}>
+                          Invite ({selectedAllResumeEntries.length})
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="w-56 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                        <DropdownMenuItem
+                          className={actionsMenuItemClass}
+                          disabled={!(hasPermission('canCreateAssessments') || isTenantAdmin)}
+                          title={!(hasPermission('canCreateAssessments') || isTenantAdmin) ? 'You do not have permission to invite to an assessment' : undefined}
+                          onSelect={() => {
+                            if (!(hasPermission('canCreateAssessments') || isTenantAdmin)) {
+                              toast.error('You do not have permission to invite to an assessment');
+                              return;
+                            }
+                            handleInviteAssessmentSelectedAllResumes();
+                          }}
+                        >
+                          <BarChart3 className="w-4 h-4 text-menu-icon-score" />
+                          <span className={MENU_ITEM_SCALE_CLASS}>Invite Assessment</span>
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className={`${actionsMenuItemClass} ${!canCreateAIInterviews ? 'opacity-50' : ''}`}
+                          aria-disabled={!canCreateAIInterviews}
+                          title={!canCreateAIInterviews ? 'You do not have permission to invite to an AI interview' : undefined}
+                          onSelect={() => {
+                            if (!canCreateAIInterviews) {
+                              toast.error('You do not have permission to invite to an AI interview');
+                              return;
+                            }
+                            handleInviteAIInterviewSelectedAllResumes();
+                          }}
+                        >
+                          <Video className="w-4 h-4 text-menu-icon-view" />
+                          <span className={MENU_ITEM_SCALE_CLASS}>Invite AI Interview</span>
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 )}
 
@@ -3616,16 +3648,21 @@ export default function AITalentMatchPage({
                                   <Eye className="w-4 h-4 text-menu-icon-view" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
                                 </DropdownMenuItem>
-                                {canRunScoring && (
-                                  <DropdownMenuItem
-                                    className={actionsMenuItemClass}
-                                    disabled={!job.resumeId}
-                                    onSelect={() => { void scoreJobMatchCandidate(job); }}
-                                  >
-                                    <ClipboardList className="w-4 h-4 text-menu-icon-score" />
-                                    <span className={MENU_ITEM_SCALE_CLASS}>Score Resume</span>
-                                  </DropdownMenuItem>
-                                )}
+                                <DropdownMenuItem
+                                  className={`${actionsMenuItemClass} ${!canRunScoring ? 'opacity-50' : ''}`}
+                                  disabled={!job.resumeId}
+                                  title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
+                                  onSelect={() => {
+                                    if (!canRunScoring) {
+                                      toast.error('You do not have permission to score resumes');
+                                      return;
+                                    }
+                                    void scoreJobMatchCandidate(job);
+                                  }}
+                                >
+                                  <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+                                  <span className={MENU_ITEM_SCALE_CLASS}>Score Resume</span>
+                                </DropdownMenuItem>
                               </DropdownMenuContent>
                             </DropdownMenu>
                           </td>
@@ -4190,19 +4227,24 @@ export default function AITalentMatchPage({
               <p className="text-sm text-gray-600 dark:text-slate-400 mb-4">
                 Start using AI Talent Match to find the best candidates for your jobs. Our AI will analyze and rank candidates based on job fit.
               </p>
-              {canRunAiMatch && (
-                <Button
-                  variant="primary"
-                  onClick={() => {
-                    setViewMode('new');
-                    setSelectedJob('');
-                    router.push('/recruitment/ai-talent-match', { scroll: false });
-                  }}
-                >
-                  <Sparkles className="w-4 h-4" />
-                  Run AI Match Now
-                </Button>
-              )}
+              <Button
+                variant="primary"
+                onClick={() => {
+                  if (!canRunAiMatch) {
+                    toast.error('You do not have permission to run AI Talent Match');
+                    return;
+                  }
+                  setViewMode('new');
+                  setSelectedJob('');
+                  router.push('/recruitment/ai-talent-match', { scroll: false });
+                }}
+                aria-disabled={!canRunAiMatch}
+                className={!canRunAiMatch ? 'opacity-50 cursor-not-allowed' : ''}
+                title={!canRunAiMatch ? 'You do not have permission to run AI Talent Match' : ''}
+              >
+                <Sparkles className="w-4 h-4" />
+                Run AI Match Now
+              </Button>
             </div>
           </div>
         ) : (
@@ -4867,13 +4909,21 @@ export default function AITalentMatchPage({
                 <option value={7}>7+ Rating</option>
                 <option value={9}>9+ Rating</option>
               </select>
-              {canExport && matchedCandidates.length > 0 && (
+              {matchedCandidates.length > 0 && (
                 <Button
                   variant="secondary"
                   size="md"
-                  onClick={handleExportCandidates}
+                  onClick={() => {
+                    if (!canExport) {
+                      toast.error('You do not have permission to export');
+                      return;
+                    }
+                    handleExportCandidates();
+                  }}
+                  aria-disabled={!canExport}
+                  title={!canExport ? 'You do not have permission to export' : undefined}
                   icon={<FileDown className="w-3.5 h-3.5" />}
-                  className="whitespace-nowrap"
+                  className={`whitespace-nowrap ${!canExport ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   Export
                 </Button>
@@ -4900,47 +4950,67 @@ export default function AITalentMatchPage({
                     </div>
                   )}
                   <>
-                  {canRunScoring && (
                   <Button
                       variant="secondary"
                       size="md"
-                      onClick={() => handleSubmitToScoring()}
+                      onClick={() => {
+                        if (!canRunScoring) {
+                          toast.error('You do not have permission to score resumes');
+                          return;
+                        }
+                        handleSubmitToScoring();
+                      }}
                       disabled={availableUnits !== null && selectedCandidates.length > availableUnits}
+                      aria-disabled={!canRunScoring}
+                      title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
                       icon={<ClipboardList className="w-3.5 h-3.5" />}
-                      className="flex-1 sm:flex-initial"
+                      className={`flex-1 sm:flex-initial ${!canRunScoring ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       Score ({selectedCandidates.length})
                     </Button>
-                  )}
                   {/* "Invite" replaces the old standalone Assessment button —
                       a dropdown of the two invite destinations, so a bulk
                       AI Interview invite has the same entry point the row
-                      menu already offers per candidate. Hidden entirely when
-                      neither destination is available to this viewer, same
-                      as ScoredResumesTable's own Invite button. */}
-                  {(hasPermission('canCreateAssessments') || isTenantAdmin || canCreateAIInterviews) && (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="primary" size="md" icon={<Send className="w-3.5 h-3.5" />} className="flex-1 sm:flex-initial">
-                          Invite ({selectedCandidates.length})
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="w-56 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
-                        {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
-                          <DropdownMenuItem className={actionsMenuItemClass} onSelect={() => handleAssessment()}>
-                            <BarChart3 className="w-4 h-4 text-menu-icon-score" />
-                            <span className={MENU_ITEM_SCALE_CLASS}>Invite Assessment</span>
-                          </DropdownMenuItem>
-                        )}
-                        {canCreateAIInterviews && (
-                          <DropdownMenuItem className={actionsMenuItemClass} onSelect={handleBulkInviteAIInterview}>
-                            <Video className="w-4 h-4 text-menu-icon-view" />
-                            <span className={MENU_ITEM_SCALE_CLASS}>Invite AI Interview</span>
-                          </DropdownMenuItem>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  )}
+                      menu already offers per candidate. */}
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="primary" size="md" icon={<Send className="w-3.5 h-3.5" />} className="flex-1 sm:flex-initial">
+                        Invite ({selectedCandidates.length})
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" className="w-56 !rounded-lg !bg-white !py-1 !px-0 !shadow-xl">
+                      <DropdownMenuItem
+                        className={actionsMenuItemClass}
+                        disabled={!(hasPermission('canCreateAssessments') || isTenantAdmin)}
+                        title={!(hasPermission('canCreateAssessments') || isTenantAdmin) ? 'You do not have permission to invite to an assessment' : undefined}
+                        onSelect={() => {
+                          if (!(hasPermission('canCreateAssessments') || isTenantAdmin)) {
+                            toast.error('You do not have permission to invite to an assessment');
+                            return;
+                          }
+                          handleAssessment();
+                        }}
+                      >
+                        <BarChart3 className="w-4 h-4 text-menu-icon-score" />
+                        <span className={MENU_ITEM_SCALE_CLASS}>Invite Assessment</span>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem
+                        className={`${actionsMenuItemClass} ${!canCreateAIInterviews ? 'opacity-50' : ''}`}
+                        aria-disabled={!canCreateAIInterviews}
+                        title={!canCreateAIInterviews ? 'You do not have permission to invite to an AI interview' : undefined}
+                        onSelect={() => {
+                          if (!canCreateAIInterviews) {
+                            toast.error('You do not have permission to invite to an AI interview');
+                            return;
+                          }
+                          handleBulkInviteAIInterview();
+                        }}
+                      >
+                        <Video className="w-4 h-4 text-menu-icon-view" />
+                        <span className={MENU_ITEM_SCALE_CLASS}>Invite AI Interview</span>
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </>
                 </div>
               )}
@@ -5016,15 +5086,22 @@ export default function AITalentMatchPage({
               <p className="text-sm text-gray-600 dark:text-slate-400 max-w-md mx-auto mb-4">
                 AI Talent Match has not been run for this job yet. Run AI matching to find candidates that match this job description.
               </p>
-              {canRunAiMatch && (
-                <Button
-                  variant="primary"
-                  onClick={() => handleRunAIMatch(selectedJob)}
-                >
-                  <Sparkles className="w-4 h-4" />
-                  Run AI Match
-                </Button>
-              )}
+              <Button
+                variant="primary"
+                onClick={() => {
+                  if (!canRunAiMatch) {
+                    toast.error('You do not have permission to run AI Talent Match');
+                    return;
+                  }
+                  handleRunAIMatch(selectedJob);
+                }}
+                aria-disabled={!canRunAiMatch}
+                className={!canRunAiMatch ? 'opacity-50 cursor-not-allowed' : ''}
+                title={!canRunAiMatch ? 'You do not have permission to run AI Talent Match' : ''}
+              >
+                <Sparkles className="w-4 h-4" />
+                Run AI Match
+              </Button>
             </div>
           ) : (
           <div className="overflow-hidden rounded-xl border border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 shadow-sm">
@@ -5236,46 +5313,55 @@ export default function AITalentMatchPage({
                             <Eye className="w-4 h-4 text-menu-icon-view" />
                             <span className={MENU_ITEM_SCALE_CLASS}>Preview Resume</span>
                           </DropdownMenuItem>
-                          {canRunScoring && (
-                            <DropdownMenuItem
-                              className={actionsMenuItemClass}
-                              disabled={!candidate.resumeId}
-                              onSelect={() => {
-                                if (!candidate.resumeId) return;
-                                setSelectedCandidates([candidate.id]);
-                                handleSubmitToScoring([candidate.id]);
-                              }}
-                            >
-                              <ClipboardList className="w-4 h-4 text-menu-icon-score" />
-                              <span className={MENU_ITEM_SCALE_CLASS}>Score Resume</span>
-                            </DropdownMenuItem>
-                          )}
-                          {canCreateAssessments && (
-                            <DropdownMenuItem
-                              className={actionsMenuItemClass}
-                              onSelect={() => {
-                                setSelectedCandidates([candidate.id]);
-                                handleAssessment([candidate.id]);
-                              }}
-                            >
-                              <FileText className="w-4 h-4 text-menu-icon-view" />
-                              <span className={MENU_ITEM_SCALE_CLASS}>Invite Assessment</span>
-                            </DropdownMenuItem>
-                          )}
-                          {canCreateAIInterviews && (
-                            <DropdownMenuItem
-                              className={actionsMenuItemClass}
-                              disabled={!candidate.email || resolvingInviteConfig}
-                              title={!candidate.email ? 'Candidate has no email on file' : undefined}
-                              onSelect={() => {
-                                if (!candidate.email) return;
-                                handleInviteAIInterview([{ name: candidate.name || 'Candidate', email: candidate.email, resumeId: candidate.resumeId }]);
-                              }}
-                            >
-                              <Video className="w-4 h-4 text-menu-icon-share" />
-                              <span className={MENU_ITEM_SCALE_CLASS}>Invite AI Interview</span>
-                            </DropdownMenuItem>
-                          )}
+                          <DropdownMenuItem
+                            className={`${actionsMenuItemClass} ${!canRunScoring ? 'opacity-50' : ''}`}
+                            disabled={!candidate.resumeId}
+                            title={!canRunScoring ? 'You do not have permission to score resumes' : undefined}
+                            onSelect={() => {
+                              if (!canRunScoring) {
+                                toast.error('You do not have permission to score resumes');
+                                return;
+                              }
+                              if (!candidate.resumeId) return;
+                              setSelectedCandidates([candidate.id]);
+                              handleSubmitToScoring([candidate.id]);
+                            }}
+                          >
+                            <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+                            <span className={MENU_ITEM_SCALE_CLASS}>Score Resume</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className={`${actionsMenuItemClass} ${!canCreateAssessments ? 'opacity-50' : ''}`}
+                            aria-disabled={!canCreateAssessments}
+                            title={!canCreateAssessments ? 'You do not have permission to invite to an assessment' : undefined}
+                            onSelect={() => {
+                              if (!canCreateAssessments) {
+                                toast.error('You do not have permission to invite to an assessment');
+                                return;
+                              }
+                              setSelectedCandidates([candidate.id]);
+                              handleAssessment([candidate.id]);
+                            }}
+                          >
+                            <FileText className="w-4 h-4 text-menu-icon-view" />
+                            <span className={MENU_ITEM_SCALE_CLASS}>Invite Assessment</span>
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className={`${actionsMenuItemClass} ${!canCreateAIInterviews ? 'opacity-50' : ''}`}
+                            disabled={!candidate.email || resolvingInviteConfig}
+                            title={!canCreateAIInterviews ? 'You do not have permission to invite to an AI interview' : !candidate.email ? 'Candidate has no email on file' : undefined}
+                            onSelect={() => {
+                              if (!canCreateAIInterviews) {
+                                toast.error('You do not have permission to invite to an AI interview');
+                                return;
+                              }
+                              if (!candidate.email) return;
+                              handleInviteAIInterview([{ name: candidate.name || 'Candidate', email: candidate.email, resumeId: candidate.resumeId }]);
+                            }}
+                          >
+                            <Video className="w-4 h-4 text-menu-icon-share" />
+                            <span className={MENU_ITEM_SCALE_CLASS}>Invite AI Interview</span>
+                          </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </td>

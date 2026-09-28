@@ -825,7 +825,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
               }
               setIsCreateModalOpen(true);
             }}
-            disabled={!canCreateUser}
+            aria-disabled={!canCreateUser}
             title={!canCreateUser ? 'You do not have permission to create users' : ''}
             className={`flex items-center gap-2 px-4 py-2.5 rounded-lg transition-colors shadow-md ${
               !canCreateUser
@@ -988,7 +988,7 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                             }
                             setEditingUser(user);
                           }}
-                          disabled={!canUpdateUser}
+                          aria-disabled={!canUpdateUser}
                           title={!canUpdateUser ? 'You do not have permission to edit users' : ''}
                           className={`p-2 rounded-lg transition-colors ${
                             !canUpdateUser
@@ -1006,7 +1006,8 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                             }
                             handleDeleteUser(user.id);
                           }}
-                          disabled={!canDeleteUser || user.id === currentUser?.id}
+                          disabled={user.id === currentUser?.id}
+                          aria-disabled={!canDeleteUser}
                           title={!canDeleteUser ? 'You do not have permission to delete users' : (user.id === currentUser?.id ? 'Cannot delete yourself' : '')}
                           className={`p-2 rounded-lg transition-colors ${
                             !canDeleteUser || user.id === currentUser?.id

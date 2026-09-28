@@ -47,10 +47,10 @@ export default function JDListPage() {
   const dialog = useGlobalDialog();
   // ✅ PERMISSION FIX: Get JD CRUD permissions
   const jdPerms = useModulePermissions('jd');
-  const { isTenantAdmin, user } = useAuth();
+  const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const canRunScoring = isTenantAdmin || (user?.permissions?.canRunScoring ?? false);
   const canDeleteJd = isTenantAdmin || (user?.permissions?.canDeleteJd ?? false);
-  const canExportJd = isTenantAdmin || (user?.permissions?.canExport ?? false);
+  const canExportJd = isTenantAdmin || hasPermissionCode('jd:export');
   const [jds, setJds] = useState<JDResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -569,14 +569,18 @@ export default function JDListPage() {
               variant="primary"
               onClick={() => {
                 // FIX-003: Open sheet instead of navigating
-                if (canCreateJD) {
-                  setEditingJDId(null);
-                  setShowJDSheet(true);
+                if (!canCreateJD) {
+                  toast.error(accessError || 'You do not have permission to create job descriptions');
+                  return;
                 }
+                setEditingJDId(null);
+                setShowJDSheet(true);
               }}
-              disabled={!canCreateJD || accessCheckLoading}
+              disabled={accessCheckLoading}
+              aria-disabled={!canCreateJD}
               icon={<Plus className="w-4 h-4" />}
               title={!canCreateJD ? accessError || 'Cannot create JD' : 'Create a new job description'}
+              className={!canCreateJD ? 'opacity-50 cursor-not-allowed' : ''}
             >
               Create New JD
             </Button>
@@ -634,18 +638,27 @@ export default function JDListPage() {
                       Export Selected to CSV
                     </button>
                   )}
-                  {canDeleteJd && (
-                    <>
-                      <div className="border-t border-gray-100 my-1" />
-                      <button
-                        onClick={() => { handleBulkDelete(); setBulkActionsOpen(false); }}
-                        className="w-full flex items-center gap-2 px-4 py-2 text-sm text-destructive hover:bg-destructive-subtle"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                        Delete Selected
-                      </button>
-                    </>
-                  )}
+                  <div className="border-t border-gray-100 my-1" />
+                  <button
+                    onClick={() => {
+                      if (!canDeleteJd) {
+                        toast.error('You do not have permission to delete job descriptions');
+                        return;
+                      }
+                      handleBulkDelete();
+                      setBulkActionsOpen(false);
+                    }}
+                    aria-disabled={!canDeleteJd}
+                    title={!canDeleteJd ? 'You do not have permission to delete job descriptions' : ''}
+                    className={`w-full flex items-center gap-2 px-4 py-2 text-sm ${
+                      canDeleteJd
+                        ? 'text-destructive hover:bg-destructive-subtle'
+                        : 'text-gray-400 cursor-not-allowed opacity-60'
+                    }`}
+                  >
+                    <Trash2 className="w-4 h-4" />
+                    Delete Selected
+                  </button>
                 </div>
               )}
             </div>
@@ -759,14 +772,21 @@ export default function JDListPage() {
                 ? 'Try adjusting your filters'
                 : 'Create your first job description to get started'}
             </p>
-            {!searchQuery && statusFilter === 'all' && canCreateJD && (
+            {!searchQuery && statusFilter === 'all' && (
               <Button
                 variant="primary"
                 onClick={() => {
                   // FIX-003: Open sheet instead of navigating
+                  if (!canCreateJD) {
+                    toast.error(accessError || 'You do not have permission to create job descriptions');
+                    return;
+                  }
                   setEditingJDId(null);
                   setShowJDSheet(true);
                 }}
+                aria-disabled={!canCreateJD}
+                title={!canCreateJD ? accessError || 'Cannot create JD' : 'Create a new job description'}
+                className={!canCreateJD ? 'opacity-50 cursor-not-allowed' : ''}
                 icon={<Plus className="w-4 h-4" />}
               >
                 Create New JD
@@ -877,21 +897,25 @@ export default function JDListPage() {
                     </Button>
 
                     {/* Edit Button - FIX-003: Open in sheet, icon only on mobile */}
-                    {/* ✅ PERMISSION FIX: Only show Edit button if user has canUpdateJD permission */}
-                    {jdPerms.canUpdate && (
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        onClick={() => {
-                          setEditingJDId(jd.id);
-                          setShowJDSheet(true);
-                        }}
-                        icon={<Edit2 className="w-4 h-4" />}
-                        className="whitespace-nowrap"
-                      >
-                        <span className="hidden sm:inline">Edit</span>
-                      </Button>
-                    )}
+                    {/* Always visible; disabled (non-clickable) without canUpdateJD permission */}
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => {
+                        if (!jdPerms.canUpdate) {
+                          toast.error('You do not have permission to edit job descriptions');
+                          return;
+                        }
+                        setEditingJDId(jd.id);
+                        setShowJDSheet(true);
+                      }}
+                      disabled={!jdPerms.canUpdate}
+                      title={!jdPerms.canUpdate ? 'You do not have permission to edit job descriptions' : 'Edit'}
+                      icon={<Edit2 className="w-4 h-4" />}
+                      className="whitespace-nowrap"
+                    >
+                      <span className="hidden sm:inline">Edit</span>
+                    </Button>
 
                     {/* More Actions Dropdown (3-dot menu) */}
                     <div className="relative flex-shrink-0">
@@ -935,10 +959,14 @@ export default function JDListPage() {
                               Publish
                             </button>
                           )}
-                          {/* JD04: Disable action — only for users with disable permission */}
-                          {jdPerms.canDisable && jd.status === 'published' && (
+                          {/* JD04: Disable action — always visible; disabled without disable permission */}
+                          {jd.status === 'published' && (
                             <button
                               onClick={() => {
+                                if (!jdPerms.canDisable) {
+                                  toast.error('You do not have permission to disable job descriptions');
+                                  return;
+                                }
                                 setConfirmDialog({
                                   isOpen: true,
                                   type: 'disable',
@@ -949,16 +977,26 @@ export default function JDListPage() {
                                 });
                                 setActiveDropdown(null);
                               }}
-                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-orange-700 hover:bg-orange-50"
+                              disabled={!jdPerms.canDisable}
+                              title={!jdPerms.canDisable ? 'You do not have permission to disable job descriptions' : ''}
+                              className={`w-full flex items-center gap-2 px-4 py-2 text-sm ${
+                                jdPerms.canDisable
+                                  ? 'text-orange-700 hover:bg-orange-50'
+                                  : 'text-gray-400 cursor-not-allowed opacity-60'
+                              }`}
                             >
                               <Power className="w-4 h-4" />
                               Disable Job
                             </button>
                           )}
-                          {/* Archive action — only for users with archive permission */}
-                          {jdPerms.canArchive && jd.status !== 'archived' && (
+                          {/* Archive action — always visible; disabled without archive permission */}
+                          {jd.status !== 'archived' && (
                             <button
                               onClick={() => {
+                                if (!jdPerms.canArchive) {
+                                  toast.error('You do not have permission to archive job descriptions');
+                                  return;
+                                }
                                 setConfirmDialog({
                                   isOpen: true,
                                   type: 'archive',
@@ -967,14 +1005,34 @@ export default function JDListPage() {
                                 });
                                 setActiveDropdown(null);
                               }}
-                              className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                              disabled={!jdPerms.canArchive}
+                              title={!jdPerms.canArchive ? 'You do not have permission to archive job descriptions' : ''}
+                              className={`w-full flex items-center gap-2 px-4 py-2 text-sm ${
+                                jdPerms.canArchive
+                                  ? 'text-gray-700 hover:bg-gray-50'
+                                  : 'text-gray-400 cursor-not-allowed opacity-60'
+                              }`}
                             >
                               <Archive className="w-4 h-4" />
                               Archive Job
                             </button>
                           )}
-                          {/* Delete section — only shown if user has delete permission */}
-                          {jdPerms.canDelete && (() => {
+                          {/* Delete section — always shown; disabled without delete permission */}
+                          {(() => {
+                            if (!jdPerms.canDelete) {
+                              return (
+                                <button
+                                  onClick={() => toast.error('You do not have permission to delete job descriptions')}
+                                  disabled
+                                  title="You do not have permission to delete job descriptions"
+                                  className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-400 cursor-not-allowed opacity-60"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Delete
+                                </button>
+                              );
+                            }
+
                             const delStatus = jdDeletionStatus[jd.id];
 
                             // Still loading — show nothing (delete button stays hidden)

@@ -38,6 +38,7 @@ import {
 } from '@/components/teams';
 import TeamHistory from '@/components/teams/TeamHistory';
 import { useScrollRestoration, useListStatePersistence } from '@/lib/hooks/useListViewPersistence';
+import { useAuth } from '@/components/providers/AuthProvider';
 
 const ITEMS_PER_PAGE = 6;
 
@@ -57,6 +58,7 @@ const getErrorDetail = (error: unknown): string | undefined => {
 
 export default function TeamManagementPage() {
   const router = useRouter();
+  const { hasPermissionCode } = useAuth();
   const [teams, setTeams] = useState<Team[]>([]);
   const [stats, setStats] = useState<TeamStats>({
     total_teams: 0,
@@ -273,8 +275,8 @@ export default function TeamManagementPage() {
   const canCreateTeams = isTenantAdmin || !!currentUser?.permissions?.can_create_teams;
   const canEditTeams = isTenantAdmin || !!currentUser?.permissions?.can_update_teams;
   const canDeleteTeams = isTenantAdmin || !!currentUser?.permissions?.can_delete_teams;
-  const canViewUsageTab = isTenantAdmin || !!currentUser?.permissions?.can_view_team_usage;
-  const canViewAnalyticsTab = isTenantAdmin || !!currentUser?.permissions?.can_view_team_usage;
+  const canViewUsageTab = isTenantAdmin || hasPermissionCode('teams:view_reports');
+  const canViewAnalyticsTab = isTenantAdmin || hasPermissionCode('teams:view_reports');
 
   const handleOpenCreateModal = async () => {
     if (!canCreateTeams) {
@@ -471,16 +473,26 @@ export default function TeamManagementPage() {
                       <div className="mt-1 font-semibold">{stats.total_members}</div>
                     </div>
                   </div>
-                  {canCreateTeams && (
-                    <button
-                      onClick={handleOpenCreateModal}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-lg bg-white px-3 py-2 text-sm font-medium text-brand-blue shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg"
-                    >
-                      <Plus className="h-4 w-4" />
-                      Create Team
-                      <ArrowUpRight className="h-4 w-4" />
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      if (!canCreateTeams) {
+                        toast.error('You do not have permission to create teams');
+                        return;
+                      }
+                      handleOpenCreateModal();
+                    }}
+                    aria-disabled={!canCreateTeams}
+                    title={!canCreateTeams ? 'You do not have permission to create teams' : ''}
+                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all ${
+                      canCreateTeams
+                        ? 'bg-white text-brand-blue shadow-md hover:-translate-y-0.5 hover:shadow-lg'
+                        : 'bg-white/40 text-white/60 cursor-not-allowed'
+                    }`}
+                  >
+                    <Plus className="h-4 w-4" />
+                    Create Team
+                    <ArrowUpRight className="h-4 w-4" />
+                  </button>
                 </div>
               </div>
             </section>
@@ -498,32 +510,48 @@ export default function TeamManagementPage() {
                   <Users className="w-4 h-4" />
                   Teams
                 </button>
-                {canViewUsageTab && (
-                  <button
-                    onClick={() => setActiveTab('usage')}
-                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
-                      activeTab === 'usage'
+                <button
+                  onClick={() => {
+                    if (!canViewUsageTab) {
+                      toast.error('You do not have permission to view team usage');
+                      return;
+                    }
+                    setActiveTab('usage');
+                  }}
+                  aria-disabled={!canViewUsageTab}
+                  title={!canViewUsageTab ? 'You do not have permission to view team usage' : ''}
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
+                    !canViewUsageTab
+                      ? 'text-gray-300 dark:text-slate-600 cursor-not-allowed opacity-60'
+                      : activeTab === 'usage'
                         ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
                         : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
-                    }`}
-                  >
-                    <BarChart3 className="w-4 h-4" />
-                    Team Usage
-                  </button>
-                )}
-                {canViewAnalyticsTab && (
-                  <button
-                    onClick={() => setActiveTab('analytics')}
-                    className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
-                      activeTab === 'analytics'
+                  }`}
+                >
+                  <BarChart3 className="w-4 h-4" />
+                  Team Usage
+                </button>
+                <button
+                  onClick={() => {
+                    if (!canViewAnalyticsTab) {
+                      toast.error('You do not have permission to view team analytics');
+                      return;
+                    }
+                    setActiveTab('analytics');
+                  }}
+                  aria-disabled={!canViewAnalyticsTab}
+                  title={!canViewAnalyticsTab ? 'You do not have permission to view team analytics' : ''}
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-sm font-medium transition-all whitespace-nowrap ${
+                    !canViewAnalyticsTab
+                      ? 'text-gray-300 dark:text-slate-600 cursor-not-allowed opacity-60'
+                      : activeTab === 'analytics'
                         ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/25'
                         : 'text-gray-600 dark:text-slate-400 hover:bg-brand-blue/[0.04] hover:text-brand-blue'
-                    }`}
-                  >
-                    <TrendingUp className="w-4 h-4" />
-                    Analytics
-                  </button>
-                )}
+                  }`}
+                >
+                  <TrendingUp className="w-4 h-4" />
+                  Analytics
+                </button>
                 {isTenantAdmin && (
                   <button
                     onClick={() => setActiveTab('history')}

@@ -1,6 +1,7 @@
 'use client';
 
 import { Users, Briefcase, FileText, ArrowUpRight, Shield } from 'lucide-react';
+import { toast } from 'sonner';
 import { Team } from '@/lib/services/teamService';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -81,14 +82,24 @@ export function TeamCard({ team, onViewDetails, onManageTeam, canManage = false 
             View Details
             <ArrowUpRight className="h-4 w-4" />
           </button>
-          {canManage && (
-            <button
-              onClick={() => onManageTeam(team.id)}
-              className="flex-1 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-brand-cyan/20 hover:bg-brand-cyan/[0.04] hover:text-brand-blue"
-            >
-              Manage Team
-            </button>
-          )}
+          <button
+            onClick={() => {
+              if (!canManage) {
+                toast.error('You do not have permission to manage this team');
+                return;
+              }
+              onManageTeam(team.id);
+            }}
+            aria-disabled={!canManage}
+            title={!canManage ? 'You do not have permission to manage this team' : ''}
+            className={`flex-1 rounded-xl border px-4 py-2.5 text-sm font-medium transition-all ${
+              canManage
+                ? 'border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:border-brand-cyan/20 hover:bg-brand-cyan/[0.04] hover:text-brand-blue'
+                : 'border-gray-100 dark:border-slate-800 bg-gray-50 dark:bg-slate-800 text-gray-300 dark:text-slate-600 cursor-not-allowed opacity-60'
+            }`}
+          >
+            Manage Team
+          </button>
         </div>
       </div>
     </div>

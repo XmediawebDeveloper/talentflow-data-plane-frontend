@@ -322,16 +322,21 @@ export default function RefundHistoryPage() {
 
         {/* Header — actions */}
         <div className="flex flex-wrap items-center justify-end gap-2 mb-4">
-          {canExportRefundHistory && (
-            <button
-              onClick={handleExportCSV}
-              disabled={loading || filteredRefunds.length === 0}
-              className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-60"
-            >
-              <Download className="h-4 w-4" />
-              Export CSV
-            </button>
-          )}
+          <button
+            onClick={() => {
+              if (!canExportRefundHistory) {
+                toast.error('You do not have permission to export refund history');
+                return;
+              }
+              handleExportCSV();
+            }}
+            disabled={loading || filteredRefunds.length === 0 || !canExportRefundHistory}
+            title={!canExportRefundHistory ? 'You do not have permission to export refund history' : ''}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 transition-colors hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            <Download className="h-4 w-4" />
+            Export CSV
+          </button>
           <button
             onClick={fetchRefundData}
             disabled={loading}

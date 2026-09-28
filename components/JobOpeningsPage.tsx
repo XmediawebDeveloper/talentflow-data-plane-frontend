@@ -262,9 +262,11 @@ export default function JobOpeningsPage() {
                 }
                 router.push('/recruitment/jd-creation');
               }}
-              disabled={!canCreateJd || hasInsufficientUnits}
+              disabled={hasInsufficientUnits}
+              aria-disabled={!canCreateJd}
               icon={<Plus className="w-4 h-4" />}
               title={!canCreateJd ? 'You do not have permission to create job descriptions' : ''}
+              className={!canCreateJd ? 'opacity-50 cursor-not-allowed' : ''}
             >
               Create New Job
             </Button>
@@ -433,9 +435,11 @@ export default function JobOpeningsPage() {
                     }
                     router.push('/recruitment/jd-creation');
                   }}
-                  disabled={!canCreateJd || hasInsufficientUnits}
+                  disabled={hasInsufficientUnits}
+                  aria-disabled={!canCreateJd}
                   icon={<Plus className="w-4 h-4" />}
                   title={!canCreateJd ? 'You do not have permission to create job descriptions' : ''}
+                  className={!canCreateJd ? 'opacity-50 cursor-not-allowed' : ''}
                 >
                   Create New Job
                 </Button>
@@ -506,7 +510,7 @@ export default function JobOpeningsPage() {
                             }
                             router.push(`/recruitment/jd-creation?id=${job.id}`);
                           }}
-                          disabled={!canUpdateJd}
+                          aria-disabled={!canUpdateJd}
                           className={`flex items-center justify-center gap-0 sm:gap-1 p-1 sm:px-2.5 sm:py-1.5 text-xs sm:text-sm rounded transition-colors border ${
                             canUpdateJd
                               ? 'text-gray-600 hover:bg-gray-100 border-gray-200 cursor-pointer'
@@ -559,7 +563,7 @@ export default function JobOpeningsPage() {
                                 </button>
                               )}
                               {/* Disable Job for published */}
-                              {job.status === 'published' && canUpdateJd && (
+                              {job.status === 'published' && (
                                 <button
                                   onClick={() => {
                                     if (!canUpdateJd) {
@@ -568,14 +572,18 @@ export default function JobOpeningsPage() {
                                     }
                                     handleStatusChange(job.id, 'disabled');
                                   }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700 hover:bg-orange-50"
+                                  aria-disabled={!canUpdateJd}
+                                  title={!canUpdateJd ? 'You do not have permission to update job descriptions' : ''}
+                                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${
+                                    canUpdateJd ? 'text-orange-700 hover:bg-orange-50' : 'text-gray-400 cursor-not-allowed opacity-60'
+                                  }`}
                                 >
                                   <Power className="w-4 h-4" />
                                   Disable Job
                                 </button>
                               )}
                               {/* Re-enable JD for disabled */}
-                              {job.status === 'disabled' && canUpdateJd && (
+                              {job.status === 'disabled' && (
                                 <button
                                   onClick={() => {
                                     if (!canUpdateJd) {
@@ -584,14 +592,18 @@ export default function JobOpeningsPage() {
                                     }
                                     handleStatusChange(job.id, 'published');
                                   }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-success hover:bg-success-subtle"
+                                  aria-disabled={!canUpdateJd}
+                                  title={!canUpdateJd ? 'You do not have permission to update job descriptions' : ''}
+                                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${
+                                    canUpdateJd ? 'text-success hover:bg-success-subtle' : 'text-gray-400 cursor-not-allowed opacity-60'
+                                  }`}
                                 >
                                   <Power className="w-4 h-4" />
                                   Re-enable JD
                                 </button>
                               )}
                               {/* Archive Job */}
-                              {job.status !== 'archived' && canDeleteJd && (
+                              {job.status !== 'archived' && (
                                 <button
                                   onClick={() => {
                                     if (!canDeleteJd) {
@@ -600,7 +612,11 @@ export default function JobOpeningsPage() {
                                     }
                                     handleStatusChange(job.id, 'archived');
                                   }}
-                                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                                  aria-disabled={!canDeleteJd}
+                                  title={!canDeleteJd ? 'You do not have permission to archive job descriptions' : ''}
+                                  className={`w-full flex items-center gap-2 px-3 py-2 text-sm ${
+                                    canDeleteJd ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed opacity-60'
+                                  }`}
                                 >
                                   <Archive className="w-4 h-4" />
                                   Archive Job

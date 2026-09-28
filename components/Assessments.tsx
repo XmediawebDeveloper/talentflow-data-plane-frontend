@@ -442,17 +442,18 @@ type CandidateResultRow = AssessmentAttemptResponse & {
 export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation, autoOpenCreate, preSelectedJdId, preSelectedJdTitle, initialListTab }: AssessmentsProps) {
   const router = useRouter();
   const dialog = useGlobalDialog();
-  const { user, isTenantAdmin, hasPermission, hasPermissionCode } = useAuth();
+  const { user, isTenantAdmin, hasPermissionCode } = useAuth();
 
   // Permission checks for CRUD operations (bypass for tenant admin)
   const canCreateAssessment = isTenantAdmin || (user?.permissions?.canCreateAssessments ?? false);
   const canUpdateAssessment = isTenantAdmin || (user?.permissions?.canUpdateAssessments ?? false);
   const canDeleteAssessment = isTenantAdmin || (user?.permissions?.canDeleteAssessments ?? false);
   const canDownloadAssessmentPDF = isTenantAdmin || (user?.permissions?.canDownloadAssessmentPDF ?? false);
-  const canBatchDownloadAssessmentPDF = isTenantAdmin || hasPermissionCode('assessments:batch_download') || (user?.permissions?.canExport ?? false);
-  /* Download Report on an invitation row — the page's existing per-result PDF
-     right, plus the permission code the catalogue names for it. */
-  const canDownloadInviteReport = canDownloadAssessmentPDF || hasPermissionCode('assessments:download_report');
+  const canBatchDownloadAssessmentPDF = isTenantAdmin || hasPermissionCode('assessments:batch_download');
+  /* Download Report on an invitation row — gated on its own permission code only
+     (a generic canDownloadAssessmentPDF/canExport fallback would default this on
+     for most roles and defeat the specific toggle). */
+  const canDownloadInviteReport = isTenantAdmin || hasPermissionCode('assessments:download_report');
   // HR Question Bank is reached via a quick link here (moved out of the sidebar)
   const canAccessHRQuestionBank = isTenantAdmin || !!(user?.permissions?.canViewHRQuestionBank || user?.permissions?.canCreateHRQuestionBank || user?.permissions?.canUpdateHRQuestionBank || user?.permissions?.canDeleteHRQuestionBank);
 
@@ -4060,7 +4061,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             setSelectedAssessmentForPreview(selectedAssessmentForDetails);
             setShowPreviewModal(true);
           }}
-          onShare={(hasPermission('canUpdateAssessments') || isTenantAdmin) ? () => {
+          onShare={(isTenantAdmin || hasPermissionCode('assessments:share')) ? () => {
             // Keep details view open, modal will overlay on top
             setSelectedAssessmentForShare(selectedAssessmentForDetails);
             setShowShareModal(true);
@@ -5342,7 +5343,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <div className="border-t border-gray-100 dark:border-slate-700/60 my-1"></div>
               </>
             )}
-            {assessment.status !== 'Archived' && canCreateAssessment && (() => {
+            {assessment.status !== 'Archived' && (() => {
               // Gating computed FRONT-END, on the lineage this page has
               // actually loaded, so it does not depend on which of the
               // backend's clone_* flags a deployment happens to return.
@@ -5365,8 +5366,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               //     record for other readers; they just do not gate here.
               const isDraft = assessment.status === 'Draft';
               const capReached = isVersionCapReached(assessment);
-              const buttonDisabled = isDraft || capReached;
-              const disabledReason = isDraft
+              const buttonDisabled = !canCreateAssessment || isDraft || capReached;
+              const disabledReason = !canCreateAssessment
+                ? 'You do not have permission to create assessments'
+                : isDraft
                 ? 'Publish the assessment before duplicating.'
                 : capReached
                 ? `Maximum ${MAX_ASSESSMENT_VERSIONS} versions reached. Archive a version to duplicate again.`
@@ -5374,7 +5377,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               return (
                 <button
                   onClick={() => {
-                    if (buttonDisabled) return;
+                    if (buttonDisabled) {
+                      if (!canCreateAssessment) toast.error(disabledReason);
+                      return;
+                    }
                     setOpenMenuId(null);
                     handleOpenCloneModal(assessment);
                   }}
@@ -5391,7 +5397,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 </button>
               );
             })()}
-            {assessment.status === 'Active' && canUpdateAssessment && (() => {
+            {assessment.status === 'Active' && (() => {
               // Revoke is only meaningful once at least one invite
               // exists, AND only once. After a recruiter has already
               // revoked invites on this assessment the action is
@@ -5399,8 +5405,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               // a fresh invite round, not re-run revoke.
               const hasInvites = (assessment.invitations_count || 0) > 0;
               const alreadyRevoked = !!assessment.has_revoked_invites;
-              const revokeDisabled = !hasInvites || alreadyRevoked;
-              const revokeReason = !hasInvites
+              const revokeDisabled = !canUpdateAssessment || !hasInvites || alreadyRevoked;
+              const revokeReason = !canUpdateAssessment
+                ? 'You do not have permission to edit assessments'
+                : !hasInvites
                 ? 'No invites have been sent yet.'
                 : alreadyRevoked
                 ? 'Invites for this assessment have already been revoked.'
@@ -5408,7 +5416,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               return (
                 <button
                   onClick={() => {
-                    if (revokeDisabled) return;
+                    if (revokeDisabled) {
+                      if (!canUpdateAssessment) toast.error(revokeReason as string);
+                      return;
+                    }
                     setOpenMenuId(null);
                     handleOpenRevokeModal(assessment);
                   }}
@@ -5430,12 +5441,22 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 go through the configure-page Publish button,
                 and an unpublished row has nothing meaningful
                 to archive. */}
-            {canUpdateAssessment && assessment.status !== 'Active' && assessment.status !== 'Draft' && (
+            {assessment.status !== 'Active' && assessment.status !== 'Draft' && (
               <button
-                onClick={() => handleActivateAssessment(assessment.id)}
-                className="group w-full px-4 py-2.5 text-left text-sm text-gray-700 dark:text-slate-300 flex items-center gap-2 transition-colors"
+                onClick={() => {
+                  if (!canUpdateAssessment) {
+                    toast.error('You do not have permission to edit assessments');
+                    return;
+                  }
+                  handleActivateAssessment(assessment.id);
+                }}
+                aria-disabled={!canUpdateAssessment}
+                title={!canUpdateAssessment ? 'You do not have permission to edit assessments' : ''}
+                className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 transition-colors ${
+                  canUpdateAssessment ? 'text-gray-700 dark:text-slate-300' : 'text-gray-400 cursor-not-allowed opacity-60'
+                }`}
               >
-                <Play className="w-4 h-4 text-menu-icon-activate flex-shrink-0" />
+                <Play className={`w-4 h-4 flex-shrink-0 ${canUpdateAssessment ? 'text-menu-icon-activate' : 'text-gray-300'}`} />
                 <span className={MENU_ITEM_SCALE_CLASS}>Activate</span>
               </button>
             )}
@@ -5448,7 +5469,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 }
                 handleArchiveAssessment(assessment.id);
               }}
-              disabled={!canDeleteAssessment}
+              aria-disabled={!canDeleteAssessment}
               title={!canDeleteAssessment ? 'You do not have permission to archive assessments' : ''}
               className={`group w-full px-4 py-2.5 text-left text-sm flex items-center gap-2 ${
                 !canDeleteAssessment
@@ -5463,7 +5484,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             {assessment.status !== 'Archived' && (
               <div className="border-t border-gray-100 dark:border-slate-700/60 my-1"></div>
             )}
-            {assessment.status !== 'Archived' && (hasPermission('canDeleteAssessments') || isTenantAdmin) && (() => {
+            {assessment.status !== 'Archived' && (() => {
               const hasCandidates = assessment.invitations_count > 0;
               const isDisabled = !canDeleteAssessment || hasCandidates;
               const disabledReason = !canDeleteAssessment
@@ -5529,7 +5550,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     const iconClass = (disabled: boolean, enabledColor: string) =>
       `w-4 h-4 flex-shrink-0 ${disabled ? 'text-gray-300' : enabledColor}`;
 
-    const canShare = hasPermission('canUpdateAssessments') || isTenantAdmin;
+    const canShare = isTenantAdmin || hasPermissionCode('assessments:share');
     const shareBlockedReason =
       assessment.status === 'Draft' ? 'Publish assessment first to share' :
       assessment.status === 'Archived' ? 'Archived assessments cannot be shared' :
@@ -5565,22 +5586,26 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             what decides whether it can be shared is unchanged: a Draft has
             nothing published to send, an Archived one is out of circulation,
             and one whose invites were revoked is sealed until duplicated. */}
-        {canShare && (
-          <button
-            onClick={() => {
-              if (isShareBlocked) return;
+        <button
+          onClick={() => {
+            if (!canShare) {
               setOpenMenuId(null);
-              setSelectedAssessmentForShare(assessment);
-              setShowShareModal(true);
-            }}
-            disabled={isShareBlocked}
-            title={shareBlockedReason || 'Share via email'}
-            className={itemClass(isShareBlocked)}
-          >
-            <Send className={iconClass(isShareBlocked, 'text-menu-icon-share')} />
-            <span className={MENU_ITEM_SCALE_CLASS}>Send</span>
-          </button>
-        )}
+              toast.error('You do not have permission to share assessments');
+              return;
+            }
+            if (isShareBlocked) return;
+            setOpenMenuId(null);
+            setSelectedAssessmentForShare(assessment);
+            setShowShareModal(true);
+          }}
+          disabled={isShareBlocked}
+          aria-disabled={!canShare}
+          title={!canShare ? 'You do not have permission to share assessments' : (shareBlockedReason || 'Share via email')}
+          className={itemClass(isShareBlocked || !canShare)}
+        >
+          <Send className={iconClass(isShareBlocked || !canShare, 'text-menu-icon-share')} />
+          <span className={MENU_ITEM_SCALE_CLASS}>Send</span>
+        </button>
 
         {/* Track Invites — always offered, enabled once the assessment has been
             shared with at least one candidate. */}
@@ -5683,48 +5708,55 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <span className="sm:hidden">Questions</span>
               </Button>
             )}
-            {/* Send Invite — same permission as the per-row Share action. */}
-            {(hasPermission('canUpdateAssessments') || isTenantAdmin) && (
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={handleSendInvite}
-                disabled={shareableAssessments.length === 0}
-                title={
-                  shareableAssessments.length === 0
+            {/* Send Invite — same permission as the per-row Share action. Always visible; disabled without permission. */}
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={() => {
+                if (!canUpdateAssessment) {
+                  toast.error('You do not have permission to edit assessments');
+                  return;
+                }
+                handleSendInvite();
+              }}
+              disabled={shareableAssessments.length === 0}
+              aria-disabled={!canUpdateAssessment}
+              title={
+                !canUpdateAssessment
+                  ? 'You do not have permission to edit assessments'
+                  : shareableAssessments.length === 0
                     ? 'Publish an assessment before inviting candidates'
                     : 'Send an assessment invitation'
-                }
-                icon={<Mail className="w-4 h-4" />}
-              >
-                <span className="hidden sm:inline">Send Invite</span>
-                <span className="sm:hidden">Invite</span>
-              </Button>
-            )}
+              }
+              icon={<Mail className="w-4 h-4" />}
+            >
+              <span className="hidden sm:inline">Send Invite</span>
+              <span className="sm:hidden">Invite</span>
+            </Button>
             {onOpenCandidateView && (
               <Button variant="secondary" size="md" onClick={onOpenCandidateView} icon={<Eye className="w-4 h-4" />}>
                 Preview Candidate View
               </Button>
             )}
-            {(hasPermission('canCreateAssessments') || isTenantAdmin) && (
-              <Button
-                variant="primary"
-                size="md"
-                onClick={() => {
-                  if (!canCreateAssessment) {
-                    toast.error('You do not have permission to create assessments');
-                    return;
-                  }
-                  handleOpenCreation();
-                }}
-                disabled={!canCreateAssessment || (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0)}
-                title={!canCreateAssessment ? 'You do not have permission to create assessments' : (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0 ? 'No assessment units available' : '')}
-                icon={<Sparkles className="w-4 h-4" />}
-              >
-                <span className="hidden sm:inline">Create Assessment</span>
+            <Button
+              variant="primary"
+              size="md"
+              onClick={() => {
+                if (!canCreateAssessment) {
+                  toast.error('You do not have permission to create assessments');
+                  return;
+                }
+                handleOpenCreation();
+              }}
+              disabled={!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0}
+              aria-disabled={!canCreateAssessment}
+              title={!canCreateAssessment ? 'You do not have permission to create assessments' : (!isUnlimited && totalUnits > 0 && (totalUnits - stats.units_consumed) <= 0 ? 'No assessment units available' : '')}
+              icon={<Sparkles className="w-4 h-4" />}
+              className={!canCreateAssessment ? 'opacity-50 cursor-not-allowed' : ''}
+            >
+              <span className="hidden sm:inline">Create Assessment</span>
                 <span className="sm:hidden">Create</span>
               </Button>
-            )}
           </div>
         </div>
 
@@ -7673,7 +7705,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                       {(() => {
                                         const hasResult = inviteHasResult(inv);
                                         const scored = inv.scoring_status !== 'pending' && inv.scoring_status !== 'processing';
-                                        const canDownload = hasResult && scored && canDownloadInviteReport;
                                         // Edit Email/Change Email (the pre-existing
                                         // failed/bounced "fix the address" flow)
                                         // isn't wired on this tab — it never had
@@ -7703,11 +7734,18 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                                 this row, it is just not ready yet,
                                                 and hiding it would read as "this
                                                 row has no report". */}
-                                            {hasResult && canDownloadInviteReport && (
+                                            {hasResult && (
                                               <DropdownMenuItem
-                                                className={assessmentDropdownMenuItemClass}
-                                                disabled={!canDownload || downloadingInviteReportId === inv.id}
-                                                onSelect={() => downloadInviteReport(inv)}
+                                                className={`${assessmentDropdownMenuItemClass} ${!canDownloadInviteReport ? 'opacity-50' : ''}`}
+                                                disabled={!scored || downloadingInviteReportId === inv.id}
+                                                title={!canDownloadInviteReport ? 'You do not have permission to download assessment reports' : undefined}
+                                                onSelect={() => {
+                                                  if (!canDownloadInviteReport) {
+                                                    toast.error('You do not have permission to download assessment reports');
+                                                    return;
+                                                  }
+                                                  downloadInviteReport(inv);
+                                                }}
                                               >
                                                 {downloadingInviteReportId === inv.id
                                                   ? <Loader2 className="w-3.5 h-3.5 text-menu-icon-download animate-spin" />
@@ -8025,13 +8063,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 {topicSettings.hr_enabled ? 'ON' : 'OFF'}
                               </span>
                               <button
-                                onClick={() => updateTopicSettings({ hr_enabled: !topicSettings.hr_enabled })}
-                                disabled={isSavingTopics}
+                                onClick={() => {
+                                  if (!canUpdateAssessment) {
+                                    toast.error('You do not have permission to edit assessment settings');
+                                    return;
+                                  }
+                                  updateTopicSettings({ hr_enabled: !topicSettings.hr_enabled });
+                                }}
+                                disabled={isSavingTopics || !canUpdateAssessment}
+                                title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : ''}
                                 className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.hr_enabled
                                     ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
                                     : 'bg-gray-300'
-                                } ${isSavingTopics ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                } ${(isSavingTopics || !canUpdateAssessment) ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
                                 <div className={`absolute top-0.5 sm:top-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
                                   topicSettings.hr_enabled
@@ -8072,13 +8117,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 {topicSettings.technical_enabled ? 'ON' : 'OFF'}
                               </span>
                               <button
-                                onClick={() => updateTopicSettings({ technical_enabled: !topicSettings.technical_enabled })}
-                                disabled={isSavingTopics}
+                                onClick={() => {
+                                  if (!canUpdateAssessment) {
+                                    toast.error('You do not have permission to edit assessment settings');
+                                    return;
+                                  }
+                                  updateTopicSettings({ technical_enabled: !topicSettings.technical_enabled });
+                                }}
+                                disabled={isSavingTopics || !canUpdateAssessment}
+                                title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : ''}
                                 className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.technical_enabled
                                     ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
                                     : 'bg-gray-300'
-                                } ${isSavingTopics ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                } ${(isSavingTopics || !canUpdateAssessment) ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
                                 <div className={`absolute top-0.5 sm:top-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
                                   topicSettings.technical_enabled
@@ -8119,13 +8171,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 {topicSettings.coding_enabled ? 'ON' : 'OFF'}
                               </span>
                               <button
-                                onClick={() => updateTopicSettings({ coding_enabled: !topicSettings.coding_enabled })}
-                                disabled={isSavingTopics}
+                                onClick={() => {
+                                  if (!canUpdateAssessment) {
+                                    toast.error('You do not have permission to edit assessment settings');
+                                    return;
+                                  }
+                                  updateTopicSettings({ coding_enabled: !topicSettings.coding_enabled });
+                                }}
+                                disabled={isSavingTopics || !canUpdateAssessment}
+                                title={!canUpdateAssessment ? 'You do not have permission to edit assessment settings' : ''}
                                 className={`relative w-9 sm:w-14 h-5 sm:h-7 rounded-full transition-colors ${
                                   topicSettings.coding_enabled
                                     ? 'bg-brand-blue shadow-sm shadow-brand-blue/25'
                                     : 'bg-gray-300'
-                                } ${isSavingTopics ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                } ${(isSavingTopics || !canUpdateAssessment) ? 'opacity-50 cursor-not-allowed' : ''}`}
                               >
                                 <div className={`absolute top-0.5 sm:top-1 w-4 h-4 sm:w-5 sm:h-5 rounded-full bg-white shadow-md transition-transform ${
                                   topicSettings.coding_enabled
@@ -8588,7 +8647,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         }
                         handleOpenCreation();
                       }}
-                      disabled={!canCreateAssessment}
+                      aria-disabled={!canCreateAssessment}
+                      className={!canCreateAssessment ? 'opacity-50 cursor-not-allowed' : ''}
                       title={!canCreateAssessment ? 'You do not have permission to create assessments' : ''}
                       icon={<Sparkles className="w-4 h-4" />}
                     >

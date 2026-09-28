@@ -620,8 +620,12 @@ function getExperienceRange(job: Pick<Job, 'experience' | 'experience_min' | 'ex
 const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreationProps>(function AssessmentCreation({ onBack, jobs, onCreateAssessment, onCreateNewJD, onJobsRefresh, topicSettings, preSelectedJobId, proctoringSettings: initialProctoringSettings, embedded = false, editAssessmentId: embeddedEditAssessmentId, readOnly = false }, ref) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { isTenantAdmin, user } = useAuth();
+  const { isTenantAdmin, user, hasPermissionCode } = useAuth();
   const canCreateJd = isTenantAdmin || (user?.permissions?.canCreateJD ?? false);
+  // HR Question Bank's "Add Quiz" control inside the HR round — the only
+  // add/edit/delete-question affordance this builder actually has (the bank
+  // has no per-question edit or delete UI here to gate).
+  const canAddQuestion = isTenantAdmin || hasPermissionCode('assessments:add_question');
   const { available: assessmentAvailable } = usePlanFeature('assessment');
 
   /* Read initial step from URL, default to 'select-jd'.
@@ -1285,6 +1289,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
      had no other caller, so leaving them would have been dead code. */
 
   const openAddHRQuizModal = () => {
+    if (!canAddQuestion) {
+      toast.error('You do not have permission to add questions');
+      return;
+    }
     const hrSection = sections.find(s => s.name === 'HR');
     if (!hrSection?.enabled) return;
 
@@ -1299,6 +1307,10 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
   };
 
   const handleSaveHRQuestion = async () => {
+    if (!canAddQuestion) {
+      toast.error('You do not have permission to add questions');
+      return;
+    }
     const questionText = newHRQuestion.question_text.trim();
     if (!questionText) {
       toast.error('Question text is required');
@@ -3357,17 +3369,23 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                     Choose the JD that this assessment will be based on
                   </p>
                 </div>
-                {canCreateJd && (
-                  <Button
-                    variant="primary"
-                    onClick={handleCreateNewJD}
-                    className="flex-shrink-0"
-                    icon={<Plus className="w-4 h-4" />}
-                  >
-                    <span className="hidden sm:inline">Create New Job</span>
-                    <span className="sm:hidden">New Job</span>
-                  </Button>
-                )}
+                <Button
+                  variant="primary"
+                  onClick={() => {
+                    if (!canCreateJd) {
+                      toast.error('You do not have permission to create job descriptions');
+                      return;
+                    }
+                    handleCreateNewJD();
+                  }}
+                  aria-disabled={!canCreateJd}
+                  title={!canCreateJd ? 'You do not have permission to create job descriptions' : undefined}
+                  className={`flex-shrink-0 ${!canCreateJd ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  icon={<Plus className="w-4 h-4" />}
+                >
+                  <span className="hidden sm:inline">Create New Job</span>
+                  <span className="sm:hidden">New Job</span>
+                </Button>
               </div>
             </div>
 
@@ -3997,11 +4015,19 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                           ? 'Every published job version already has an assessment. Publish a new version of a job to create another one.'
                           : 'Create and publish a Job first to create assessments'}
                     </p>
-                    {canCreateJd && availableJobs.length === 0 && (
+                    {availableJobs.length === 0 && (
                       <Button
                         variant="primary"
-                        onClick={handleCreateNewJD}
-                        className="mt-4 mx-auto"
+                        onClick={() => {
+                          if (!canCreateJd) {
+                            toast.error('You do not have permission to create job descriptions');
+                            return;
+                          }
+                          handleCreateNewJD();
+                        }}
+                        aria-disabled={!canCreateJd}
+                        title={!canCreateJd ? 'You do not have permission to create job descriptions' : undefined}
+                        className={`mt-4 mx-auto ${!canCreateJd ? 'opacity-50 cursor-not-allowed' : ''}`}
                         icon={<Plus className="w-4 h-4" />}
                       >
                         Create New Job
@@ -4128,7 +4154,9 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
             size="sm"
             type="button"
             onClick={openAddHRQuizModal}
-            className="flex-shrink-0"
+            aria-disabled={!canAddQuestion}
+            title={!canAddQuestion ? 'You do not have permission to add questions' : undefined}
+            className={`flex-shrink-0 ${!canAddQuestion ? 'opacity-50 cursor-not-allowed' : ''}`}
             icon={<Plus className="w-3.5 h-3.5" />}
           >
             Add Quiz

@@ -1,6 +1,7 @@
 'use client';
 
 import { Users, Plus } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface EmptyStateProps {
   isTenantAdmin: boolean;
@@ -24,15 +25,25 @@ export default function EmptyState({
           ? 'Create your first team to start organizing your recruitment workflow'
           : 'No teams have been created yet. Contact your administrator to create teams.'}
       </p>
-      {isTenantAdmin && canCreateTeams && (
-        <button
-          onClick={onCreateTeam}
-          className="inline-flex items-center gap-2 rounded-xl bg-brand-blue px-6 py-3 text-sm font-medium text-white shadow-md shadow-brand-blue/20 transition-all hover:-translate-y-0.5 hover:shadow-lg"
-        >
-          <Plus className="w-5 h-5" />
-          Create Your First Team
-        </button>
-      )}
+      <button
+        onClick={() => {
+          if (!canCreateTeams) {
+            toast.error('You do not have permission to create teams');
+            return;
+          }
+          onCreateTeam();
+        }}
+        aria-disabled={!canCreateTeams}
+        title={!canCreateTeams ? 'You do not have permission to create teams' : ''}
+        className={`inline-flex items-center gap-2 rounded-xl px-6 py-3 text-sm font-medium transition-all ${
+          canCreateTeams
+            ? 'bg-brand-blue text-white shadow-md shadow-brand-blue/20 hover:-translate-y-0.5 hover:shadow-lg'
+            : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+        }`}
+      >
+        <Plus className="w-5 h-5" />
+        Create Your First Team
+      </button>
     </div>
   );
 }

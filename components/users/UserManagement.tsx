@@ -790,11 +790,28 @@ export default function UserManagement() {
   };
 
   const selectRole = async (roleId: number, isEdit: boolean = false) => {
+    if (isEdit) {
+      // Switching an EXISTING user's assigned role must not discard whatever
+      // permission customizations are currently shown in the editor — this
+      // used to fetch the clicked role's raw default template and overwrite
+      // editSelectedPermissionCodes/Ids with it, silently wiping out the
+      // user's real saved permission overrides (or edits made earlier in the
+      // same session) out from under the admin. Role assignment and
+      // permission overrides are edited independently in this modal: the
+      // permissions checklist keeps whatever it already shows, and role only
+      // changes the `role`/`role_id` columns that get saved.
+      setEditSelectedRoleId(roleId);
+      return;
+    }
+
     const requestId = ++selectRoleRequestIdRef.current;
     setIsLoadingPermissions(true);
 
     try {
-      // Fetch full role details including permissions
+      // Fetch full role details including permissions — create-user flow
+      // only: starting a brand-new user from a role's default template is
+      // the correct behavior there (there is no existing customization to
+      // discard).
       const roleDetails = await rbacService.getRoleById(roleId);
 
       // A newer role selection started after this one — discard this stale response.
@@ -811,30 +828,16 @@ export default function UserManagement() {
       console.log(`[DEBUG] Loaded ${permissionIds.size} permissions for role ${roleId}`);
       console.log(`[DEBUG] Permission codes:`, Array.from(permissionCodes));
 
-      if (isEdit) {
-        // TEMP DIAGNOSTIC — remove once the spurious-toast root cause is confirmed.
-        console.log(`[SELECT-ROLE] resolved roleId=${roleId}, applying ${permissionCodes.size} codes`, { timeStamp: performance.now() });
-        setEditSelectedRoleId(roleId);
-        setEditSelectedPermissionIds(permissionIds);
-        setEditSelectedPermissionCodes(permissionCodes);
-      } else {
-        setSelectedRoleId(roleId);
-        setSelectedPermissionIds(permissionIds);
-        setSelectedPermissionCodes(permissionCodes);
-      }
+      setSelectedRoleId(roleId);
+      setSelectedPermissionIds(permissionIds);
+      setSelectedPermissionCodes(permissionCodes);
     } catch (error) {
       if (requestId !== selectRoleRequestIdRef.current) return;
       console.error('Error fetching role permissions:', error);
       // Clear permissions on error
-      if (isEdit) {
-        setEditSelectedRoleId(roleId);
-        setEditSelectedPermissionIds(new Set());
-        setEditSelectedPermissionCodes(new Set());
-      } else {
-        setSelectedRoleId(roleId);
-        setSelectedPermissionIds(new Set());
-        setSelectedPermissionCodes(new Set());
-      }
+      setSelectedRoleId(roleId);
+      setSelectedPermissionIds(new Set());
+      setSelectedPermissionCodes(new Set());
     } finally {
       if (requestId === selectRoleRequestIdRef.current) {
         setIsLoadingPermissions(false);
@@ -3038,27 +3041,16 @@ export default function UserManagement() {
                           : true;
 
                         const toggleCategory = (e?: React.MouseEvent) => {
-                          // TEMP DIAGNOSTIC — remove once the spurious-toast root cause is confirmed.
-                          console.log(`[TOGGLE-CATEGORY] fired for "${category.name}"`, {
-                            isTrusted: e?.isTrusted,
-                            eventType: e?.type,
-                            targetTag: (e?.target as HTMLElement | undefined)?.tagName,
-                            targetText: (e?.target as HTMLElement | undefined)?.textContent?.slice(0, 60),
-                            currentTargetTag: (e?.currentTarget as HTMLElement | undefined)?.tagName,
-                            activeElement: document.activeElement?.tagName,
-                            timeStamp: e?.timeStamp,
-                          });
-                          console.trace('[TOGGLE-CATEGORY] call stack');
+                          const allCategoryCodes = [
+                            ...(category.viewCode ? [category.viewCode] : []),
+                            ...(category.actions?.map(a => a.code) || []),
+                            ...(category.subCategories?.flatMap(s => [
+                              ...(s.viewCode ? [s.viewCode] : []),
+                              ...s.actions.map(a => a.code),
+                            ]) || []),
+                          ];
                           if (isCategoryActive) {
                             // Block if any code in this category is required by another active permission
-                            const allCategoryCodes = [
-                              ...(category.viewCode ? [category.viewCode] : []),
-                              ...(category.actions?.map(a => a.code) || []),
-                              ...(category.subCategories?.flatMap(s => [
-                                ...(s.viewCode ? [s.viewCode] : []),
-                                ...s.actions.map(a => a.code),
-                              ]) || []),
-                            ];
                             const blockerNames = [
                               ...new Set(
                                 allCategoryCodes.flatMap(c =>
@@ -3090,6 +3082,14 @@ export default function UserManagement() {
                               category.subCategories?.forEach(s => {
                                 if (s.viewCode) next.add(s.viewCode);
                                 s.actions.forEach(a => next.add(a.code));
+                              });
+                              // Auto-enable dependencies for every code in this category
+                              allCategoryCodes.forEach(c => {
+                                getPermissionDependencies(c).forEach(dep => {
+                                  next.add(dep);
+                                  const depViewCode = getCategoryViewCodeFor(dep);
+                                  if (depViewCode) next.add(depViewCode);
+                                });
                               });
                             }
                             return next;
@@ -3206,6 +3206,26 @@ export default function UserManagement() {
                                 : sub.actions.some(a => editSelectedPermissionCodes.has(a.code));
 
                               const toggleSub = () => {
+                                const subAllCodesForToggle = [
+                                  ...(sub.viewCode ? [sub.viewCode] : []),
+                                  ...sub.actions.map(a => a.code),
+                                ];
+                                if (isSubActive) {
+                                  // Block if any code in this sub-category is required by another active permission
+                                  const blockerNames = [
+                                    ...new Set(
+                                      subAllCodesForToggle.flatMap(c =>
+                                        getBlockingPermissions(c, editSelectedPermissionCodes)
+                                      )
+                                    ),
+                                  ];
+                                  if (blockerNames.length > 0) {
+                                    toast.warning(
+                                      `Cannot disable "${sub.name}" — it's required by ${blockerNames.join(', ')}. Disable that permission first.`
+                                    );
+                                    return;
+                                  }
+                                }
                                 setEditSelectedPermissionCodes(prev => {
                                   const next = new Set(prev);
                                   if (isSubActive) {
@@ -3230,6 +3250,14 @@ export default function UserManagement() {
                                       sub.actions.forEach(a => next.add(a.code));
                                     }
                                     if (category.viewCode) next.add(category.viewCode);
+                                    // Auto-enable dependencies for every code in this sub-category
+                                    subAllCodesForToggle.forEach(c => {
+                                      getPermissionDependencies(c).forEach(dep => {
+                                        next.add(dep);
+                                        const depViewCode = getCategoryViewCodeFor(dep);
+                                        if (depViewCode) next.add(depViewCode);
+                                      });
+                                    });
                                   }
                                   return next;
                                 });

@@ -81,15 +81,25 @@ export default function ResumeScoringJDSelection() {
               </div>
             </div>
           </div>
-          {canCreateJD && (
-            <button
-              onClick={() => router.push('/recruitment/jd-creation?from=resume-scoring')}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm border border-gray-200 bg-white text-gray-700 rounded-lg hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors whitespace-nowrap"
-            >
-              <Plus className="w-4 h-4" />
-              Create New Job
-            </button>
-          )}
+          <button
+            onClick={() => {
+              if (!canCreateJD) {
+                toast.error('You do not have permission to create job descriptions');
+                return;
+              }
+              router.push('/recruitment/jd-creation?from=resume-scoring');
+            }}
+            aria-disabled={!canCreateJD}
+            title={!canCreateJD ? 'You do not have permission to create job descriptions' : undefined}
+            className={`flex items-center gap-2 px-4 py-2.5 text-sm border rounded-lg transition-colors whitespace-nowrap ${
+              canCreateJD
+                ? 'border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue'
+                : 'border-gray-200 bg-gray-50 text-gray-400 cursor-not-allowed opacity-60'
+            }`}
+          >
+            <Plus className="w-4 h-4" />
+            Create New Job
+          </button>
         </div>
 
         {/* Search */}
@@ -142,15 +152,25 @@ export default function ResumeScoringJDSelection() {
             </div>
             <p className="text-gray-700 mb-2 text-sm font-medium">No published job descriptions found</p>
             <p className="text-xs sm:text-sm text-gray-500 mb-4">Create and publish a JD first to score resumes against it</p>
-            {canCreateJD && (
-              <button
-                onClick={() => router.push('/recruitment/jd-creation?from=resume-scoring')}
-                className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
-              >
-                <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
-                Create Job Description
-              </button>
-            )}
+            <button
+              onClick={() => {
+                if (!canCreateJD) {
+                  toast.error('You do not have permission to create job descriptions');
+                  return;
+                }
+                router.push('/recruitment/jd-creation?from=resume-scoring');
+              }}
+              aria-disabled={!canCreateJD}
+              title={!canCreateJD ? 'You do not have permission to create job descriptions' : undefined}
+              className={`inline-flex items-center gap-2 px-4 sm:px-5 py-2 sm:py-2.5 text-xs sm:text-sm rounded-lg transition-colors ${
+                canCreateJD
+                  ? 'bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10'
+                  : 'bg-gray-200 text-gray-400 cursor-not-allowed opacity-60'
+              }`}
+            >
+              <Plus className="w-3.5 h-3.5 sm:w-4 sm:h-4 flex-shrink-0" />
+              Create Job Description
+            </button>
           </div>
         ) : (
           <div className="space-y-3">

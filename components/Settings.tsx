@@ -12,13 +12,16 @@ import { toast } from 'sonner';
 import { Skeleton } from '@/components/ui/skeleton';
 
 export default function Settings() {
-  const { user, logout, hasPermission, isTenantAdmin } = useAuth();
+  const { user, logout, hasPermission, hasPermissionCode, isTenantAdmin } = useAuth();
   const { setTheme, theme: currentTheme } = useTheme();
   const [activeTab, setActiveTab] = useState('profile');
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
-  const canEditSettings = isTenantAdmin || hasPermission('canManageSettings');
+  // General Settings' own "Manage" action (settings:general) — not the broader
+  // canManageSettings admin flag, which only decides whether links to the
+  // OTHER settings sub-pages (Branding, Legal, ...) are shown below.
+  const canEditSettings = isTenantAdmin || hasPermissionCode('settings:general');
 
   // Change Password state
   const [currentPassword, setCurrentPassword] = useState('');

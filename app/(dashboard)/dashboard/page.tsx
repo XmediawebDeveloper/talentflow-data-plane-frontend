@@ -21,6 +21,7 @@
  */
 
 import Link from 'next/link';
+import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -685,10 +686,11 @@ export default function DashboardPage() {
     router.push(`/recruitment/jd-creation?new=${Date.now()}`);
   };
 
-  // CTAs (gated by real permissions)
+  // CTAs — always rendered; `enabled` drives disabled styling + a permission
+  // toast instead of hiding the tile (permission-off must stay visible/disabled).
   const featuredActions = [
-    { label: 'Create Job', href: '/recruitment/jd-creation', onClick: handleCreateJob, visible: isTenantAdmin || hasPermission('canCreateJD'), primary: true, icon: Plus },
-  ].filter((item) => item.visible);
+    { label: 'Create Job', href: '/recruitment/jd-creation', onClick: handleCreateJob, enabled: isTenantAdmin || hasPermission('canCreateJD'), primary: true, icon: Plus },
+  ];
 
   // Single loading skeleton for the dashboard (banner + Quick Access), shown
   // while /dashboard resolves. The shared layout no longer draws a skeleton, so
@@ -762,9 +764,20 @@ export default function DashboardPage() {
                   <Link
                     key={item.href}
                     href={item.href}
-                    onClick={item.onClick}
+                    onClick={(e) => {
+                      if (!item.enabled) {
+                        e.preventDefault();
+                        toast.error('You do not have permission to create job descriptions');
+                        return;
+                      }
+                      item.onClick(e);
+                    }}
+                    aria-disabled={!item.enabled}
+                    title={!item.enabled ? 'You do not have permission to create job descriptions' : undefined}
                     className={
-                      item.primary
+                      !item.enabled
+                        ? 'inline-flex w-full sm:w-auto items-center justify-center sm:justify-start gap-2 whitespace-nowrap rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-400 dark:text-slate-600 cursor-not-allowed opacity-60'
+                        : item.primary
                         ? 'inline-flex w-full sm:w-auto items-center justify-center sm:justify-start gap-2 whitespace-nowrap rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-semibold text-white shadow-sm shadow-brand-blue/20 transition-colors hover:opacity-90'
                         : 'inline-flex w-full sm:w-auto items-center justify-center sm:justify-start gap-2 whitespace-nowrap rounded-xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3.5 py-2.5 text-sm font-medium text-slate-700 dark:text-slate-300 transition-colors hover:border-brand-blue/30 hover:text-brand-blue'
                     }

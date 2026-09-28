@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
+import { toast } from 'sonner';
 import {
   BarChart3,
   TrendingUp,
@@ -55,8 +56,8 @@ const UNIT_LABELS: Record<string, string> = {
 };
 
 export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashboardProps) {
-  const { isTenantAdmin: authIsTenantAdmin, user } = useAuth();
-  const canExport = authIsTenantAdmin || !!user?.permissions?.canExport;
+  const { isTenantAdmin: authIsTenantAdmin, hasPermissionCode } = useAuth();
+  const canExport = authIsTenantAdmin || hasPermissionCode('teams:export');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [teamsUsage, setTeamsUsage] = useState<AllTeamsUsageSummary | null>(null);
@@ -301,11 +302,20 @@ export default function TeamAnalyticsDashboard({ userRole }: TeamAnalyticsDashbo
               className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-3 py-2 text-sm outline-none transition-all focus:border-brand-blue/30 focus:ring-4 focus:ring-brand-blue/10"
             />
           </div>
-          {canExport && teamsUsage?.teams && teamsUsage.teams.length > 0 && (
+          {teamsUsage?.teams && teamsUsage.teams.length > 0 && (
             <Button
               variant="primary"
               size="sm"
-              onClick={handleExport}
+              onClick={() => {
+                if (!canExport) {
+                  toast.error('You do not have permission to export team analytics');
+                  return;
+                }
+                handleExport();
+              }}
+              aria-disabled={!canExport}
+              className={!canExport ? 'opacity-50 cursor-not-allowed' : ''}
+              title={!canExport ? 'You do not have permission to export team analytics' : ''}
               icon={<Download className="w-4 h-4" />}
             >
               Export CSV

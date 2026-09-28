@@ -5,6 +5,7 @@ import type { LucideIcon } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { toast } from 'sonner';
 import { Job } from '@/lib/types/types';
 import { MENU_ITEM_SCALE_CLASS } from '@/lib/constants/menuAnimation';
 import AITalentMatchProgressPanel from './AITalentMatchProgressPanel';
@@ -65,10 +66,19 @@ interface JobsListingProps {
    *  doesn't pass it just gets the live tally, as before. */
   jobsFullyLoaded?: boolean;
   onCreateNew: () => void;
+  /** Permission gate for onCreateNew — action/icon must stay visible and only
+   *  become non-clickable (with a toast on click) when this is true, never
+   *  hidden entirely. Create has no internal canCreateJd check in this file
+   *  (unlike Edit/Disable/Archive/Delete below, which reuse canUpdateJd/
+   *  canDisableJd/canArchiveJd/canDeleteJd computed from useAuth() directly),
+   *  so the host must pass this explicitly. */
+  onCreateNewDisabled?: boolean;
   onViewJob: (job: Job) => void;
   onViewApplicants?: (job: Job) => void;
   onAIMatch?: (job: Job) => void;
+  onAIMatchDisabled?: boolean;
   onScoreResumes?: (job: Job) => void;
+  onScoreResumesDisabled?: boolean;
   onUpdateJobStatus?: (jobId: string, status: Job['status']) => void;
   onEditJob?: (job: Job) => void;
   /**
@@ -129,15 +139,19 @@ const StatVersions = ({ count }: { count: number }) => (
   </span>
 );
 
-export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded = true, onCreateNew, onViewJob, onViewApplicants, onAIMatch, onScoreResumes, onUpdateJobStatus, onEditJob, versionStatusOverrides, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, forceListView, configHref }: JobsListingProps) {
+export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded = true, onCreateNew, onCreateNewDisabled = false, onViewJob, onViewApplicants, onAIMatch, onAIMatchDisabled = false, onScoreResumes, onScoreResumesDisabled = false, onUpdateJobStatus, onEditJob, versionStatusOverrides, onPublishJob, onDisableJob, onRepublishJob, onArchiveJob, onUnarchiveJob, onDeleteJob, onBulkDelete, quotaInfo, initialStatusFilter, forceListView, configHref }: JobsListingProps) {
   const dialog = useGlobalDialog();
   const router = useRouter();
-  const { isTenantAdmin, user } = useAuth();
-  const canUpdateJd = isTenantAdmin || (user?.permissions?.canUpdateJd ?? false);
-  const canDeleteJd = isTenantAdmin || (user?.permissions?.canDeleteJd ?? false);
-  const canArchiveJd = isTenantAdmin || (user?.permissions?.canArchiveJd ?? false);
-  const canDisableJd = isTenantAdmin || (user?.permissions?.canDisableJd ?? false);
-  const canExportJd = isTenantAdmin || (user?.permissions?.canExport ?? false);
+  const { isTenantAdmin, user, hasPermissionCode } = useAuth();
+  // NOTE: canUpdateJD/canDeleteJD/canArchiveJD/canDisableJD (capital JD) are the
+  // real, populated fields — AuthProvider never sets the deprecated lowercase
+  // canUpdateJd/etc. aliases, so checking those left every non-admin's Edit/
+  // Disable/Archive/Delete permanently denied regardless of their actual grant.
+  const canUpdateJd = isTenantAdmin || (user?.permissions?.canUpdateJD ?? false);
+  const canDeleteJd = isTenantAdmin || (user?.permissions?.canDeleteJD ?? false);
+  const canArchiveJd = isTenantAdmin || (user?.permissions?.canArchiveJD ?? false);
+  const canDisableJd = isTenantAdmin || (user?.permissions?.canDisableJD ?? false);
+  const canExportJd = isTenantAdmin || hasPermissionCode('jd:export');
   // Search + all eleven filters, in the shared hook. The controls commit as they
   // change, so this uses `setFilter` and leaves the draft pair alone.
   const search = useListSearch({
@@ -707,6 +721,10 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
   // Unlike the job-details drill-down — which intentionally restores state — a
   // fresh "Create" should not carry the previous filter selection back.
   const handleCreateNewJob = () => {
+    if (onCreateNewDisabled) {
+      toast.error('You do not have permission to create job descriptions');
+      return;
+    }
     if (quotaInfo && quotaInfo.remaining <= 0) {
       setShowQuotaModal(true);
       return;
@@ -799,8 +817,10 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                       variant="primary"
                       size="md"
                       onClick={handleCreateNewJob}
+                      aria-disabled={onCreateNewDisabled}
+                      title={onCreateNewDisabled ? 'You do not have permission to create job descriptions' : undefined}
                       icon={<Plus className="w-4 h-4" />}
-                      className="w-full sm:w-auto"
+                      className={`w-full sm:w-auto ${onCreateNewDisabled ? 'opacity-50 cursor-not-allowed' : ''}`}
                     >
                       Create New Job
                     </Button>
@@ -1072,47 +1092,89 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                       // Right-aligned + width clamped to the viewport so the menu
                       // never runs off the right edge on narrow/mobile screens.
                       <div className="absolute top-full right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-2 z-50">
-                        {canUpdateJd && (
+                        <button
+                          onClick={() => {
+                            if (!canUpdateJd) {
+                              toast.error('You do not have permission to publish job descriptions');
+                              return;
+                            }
+                            handleBulkPublish();
+                          }}
+                          aria-disabled={!canUpdateJd}
+                          title={!canUpdateJd ? 'You do not have permission to publish job descriptions' : ''}
+                          className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
+                            canUpdateJd ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed opacity-60'
+                          }`}
+                        >
+                          <Send className={`w-4 h-4 ${canUpdateJd ? 'text-success' : 'text-gray-400'}`} />
+                          Publish Selected (Drafts)
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (!canDisableJd) {
+                              toast.error('You do not have permission to disable job descriptions');
+                              return;
+                            }
+                            handleBulkDisable();
+                          }}
+                          aria-disabled={!canDisableJd}
+                          title={!canDisableJd ? 'You do not have permission to disable job descriptions' : ''}
+                          className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
+                            canDisableJd ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed opacity-60'
+                          }`}
+                        >
+                          <Ban className={`w-4 h-4 ${canDisableJd ? 'text-destructive' : 'text-gray-400'}`} />
+                          Disable Selected (Published)
+                        </button>
+                        <button
+                          onClick={() => {
+                            if (!canArchiveJd) {
+                              toast.error('You do not have permission to archive job descriptions');
+                              return;
+                            }
+                            handleBulkArchive();
+                          }}
+                          aria-disabled={!canArchiveJd}
+                          title={!canArchiveJd ? 'You do not have permission to archive job descriptions' : ''}
+                          className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
+                            canArchiveJd ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed opacity-60'
+                          }`}
+                        >
+                          <Archive className="w-4 h-4 text-gray-600" />
+                          Archive Selected
+                        </button>
+                        <div className="border-t border-gray-200 my-2" />
+                        <button
+                          onClick={() => {
+                            if (!canExportJd) {
+                              toast.error('You do not have permission to export job descriptions');
+                              return;
+                            }
+                            handleBulkExport();
+                          }}
+                          aria-disabled={!canExportJd}
+                          title={!canExportJd ? 'You do not have permission to export job descriptions' : ''}
+                          className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
+                            canExportJd ? 'text-gray-700 hover:bg-gray-50' : 'text-gray-400 cursor-not-allowed opacity-60'
+                          }`}
+                        >
+                          <Download className="w-4 h-4 text-gray-700" />
+                          Export Selected to CSV
+                        </button>
+                        {onBulkDelete && (
                           <button
-                            onClick={handleBulkPublish}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                          >
-                            <Send className="w-4 h-4 text-success" />
-                            Publish Selected (Drafts)
-                          </button>
-                        )}
-                        {canDisableJd && (
-                          <button
-                            onClick={handleBulkDisable}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                          >
-                            <Ban className="w-4 h-4 text-destructive" />
-                            Disable Selected (Published)
-                          </button>
-                        )}
-                        {canArchiveJd && (
-                          <button
-                            onClick={handleBulkArchive}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                          >
-                            <Archive className="w-4 h-4 text-gray-600" />
-                            Archive Selected
-                          </button>
-                        )}
-                        {(canExportJd || (canDeleteJd && onBulkDelete)) && <div className="border-t border-gray-200 my-2" />}
-                        {canExportJd && (
-                          <button
-                            onClick={handleBulkExport}
-                            className="w-full px-3 py-2 text-left text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2"
-                          >
-                            <Download className="w-4 h-4 text-gray-700" />
-                            Export Selected to CSV
-                          </button>
-                        )}
-                        {canDeleteJd && onBulkDelete && (
-                          <button
-                            onClick={handleBulkDelete}
-                            className="w-full px-3 py-2 text-left text-sm text-destructive hover:bg-destructive-subtle flex items-center gap-2"
+                            onClick={() => {
+                              if (!canDeleteJd) {
+                                toast.error('You do not have permission to delete job descriptions');
+                                return;
+                              }
+                              handleBulkDelete();
+                            }}
+                            aria-disabled={!canDeleteJd}
+                            title={!canDeleteJd ? 'You do not have permission to delete job descriptions' : ''}
+                            className={`w-full px-3 py-2 text-left text-sm flex items-center gap-2 ${
+                              canDeleteJd ? 'text-destructive hover:bg-destructive-subtle' : 'text-gray-400 cursor-not-allowed opacity-60'
+                            }`}
                           >
                             <Trash2 className="w-4 h-4" />
                             Delete Selected
@@ -1188,7 +1250,7 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                   <div
                     key={job.id}
                     className={`relative bg-white rounded-xl border transition-[transform,box-shadow,border-color] duration-150 cursor-pointer p-4 ${activeDropdown === job.id ? 'z-30' : 'z-0'} ${selectedJobs.has(job.id) ? 'border-brand-blue/50 shadow-md shadow-brand-blue/10 ring-1 ring-brand-blue/30' : 'border-gray-300 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 hover:-translate-y-0.5'}`}
-                    onClick={() => job.status.toLowerCase() === 'draft' && onEditJob ? onEditJob(job) : onViewJob(job)}
+                    onClick={() => job.status.toLowerCase() === 'draft' && onEditJob && canUpdateJd ? onEditJob(job) : onViewJob(job)}
                   >
                     <div className="flex flex-col md:flex-row md:items-start gap-3 md:gap-4">
                       {/* Individual Select + Job Icon */}
@@ -1228,9 +1290,17 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                         {onEditJob && (
                           <Button
                             variant="secondary"
-                            onClick={(e) => { e.stopPropagation(); onEditJob(job); }}
-                            className="h-9 w-9 p-0 rounded-md"
-                            aria-label="Edit" title="Edit"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!canUpdateJd) {
+                                toast.error('You do not have permission to edit job descriptions');
+                                return;
+                              }
+                              onEditJob(job);
+                            }}
+                            aria-disabled={!canUpdateJd}
+                            className={`h-9 w-9 p-0 rounded-md ${!canUpdateJd ? 'opacity-50 cursor-not-allowed' : ''}`}
+                            aria-label="Edit" title={!canUpdateJd ? 'You do not have permission to edit job descriptions' : 'Edit'}
                           >
                             <Edit className="w-4 h-4" />
                           </Button>
@@ -1279,12 +1349,18 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    if (onAIMatchDisabled) {
+                                      toast.error('You do not have permission to run AI Talent Match');
+                                      return;
+                                    }
                                     setActiveDropdown(null);
                                     onAIMatch(job);
                                   }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700"
+                                  aria-disabled={onAIMatchDisabled}
+                                  title={onAIMatchDisabled ? 'You do not have permission to run AI Talent Match' : ''}
+                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${onAIMatchDisabled ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700'}`}
                                 >
-                                  <Brain className="w-4 h-4 text-menu-icon-ai" />
+                                  <Brain className={`w-4 h-4 ${onAIMatchDisabled ? 'text-gray-400' : 'text-menu-icon-ai'}`} />
                                   <span className={MENU_ITEM_SCALE_CLASS}>AI Talent Match</span>
                                 </button>
                               )}
@@ -1292,12 +1368,18 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    if (onScoreResumesDisabled) {
+                                      toast.error('You do not have permission to run resume scoring');
+                                      return;
+                                    }
                                     onScoreResumes(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700"
+                                  aria-disabled={onScoreResumesDisabled}
+                                  title={onScoreResumesDisabled ? 'You do not have permission to run resume scoring' : ''}
+                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${onScoreResumesDisabled ? 'text-gray-400 cursor-not-allowed opacity-60' : 'text-gray-700'}`}
                                 >
-                                  <ClipboardList className="w-4 h-4 text-menu-icon-score" />
+                                  <ClipboardList className={`w-4 h-4 ${onScoreResumesDisabled ? 'text-gray-400' : 'text-menu-icon-score'}`} />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
                                 </button>
                               )}
@@ -1306,9 +1388,15 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    if (!canDisableJd) {
+                                      toast.error('You do not have permission to disable job descriptions');
+                                      return;
+                                    }
                                     requestDisableJob(job);
                                   }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-orange-700"
+                                  aria-disabled={!canDisableJd}
+                                  title={!canDisableJd ? 'You do not have permission to disable job descriptions' : undefined}
+                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canDisableJd ? 'text-orange-700' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
                                 >
                                   <Ban className="w-4 h-4" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Disable Job</span>
@@ -1319,10 +1407,16 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    if (!canUpdateJd) {
+                                      toast.error('You do not have permission to update job descriptions');
+                                      return;
+                                    }
                                     onRepublishJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-success"
+                                  aria-disabled={!canUpdateJd}
+                                  title={!canUpdateJd ? 'You do not have permission to update job descriptions' : undefined}
+                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canUpdateJd ? 'text-success' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
                                 >
                                   <CheckCircle2 className="w-4 h-4" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
@@ -1333,12 +1427,18 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    if (!canArchiveJd) {
+                                      toast.error('You do not have permission to archive job descriptions');
+                                      return;
+                                    }
                                     onArchiveJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700"
+                                  aria-disabled={!canArchiveJd}
+                                  title={!canArchiveJd ? 'You do not have permission to archive job descriptions' : undefined}
+                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canArchiveJd ? 'text-gray-700' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
                                 >
-                                  <Archive className="w-4 h-4 text-menu-icon-archive" />
+                                  <Archive className={`w-4 h-4 ${canArchiveJd ? 'text-menu-icon-archive' : 'text-gray-400'}`} />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Archive Job</span>
                                 </button>
                               )}
@@ -1347,10 +1447,16 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    if (!canArchiveJd) {
+                                      toast.error('You do not have permission to archive job descriptions');
+                                      return;
+                                    }
                                     onUnarchiveJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-success"
+                                  aria-disabled={!canArchiveJd}
+                                  title={!canArchiveJd ? 'You do not have permission to archive job descriptions' : undefined}
+                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canArchiveJd ? 'text-success' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
                                 >
                                   <RefreshCw className="w-4 h-4" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Unarchive Job</span>
@@ -1361,10 +1467,16 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                 <button
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    if (!canDeleteJd) {
+                                      toast.error('You do not have permission to delete job descriptions');
+                                      return;
+                                    }
                                     onDeleteJob(job);
                                     setActiveDropdown(null);
                                   }}
-                                  className="group w-full flex items-center gap-2 px-3 py-2 text-sm text-destructive"
+                                  aria-disabled={!canDeleteJd}
+                                  title={!canDeleteJd ? 'You do not have permission to delete job descriptions' : undefined}
+                                  className={`group w-full flex items-center gap-2 px-3 py-2 text-sm ${canDeleteJd ? 'text-destructive' : 'text-gray-400 cursor-not-allowed opacity-60'}`}
                                 >
                                   <Trash2 className="w-4 h-4" />
                                   <span className={MENU_ITEM_SCALE_CLASS}>Delete Job</span>
@@ -1459,48 +1571,132 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                                 )}
                                 {/* Quick Actions — same gates as the latest-version menu */}
                                 {onAIMatch && !['draft', 'disabled', 'archived'].includes(versionJob.status.toLowerCase()) && (
-                                  <DropdownMenuItem onSelect={() => onAIMatch(versionJob)} className={viewVersionsMenuItemClass}>
+                                  <DropdownMenuItem
+                                    onSelect={(e) => {
+                                      if (onAIMatchDisabled) {
+                                        e.preventDefault();
+                                        toast.error('You do not have permission to run AI Talent Match');
+                                        return;
+                                      }
+                                      onAIMatch(versionJob);
+                                    }}
+                                    aria-disabled={onAIMatchDisabled}
+                                    title={onAIMatchDisabled ? 'You do not have permission to run AI Talent Match' : undefined}
+                                    className={onAIMatchDisabled ? `${viewVersionsMenuItemClass} opacity-50 cursor-not-allowed` : viewVersionsMenuItemClass}
+                                  >
                                     <Brain className="w-4 h-4 text-menu-icon-ai" />
                                     <span className={MENU_ITEM_SCALE_CLASS}>AI Talent Match</span>
                                   </DropdownMenuItem>
                                 )}
                                 {onScoreResumes && !['draft', 'disabled', 'archived'].includes(versionJob.status.toLowerCase()) && (
-                                  <DropdownMenuItem onSelect={() => onScoreResumes(versionJob)} className={viewVersionsMenuItemClass}>
+                                  <DropdownMenuItem
+                                    onSelect={(e) => {
+                                      if (onScoreResumesDisabled) {
+                                        e.preventDefault();
+                                        toast.error('You do not have permission to run resume scoring');
+                                        return;
+                                      }
+                                      onScoreResumes(versionJob);
+                                    }}
+                                    aria-disabled={onScoreResumesDisabled}
+                                    title={onScoreResumesDisabled ? 'You do not have permission to run resume scoring' : undefined}
+                                    className={onScoreResumesDisabled ? `${viewVersionsMenuItemClass} opacity-50 cursor-not-allowed` : viewVersionsMenuItemClass}
+                                  >
                                     <ClipboardList className="w-4 h-4 text-menu-icon-score" />
                                     <span className={MENU_ITEM_SCALE_CLASS}>Score Resumes</span>
                                   </DropdownMenuItem>
                                 )}
                                 {/* Disable Job for Published */}
                                 {versionJob.status === 'Published' && onDisableJob && (
-                                  <DropdownMenuItem onSelect={() => requestDisableJob(versionJob)} className={viewVersionsMenuItemOrangeClass}>
+                                  <DropdownMenuItem
+                                    onSelect={(e) => {
+                                      if (!canDisableJd) {
+                                        e.preventDefault();
+                                        toast.error('You do not have permission to disable job descriptions');
+                                        return;
+                                      }
+                                      requestDisableJob(versionJob);
+                                    }}
+                                    aria-disabled={!canDisableJd}
+                                    title={!canDisableJd ? 'You do not have permission to disable job descriptions' : undefined}
+                                    className={canDisableJd ? viewVersionsMenuItemOrangeClass : `${viewVersionsMenuItemClass} opacity-50 cursor-not-allowed`}
+                                  >
                                     <Ban className="w-4 h-4" />
                                     <span className={MENU_ITEM_SCALE_CLASS}>Disable Job</span>
                                   </DropdownMenuItem>
                                 )}
                                 {/* Re-enable JD for Disabled */}
                                 {versionJob.status === 'Disabled' && onRepublishJob && (
-                                  <DropdownMenuItem onSelect={() => onRepublishJob(versionJob)} className={viewVersionsMenuItemGreenClass}>
+                                  <DropdownMenuItem
+                                    onSelect={(e) => {
+                                      if (!canUpdateJd) {
+                                        e.preventDefault();
+                                        toast.error('You do not have permission to update job descriptions');
+                                        return;
+                                      }
+                                      onRepublishJob(versionJob);
+                                    }}
+                                    aria-disabled={!canUpdateJd}
+                                    title={!canUpdateJd ? 'You do not have permission to update job descriptions' : undefined}
+                                    className={canUpdateJd ? viewVersionsMenuItemGreenClass : `${viewVersionsMenuItemClass} opacity-50 cursor-not-allowed`}
+                                  >
                                     <CheckCircle2 className="w-4 h-4" />
                                     <span className={MENU_ITEM_SCALE_CLASS}>Re-enable JD</span>
                                   </DropdownMenuItem>
                                 )}
                                 {/* Archive Job */}
                                 {versionJob.status !== 'Archived' && onArchiveJob && (
-                                  <DropdownMenuItem onSelect={() => onArchiveJob(versionJob)} className={viewVersionsMenuItemClass}>
+                                  <DropdownMenuItem
+                                    onSelect={(e) => {
+                                      if (!canArchiveJd) {
+                                        e.preventDefault();
+                                        toast.error('You do not have permission to archive job descriptions');
+                                        return;
+                                      }
+                                      onArchiveJob(versionJob);
+                                    }}
+                                    aria-disabled={!canArchiveJd}
+                                    title={!canArchiveJd ? 'You do not have permission to archive job descriptions' : undefined}
+                                    className={canArchiveJd ? viewVersionsMenuItemClass : `${viewVersionsMenuItemClass} opacity-50 cursor-not-allowed`}
+                                  >
                                     <Archive className="w-4 h-4 text-menu-icon-archive" />
                                     <span className={MENU_ITEM_SCALE_CLASS}>Archive Job</span>
                                   </DropdownMenuItem>
                                 )}
                                 {/* Unarchive Job */}
                                 {versionJob.status === 'Archived' && onUnarchiveJob && (
-                                  <DropdownMenuItem onSelect={() => onUnarchiveJob(versionJob)} className={viewVersionsMenuItemGreenClass}>
+                                  <DropdownMenuItem
+                                    onSelect={(e) => {
+                                      if (!canArchiveJd) {
+                                        e.preventDefault();
+                                        toast.error('You do not have permission to archive job descriptions');
+                                        return;
+                                      }
+                                      onUnarchiveJob(versionJob);
+                                    }}
+                                    aria-disabled={!canArchiveJd}
+                                    title={!canArchiveJd ? 'You do not have permission to archive job descriptions' : undefined}
+                                    className={canArchiveJd ? viewVersionsMenuItemGreenClass : `${viewVersionsMenuItemClass} opacity-50 cursor-not-allowed`}
+                                  >
                                     <RefreshCw className="w-4 h-4" />
                                     <span className={MENU_ITEM_SCALE_CLASS}>Unarchive Job</span>
                                   </DropdownMenuItem>
                                 )}
                                 {/* Delete Job */}
                                 {onDeleteJob && (
-                                  <DropdownMenuItem onSelect={() => onDeleteJob(versionJob)} className={viewVersionsMenuItemRedClass}>
+                                  <DropdownMenuItem
+                                    onSelect={(e) => {
+                                      if (!canDeleteJd) {
+                                        e.preventDefault();
+                                        toast.error('You do not have permission to delete job descriptions');
+                                        return;
+                                      }
+                                      onDeleteJob(versionJob);
+                                    }}
+                                    aria-disabled={!canDeleteJd}
+                                    title={!canDeleteJd ? 'You do not have permission to delete job descriptions' : undefined}
+                                    className={canDeleteJd ? viewVersionsMenuItemRedClass : `${viewVersionsMenuItemClass} opacity-50 cursor-not-allowed`}
+                                  >
                                     <Trash2 className="w-4 h-4" />
                                     <span className={MENU_ITEM_SCALE_CLASS}>Delete Job</span>
                                   </DropdownMenuItem>

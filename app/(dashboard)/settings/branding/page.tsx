@@ -215,18 +215,23 @@ export default function BrandingPage() {
                 <p className="mt-2 max-w-2xl text-sm text-white/80 sm:text-base">Customize your portal&apos;s look — logo, colors, custom domain.</p>
               </div>
             </div>
-            {canManage && (
-              <Button
-                tone="onColor"
-                variant="primary"
-                onClick={handleSave}
-                disabled={isSaving}
-                icon={saved ? <Check className="w-4 h-4" /> : isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                className="rounded-xl px-4 py-2.5 shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0"
-              >
-                {saved ? 'Saved!' : isSaving ? 'Saving...' : 'Save Changes'}
-              </Button>
-            )}
+            <Button
+              tone="onColor"
+              variant="primary"
+              onClick={() => {
+                if (!canManage) {
+                  toast.error('You do not have permission to manage branding');
+                  return;
+                }
+                handleSave();
+              }}
+              disabled={isSaving || !canManage}
+              title={!canManage ? 'You do not have permission to manage branding' : ''}
+              icon={saved ? <Check className="w-4 h-4" /> : isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
+              className="rounded-xl px-4 py-2.5 shadow-md transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0"
+            >
+              {saved ? 'Saved!' : isSaving ? 'Saving...' : 'Save Changes'}
+            </Button>
           </div>
         </section>
 
@@ -263,9 +268,17 @@ export default function BrandingPage() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => logoInputRef.current?.click()}
-                  disabled={isUploadingLogo || !canManage}
-                  className="text-xs sm:text-sm"
+                  onClick={() => {
+                    if (!canManage) {
+                      toast.error('You do not have permission to manage branding');
+                      return;
+                    }
+                    logoInputRef.current?.click();
+                  }}
+                  disabled={isUploadingLogo}
+                  aria-disabled={!canManage}
+                  className={`text-xs sm:text-sm ${!canManage ? 'opacity-50 cursor-not-allowed' : ''}`}
+                  title={!canManage ? 'You do not have permission to manage branding' : ''}
                 >
                   {isUploadingLogo ? (
                     <><Loader2 className="w-3.5 h-3.5 animate-spin" />Uploading...</>
@@ -273,11 +286,22 @@ export default function BrandingPage() {
                     <><Upload className="w-3.5 h-3.5" />Upload Logo</>
                   )}
                 </Button>
-                {branding.logo_url && canManage && (
+                {branding.logo_url && (
                   <button
-                    onClick={() => setBranding(prev => ({ ...prev, logo_url: '' }))}
-                    className="p-2 text-gray-400 dark:text-slate-500 hover:text-destructive rounded-lg hover:bg-destructive-subtle transition-colors"
-                    aria-label="Remove logo" title="Remove logo"
+                    onClick={() => {
+                      if (!canManage) {
+                        toast.error('You do not have permission to manage branding');
+                        return;
+                      }
+                      setBranding(prev => ({ ...prev, logo_url: '' }));
+                    }}
+                    aria-disabled={!canManage}
+                    className={`p-2 rounded-lg transition-colors ${
+                      canManage
+                        ? 'text-gray-400 dark:text-slate-500 hover:text-destructive hover:bg-destructive-subtle'
+                        : 'text-gray-300 dark:text-slate-700 cursor-not-allowed opacity-60'
+                    }`}
+                    aria-label="Remove logo" title={!canManage ? 'You do not have permission to manage branding' : 'Remove logo'}
                   >
                     <X className="w-3.5 h-3.5" />
                   </button>

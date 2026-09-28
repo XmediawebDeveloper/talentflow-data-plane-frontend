@@ -165,7 +165,10 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   const canUpdateAIInterviews = isTenantAdmin || !!user?.permissions?.canUpdateAIInterviews;
   const canArchiveAIInterviews = isTenantAdmin || !!user?.permissions?.canArchiveAIInterviews;
   const canDeleteAIInterviews = isTenantAdmin || !!user?.permissions?.canDeleteAIInterviews;
-  const canShareAIInterviews = isTenantAdmin || !!user?.permissions?.canShareAIInterviews;
+  // Share and Invite are the same action (both open ShareAIInterviewModal to
+  // send a candidate their interview link) — checked via the Invite
+  // permission so both entry points across the app agree on one gate.
+  const canShareAIInterviews = isTenantAdmin || !!user?.permissions?.canInviteAIInterviews;
   const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'versions' | 'viewjd' | 'results' | 'invites'>('overview');
   /* Interview Details' own sub-tabs — Configure Details (what the tab used to
      show outright) and Interview Info (the former standalone "AI Interview
@@ -1319,26 +1322,41 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
             <div className="flex items-center gap-2 flex-shrink-0 self-start flex-wrap">
               {/* Share — a dialog now, not a tab; same slot & styling the
                   Assessment Details header's Share button uses. */}
-              {config.status === 'published' && canShareAIInterviews && (
-                <Button
-                  variant="primary"
-                  size="sm"
-                  onClick={() => setShowShareModal(true)}
-                  icon={<Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
-                >
-                  Share
-                </Button>
-              )}
-              {config.status === 'draft' && config.jd_id && canUpdateAIInterviews && (
+              {config.status === 'published' && (
                 <Button
                   variant="primary"
                   size="sm"
                   onClick={() => {
+                    if (!canShareAIInterviews) {
+                      toast.error('You do not have permission to invite candidates to an AI interview');
+                      return;
+                    }
+                    setShowShareModal(true);
+                  }}
+                  aria-disabled={!canShareAIInterviews}
+                  className={!canShareAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}
+                  title={!canShareAIInterviews ? 'You do not have permission to invite candidates to an AI interview' : ''}
+                  icon={<Mail className="w-3.5 h-3.5 sm:w-4 sm:h-4" />}
+                >
+                  Invite
+                </Button>
+              )}
+              {config.status === 'draft' && config.jd_id && (
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => {
+                    if (!canUpdateAIInterviews) {
+                      toast.error('You do not have permission to edit AI interviews');
+                      return;
+                    }
                     const url = `/recruitment/ai-interviews/jd-selection/ai-interview-config?jd_id=${config.jd_id}&config_id=${config.id}`;
                     router.push(url);
                   }}
+                  aria-disabled={!canUpdateAIInterviews}
+                  title={!canUpdateAIInterviews ? 'You do not have permission to edit AI interviews' : ''}
                   icon={<Pencil className="w-3.5 h-3.5 flex-shrink-0" />}
-                  className="gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm"
+                  className={`gap-1.5 px-3 sm:px-4 min-h-[40px] text-xs sm:text-sm ${!canUpdateAIInterviews ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
                   <span className="hidden sm:inline">Continue Editing</span>
                   <span className="sm:hidden">Edit</span>

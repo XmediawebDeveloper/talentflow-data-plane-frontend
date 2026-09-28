@@ -526,23 +526,28 @@ export default function SecurityPage() {
               </div>
             )}
 
-            {canManage && (
-              <Button
-                variant="primary"
-                onClick={handleChangePassword}
-                disabled={Boolean(isChangingPassword || (passwordForm.newPassword && passwordStrength < 3))}
-                className="text-xs sm:text-sm md:text-base w-full sm:w-auto justify-center sm:justify-start"
-              >
-                {isChangingPassword ? (
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                ) : passwordChanged ? (
-                  <Check className="w-4 h-4" />
-                ) : (
-                  <Save className="w-4 h-4" />
-                )}
-                {passwordChanged ? 'Password Updated!' : isChangingPassword ? 'Changing...' : 'Change Password'}
-              </Button>
-            )}
+            <Button
+              variant="primary"
+              onClick={() => {
+                if (!canManage) {
+                  toast.error('You do not have permission to change the password');
+                  return;
+                }
+                handleChangePassword();
+              }}
+              disabled={Boolean(isChangingPassword || (passwordForm.newPassword && passwordStrength < 3) || !canManage)}
+              title={!canManage ? 'You do not have permission to change the password' : ''}
+              className="text-xs sm:text-sm md:text-base w-full sm:w-auto justify-center sm:justify-start"
+            >
+              {isChangingPassword ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : passwordChanged ? (
+                <Check className="w-4 h-4" />
+              ) : (
+                <Save className="w-4 h-4" />
+              )}
+              {passwordChanged ? 'Password Updated!' : isChangingPassword ? 'Changing...' : 'Change Password'}
+            </Button>
           </div>
         </div>
 
@@ -558,13 +563,20 @@ export default function SecurityPage() {
                 <p className="text-2xs sm:text-xs md:text-sm text-gray-500 dark:text-slate-500">Add an extra layer of security</p>
               </div>
             </div>
-            {!show2FASetup && canManage && (
+            {!show2FASetup && (
               <button
-                onClick={settings.two_factor_enabled ? handleDisable2FA : handleEnable2FA}
-                disabled={is2FALoading}
+                onClick={() => {
+                  if (!canManage) {
+                    toast.error('You do not have permission to manage security settings');
+                    return;
+                  }
+                  (settings.two_factor_enabled ? handleDisable2FA : handleEnable2FA)();
+                }}
+                disabled={is2FALoading || !canManage}
+                title={!canManage ? 'You do not have permission to manage security settings' : ''}
                 className={`relative w-12 h-6 rounded-full transition-colors ${
                   settings.two_factor_enabled ? 'bg-success' : 'bg-gray-300'
-                } ${is2FALoading ? 'opacity-50' : ''}`}
+                } ${(is2FALoading || !canManage) ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
                 <div
                   className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow-sm transition-transform ${
@@ -739,9 +751,23 @@ export default function SecurityPage() {
           <div className="relative">
             <select
               value={settings.session_timeout_minutes?.toString() || '30'}
-              onChange={(e) => handleSessionTimeoutChange(e.target.value)}
-              disabled={!canManage || isSavingTimeout}
-              className="w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none bg-white dark:bg-slate-900 disabled:opacity-50 text-black text-xs sm:text-sm md:text-base"
+              onChange={(e) => {
+                if (!canManage) {
+                  toast.error('You do not have permission to manage security settings');
+                  return;
+                }
+                handleSessionTimeoutChange(e.target.value);
+              }}
+              onMouseDown={(e) => {
+                if (!canManage) {
+                  e.preventDefault();
+                  toast.error('You do not have permission to manage security settings');
+                }
+              }}
+              disabled={isSavingTimeout}
+              aria-disabled={!canManage}
+              title={!canManage ? 'You do not have permission to manage security settings' : ''}
+              className={`w-full px-2.5 sm:px-3 md:px-4 py-1.5 sm:py-2 border border-gray-300 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue focus:outline-none bg-white dark:bg-slate-900 disabled:opacity-50 text-black text-xs sm:text-sm md:text-base ${!canManage ? 'opacity-50 cursor-not-allowed' : ''}`}
             >
               <option value="15">15 minutes</option>
               <option value="30">30 minutes</option>
@@ -781,10 +807,20 @@ export default function SecurityPage() {
         <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-sm shadow-brand-blue/5 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] p-3 sm:p-4 md:p-6 overflow-hidden">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 sm:gap-2 mb-2 sm:mb-3 md:mb-4">
             <h2 className="text-sm sm:text-base md:text-lg font-semibold text-gray-900 dark:text-slate-50">Active Sessions</h2>
-            {canManage && sessions.filter(s => !s.is_current).length > 0 && (
+            {sessions.filter(s => !s.is_current).length > 0 && (
               <button
-                onClick={handleRevokeAllOtherSessions}
-                className="text-xs sm:text-sm text-destructive hover:text-destructive self-start sm:self-auto"
+                onClick={() => {
+                  if (!canManage) {
+                    toast.error('You do not have permission to manage security settings');
+                    return;
+                  }
+                  handleRevokeAllOtherSessions();
+                }}
+                aria-disabled={!canManage}
+                title={!canManage ? 'You do not have permission to manage security settings' : ''}
+                className={`text-xs sm:text-sm self-start sm:self-auto ${
+                  canManage ? 'text-destructive hover:text-destructive' : 'text-gray-400 cursor-not-allowed opacity-60'
+                }`}
               >
                 Revoke All Other Sessions
               </button>
@@ -822,14 +858,24 @@ export default function SecurityPage() {
                       <span className="px-1.5 sm:px-2 md:px-3 py-0.5 bg-success-subtle text-success rounded-full text-2xs sm:text-xs md:text-sm font-medium whitespace-nowrap">
                         Current
                       </span>
-                    ) : canManage ? (
+                    ) : (
                       <button
-                        onClick={() => handleRevokeSession(session.id)}
-                        className="text-2xs sm:text-xs md:text-sm text-destructive hover:text-destructive whitespace-nowrap"
+                        onClick={() => {
+                          if (!canManage) {
+                            toast.error('You do not have permission to manage security settings');
+                            return;
+                          }
+                          handleRevokeSession(session.id);
+                        }}
+                        aria-disabled={!canManage}
+                        title={!canManage ? 'You do not have permission to manage security settings' : ''}
+                        className={`text-2xs sm:text-xs md:text-sm whitespace-nowrap ${
+                          canManage ? 'text-destructive hover:text-destructive' : 'text-gray-400 cursor-not-allowed opacity-60'
+                        }`}
                       >
                         Revoke
                       </button>
-                    ) : null}
+                    )}
                   </div>
                 </div>
               ))}
