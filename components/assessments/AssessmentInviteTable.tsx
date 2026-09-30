@@ -78,6 +78,21 @@ export const isBulkResendable = (inv: any): boolean =>
 export const isTrackedInviteCompleted = (inv: any): boolean =>
   (inv.status === 'completed' || !!inv.completed_at) && !!inv.attempt_id;
 
+/** Proctoring-terminated (or walked out): `abandoned`, with an attempt behind
+ *  it and no completion. */
+export const isTrackedInviteTerminated = (inv: any): boolean =>
+  (inv.status === 'abandoned' || !!inv.terminated_at)
+  && !inv.completed_at
+  && !!inv.attempt_id;
+
+/** Rows that open the details page. Completed rows open it for the SCORES; a
+ *  terminated row has none, but it has the recording and the Integrity Check
+ *  evidence — the whole reason a recruiter opens a terminated candidate — and
+ *  the details endpoint keys off the attempt, not the result, so it renders
+ *  without one (2026-09-30). */
+export const opensTrackedInviteDetails = (inv: any): boolean =>
+  isTrackedInviteCompleted(inv) || isTrackedInviteTerminated(inv);
+
 /** The bucket a row counts in, for the stat cards above the table. Reads
  *  expiry the way the badge does, so a card's number always matches the rows
  *  that selecting it produces — including clock-expired invites, which
@@ -243,6 +258,25 @@ export default function AssessmentInviteTable({
               <tr className="border-b border-gray-200 dark:border-slate-700">
                 <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left" aria-label="Select" />
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CID</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
+                {/* hidden md:table-cell mirrors this column's <td>. Without
+                    it the header carried one more cell than the body between
+                    sm and md, shifting every heading after Timeline off its
+                    column. */}
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Timeline</th>
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                {/* Tech / Coding Score columns are conditional on the
+                    assessment having that round enabled — same rule as
+                    the Results page. Showing a "Coding Score" column
+                    for a JD without a coding round produced a
+                    permanent "—" column that confused recruiters. */}
+                {techEnabled && (
+                  <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tech Score</th>
+                )}
+                {codingEnabled && (
+                  <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Coding Score</th>
+                )}
+                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Invite Source</th>
                 {/* Job scope only: with invites from several
                     assessments in one table, the row has to say which
                     job version its assessment belongs to - that is the
@@ -262,25 +296,6 @@ export default function AssessmentInviteTable({
                 )}
                 {showVersionColumns && (
                   <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Assessment Version</th>
-                )}
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Invite Source</th>
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                {/* hidden md:table-cell mirrors this column's <td>. Without
-                    it the header carried one more cell than the body between
-                    sm and md, shifting every heading after Timeline off its
-                    column. */}
-                <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Timeline</th>
-                {/* Tech / Coding Score columns are conditional on the
-                    assessment having that round enabled — same rule as
-                    the Results page. Showing a "Coding Score" column
-                    for a JD without a coding round produced a
-                    permanent "—" column that confused recruiters. */}
-                {techEnabled && (
-                  <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tech Score</th>
-                )}
-                {codingEnabled && (
-                  <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Coding Score</th>
                 )}
                 <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider tf-sticky-col">Actions</th>
               </tr>
@@ -348,25 +363,6 @@ export default function AssessmentInviteTable({
                         {invitation.candidate_display_id || '-'}
                       </span>
                     </td>
-                    {/* The job version this invite's assessment was
-                        built against - the version panel's own blue
-                        chip, so V2 reads the same wherever a recruiter
-                        meets it. */}
-                    {showVersionColumns && (
-                      <td className="py-3 px-4 align-top">
-                        <VersionChip kind="job" version={invitation._jd_version} />
-                      </td>
-                    )}
-                    {/* The assessment version, in the panel's cyan -
-                        the version and nothing else. The assessment's
-                        own id sat under it and was noise in a column
-                        asked for a version; the assessment is named in
-                        the row's actions and on the page it opens. */}
-                    {showVersionColumns && (
-                      <td className="py-3 px-4 align-top">
-                        <VersionChip kind="assessment" version={invitation._assessment_version} />
-                      </td>
-                    )}
                     <td className="py-3 px-4 align-top">
                       <div className="flex items-center gap-3">
                         <div className="w-10 h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-sm flex-shrink-0">
@@ -380,19 +376,6 @@ export default function AssessmentInviteTable({
                           <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                         </div>
                       </div>
-                    </td>
-                    {/* Invite Source — how this candidate was actually
-                        invited, from the invitation's own resume_id. */}
-                    <td className="py-3 px-4 align-top text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
-                      <InviteSourceValue inv={assessmentInviteSource(invitation)} iconClassName="w-3.5 h-3.5" />
-                    </td>
-                    <td className="py-3 px-4 align-top">
-                      {/* Status is the badge alone. Expiry is resolved inside
-                          renderInviteStatusBadge, so a lapsed invite renders one Expired
-                          badge — not its old status with a chip beside it — and
-                          the failed row's "Incorrect Email" note now lives only
-                          in the Edit Email flow. */}
-                      {<InviteStatusBadge inv={invitation} />}
                     </td>
                         <td className="py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 hidden md:table-cell">
                           <div className="space-y-1">
@@ -461,6 +444,14 @@ export default function AssessmentInviteTable({
                         )}
                       </div>
                     </td>
+                    <td className="py-3 px-4 align-top">
+                      {/* Status is the badge alone. Expiry is resolved inside
+                          renderInviteStatusBadge, so a lapsed invite renders one Expired
+                          badge — not its old status with a chip beside it — and
+                          the failed row's "Incorrect Email" note now lives only
+                          in the Edit Email flow. */}
+                      {<InviteStatusBadge inv={invitation} />}
+                    </td>
                     {/* Tech Score / Coding Score columns. Same pattern
                         as the Results page: percent number on top, small
                         Pass/Fail tag below, both colored against the 70%
@@ -525,6 +516,30 @@ export default function AssessmentInviteTable({
                         </td>
                       );
                     })()}
+                    {/* Invite Source — how this candidate was actually
+                        invited, from the invitation's own resume_id. */}
+                    <td className="py-3 px-4 align-top text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                      <InviteSourceValue inv={assessmentInviteSource(invitation)} iconClassName="w-3.5 h-3.5" />
+                    </td>
+                    {/* The job version this invite's assessment was
+                        built against - the version panel's own blue
+                        chip, so V2 reads the same wherever a recruiter
+                        meets it. */}
+                    {showVersionColumns && (
+                      <td className="py-3 px-4 align-top">
+                        <VersionChip kind="job" version={invitation._jd_version} />
+                      </td>
+                    )}
+                    {/* The assessment version, in the panel's cyan -
+                        the version and nothing else. The assessment's
+                        own id sat under it and was noise in a column
+                        asked for a version; the assessment is named in
+                        the row's actions and on the page it opens. */}
+                    {showVersionColumns && (
+                      <td className="py-3 px-4 align-top">
+                        <VersionChip kind="assessment" version={invitation._assessment_version} />
+                      </td>
+                    )}
                     <td className="py-3 px-4 align-top tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                       {/* Actions collapse into a kebab menu. This uses Radix's
                           DropdownMenu rather than the hand-rolled absolute
@@ -573,6 +588,10 @@ export default function AssessmentInviteTable({
                         </div>
                       ) : (() => {
                         const isCompleted = invitation.status === 'completed' || !!invitation.completed_at;
+                        // The host decides which rows open the details page; a
+                        // terminated one does (no scores, but the recording and
+                        // the Integrity Check are there).
+                        const isTerminatedOpenable = !isCompleted && canOpenResult(invitation);
                         const isBounced = invitation.status === 'bounced';
                         // Action rules by status: Invited/Expired → Resend only;
                         // System Check ('opened') and In Progress → no menu at all;
@@ -588,7 +607,7 @@ export default function AssessmentInviteTable({
 
                         // Nothing actionable — render no trigger rather than an
                         // empty menu the user can open onto nothing.
-                        if (!isCompleted && !isBounced && !canResend) return null;
+                        if (!isCompleted && !isTerminatedOpenable && !isBounced && !canResend) return null;
 
                         return (
                           <DropdownMenu>
@@ -602,7 +621,7 @@ export default function AssessmentInviteTable({
                               </button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end" className="w-44">
-                              {isCompleted && (
+                              {(isCompleted || isTerminatedOpenable) && (
                                 // Completed-but-no-attempt is a rare orphaned
                                 // invitation: disabled, so we never silently drop
                                 // the user on the aggregate results page.
@@ -612,7 +631,9 @@ export default function AssessmentInviteTable({
                                   onSelect={() => onOpenResult(invitation)}
                                 >
                                   <Eye className="w-3.5 h-3.5 text-menu-icon-view" />
-                                  <span className={MENU_ITEM_SCALE_CLASS}>View Results</span>
+                                  <span className={MENU_ITEM_SCALE_CLASS}>
+                                    {isCompleted ? 'View Results' : 'View Details'}
+                                  </span>
                                 </DropdownMenuItem>
                               )}
                               {canResend && (

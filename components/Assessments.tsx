@@ -34,6 +34,7 @@ import InviteStatCards, { INVITE_CARD_TONES } from './InviteStatCards';
 import AssessmentInviteTable, {
   InviteStatusBadge,
   isTrackedInviteCompleted,
+  opensTrackedInviteDetails,
   isValidInviteEmail,
 } from '@/components/assessments/AssessmentInviteTable';
 import ListToolbar from '@/components/ui/list-toolbar';
@@ -1850,15 +1851,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     };
   };
 
-  /* Only Completed and Auto Completed invites open the Result Details page.
-     Auto Completed is a completed invite whose attempt was auto-submitted on
-     session timeout (termination_code TENANT_SESSION_TIMEOUT), so the same
-     completed_at/attempt_id check covers both. Every other status — In
-     Progress, System Check, Expired, Invited, Terminated, ... — stays on the
-     tracking popup: there is no result to show, so the row doesn't navigate. */
+  /* Completed, Auto Completed and Terminated invites open the Result Details
+     page. Auto Completed is a completed invite whose attempt was auto-submitted
+     on session timeout (termination_code TENANT_SESSION_TIMEOUT), so the same
+     completed_at/attempt_id check covers both. Terminated rows carry no scores,
+     but they do carry the recording and the Integrity Check evidence, which is
+     exactly what a recruiter opens a terminated candidate to see (2026-09-30).
+     Every other status — In Progress, System Check, Expired, Invited, ... —
+     stays on the tracking popup: there is no attempt to show. */
 
   const opensTrackedDetails = (invitation: any): boolean =>
-    isTrackedInviteCompleted(invitation);
+    opensTrackedInviteDetails(invitation);
 
   const openTrackedInviteResult = (invitation: any) => {
     if (!selectedAssessmentForTracking) return;
@@ -9401,7 +9404,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 Counts come from the API's unfiltered summary, so selecting a
                 bucket narrows the table without collapsing the other cards. */}
             <InviteStatCards
-              gridClassName="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-8 gap-1 sm:gap-2 lg:gap-3"
+              gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-3"
               activeStatus={trackingFilters.status}
               onSelect={(status) => {
                 setTrackingFilters({ ...trackingFilters, status });
@@ -9428,14 +9431,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 { key: 'expired', label: 'Expired', Icon: Clock, value: invitationStats.expired, ...INVITE_CARD_TONES.orange },
                 { key: 'terminated', label: 'Terminated', Icon: Ban, value: invitationStats.terminated, ...INVITE_CARD_TONES.red },
                 { key: 'revoked', label: 'Revoked', Icon: Ban, value: invitationStats.revoked, ...INVITE_CARD_TONES.indigo },
-                {
-                  key: 'completion-rate',
-                  label: 'Completion Rate',
-                  Icon: TrendingUp,
-                  value: `${invitationStats.total > 0 ? Math.round((invitationStats.completed / invitationStats.total) * 100) : 0}%`,
-                  filterable: false,
-                  ...INVITE_CARD_TONES.purple,
-                },
               ]}
             />
 
@@ -9450,6 +9445,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
                   <span className="font-semibold">Note:</span> Results are available only for candidates with Complete status. Other candidates&rsquo; results are not available.
                 </p>
+                {/* Completion rate lives here, not in the card row: the row is
+                    the status FILTER and this was the one tile that filtered
+                    nothing. Same placement and treatment as the AI interview
+                    tracker (2026-09-30). */}
+                <span className="ml-auto flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  {invitationStats.total > 0 ? Math.round((invitationStats.completed / invitationStats.total) * 100) : 0}% Completion
+                </span>
               </div>
             </div>
 
@@ -9601,6 +9604,25 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                       <tr className="border-b border-gray-200 dark:border-slate-700">
                         <th className="w-8 py-3 pl-4 pr-0 tf-sticky-col-left" aria-label="Select" />
                         <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">CID</th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
+                        {/* hidden md:table-cell mirrors this column's <td>. Without
+                            it the header carried one more cell than the body between
+                            sm and md, shifting every heading after Timeline off its
+                            column. */}
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Timeline</th>
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
+                        {/* Tech / Coding Score columns are conditional on the
+                            assessment having that round enabled — same rule as
+                            the Results page. Showing a "Coding Score" column
+                            for a JD without a coding round produced a
+                            permanent "—" column that confused recruiters. */}
+                        {trackingTechEnabled && (
+                          <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tech Score</th>
+                        )}
+                        {trackingCodingEnabled && (
+                          <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Coding Score</th>
+                        )}
+                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Invite Source</th>
                         {/* Job scope only: with invites from several
                             assessments in one table, the row has to say which
                             job version its assessment belongs to - that is the
@@ -9620,25 +9642,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         )}
                         {trackingJob && (
                           <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Assessment Version</th>
-                        )}
-                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Candidate</th>
-                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Invite Source</th>
-                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Status</th>
-                        {/* hidden md:table-cell mirrors this column's <td>. Without
-                            it the header carried one more cell than the body between
-                            sm and md, shifting every heading after Timeline off its
-                            column. */}
-                        <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden md:table-cell">Timeline</th>
-                        {/* Tech / Coding Score columns are conditional on the
-                            assessment having that round enabled — same rule as
-                            the Results page. Showing a "Coding Score" column
-                            for a JD without a coding round produced a
-                            permanent "—" column that confused recruiters. */}
-                        {trackingTechEnabled && (
-                          <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Tech Score</th>
-                        )}
-                        {trackingCodingEnabled && (
-                          <th className="text-center py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Coding Score</th>
                         )}
                         <th className="text-left py-3 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider tf-sticky-col">Actions</th>
                       </tr>
@@ -9706,25 +9709,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 {invitation.candidate_display_id || '-'}
                               </span>
                             </td>
-                            {/* The job version this invite's assessment was
-                                built against - the version panel's own blue
-                                chip, so V2 reads the same wherever a recruiter
-                                meets it. */}
-                            {trackingJob && (
-                              <td className="py-3 px-4 align-top">
-                                <VersionChip kind="job" version={invitation._jd_version} />
-                              </td>
-                            )}
-                            {/* The assessment version, in the panel's cyan -
-                                the version and nothing else. The assessment's
-                                own id sat under it and was noise in a column
-                                asked for a version; the assessment is named in
-                                the row's actions and on the page it opens. */}
-                            {trackingJob && (
-                              <td className="py-3 px-4 align-top">
-                                <VersionChip kind="assessment" version={invitation._assessment_version} />
-                              </td>
-                            )}
                             <td className="py-3 px-4 align-top">
                               <div className="flex items-center gap-3">
                                 <div className="w-10 h-10 rounded-full bg-brand-blue/10 ring-1 ring-brand-blue/20 flex items-center justify-center text-brand-blue font-medium text-sm flex-shrink-0">
@@ -9738,19 +9722,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                   <p className="text-xs text-gray-500 dark:text-slate-500 truncate" title={invitation.candidate_email}>{invitation.candidate_email}</p>
                                 </div>
                               </div>
-                            </td>
-                            {/* Invite Source — how this candidate was actually
-                                invited, from the invitation's own resume_id. */}
-                            <td className="py-3 px-4 align-top text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
-                              <InviteSourceValue inv={assessmentInviteSource(invitation)} iconClassName="w-3.5 h-3.5" />
-                            </td>
-                            <td className="py-3 px-4 align-top">
-                              {/* Status is the badge alone: the latest status in the
-                                  row's Timeline (the bottom status line beside it),
-                                  so the two cannot disagree. The failed row's
-                                  "Incorrect Email" note lives only in the Edit
-                                  Email flow. */}
-                              {renderInviteBadgeForStatus(currentInviteStatus(invitation), invitation)}
                             </td>
                                 <td className="py-3 px-4 align-top text-xs text-gray-500 dark:text-slate-500 hidden md:table-cell">
                                   <div className="space-y-1">
@@ -9777,6 +9748,14 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                     <ViewFullHistoryLink onClick={() => setHistoryInviteTarget(invitation)} />
                                   )}
                                 </td>
+                            <td className="py-3 px-4 align-top">
+                              {/* Status is the badge alone: the latest status in the
+                                  row's Timeline (the bottom status line beside it),
+                                  so the two cannot disagree. The failed row's
+                                  "Incorrect Email" note lives only in the Edit
+                                  Email flow. */}
+                              {renderInviteBadgeForStatus(currentInviteStatus(invitation), invitation)}
+                            </td>
                             {/* Tech Score / Coding Score columns. Same pattern
                                 as the Results page: percent number on top, small
                                 Pass/Fail tag below, both colored against the 70%
@@ -9841,6 +9820,30 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                                 </td>
                               );
                             })()}
+                            {/* Invite Source — how this candidate was actually
+                                invited, from the invitation's own resume_id. */}
+                            <td className="py-3 px-4 align-top text-sm text-gray-700 dark:text-slate-300 whitespace-nowrap">
+                              <InviteSourceValue inv={assessmentInviteSource(invitation)} iconClassName="w-3.5 h-3.5" />
+                            </td>
+                            {/* The job version this invite's assessment was
+                                built against - the version panel's own blue
+                                chip, so V2 reads the same wherever a recruiter
+                                meets it. */}
+                            {trackingJob && (
+                              <td className="py-3 px-4 align-top">
+                                <VersionChip kind="job" version={invitation._jd_version} />
+                              </td>
+                            )}
+                            {/* The assessment version, in the panel's cyan -
+                                the version and nothing else. The assessment's
+                                own id sat under it and was noise in a column
+                                asked for a version; the assessment is named in
+                                the row's actions and on the page it opens. */}
+                            {trackingJob && (
+                              <td className="py-3 px-4 align-top">
+                                <VersionChip kind="assessment" version={invitation._assessment_version} />
+                              </td>
+                            )}
                             <td className="py-3 px-4 align-top tf-sticky-col" onClick={(e) => e.stopPropagation()}>
                               {/* Actions collapse into a kebab menu. This uses Radix's
                                   DropdownMenu rather than the hand-rolled absolute
