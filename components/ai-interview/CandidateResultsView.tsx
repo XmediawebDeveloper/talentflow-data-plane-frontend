@@ -3044,7 +3044,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                       {qaExportMenuOpen && (
                         <>
                           <div className="fixed inset-0 z-10" onClick={() => setQaExportMenuOpen(false)} />
-                          <div className="absolute right-0 top-9 z-20 w-32 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-lg shadow-brand-blue/10 py-1">
+                          <div className="absolute right-0 top-9 z-20 w-32 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-lg shadow-brand-blue/10 py-1">
                             <button onClick={exportQaPDF} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue">
                               <FileText className="w-3.5 h-3.5 text-destructive" /> PDF
                             </button>
@@ -3579,7 +3579,6 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); setEnvFrameViewer(null); }}
-                  title="Close"
                   aria-label="Close"
                   className="absolute top-4 right-4 sm:top-6 sm:right-6 text-white/80 hover:text-white p-2 rounded-full hover:bg-white/10 transition-colors"
                 >
@@ -4274,7 +4273,7 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                             {exportMenuOpen && (
                               <>
                                 <div className="fixed inset-0 z-10" onClick={() => setExportMenuOpen(false)} />
-                                <div className="absolute right-0 top-9 z-20 w-32 bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-lg shadow-brand-blue/10 py-1">
+                                <div className="absolute right-0 top-9 z-20 w-32 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-lg shadow-brand-blue/10 py-1">
                                   <button onClick={exportCSV} className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue">
                                     <FileText className="w-3.5 h-3.5 text-slate-400" /> CSV
                                   </button>

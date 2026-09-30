@@ -742,13 +742,15 @@ export default function JDVersionHistoryModal({
                   Compare
                 </Button>
               )}
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={selectedVersion ? () => setSelectedVersion(null) : closeModal}
-              >
-                {selectedVersion ? 'Back to List' : 'Close'}
-              </Button>
+              {selectedVersion && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  onClick={() => setSelectedVersion(null)}
+                >
+                  Back to List
+                </Button>
+              )}
             </div>
           </div>
         </div>

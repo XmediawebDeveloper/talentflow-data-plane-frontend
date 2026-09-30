@@ -945,14 +945,6 @@ export default function UnitDisputesPage() {
                   <p className="mt-1 text-sm text-gray-900 dark:text-slate-50">{selectedDispute.requested_by_name} <span className="text-gray-500 dark:text-slate-500">({selectedDispute.requested_by_email})</span></p>
                 </div>
 
-                <div className="flex pt-1">
-                  <button
-                    onClick={() => setSelectedDispute(null)}
-                    className="flex-1 rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-gray-300 dark:hover:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"
-                  >
-                    Close
-                  </button>
-                </div>
               </div>
             </div>
           </div>

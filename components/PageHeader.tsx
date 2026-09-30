@@ -44,30 +44,33 @@ export default function PageHeader({ onUploadClick, onVersionClick }: PageHeader
             </button>
 
             {showDropdown && (
-              <div className="absolute right-0 mt-2 w-56 bg-popover text-popover-foreground rounded-lg shadow-lg border border-border py-1.5 z-20">
-                <button
-                  onClick={() => {
-                    onUploadClick();
-                    setShowDropdown(false);
-                  }}
-                  className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-accent/50 rounded-md mx-1 transition-colors"
-                >
-                  Single Resume Upload
-                </button>
-                <button
-                  onClick={() => {
-                    onUploadClick();
-                    setShowDropdown(false);
-                  }}
-                  className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-accent/50 rounded-md mx-1 transition-colors"
-                >
-                  Bulk Resume Upload
-                </button>
-                <div className="border-t border-border my-1.5" />
-                <button className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-accent/50 rounded-md mx-1 transition-colors">
-                  Create Folder
-                </button>
-              </div>
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowDropdown(false)} />
+                <div className="absolute right-0 mt-2 w-56 max-w-[calc(100vw-1.5rem)] max-h-[70dvh] overflow-y-auto bg-popover text-popover-foreground rounded-lg shadow-lg border border-border py-1.5 z-20">
+                  <button
+                    onClick={() => {
+                      onUploadClick();
+                      setShowDropdown(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-accent/50 rounded-md mx-1 transition-colors"
+                  >
+                    Single Resume Upload
+                  </button>
+                  <button
+                    onClick={() => {
+                      onUploadClick();
+                      setShowDropdown(false);
+                    }}
+                    className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-accent/50 rounded-md mx-1 transition-colors"
+                  >
+                    Bulk Resume Upload
+                  </button>
+                  <div className="border-t border-border my-1.5" />
+                  <button className="w-full text-left px-3 py-2 text-sm text-foreground hover:bg-accent/50 rounded-md mx-1 transition-colors">
+                    Create Folder
+                  </button>
+                </div>
+              </>
             )}
           </div>
         </div>

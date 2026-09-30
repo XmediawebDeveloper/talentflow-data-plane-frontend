@@ -293,7 +293,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
   const isInvExpired = isInviteExpired;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4 md:p-6">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6">
       {/* Height is content-driven with a viewport cap, not a fixed dvh, so a
           short list no longer stretches the dialog down a large monitor. */}
       <div className={TRACKER_DIALOG_PANEL_CLASS}>
@@ -721,12 +721,6 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                 </button>
               </>
             )}
-            <button
-              onClick={onClose}
-              className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
-            >
-              Close
-            </button>
           </div>
         </div>
       </div>

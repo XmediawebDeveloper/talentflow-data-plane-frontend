@@ -96,7 +96,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 className="fixed inset-0 z-10"
                 onClick={() => setShowHelpMenu(false)}
               ></div>
-              <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-20">
+              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 sm:max-w-[calc(100vw-2rem)] max-h-[70dvh] overflow-y-auto bg-white rounded-lg shadow-xl border border-gray-200 z-20">
                 <div className="px-4 py-3 bg-gray-800 text-white">
                   <h3 className="font-medium flex items-center gap-2">
                     <HelpCircle className="w-5 h-5" />
@@ -226,7 +226,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 className="fixed inset-0 z-10"
                 onClick={() => setShowNotifications(false)}
               ></div>
-              <div className="absolute right-0 top-full mt-2 w-96 bg-white rounded-lg shadow-xl border border-gray-200 overflow-hidden z-20">
+              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-96 sm:max-w-[calc(100vw-2rem)] max-h-[70dvh] overflow-y-auto bg-white rounded-lg shadow-xl border border-gray-200 z-20">
                 <div className="px-4 py-3 bg-gray-800 text-white">
                   <div className="flex items-center justify-between">
                     <h3 className="font-medium flex items-center gap-2">
@@ -395,7 +395,7 @@ export default function Header({ onLogout, user, tenant, onOpenTour, onOpenShort
                 className="fixed inset-0 z-10"
                 onClick={() => setShowUserMenu(false)}
               ></div>
-              <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-20">
+              <div className="fixed inset-x-3 top-[60px] sm:inset-x-auto sm:absolute sm:right-0 sm:top-full sm:mt-2 sm:w-72 sm:max-w-[calc(100vw-2rem)] max-h-[70dvh] overflow-y-auto bg-white rounded-lg shadow-xl border border-gray-200 py-2 z-20">
                 <div className="px-4 py-3 border-b border-gray-100">
                   <div className="flex items-center justify-between mb-2">
                     <p className="text-sm text-gray-900">{user.name}</p>

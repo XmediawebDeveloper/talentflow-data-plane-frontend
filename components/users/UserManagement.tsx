@@ -2833,13 +2833,6 @@ export default function UserManagement() {
 
             <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 px-5 sm:px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50 shrink-0">
               <button
-                onClick={resetCreateModal}
-                className="px-4 py-2 sm:py-2.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 text-sm font-medium transition-all"
-                disabled={isSaving}
-              >
-                Cancel
-              </button>
-              <button
                 onClick={handleCreateUser}
                 disabled={isSaving || !emailCheckResult.available || isCheckingEmail}
                 className="px-5 py-2 sm:py-2.5 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-sm font-medium transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
@@ -3404,13 +3397,6 @@ export default function UserManagement() {
               </span>
               <div className="flex gap-2">
                 <button
-                  onClick={resetEditModal}
-                  className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg transition-all"
-                  disabled={isSaving}
-                >
-                  Cancel
-                </button>
-                <button
                   onClick={handleUpdateUser}
                   disabled={isSaving}
                   className="px-4 sm:px-5 py-1.5 sm:py-2 bg-brand-blue hover:bg-brand-blue-2 text-white text-xs sm:text-sm font-medium rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
@@ -3693,12 +3679,6 @@ export default function UserManagement() {
                   </span>
                 )}
               </div>
-              <button
-                onClick={() => { setViewingRolePopup(null); setViewingRolePopupPermissions([]); }}
-                className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-              >
-                Close
-              </button>
             </div>
           </div>
         </div>

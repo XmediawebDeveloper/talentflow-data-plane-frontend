@@ -17,6 +17,7 @@ import {
   XCircle,
   ExternalLink,
   Download,
+  X,
 } from 'lucide-react';
 import ListEmptyState from '@/components/ui/list-empty-state';
 import ListToolbar from '@/components/ui/list-toolbar';
@@ -531,8 +532,18 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
               }}
             />
             <div className="relative bg-white rounded-lg shadow-xl max-w-[95vw] sm:max-w-2xl w-full max-h-[85dvh] flex flex-col overflow-hidden mx-2 sm:mx-0">
-              <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200">
+              <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-200 flex items-center justify-between">
                 <h3 className="text-sm sm:text-lg font-semibold text-gray-900">Consent Log Details</h3>
+                <button
+                  onClick={() => {
+                    setSelectedLog(null);
+                    setShowAuditTrail(false);
+                  }}
+                  className="p-1.5 text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                  aria-label="Close"
+                >
+                  <X className="w-5 h-5" />
+                </button>
               </div>
               <div className="flex-1 min-h-0 overflow-y-auto px-4 sm:px-6 py-3 sm:py-4 space-y-3 sm:space-y-4">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
@@ -602,17 +613,6 @@ export default function ConsentLogs({ compact = false, defaultFeature = '' }: Co
                     ))}
                   </div>
                 </div>
-              </div>
-              <div className="flex-shrink-0 px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-200 flex justify-end">
-                <button
-                  onClick={() => {
-                    setSelectedLog(null);
-                    setShowAuditTrail(false);
-                  }}
-                  className="px-3 sm:px-4 py-1.5 sm:py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm"
-                >
-                  Close
-                </button>
               </div>
             </div>
           </div>

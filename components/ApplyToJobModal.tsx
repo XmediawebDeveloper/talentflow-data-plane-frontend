@@ -267,14 +267,6 @@ export default function ApplyToJobModal({
           </div>
           <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
             <Button
-              variant="secondary"
-              onClick={onClose}
-              disabled={isApplying}
-              className="flex-1 sm:flex-none"
-            >
-              Cancel
-            </Button>
-            <Button
               variant="primary"
               onClick={handleApply}
               disabled={!canSubmit || isApplying}

@@ -3623,16 +3623,6 @@ function CurrentPlanContent() {
               {/* Action Buttons */}
               <div className="flex gap-3">
                 <button
-                  onClick={() => {
-                    setShowTCModal(false);
-                    setSelectedQueuedUpgrade(null);
-                    setTcAccepted(false);
-                  }}
-                  className="flex-1 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800"
-                >
-                  Cancel
-                </button>
-                <button
                   onClick={handleApplyUpgrade}
                   disabled={!tcAccepted || isApplyingUpgrade}
                   className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-brand-teal px-4 py-2.5 font-medium text-white shadow-md shadow-brand-teal/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-50"

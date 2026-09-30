@@ -716,7 +716,18 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
   if (showDuplicateError) {
     return (
       <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4">
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full p-5 sm:p-6 max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden">
+        <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] max-w-[95vw] sm:max-w-md w-full p-5 sm:p-6 max-h-[calc(100dvh-2rem)] flex flex-col overflow-hidden">
+          <button
+            onClick={() => {
+              setShowDuplicateError(false);
+              setDuplicateEmail('');
+              onClose();
+            }}
+            className="absolute top-3 right-3 p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
           <div className="shrink-0 text-center mb-4">
             <div className="w-12 h-12 bg-warning-subtle ring-1 ring-warning-line rounded-full flex items-center justify-center mx-auto mb-3">
               <AlertTriangle className="w-6 h-6 text-warning" />
@@ -745,16 +756,6 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
               className="flex-1 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white shadow-md shadow-brand-blue/25 ring-1 ring-white/10 rounded-lg transition-colors"
             >
               Try Different Email
-            </button>
-            <button
-              onClick={() => {
-                setShowDuplicateError(false);
-                setDuplicateEmail('');
-                onClose();
-              }}
-              className="flex-1 px-4 py-2 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-slate-100 transition-colors"
-            >
-              Close
             </button>
           </div>
         </div>
@@ -1380,12 +1381,6 @@ export default function ShareAssessmentModal({ isOpen, onClose, assessment, pref
             })()}
           </div>
           <div className="flex items-center gap-2 sm:gap-3 ml-auto shrink-0">
-            <button
-              onClick={onClose}
-              className="px-3 sm:px-5 py-1.5 sm:py-2 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-slate-100 transition-colors text-xs sm:text-sm"
-            >
-              Cancel
-            </button>
             <button
               onClick={handleSend}
               disabled={!isValid || isSubmitting || (quotaStats !== null && quotaStats.available === 0 && quotaStats.total_quota < 999999)}

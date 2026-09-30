@@ -280,17 +280,6 @@ export default function AssessmentPreviewModal({ isOpen, onClose, assessment }: 
             ))}
           </div>
         </div>
-
-        {/* Footer */}
-        <div className="border-t border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 bg-slate-50 dark:bg-slate-950 flex items-center justify-end flex-shrink-0">
-          <Button
-            variant="primary"
-            onClick={onClose}
-            className="w-full sm:w-auto"
-          >
-            Close
-          </Button>
-        </div>
       </div>
     </div>
   );

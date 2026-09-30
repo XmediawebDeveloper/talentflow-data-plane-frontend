@@ -1229,7 +1229,7 @@ Best regards`);
                 </button>
 
                 {showInviteMenu && (
-                  <div role="menu" className="absolute left-0 top-full mt-2 w-52 bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-[60]">
+                  <div role="menu" className="absolute left-0 top-full mt-2 w-52 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-[60]">
                     {canInviteAssessment && (
                       <button
                         role="menuitem"
@@ -2407,12 +2407,6 @@ Best regards`);
             {/* Footer */}
             <div className="flex-shrink-0 flex items-center justify-end gap-3 p-6 border-t border-gray-100 bg-slate-50">
               <button
-                onClick={() => setShowVersionSelectModal(false)}
-                className="px-4 py-2 text-sm text-gray-700 border border-gray-200 bg-white rounded-lg hover:bg-slate-100 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
                 onClick={() => selectedVersionForApply && handleVersionSelectForApply(selectedVersionForApply)}
                 disabled={!selectedVersionForApply}
                 className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
@@ -2772,15 +2766,6 @@ Best regards`);
 
               {/* Actions */}
               <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
-                <button
-                  onClick={() => {
-                    setIsShareModalOpen(false);
-                    setShareEmail('');
-                  }}
-                  className="px-4 py-2 text-gray-700 hover:bg-slate-100 rounded-lg transition-colors"
-                >
-                  Cancel
-                </button>
                 <button
                   onClick={handleSendEmail}
                   disabled={isSendingEmail || !shareEmail.trim()}

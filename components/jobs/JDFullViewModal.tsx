@@ -172,8 +172,8 @@ export default function JDFullViewModal({
           )}
         </div>
 
-        {/* Footer — the way out, and the way through to the JD's own page where
-            the host offers one (which is where View JD used to go). */}
+        {/* Footer — the way through to the JD's own page where the host
+            offers one (which is where View JD used to go). */}
         <div className="flex-shrink-0 flex items-center justify-between gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60">
           {onOpenFullPage && jd ? (
             <button
@@ -187,13 +187,6 @@ export default function JDFullViewModal({
           ) : (
             <span />
           )}
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-3 py-1.5 text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-200 transition-colors hover:bg-gray-50 dark:hover:bg-slate-700"
-          >
-            Close
-          </button>
         </div>
       </div>
     </div>

@@ -3827,9 +3827,6 @@ export default function AIInterview() {
                   )}
                 </div>
                 <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
-                  <Button variant="secondary" size="md" onClick={closePicker} className="flex-1 sm:flex-none">
-                    Cancel
-                  </Button>
                   <Button
                     variant="primary"
                     size="md"
@@ -3951,7 +3948,7 @@ export default function AIInterview() {
           'hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue transition-colors';
 
         return (
-          <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4 md:p-6">
+          <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6">
             {/* Height is content-driven with a viewport cap, not a fixed dvh: a
                 three-invite list on a large monitor used to stretch the dialog the
                 full screen with empty space under the rows. The list absorbs the
@@ -4294,9 +4291,6 @@ export default function AIInterview() {
                   >
                     Invite More
                   </Button>
-                  <Button variant="secondary" size="sm" onClick={() => setViewInvitationsConfig(null)}>
-                    Close
-                  </Button>
                 </div>
               </div>
             </div>
@@ -4491,8 +4485,8 @@ export default function AIInterview() {
             : null;
         return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md">
-            <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] sm:max-h-[calc(100dvh-3rem)] overflow-y-auto flex flex-col">
+            <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between shrink-0">
               <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Edit Invitation</h3>
               <Button variant="secondary" size="sm" onClick={() => { if (!savingEditInvite) setEditInviteTarget(null); }} aria-label="Close" className="px-2">
                 <X className="w-5 h-5" />
@@ -4529,10 +4523,7 @@ export default function AIInterview() {
                 )}
               </div>
             </div>
-            <div className="px-5 sm:px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-end gap-2">
-              <Button variant="secondary" size="md" onClick={() => setEditInviteTarget(null)} disabled={savingEditInvite}>
-                Cancel
-              </Button>
+            <div className="px-5 sm:px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-end gap-2 shrink-0">
               <Button
                 variant="primary"
                 size="md"

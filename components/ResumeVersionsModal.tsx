@@ -467,12 +467,6 @@ export default function ResumeVersionsModal({
                   Compare
                 </button>
               )}
-              <button
-                onClick={onClose}
-                className="px-4 py-2 bg-gray-200 dark:bg-slate-800 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-300 transition-colors font-medium text-sm"
-              >
-                Close
-              </button>
             </div>
           </div>
         </div>

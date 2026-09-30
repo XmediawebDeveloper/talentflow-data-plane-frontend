@@ -1483,9 +1483,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             </div>
 
             <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200 shrink-0">
-              <Button variant="secondary" size="md" onClick={() => setShowExportModal(false)}>
-                Cancel
-              </Button>
               <Button
                 variant="primary"
                 size="md"

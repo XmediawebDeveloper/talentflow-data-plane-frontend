@@ -394,15 +394,6 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="flex items-center justify-end p-6 flex-shrink-0">
-            <button
-              onClick={closeAsDiscarded}
-              className="px-6 py-2.5 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-colors font-medium shadow-sm shadow-brand-blue/25"
-            >
-              Close Now
-            </button>
-          </div>
         </div>
       </div>
       {previewOverlay}
@@ -779,13 +770,6 @@ export default function DuplicateResumeModal({ duplicates, onClose, onResolve, t
         <div className="flex items-center justify-end p-6 border-t border-gray-200 bg-gray-50">
           {/* Actions */}
           <div className="flex items-center gap-3">
-            <button
-              onClick={onClose}
-              disabled={isSubmitting}
-              className="px-5 py-2.5 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-white dark:hover:bg-slate-800 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              Cancel All
-            </button>
             <button
               onClick={handleConfirm}
               disabled={!selectedAction || isSubmitting}
