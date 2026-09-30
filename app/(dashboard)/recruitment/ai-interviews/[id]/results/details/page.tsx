@@ -88,7 +88,8 @@ function DetailsContent() {
   // Prev/Next navigation: AIInterviewResults stores the visible session list in
   // sessionStorage when the user opens the details view, so recruiters can step
   // through candidates without returning to the list each time.
-  const [navList, setNavList] = useState<{ id: string }[]>([]);
+  /** `configId` is set when the list spans interviews (Candidate Results). */
+  const [navList, setNavList] = useState<{ id: string; configId?: string }[]>([]);
   useEffect(() => {
     try {
       const stored = sessionStorage.getItem('aiInterviewResultNavList');
@@ -100,8 +101,8 @@ function DetailsContent() {
   const nextSession = navIndex >= 0 && navIndex < navList.length - 1 ? navList[navIndex + 1] : null;
   // Carries the origin across Prev/Next — without it, paging to the next
   // candidate would silently re-add the Results crumb mid-session.
-  const buildNavUrl = (entry: { id: string }) =>
-    `/recruitment/ai-interviews/${configId}/results/details?session_id=${entry.id}` +
+  const buildNavUrl = (entry: { id: string; configId?: string }) =>
+    `/recruitment/ai-interviews/${entry.configId || configId}/results/details?session_id=${entry.id}` +
     (fromCandidateResults ? '&from=candidate-results' : '');
 
   useEffect(() => {
@@ -130,11 +131,11 @@ function DetailsContent() {
   const handleBack = () => {
     router.push(
       fromCandidateResults
-        ? '/recruitment/ai-interviews'
+        ? CANDIDATE_RESULTS_HREF
         : `/recruitment/ai-interviews/${configId}/results`
     );
   };
-  const backLabel = fromCandidateResults ? 'Back to AI Interviews' : 'Back to Results';
+  const backLabel = fromCandidateResults ? 'Back to Candidate Results' : 'Back to Results';
 
   if (!sessionId) {
     return (
@@ -189,6 +190,14 @@ function DetailsContent() {
         label: session.position || session.jd_title || 'Results',
         href: `/recruitment/ai-interviews/${configId}/results`,
       }]}
+      /* Opened from the cross-interview Candidate Results tab: no interview
+         crumb, and "AI Interviews" leads back to that tab — the list the
+         recruiter came from (Back and browser Back land there too). */
+      breadcrumbItems={fromCandidateResults ? [
+        { label: 'Dashboard', href: '/dashboard' },
+        { label: 'AI Interviews', href: CANDIDATE_RESULTS_HREF },
+        { label: session.candidate_name || 'Candidate Results' },
+      ] : undefined}
       currentIndex={navIndex >= 0 ? navIndex : undefined}
       totalCount={navList.length || undefined}
       onPrev={prevSession ? () => router.replace(buildNavUrl(prevSession)) : undefined}
@@ -196,6 +205,9 @@ function DetailsContent() {
     />
   );
 }
+
+/** The AI Interviews page's cross-interview Candidate Results tab. */
+const CANDIDATE_RESULTS_HREF = '/recruitment/ai-interviews?tab=candidate-results';
 
 export default function AIInterviewResultDetailsPage() {
   return (
