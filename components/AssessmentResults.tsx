@@ -1,4 +1,4 @@
-import { ArrowLeft, User, Clock, Award, XCircle, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye } from 'lucide-react';
+import { ArrowLeft, User, Clock, Award, XCircle, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, ArrowUpDown, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService, jdService } from '@/lib/services';
@@ -28,6 +28,7 @@ import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
 import { timelineEvents } from '@/components/AssessmentInviteActions';
 import { toOneDecimalScore } from '@/lib/utils/score';
 import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
+import Pagination from '@/components/Pagination';
 
 interface AssessmentResultsProps {
   /**
@@ -106,75 +107,6 @@ interface AssessmentResultsProps {
   nextId?: string | null;
   currentIndex?: number;
   totalCount?: number;
-}
-
-/** The canonical "Go to [input] · Previous · page/total · Next" control from
- *  components/Pagination.tsx, reused inline since this table's pagination
- *  footer also carries a "First"/"Last" pair and page-size-driven export
- *  wiring that don't fit that component's props as-is. */
-function InlinePageNav({ page, totalPages, onPageChange }: { page: number; totalPages: number; onPageChange: (page: number) => void }) {
-  const [goToPage, setGoToPage] = useState(String(page));
-  useEffect(() => {
-    setGoToPage(String(page));
-  }, [page]);
-
-  const commitGoToPage = () => {
-    const target = Math.round(Number(goToPage));
-    if (Number.isFinite(target) && target >= 1 && target <= totalPages) {
-      onPageChange(target);
-    } else {
-      setGoToPage(String(page));
-    }
-  };
-
-  const navBtnClass =
-    "inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors";
-
-  return (
-    <div className="flex flex-wrap items-center justify-center gap-2 sm:gap-3">
-      <div className="flex items-center gap-1.5">
-        <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
-        <input
-          type="number"
-          min={1}
-          max={totalPages}
-          value={goToPage}
-          onChange={(e) => setGoToPage(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.currentTarget.blur();
-              commitGoToPage();
-            }
-          }}
-          onBlur={commitGoToPage}
-          aria-label="Go to page"
-          className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
-        />
-      </div>
-
-      <button
-        onClick={() => onPageChange(page - 1)}
-        disabled={page === 1}
-        className={navBtnClass}
-        aria-label="Previous page" title="Previous page"
-      >
-        <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-      </button>
-
-      <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
-        <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
-      </span>
-
-      <button
-        onClick={() => onPageChange(page + 1)}
-        disabled={page === totalPages}
-        className={navBtnClass}
-        aria-label="Next page" title="Next page"
-      >
-        <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-      </button>
-    </div>
-  );
 }
 
 interface CandidateResult {
@@ -287,7 +219,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const [sortField, setSortField] = useState<'name' | 'score' | 'status' | 'date'>('date');
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(10);
   const [statusFilter, setStatusFilter] = useState<'all' | 'Completed' | 'In Progress' | 'Terminated' | 'Pending'>('all');
   // Two-step view: 'cards' shows only the 4 stat tiles; 'list' shows search,
   // filters, and the candidate table. Mirrors the Job Openings page pattern
@@ -1702,9 +1634,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     );
   };
 
-  const startIndex = pageStartIndex;
-  const endIndex = Math.min(startIndex + pageSize, totalItems);
-
   const stickyHeaderClass = 'bg-slate-50';
   /* Previous / Next open another results page. While Total Candidates is the
      list on screen, the link carries `view=total` so that page opens on Total
@@ -2776,18 +2705,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
             </table>
           </div>
 
-          {/* AS-23: Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-gray-100 bg-slate-50 flex flex-col sm:flex-row items-center justify-between gap-3">
-              <div className="text-center sm:text-left text-xs sm:text-sm text-gray-600">
-                Showing {startIndex + 1} to {Math.min(endIndex, totalItems)} of {totalItems} results
-              </div>
-              <InlinePageNav
-                page={safePage}
-                totalPages={totalPages}
-                onPageChange={setCurrentPage}
-              />
-            </div>
+          {/* AS-23: Pagination Controls — components/Pagination, the
+              reference bar. */}
+          {totalItems > 0 && (
+            <Pagination
+              currentPage={safePage}
+              totalPages={totalPages}
+              totalItems={totalItems}
+              itemsPerPage={pageSize}
+              onPageChange={setCurrentPage}
+              onItemsPerPageChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+            />
           )}
         </div>
 

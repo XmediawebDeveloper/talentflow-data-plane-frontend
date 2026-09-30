@@ -27,20 +27,12 @@ import ListCountBadge from '@/components/ui/list-count-badge';
    mounts this `compact`, with no filter row at all, so it is unaffected. */
 import { ListToolbarPortal } from '@/components/ui/list-toolbar-slot';
 import { Button } from '@/components/ui/button';
-import ListPagination from '@/components/ListPagination';
 import consentService, { ConsentLog, ConsentAuditLog } from '@/lib/services/consentService';
 import { formatIST } from '@/lib/utils/dateUtils';
 
 interface ConsentLogsProps {
   compact?: boolean;
   defaultFeature?: string;
-  /**
-   * Page through the logs with the shared pagination bar (Per Page, Showing
-   * X to Y of Z, First / Previous / Next / Last) — the bar every other table
-   * on the Assessments page uses. Off by default, so the AI Interview page
-   * keeps the footer it has.
-   */
-  standardPagination?: boolean;
 }
 
 /* Every control in the More Filters panel wears this. It is the field class the
@@ -54,7 +46,7 @@ const FILTER_FIELD =
   'bg-white dark:bg-slate-900 text-black dark:text-slate-100 ' +
   'focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue/40';
 
-export default function ConsentLogs({ compact = false, defaultFeature = '', standardPagination = false }: ConsentLogsProps) {
+export default function ConsentLogs({ compact = false, defaultFeature = '' }: ConsentLogsProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [logs, setLogs] = useState<ConsentLog[]>([]);
   const [total, setTotal] = useState(0);
@@ -93,9 +85,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '', stan
 
   // Pagination
   const [page, setPage] = useState(0);
-  /* Rows per request. Settable only through the shared bar's Per Page
-     select (`standardPagination`); 20 otherwise, as it always was. */
-  const [limit, setLimit] = useState(20);
+  const [limit] = useState(20);
 
   /* `emailFilter` joins the dependency list. It has been in this component's
      state since it was written and was passed to the API, but no control ever
@@ -104,7 +94,7 @@ export default function ConsentLogs({ compact = false, defaultFeature = '', stan
      search box writes it now, debounced, exactly like every other tab's. */
   useEffect(() => {
     loadLogs();
-  }, [page, limit, featureFilter, statusFilter, emailFilter, startDate, endDate]);
+  }, [page, featureFilter, statusFilter, emailFilter, startDate, endDate]);
 
   const loadLogs = async () => {
     setIsLoading(true);
@@ -480,21 +470,8 @@ export default function ConsentLogs({ compact = false, defaultFeature = '', stan
         </div>
       )}
 
-      {/* Pagination — the shared bar where the host asks for it (the
-          Assessments page); this footer otherwise. The bar is 1-based, `page`
-          here is 0-based, hence the +1 / -1. */}
-      {standardPagination && !isLoading && (
-        <ListPagination
-          currentPage={page + 1}
-          itemsPerPage={limit}
-          totalItems={total}
-          onPageChange={(next) => setPage(next - 1)}
-          onItemsPerPageChange={(size) => { setLimit(size); setPage(0); }}
-          itemLabel="logs"
-          showFirstLast
-        />
-      )}
-      {!standardPagination && totalPages > 1 && (
+      {/* Pagination */}
+      {totalPages > 1 && (
         <div className="px-3 sm:px-6 py-3 sm:py-4 border-t border-gray-200 flex flex-col sm:flex-row items-center justify-between gap-2 sm:gap-0">
           <p className="text-xs sm:text-sm text-gray-500">
             Showing {page * limit + 1} to {Math.min((page + 1) * limit, total)} of {total}
