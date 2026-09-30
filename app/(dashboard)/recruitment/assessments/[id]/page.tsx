@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, Suspense } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import AssessmentDetailsView from '@/components/AssessmentDetailsView';
-import { DetailPageSkeleton } from '@/components/ui/skeleton-loader';
+import { Skeleton } from '@/components/ui/skeleton';
 import ShareAssessmentModal from '@/components/ShareAssessmentModal';
 import AssessmentPreviewModal from '@/components/AssessmentPreviewModal';
 import AssessmentEditModal from '@/components/AssessmentEditModal';
@@ -11,6 +11,76 @@ import AssessmentConfigureModal from '@/components/AssessmentConfigureModal';
 import { assessmentService } from '@/lib/services';
 import FeatureGate from '@/components/shared/FeatureGate';
 import { useAuth } from '@/lib/hooks/useAuth';
+
+/**
+ * Mirrors AssessmentDetailsView's real shell: scrolling bg-slate-50 main,
+ * centred max-w-[1400px] column, padded white rounded-2xl shadow-2xl card,
+ * breadcrumb, the bordered summary card (id pill + title + status + facts
+ * row), then the left vertical tab-nav + right content grid. Without this
+ * the generic DetailPageSkeleton (max-w-5xl, circular avatar, plain cards,
+ * no white card, no sidebar nav) popped visibly when the real view mounted.
+ */
+function AssessmentDetailsSkeleton() {
+  return (
+    <main className="flex-1 overflow-x-clip bg-slate-50">
+      <div className="mx-auto w-full max-w-[1400px]">
+        <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+          {/* Breadcrumb */}
+          <div className="mb-4 flex items-center gap-2">
+            <Skeleton className="h-3 w-16" />
+            <Skeleton className="h-3 w-3" />
+            <Skeleton className="h-3 w-20" />
+            <Skeleton className="h-3 w-3" />
+            <Skeleton className="h-3 w-28" />
+          </div>
+
+          {/* Summary card: id pill + title + status, facts row */}
+          <div className="mb-5">
+            <div className="rounded-xl border border-gray-100 p-4 sm:p-5">
+              <div className="flex flex-col lg:flex-row lg:items-start justify-between gap-3">
+                <div className="flex-1 min-w-0 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Skeleton className="h-5 w-16 rounded-md" />
+                    <Skeleton className="h-5 w-56" />
+                    <Skeleton className="h-5 w-16 rounded-full" />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Skeleton className="h-3.5 w-24" />
+                    <Skeleton className="h-3.5 w-28" />
+                    <Skeleton className="h-3.5 w-32" />
+                  </div>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <Skeleton className="h-9 w-24 rounded-lg" />
+                  <Skeleton className="h-9 w-9 rounded-lg" />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Sidebar nav + content grid */}
+          <div className="grid grid-cols-1 items-start gap-3 sm:grid-cols-[180px_minmax(0,1fr)] sm:gap-4 md:grid-cols-[220px_minmax(0,1fr)] lg:grid-cols-[280px_minmax(0,1fr)] lg:gap-6">
+            <div className="min-w-0 rounded-xl border border-gray-100 p-2 sm:p-3 space-y-1.5">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <Skeleton key={i} className="h-9 w-full rounded-lg" />
+              ))}
+            </div>
+            <div className="min-w-0 space-y-4 py-3 sm:py-4">
+              {Array.from({ length: 2 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-gray-200 p-4 sm:p-6 space-y-3">
+                  <Skeleton className="h-5 w-40" />
+                  <Skeleton className="h-4 w-full" />
+                  <Skeleton className="h-4 w-5/6" />
+                  <Skeleton className="h-4 w-2/3" />
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
 
 function AssessmentDetailsContent() {
   const params = useParams();
@@ -280,7 +350,7 @@ function AssessmentDetailsContent() {
    * must not sit there looking interactive.
    */
   if ((isLoading && !assessment) || redirectingToDraft) {
-    return <DetailPageSkeleton />;
+    return <AssessmentDetailsSkeleton />;
   }
 
   if (error || !assessment) {
@@ -385,7 +455,7 @@ export default function AssessmentDetailsPage() {
   // useSearchParams needs a Suspense boundary in the App Router.
   return (
     <Suspense
-      fallback={<DetailPageSkeleton />}
+      fallback={<AssessmentDetailsSkeleton />}
     >
       <AssessmentDetailsContent />
     </Suspense>

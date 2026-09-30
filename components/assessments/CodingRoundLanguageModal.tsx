@@ -456,9 +456,6 @@ export default function CodingRoundLanguageModal({
             Minimum 1 and maximum {maxLanguages} languages can be selected.
           </p>
           <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 order-1 sm:order-2">
-            <Button variant="secondary" size="md" onClick={onCancel}>
-              Cancel
-            </Button>
             <Button
               variant="primary"
               size="md"

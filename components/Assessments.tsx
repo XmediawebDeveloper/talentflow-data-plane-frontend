@@ -7892,9 +7892,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                             </div>
 
                             <div className="flex flex-wrap items-center justify-end gap-2 sm:gap-3 p-4 sm:p-5 border-t border-gray-200 dark:border-slate-700 shrink-0">
-                              <Button variant="secondary" size="md" onClick={() => setShowInviteExportModal(false)}>
-                                Cancel
-                              </Button>
                               <Button
                                 variant="primary"
                                 size="md"
@@ -9178,9 +9175,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                   })()}
                 </div>
                 <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
-                  <Button variant="secondary" size="md" onClick={closeInvitePicker} className="flex-1 sm:flex-none">
-                    Cancel
-                  </Button>
                   <Button
                     variant="primary"
                     size="md"
@@ -9313,7 +9307,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
       {/* Track Invites Modal */}
       {showTrackInvitesModal && selectedAssessmentForTracking && (
-        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4 md:p-6">
+        <div className="fixed inset-0 bg-gray-900/50 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6">
           {/* Height is content-driven with a viewport cap, not a fixed 95dvh:
               a 3-invite list on a 27" monitor used to stretch the dialog the
               full screen with an empty table below the rows. The table shell
@@ -9975,9 +9969,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                     </Button>
                   );
                 })()}
-                <Button variant="secondary" size="sm" onClick={closeTrackInvitesModal}>
-                  Close
-                </Button>
               </div>
             </div>
           </div>
@@ -10216,9 +10207,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
 
             {/* Actions */}
             <div className="flex-shrink-0 border-t border-gray-200 dark:border-slate-700 px-4 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
-              <Button variant="secondary" size="md" onClick={closeIfIdle} disabled={isCloning}>
-                Cancel
-              </Button>
               <Button
                 variant="primary"
                 size="md"
@@ -10326,9 +10314,6 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               </div>
 
               <div className="shrink-0 border-t border-gray-200 dark:border-slate-700 px-4 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
-                <Button variant="secondary" size="md" onClick={closeConflict}>
-                  Cancel
-                </Button>
                 <Button
                   variant="primary"
                   size="md"

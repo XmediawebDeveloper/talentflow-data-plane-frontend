@@ -2732,8 +2732,8 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       {renderContent()}
       {/* Fullscreen exit overlay — mirrors AI Interview enforcement */}
       {step === 'assessment' && !useAdaptiveAssessmentMode && fullscreenStateSampled && !isFullscreenActive && (
-        <div className="fixed inset-0 z-[99] bg-black/90 flex items-center justify-center backdrop-blur-sm">
-          <div className="bg-white border-2 border-warning rounded-2xl p-5 sm:p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
+        <div className="fixed inset-0 z-[99] bg-black/90 flex items-center justify-center backdrop-blur-sm p-4">
+          <div className="bg-white border-2 border-warning rounded-2xl p-5 sm:p-8 max-w-[95vw] sm:max-w-md w-full text-center shadow-2xl">
             <Maximize2 className="w-12 h-12 text-warning mx-auto mb-4" />
             <h2 className="text-xl font-bold text-gray-900 mb-2">Fullscreen Required</h2>
             <p className="text-gray-600 mb-4">

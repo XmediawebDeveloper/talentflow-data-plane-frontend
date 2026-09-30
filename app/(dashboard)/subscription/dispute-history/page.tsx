@@ -807,12 +807,6 @@ export default function DisputeHistoryPage() {
                       <><Download className="h-4 w-4" /> Download Record</>
                     )}
                   </button>
-                  <button
-                    onClick={() => setSelectedDispute(null)}
-                    className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-gray-300 dark:hover:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"
-                  >
-                    Close
-                  </button>
                 </div>
               </div>
             </div>

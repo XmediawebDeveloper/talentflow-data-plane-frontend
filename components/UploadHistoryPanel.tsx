@@ -249,12 +249,6 @@ export default function UploadHistoryPanel({ records, onClose, currentSource }: 
             <p className="text-xs sm:text-sm text-gray-600 text-center sm:text-left">
               Showing <span className="text-gray-900">{filteredRecords.length}</span> upload record{filteredRecords.length !== 1 ? 's' : ''}
             </p>
-            <button
-              onClick={onClose}
-              className="px-4 sm:px-6 py-2 sm:py-2.5 bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-colors shadow-sm text-sm sm:text-base"
-            >
-              Close
-            </button>
           </div>
         </div>
       </div>

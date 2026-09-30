@@ -71,10 +71,10 @@ export default function FeatureTour({ isOpen, onClose }: FeatureTourProps) {
       <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 animate-in fade-in duration-200" />
 
       {/* Tour Modal */}
-      <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full pointer-events-auto animate-in zoom-in-95 duration-200">
+      <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6 pointer-events-none">
+        <div className="bg-white rounded-xl sm:rounded-2xl shadow-2xl max-w-[95vw] sm:max-w-2xl w-full max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] overflow-hidden flex flex-col pointer-events-auto animate-in zoom-in-95 duration-200">
           {/* Header */}
-          <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5 flex items-center justify-between rounded-t-2xl">
+          <div className="bg-gradient-to-r from-gray-800 to-gray-800 px-6 py-5 flex items-center justify-between rounded-t-xl sm:rounded-t-2xl flex-shrink-0">
             <div>
               <h2 className="text-xl text-white font-semibold">{step.title}</h2>
               <p className="text-sm text-gray-100 mt-1">
@@ -90,7 +90,7 @@ export default function FeatureTour({ isOpen, onClose }: FeatureTourProps) {
           </div>
 
           {/* Content */}
-          <div className="p-8">
+          <div className="p-8 overflow-y-auto flex-1 min-h-0">
             {/* Progress Bar */}
             <div className="mb-6">
               <div className="h-1.5 bg-gray-200 rounded-full overflow-hidden">
@@ -118,7 +118,7 @@ export default function FeatureTour({ isOpen, onClose }: FeatureTourProps) {
           </div>
 
           {/* Footer */}
-          <div className="px-8 py-5 bg-gray-50 rounded-b-2xl flex items-center justify-between border-t border-gray-200">
+          <div className="px-8 py-5 bg-gray-50 rounded-b-xl sm:rounded-b-2xl flex items-center justify-between border-t border-gray-200 flex-shrink-0">
             <button
               onClick={handleSkip}
               className="text-sm text-gray-600 hover:text-gray-900 transition-colors"

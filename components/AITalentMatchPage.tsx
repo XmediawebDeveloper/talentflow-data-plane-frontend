@@ -4829,9 +4829,6 @@ export default function AITalentMatchPage({
                   <Info className="w-3.5 h-3.5 flex-shrink-0" />
                   Match rating is based on AI similarity between candidate resumes and the job description (1 - 10 scale).
                 </p>
-                <Button variant="secondary" size="md" onClick={() => setMatchHistoryModal(null)} className="flex-shrink-0">
-                  Close
-                </Button>
               </div>
             </div>
           </div>

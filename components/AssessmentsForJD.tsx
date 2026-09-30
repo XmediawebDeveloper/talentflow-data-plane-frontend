@@ -453,7 +453,7 @@ export default function AssessmentsForJD({ jdId, jdTitle }: AssessmentsForJDProp
                                   className="fixed inset-0 z-10"
                                   onClick={() => setOpenMenuId(null)}
                                 />
-                                <div className="absolute right-0 mt-2 w-44 sm:w-48 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 z-20 max-h-[70dvh] overflow-y-auto">
+                                <div className="absolute right-0 mt-2 w-44 sm:w-48 max-w-[calc(100vw-1.5rem)] bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-1 z-20 max-h-[70dvh] overflow-y-auto">
                                   <button
                                     onClick={() => {
                                       handleViewDetails(assessment);

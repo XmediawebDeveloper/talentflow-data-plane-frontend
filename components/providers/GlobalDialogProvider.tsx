@@ -152,22 +152,17 @@ const initialState: DialogState = {
 export function GlobalDialogProvider({ children }: { children: ReactNode }) {
   const [dialog, setDialog] = useState<DialogState>(initialState);
   const confirmBtnRef = useRef<HTMLButtonElement>(null);
-  const cancelBtnRef = useRef<HTMLButtonElement>(null);
 
   // Focus the primary button when dialog opens
   useEffect(() => {
     if (dialog.open) {
       // Small delay to let the DOM render
       const id = setTimeout(() => {
-        if (dialog.hideCancelButton) {
-          confirmBtnRef.current?.focus();
-        } else {
-          cancelBtnRef.current?.focus();
-        }
+        confirmBtnRef.current?.focus();
       }, 50);
       return () => clearTimeout(id);
     }
-  }, [dialog.open, dialog.hideCancelButton]);
+  }, [dialog.open]);
 
   // Close on Escape
   useEffect(() => {
@@ -370,16 +365,6 @@ export function GlobalDialogProvider({ children }: { children: ReactNode }) {
                 {/* Buttons — right-aligned, sized like ArchiveJobModal /
                     DisableJobModal's footer rather than stretched flex-1s. */}
                 <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
-                  {!dialog.hideCancelButton && (
-                    <button
-                      ref={cancelBtnRef}
-                      type="button"
-                      onClick={() => handleClose(false)}
-                      className="px-6 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors text-sm font-semibold text-gray-700 dark:text-gray-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-gray-400"
-                    >
-                      {dialog.cancelText}
-                    </button>
-                  )}
                   <button
                     ref={confirmBtnRef}
                     type="button"

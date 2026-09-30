@@ -329,13 +329,6 @@ function ExportModal({
               Preparing export…
             </span>
           ) : <span />}
-          <button
-            onClick={onClose}
-            disabled={isExporting}
-            className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-200 rounded-lg hover:border-gray-300 hover:bg-gray-50 transition-all disabled:opacity-50"
-          >
-            Close
-          </button>
         </div>
       </div>
     </div>

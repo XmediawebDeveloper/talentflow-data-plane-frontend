@@ -113,9 +113,6 @@ export default function ArchiveAIInterviewModal({
             Are you sure you want to archive this AI interview?
           </p>
           <div className="flex gap-3 justify-end">
-            <Button variant="secondary" onClick={onCancel} disabled={isLoading} className="px-6">
-              Cancel
-            </Button>
             <Button variant="destructive" onClick={onConfirm} disabled={isLoading} className="px-6">
               {isLoading ? (
                 <span className="flex items-center justify-center gap-2">

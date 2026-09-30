@@ -116,7 +116,6 @@ export default function AssessmentConfigureModal({
             type="button"
             onClick={() => assessmentCreationRef.current?.requestClose()}
             aria-label={readOnly ? 'Close assessment preview' : 'Close assessment configuration'}
-            title="Close"
             className="px-2 flex-shrink-0"
           >
             <X className="w-5 h-5" />

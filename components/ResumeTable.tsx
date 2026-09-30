@@ -1306,17 +1306,6 @@ export default function ResumeTable({
             </div>
             <div className="flex gap-3 p-6 border-t border-gray-200 shrink-0">
               <Button
-                variant="secondary"
-                size="md"
-                onClick={() => {
-                  setShowEditModal(false);
-                  setSelectedResumeForAction(null);
-                }}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button
                 variant="primary"
                 size="md"
                 onClick={() => {
@@ -1394,17 +1383,6 @@ export default function ResumeTable({
             </div>
             <div className="flex gap-3 p-6 border-t border-gray-200 shrink-0">
               <Button
-                variant="secondary"
-                size="md"
-                onClick={() => {
-                  setShowAddTagsModal(false);
-                  setSelectedResumeForAction(null);
-                }}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
-              <Button
                 variant="primary"
                 size="md"
                 onClick={() => {
@@ -1465,17 +1443,6 @@ export default function ResumeTable({
               </div>
             </div>
             <div className="flex gap-3 p-6 border-t border-gray-200 shrink-0">
-              <Button
-                variant="secondary"
-                size="md"
-                onClick={() => {
-                  setShowArchiveModal(false);
-                  setSelectedResumeForAction(null);
-                }}
-                className="flex-1"
-              >
-                Cancel
-              </Button>
               <Button
                 variant="primary"
                 size="md"

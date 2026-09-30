@@ -628,7 +628,7 @@ export default function JDListPage() {
                 </svg>
               </button>
               {bulkActionsOpen && (
-                <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
+                <div className="absolute right-0 top-full mt-1 w-52 max-w-[calc(100vw-1.5rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
                   {canExportJd && (
                     <button
                       onClick={() => { handleExportJDs(); setBulkActionsOpen(false); }}
@@ -930,7 +930,9 @@ export default function JDListPage() {
                         <MoreVertical className="w-5 h-5 text-gray-700" />
                       </button>
                       {activeDropdown === jd.id && (
-                        <div className="absolute right-0 top-full mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                        <>
+                          <div className="fixed inset-0 z-[9]" onClick={() => setActiveDropdown(null)} />
+                          <div className="absolute right-0 top-full mt-1 w-48 max-w-[calc(100vw-1.5rem)] max-h-[70dvh] overflow-y-auto bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
                           {/* View Applicants */}
                           <button
                             onClick={() => { router.push(`/recruitment/jd-details?id=${jd.id}&tab=applicants`); setActiveDropdown(null); }}
@@ -1075,7 +1077,8 @@ export default function JDListPage() {
                               </button>
                             );
                           })()}
-                        </div>
+                          </div>
+                        </>
                       )}
                     </div>
                   </div>

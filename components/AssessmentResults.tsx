@@ -2847,15 +2847,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 </div>
 
                 <div className="flex items-center justify-end gap-3 p-4 sm:p-5 border-t border-gray-100">
-                  <button
-                    onClick={() => {
-                      setShowExportModal(false);
-                      setExportStep('format');
-                    }}
-                    className="px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-md transition-colors"
-                  >
-                    Cancel
-                  </button>
                 </div>
               </>
             )}
@@ -2974,16 +2965,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     icon={<ArrowLeft className="w-4 h-4" />}
                   >
                     Back
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setShowExportModal(false);
-                      setExportStep('format');
-                    }}
-                  >
-                    Cancel
                   </Button>
                 </div>
               </>
