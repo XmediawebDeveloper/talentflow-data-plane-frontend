@@ -2524,49 +2524,53 @@ export default function UserManagement() {
                           </button>
                         )} */}
   
-                        {/* Edit button - requires users:update, disabled when user is inactive */}
-                        {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && canUpdateUser && (
+                        {/* Edit button - requires users:update, disabled when user is inactive.
+                            Icon stays visible (never removed from the DOM) when the permission
+                            is off, matching the is_active disabled treatment right below it —
+                            and reacts live to a permission change because canUpdateUser is
+                            derived from currentUser?.permissions on every render. */}
+                        {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
                           <button
-                            onClick={() => user.is_active && openEditModal(user)}
-                            disabled={!user.is_active}
+                            onClick={() => canUpdateUser && user.is_active && openEditModal(user)}
+                            disabled={!canUpdateUser || !user.is_active}
                             className={`p-2 rounded-lg transition-all ${
-                              user.is_active
+                              canUpdateUser && user.is_active
                                 ? 'text-gray-500 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/10 cursor-pointer'
                                 : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
                             }`}
-                            title={user.is_active ? 'Edit User' : 'Cannot edit inactive user'}
+                            title={!canUpdateUser ? 'You do not have permission to edit users' : user.is_active ? 'Edit User' : 'Cannot edit inactive user'}
                           >
                             <Pencil className="w-4 h-4" />
                           </button>
                         )}
-  
-                        {/* Reset Password — requires users:reset_password */}
-                        {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && canResetPassword && (
+
+                        {/* Reset Password — requires users:reset_password. Icon stays visible; see Edit button above. */}
+                        {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
                           <button
-                            onClick={() => { if (user.is_active) { setResetPwMode('choose'); setResetPwUser(user); } }}
-                            disabled={!user.is_active}
+                            onClick={() => { if (canResetPassword && user.is_active) { setResetPwMode('choose'); setResetPwUser(user); } }}
+                            disabled={!canResetPassword || !user.is_active}
                             className={`p-2 rounded-lg transition-all ${
-                              user.is_active
+                              canResetPassword && user.is_active
                                 ? 'text-gray-500 dark:text-slate-500 hover:text-warning hover:bg-warning-subtle cursor-pointer'
                                 : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
                             }`}
-                            title={user.is_active ? 'Reset Password' : 'Cannot reset password for inactive user'}
+                            title={!canResetPassword ? 'You do not have permission to reset passwords' : user.is_active ? 'Reset Password' : 'Cannot reset password for inactive user'}
                           >
                             <KeyRound className="w-4 h-4" />
                           </button>
                         )}
-  
-                        {/* Force Password Change — requires users:force_password_change */}
-                        {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && canForcePwChange && (
+
+                        {/* Force Password Change — requires users:force_password_change. Icon stays visible; see Edit button above. */}
+                        {user.role.toLowerCase() !== 'tenant_admin' && user.id !== currentUserId && (
                           <button
-                            onClick={() => user.is_active && handleForcePasswordChange(user)}
-                            disabled={!user.is_active}
+                            onClick={() => canForcePwChange && user.is_active && handleForcePasswordChange(user)}
+                            disabled={!canForcePwChange || !user.is_active}
                             className={`p-2 rounded-lg transition-all ${
-                              user.is_active
+                              canForcePwChange && user.is_active
                                 ? 'text-gray-500 dark:text-slate-500 hover:text-orange-600 hover:bg-orange-50 cursor-pointer'
                                 : 'text-gray-300 dark:text-slate-500 cursor-not-allowed'
                             }`}
-                            title={user.is_active ? 'Force password change on next login' : 'Cannot update inactive user'}
+                            title={!canForcePwChange ? 'You do not have permission to force a password change' : user.is_active ? 'Force password change on next login' : 'Cannot update inactive user'}
                           >
                             <Lock className="w-4 h-4" />
                           </button>
