@@ -80,7 +80,7 @@ export default function CodingLanguagePickerStep({
   // showing" — visually they were looking for an overlay.
   if (compilable === null) {
     return (
-      <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
+      <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-[95vw] sm:max-w-2xl w-full p-6 sm:p-8 flex items-center justify-center min-h-[200px]">
           <Loader2 className="w-6 h-6 text-gray-400 animate-spin" />
         </div>
@@ -89,7 +89,7 @@ export default function CodingLanguagePickerStep({
   }
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center px-4">
+    <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-6">
       <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 max-w-[95vw] sm:max-w-2xl w-full p-6 sm:p-8 max-h-[calc(100dvh-3rem)] flex flex-col overflow-hidden">
         <div className="shrink-0 w-12 h-12 bg-brand-blue/10 text-brand-blue rounded-full flex items-center justify-center mb-4">
           <Code className="w-6 h-6" />

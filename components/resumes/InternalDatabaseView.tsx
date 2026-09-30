@@ -31,7 +31,6 @@ import { handleQuotaError } from '@/lib/utils/quotaErrorHandler';
 import {
   AlertDialog,
   AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -1402,7 +1401,6 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="border-t border-gray-100 pt-4">
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               className="gap-2 bg-red-600 text-white hover:bg-red-700"
               onClick={() => {
@@ -1479,13 +1477,6 @@ export default function InternalDatabaseView({ header }: { header?: ReactNode })
 
               {/* Footer */}
               <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-2xl border-t border-gray-200">
-                <button
-                  onClick={() => setIsZipDownloadModalOpen(false)}
-                  disabled={isDownloadingSelection}
-                  className="px-5 py-2.5 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Cancel
-                </button>
                 <button
                   onClick={handleZipDownload}
                   disabled={isDownloadingSelection}

@@ -46,7 +46,7 @@ export function ExportMenu({ onExportCsv, onExportXlsx, variant = 'light', label
         <ChevronDown className={`w-3 h-3 transition-transform ${open ? 'rotate-180' : ''}`} />
       </button>
       {open && (
-        <div className="absolute right-0 top-full mt-1 z-30 w-40 bg-white border border-gray-200 rounded-lg shadow-lg py-1">
+        <div className="absolute right-0 top-full mt-1 z-30 w-40 max-w-[calc(100vw-1.5rem)] bg-white border border-gray-200 rounded-lg shadow-lg py-1">
           <button
             type="button"
             onClick={() => { setOpen(false); onExportCsv(); }}

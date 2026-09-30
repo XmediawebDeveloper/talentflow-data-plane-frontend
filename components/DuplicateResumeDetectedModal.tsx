@@ -9,7 +9,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, Eye, ClipboardList, X, Calendar, User, Mail, FileText, Briefcase } from 'lucide-react';
+import { AlertTriangle, Eye, ClipboardList, Calendar, User, Mail, FileText, Briefcase } from 'lucide-react';
 import { format } from 'date-fns';
 
 interface ExistingResumeInfo {
@@ -123,17 +123,6 @@ export function DuplicateResumeDetectedModal({
             guard, so without these the labels overflow their boxes instead of
             wrapping to a second row when space is tight. */}
         <DialogFooter className="flex flex-col sm:flex-row sm:flex-wrap gap-2 shrink-0 [&>button]:shrink-0">
-          {/* Cancel Button */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onClose}
-            className="flex items-center justify-center gap-1.5 order-3 sm:order-1"
-          >
-            <X className="w-3.5 h-3.5" />
-            Cancel
-          </Button>
-
           {/* View Existing Record Button */}
           <Button
             variant="outline"

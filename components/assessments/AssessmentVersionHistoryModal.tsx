@@ -620,11 +620,6 @@ export default function AssessmentVersionHistoryModal({
             )}
           </div>
 
-          <div className="flex justify-end px-4 sm:px-6 py-2.5 border-t border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue">
-              Close
-            </button>
-          </div>
         </div>
       </div>
     </>

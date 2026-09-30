@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
   AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -55,9 +54,6 @@ export default function SkipQuestionButton({
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
-          <AlertDialogCancel className="border-gray-600 text-gray-300 hover:text-white">
-            Cancel
-          </AlertDialogCancel>
           <AlertDialogAction
             onClick={onSkip}
             className="bg-amber-600 hover:bg-amber-700 text-white"

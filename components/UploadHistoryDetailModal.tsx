@@ -202,12 +202,6 @@ export default function UploadHistoryDetailModal({ item, onClose }: UploadHistor
 
         {/* Footer */}
         <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 shrink-0">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
-          >
-            Close
-          </button>
           {(item.status === 'completed' || item.status === 'versioned') && item.resumeId && (
             <ViewResumeButton onClick={handleViewResume} className="justify-center" />
           )}

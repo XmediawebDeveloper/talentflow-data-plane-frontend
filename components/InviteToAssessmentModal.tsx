@@ -467,16 +467,6 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
             >
               Try Different Email
             </button>
-            <button
-              onClick={() => {
-                setShowDuplicateError(false);
-                setDuplicateEmails([]);
-                onClose();
-              }}
-              className="flex-1 px-4 py-2 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 text-sm sm:text-base rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-            >
-              Close
-            </button>
           </div>
         </div>
       </div>
@@ -577,12 +567,6 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
             >
               <Sparkles className="w-4 h-4 sm:w-5 sm:h-5" />
               Create Assessment
-            </button>
-            <button
-              onClick={onClose}
-              className="w-full px-4 sm:px-6 py-2.5 sm:py-3 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 text-sm sm:text-base rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-            >
-              Cancel
             </button>
           </div>
         </div>
@@ -950,12 +934,6 @@ export default function InviteToAssessmentModal({ onClose, jobTitle, jobId, cand
             })()}
           </div>
           <div className="flex items-center gap-2 sm:gap-3">
-            <button
-              onClick={onClose}
-              className="flex-1 sm:flex-none px-4 sm:px-5 py-2 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 text-sm sm:text-base rounded-lg hover:bg-gray-100 dark:hover:bg-slate-700 transition-colors"
-            >
-              Cancel
-            </button>
             <button
               onClick={handleSendInvitations}
               disabled={!isValid || isSubmitting || (quotaStats !== null && quotaStats.available === 0 && quotaStats.total_quota < 999999)}

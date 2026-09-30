@@ -1164,17 +1164,6 @@ export default function RoleManagement() {
                 </div>
               )}
             </div>
-            <div className="flex justify-end gap-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/50 px-5 py-4 sm:px-6 shrink-0 rounded-b-3xl">
-              <button
-                onClick={() => {
-                  setViewingRole(null);
-                  setViewingRolePermissions([]);
-                }}
-                className="rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg"
-              >
-                Close
-              </button>
-            </div>
           </div>
         </div>
       )}

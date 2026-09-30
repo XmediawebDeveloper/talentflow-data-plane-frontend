@@ -407,14 +407,7 @@ export default function AssessmentEditModal({ isOpen, onClose, assessment, onSav
         </div>
 
         {/* Footer */}
-        <div className="border-t border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 bg-slate-50 dark:bg-slate-950 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 flex-shrink-0">
-          <Button
-            variant="secondary"
-            onClick={handleCloseAttempt}
-            disabled={isSaving}
-          >
-            Cancel
-          </Button>
+        <div className="border-t border-gray-100 dark:border-slate-700/60 px-4 sm:px-6 py-3 bg-slate-50 dark:bg-slate-950 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 flex-shrink-0">
           <div className="flex flex-col-reverse sm:flex-row items-stretch sm:items-center gap-2 sm:gap-3">
             <Button
               variant="secondary"

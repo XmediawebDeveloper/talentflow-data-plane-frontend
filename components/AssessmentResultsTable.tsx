@@ -613,7 +613,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     className="fixed inset-0 z-10"
                     onClick={() => setShowColumnSelector(false)}
                   ></div>
-                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-20 max-h-96 overflow-y-auto">
+                  <div className="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-20 max-h-96 overflow-y-auto">
                     <div className="px-4 py-2 border-b border-gray-100">
                       <div className="text-sm text-gray-900">Select Columns</div>
                       <div className="text-xs text-gray-500 mt-0.5">
@@ -1543,16 +1543,6 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                 </div>
 
                 <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setShowExportModal(false);
-                      setExportStep('format');
-                    }}
-                  >
-                    Cancel
-                  </Button>
                 </div>
               </>
             )}
@@ -1653,16 +1643,6 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     icon={<ArrowLeft className="w-4 h-4" />}
                   >
                     Back
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setShowExportModal(false);
-                      setExportStep('format');
-                    }}
-                  >
-                    Cancel
                   </Button>
                 </div>
               </>

@@ -226,6 +226,11 @@ function JobDetailsContent() {
   useEffect(() => {
     if (jobId) {
       fetchJobDetails();
+    } else {
+      // No `?id=` in the URL — nothing to fetch. Without this, `loading` stays
+      // true forever and the page hangs on the skeleton instead of falling
+      // through to the "Job not found" state below.
+      setLoading(false);
     }
   }, [jobId]);
 

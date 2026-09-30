@@ -1592,17 +1592,6 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             <div className="p-6 border-t border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800/50 rounded-b-2xl shrink-0">
               <div className="flex gap-3">
                 <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setShowRecordModal(false);
-                    setRecordError(null);
-                    setRecordSuccess(null);
-                  }}
-                  className="flex-1"
-                >
-                  Cancel
-                </Button>
-                <Button
                   variant="primary"
                   onClick={handleRecordUsage}
                   disabled={recordingUsage}
@@ -1628,8 +1617,8 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
 
       {/* Addon Purchase Modal */}
       {showAddonModal && selectedAddon && (
-        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-6">
-          <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-xl shadow-2xl sm:border sm:border-gray-200 dark:sm:border-slate-700 max-w-[95vw] sm:max-w-2xl w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300 max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
+        <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+          <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-300 max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
 
             {/* Modal Header */}
             <div className="relative px-5 sm:px-7 py-5 sm:py-6 bg-gradient-to-br from-brand-blue via-brand-blue-2 to-brand-teal flex-shrink-0 overflow-hidden">
@@ -1807,17 +1796,6 @@ export default function UsageDashboard({ onBack }: UsageDashboardProps) {
             {/* Modal Footer */}
             <div className="p-4 sm:p-5 border-t border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 flex-shrink-0">
               <div className="flex gap-3">
-                <Button
-                  variant="secondary"
-                  onClick={() => {
-                    setShowAddonModal(false);
-                    setAddonPurchaseError(null);
-                    setAddonPurchaseSuccess(null);
-                    setPaymentCaptured(false);
-                  }}
-                >
-                  {paymentCaptured && addonPurchaseError ? 'Close' : 'Cancel'}
-                </Button>
                 <Button
                   variant="primary"
                   onClick={handlePurchaseAddon}
