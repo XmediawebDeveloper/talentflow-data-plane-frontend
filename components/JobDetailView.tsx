@@ -3675,15 +3675,17 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       label="Invite"
                       accent="orange"
                       onClick={() => handleInviteAIInterview()}
-                      disabled={!canInviteToAIInterview}
+                      disabled={!canInviteJd || !canInviteToAIInterview}
                       disabledTooltip={
-                        !features.ai_interview
-                          ? 'AI Interviews not enabled'
-                          : job.status === 'Disabled'
-                            ? 'JD is disabled'
-                            : !hasAnyAIInterview
-                              ? 'Create an AI interview first'
-                              : 'Publish the AI interview first'
+                        !canInviteJd
+                          ? 'You do not have permission to invite candidates from a job description'
+                          : !features.ai_interview
+                            ? 'AI Interviews not enabled'
+                            : job.status === 'Disabled'
+                              ? 'JD is disabled'
+                              : !hasAnyAIInterview
+                                ? 'Create an AI interview first'
+                                : 'Publish the AI interview first'
                       }
                     />
                   )}

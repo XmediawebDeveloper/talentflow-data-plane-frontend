@@ -50,9 +50,14 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'jd:invite', label: 'Invite' },
       { code: 'jd:add_applicants', label: 'Add Applicants' },
     ],
-    // Rule: JD Invite requires Assessment Share (invite uses assessment links)
+    // Rule: JD Invite requires Assessment Invite (this is what actually sends
+    // the invitation server-side — see app/routers/assessments.py's
+    // invite/bulk-invite endpoints, gated by 'assessments:invite', not
+    // 'assessments:share'. 'Share' is a separate, real permission that only
+    // controls generating a shareable assessment link from the Assessments
+    // list page).
     dependencies: {
-      'jd:invite': ['assessments:share'],
+      'jd:invite': ['assessments:invite'],
     },
   },
   {
@@ -71,11 +76,12 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // (app/services/permission_dependencies.py: scoring:score → jd:read, resumes:read);
     // 'my_resumes:upload' is kept as an additional, deliberate UX auto-enable
     // (scoring flow lets you upload resumes directly), not a substitute for view access.
-    // Rule: Scoring Invite also requires Assessment Share
+    // Rule: Scoring Invite also requires Assessment Invite (see jd:invite above
+    // for why this points at 'assessments:invite' rather than 'assessments:share')
     // NOTE: Export, Invite, Download Scorecard do NOT block disabling Score Resumes
     dependencies: {
       'scoring:score': ['my_resumes:read', 'my_resumes:upload', 'internal_db:read', 'jd:add_applicants'],
-      'scoring:invite': ['assessments:share'],
+      'scoring:invite': ['assessments:invite'],
     },
   },
   {
@@ -104,9 +110,10 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'my_resumes:score', label: 'Score Resume' },
       { code: 'my_resumes:share', label: 'Share Resume' },
     ],
-    // Rule: Assessment invite from My Resumes requires Assessment Share
+    // Rule: Assessment invite from My Resumes requires Assessment Invite
+    // (see jd:invite above for why this points at 'assessments:invite')
     dependencies: {
-      'my_resumes:assessment': ['assessments:share'],
+      'my_resumes:assessment': ['assessments:invite'],
     },
   },
   {
@@ -123,9 +130,10 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'internal_db:score', label: 'Score Resume' },
       { code: 'internal_db:share', label: 'Share Resume' },
     ],
-    // Rule: Assessment invite from Internal DB requires Assessment Share
+    // Rule: Assessment invite from Internal DB requires Assessment Invite
+    // (see jd:invite above for why this points at 'assessments:invite')
     dependencies: {
-      'internal_db:assessment': ['assessments:share'],
+      'internal_db:assessment': ['assessments:invite'],
     },
   },
   {
@@ -136,6 +144,14 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     actions: [
       { code: 'assessments:create', label: 'Create' },
       { code: 'assessments:update', label: 'Edit' },
+      // The permission the actual invite/bulk-invite backend endpoints check
+      // (app/routers/assessments.py). Previously missing from this catalog —
+      // there was no checkbox for it anywhere in the Roles & Permissions UI,
+      // so admins could not grant or revoke it, and 'jd:invite' /
+      // 'scoring:invite' etc. above were pointed at 'assessments:share' (a
+      // different, real permission that only gates the "Share" link action)
+      // instead.
+      { code: 'assessments:invite', label: 'Invite' },
       { code: 'assessments:share', label: 'Share' },
       { code: 'assessments:download_report', label: 'Download Report' },
       { code: 'assessments:batch_download', label: 'Batch Download' },

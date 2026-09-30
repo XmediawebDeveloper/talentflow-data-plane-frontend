@@ -210,7 +210,13 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     if (!user.permissions) return false;
     return user.permissions[permission as keyof typeof user.permissions] === true;
   };
-  const mayInviteAssessment = hasPermission('canCreateAssessments') && hasPlanFeature('assessment');
+  // Resume Scoring's own `scoring:invite` toggle, not canCreateAssessments
+  // (creating a brand-new assessment is a different action) — same fix
+  // already applied to the Scored Resumes table this page is opened from
+  // (see ScoredResumesTable.tsx's canCreateAssessments), which this page had
+  // missed: previously, disabling Resume Scoring's "Invite" permission had
+  // no effect on this button.
+  const mayInviteAssessment = (isTenantAdmin || hasPermissionCode('scoring:invite')) && hasPlanFeature('assessment');
   const mayInviteAIInterview =
     hasPermission('canInviteAIInterviews') && hasPlanFeature('ai_interview');
   const canInvite = mayInviteAssessment || mayInviteAIInterview;
