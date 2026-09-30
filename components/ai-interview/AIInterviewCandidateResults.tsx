@@ -114,6 +114,8 @@ function VersionPill({ kind, version }: { kind: 'job' | 'interview'; version: nu
 }
 
 const PAGE_SIZE = 15;
+/** The "Show N per page" choices. */
+const PAGE_SIZE_OPTIONS = [10, 15, 25, 50, 100];
 
 /** The AI Interview rule: Must-Have Skills 60% or above is a Pass. Score is
  *  the MHS% the invite trackers show (displayInviteScore), and Result is the
@@ -162,6 +164,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
   const [error, setError] = useState<string | null>(null);
 
   const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [displayMode, setDisplayMode] = useState<ListDisplayMode>('list');
 
   // Search state lives in the shared hook: typed vs applied query, plus a
@@ -192,11 +195,12 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
   }, []);
   useListStatePersistence(
     'ai-interview-candidate-results',
-    { currentPage, query: search.query, filters: search.filters, displayMode },
+    { currentPage, pageSize, query: search.query, filters: search.filters, displayMode },
     (s) => {
       if (typeof s.query === 'string' && s.query) search.setQuery(s.query);
       if (s.filters && typeof s.filters === 'object') search.setFilters({ ...EMPTY_CANDIDATE_FILTERS, ...s.filters });
       if ((s.displayMode === 'list' || s.displayMode === 'grid') && !isPhoneWidth()) setDisplayMode(s.displayMode);
+      if (typeof s.pageSize === 'number' && PAGE_SIZE_OPTIONS.includes(s.pageSize)) setPageSize(s.pageSize);
       if (typeof s.currentPage === 'number' && s.currentPage >= 1) setCurrentPage(s.currentPage);
     },
   );
@@ -208,10 +212,10 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
    * config whose sessions fail to load contributes nothing rather than sinking
    * the whole tab.
    *
-   * `status: 'completed'` — Candidate Results only has a result to show once
-   * an interview is actually finished, so the fetch itself is scoped to
-   * that, rather than pulling every invite/in-progress/expired row across
-   * every config just to filter them back out client-side.
+   * Completed AND Terminated — the two states with a result to show (a
+   * terminated interview has its partial evaluation). One request per status
+   * per config, in parallel, rather than pulling every invite / in-progress /
+   * expired row across every config just to filter them back out here.
    */
   const loadAllSessions = useCallback(async () => {
     setIsLoading(true);
@@ -247,13 +251,14 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
       const perConfig = await Promise.all(
         configs.map(async (config) => {
           try {
-            const result = await aiInterviewService.getConfigInvitations(config.id, {
-              page: 1,
-              page_size: 1000,
-              compact: true,
-              status: 'completed',
-            });
-            return (result.items ?? []).map((session): CandidateSessionRow => ({
+            const [completed, terminated] = await Promise.all(
+              (['completed', 'terminated'] as const).map((status) =>
+                aiInterviewService.getConfigInvitations(config.id, { page: 1, page_size: 1000, compact: true, status })
+                  // A failed status fetch drops only that status, not the config.
+                  .catch(() => ({ items: [] as AIInterviewResponse[] })),
+              ),
+            );
+            return [...(completed.items ?? []), ...(terminated.items ?? [])].map((session): CandidateSessionRow => ({
               ...session,
               _config_id: config.id,
               // jd_title first, matching how the interview cards on this page
@@ -334,9 +339,9 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
   const jobVersionOptions = useMemo(() => versionFilterOptions(rows, (r) => r._job_version), [rows]);
   const interviewVersionOptions = useMemo(() => versionFilterOptions(rows, (r) => r._interview_version), [rows]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / pageSize));
   const safePage = Math.min(currentPage, totalPages);
-  const pageRows = filteredRows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+  const pageRows = filteredRows.slice((safePage - 1) * pageSize, safePage * pageSize);
 
   // Local text so a partial edit doesn't get clobbered by safePage until Enter/blur commits it.
   const [goToPage, setGoToPage] = useState(String(safePage));
@@ -404,7 +409,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
           row.completed_at ? formatIST(row.completed_at) : '',
           row.started_at ? formatDuration(row) : '',
         ];
-        case 'proctoring': return [row.status === 'completed' ? getProctoringRisk(row).level : ''];
+        case 'proctoring': return [(row.status === 'completed' || row.status === 'terminated') ? getProctoringRisk(row).level : ''];
         default: return [''];
       }
     });
@@ -751,7 +756,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                           LIVE
                         </span>
                       )}
-                      {row.status === 'completed' && (
+                      {(row.status === 'completed' || row.status === 'terminated') && (
                         <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>
                           {risk.level} risk
                         </span>
@@ -784,10 +789,23 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                 );
               })}
             </div>
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
-                <div className="text-sm text-gray-500 dark:text-slate-400">
-                  Showing {((safePage - 1) * PAGE_SIZE) + 1}–{Math.min(safePage * PAGE_SIZE, filteredRows.length)} of {filteredRows.length}
+            {filteredRows.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
+                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-slate-400">
+                  {/* Show N per page — back to page 1 on change. */}
+                  <label className="inline-flex items-center gap-2">
+                    <span>Show</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                      aria-label="Rows per page"
+                      className="h-8 px-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
+                    >
+                      {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                    <span>per page</span>
+                  </label>
+                  <span>Showing {((safePage - 1) * pageSize) + 1}–{Math.min(safePage * pageSize, filteredRows.length)} of {filteredRows.length}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1.5">
@@ -993,7 +1011,7 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
                         )}
                         {col('proctoring') && (
                           <td className="px-4 py-3 whitespace-nowrap">
-                            {row.status === 'completed' ? (
+                            {(row.status === 'completed' || row.status === 'terminated') ? (
                               <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${risk.badge}`}>
                                 {risk.level}
                               </span>
@@ -1012,10 +1030,23 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
               </table>
             </div>
 
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
-                <div className="text-sm text-gray-500 dark:text-slate-400">
-                  Showing {((safePage - 1) * PAGE_SIZE) + 1}–{Math.min(safePage * PAGE_SIZE, filteredRows.length)} of {filteredRows.length}
+            {filteredRows.length > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-800/50">
+                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500 dark:text-slate-400">
+                  {/* Show N per page — back to page 1 on change. */}
+                  <label className="inline-flex items-center gap-2">
+                    <span>Show</span>
+                    <select
+                      value={pageSize}
+                      onChange={(e) => { setPageSize(Number(e.target.value)); setCurrentPage(1); }}
+                      aria-label="Rows per page"
+                      className="h-8 px-2 text-sm border border-gray-200 dark:border-slate-700 rounded-lg bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/40"
+                    >
+                      {PAGE_SIZE_OPTIONS.map((n) => <option key={n} value={n}>{n}</option>)}
+                    </select>
+                    <span>per page</span>
+                  </label>
+                  <span>Showing {((safePage - 1) * pageSize) + 1}–{Math.min(safePage * pageSize, filteredRows.length)} of {filteredRows.length}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <div className="flex items-center gap-1.5">
