@@ -71,16 +71,28 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'scoring:invite', label: 'Invite' },
       { code: 'scoring:download', label: 'Download Scorecard' },
     ],
-    // Rule: Enable Score Resumes → auto-enable My Resumes view + upload + Internal DB view + JD Add Applicants
-    // 'my_resumes:read' matches what the backend actually requires to run scoring
-    // (app/services/permission_dependencies.py: scoring:score → jd:read, resumes:read);
-    // 'my_resumes:upload' is kept as an additional, deliberate UX auto-enable
-    // (scoring flow lets you upload resumes directly), not a substitute for view access.
+    // Rule: Enable Score Resumes → auto-enable Job Description view + My
+    // Resumes view + upload + JD Add Applicants.
+    // 'jd:read' and 'my_resumes:read' are the two the backend actually
+    // requires to run scoring (app/services/permission_dependencies.py:
+    // scoring:score → jd:read, resumes:read — 'my_resumes:read' satisfies
+    // the 'resumes:read' alias). 'my_resumes:upload' is kept as an
+    // additional, deliberate UX auto-enable (scoring flow lets you upload
+    // resumes directly), not a substitute for view access.
+    // Internal DB deliberately NOT listed here: Shared Database is an
+    // independent module — an optional extra resume SOURCE for scoring, not
+    // a requirement for Score Resumes to work at all. That source is its own
+    // combo of 'internal_db:read' + 'internal_db:score' (see
+    // SelectSourceModal.tsx's Internal Database tab), granted separately.
+    // Bundling it in here previously meant enabling Score Resumes always
+    // force-granted tenant-wide Shared Database read access, and disabling
+    // Shared Database was blocked as "required by Score Resumes" even when
+    // My Resumes access alone already satisfied scoring's real requirement.
     // Rule: Scoring Invite also requires Assessment Invite (see jd:invite above
     // for why this points at 'assessments:invite' rather than 'assessments:share')
     // NOTE: Export, Invite, Download Scorecard do NOT block disabling Score Resumes
     dependencies: {
-      'scoring:score': ['my_resumes:read', 'my_resumes:upload', 'internal_db:read', 'jd:add_applicants'],
+      'scoring:score': ['jd:read', 'my_resumes:read', 'my_resumes:upload', 'jd:add_applicants'],
       'scoring:invite': ['assessments:invite'],
     },
   },
