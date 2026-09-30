@@ -456,11 +456,18 @@ export default function AIInterviewCandidateResults({ toolbarSlot, refreshSignal
    */
   const openSession = (row: CandidateSessionRow) => {
     try {
-      const navList = pageRows
-        .filter((r) => r._config_id === row._config_id)
-        .map((r) => ({ id: r.id }));
+      /* Every candidate in the current (filtered, sorted) list — across all
+         pages and interviews — each carrying its own interview, so Previous /
+         Next walk the Candidate Results list rather than stopping at the rows
+         of one interview on one page (which read "1 / 1"). */
+      const navList = filteredRows.map((r) => ({ id: r.id, configId: r._config_id }));
       sessionStorage.setItem('aiInterviewResultNavList', JSON.stringify(navList));
     } catch { /* ignore storage failures */ }
+    /* Stamp this page's own entry with the tab first (no navigation), so the
+       browser's Back from the result lands on Candidate Results itself. */
+    try {
+      window.history.replaceState(window.history.state, '', '/recruitment/ai-interviews?tab=candidate-results');
+    } catch { /* ignore */ }
     router.push(
       `/recruitment/ai-interviews/${row._config_id}/results/details?session_id=${row.id}&from=candidate-results`
     );

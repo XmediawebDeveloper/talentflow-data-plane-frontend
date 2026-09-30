@@ -685,12 +685,6 @@ export function EvalReportCombined({
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap">
                 <div className="text-lg font-bold text-gray-900 dark:text-slate-50 leading-tight">AI Interview Evaluation Report</div>
-                <span className={`inline-flex items-center gap-1 text-xs font-bold px-2.5 py-0.5 rounded-full ring-1 ${verdictTone.pill}`}>
-                  {isPartialEvaluation ? 'PARTIAL' : <>{isPassed ? <CheckCircle className="w-3.5 h-3.5" /> : <XCircle className="w-3.5 h-3.5" />}{finalResultLabel}</>}
-                </span>
-              </div>
-              <div className="text-xs text-gray-500 dark:text-slate-400 mt-1">
-                {totalQuestions} question{totalQuestions !== 1 ? 's' : ''} · {totalSkills} skill{totalSkills !== 1 ? 's' : ''} · ID #{evalId}
               </div>
             </div>
           </div>

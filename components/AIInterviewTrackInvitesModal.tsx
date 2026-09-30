@@ -51,6 +51,9 @@ interface AIInterviewTrackInvitesModalProps {
   /** Tracking ONE version (a version's own details page): every row shares
    *  its job and interview version, so their columns and filters are left out. */
   hideVersionDetails?: boolean;
+  /** Opened from a job's own page: the job version is fixed, so its filter is
+   *  dropped and the version shows after the job name in the title instead. */
+  hideJobVersionFilter?: boolean;
   /** Opens a completed candidate's result. When the host can render the result
    *  inline (Job Details does), pass this; the table only offers View Details
    *  on completed rows when it is present. */
@@ -86,6 +89,7 @@ export default function AIInterviewTrackInvitesModal({
   jobVersion: jobVersionProp,
   interviewVersion: interviewVersionProp,
   hideVersionDetails = false,
+  hideJobVersionFilter = false,
   onViewResult,
   embedded = false,
 }: AIInterviewTrackInvitesModalProps) {
@@ -353,10 +357,13 @@ export default function AIInterviewTrackInvitesModal({
                     </>
                   )}
                 </h2>
-                {/* JD ID, then the job title. */}
+                {/* JD ID · job title · job version */}
                 <p className="flex items-center gap-2 text-2xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 min-w-0">
                   {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
                   <span className="truncate">{jdTitle}</span>
+                  {hideJobVersionFilter && jobVersion != null && jobVersion > 0 && (
+                    <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 flex-shrink-0" title="Job version">V{jobVersion}</span>
+                  )}
                 </p>
               </div>
             </div>
@@ -414,11 +421,11 @@ export default function AIInterviewTrackInvitesModal({
           statusOptions={AI_INTERVIEW_INVITE_STATUS_OPTIONS}
           searchPlaceholder="Search by candidate name or email..."
           extraSelects={[
-            ...(hideVersionDetails ? [] : [{
+            ...(hideVersionDetails ? [] : [...(hideJobVersionFilter ? [] : [{
               key: 'job-version', ariaLabel: 'Job Version', anyLabel: 'All Job Versions', value: jobVersionFilter,
               options: jobVersion != null ? [{ value: String(jobVersion), label: `Job V${jobVersion}` }] : [],
               onChange: setJobVersionFilter,
-            },
+            }]),
             {
               key: 'interview-version', ariaLabel: 'Interview Version', anyLabel: 'All Interview Versions', value: versionFilter,
               options: interviewVersion != null ? [{ value: String(interviewVersion), label: `Interview V${interviewVersion}` }] : [],
