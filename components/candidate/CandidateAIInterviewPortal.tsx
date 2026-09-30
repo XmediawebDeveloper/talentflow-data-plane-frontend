@@ -1782,11 +1782,16 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       // the top of the frame — well outside the centered card in every layout
       // — and check it's actually near-white; a still-colored strip means the
       // blank hasn't visually landed yet.
+      // 2026-09-30: the band was 3-6 % of the height, ABOVE the browser's own
+      // "<site> - To exit full screen, press Esc" banner at ~6-13 %, so a
+      // capture taken while that banner was still up sailed through this check
+      // and then failed the vision gate on the browser's own chrome. Widened
+      // to 2-18 %; a collapsed sharing pill is too small to move the mean.
       const looksBlank = (canvas: HTMLCanvasElement): boolean => {
         const ctx = canvas.getContext('2d');
         if (!ctx) return true; // can't verify — don't block the flow on it
-        const sy = Math.round(canvas.height * 0.03), sh = Math.max(1, Math.round(canvas.height * 0.03));
-        const sx = Math.round(canvas.width * 0.1), sw = Math.round(canvas.width * 0.8);
+        const sy = Math.round(canvas.height * 0.02), sh = Math.max(1, Math.round(canvas.height * 0.16));
+        const sx = Math.round(canvas.width * 0.05), sw = Math.round(canvas.width * 0.9);
         let data: Uint8ClampedArray;
         try { data = ctx.getImageData(sx, sy, sw, sh).data; } catch { return true; }
         let sum = 0;
@@ -1796,12 +1801,13 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       };
       const grabFrame = async (): Promise<Blob | null> => {
         let canvas = grabCanvas();
-        // Up to 4 extra retries (~1.4s worst case) waiting for the blank to
+        // Up to 14 extra retries (~5.6s worst case) waiting for the blank to
         // actually land before giving up and using whatever's latest — better
         // than an unbounded wait, but closes the gap the fixed rVFC wait left
-        // open on slower hardware.
-        for (let attempt = 0; canvas && !looksBlank(canvas) && attempt < 4; attempt++) {
-          await new Promise<void>((r) => window.setTimeout(r, 350));
+        // open on slower hardware, and outlasts the browser's ~4s full-screen
+        // banner (see looksBlank).
+        for (let attempt = 0; canvas && !looksBlank(canvas) && attempt < 14; attempt++) {
+          await new Promise<void>((r) => window.setTimeout(r, 400));
           canvas = grabCanvas();
         }
         if (!canvas) return null;

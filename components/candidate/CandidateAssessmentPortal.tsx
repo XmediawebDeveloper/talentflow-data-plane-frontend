@@ -1443,21 +1443,31 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         ctx.drawImage(video, 0, 0, cw, ch);
         return canvas;
       };
+      // Is the top of the frame actually the blanked-white page? The band runs
+      // from 2 % to 18 % of the height (2026-09-30: it used to stop at 6 %,
+      // ABOVE the browser's own "<site> - To exit full screen, press Esc"
+      // banner at ~6-13 %, so the capture went ahead while that banner was
+      // still on screen and the vision gate blocked the candidate for their
+      // own browser's chrome). A collapsed sharing pill is far too small to
+      // move this band's mean, so it still reads blank.
       const looksBlank = (canvas: HTMLCanvasElement) => {
         const ctx = canvas.getContext('2d');
         if (!ctx) return true;
-        const sy = Math.round(ch * 0.03), sh = Math.max(1, Math.round(ch * 0.03));
-        const sx = Math.round(cw * 0.1), sw = Math.round(cw * 0.8);
+        const sy = Math.round(ch * 0.02), sh = Math.max(1, Math.round(ch * 0.16));
+        const sx = Math.round(cw * 0.05), sw = Math.round(cw * 0.9);
         let data: Uint8ClampedArray;
         try { data = ctx.getImageData(sx, sy, sw, sh).data; } catch { return true; }
         let sum = 0;
         for (let i = 0; i < data.length; i += 4) sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
         return data.length > 0 && sum / (data.length / 4) > 235;
       };
-      // Wait (bounded) for the white background to actually land in the capture.
+      // Wait (bounded) for the white background to actually land in the
+      // capture - and, with the widened band above, for the browser's
+      // full-screen banner to auto-hide. It lasts ~4 s, so the ceiling is
+      // ~5.6 s; a screen that never clears is captured anyway and judged.
       let canvas: HTMLCanvasElement | null = null;
-      for (let i = 0; i < 6; i += 1) {
-        await new Promise((r) => setTimeout(r, i === 0 ? 400 : 300));
+      for (let i = 0; i < 14; i += 1) {
+        await new Promise((r) => setTimeout(r, 400));
         canvas = grab();
         if (canvas && looksBlank(canvas)) break;
       }
@@ -1537,7 +1547,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     try {
       await requestEntireScreenShare();
       setScreenShareStopped(false);
-      if (stepRef.current === 'assessment') startScreenRecorder();
+      if (stepRef.current === 'assessment' || stepRef.current === 'hide_share_bar') startScreenRecorder();
       if (!isFullscreen()) { try { await requestFullscreen(); } catch { /* ignore */ } }
     } catch (e: any) {
       console.warn('[AS-ScreenRecording] re-share failed:', e?.name || e);
@@ -1558,9 +1568,15 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     if (cameraRelayVideoRef.current) { cameraRelayVideoRef.current.srcObject = null; cameraRelayVideoRef.current = null; }
   }, []);
 
-  // ── Recorders: start with the assessment screen, final-flush when it ends ──
+  // ── Recorders: start at the hide-share-bar gate, final-flush at the end ──
+  // 2026-09-30: recording used to begin only once the assessment itself
+  // opened, so everything the candidate did on the gate screen — including
+  // every failed vision check and any re-share — was outside both files. The
+  // gate is the first moment BOTH sources exist (the entire-screen share was
+  // just granted, and the camera has been live since the system check), so it
+  // is where the record now starts.
   useEffect(() => {
-    if (step !== 'assessment') return;
+    if (step !== 'hide_share_bar' && step !== 'assessment') return;
     const attemptId = assessmentInfo?.attempt_id || assessmentData?.attempt_id || '';
     try {
       const markerKey = `tf_as_rec_attempt_${token}`;
@@ -1628,8 +1644,10 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   const FEEDBACK_GRACE_MS = 4000;
   // Once the popup's state flips it still takes a moment to paint and for the
   // screen-capture pipeline to pick the new frame up. Stopping immediately cut
-  // the recording just BEFORE the popup was visible; keep going a little.
-  const FEEDBACK_VISIBLE_GRACE_MS = 5000;
+  // the recording just BEFORE the popup was visible; keep going a little — but
+  // only long enough to SHOW the popup. At 5 s (2026-09-28) the candidate was
+  // already typing their feedback into the recording, which nobody needs.
+  const FEEDBACK_VISIBLE_GRACE_MS = 1800;
   const finishRecordings = useCallback(() => {
     void stopRecorders().finally(() => {
       stopScreenShare();
