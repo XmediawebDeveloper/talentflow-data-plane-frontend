@@ -128,40 +128,71 @@ export default function AssessmentsRoute() {
   }, []);
 
   if (isLoading) {
-    // Neutral skeleton mirroring the assessments list (header + job rows)
-    // instead of a bare spinner.
+    // Mirrors the real page's shell (white rounded-2xl card, breadcrumb,
+    // header, 5-card stats row, then list rows) instead of the old bare
+    // gray-background skeleton, which popped into a completely different
+    // frame once <Assessments> actually mounted.
     return (
       <div className="flex-1 overflow-x-clip bg-slate-50">
-        <div className="mx-auto w-full max-w-[1400px] p-4 md:p-8">
-          <div className="mb-6 flex items-center justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <Skeleton className="hidden sm:block h-10 w-10 rounded-lg shrink-0" />
-              <div className="space-y-2">
-                <Skeleton className="h-6 w-56" />
-                <Skeleton className="h-4 w-80 max-w-full" />
-              </div>
-            </div>
-            <Skeleton className="h-10 w-40 rounded-lg" />
-          </div>
-          <div className="space-y-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="rounded-xl border border-gray-100 bg-white p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
-                    <div className="space-y-2">
-                      <Skeleton className="h-4 w-48" />
-                      <Skeleton className="h-3 w-32" />
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Skeleton className="h-6 w-20 rounded-full" />
-                    <Skeleton className="hidden sm:block h-8 w-24 rounded-lg" />
-                    <Skeleton className="h-8 w-8 rounded-lg" />
-                  </div>
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+            <Skeleton className="h-4 w-40 mb-4 md:mb-6" />
+
+            {/* Header */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-5">
+              <div className="flex items-start gap-3">
+                <Skeleton className="hidden sm:block h-9 w-9 rounded-lg shrink-0" />
+                <div className="space-y-2">
+                  <Skeleton className="h-5 w-52" />
+                  <Skeleton className="h-4 w-72 max-w-full" />
                 </div>
               </div>
-            ))}
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+                <Skeleton className="h-9 w-32 rounded-lg" />
+                <Skeleton className="h-9 w-28 rounded-lg" />
+                <Skeleton className="h-9 w-36 rounded-lg" />
+              </div>
+            </div>
+
+            {/* Stats row — Total Jobs / Total Assessments / Active / Draft / Candidates Assessed */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4 mb-4 sm:mb-6">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-gray-100 p-3 sm:p-4 space-y-2">
+                  <Skeleton className="h-8 w-8 rounded-lg" />
+                  <Skeleton className="h-5 w-12" />
+                  <Skeleton className="h-3 w-20" />
+                </div>
+              ))}
+            </div>
+
+            {/* Tab strip */}
+            <div className="mb-4 flex flex-wrap gap-4 sm:gap-6 border-b border-gray-200 pb-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-4 w-20" />
+              ))}
+            </div>
+
+            {/* List rows */}
+            <div className="space-y-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-gray-100 bg-white p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 items-center gap-3">
+                      <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
+                      <div className="space-y-2">
+                        <Skeleton className="h-4 w-48" />
+                        <Skeleton className="h-3 w-32" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Skeleton className="h-6 w-20 rounded-full" />
+                      <Skeleton className="hidden sm:block h-8 w-24 rounded-lg" />
+                      <Skeleton className="h-8 w-8 rounded-lg" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>

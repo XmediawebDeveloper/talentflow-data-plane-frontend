@@ -640,12 +640,6 @@ export default function ResumeUploadModal({ jobTitle, onClose, onSubmit }: Resum
             </div>
             <div className="flex gap-3">
               <button
-                onClick={onClose}
-                className="px-6 py-2.5 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors"
-              >
-                Cancel
-              </button>
-              <button
                 onClick={handleSubmit}
                 disabled={!hasQuota || filesExceedQuota || isCheckingQuota || isCheckingDuplicates || needsResolution || errorFiles.length > 0}
                 className={`px-6 py-2.5 rounded-lg transition-colors ${

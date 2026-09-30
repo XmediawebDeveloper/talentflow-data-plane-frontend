@@ -1177,13 +1177,6 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
 
             <div className="flex justify-end gap-3 px-5 sm:px-6 py-4 border-t border-gray-200 dark:border-slate-700 shrink-0">
               <button
-                onClick={() => setIsCreateModalOpen(false)}
-                className="px-4 py-2.5 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800"
-                disabled={isSaving}
-              >
-                Cancel
-              </button>
-              <button
                 onClick={handleCreateUser}
                 disabled={isSaving}
                 className="px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 flex items-center gap-2"
@@ -1295,13 +1288,6 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
             </div>
 
             <div className="flex justify-end gap-3 px-5 sm:px-6 py-4 border-t border-gray-200 dark:border-slate-700 shrink-0">
-              <button
-                onClick={() => setEditingUser(null)}
-                className="px-4 py-2.5 border border-gray-300 dark:border-slate-700 text-gray-700 dark:text-slate-300 rounded-lg hover:bg-gray-50 dark:hover:bg-slate-800"
-                disabled={isSaving}
-              >
-                Cancel
-              </button>
               <button
                 onClick={handleUpdateUser}
                 disabled={isSaving}
@@ -1420,12 +1406,6 @@ export default function UsersManagement({ currentUser, tenantId }: UsersManageme
                   </span>
                 )}
               </div>
-              <button
-                onClick={() => { setViewingRole(null); setViewingRolePermissions([]); }}
-                className="w-full sm:w-auto px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 transition-colors font-medium text-xs sm:text-sm"
-              >
-                Close
-              </button>
             </div>
           </div>
         </div>

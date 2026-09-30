@@ -1890,9 +1890,6 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
 
             {/* Footer */}
             <div className="px-5 py-4 border-t border-gray-100 flex flex-col sm:flex-row gap-2 justify-center shrink-0">
-              <Button variant="secondary" size="md" onClick={() => setShowQuotaModal(false)}>
-                Cancel
-              </Button>
               <Button
                 variant="primary"
                 size="md"

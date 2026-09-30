@@ -709,16 +709,6 @@ export default function SecurityPage() {
 
                 <div className="flex flex-col sm:flex-row gap-2 sm:gap-3">
                   <Button
-                    variant="secondary"
-                    onClick={() => {
-                      setShowDisable2FADialog(false);
-                      setDisable2FACode('');
-                    }}
-                    className="flex-1 text-sm sm:text-base"
-                  >
-                    Cancel
-                  </Button>
-                  <Button
                     variant="destructive"
                     onClick={confirmDisable2FA}
                     disabled={is2FALoading || disable2FACode.length !== 6}
@@ -914,13 +904,6 @@ export default function SecurityPage() {
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 pt-1 sm:pt-2">
-                  <Button
-                    variant="secondary"
-                    onClick={() => setShowRevokeAllDialog(false)}
-                    className="flex-1 font-medium text-xs sm:text-sm md:text-base"
-                  >
-                    Cancel
-                  </Button>
                   <Button
                     variant="destructive"
                     onClick={confirmRevokeAllOtherSessions}

@@ -32,6 +32,15 @@ export default function AllAssessmentsPage() {
           <main className="flex-1 overflow-x-clip bg-slate-50">
             <div className="mx-auto w-full max-w-[1400px]">
               <div className="p-4 md:p-8 w-full bg-white rounded-2xl my-4 md:my-5 shadow-2xl">
+                {/* Breadcrumb: Dashboard › Assessments › All Assessments */}
+                <div className="mb-4 md:mb-6 flex items-center gap-2">
+                  <Skeleton className="h-3 w-16" />
+                  <Skeleton className="h-3 w-3" />
+                  <Skeleton className="h-3 w-20" />
+                  <Skeleton className="h-3 w-3" />
+                  <Skeleton className="h-3 w-28" />
+                </div>
+
                 {/* Header: icon + title + subtitle */}
                 <div className="flex items-center gap-3 mb-5">
                   <Skeleton className="h-10 w-10 rounded-xl shrink-0" />

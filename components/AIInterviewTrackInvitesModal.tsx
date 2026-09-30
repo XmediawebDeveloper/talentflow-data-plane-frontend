@@ -794,11 +794,6 @@ export default function AIInterviewTrackInvitesModal({
                 Invite More
               </Button>
             )}
-            {!embedded && (
-              <Button variant="secondary" size="sm" onClick={onClose}>
-                Close
-              </Button>
-            )}
           </div>
         </div>
         )}
@@ -901,7 +896,7 @@ export default function AIInterviewTrackInvitesModal({
   if (embedded) return <>{panel}{editModal}</>;
 
   return (
-    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4 md:p-6">
+    <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-4 md:p-6">
       {/* Height is content-driven with a viewport cap, not a fixed dvh: a
           three-invite list on a large monitor used to stretch the dialog the full
           screen with empty space under the rows. The list absorbs the overflow
