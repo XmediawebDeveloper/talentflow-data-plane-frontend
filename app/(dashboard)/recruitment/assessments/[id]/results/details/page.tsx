@@ -28,8 +28,8 @@ function DetailsContent() {
   // cid = human-readable candidate display ID (e.g. CID-05), passed by the results list
   const candidateDisplayId = searchParams.get('cid') || '';
   // Opened from the Assessments list's Candidate Results tab, which spans every
-  // assessment. Only carried across Prev/Next now, so paging keeps the origin —
-  // the trail itself names the assessment either way.
+  // assessment. The breadcrumb then drops the job-role crumb, and Prev/Next
+  // carry the flag so paging keeps that.
   const fromCandidateResults = searchParams.get('from') === 'candidate-results';
   /* The page this result was opened from — an assessment's Results / Invite
      Status / Recent Activity tab, or the standalone results page — named by
@@ -148,18 +148,19 @@ function DetailsContent() {
             onNext={next ? () => router.replace(buildNavUrl(next)) : undefined}
           />
         ) : undefined}
-        // Always the full chain: Dashboard › Assessments › <assessment> ›
-        // <candidate>. The assessment is a real step between the list and this
-        // page, so it stays in the trail no matter which route the recruiter
-        // came in by — including the cross-assessment Candidate Results tab,
-        // where it's the only thing naming which assessment this result is for.
+        // The full chain: Dashboard › Assessments › <assessment> › <candidate>.
+        // Opened from the Assessments list's Candidate Results tab, the job-role
+        // crumb is left out: Dashboard › Assessments › <candidate>. Every other
+        // way in keeps the full chain.
         items={[
           { label: 'Dashboard', href: '/dashboard' },
           { label: 'Assessments', href: '/recruitment/assessments' },
-          {
-            label: returnLabel || assessmentTitle || 'Assessment',
-            href: backHref,
-          },
+          ...(fromCandidateResults
+            ? []
+            : [{
+                label: returnLabel || assessmentTitle || 'Assessment',
+                href: backHref,
+              }]),
           // onClick, not href: the candidate crumb points at the route we're
           // already on, so a link couldn't switch the body back.
           resumeView.viewing

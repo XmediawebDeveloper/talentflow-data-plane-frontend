@@ -20,18 +20,29 @@ const interviewModeOf = (si?: string | null): string | undefined => {
   try { return JSON.parse(si).interview_mode; } catch { return undefined; }
 };
 
-/** True when a list row has an evaluation report to download — scored, or a
- *  partial (terminated) evaluation. Mirrors when the result page's Eval tab
- *  has a report rather than a placeholder. */
+/** True when a session has an evaluation report to download — completed, or
+ *  terminated with whatever (partial) evaluation it got. Needs the FULL
+ *  session: compact list rows can omit ai_evaluation — use canTryReport there. */
 export const hasEvaluationReport = (row: any): boolean => {
   if (!row?.ai_evaluation || row.status === 'in_progress') return false;
-  const evaluation = row.ai_evaluation;
-  if (evaluation.partial === true) return true;
-  return row.status === 'completed';
+  if (row.ai_evaluation.partial === true) return true;
+  return row.status === 'completed' || row.status === 'terminated';
 };
+
+/** List-row gate. Compact rows can lack ai_evaluation (or its `partial`
+ *  flag), so a completed/terminated row is enabled and the full session
+ *  fetched on click decides — see NoReportError. */
+export const canTryReport = (row: any): boolean =>
+  row?.status === 'completed' || row?.status === 'terminated' || hasEvaluationReport(row);
+
+/** Thrown when the full session turns out to have no evaluation yet. */
+export class NoReportError extends Error {
+  constructor() { super('No evaluation report for this session yet'); this.name = 'NoReportError'; }
+}
 
 export async function downloadSessionReport(sessionId: string, save = true) {
   const session: any = await aiInterviewService.get(sessionId);
+  if (!hasEvaluationReport(session)) throw new NoReportError();
   // Session first; the parent config when the session didn't inherit its
   // clusters — the same resolution the result page uses.
   let clusterConfig = parseClusterConfig(session.special_instructions);
@@ -75,13 +86,18 @@ export async function downloadSessionReports(
   zipName: string,
   onProgress?: (done: number, total: number) => void,
 ): Promise<{ downloaded: number; skipped: number; failed: number }> {
-  const withReport = rows.filter(hasEvaluationReport);
+  const withReport = rows.filter(canTryReport);
   const skipped = rows.length - withReport.length;
   if (withReport.length === 0) return { downloaded: 0, skipped, failed: 0 };
 
   if (withReport.length === 1) {
     onProgress?.(0, 1);
-    await downloadSessionReport(withReport[0].id);
+    try {
+      await downloadSessionReport(withReport[0].id);
+    } catch (err) {
+      if (err instanceof NoReportError) return { downloaded: 0, skipped: skipped + 1, failed: 0 };
+      throw err;
+    }
     onProgress?.(1, 1);
     return { downloaded: 1, skipped, failed: 0 };
   }
@@ -90,6 +106,7 @@ export async function downloadSessionReports(
   const zip = new JSZip();
   const used = new Set<string>();
   let failed = 0;
+  let noReport = 0;
   for (let i = 0; i < withReport.length; i += 1) {
     onProgress?.(i, withReport.length);
     try {
@@ -100,15 +117,16 @@ export async function downloadSessionReports(
       used.add(name);
       if (blob) zip.file(name, blob);
     } catch (err) {
+      if (err instanceof NoReportError) { noReport += 1; continue; }
       console.error('[downloadSessionReports] report failed for', withReport[i].id, err);
       failed += 1;
     }
   }
   onProgress?.(withReport.length, withReport.length);
-  const downloaded = withReport.length - failed;
+  const downloaded = withReport.length - failed - noReport;
   if (downloaded > 0) {
     const archive = await zip.generateAsync({ type: 'blob' });
     aiInterviewService.triggerBlobDownload(archive, zipName);
   }
-  return { downloaded, skipped, failed };
+  return { downloaded, skipped: skipped + noReport, failed };
 }

@@ -76,6 +76,10 @@ export interface Job {
   experience_min?: number; // Minimum years of experience
   experience_max?: number; // Maximum years of experience
   applicants?: number;
+  /** Candidates who completed an assessment / AI interview for this job —
+   *  set only by the Job Openings list (see useJobCandidateCounts). */
+  assessed?: number;
+  interviewed?: number;
   description?: string;
   /**
    * The JD's skills as ONE list — historically `must_have_skills`, which is
