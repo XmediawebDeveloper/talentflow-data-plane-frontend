@@ -276,12 +276,6 @@ export default function InviteToAIInterviewFlow({
             </div>
             <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
               <button
-                onClick={closePicker}
-                className="flex-1 sm:flex-none px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
                 onClick={proceedToShare}
                 disabled={!selectedConfig || (!noPresetCandidates && invitees.length === 0)}
                 className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-colors shadow-md shadow-brand-blue/25 ring-1 ring-white/10 disabled:opacity-50 disabled:cursor-not-allowed"

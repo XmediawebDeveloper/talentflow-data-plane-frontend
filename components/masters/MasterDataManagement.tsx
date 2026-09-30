@@ -644,12 +644,6 @@ export default function MasterDataManagement({ type, embedded = false }: MasterD
 
             <div className="flex justify-end gap-2 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-800/50 px-5 py-4 sm:gap-3 shrink-0 rounded-b-3xl">
               <button
-                onClick={closeModal}
-                className="rounded-xl border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-2.5 text-sm font-medium text-gray-700 dark:text-slate-300 transition-all hover:border-gray-300 dark:hover:border-slate-700 hover:bg-gray-50 dark:hover:bg-slate-800"
-              >
-                Cancel
-              </button>
-              <button
                 onClick={handleSubmit}
                 disabled={isSubmitting || !formData.label.trim()}
                 className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-5 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:cursor-not-allowed disabled:opacity-70"

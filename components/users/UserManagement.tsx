@@ -2345,17 +2345,26 @@ export default function UserManagement() {
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 tf-round-edges">
         {isLoading ? (
           /* Neutral skeleton matching the users table columns: User ID, User,
-             Role, Permissions, Status, Created At, Last Login, Actions. */
+             Role, Permissions, Status, Created At, Last Login, Actions.
+             Column count per breakpoint mirrors the real <thead> below: User ID
+             hides below sm, Permissions below md, Created At/Last Login below lg —
+             otherwise the skeleton shows 8 cramped columns on a phone while the
+             real table only ever shows 4. */
           <div className="tf-table-shell">
-            <div className="grid grid-cols-8 gap-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-6 py-4">
-              {['w-16', 'w-12', 'w-12', 'w-24', 'w-14', 'w-20', 'w-20', 'w-16'].map((w, i) => (
-                <Skeleton key={i} className={`h-3 ${w}`} />
-              ))}
+            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-6 py-4">
+              <div className="hidden sm:block"><Skeleton className="h-3 w-16" /></div>
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-3 w-12" />
+              <div className="hidden md:block"><Skeleton className="h-3 w-24" /></div>
+              <Skeleton className="h-3 w-14" />
+              <div className="hidden lg:block"><Skeleton className="h-3 w-20" /></div>
+              <div className="hidden lg:block"><Skeleton className="h-3 w-20" /></div>
+              <Skeleton className="h-3 w-16" />
             </div>
             <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {Array.from({ length: 8 }).map((_, r) => (
-                <div key={r} className="grid grid-cols-8 items-center gap-4 px-6 py-4">
-                  <Skeleton className="h-5 w-16 rounded" />
+                <div key={r} className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 items-center gap-4 px-6 py-4">
+                  <div className="hidden sm:block"><Skeleton className="h-5 w-16 rounded" /></div>
                   <div className="flex items-center gap-2">
                     <Skeleton className="h-8 w-8 rounded-full shrink-0" />
                     <div className="space-y-1.5">
@@ -2364,10 +2373,15 @@ export default function UserManagement() {
                     </div>
                   </div>
                   <Skeleton className="h-5 w-16 rounded-full" />
-                  <Skeleton className="h-4 w-20" />
+                  <div className="hidden md:block">
+                    <div className="flex flex-wrap gap-1">
+                      <Skeleton className="h-5 w-14 rounded" />
+                      <Skeleton className="h-5 w-10 rounded" />
+                    </div>
+                  </div>
                   <Skeleton className="h-5 w-14 rounded-full" />
-                  <Skeleton className="h-4 w-20" />
-                  <Skeleton className="h-4 w-20" />
+                  <div className="hidden lg:block"><Skeleton className="h-4 w-20" /></div>
+                  <div className="hidden lg:block"><Skeleton className="h-4 w-20" /></div>
                   <div className="flex items-center justify-center gap-1">
                     <Skeleton className="h-8 w-8 rounded-lg" />
                     <Skeleton className="h-8 w-8 rounded-lg" />
@@ -2836,13 +2850,6 @@ export default function UserManagement() {
             </div>
 
             <div className="flex flex-col-reverse sm:flex-row justify-end gap-2 sm:gap-3 px-5 sm:px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/50 dark:bg-slate-800/50 shrink-0">
-              <button
-                onClick={resetCreateModal}
-                className="px-4 py-2 sm:py-2.5 border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 rounded-lg hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 text-sm font-medium transition-all"
-                disabled={isSaving}
-              >
-                Cancel
-              </button>
               <button
                 onClick={handleCreateUser}
                 disabled={isSaving || !emailCheckResult.available || isCheckingEmail}
@@ -3408,13 +3415,6 @@ export default function UserManagement() {
               </span>
               <div className="flex gap-2">
                 <button
-                  onClick={resetEditModal}
-                  className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 hover:border-gray-300 hover:bg-gray-50 dark:hover:bg-slate-800 rounded-lg transition-all"
-                  disabled={isSaving}
-                >
-                  Cancel
-                </button>
-                <button
                   onClick={handleUpdateUser}
                   disabled={isSaving}
                   className="px-4 sm:px-5 py-1.5 sm:py-2 bg-brand-blue hover:bg-brand-blue-2 text-white text-xs sm:text-sm font-medium rounded-lg transition-all flex items-center gap-2 disabled:opacity-50 shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
@@ -3697,12 +3697,6 @@ export default function UserManagement() {
                   </span>
                 )}
               </div>
-              <button
-                onClick={() => { setViewingRolePopup(null); setViewingRolePopupPermissions([]); }}
-                className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all font-medium text-xs sm:text-sm shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-              >
-                Close
-              </button>
             </div>
           </div>
         </div>

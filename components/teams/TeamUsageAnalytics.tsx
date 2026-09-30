@@ -708,7 +708,7 @@ export default function TeamUsageAnalytics() {
                 <ChevronDown className="w-3.5 h-3.5 text-gray-500 dark:text-slate-500" />
               </button>
               {showExportMenu && (
-                <div className="absolute right-0 top-full mt-1 w-52 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg z-20 overflow-hidden">
+                <div className="absolute right-0 top-full mt-1 w-52 max-w-[calc(100vw-1.5rem)] bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-lg shadow-lg z-20 overflow-hidden">
                   <button
                     onClick={() => { exportCSV(teams, fromDate, toDate); setShowExportMenu(false); }}
                     className="group w-full text-left px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 flex items-center gap-2"

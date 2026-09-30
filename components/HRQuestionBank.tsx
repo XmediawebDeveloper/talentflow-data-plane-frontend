@@ -570,12 +570,6 @@ export default function HRQuestionBank() {
             {/* Save / Cancel */}
             <div className="flex justify-end gap-3 pt-3 border-t border-gray-100">
               <button
-                onClick={() => { setShowAddForm(false); setEditingId(null); setFormData(EMPTY_QUESTION); }}
-                className="px-4 py-2 text-sm text-gray-600 hover:text-gray-900 border border-gray-200 hover:border-gray-300 rounded-lg transition-colors font-medium"
-              >
-                Cancel
-              </button>
-              <button
                 onClick={handleSave}
                 disabled={saving}
                 className="flex items-center gap-2 px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-sm font-medium disabled:opacity-50 transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10"

@@ -210,8 +210,22 @@ export default function CandidateScoringDetailPage({ resume, jobTitle, jobId, on
     if (!user.permissions) return false;
     return user.permissions[permission as keyof typeof user.permissions] === true;
   };
-  const mayInviteAssessment = hasPermission('canCreateAssessments') && hasPlanFeature('assessment');
+  // Resume Scoring's own `scoring:invite` toggle, not canCreateAssessments
+  // (creating a brand-new assessment is a different action) — same fix
+  // already applied to the Scored Resumes table this page is opened from
+  // (see ScoredResumesTable.tsx's canCreateAssessments), which this page had
+  // missed: previously, disabling Resume Scoring's "Invite" permission had
+  // no effect on this button.
+  const mayInviteAssessment = (isTenantAdmin || hasPermissionCode('scoring:invite')) && hasPlanFeature('assessment');
+  // Same scoring:invite gate as Assessment above — this page lives on the
+  // Resume Scoring surface, so disabling that module's "Invite" permission
+  // should turn off BOTH invite targets reachable from it, not just
+  // Assessment (see ScoredResumesTable.tsx's mayInviteAIInterview for the
+  // matching fix). canInviteAIInterviews (ai_interview:invite) stays
+  // required alongside it, since that is what the AI Interview invite
+  // endpoints actually enforce server-side.
   const mayInviteAIInterview =
+    (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
     hasPermission('canInviteAIInterviews') && hasPlanFeature('ai_interview');
   const canInvite = mayInviteAssessment || mayInviteAIInterview;
 
@@ -1237,68 +1251,77 @@ Best regards`);
                 </Button>
               )}
 
-              {canInvite && (
-                <div className="relative" ref={inviteMenuRef}>
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    onClick={() => setShowInviteMenu(!showInviteMenu)}
-                    disabled={inviteDisabled}
-                    title={inviteDisabled ? 'No published assessment or AI interview for this job yet' : undefined}
-                    aria-haspopup="menu"
-                    aria-expanded={showInviteMenu}
-                    className="whitespace-nowrap"
-                  >
-                    <UserPlus className="w-4 h-4" />
-                    Invite
-                    <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showInviteMenu ? 'rotate-180' : ''}`} />
-                  </Button>
+              {/* Always rendered rather than hidden when canInvite is false —
+                  the trigger stays visible and non-clickable, with a tooltip
+                  naming the reason, matching every other disabled action on
+                  this page (Export, Download Scorecard, etc.) instead of the
+                  button disappearing outright when nobody can use it. */}
+              <div className="relative" ref={inviteMenuRef}>
+                <Button
+                  variant="primary"
+                  size="sm"
+                  onClick={() => canInvite && setShowInviteMenu(!showInviteMenu)}
+                  disabled={inviteDisabled}
+                  title={
+                    inviteDisabled
+                      ? (!canInvite
+                          ? 'You do not have permission to invite candidates'
+                          : 'No published assessment or AI interview for this job yet')
+                      : undefined
+                  }
+                  aria-haspopup="menu"
+                  aria-expanded={showInviteMenu}
+                  className="whitespace-nowrap"
+                >
+                  <UserPlus className="w-4 h-4" />
+                  Invite
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showInviteMenu ? 'rotate-180' : ''}`} />
+                </Button>
 
-                  {showInviteMenu && (
-                    <div
-                      role="menu"
-                      className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-30"
-                    >
-                      {/* Each entry stays visible for anyone permitted to use
-                          it and goes disabled when this JD has nothing to
-                          invite to, so the next step is discoverable and the
-                          tooltip can name what's blocking it. */}
-                      {mayInviteAssessment && (
-                        <button
-                          role="menuitem"
-                          onClick={handleInviteForAssessment}
-                          disabled={!canInviteAssessment}
-                          title={!canInviteAssessment ? 'No published assessment for this job yet' : undefined}
-                          className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                        >
-                          <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
-                            <Mail className="w-4 h-4 text-brand-blue" />
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block text-sm font-medium text-gray-900">Assessment</span>
-                          </span>
-                        </button>
-                      )}
-                      {mayInviteAIInterview && (
-                        <button
-                          role="menuitem"
-                          onClick={handleInviteForAIInterview}
-                          disabled={!canInviteAIInterview}
-                          title={!canInviteAIInterview ? 'No published AI interview for this job yet' : undefined}
-                          className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                        >
-                          <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
-                            <Sparkles className="w-4 h-4 text-brand-cyan" />
-                          </span>
-                          <span className="min-w-0">
-                            <span className="block text-sm font-medium text-gray-900">AI Interview</span>
-                          </span>
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
+                {showInviteMenu && canInvite && (
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-30"
+                  >
+                    {/* Each entry stays visible for anyone permitted to use
+                        it and goes disabled when this JD has nothing to
+                        invite to, so the next step is discoverable and the
+                        tooltip can name what's blocking it. */}
+                    {mayInviteAssessment && (
+                      <button
+                        role="menuitem"
+                        onClick={handleInviteForAssessment}
+                        disabled={!canInviteAssessment}
+                        title={!canInviteAssessment ? 'No published assessment for this job yet' : undefined}
+                        className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                      >
+                        <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-blue/10 flex items-center justify-center flex-shrink-0">
+                          <Mail className="w-4 h-4 text-brand-blue" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-gray-900">Assessment</span>
+                        </span>
+                      </button>
+                    )}
+                    {mayInviteAIInterview && (
+                      <button
+                        role="menuitem"
+                        onClick={handleInviteForAIInterview}
+                        disabled={!canInviteAIInterview}
+                        title={!canInviteAIInterview ? 'No published AI interview for this job yet' : undefined}
+                        className="w-full flex items-start gap-3 px-3 py-2.5 text-left hover:bg-brand-blue/5 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                      >
+                        <span className="mt-0.5 w-8 h-8 rounded-lg bg-brand-cyan/10 flex items-center justify-center flex-shrink-0">
+                          <Sparkles className="w-4 h-4 text-brand-cyan" />
+                        </span>
+                        <span className="min-w-0">
+                          <span className="block text-sm font-medium text-gray-900">AI Interview</span>
+                        </span>
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
 
               <ViewResumeButton onClick={handleViewResume} loading={loadingResumeDetail} />
 
@@ -2908,12 +2931,6 @@ Best regards`);
 
                   <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
                     <Button
-                      variant="secondary"
-                      onClick={closeShareModal}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
                       variant="primary"
                       onClick={handleSendShareEmail}
                       disabled={isSendingEmail || !shareEmail.trim()}
@@ -3041,7 +3058,12 @@ Best regards`);
                 jd_title: jobTitle,
                 jd_version: a.jd_version,
               }))}
-              inviteSource="JD"
+              // This page is the Resume Scoring candidate detail view (opened
+              // from a scored resume), not the JD page — "JD" here was a
+              // copy-paste artifact that mistagged every invite sent from
+              // this page, which meant a backend check keyed on invite_source
+              // would never see these invites as Resume-Scoring-originated.
+              inviteSource="Resume Scoring"
             />
           )}
 
@@ -3303,16 +3325,6 @@ Best regards`);
                         </div>
                       </div>
                     )}
-                  </div>
-
-                  {/* Footer */}
-                  <div className="flex items-center justify-end px-4 sm:px-6 py-3 border-t border-gray-100 bg-slate-50 flex-shrink-0">
-                    <Button
-                      variant="primary"
-                      onClick={closeCompare}
-                    >
-                      Close
-                    </Button>
                   </div>
                 </div>
               </div>

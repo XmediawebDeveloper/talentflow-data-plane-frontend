@@ -10,7 +10,7 @@ interface UploadProcessingNotificationProps {
 export default function UploadProcessingNotification({ totalFiles, onClose }: UploadProcessingNotificationProps) {
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-md overflow-hidden">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-[95vw] sm:max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
         {/* Header with gradient */}
         <div className="bg-gradient-to-r from-green-500 to-green-600 p-8 text-center">
           <div className="w-20 h-20 bg-white rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">

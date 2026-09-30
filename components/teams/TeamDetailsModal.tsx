@@ -135,14 +135,6 @@ export default function TeamDetailsModal({ isOpen, onClose, team }: TeamDetailsM
           </div>
         </div>
 
-        <div className="border-t border-gray-100 dark:border-slate-700/60 bg-white/95 dark:bg-slate-900 px-6 py-4 backdrop-blur-sm shrink-0 rounded-b-3xl">
-          <button
-            onClick={onClose}
-            className="w-full rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/20 transition-all hover:-translate-y-0.5 hover:shadow-lg"
-          >
-            Close
-          </button>
-        </div>
       </div>
     </div>
   );

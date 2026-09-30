@@ -81,15 +81,6 @@ export default function ErrorModal({ isOpen, onClose, error }: ErrorModalProps) 
           )}
         </div>
 
-        {/* Footer */}
-        <div className="flex-shrink-0 flex items-center justify-end gap-3 px-4 sm:px-6 py-3 border-t border-gray-100 bg-slate-50 rounded-b-xl">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-colors"
-          >
-            Close
-          </button>
-        </div>
       </div>
     </div>
   );

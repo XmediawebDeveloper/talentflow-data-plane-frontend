@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle, Info, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Info, XCircle, X } from 'lucide-react';
 import { ReactNode } from 'react';
 
 interface ConfirmationDialogProps {
@@ -69,7 +69,14 @@ export function ConfirmationDialog({
 
       {/* Dialog */}
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4 pointer-events-none">
-        <div className="bg-white rounded-xl shadow-2xl border border-gray-200 max-w-[95vw] sm:max-w-md w-full pointer-events-auto animate-in zoom-in-95 duration-200 overflow-hidden">
+        <div className="relative bg-white rounded-xl shadow-2xl border border-gray-200 max-w-[95vw] sm:max-w-md w-full pointer-events-auto animate-in zoom-in-95 duration-200 overflow-hidden">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 p-1 text-gray-400 hover:text-gray-600 rounded-lg transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
           <div className="p-6">
             {/* Icon */}
             <div className={`w-12 h-12 ${config.iconBg} rounded-full flex items-center justify-center mx-auto mb-4`}>
@@ -87,12 +94,6 @@ export function ConfirmationDialog({
 
             {/* Actions */}
             <div className="flex gap-3">
-              <button
-                onClick={onClose}
-                className="flex-1 px-4 py-2.5 border border-gray-200 bg-white rounded-lg hover:bg-gray-50 hover:border-brand-blue/30 transition-colors text-sm font-medium text-gray-700"
-              >
-                {cancelText}
-              </button>
               <button
                 onClick={() => {
                   onConfirm();

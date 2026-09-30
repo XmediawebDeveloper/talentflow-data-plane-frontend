@@ -92,13 +92,6 @@ export default function ConfirmationDialog({
         {/* Footer */}
         <div className="px-6 sm:px-8 py-4 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50/60 dark:bg-slate-950 flex flex-col-reverse sm:flex-row gap-3 shrink-0">
           <button
-            onClick={onCancel}
-            disabled={isLoading}
-            className="flex-1 px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {cancelText}
-          </button>
-          <button
             onClick={onConfirm}
             disabled={isLoading}
             className={`flex-1 px-4 py-2 text-sm text-white rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${confirmButton}`}

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, X, Eye, BarChart3, Calendar, Mail, Phone, Clock, CheckCircle, XCircle, FileText, Archive, Loader2, Trash2, Award, Play } from 'lucide-react';
+import { ArrowLeft, Search, SlidersHorizontal, Download, FileDown, CheckSquare, Square, X, Eye, BarChart3, Mail, Phone, Clock, CheckCircle, XCircle, FileText, Archive, Loader2, Trash2, Award, Play } from 'lucide-react';
 import React from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService } from '@/lib/services/assessmentService';
@@ -17,7 +17,9 @@ import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
 import { formatScore } from '@/lib/utils/score';
 
 // AS-24: localStorage key for column preferences (v2 with new columns)
-const COLUMN_PREFERENCES_KEY = 'assessment_results_jd_column_preferences_v2';
+// v3: Result Status split into Score + Result, Completed became Status —
+// a new key so saved v2 layouts don't hide the new columns.
+const COLUMN_PREFERENCES_KEY = 'assessment_results_jd_column_preferences_v3';
 
 interface AssessmentResult {
   id: string;
@@ -98,7 +100,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   const [selectedResults, setSelectedResults] = useState<string[]>([]);
 
   // Filters (inline dropdowns matching AssessmentResults.tsx)
-  const [statusFilter, setStatusFilter] = useState<'all' | 'Completed' | 'In Progress' | 'Terminated' | 'Pending'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Complete' | 'In Progress' | 'Terminated' | 'Pending'>('all');
   const [filterPassFail, setFilterPassFail] = useState<'all' | 'Pass' | 'Fail'>('all');
   const [roundFilters, setRoundFilters] = useState<{
     technical?: 'all' | '50-70' | '70-90' | '90+';
@@ -123,12 +125,11 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
     ...(hasTechnicalRound ? [{ id: 'techScore', label: 'Tech Score', enabled: true }] : []),
     ...(hasCodingRound ? [{ id: 'codingScore', label: 'Coding Score', enabled: true }] : []),
     { id: 'inviteSource', label: 'Invite Source', enabled: true },
-    { id: 'status', label: 'Result Status', enabled: true },
+    { id: 'scorePercentage', label: 'Score', enabled: true },
+    { id: 'passFail', label: 'Result', enabled: true },
     { id: 'timeline', label: 'Timeline', enabled: true },
-    { id: 'completed', label: 'Completed', enabled: true },
+    { id: 'status', label: 'Status', enabled: true },
     { id: 'duration', label: 'Duration', enabled: true },
-    { id: 'scorePercentage', label: 'Score %', enabled: false },
-    { id: 'passFail', label: 'Result', enabled: false },
     { id: 'invitedBy', label: 'Invited By', enabled: false },
     { id: 'invitedDate', label: 'Invited Date', enabled: false },
   ];
@@ -193,26 +194,26 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
     // candidate finished — display Completed even while scoring is
     // still running. (The Tech/Coding score cells gate on scoring_status
     // separately and show '—' until scoring is done.)
-    if (result.status === 'completed' || result.completed_at) return 'Completed';
+    if (result.status === 'completed' || result.completed_at) return 'Complete';
     // Terminal — checked before started_at, which a terminated attempt also
     // carries and which used to make it read "In Progress" forever.
     if (result.status === 'Terminated' || result.status === 'terminated') return 'Terminated';
     if (result.status === 'in_progress' || result.started_at) return 'In Progress';
     if (result.status === 'pending') return 'Pending';
-    if (result.completedDate && result.completedDate !== 'In Progress' && result.completedDate !== 'Not started') return 'Completed';
+    if (result.completedDate && result.completedDate !== 'In Progress' && result.completedDate !== 'Not started') return 'Complete';
     if (result.completedDate === 'In Progress') return 'In Progress';
     return 'Pending';
   };
 
   const canDownloadResultPdf = (result: AssessmentResult): boolean => {
-    return getResultStatus(result) === 'Completed' && result.scoring_status === 'completed';
+    return getResultStatus(result) === 'Complete' && result.scoring_status === 'completed';
   };
 
   // Helper: status badge colors
   // Canonical status → Badge variant (shared mapping so statuses don't drift).
   const getStatusVariant = (status: string): 'success' | 'info' | 'warning' | 'muted' | 'destructive' => {
     switch (status) {
-      case 'Completed': return 'success';
+      case 'Complete': return 'success';
       case 'In Progress': return 'info';
       case 'Pending': return 'warning';
       case 'Failed':
@@ -613,7 +614,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     className="fixed inset-0 z-10"
                     onClick={() => setShowColumnSelector(false)}
                   ></div>
-                  <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-20 max-h-96 overflow-y-auto">
+                  <div className="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-20 max-h-96 overflow-y-auto">
                     <div className="px-4 py-2 border-b border-gray-100">
                       <div className="text-sm text-gray-900">Select Columns</div>
                       <div className="text-xs text-gray-500 mt-0.5">
@@ -700,11 +701,11 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Terminated' | 'Pending')}
+              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'Complete' | 'In Progress' | 'Terminated' | 'Pending')}
               className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
             >
               <option value="all">All</option>
-              <option value="Completed">Completed</option>
+              <option value="Complete">Complete</option>
               <option value="In Progress">In Progress</option>
               <option value="Terminated">Terminated</option>
               <option value="Pending">Pending</option>
@@ -1015,16 +1016,6 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                             </td>
                           );
                         }
-                        if (col.id === 'completed') {
-                          return (
-                            <td key={col.id} className="py-3 px-4">
-                              <div className="flex items-center gap-1.5 text-sm text-gray-600">
-                                <Calendar className="w-3.5 h-3.5" />
-                                {result.completedDate}
-                              </div>
-                            </td>
-                          );
-                        }
                         if (col.id === 'duration') {
                           return (
                             <td key={col.id} className="py-3 px-4 text-center">
@@ -1187,7 +1178,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
           ) : (
             paginatedResults.map((result) => {
               const status = getResultStatus(result);
-              const scoringDone = status === 'Completed' && result.scoring_status === 'completed';
+              const scoringDone = status === 'Complete' && result.scoring_status === 'completed';
               const openDetail = () => {
                 if (status === 'Pending') return;
                 if (onViewResultDetail) { onViewResultDetail(result, jobTitle); return; }
@@ -1367,12 +1358,6 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                         </div>
                       );
                     })()}
-                    {enabledColumns.find(c => c.id === 'completed') && (
-                      <div className="flex items-center gap-1.5 text-xs text-gray-600">
-                        <Calendar className="w-3 h-3" />
-                        {result.completedDate}
-                      </div>
-                    )}
                     {enabledColumns.find(c => c.id === 'duration') && (
                       <div className="flex items-center gap-1.5 text-xs text-gray-600">
                         <Clock className="w-3 h-3" />
@@ -1543,16 +1528,6 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                 </div>
 
                 <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setShowExportModal(false);
-                      setExportStep('format');
-                    }}
-                  >
-                    Cancel
-                  </Button>
                 </div>
               </>
             )}
@@ -1653,16 +1628,6 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
                     icon={<ArrowLeft className="w-4 h-4" />}
                   >
                     Back
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setShowExportModal(false);
-                      setExportStep('format');
-                    }}
-                  >
-                    Cancel
                   </Button>
                 </div>
               </>

@@ -548,7 +548,9 @@ export default function JobOpeningsPage() {
                             <MoreVertical className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-gray-500" />
                           </button>
                           {activeDropdown === job.id && (
-                            <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-10">
+                            <>
+                              <div className="fixed inset-0 z-10" onClick={() => setActiveDropdown(null)} />
+                              <div className="absolute right-0 top-full mt-1 w-44 max-w-[calc(100vw-1.5rem)] bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-20">
                               {/* View Applicants */}
                               <button
                                 onClick={() => { router.push(`/recruitment/job-details?id=${job.id}&tab=applicants`); setActiveDropdown(null); }}
@@ -627,7 +629,8 @@ export default function JobOpeningsPage() {
                                   Archive Job
                                 </button>
                               )}
-                            </div>
+                              </div>
+                            </>
                           )}
                         </div>
                       </div>
@@ -721,12 +724,6 @@ export default function JobOpeningsPage() {
             {/* Footer */}
             <div className="px-5 sm:px-6 py-4 border-t border-gray-200 flex gap-3 justify-center shrink-0">
               <Button
-                variant="secondary"
-                onClick={() => setShowQuotaModal(false)}
-              >
-                Cancel
-              </Button>
-              <Button
                 variant="primary"
                 onClick={() => {
                   setShowQuotaModal(false);
@@ -798,12 +795,6 @@ export default function JobOpeningsPage() {
 
             {/* Footer */}
             <div className="px-5 sm:px-6 py-4 border-t border-gray-200 flex gap-3 justify-center shrink-0">
-              <Button
-                variant="secondary"
-                onClick={() => setShowInsufficientUnitsModal(false)}
-              >
-                Cancel
-              </Button>
               <Button
                 variant="primary"
                 onClick={() => {

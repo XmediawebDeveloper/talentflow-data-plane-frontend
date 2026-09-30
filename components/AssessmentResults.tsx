@@ -1,4 +1,4 @@
-import { ArrowLeft, User, Clock, Award, XCircle, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, ArrowUpDown, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye } from 'lucide-react';
+import { ArrowLeft, User, Clock, Award, XCircle, ChevronUp, FileText, TrendingUp, Briefcase, AlertCircle, Info, Filter, Layers, ArrowUpDown, Loader2, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService, jdService } from '@/lib/services';
@@ -276,11 +276,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
        their result stands, their scores and timeline, then the job / version
        detail and completion columns. */
     const baseColumns: ColumnConfig[] = [
+      /* Email is no longer a column of its own — it sits under the candidate
+         name in the identity cell. It is still EXPORTED (see
+         downloadScopedExport), which is why it is not simply gone. */
       { id: 'candidate', label: 'Candidate', enabled: true },
-      { id: 'email', label: 'Email', enabled: true },
-      { id: 'phone', label: 'Phone', enabled: true },
-      { id: 'inviteSource', label: 'Invite Source', enabled: true },
-      { id: 'status', label: 'Result Status', enabled: true },
+      { id: 'timeline', label: 'Timeline', enabled: true },
+      { id: 'status', label: 'Status', enabled: true },
     ];
 
     // Add score columns only if those rounds are enabled for this assessment
@@ -292,19 +293,19 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     }
 
     baseColumns.push(
-      { id: 'timeline', label: 'Timeline', enabled: true },
+      { id: 'duration', label: 'Duration', enabled: true },
+      { id: 'inviteSource', label: 'Invite Source', enabled: true },
+      { id: 'phone', label: 'Phone', enabled: true },
       { id: 'cid', label: 'CID', enabled: true },
       { id: 'jdId', label: 'JD ID', enabled: true },
-      { id: 'jdTitle', label: 'JD Title', enabled: true },
+      { id: 'jdTitle', label: 'Job Title', enabled: true },
       { id: 'jobVersion', label: 'Job Version', enabled: true },
       /* Beside the job version, in the order the two read as a pair: which
          version of the JOB the assessment belongs to, then which version of the
          ASSESSMENT the candidate sat. A column added here is enabled for
          everyone, including recruiters with saved preferences — the merge below
          only carries over the `enabled` flag of ids a saved set already had. */
-      { id: 'assessmentVersion', label: 'Assessment Version', enabled: true },
-      { id: 'completed', label: 'Completed', enabled: true },
-      { id: 'duration', label: 'Duration', enabled: true }
+      { id: 'assessmentVersion', label: 'Assessment Version', enabled: true }
     );
 
     return baseColumns;
@@ -1335,7 +1336,15 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     baseFilters: ExportFilters,
     fileLabel: string,
   ) => {
-    const enabledColumnIds = columns.filter(col => col.enabled).map(col => col.id);
+    /* The table no longer has an Email or a Completed COLUMN (email moved
+       under the candidate name; the completion time is in the Timeline), but
+       both are still wanted in an exported file — so they ride along
+       regardless of the picker (2026-09-30). */
+    const enabledColumnIds = [
+      ...columns.filter(col => col.enabled).map(col => col.id),
+      'email',
+      'completed',
+    ];
     const sorting = { sort_by: sortField, sort_order: sortDirection };
     console.log('[EXPORT] Exporting columns:', enabledColumnIds, 'from assessments:', [...groups.keys()]);
     const extension = selectedFormat === 'csv' ? 'csv' : 'xlsx';
@@ -2348,7 +2357,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   </th>
                   {isColumnEnabled('candidate') && (
                     <th
-                      className={`w-48 text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
+                      className={`w-64 text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
                       onClick={() => handleSort('name')}
                     >
                       <div className="flex items-center gap-1">
@@ -2357,24 +2366,21 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       </div>
                     </th>
                   )}
-                  {isColumnEnabled('email') && (
-                    <th className={`w-64 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
+                  {isColumnEnabled('timeline') && (
+                    /* Sorts by date. The Completed column used to own that
+                       control and has been removed; Timeline is where those
+                       dates live now, and `date` is still the default sort, so
+                       without this there was no way back to it (2026-09-30). */
+                    <th
+                      className={`w-96 text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
+                      onClick={() => handleSort('date')}
+                    >
                       <div className="flex items-center gap-1">
-                        <Mail className="w-3 h-3" />
-                        Email
+                        <Clock className="w-3 h-3" />
+                        Timeline
+                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'date' ? 'text-brand-blue' : 'text-gray-400'}`} />
                       </div>
                     </th>
-                  )}
-                  {isColumnEnabled('phone') && (
-                    <th className={`w-36 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
-                      <div className="flex items-center gap-1">
-                        <Phone className="w-3 h-3" />
-                        Phone
-                      </div>
-                    </th>
-                  )}
-                  {isColumnEnabled('inviteSource') && (
-                    <th className={`w-36 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Invite Source</th>
                   )}
                   {isColumnEnabled('status') && (
                     <th
@@ -2382,7 +2388,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       onClick={() => handleSort('status')}
                     >
                       <div className="flex items-center justify-center gap-1">
-                        Result Status
+                        Status
                         <ArrowUpDown className={`w-3 h-3 ${sortField === 'status' ? 'text-brand-blue' : 'text-gray-400'}`} />
                       </div>
                     </th>
@@ -2409,11 +2415,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                       </div>
                     </th>
                   )}
-                  {isColumnEnabled('timeline') && (
-                    <th className={`w-96 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
+                  {isColumnEnabled('duration') && (
+                    <th className={`w-28 text-center px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Duration</th>
+                  )}
+                  {isColumnEnabled('inviteSource') && (
+                    <th className={`w-36 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Invite Source</th>
+                  )}
+                  {isColumnEnabled('phone') && (
+                    <th className={`w-36 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
                       <div className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" />
-                        Timeline
+                        <Phone className="w-3 h-3" />
+                        Phone
                       </div>
                     </th>
                   )}
@@ -2427,7 +2439,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     <th className={`w-56 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>
                       <div className="flex items-center gap-1">
                         <Briefcase className="w-3 h-3" />
-                        JD Title
+                        Job Title
                       </div>
                     </th>
                   )}
@@ -2442,20 +2454,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                        column instead of wrapping inside it. 160px holds
                        "Assessment Version" at text-xs with the px-4 gutters. */
                     <th className={`w-40 text-left px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Assessment Version</th>
-                  )}
-                  {isColumnEnabled('completed') && (
-                    <th
-                      className={`w-32 text-left px-4 py-3 text-xs text-gray-600 cursor-pointer hover:bg-brand-blue/5 ${stickyHeaderClass}`}
-                      onClick={() => handleSort('date')}
-                    >
-                      <div className="flex items-center gap-1">
-                        Completed
-                        <ArrowUpDown className={`w-3 h-3 ${sortField === 'date' ? 'text-brand-blue' : 'text-gray-400'}`} />
-                      </div>
-                    </th>
-                  )}
-                  {isColumnEnabled('duration') && (
-                    <th className={`w-28 text-center px-4 py-3 text-xs text-gray-600 ${stickyHeaderClass}`}>Duration</th>
                   )}
                   <th className={`w-32 text-center px-4 py-3 text-xs text-gray-600 tf-sticky-col ${stickyHeaderClass}`}>Actions</th>
                 </tr>
@@ -2516,23 +2514,36 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                             <div className="w-8 h-8 rounded-full bg-brand-blue ring-1 ring-white/10 shadow-sm shadow-brand-blue/25 flex shrink-0 items-center justify-center text-white text-xs">
                               {(candidate.name || 'U').split(' ').map(n => n[0]).join('').slice(0, 2)}
                             </div>
-                            <div className="min-w-0 truncate text-sm text-gray-900 font-medium" title={candidate.name || 'Unknown'}>{candidate.name || 'Unknown'}</div>
+                            {/* Name over email, one identity cell — the same
+                                shape the invite tracker uses, which is what
+                                let the separate Email column go. */}
+                            <div className="min-w-0">
+                              <div className="truncate text-sm text-gray-900 font-medium" title={candidate.name || 'Unknown'}>{candidate.name || 'Unknown'}</div>
+                              <div className="truncate text-xs text-gray-500" title={candidate.email || ''}>{candidate.email || '-'}</div>
+                            </div>
                           </div>
                         </td>
                       )}
-                      {isColumnEnabled('email') && (
-                        <td className="px-4 py-4">
-                          <div className="truncate text-sm text-gray-600" title={candidate.email || '-'}>{candidate.email || '-'}</div>
-                        </td>
-                      )}
-                      {isColumnEnabled('phone') && (
-                        <td className="px-4 py-4">
-                          <div className="truncate text-sm text-gray-600" title={candidate.phone || '-'}>{candidate.phone || '-'}</div>
-                        </td>
-                      )}
-                      {isColumnEnabled('inviteSource') && (
-                        <td className="px-4 py-4 text-sm text-gray-700 whitespace-nowrap">
-                          <InviteSourceValue inv={{ invite_source: candidate.inviteSource }} iconClassName="w-3.5 h-3.5" />
+                      {isColumnEnabled('timeline') && (
+                        <td className="px-4 py-4 overflow-hidden text-xs text-gray-500">
+                          {/* One event per line, in chronological order — the events
+                              read as a timeline rather than a single run-on row. */}
+                          <div className="flex min-w-0 flex-col gap-1 overflow-hidden" title={getTimelineSummary(candidate)}>
+                            {/* Same trail as Track Invites (Invited / System Check /
+                                Started / Completed …), from the shared builder. */}
+                            {timelineEvents(candidate.timelineSource).map(({ label, at, Icon, tone }, i) => (
+                              <div key={`${label}-${i}`} className="flex min-w-0 items-center gap-2">
+                                <Icon className={`w-3 h-3 shrink-0 ${tone}`} />
+                                <span className="truncate">{label}: {formatTimelineDate(at)}</span>
+                              </div>
+                            ))}
+                            {timelineEvents(candidate.timelineSource).length === 0 && (
+                              <div className="flex min-w-0 items-center gap-2">
+                                <Clock className="w-3 h-3 shrink-0 text-gray-400" />
+                                <span className="truncate">-</span>
+                              </div>
+                            )}
+                          </div>
                         </td>
                       )}
                       {isColumnEnabled('status') && (
@@ -2575,26 +2586,22 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           </div>
                         </td>
                       )}
-                      {isColumnEnabled('timeline') && (
-                        <td className="px-4 py-4 overflow-hidden text-xs text-gray-500">
-                          {/* One event per line, in chronological order — the events
-                              read as a timeline rather than a single run-on row. */}
-                          <div className="flex min-w-0 flex-col gap-1 overflow-hidden" title={getTimelineSummary(candidate)}>
-                            {/* Same trail as Track Invites (Invited / System Check /
-                                Started / Completed …), from the shared builder. */}
-                            {timelineEvents(candidate.timelineSource).map(({ label, at, Icon, tone }, i) => (
-                              <div key={`${label}-${i}`} className="flex min-w-0 items-center gap-2">
-                                <Icon className={`w-3 h-3 shrink-0 ${tone}`} />
-                                <span className="truncate">{label}: {formatTimelineDate(at)}</span>
-                              </div>
-                            ))}
-                            {timelineEvents(candidate.timelineSource).length === 0 && (
-                              <div className="flex min-w-0 items-center gap-2">
-                                <Clock className="w-3 h-3 shrink-0 text-gray-400" />
-                                <span className="truncate">-</span>
-                              </div>
-                            )}
+                      {isColumnEnabled('duration') && (
+                        <td className="px-4 py-4 text-center">
+                          <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+                            <Clock className="w-4 h-4" />
+                            {candidate.duration}
                           </div>
+                        </td>
+                      )}
+                      {isColumnEnabled('inviteSource') && (
+                        <td className="px-4 py-4 text-sm text-gray-700 whitespace-nowrap">
+                          <InviteSourceValue inv={{ invite_source: candidate.inviteSource }} iconClassName="w-3.5 h-3.5" />
+                        </td>
+                      )}
+                      {isColumnEnabled('phone') && (
+                        <td className="px-4 py-4">
+                          <div className="truncate text-sm text-gray-600" title={candidate.phone || '-'}>{candidate.phone || '-'}</div>
                         </td>
                       )}
                       {isColumnEnabled('cid') && (
@@ -2651,22 +2658,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                           ) : (
                             <span className="text-sm text-gray-400">-</span>
                           )}
-                        </td>
-                      )}
-                      {isColumnEnabled('completed') && (
-                        <td className="px-4 py-4">
-                          <div className="flex items-center gap-2 text-sm text-gray-600">
-                            <Calendar className="w-4 h-4" />
-                            {candidate.completedDate}
-                          </div>
-                        </td>
-                      )}
-                      {isColumnEnabled('duration') && (
-                        <td className="px-4 py-4 text-center">
-                          <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
-                            <Clock className="w-4 h-4" />
-                            {candidate.duration}
-                          </div>
                         </td>
                       )}
                       <td className="px-2 sm:px-4 py-4 tf-sticky-col" onClick={(e) => e.stopPropagation()}>
@@ -2784,15 +2775,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 </div>
 
                 <div className="flex items-center justify-end gap-3 p-4 sm:p-5 border-t border-gray-100">
-                  <button
-                    onClick={() => {
-                      setShowExportModal(false);
-                      setExportStep('format');
-                    }}
-                    className="px-3 sm:px-4 py-2 text-xs sm:text-sm border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-md transition-colors"
-                  >
-                    Cancel
-                  </button>
                 </div>
               </>
             )}
@@ -2911,16 +2893,6 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     icon={<ArrowLeft className="w-4 h-4" />}
                   >
                     Back
-                  </Button>
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => {
-                      setShowExportModal(false);
-                      setExportStep('format');
-                    }}
-                  >
-                    Cancel
                   </Button>
                 </div>
               </>

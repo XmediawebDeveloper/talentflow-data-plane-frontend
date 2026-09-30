@@ -24,7 +24,7 @@ export default function FloatingHelpButton({ onNavigateToSupport }: FloatingHelp
             />
             
             {/* Menu Options */}
-            <div className="absolute bottom-16 right-0 bg-white rounded-lg shadow-xl border border-gray-200 py-2 w-56 z-50">
+            <div className="absolute bottom-16 right-0 bg-white rounded-lg shadow-xl border border-gray-200 py-2 w-56 max-w-[calc(100vw-3rem)] max-h-[70dvh] overflow-y-auto z-50">
               <button
                 onClick={() => {
                   setShowMenu(false);

@@ -35,8 +35,8 @@
  * floor to 88dvh keeps it under every cap below.
  */
 export const TRACKER_DIALOG_PANEL_CLASS =
-  'bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl shadow-brand-blue/10 '
-  + 'sm:border sm:border-gray-100 dark:sm:border-slate-700/60 sm:ring-1 sm:ring-black/[0.02] dark:sm:ring-white/[0.02] '
+  'bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 '
+  + 'border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] '
   + 'w-full sm:max-w-2xl md:max-w-4xl lg:max-w-5xl xl:max-w-6xl '
   + 'min-h-[min(560px,88dvh)] max-h-[92dvh] sm:max-h-[calc(100dvh-2rem)] md:max-h-[calc(100dvh-3rem)] '
   + 'overflow-hidden flex flex-col';

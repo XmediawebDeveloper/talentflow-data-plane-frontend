@@ -350,16 +350,6 @@ export default function VersionCompareModal({ older, newer, onClose, title, subt
           )}
           </div>
         </div>
-
-        {/* Footer */}
-        <div className="flex items-center justify-end px-6 py-3 border-t border-gray-100 bg-slate-50 flex-shrink-0">
-          <button
-            onClick={onClose}
-            className="px-5 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10"
-          >
-            Close
-          </button>
-        </div>
       </div>
     </div>
   );

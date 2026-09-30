@@ -151,14 +151,6 @@ export default function ArchiveJobModal({
 
         <div className="px-5 sm:px-8 py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col-reverse sm:flex-row sm:justify-end gap-3 shrink-0">
           <Button
-            variant="secondary"
-            onClick={onCancel}
-            disabled={isLoading}
-            className="px-6"
-          >
-            Cancel
-          </Button>
-          <Button
             variant="primary"
             onClick={onConfirm}
             disabled={isLoading}

@@ -15,7 +15,6 @@ import ResumeTextPreviewModal from './ResumeTextPreviewModal';
 import {
   AlertDialog,
   AlertDialogAction,
-  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
@@ -1328,12 +1327,6 @@ export default function SelectSourceModal({
             </div>
             <div className="flex items-center gap-2 sm:gap-3">
               <button
-                onClick={onClose}
-                className="px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors font-medium"
-              >
-                Cancel
-              </button>
-              <button
                 onClick={handleSubmitForScoring}
                 disabled={(() => {
                   if (!canRunScoring) return true;
@@ -1514,7 +1507,6 @@ export default function SelectSourceModal({
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="border-t border-gray-100 pt-4">
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDeleteResume}
               className="gap-2 bg-red-600 text-white hover:bg-red-700"

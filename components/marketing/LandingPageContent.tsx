@@ -716,10 +716,10 @@ export function LandingPageContent() {
           onClick={() => setDemoModalOpen(false)}
         >
           <div
-            className="relative w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-mkt-navy-surface text-white shadow-2xl"
+            className="relative flex w-full max-w-3xl max-h-[calc(100dvh-1.5rem)] sm:max-h-[calc(100dvh-3rem)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-mkt-navy-surface text-white shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
+            <div className="flex shrink-0 items-center justify-between gap-3 border-b border-white/10 px-5 py-4">
               <div>
                 <p className="text-2xs font-semibold uppercase tracking-[0.18em] text-white/60">
                   Product demo
@@ -738,7 +738,7 @@ export function LandingPageContent() {
               </button>
             </div>
 
-            <div className="px-5 py-6 sm:px-8 sm:py-8">
+            <div className="overflow-y-auto px-5 py-6 sm:px-8 sm:py-8">
               <p className="text-sm text-white/70">
                 Follow one role from bulk upload to a ranked shortlist and a booked
                 interview.

@@ -170,7 +170,9 @@ export default function SearchFilterBar({
             </button>
 
             {showSort && (
-              <div className="absolute right-0 mt-2 w-56 bg-popover text-popover-foreground rounded-lg shadow-2xl border border-border py-1.5 z-20">
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setShowSort(false)} />
+                <div className="absolute right-0 mt-2 w-56 max-w-[calc(100vw-1.5rem)] max-h-[70dvh] overflow-y-auto bg-popover text-popover-foreground rounded-lg shadow-2xl border border-border py-1.5 z-20">
                 {[
                   { value: 'latest', label: 'Latest Upload' },
                   { value: 'lastUpdated', label: 'Recently Updated' },
@@ -193,7 +195,8 @@ export default function SearchFilterBar({
                     {option.label}
                   </button>
                 ))}
-              </div>
+                </div>
+              </>
             )}
           </div>
         </div>

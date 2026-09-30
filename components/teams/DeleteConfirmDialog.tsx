@@ -8,7 +8,6 @@ import {
   AlertDialogTitle,
   AlertDialogDescription,
   AlertDialogFooter,
-  AlertDialogCancel,
   AlertDialogAction,
 } from '@/components/ui/alert-dialog';
 
@@ -45,7 +44,6 @@ export default function DeleteConfirmDialog({
           </AlertDialogDescription>
         </div>
         <AlertDialogFooter className="shrink-0">
-          <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
           <AlertDialogAction
             onClick={onConfirm}
             disabled={isDeleting}

@@ -34,6 +34,37 @@ const getPermissionDependencies = (code: string): string[] => {
   return [];
 };
 
+/** The reverse of getPermissionDependencies: every action code that declares
+ *  `code` as one of ITS dependencies. Used to block unchecking a permission
+ *  that something else currently selected still relies on — mirrors
+ *  getBlockingPermissions in components/users/UserManagement.tsx, so the
+ *  per-role and per-user permission editors enforce the same rule the same
+ *  way instead of one silently allowing an inconsistent combination. */
+const getPermissionsDependingOn = (code: string): string[] => {
+  const dependents: string[] = [];
+  CUSTOM_PERMISSION_CATEGORIES.forEach((category) => {
+    if (!category.dependencies) return;
+    Object.entries(category.dependencies).forEach(([action, deps]) => {
+      if (deps.includes(code)) dependents.push(action);
+    });
+  });
+  return dependents;
+};
+
+const getPermissionDisplayName = (code: string): string => {
+  for (const category of CUSTOM_PERMISSION_CATEGORIES) {
+    if (category.viewCode === code) return category.name;
+    const action = category.actions?.find((a) => a.code === code);
+    if (action) return action.label;
+    for (const sub of category.subCategories || []) {
+      if (sub.viewCode === code) return `View ${sub.name}`;
+      const subAction = sub.actions.find((a) => a.code === code);
+      if (subAction) return `${subAction.label} (${sub.name})`;
+    }
+  }
+  return code;
+};
+
 const getAllCustomPermissionCodes = (): string[] => {
   const codes: string[] = [];
   CUSTOM_PERMISSION_CATEGORIES.forEach((category) => {
@@ -191,10 +222,24 @@ export default function CreateRoleForm({ embedded = false, onSuccess, onCancel }
   const handlePermissionToggle = (code: string) => {
     const dependencies = getPermissionDependencies(code);
     const found = findCategoryForAction(code);
+    const isSelected = selectedPermissionCodes.has(code);
+
+    if (isSelected) {
+      // Disabling — block if another still-enabled permission requires this
+      // one, the same guard components/users/UserManagement.tsx already
+      // applies to per-user overrides, so both editors refuse the same
+      // inconsistent combination instead of only one of them catching it.
+      const blockers = getPermissionsDependingOn(code).filter((dependent) => selectedPermissionCodes.has(dependent));
+      if (blockers.length > 0) {
+        toast.warning(
+          `Cannot disable "${getPermissionDisplayName(code)}" — it's required by ${blockers.map(getPermissionDisplayName).join(', ')}. Disable that permission first.`,
+        );
+        return;
+      }
+    }
 
     setSelectedPermissionCodes((prev) => {
       const next = new Set(prev);
-      const isSelected = next.has(code);
 
       if (!isSelected) {
         next.add(code);

@@ -856,7 +856,7 @@ export default function AuditTrailPage() {
                   <ChevronDown className="w-3 h-3 sm:w-3.5 sm:h-3.5" />
                 </button>
                 {exportDropdownOpen && (
-                  <div className="absolute right-0 top-full mt-1.5 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 rounded-xl shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 overflow-hidden min-w-[120px]">
+                  <div className="absolute right-0 top-full mt-1.5 bg-white dark:bg-slate-900 border border-gray-100 dark:border-slate-700/60 rounded-xl shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] dark:ring-white/[0.02] z-50 overflow-hidden min-w-[120px] max-w-[calc(100vw-1.5rem)]">
                     <button
                       onClick={() => openExportModal('csv')}
                       className="flex items-center gap-2 w-full px-4 py-2.5 text-sm text-gray-700 dark:text-slate-300 hover:bg-brand-cyan/[0.06] hover:text-brand-blue transition-colors"
@@ -1768,15 +1768,6 @@ export default function AuditTrailPage() {
             )}
             </div>
 
-            {/* Modal Footer */}
-            <div className="flex-shrink-0 px-3 sm:px-4 md:px-6 py-3 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 bg-gray-50/50 dark:bg-slate-800/50 flex justify-end">
-              <button
-                onClick={() => setSelectedLog(null)}
-                className="px-4 py-2 text-sm bg-brand-blue text-white rounded-lg hover:bg-brand-blue-2 transition-all shadow-md shadow-brand-blue/25 ring-1 ring-white/10 font-medium"
-              >
-                Close
-              </button>
-            </div>
           </div>
         </div>
       )}
@@ -1909,12 +1900,6 @@ export default function AuditTrailPage() {
                 Up to {Math.min(total, 1000).toLocaleString()} records
               </p>
               <div className="flex gap-2">
-                <button
-                  onClick={() => setExportModalOpen(false)}
-                  className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-all"
-                >
-                  Cancel
-                </button>
                 <button
                   onClick={handleExport}
                   disabled={exportLoading || Object.values(exportSelectedCols).every(v => !v) || (exportDateMode === 'custom' && (!exportStartDate || !exportEndDate))}

@@ -303,7 +303,7 @@ export default function GlobalScoringProgressIndicator() {
             activeScoringJobs.forEach(job => clearJob(job.jobId));
           }}
           className="flex-shrink-0 p-0.5 -m-0.5 rounded hover:bg-white/10 transition-colors"
-          aria-label="Close" title="Close"
+          aria-label="Close"
         >
           <X className="w-4 h-4 text-gray-400 hover:text-white transition-colors" />
         </button>
@@ -413,7 +413,7 @@ export default function GlobalScoringProgressIndicator() {
             size="sm"
             onClick={() => activeScoringJobs.forEach(job => clearJob(job.jobId))}
             className="px-2"
-            aria-label="Close" title="Close"
+            aria-label="Close"
           >
             <X className="w-4 h-4" />
           </Button>

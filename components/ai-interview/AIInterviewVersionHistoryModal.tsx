@@ -31,7 +31,6 @@ const RESULT_SEGMENTS = [
   { key: 'terminated', label: 'Terminated', swatch: 'bg-[#b91c1c] dark:bg-[#e11d48]', fill: 'fill-[#b91c1c] dark:fill-[#e11d48]' },
   { key: 'expired', label: 'Expired', swatch: 'bg-[#ed881c] dark:bg-[#d97706]', fill: 'fill-[#ed881c] dark:fill-[#d97706]' },
 ] as const;
-type SegmentKey = (typeof RESULT_SEGMENTS)[number]['key'];
 type SortKey = 'created' | 'creator' | 'rounds' | 'status';
 /** Version Wise Results value that sums every version. */
 const ALL_VERSIONS = '__all__';
@@ -116,7 +115,6 @@ export default function AIInterviewVersionHistoryModal({
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [hoverSeg, setHoverSeg] = useState<SegmentKey | null>(null);
   /* Sortable columns — Version and Created On both order by creation (newest
      first by default); Created By / Rounds / Status by name, count, status. */
   const [sort, setSort] = useState<{ key: SortKey; dir: 'asc' | 'desc' }>({ key: 'created', dir: 'desc' });
@@ -282,7 +280,7 @@ export default function AIInterviewVersionHistoryModal({
             {/* Filters — one row above the table */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
               <label className="block">
-                <span className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Version</span>
+                <span className="block text-xs font-medium text-gray-600 dark:text-slate-400 mb-1">Interview Version</span>
                 <select value={versionFilter} onChange={(e) => setVersionFilter(e.target.value)} className={fieldClass}>
                   <option value="">All Versions</option>
                   {versions.map((c) => <option key={c.id} value={c.id}>{labelOf(c)}{multiJobVersions ? ` · Job V${c.jd_version ?? 1}` : ''} ({pillFor(c.status).label})</option>)}
@@ -476,8 +474,8 @@ export default function AIInterviewVersionHistoryModal({
                   ) : (
                     <>
                       {/* Donut (status breakdown) + legend with counts — identity is
-                          never colour alone. The centre shows the total, or the
-                          hovered slice's count and share. */}
+                          never colour alone. Static: no hover highlighting; the
+                          centre always shows the total. */}
                       <div className="flex flex-col items-center gap-4 flex-1 justify-center">
                         <div className="relative w-[210px] h-[210px] shrink-0">
                           {sel.total > 0 ? (
@@ -495,13 +493,11 @@ export default function AIInterviewVersionHistoryModal({
                                   cornerRadius={3}
                                   stroke="none"
                                   isAnimationActive={false}
-                                  onMouseLeave={() => setHoverSeg(null)}
                                 >
                                   {RESULT_SEGMENTS.filter((seg) => sel[seg.key] > 0).map((seg) => (
                                     <Cell
                                       key={seg.key}
-                                      className={`${seg.fill} outline-none transition-opacity ${hoverSeg && hoverSeg !== seg.key ? 'opacity-40' : ''}`}
-                                      onMouseEnter={() => setHoverSeg(seg.key)}
+                                      className={`${seg.fill} outline-none pointer-events-none`}
                                     />
                                   ))}
                                 </Pie>
@@ -511,18 +507,8 @@ export default function AIInterviewVersionHistoryModal({
                             <div className="w-full h-full rounded-full border-[22px] border-slate-100 dark:border-slate-800" />
                           )}
                           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none text-center">
-                            {hoverSeg ? (
-                              <>
-                                <span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-slate-50 leading-none">{sel[hoverSeg]}</span>
-                                <span className="text-xs text-gray-500 dark:text-slate-400 mt-1">{RESULT_SEGMENTS.find((seg) => seg.key === hoverSeg)?.label}</span>
-                                <span className="text-2xs text-gray-400 tabular-nums">{pct(sel[hoverSeg], sel.total)}%</span>
-                              </>
-                            ) : (
-                              <>
-                                <span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-slate-50 leading-none">{sel.total}</span>
-                                <span className="text-xs text-gray-500 dark:text-slate-400 mt-1 leading-tight">Total<br />Candidates</span>
-                              </>
-                            )}
+                            <span className="text-3xl font-bold tabular-nums text-gray-900 dark:text-slate-50 leading-none">{sel.total}</span>
+                            <span className="text-xs text-gray-500 dark:text-slate-400 mt-1 leading-tight">Total<br />Candidates</span>
                           </div>
                         </div>
                         {/* Legend: names in the left half, values in the right half,
@@ -532,9 +518,7 @@ export default function AIInterviewVersionHistoryModal({
                           {RESULT_SEGMENTS.map((seg) => (
                             <li
                               key={seg.key}
-                              className={`grid grid-cols-2 items-center rounded transition-colors ${hoverSeg === seg.key ? 'bg-slate-100 dark:bg-slate-800' : ''}`}
-                              onMouseEnter={() => setHoverSeg(seg.key)}
-                              onMouseLeave={() => setHoverSeg(null)}
+                              className="grid grid-cols-2 items-center rounded"
                             >
                               <span className="flex items-center gap-2 min-w-0 pl-1 pr-3">
                                 <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${seg.swatch}`} />
@@ -565,11 +549,6 @@ export default function AIInterviewVersionHistoryModal({
             )}
           </div>
 
-          <div className="flex justify-end px-4 sm:px-6 py-2.5 border-t border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50">
-            <button type="button" onClick={onClose} className="px-4 py-2 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:text-brand-blue">
-              Close
-            </button>
-          </div>
         </div>
       </div>
     </>

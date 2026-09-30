@@ -455,12 +455,6 @@ export default function UnitAdjustmentModal({
         {!showHistory && (
           <div className="px-6 py-4 border-t border-gray-200 dark:border-slate-700 flex items-center justify-end gap-3 shrink-0">
             <button
-              onClick={onClose}
-              className="px-4 py-2 text-gray-700 dark:text-slate-300 hover:text-gray-900 font-medium"
-            >
-              Cancel
-            </button>
-            <button
               onClick={handleSubmit}
               disabled={isSaving || projectedBalance < 0 || !reason.trim()}
               className="px-4 py-2 bg-gray-900 text-white rounded-lg hover:bg-gray-800 font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"

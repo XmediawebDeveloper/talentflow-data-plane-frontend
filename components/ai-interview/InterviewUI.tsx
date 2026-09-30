@@ -1113,13 +1113,18 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // gate at this length could strand the popup on screen forever — someone
   // resuming as "So... the main challenge was... handling the framework"
   // never produces 2.5s of unbroken sound, yet is plainly answering.
-  const SPEECH_RESUME_CONFIRM_MS = 2500;
+  //
+  // ONE window, counted directly from the VAD's own per-frame speech decision
+  // (`_frameIsActive` in the analyser loop) — NOT from silence-clock resets,
+  // which would stack the VAD's SUSTAINED_ACTIVE_MS run in front of this count.
+  // Closing the popup also resets the silence clock, so the next popup is a
+  // full DONE_CONFIRM_SILENCE_MS after this speech.
+  const SPEECH_RESUME_CONFIRM_MS = 3000;
   // Total speech-like ms observed since the popup was raised. Reset when the
   // popup is raised (fresh cycle) and when it closes — never by a pause.
   const speechAccumMsRef = useRef(0);
-  // Previous poll timestamp, so each tick adds real elapsed time rather than
-  // assuming the interval fired exactly on schedule.
-  const speechTickAtRef = useRef<number | null>(null);
+  // Previous analyser-frame timestamp while the popup is up, for per-frame dt.
+  const popupVadFrameAtRef = useRef<number | null>(null);
   const [midSilenceConfirm, setMidSilenceConfirm] = useState(false);
   const midSilenceConfirmRef = useRef(false);
   const setMidSilenceConfirm_ = useCallback((val: boolean) => {
@@ -3762,7 +3767,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // running through it. `activeStreakStartRef` = when the current unbroken run
   // of active frames began (null when the last frame was inactive).
   const activeStreakStartRef = useRef<number | null>(null);
-  const SUSTAINED_ACTIVE_MS = 400; // ~4-5 frames of continuous voice before reset
+  const SUSTAINED_ACTIVE_MS = 3000; // TEST (was 400): ~3s of continuous voice before reset
   // Dip tolerance ("hangover") for the active streak. Natural speech is not a
   // solid block of above-threshold frames — there are ~50-150ms gaps between
   // words, unstressed syllables, and after plosives that dip BELOW the
@@ -7834,6 +7839,35 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
               : (nowMs - activeStreakStartRef.current);
             const _sustained = _frameIsActive && _streakMs >= SUSTAINED_ACTIVE_MS;
 
+            // AII14 popup dismissal — counts SPEECH_RESUME_CONFIRM_MS of VAD
+            // speech frames (cumulative, pauses allowed) straight from this
+            // frame's decision, in the same window as the streak above rather
+            // than after it. dt is clamped so a stalled tab can't credit a gap.
+            if (midSilenceConfirmRef.current) {
+              const _prev = popupVadFrameAtRef.current;
+              popupVadFrameAtRef.current = nowMs;
+              if (_frameIsActive && _prev != null) {
+                speechAccumMsRef.current += Math.min(nowMs - _prev, 250);
+                if (speechAccumMsRef.current >= SPEECH_RESUME_CONFIRM_MS) {
+                  // Real speech confirmed: close the popup AND restart the
+                  // silence clock from now. Without the clock reset the poll
+                  // would see the old (>15s) silence start and re-raise at once.
+                  speechAccumMsRef.current = 0;
+                  popupVadFrameAtRef.current = null;
+                  silenceHoldLoggedRef.current = false;
+                  lastMeaningfulAudioAtRef.current = nowMs;
+                  lastStrongVoiceAtRef.current = nowMs;
+                  silenceStartRef.current = null;
+                  setMidSilenceConfirm_(false);
+                  console.log('[INTERVIEW-DEBUG] AII14: popup closed after VAD speech', {
+                    confirmMs: SPEECH_RESUME_CONFIRM_MS,
+                  });
+                }
+              }
+            } else {
+              popupVadFrameAtRef.current = null;
+            }
+
             if (transcriptRecentlyAdvanced) {
               lastMeaningfulAudioAtRef.current = nowMs;
               silenceStartRef.current = null;
@@ -8184,15 +8218,9 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // tuning value that varies per device/deployment (and no longer ends the turn
   // anyway now that the auto-advance is parked).
   //
-  // DISMISSAL REQUIRES CUMULATIVE SPEECH (SPEECH_RESUME_CONFIRM_MS, 2.5s).
-  // Each 100ms tick where the silence clock is clear adds its real elapsed time
-  // to speechAccumMsRef; the popup closes once the total crosses the threshold.
-  // Pauses stop the count but never reset it, so a candidate resuming in bursts
-  // still gets there — which a continuous gate could not guarantee.
-  //
-  // The per-tick delta is CLAMPED: a throttled/backgrounded tab can stall the
-  // interval for seconds, and an unclamped delta would credit all of that as
-  // speech and dismiss the popup instantly on the next tick.
+  // This effect only RAISES the popup. Dismissal (SPEECH_RESUME_CONFIRM_MS of
+  // cumulative VAD speech) is counted per analyser frame in the VAD loop — see
+  // popupVadFrameAtRef — so it shares the VAD's window instead of trailing it.
   //
   // AII14-PARKED: the previous version of this effect drove the 10→1 countdown
   // and is preserved verbatim in ./parked/silence-auto-advance.parked.md
@@ -8201,39 +8229,21 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       setMidSilenceConfirm_(false);
       setMidSilenceCountdown_(null);
       speechAccumMsRef.current = 0;
-      speechTickAtRef.current = null;
       return;
     }
     const id = setInterval(() => {
       if (!isRecordingRef.current || isAiSpeakingRef.current || isProcessingRef.current) {
         setMidSilenceConfirm_(false);
         speechAccumMsRef.current = 0;
-        speechTickAtRef.current = null;
         return;
       }
       const nowTs = Date.now();
-      // Real elapsed time since the last tick, clamped so a throttled tab
-      // cannot credit a multi-second stall as speech.
-      const dt = speechTickAtRef.current === null
-        ? 0
-        : Math.min(nowTs - speechTickAtRef.current, 500);
-      speechTickAtRef.current = nowTs;
-
       const start = silenceStartRef.current;
       if (start == null) {
-        // Silence clock is clear — the candidate is making speech-like sound.
-        // Only counts while the popup is actually up; speech before that is
-        // just a normal answer and must not pre-charge the next cycle.
-        if (midSilenceConfirmRef.current) {
-          speechAccumMsRef.current += dt;
-          if (speechAccumMsRef.current >= SPEECH_RESUME_CONFIRM_MS) {
-            // Enough real speech — close the popup and re-arm the one-shot
-            // hold log for the NEXT pause (AC3).
-            silenceHoldLoggedRef.current = false;
-            speechAccumMsRef.current = 0;
-            setMidSilenceConfirm_(false);
-          }
-        }
+        // Silence clock is clear — nothing to raise. Dismissal is NOT counted
+        // here any more: the analyser loop counts VAD speech frames directly
+        // (see popupVadFrameAtRef) so it runs in the same window as the VAD's
+        // own sustained-speech check instead of after it.
         return;
       }
       // Silence again. Deliberately does NOT reset speechAccumMsRef — that is
@@ -8263,7 +8273,6 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       clearInterval(id);
       silenceHoldLoggedRef.current = false;
       speechAccumMsRef.current = 0;
-      speechTickAtRef.current = null;
       setMidSilenceConfirm_(false);
     };
   }, [isRecording, setMidSilenceConfirm_, setMidSilenceCountdown_, DONE_CONFIRM_SILENCE_MS]);

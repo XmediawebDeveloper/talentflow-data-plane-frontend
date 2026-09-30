@@ -269,8 +269,8 @@ export default function AddSeatsModal({
   const addonDisplayName = (pricing?.addon_name || 'User Seat Pack').replace(/\s*-?\s*Pro$/i, '').trim();
 
   return (
-    <div className="fixed inset-0 bg-gray-900/60 dark:bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-6">
-      <div className="bg-white dark:bg-slate-900 rounded-t-2xl sm:rounded-2xl shadow-2xl sm:border sm:border-gray-200 dark:sm:border-slate-700 max-w-[95vw] sm:max-w-2xl w-full overflow-hidden animate-in fade-in slide-in-from-bottom-4 sm:zoom-in-95 duration-300 max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
+    <div className="fixed inset-0 bg-gray-900/60 dark:bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-3 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-2xl w-full overflow-hidden animate-in fade-in zoom-in-95 duration-300 max-h-[95dvh] sm:max-h-[calc(100dvh-3rem)] flex flex-col">
 
         {/* Header */}
         <div className="relative px-5 sm:px-7 py-5 sm:py-6 bg-brand-blue flex-shrink-0 overflow-hidden">
@@ -504,12 +504,6 @@ export default function AddSeatsModal({
         {/* Footer */}
         <div className="p-4 sm:p-5 border-t border-gray-100 dark:border-slate-700/60 bg-white dark:bg-slate-900 flex-shrink-0">
           <div className="flex gap-3">
-            <button
-              onClick={onClose}
-              className="px-5 py-3 border border-gray-200 dark:border-slate-700 rounded-lg text-gray-700 dark:text-slate-300 font-semibold text-sm hover:bg-gray-50 dark:hover:bg-slate-800 hover:border-brand-blue/30 hover:text-brand-blue transition-all"
-            >
-              Cancel
-            </button>
             <button
               onClick={handlePurchase}
               disabled={isPurchasing || razorpayProcessing || !pricing || !!purchaseSuccess}
