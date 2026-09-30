@@ -159,6 +159,14 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'assessments:edit_question', label: 'Edit Question' },
       { code: 'assessments:delete_question', label: 'Delete Question' },
     ],
+    // Rule: Create requires Job Description access — every assessment is
+    // tied to a JD (app/services/permission_dependencies.py already enforces
+    // assessments:create -> jd:read server-side). Declared here so disabling
+    // a role's Job Description access warns about breaking Assessment
+    // creation too, not just Resume Scoring.
+    dependencies: {
+      'assessments:create': ['jd:read'],
+    },
   },
   {
     id: 'ai_interviews',
@@ -173,6 +181,15 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'ai_interview:archive', label: 'Archive' },
       { code: 'ai_interview:delete', label: 'Delete' },
     ],
+    // Rule: Create requires Job Description access — every AI interview is
+    // tied to a JD (app/services/permission_dependencies.py now enforces
+    // ai_interview:create -> jd:read server-side, matching the same JD-scoping
+    // Assessments already declares via assessments:create -> jd:read).
+    // Declared here so disabling a role's Job Description access warns about
+    // breaking AI Interview creation too, not just Resume Scoring.
+    dependencies: {
+      'ai_interview:create': ['jd:read'],
+    },
   },
   {
     id: 'hr_question_bank',
