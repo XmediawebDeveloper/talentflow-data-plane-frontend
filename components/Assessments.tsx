@@ -131,74 +131,6 @@ import { formatScore } from '@/lib/utils/score';
  *  this names the three fields rather than widening to `any`. */
 type AssessmentLineageRef = { id: string; jd_id?: string };
 
-/** The canonical "Go to [input] · Previous · page/total · Next" control from
- *  components/Pagination.tsx, reused inline for this file's popup footers
- *  (Tracking Invitations, Completed Candidates, Invite Status Tracking) which
- *  don't otherwise fit that component's items-per-page/"Showing X-Y" shape. */
-function InlinePageNav({ page, totalPages, onPageChange }: { page: number; totalPages: number; onPageChange: (page: number) => void }) {
-  const [goToPage, setGoToPage] = useState(String(page));
-  useEffect(() => {
-    setGoToPage(String(page));
-  }, [page]);
-
-  const commitGoToPage = () => {
-    const target = Math.round(Number(goToPage));
-    if (Number.isFinite(target) && target >= 1 && target <= totalPages) {
-      onPageChange(target);
-    } else {
-      setGoToPage(String(page));
-    }
-  };
-
-  const navBtnClass =
-    "inline-flex items-center justify-center w-8 h-8 sm:w-9 sm:h-9 rounded-lg border border-gray-200 bg-white text-gray-700 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white disabled:hover:border-gray-200 disabled:hover:text-gray-700 transition-colors";
-
-  return (
-    <div className="flex flex-wrap items-center gap-2 sm:gap-3">
-      <div className="flex items-center gap-1.5">
-        <span className="text-xs sm:text-sm text-gray-600 whitespace-nowrap">Go to</span>
-        <input
-          type="number"
-          min={1}
-          max={totalPages}
-          value={goToPage}
-          onChange={(e) => setGoToPage(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') {
-              e.currentTarget.blur();
-              commitGoToPage();
-            }
-          }}
-          onBlur={commitGoToPage}
-          aria-label="Go to page"
-          className="w-14 h-8 sm:h-9 px-2 text-sm text-center border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-gray-900"
-        />
-      </div>
-
-      <button
-        onClick={() => onPageChange(page - 1)}
-        disabled={page === 1}
-        className={navBtnClass}
-        aria-label="Previous page" title="Previous page"
-      >
-        <ChevronLeft className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-      </button>
-
-      <span className="text-sm font-medium text-gray-700 px-1 whitespace-nowrap">
-        <span className="text-brand-blue font-semibold">{page}</span> / {totalPages}
-      </span>
-
-      <button
-        onClick={() => onPageChange(page + 1)}
-        disabled={page === totalPages}
-        className={navBtnClass}
-        aria-label="Next page" title="Next page"
-      >
-        <ChevronRight className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-      </button>
-    </div>
-  );
-}
 
 /* ── Send Invite: the job list, shared with Total Jobs ─────────────────────
    The dialog used to own a job list of its own: assessments grouped into a
@@ -439,6 +371,9 @@ type CandidateResultRow = AssessmentAttemptResponse & {
   _assessment_version?: number;
   _resume_version?: number;
 };
+
+/** Session key holding the Total Jobs page a job's Results was opened from. */
+const RESULTS_RETURN_PAGE_KEY = 'assessments:resultsReturnPage';
 
 export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDCreation, autoOpenCreate, preSelectedJdId, preSelectedJdTitle, initialListTab }: AssessmentsProps) {
   const router = useRouter();
@@ -1365,7 +1300,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const [quotaPercentage, setQuotaPercentage] = useState<number>(0); // Percentage of quota used
   const [trackingCurrentPage, setTrackingCurrentPage] = useState(1);
   const [trackingTotalItems, setTrackingTotalItems] = useState(0);
-  const [trackingTotalPages, setTrackingTotalPages] = useState(1);
+  const [, setTrackingTotalPages] = useState(1);
+  /* Rows per page — the shared pagination bar's Per Page select. Starts at the
+     popup's long-standing INVITATIONS_PAGE_SIZE. */
+  const [trackingPageSize, setTrackingPageSize] = useState(INVITATIONS_PAGE_SIZE);
+  const trackingScrollRef = useRef<HTMLDivElement | null>(null);
   const [trackingFilters, setTrackingFilters] = useState<InviteFilterState>(EMPTY_INVITE_FILTERS);
 
   // Cross-assessment "Candidate Results" tab — aggregates every completed
@@ -1399,7 +1338,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     onChange: () => setCompletedCandidatesPage(1),
   });
 
-  const COMPLETED_PAGE_SIZE = 20;
+  /* Rows per page — the shared pagination bar's Per Page select. Starts at the
+     20 this tab always showed. */
+  const [completedPageSize, setCompletedPageSize] = useState(20);
 
   /* Cross-assessment "Invitation Status" tab — the Track Invites popup's view
      widened to the whole page: every invitation of every assessment, not one
@@ -1421,7 +1362,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
      same commit-as-you-change behaviour, same `EMPTY_INVITE_FILTERS` reset. */
   const [showInviteStatusFilters, setShowInviteStatusFilters] = useState(false);
 
-  const INVITE_STATUS_PAGE_SIZE = 20;
+  /* Rows per page — the shared pagination bar's Per Page select. Starts at the
+     20 this tab always showed. */
+  const [inviteStatusPageSize, setInviteStatusPageSize] = useState(20);
 
   /* Row selection on the Invitation Status tab, and the export it feeds.
      Selection is by invitation id and survives paging, because the export acts
@@ -1450,6 +1393,17 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
     setCompletedCandidatesPage(1);
     setPageView('list');
     setListScrollRequest((request) => request + 1);
+  };
+
+  /** Open a job's Results from the Total Jobs list, noting the list page so
+   *  coming back lands on it again — see `heldPageResetKeyRef`. */
+  const openJobResults = (href: string) => {
+    try {
+      window.sessionStorage.setItem(RESULTS_RETURN_PAGE_KEY, String(assessmentCurrentPage));
+    } catch {
+      /* Ignore unavailable sessionStorage. */
+    }
+    router.push(href);
   };
 
 
@@ -1523,6 +1477,20 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
    * knows a fresh visit from a return — a fresh visit scrolls nowhere.
    */
   const restoreScrollTargetRef = useRef<string | null>(null);
+  /**
+   * Coming back from a job's Results page onto the Total Jobs page it was
+   * opened from. The Results buttons (`openJobResults`) store the page number
+   * under `RESULTS_RETURN_PAGE_KEY`; the restore below reads it once and puts
+   * that page back.
+   *
+   * `heldPageResetKeyRef` is the other half: the "back to page 1" effect further
+   * down fires on mount and again when the restore puts the saved tab and
+   * rows-per-page back, and either would throw the returned page away. Set only
+   * on a return from Results, so every other arrival behaves as before.
+   */
+  const pageResetKey = `${activeTab}|${preSelectedJdId ?? ''}|${assessmentItemsPerPage}`;
+  const heldPageResetKeyRef = useRef<string | null>(null);
+  const pageResetMountedRef = useRef(false);
   useListStatePersistence(
     'assessments',
     {
@@ -1611,6 +1579,25 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       }
       if (s.settingsSubTab === 'proctoring' || s.settingsSubTab === 'topics') setSettingsSubTab(s.settingsSubTab);
       if (typeof s.assessmentItemsPerPage === 'number') setAssessmentItemsPerPage(s.assessmentItemsPerPage);
+
+      /* Back from Results: the page the recruiter opened it from. Set LAST —
+         restoring the search and filters above fires their "back to page 1"
+         `onChange`, and whichever page update is queued last is the one kept. */
+      let resultsReturnPage: number | null = null;
+      try {
+        const raw = window.sessionStorage.getItem(RESULTS_RETURN_PAGE_KEY);
+        window.sessionStorage.removeItem(RESULTS_RETURN_PAGE_KEY);
+        const page = Number(raw);
+        if (raw && Number.isInteger(page) && page >= 1) resultsReturnPage = page;
+      } catch {
+        /* Ignore unavailable sessionStorage. */
+      }
+      if (resultsReturnPage !== null && !initialListTab) {
+        setAssessmentCurrentPage(resultsReturnPage);
+        const restoredTab = typeof s.activeTab === 'string' ? s.activeTab : activeTab;
+        const restoredPerPage = typeof s.assessmentItemsPerPage === 'number' ? s.assessmentItemsPerPage : assessmentItemsPerPage;
+        heldPageResetKeyRef.current = `${restoredTab}|${preSelectedJdId ?? ''}|${restoredPerPage}`;
+      }
     },
   );
 
@@ -2535,10 +2522,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
           }),
         );
         const merged = perAssessment.flat().sort((a, b) => inviteRecency(b) - inviteRecency(a));
-        const totalPages = Math.max(1, Math.ceil(merged.length / INVITATIONS_PAGE_SIZE));
+        const totalPages = Math.max(1, Math.ceil(merged.length / trackingPageSize));
         const currentPage = Math.min(Math.max(1, page), totalPages);
         setTrackingInvitations(
-          merged.slice((currentPage - 1) * INVITATIONS_PAGE_SIZE, currentPage * INVITATIONS_PAGE_SIZE),
+          merged.slice((currentPage - 1) * trackingPageSize, currentPage * trackingPageSize),
         );
         setTrackingTotalItems(merged.length);
         setTrackingTotalPages(totalPages);
@@ -2550,12 +2537,12 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       const response = await assessmentService.listInvitations(assessment.id, {
         ...query,
         page,
-        page_size: INVITATIONS_PAGE_SIZE,
+        page_size: trackingPageSize,
       });
       const invitations = response.items || [];
       setTrackingInvitations(invitations);
       setTrackingTotalItems(response.total || 0);
-      const totalPages = Math.max(1, response.total_pages || Math.ceil((response.total || 0) / INVITATIONS_PAGE_SIZE));
+      const totalPages = Math.max(1, response.total_pages || Math.ceil((response.total || 0) / trackingPageSize));
       setTrackingTotalPages(totalPages);
 
       if (invitations.length === 0 && (response.total || 0) > 0 && page > 1) {
@@ -3061,15 +3048,25 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
       filterType, filterCreatedBy, filterCreatedFrom, filterCreatedTo]);
 
   // The hook's `onChange` covers query/filter changes; this handles the rest.
+  /* Back from Results (`heldPageResetKeyRef`), the mount pass and the pass
+     that only puts the saved tab / rows-per-page back are skipped, so the
+     returned page stands; the first real change resets to page 1 as usual. */
   useEffect(() => {
+    const held = heldPageResetKeyRef.current;
+    const isMountPass = !pageResetMountedRef.current;
+    pageResetMountedRef.current = true;
+    if (held !== null) {
+      if (isMountPass || pageResetKey === held) return;
+      heldPageResetKeyRef.current = null;
+    }
     setAssessmentCurrentPage(1);
-  }, [activeTab, preSelectedJdId, assessmentItemsPerPage]);
+  }, [pageResetKey]);
 
 
   useEffect(() => {
     if (!showTrackInvitesModal || !selectedAssessmentForTracking) return;
     loadTrackingInvitations(selectedAssessmentForTracking, trackingCurrentPage, trackingFilters);
-  }, [showTrackInvitesModal, selectedAssessmentForTracking, trackingJob, trackingCurrentPage, trackingFilters]);
+  }, [showTrackInvitesModal, selectedAssessmentForTracking, trackingJob, trackingCurrentPage, trackingFilters, trackingPageSize]);
 
   useEffect(() => {
     if (!showTrackInvitesModal || !selectedAssessmentForTracking) return;
@@ -4898,7 +4895,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                      otherwise land on whichever single version was selected
                      last time. The row is the job; its Result must read as the
                      job. */
-                  router.push(`/recruitment/assessments/${assessment.id}/results?job_version_id=all&assessment_version=all&view=total`);
+                  openJobResults(`/recruitment/assessments/${assessment.id}/results?job_version_id=all&assessment_version=all&view=total`);
                 }}
                 /* Same rule, with the version panel's Result colour. */
                 icon={<BarChart className={`w-3.5 h-3.5${hasBeenShared ? ' text-menu-icon-score' : ''}`} />}
@@ -4945,6 +4942,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
         return (
         <div onClick={(e) => e.stopPropagation()}>
           <AssessmentVersionHistoryPanel
+            paginated
             jobVersions={jdLineage.lineages[assessment.jd_id]}
             jobVersionDetails={jdLineage.versionDetails}
             assessments={displayedRows}
@@ -4954,6 +4952,10 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             loading={!hasRowsToShow && (!!loadingLineages[assessment.jd_id] || jdLineage.isLoading(assessment.jd_id))}
             currentAssessmentId={assessment.id}
             latestJobVersion={getLatestJobVersion(assessment)}
+            /* Total Jobs lists published/active job versions only - a
+               Draft version is hidden here, not changed. Send Invite
+               (selectMode) keeps its own listing as it was. */
+            hideDraftJobVersions={!selectMode}
             /* Opened on the page the ROW's own status calls for -
                a Draft on the draft page, everything else on the
                details page. The row is found by ASSESSMENT id in
@@ -5241,17 +5243,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
   const assessmentPaginationVisible = !activeTabOwnsListContent && assessmentResultCount > 5;
   const assessmentStartIndex = assessmentResultCount === 0 ? 0 : (assessmentCurrentPage - 1) * assessmentItemsPerPage + 1;
   const assessmentEndIndex = Math.min(assessmentCurrentPage * assessmentItemsPerPage, assessmentResultCount);
-  const trackingPaginationVisible = trackingTotalPages > 1;
-  const trackingStartIndex = trackingTotalItems === 0 ? 0 : (trackingCurrentPage - 1) * INVITATIONS_PAGE_SIZE + 1;
-  const trackingEndIndex = Math.min(trackingCurrentPage * INVITATIONS_PAGE_SIZE, trackingTotalItems);
   const trackingHasActiveFilters =
     trackingFilters.search.trim() !== '' ||
     trackingFilters.status !== 'all' ||
     trackingFilters.dateFrom !== '' ||
     trackingFilters.dateTo !== '';
-  const trackingResultsLabel = trackingHasActiveFilters
-    ? `${trackingTotalItems} matching invite${trackingTotalItems === 1 ? '' : 's'}`
-    : `Showing ${trackingStartIndex} to ${trackingEndIndex} of ${trackingTotalItems} invites`;
 
   /**
    * Two different loading states in the tracking popup, because they have to
@@ -5653,10 +5649,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
             /* Opened on the row's own coordinates: the JOB VERSION it sits
                under (the JD row the assessment points at) AND the ASSESSMENT
                VERSION it is — the same page, with the same two selectors, the
-               Job List row's Result opens. */
+               Job List row's Result opens. `view=total` opens it on Total
+               Candidates, as that Result button does. */
             const jobScope = assessment.jd_id ? encodeURIComponent(assessment.jd_id) : 'all';
             const versionScope = typeof assessment.version === 'number' ? assessment.version : 'all';
-            router.push(`/recruitment/assessments/${assessment.id}/results?job_version_id=${jobScope}&assessment_version=${versionScope}`);
+            openJobResults(`/recruitment/assessments/${assessment.id}/results?job_version_id=${jobScope}&assessment_version=${versionScope}&view=total`);
           }}
           disabled={!hasBeenShared}
           title={resultReason}
@@ -6461,9 +6458,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               )].sort((a, b) => a.localeCompare(b)).map((title) => ({ value: title, label: title }));
 
               const total = filteredResults.length;
-              const totalPages = Math.max(1, Math.ceil(total / COMPLETED_PAGE_SIZE));
+              const totalPages = Math.max(1, Math.ceil(total / completedPageSize));
               const safePage = Math.min(Math.max(1, completedCandidatesPage), totalPages);
-              const pageItems = filteredResults.slice((safePage - 1) * COMPLETED_PAGE_SIZE, safePage * COMPLETED_PAGE_SIZE);
+              const pageItems = filteredResults.slice((safePage - 1) * completedPageSize, safePage * completedPageSize);
               return (
                 <div>
                   {/* This tab's row in the page's one toolbar position — the
@@ -6895,18 +6892,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         </table>
                         </div>
                       </div>
-                      {total > COMPLETED_PAGE_SIZE && (
-                        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                          <span className="text-xs text-gray-600 dark:text-slate-400">
-                            {total.toLocaleString()} total
-                          </span>
-                          <InlinePageNav
-                            page={safePage}
-                            totalPages={totalPages}
-                            onPageChange={setCompletedCandidatesPage}
-                          />
-                        </div>
-                      )}
+                      {/* The page's one pagination bar — see Total Jobs. */}
+                      <ListPagination
+                        currentPage={safePage}
+                        itemsPerPage={completedPageSize}
+                        totalItems={total}
+                        onPageChange={setCompletedCandidatesPage}
+                        onItemsPerPageChange={(size) => { setCompletedPageSize(size); setCompletedCandidatesPage(1); }}
+                        itemLabel="candidates"
+                        showFirstLast
+                      />
                     </>
                   )}
                 </div>
@@ -6971,9 +6966,9 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               });
 
               const total = filtered.length;
-              const totalPages = Math.max(1, Math.ceil(total / INVITE_STATUS_PAGE_SIZE));
+              const totalPages = Math.max(1, Math.ceil(total / inviteStatusPageSize));
               const safePage = Math.min(Math.max(1, inviteStatusPage), totalPages);
-              const pageItems = filtered.slice((safePage - 1) * INVITE_STATUS_PAGE_SIZE, safePage * INVITE_STATUS_PAGE_SIZE);
+              const pageItems = filtered.slice((safePage - 1) * inviteStatusPageSize, safePage * inviteStatusPageSize);
 
               /* Selection, and the export it gates. Intersected with `filtered`
                  rather than read raw, so a row that a later filter or search
@@ -7785,18 +7780,16 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                         </div>
                       </div>
 
-                      {total > INVITE_STATUS_PAGE_SIZE && (
-                        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                          <span className="text-xs text-gray-600 dark:text-slate-400">
-                            {total.toLocaleString()} total
-                          </span>
-                          <InlinePageNav
-                            page={safePage}
-                            totalPages={totalPages}
-                            onPageChange={setInviteStatusPage}
-                          />
-                        </div>
-                      )}
+                      {/* The page's one pagination bar — see Total Jobs. */}
+                      <ListPagination
+                        currentPage={safePage}
+                        itemsPerPage={inviteStatusPageSize}
+                        totalItems={total}
+                        onPageChange={setInviteStatusPage}
+                        onItemsPerPageChange={(size) => { setInviteStatusPageSize(size); setInviteStatusPage(1); }}
+                        itemLabel="invitations"
+                        showFirstLast
+                      />
 
                       {/* Export format dialog — the Resume Scoring page's
                           export modal: the FileDown header stating what will
@@ -7922,7 +7915,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               <AssessmentAuditTrail />
             ) : activeTab === 'consent' ? (
               /* Consent Logs Tab */
-              <ConsentLogs defaultFeature="ASSESSMENT" />
+              <ConsentLogs defaultFeature="ASSESSMENT" standardPagination />
             ) : activeTab === 'settings' ? (
               /* Settings Tab with Sub-tabs */
               <div className="space-y-4 sm:space-y-6">
@@ -8701,6 +8694,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 onPageChange={setAssessmentCurrentPage}
                 onItemsPerPageChange={setAssessmentItemsPerPage}
                 itemLabel="jobs"
+                showFirstLast
               />
             )}
           </div>
@@ -9134,8 +9128,8 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                           onItemsPerPageChange={(size) => { setInvitePickerPageSize(size); setInvitePickerPage(1); }}
                           itemLabel={isUngrouped ? 'assessments' : 'jobs'}
                           scrollContainerRef={invitePickerScrollRef}
-                          compact
                           alwaysShow
+                          showFirstLast
                         />
                       )}
                     </>
@@ -9588,7 +9582,7 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                    scroll away with the content. Deliberately no overflow-hidden —
                    the shell's overflow:auto is what lets the wide auto-layout
                    table scroll sideways. */
-                <div className="tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0 border border-gray-200 dark:border-slate-700 rounded-lg">
+                <div ref={trackingScrollRef} className="tf-table-shell tf-table-shell--compact tf-table-shell--fill flex-1 min-h-0 border border-gray-200 dark:border-slate-700 rounded-lg">
                   {/* Auto layout, not table-fixed. The colgroup widths summed
                       past the table's min-width, so every column was scaled
                       down; combined with the shell's white-space: nowrap the
@@ -9901,6 +9895,24 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
                 </div>
               )}
 
+              {/* The page's one pagination bar — see Total Jobs — under the
+                  table, as on the page. shrink-0 so the table, not the bar,
+                  gives up height in the fixed-height dialog. */}
+              {trackingInvitations.length > 0 && (
+                <div className="shrink-0">
+                  <ListPagination
+                    currentPage={trackingCurrentPage}
+                    itemsPerPage={trackingPageSize}
+                    totalItems={trackingTotalItems}
+                    onPageChange={setTrackingCurrentPage}
+                    onItemsPerPageChange={(size) => { setTrackingPageSize(size); setTrackingCurrentPage(1); }}
+                    itemLabel="invites"
+                    scrollContainerRef={trackingScrollRef}
+                    showFirstLast
+                  />
+                </div>
+              )}
+
               {/* Re-reading rows that are already on screen - Refresh, a page
                   turn, a filter change. The table underneath keeps its exact
                   size and place; this only tints it and says why, and it takes
@@ -9920,23 +9932,11 @@ export default function Assessments({ jobs, onOpenCandidateView, onNavigateToJDC
               )}
             </div>
 
-            {/* Modal Footer */}
-            {/* Stacks on phones: the count line plus four page buttons and Close
-                overflowed a 320px row and pushed Close off-screen. First/Last are
-                hidden below sm — Prev/Next and the page indicator are enough on a
-                phone, and the full set comes back from sm up. */}
-            <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
-              <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 text-center sm:text-left order-2 sm:order-1">
-                {trackingResultsLabel}
-              </p>
-              <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2 order-1 sm:order-2">
-                {trackingPaginationVisible && (
-                  <InlinePageNav
-                    page={trackingCurrentPage}
-                    totalPages={trackingTotalPages}
-                    onPageChange={setTrackingCurrentPage}
-                  />
-                )}
+            {/* Modal Footer — the actions only. The count line and page
+                buttons that sat here are the pagination bar under the table
+                now, the same bar as every other table on the page. */}
+            <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-t border-gray-100 dark:border-slate-700/60 flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 bg-slate-50 dark:bg-slate-950 shrink-0">
+              <div className="flex items-center justify-center sm:justify-end flex-wrap gap-1.5 sm:gap-2">
                 {/* Invite More — the AI Interview tracking popup's button (primary,
                     sm, Send icon first) and its interaction: this popup closes,
                     the Share dialog opens on the SAME assessment, and closing

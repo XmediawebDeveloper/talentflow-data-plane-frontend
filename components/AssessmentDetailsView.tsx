@@ -2768,6 +2768,10 @@ export default function AssessmentDetailsView({
             }
             canDownloadPDF={canDownloadResultPDF}
             canBatchDownload={canBatchDownloadResults}
+            /* Opening or revisiting the tab lands on Total Candidates with its
+               list showing. Back from a candidate's result instead restores the
+               view the recruiter left, as the scopes above do. */
+            openOnTotalCandidates={!isResultRestoreArrival(searchParams)}
           />
         )}
 

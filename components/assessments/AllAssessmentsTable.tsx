@@ -47,8 +47,6 @@ import { Button } from '@/components/ui/button';
    be on screen, and sorting it would order 20 rows out of 156. */
 const FULL_SET_BATCH_SIZE = 100;
 
-/** The page-size ladder this screen specifies. */
-const PAGE_SIZE_OPTIONS = [10, 20, 50, 100];
 
 /* ── Row model ─────────────────────────────────────────────────────────────
    One flat row per assessment, derived once from the API shape so the table,
@@ -1132,8 +1130,8 @@ export default function AllAssessmentsTable({ embedded = false, fixedStatus, tit
               onPageChange={setPage}
               onItemsPerPageChange={setPageSize}
               itemLabel="assessments"
-              pageSizeOptions={PAGE_SIZE_OPTIONS}
               scrollContainerRef={scrollRef}
+              showFirstLast
             />
           )}
         </div>

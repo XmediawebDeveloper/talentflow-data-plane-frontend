@@ -193,6 +193,20 @@ export interface AssessmentInfo {
   assessment_title: string;
   assessment_description: string | null;
   jd_title: string;
+  /* The full JD behind the assessment, for the Job Description accordion on
+     Step 2. Same names the candidate AI Interview endpoint returns them under.
+     Optional: until the backend sends them the accordion stays hidden. */
+  jd_description?: string | null;
+  jd_department?: string | null;
+  jd_location?: string | null;
+  jd_employment_type?: string | null;
+  jd_remote_type?: string | null;
+  jd_experience_min?: number | null;
+  jd_experience_max?: number | null;
+  jd_must_have_skills?: string[] | null;
+  jd_nice_to_have_skills?: string[] | null;
+  /** Recruiter free text about the job — shown verbatim, apart from the description. */
+  jd_additional_details?: string | null;
   candidate_name: string;
   candidate_email: string;
   company_name: string | null;
