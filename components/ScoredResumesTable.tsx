@@ -335,8 +335,18 @@ export default function ScoredResumesTable({
   // support AI Interview invites from this table (or is deliberately hiding
   // it for a reason of its own, e.g. a disabled job) — never assumed as a
   // fallback, since that could silently bypass a host-specific gate.
+  //
+  // Also requires the same Resume Scoring `scoring:invite` toggle as the
+  // Assessment path above: this button lives on the Resume Scoring surface,
+  // so disabling that module's "Invite" permission should turn off BOTH
+  // invite targets reachable from it, not just the Assessment one — a
+  // recruiter without scoring:invite has no invite action here at all.
+  // canInviteAIInterviews (ai_interview:invite) stays required alongside it,
+  // since that is the permission the AI Interview invite endpoints actually
+  // enforce server-side.
   const mayInviteAIInterview =
     (!!onInviteAIInterview || enableInternalAIInterviewInvite) &&
+    (isTenantAdmin || hasPermissionCode('scoring:invite')) &&
     hasPermission('canInviteAIInterviews') &&
     hasPlanFeature('ai_interview') &&
     isFeatureEnabled('ai_interview');
@@ -1437,14 +1447,13 @@ Best regards`);
     const rowCanInviteAssessment = canCreateAssessments && rowAssessmentConfigured !== false;
     const rowCanInviteAIInterview = mayInviteAIInterview && rowAIInterviewConfigured !== false;
     const rowInviteDisabled = !rowCanInviteAssessment && !rowCanInviteAIInterview;
-    const rowInviteDisabledTitle =
-      canCreateAssessments || mayInviteAIInterview
-        ? 'No published assessment or AI interview for this job yet'
-        : undefined;
-
-    if (!(canCreateAssessments || mayInviteAIInterview)) {
-      return <span className="text-xs text-gray-400">-</span>;
-    }
+    // Always render the button rather than collapsing to a "-" placeholder
+    // when neither permission is held — the trigger stays visible and
+    // non-clickable, with its own tooltip naming the reason, matching every
+    // other disabled action on this page instead of disappearing outright.
+    const rowInviteDisabledTitle = !(canCreateAssessments || mayInviteAIInterview)
+      ? 'You do not have permission to invite candidates'
+      : 'No published assessment or AI interview for this job yet';
 
     return (
       <DropdownMenu>
@@ -3346,6 +3355,13 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
         candidate_name: resume.candidateName,
         candidate_email: resume.email,
         resume_id: resume.resumeId,
+        // This is the table's own Bulk Invite button, gated on scoring:invite
+        // (canCreateAssessments above) — unlike the per-row Invite dropdown,
+        // this call goes straight to the API rather than through
+        // InviteShareModal/ShareAssessmentModal, so invite_source was never
+        // set here. Without it, the backend has no way to tell this apart
+        // from any other assessment invite and can't enforce scoring:invite.
+        invite_source: 'Resume Scoring',
       }));
 
       await assessmentService.bulkInvite(selectedAssessment, {
