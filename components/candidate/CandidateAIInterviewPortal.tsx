@@ -1677,7 +1677,37 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
   // side — see _enhanced_full_screen_for_vision in candidate_ai_interview.py —
   // so only one capture is needed here. Returns null if the stream isn't
   // available or the canvas context can't be obtained.
+  // ── Browser full-screen banner ────────────────────────────────────────
+  // Chrome/Edge print "<site> - To exit full screen, press Esc" across the top
+  // centre of the SCREEN (not the page) for ~4s after every fullscreen entry.
+  // It is browser chrome we cannot hide or query, it lands in the whole-monitor
+  // capture, and the vision gate then blocks the candidate for it ("browser
+  // notification"). The Continue handler itself calls requestFullscreen(), so
+  // for anyone not already fullscreen the click SUMMONS the banner immediately
+  // before the screenshot. Track when it can still be up and simply wait it out
+  // before capturing. 5s > the ~4s the browsers show it for.
+  const FULLSCREEN_BANNER_MS = 5000;
+  const bannerVisibleUntilRef = useRef(0);
+  const markFullscreenBanner = useCallback(() => {
+    bannerVisibleUntilRef.current = Date.now() + FULLSCREEN_BANNER_MS;
+  }, []);
+  useEffect(() => {
+    const evt = getFullscreenChangeEvent();
+    const onChange = () => { if (isFullscreen()) markFullscreenBanner(); };
+    document.addEventListener(evt, onChange);
+    return () => document.removeEventListener(evt, onChange);
+  }, [markFullscreenBanner]);
+  /** Resolves once the banner can no longer be on screen. */
+  const waitOutFullscreenBanner = useCallback(async () => {
+    const remaining = bannerVisibleUntilRef.current - Date.now();
+    if (remaining > 0) {
+      console.log(`[ShareBar] waiting ${remaining}ms for the browser full-screen banner to clear`);
+      await new Promise((r) => setTimeout(r, remaining));
+    }
+  }, []);
+
   const captureScreenFrame = useCallback(async (): Promise<Blob | null> => {
+    await waitOutFullscreenBanner();
     const stream = screenStreamRef.current;
     const track = stream?.getVideoTracks?.()[0];
     if (!stream || !track || track.readyState !== 'live') return null;
@@ -1782,26 +1812,50 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       // the top of the frame — well outside the centered card in every layout
       // — and check it's actually near-white; a still-colored strip means the
       // blank hasn't visually landed yet.
+      // 2026-09-30: the band was 3-6 % of the height, ABOVE the browser's own
+      // "<site> - To exit full screen, press Esc" banner at ~6-13 %, so a
+      // capture taken while that banner was still up sailed through this check
+      // and then failed the vision gate on the browser's own chrome. Widened
+      // to 2-18 %; a collapsed sharing pill is too small to move the mean.
       const looksBlank = (canvas: HTMLCanvasElement): boolean => {
         const ctx = canvas.getContext('2d');
         if (!ctx) return true; // can't verify — don't block the flow on it
-        const sy = Math.round(canvas.height * 0.03), sh = Math.max(1, Math.round(canvas.height * 0.03));
-        const sx = Math.round(canvas.width * 0.1), sw = Math.round(canvas.width * 0.8);
+        const sy = Math.round(canvas.height * 0.02), sh = Math.max(1, Math.round(canvas.height * 0.16));
+        const sx = Math.round(canvas.width * 0.05), sw = Math.round(canvas.width * 0.9);
         let data: Uint8ClampedArray;
         try { data = ctx.getImageData(sx, sy, sw, sh).data; } catch { return true; }
+        // Two conditions, because the brightness MEAN alone is not enough: on a
+        // 2560-wide monitor the full-screen banner covers ~8 % of this band and
+        // only pulls the mean to ~237, i.e. it would still read as "blank". So
+        // also look for a WIDE DARK ROW - the banner is a solid dark bar 20-35 %
+        // of the screen wide, while the collapsed sharing pill is ~5 % and a
+        // blanked page is none. This test does not depend on screen size.
         let sum = 0;
-        const pixels = data.length / 4;
-        for (let i = 0; i < data.length; i += 4) sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
-        return pixels > 0 && sum / pixels > 235;
+        let widestDarkRow = 0;
+        for (let y = 0; y < sh; y += 1) {
+          let darkInRow = 0;
+          const row = y * sw * 4;
+          for (let x = 0; x < sw; x += 1) {
+            const i = row + x * 4;
+            const luma = (data[i] + data[i + 1] + data[i + 2]) / 3;
+            sum += luma;
+            if (luma < 170) darkInRow += 1;
+          }
+          if (darkInRow > widestDarkRow) widestDarkRow = darkInRow;
+        }
+        const pixels = sw * sh;
+        if (pixels <= 0) return true;
+        return sum / pixels > 235 && widestDarkRow / sw < 0.12;
       };
       const grabFrame = async (): Promise<Blob | null> => {
         let canvas = grabCanvas();
-        // Up to 4 extra retries (~1.4s worst case) waiting for the blank to
+        // Up to 14 extra retries (~5.6s worst case) waiting for the blank to
         // actually land before giving up and using whatever's latest — better
         // than an unbounded wait, but closes the gap the fixed rVFC wait left
-        // open on slower hardware.
-        for (let attempt = 0; canvas && !looksBlank(canvas) && attempt < 4; attempt++) {
-          await new Promise<void>((r) => window.setTimeout(r, 350));
+        // open on slower hardware, and outlasts the browser's ~4s full-screen
+        // banner (see looksBlank).
+        for (let attempt = 0; canvas && !looksBlank(canvas) && attempt < 14; attempt++) {
+          await new Promise<void>((r) => window.setTimeout(r, 400));
           canvas = grabCanvas();
         }
         if (!canvas) return null;
@@ -1844,7 +1898,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       if (pageEl) pageEl.style.background = prevPageBg ?? '';
       try { video.remove(); } catch { /* ignore */ }
     }
-  }, []);
+  }, [waitOutFullscreenBanner]);
 
 
   // Consume a unit + start the backend interview, then enter the interview UI.
@@ -1925,7 +1979,12 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
       return;
     }
     // Keep the start IN fullscreen (this click is the required user gesture).
-    if (!isFullscreen()) { try { await requestFullscreen(); } catch { /* verified in UI */ } }
+    if (!isFullscreen()) {
+      try { await requestFullscreen(); } catch { /* verified in UI */ }
+      // Entering fullscreen HERE is what puts the banner on screen; don't wait
+      // for the event round-trip to notice.
+      markFullscreenBanner();
+    }
     // Resume audio (Bina TTS) on this gesture too.
     try {
       const ctx = (window as any).__interviewAudioContext || new AudioContext({ sampleRate: 24000 });
@@ -2060,7 +2119,7 @@ function CandidateAIInterviewPortalInner({ token }: Props) {
     } finally {
       setShareBarChecking(false);
     }
-  }, [shareBarChecking, startSubmitting, shareBarAttempts, token, captureScreenFrame, startInterviewNow]);
+  }, [shareBarChecking, startSubmitting, shareBarAttempts, token, captureScreenFrame, startInterviewNow, markFullscreenBanner]);
 
   // NOTE: the share-bar check is CLICK-ONLY (no background auto-recheck). The
   // vision LLM runs exactly once per candidate press of "Continue" — never on a

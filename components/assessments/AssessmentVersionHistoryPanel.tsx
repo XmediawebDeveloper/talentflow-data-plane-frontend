@@ -3,6 +3,7 @@
 import { Fragment, useState } from 'react';
 import { ChevronDown, Eye, Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import ListPagination from '@/components/ListPagination';
 import type { ReactNode } from 'react';
 import type { JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
@@ -84,6 +85,14 @@ export interface AssessmentVersionRow {
 }
 
 interface AssessmentVersionHistoryPanelProps {
+  /**
+   * Page both tables — the Job Versions rows and each job version's
+   * Assessment Versions rows — with the shared pagination bar (Per Page,
+   * Showing X to Y of Z, First / Previous / Next / Last), each on its own
+   * page state. Off by default, so every other host keeps the full lists it
+   * has; the Assessments page turns it on to match its other tables.
+   */
+  paginated?: boolean;
   /** The JD's own lineage — every job version. Undefined while it loads. */
   jobVersions: JDLineageVersion[] | undefined;
   /** Full JD record per job-version id, for that version's own author. */
@@ -169,6 +178,15 @@ interface AssessmentVersionHistoryPanelProps {
   renderChildDetail?: (child: AssessmentVersionRow) => ReactNode;
   /** The cell under `vocabulary.extraDetailColumn`, when the vocabulary has one. */
   renderChildExtraDetail?: (child: AssessmentVersionRow) => ReactNode;
+  /**
+   * Leave Draft job versions out of the table. A Draft is not yet a
+   * published/active version of the job, so the Total Jobs list does not show
+   * it. Display only: the Draft record is untouched and still opens from the
+   * job's own Draft workflow. Read off the same status the Status column
+   * prints (`jobVersionDisplayStatus`); a version whose status is still
+   * loading stays listed. Omitted, every version is shown as before.
+   */
+  hideDraftJobVersions?: boolean;
   /**
    * The trailing controls for one assessment — the host's own three-dot menu
    * and quick actions. Given that assessment's record so the host's existing
@@ -789,8 +807,24 @@ export default function AssessmentVersionHistoryPanel({
   vocabulary = ASSESSMENT_VOCABULARY,
   renderChildDetail,
   renderChildExtraDetail,
+  hideDraftJobVersions = false,
+  paginated = false,
 }: AssessmentVersionHistoryPanelProps) {
   const childColumns = childColumnsFor(vocabulary);
+  /* `paginated` state. The Job Versions table has one page; each job version's
+     Assessment Versions table has its own, keyed by job version, so turning a
+     page in one never moves another. */
+  const [jobVersionsPage, setJobVersionsPage] = useState(1);
+  const [jobVersionsPageSize, setJobVersionsPageSize] = useState(10);
+  const [childPaging, setChildPaging] = useState<Record<number, { page: number; size: number }>>({});
+  const childPagingOf = (jobVersion: number) => childPaging[jobVersion] ?? { page: 1, size: 10 };
+  const setChildPagingOf = (jobVersion: number, next: { page: number; size: number }) =>
+    setChildPaging((current) => ({ ...current, [jobVersion]: next }));
+  /** A page's slice of `rows`, clamped to a page that exists. */
+  const pageSlice = <T,>(rows: T[], page: number, size: number) => {
+    const safe = Math.min(Math.max(1, page), Math.max(1, Math.ceil(rows.length / size)));
+    return rows.slice((safe - 1) * size, safe * size);
+  };
   /* Which job versions have their assessment table open, when this panel owns
      the answer: nothing outside it needs to know, and the state dying with the
      panel is the right lifetime wherever the panel outlives the reading.
@@ -958,7 +992,7 @@ export default function AssessmentVersionHistoryPanel({
     if (!lineageByVersion.has(number)) lineageByVersion.set(number, version);
   }
 
-  const groups: JobVersionGroup[] = jobVersionNumbers.map((jobVersion) => {
+  const allGroups: JobVersionGroup[] = jobVersionNumbers.map((jobVersion) => {
     const lineageEntry = lineageByVersion.get(jobVersion);
     const detail = lineageEntry ? jobVersionDetails[lineageEntry.id] : undefined;
     /* Only the assessments actually recorded against THIS job version,
@@ -996,6 +1030,18 @@ export default function AssessmentVersionHistoryPanel({
       totalCompleted: versionAssessments.reduce((sum, a) => sum + (a.completed_count ?? 0), 0),
     };
   });
+
+  /* Draft job versions left out when the host asks (see the prop). If the
+     host's latest version is one of them, Latest moves to the newest version
+     still listed, so the table always badges a row. */
+  const groups: JobVersionGroup[] = (() => {
+    if (!hideDraftJobVersions) return allGroups;
+    const visible = allGroups.filter(
+      (group) => jobVersionDisplayStatus(group.jobStatus, group.jobCurrentVersion) !== 'Draft',
+    );
+    if (visible.length === 0 || visible.some((group) => group.isLatestJobVersion)) return visible;
+    return visible.map((group, index) => ({ ...group, isLatestJobVersion: index === 0 }));
+  })();
 
   return (
     <div className="mt-3 pt-3 border-t border-gray-100 dark:border-slate-700">
@@ -1068,7 +1114,7 @@ export default function AssessmentVersionHistoryPanel({
                 </tr>
               </thead>
               <tbody>
-                {groups.map((group) => {
+                {(paginated ? pageSlice(groups, jobVersionsPage, jobVersionsPageSize) : groups).map((group) => {
                   const count = group.assessments.length;
                   /* The row's whole Create-vs-View decision, and the group
                      owns it (see `hasAssessment` on JobVersionGroup). NOT
@@ -1384,7 +1430,10 @@ export default function AssessmentVersionHistoryPanel({
                                               </td>
                                             </tr>
                                           )}
-                                          {group.assessments.map((assessment) => {
+                                          {(paginated
+                                            ? pageSlice(group.assessments, childPagingOf(group.jobVersion).page, childPagingOf(group.jobVersion).size)
+                                            : group.assessments
+                                          ).map((assessment) => {
                                             const isCurrent = !!currentAssessmentId && assessment.id === currentAssessmentId;
                                             const statusLabel = vocabulary.statusLabel(assessment.status);
                                             const invitations = assessment.invitations_count ?? 0;
@@ -1561,6 +1610,22 @@ export default function AssessmentVersionHistoryPanel({
                                         </tbody>
                                       </table>
                                     </div>
+                                    {paginated && (
+                                      <div className="px-3 pb-3">
+                                        <ListPagination
+                                          currentPage={childPagingOf(group.jobVersion).page}
+                                          itemsPerPage={childPagingOf(group.jobVersion).size}
+                                          totalItems={count}
+                                          onPageChange={(page) =>
+                                            setChildPagingOf(group.jobVersion, { ...childPagingOf(group.jobVersion), page })
+                                          }
+                                          onItemsPerPageChange={(size) => setChildPagingOf(group.jobVersion, { page: 1, size })}
+                                          itemLabel="versions"
+                                          showFirstLast
+                                          scrollOnPageChange={false}
+                                        />
+                                      </div>
+                                    )}
                                   </div>
                                 </div>
                               </div>
@@ -1574,6 +1639,20 @@ export default function AssessmentVersionHistoryPanel({
               </tbody>
             </table>
           </div>
+          {paginated && (
+            <div className="px-3 sm:px-4 pb-3">
+              <ListPagination
+                currentPage={jobVersionsPage}
+                itemsPerPage={jobVersionsPageSize}
+                totalItems={groups.length}
+                onPageChange={setJobVersionsPage}
+                onItemsPerPageChange={(size) => { setJobVersionsPageSize(size); setJobVersionsPage(1); }}
+                itemLabel="job versions"
+                showFirstLast
+                scrollOnPageChange={false}
+              />
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -467,10 +467,13 @@ export function buildInvitationRowActions(inv: any, opts: {
   if (isCopyLinkAvailable(inv)) {
     actions.push({ key: 'copy', label: 'Copy Link', Icon: Copy, run: () => copyInvitationLink(inv), iconClassName: 'text-menu-icon-download' });
   }
-  if (opts.onViewResult && status === 'completed') {
+  // Terminated opens the same page. It carries no scores, so it is labelled
+  // "View Details" — what is there is the recording and the Integrity Check
+  // evidence, which is the reason to open a terminated candidate (2026-09-30).
+  if (opts.onViewResult && (status === 'completed' || status === 'abandoned')) {
     actions.push({
       key: 'view',
-      label: 'View Results',
+      label: status === 'completed' ? 'View Results' : 'View Details',
       Icon: Eye,
       run: () => opts.onViewResult!(inv),
       disabled: !inv.attempt_id,

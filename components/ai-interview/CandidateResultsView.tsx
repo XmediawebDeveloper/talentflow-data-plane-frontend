@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useRef } from 'react';
+import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
 import {
   ArrowLeft, Clock, MessageSquare, ThumbsUp, ThumbsDown,
@@ -10,6 +11,7 @@ import {
   Volume2, Users, Maximize2, Camera, Mic, User, ChevronLeft, ChevronRight, Smartphone,
   Shield, CheckCircle2, XCircle, Activity, RefreshCw, Award, TrendingUp, Target,
   Download, Loader2, Sparkles, SkipForward, Play, X, Timer,
+  ArrowUpRight,
 } from 'lucide-react';
 import {
   XAxis, YAxis, CartesianGrid, Tooltip,
@@ -666,6 +668,28 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
   const [liveWsConnected, setLiveWsConnected] = useState(false);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   useEffect(() => { setLiveSession(interview); }, [interview]);
+  /* The candidate's CID for the header tagline. The invite LIST endpoints
+     inject `candidate_cid`; the single-session GET this page loads often
+     doesn't — so when it's missing, find this session in its interview's
+     invite list (searched by email) and take the CID from there. */
+  const [fetchedCid, setFetchedCid] = useState<string | null>(null);
+  useEffect(() => {
+    if (interview.candidate_cid || liveSession.candidate_cid) return;
+    const configId = (liveSession as any).config_id || (interview as any).config_id;
+    const email = interview.candidate_email || liveSession.candidate_email;
+    if (!configId || !email) return;
+    let cancelled = false;
+    aiInterviewService.getConfigInvitations(configId, { search: email, page: 1, page_size: 50, compact: true })
+      .then((res) => {
+        if (cancelled) return;
+        const match = (res.items || []).find((row: any) => row.id === liveSession.id)
+          ?? (res.items || []).find((row: any) => (row.candidate_email || '').toLowerCase() === email.toLowerCase() && row.candidate_cid);
+        if (match?.candidate_cid) setFetchedCid(match.candidate_cid);
+      })
+      .catch(() => { /* the tagline simply goes without the CID */ });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveSession.id]);
 
   // Fetch recording with auth headers and create blob URL.
   // Uses liveSession (not the initial interview prop) so that when evaluation_ready
@@ -1754,11 +1778,6 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                       <h1 className="text-xl font-semibold text-gray-900 tracking-tight">
                         {interview.candidate_name || 'Unknown Candidate'}
                       </h1>
-                      {interview.candidate_cid && (
-                        <span className="inline-flex items-center px-2 py-0.5 bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 rounded text-xs font-mono font-medium">
-                          {interview.candidate_cid}
-                        </span>
-                      )}
                       <Badge variant={getStatusVariant(interview.status)}>
                         {getStatusLabel(interview.status)}
                       </Badge>
@@ -1783,15 +1802,37 @@ export default function CandidateResultsView({ interview, onBack, currentIndex, 
                         />
                       )}
                     </div>
-                    <div className="flex items-center gap-3 mt-1 text-sm text-gray-500">
-                      {interview.candidate_email && <span>{interview.candidate_email}</span>}
-                      {interview.position && (
-                        <>
-                          <span className="text-gray-300">|</span>
-                          <span>{interview.position}</span>
-                        </>
-                      )}
-                    </div>
+                    {/* CID | email | Job name ↗ — the job opens its Job Details page. */}
+                    {(() => {
+                      const cid = interview.candidate_cid || liveSession.candidate_cid || fetchedCid;
+                      const email = interview.candidate_email || liveSession.candidate_email;
+                      const jobName = interview.position || (interview as any).jd_title || (liveSession as any).jd_title;
+                      const jdId = interview.jd_id || liveSession.jd_id;
+                      const parts: React.ReactNode[] = [];
+                      if (cid) parts.push(<span key="cid">{cid}</span>);
+                      if (email) parts.push(<span key="email" className="truncate">{email}</span>);
+                      if (jobName) parts.push(jdId ? (
+                        <Link
+                          key="job"
+                          href={`/recruitment/job-details?id=${encodeURIComponent(jdId)}`}
+                          title="Open this job"
+                          className="group inline-flex items-center gap-1 text-gray-700 hover:text-brand-blue hover:underline underline-offset-2 transition-colors"
+                        >
+                          {jobName}
+                          <ArrowUpRight className="w-3.5 h-3.5 shrink-0 text-gray-400 group-hover:text-brand-blue" aria-hidden />
+                        </Link>
+                      ) : <span key="job">{jobName}</span>);
+                      return (
+                        <div className="flex items-center gap-2 flex-wrap mt-1 text-sm text-gray-500 min-w-0">
+                          {parts.map((part, i) => (
+                            <span key={i} className="inline-flex items-center gap-2 min-w-0">
+                              {i > 0 && <span className="text-gray-300" aria-hidden>|</span>}
+                              {part}
+                            </span>
+                          ))}
+                        </div>
+                      );
+                    })()}
                   </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-gray-500 mt-2 ml-[60px]">

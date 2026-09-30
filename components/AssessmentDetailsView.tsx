@@ -31,6 +31,7 @@ import InviteFilterBar, {
 import AssessmentInviteTable, {
   isBulkResendable,
   isTrackedInviteCompleted,
+  opensTrackedInviteDetails,
 } from '@/components/assessments/AssessmentInviteTable';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -768,6 +769,7 @@ export default function AssessmentDetailsView({
      other cards to zero, which is what makes them navigable. */
   const [inviteStats, setInviteStats] = useState({
     total: 0, expired: 0, started: 0, completed: 0, failed: 0, terminated: 0,
+    invited: 0, revoked: 0,
   });
   const [inviteSelectedIds, setInviteSelectedIds] = useState<Set<string>>(new Set());
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
@@ -849,6 +851,8 @@ export default function AssessmentDetailsView({
         completed: response.completed || 0,
         failed: response.failed || 0,
         terminated: response.terminated || 0,
+        invited: response.invited || 0,
+        revoked: response.revoked || 0,
       });
     } catch (error) {
       console.error('Failed to load invitation summary:', error);
@@ -906,10 +910,10 @@ export default function AssessmentDetailsView({
      Prev/Next list the Recent Activity tab hands it, so paging between
      candidates works identically whichever tab opened one. */
   const openInviteResult = (invitation: any) => {
-    if (!isTrackedInviteCompleted(invitation)) return;
+    if (!opensTrackedInviteDetails(invitation)) return;
     try {
       const navList = inviteRows
-        .filter(isTrackedInviteCompleted)
+        .filter(opensTrackedInviteDetails)
         .map((inv: any) => ({ id: inv.attempt_id, cid: inv.candidate_display_id || '' }));
       sessionStorage.setItem('assessmentResultNavList', JSON.stringify(navList));
     } catch { /* ignore quota errors */ }
@@ -2565,7 +2569,7 @@ export default function AssessmentDetailsView({
                 summary, so selecting a bucket narrows the table without
                 collapsing the other cards. */}
             <InviteStatCards
-              gridClassName="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-5 gap-1 sm:gap-2 lg:gap-4"
+              gridClassName="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-1 sm:gap-2 lg:gap-3"
               activeStatus={inviteFilters.status}
               onSelect={(status) => {
                 setInviteFilters({ ...inviteFilters, status });
@@ -2573,17 +2577,12 @@ export default function AssessmentDetailsView({
               }}
               cards={[
                 { key: 'all', label: 'Total Invited', Icon: Users, value: inviteStats.total, ...INVITE_CARD_TONES.blue },
+                { key: 'sent', label: 'Invited', Icon: Mail, value: inviteStats.invited, ...INVITE_CARD_TONES.slate },
                 { key: 'started', label: 'In Progress', Icon: Play, value: inviteStats.started, ...INVITE_CARD_TONES.cyan },
                 { key: 'completed', label: 'Completed', Icon: CheckCircle, value: inviteStats.completed, ...INVITE_CARD_TONES.green },
                 { key: 'expired', label: 'Expired', Icon: Clock, value: inviteStats.expired, ...INVITE_CARD_TONES.orange },
-                {
-                  key: 'completion-rate',
-                  label: 'Completion Rate',
-                  Icon: TrendingUp,
-                  value: `${inviteStats.total > 0 ? Math.round((inviteStats.completed / inviteStats.total) * 100) : 0}%`,
-                  filterable: false,
-                  ...INVITE_CARD_TONES.purple,
-                },
+                { key: 'terminated', label: 'Terminated', Icon: Ban, value: inviteStats.terminated, ...INVITE_CARD_TONES.red },
+                { key: 'revoked', label: 'Revoked', Icon: Ban, value: inviteStats.revoked, ...INVITE_CARD_TONES.indigo },
               ]}
             />
 
@@ -2594,6 +2593,14 @@ export default function AssessmentDetailsView({
                 <p className="text-xs sm:text-sm text-gray-700 dark:text-slate-300">
                   <span className="font-semibold">Note:</span> Results are available only for candidates with Complete status. Other candidates&rsquo; results are not available.
                 </p>
+                {/* Completion rate lives here, not in the card row: the row is
+                    the status FILTER and this was the one tile that filtered
+                    nothing. Same placement and treatment as the AI interview
+                    tracker (2026-09-30). */}
+                <span className="ml-auto flex-shrink-0 inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+                  <TrendingUp className="w-3.5 h-3.5" />
+                  {inviteStats.total > 0 ? Math.round((inviteStats.completed / inviteStats.total) * 100) : 0}% Completion
+                </span>
               </div>
             </div>
 
@@ -2665,7 +2672,7 @@ export default function AssessmentDetailsView({
                 codingEnabled={!!assessment.coding_enabled}
                 selectedIds={inviteSelectedIds}
                 onToggleSelect={toggleInviteSelectOne}
-                canOpenResult={isTrackedInviteCompleted}
+                canOpenResult={opensTrackedInviteDetails}
                 onOpenResult={openInviteResult}
                 onResend={setResendTarget}
                 editingEmailId={editingEmailId}
@@ -2762,6 +2769,10 @@ export default function AssessmentDetailsView({
             }
             canDownloadPDF={canDownloadResultPDF}
             canBatchDownload={canBatchDownloadResults}
+            /* Opening or revisiting the tab lands on Total Candidates with its
+               list showing. Back from a candidate's result instead restores the
+               view the recruiter left, as the scopes above do. */
+            openOnTotalCandidates={!isResultRestoreArrival(searchParams)}
           />
         )}
 

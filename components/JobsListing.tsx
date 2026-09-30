@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import JobOpeningSummary from '@/components/jobs/JobOpeningSummary';
 import JobVersionHistoryPanel from '@/components/jobs/JobVersionHistoryPanel';
 import { useJobVersionLineage } from '@/lib/hooks/useJobVersionLineage';
+import { useJobCandidateCounts } from '@/lib/hooks/useJobCandidateCounts';
 import { useAuth } from '@/components/providers/AuthProvider';
 import PageBreadcrumb from '@/components/PageBreadcrumb';
 import { StatsCard, StatsCardGrid } from '@/components/ui/stats-card';
@@ -211,6 +212,9 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
      applicant counts, all from the shared hook so the Apply to Job dialog opens
      the same history from the same endpoints. */
   const versionLineage = useJobVersionLineage();
+  // "N assessed" / "N interviewed" on each card — tallied client-side, since
+  // the JD list endpoint carries neither count.
+  const candidateCounts = useJobCandidateCounts();
   /* No lineage is fetched to answer a status pill any more. The pill reads the
      job's representative row, which the list already has, so selecting one
      costs zero requests — where it used to fire one per job on the page. The
@@ -1273,7 +1277,11 @@ export default function JobsListing({ jobs, statusCounts = null, jobsFullyLoaded
                           Apply to Job dialog's list renders the identical set
                           of fields from the identical helpers. */}
                       <div className="flex-1 min-w-0">
-                        <JobOpeningSummary job={job} />
+                        <JobOpeningSummary
+                          job={candidateCounts
+                            ? { ...job, assessed: candidateCounts[job.id]?.assessed ?? 0, interviewed: candidateCounts[job.id]?.interviewed ?? 0 }
+                            : job}
+                        />
                       </div>
 
                       {/* Actions — a full-height column: icon row pinned at

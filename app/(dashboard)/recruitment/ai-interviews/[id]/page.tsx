@@ -79,6 +79,9 @@ function AIInterviewDetailsContent() {
   // Create" on a job that already has a live interview lands here. Keeps the
   // breadcrumb and Back anchored to that job instead of the AI Interviews list.
   const fromJobDetails = searchParams.get('from') === 'job-details';
+  // `?tab=results` — the AI Interviews list's "View Results" opens this
+  // version on its Results tab rather than a separate results page.
+  const initialTab = searchParams.get('tab') === 'results' ? 'results' as const : undefined;
 
   const [config, setConfig] = useState<AIInterviewResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -185,6 +188,7 @@ function AIInterviewDetailsContent() {
         ? () => router.replace(`/recruitment/ai-interviews/${allIds[allIds.indexOf(interviewId) + 1]}`)
         : undefined}
       breadcrumbItems={breadcrumbItems}
+      initialTab={initialTab}
     />
   );
 }

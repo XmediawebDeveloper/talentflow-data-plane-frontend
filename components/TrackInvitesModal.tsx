@@ -1,6 +1,10 @@
 'use client';
 
 import { X, Users, Mail, Play, CheckCircle, Clock, Eye, TrendingUp, RefreshCw, Loader2, Monitor, Ban } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
+import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from '@/components/ai-interview/ColumnFilterFields';
+import { assessmentInviteSource } from '@/components/AIInterviewInviteTable';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { Badge } from '@/components/ui/badge';
@@ -39,6 +43,10 @@ interface TrackInvitesModalProps {
   onClose: () => void;
   jdId: string;
   jdTitle: string;
+  /** The JD's short id and job version — shown as `JD-xxx · title · V1`. The
+   *  tracker is one job version's, so there is no Job Version filter. */
+  jdShortId?: string;
+  jobVersion?: number | null;
   /** Lets the host open a candidate's result without leaving its page (Job
    *  Details renders the detail view inline). Falls back to navigating to the
    *  standalone results-details route when not supplied. */
@@ -53,7 +61,23 @@ const INVITES_PAGE_SIZE = 10;
 // timelineEvents) so this surface can't drift from the other two.
 const getEffectiveStatus = resolveInviteStatus;
 
-export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onViewResult }: TrackInvitesModalProps) {
+/* The stat cards' buckets — the AI Interview tracker's set. One bucket per
+   invite, so the counts add up and a card filters to exactly what it counts.
+   Invite Failed / Bounced stay in Total and in the Status dropdown. */
+type CardBucket = 'invited' | 'in_progress' | 'completed' | 'expired' | 'terminated' | 'revoked' | 'failed';
+const CARD_KEYS = new Set<string>(['invited', 'in_progress', 'completed', 'expired', 'terminated', 'revoked']);
+const cardBucketOf = (inv: any): CardBucket => {
+  const s = resolveInviteStatus(inv);
+  if (s === 'completed') return 'completed';
+  if (s === 'revoked') return 'revoked';
+  if (s === 'abandoned') return 'terminated';
+  if (s === 'expired' || isInviteExpired(inv)) return 'expired';
+  if (s === 'failed' || s === 'bounced') return 'failed';
+  if (s === 'started' || s === 'opened') return 'in_progress';
+  return 'invited';
+};
+
+export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, jdShortId, jobVersion, onViewResult }: TrackInvitesModalProps) {
   const router = useRouter();
 
   // One rule for both the mobile cards and the desktop table: stay in place if
@@ -74,12 +98,18 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
   const [invitations, setInvitations] = useState<any[]>([]);
   const [stats, setStats] = useState({
     total: 0,
+    invited: 0,
     expired: 0,
     started: 0,
     completed: 0,
     failed: 0,
     terminated: 0,
+    revoked: 0,
   });
+  /* The AI tracker's extra filters (no Job Version — this is one job version). */
+  const [assessmentVersionFilter, setAssessmentVersionFilter] = useState('');
+  const [sourceFilter, setSourceFilter] = useState('');
+  const [resultFilter, setResultFilter] = useState('');
   // Email editing state
   /* Filters run over the merged list rather than being pushed to the API.
      Unlike the per-assessment tracker on the Assessments page, this popup
@@ -115,7 +145,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
 
       if (!assessmentsResponse.data?.items || assessmentsResponse.data.items.length === 0) {
         setInvitations([]);
-        setStats({ total: 0, expired: 0, started: 0, completed: 0, failed: 0, terminated: 0 });
+        setStats({ total: 0, invited: 0, expired: 0, started: 0, completed: 0, failed: 0, terminated: 0, revoked: 0 });
         setIsLoading(false);
         return;
       }
@@ -137,6 +167,8 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
               ...inv,
               assessment_title: assessment.title,
               assessment_id: assessment.id,
+              assessment_version: assessment.version,
+              ...assessmentInviteSource(inv),
               assessment_technical_enabled: assessment.technical_enabled,
               assessment_coding_enabled: assessment.coding_enabled,
             })));
@@ -164,13 +196,17 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
         if (s === 'started' || (inv.started_at && !inv.completed_at)) return 'started';
         return 'sent';
       };
+      void _bucket;
+      const count = (b: CardBucket) => allInvitations.filter((inv) => cardBucketOf(inv) === b).length;
       const newStats = {
         total: allInvitations.length,
-        expired: allInvitations.filter(inv => _bucket(inv) === 'expired').length,
-        started: allInvitations.filter(inv => _bucket(inv) === 'started').length,
-        completed: allInvitations.filter(inv => _bucket(inv) === 'completed').length,
-        failed: allInvitations.filter(inv => _bucket(inv) === 'failed').length,
-        terminated: allInvitations.filter(inv => _bucket(inv) === 'terminated').length,
+        invited: count('invited'),
+        started: count('in_progress'),
+        completed: count('completed'),
+        expired: count('expired'),
+        terminated: count('terminated'),
+        revoked: count('revoked'),
+        failed: count('failed'),
       };
 
       setInvitations(allInvitations);
@@ -194,7 +230,10 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
     }
   };
 
-  const filtersActive = hasActiveInviteFilters(filters);
+  const filtersActive = hasActiveInviteFilters(filters) || !!(assessmentVersionFilter || sourceFilter || resultFilter);
+  const assessmentVersions = [...new Set(invitations.map((inv: any) => inv.assessment_version).filter((v: any) => v != null))]
+    .sort((a: any, b: any) => Number(b) - Number(a));
+  const completionRate = stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0;
 
   /* Matches the server-side filter the Assessments page applies, so the same
      search finds the same people from either entry point: free text over
@@ -220,7 +259,17 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
         if (!haystack.includes(term)) return false;
       }
 
-      if (filters.status !== 'all' && getEffectiveStatus(inv) !== filters.status) return false;
+      if (filters.status !== 'all') {
+        if (CARD_KEYS.has(filters.status)) {
+          if (cardBucketOf(inv) !== filters.status) return false;
+        } else if (getEffectiveStatus(inv) !== filters.status) return false;
+      }
+      if (assessmentVersionFilter && String(inv.assessment_version ?? '') !== assessmentVersionFilter) return false;
+      if (sourceFilter && inv.invite_source !== sourceFilter) return false;
+      if (resultFilter) {
+        const scored = getEffectiveStatus(inv) === 'completed' && typeof inv.passed === 'boolean';
+        if (resultFilter === 'unscored' ? scored : !scored || (resultFilter === 'pass') !== inv.passed) return false;
+      }
 
       if (from || to) {
         const raw = inv.invited_at || inv.sent_at || inv.created_at;
@@ -233,7 +282,7 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
 
       return true;
     });
-  }, [invitations, filters]);
+  }, [invitations, filters, assessmentVersionFilter, sourceFilter, resultFilter]);
 
   const totalPages = Math.max(1, Math.ceil(filteredInvitations.length / INVITES_PAGE_SIZE));
   // Clamped rather than stored: the list refreshes every 15s and a filter can
@@ -298,25 +347,32 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
           short list no longer stretches the dialog down a large monitor. */}
       <div className={TRACKER_DIALOG_PANEL_CLASS}>
         {/* Modal Header */}
-        <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between flex-shrink-0 bg-slate-50 dark:bg-slate-950">
-          <div className="min-w-0 flex-1 flex items-center gap-2.5">
-            <div className="h-9 w-9 rounded-lg bg-brand-blue/10 ring-1 ring-brand-blue/15 flex items-center justify-center flex-shrink-0">
-              <Users className="w-4 h-4 sm:w-5 sm:h-5 text-brand-blue" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <h2 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate">
-                <span className="hidden sm:inline">Invite Status Tracking</span>
-                <span className="sm:hidden">Invite Status</span>
-              </h2>
-              <p className="text-2xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 truncate">{jdTitle}</p>
+        {/* Header — the AI Interview tracker's: solid icon tile, title, then
+            JD ID · job name · job version. */}
+        <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2 sm:gap-3">
+              <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-xl bg-brand-blue flex items-center justify-center shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 flex-shrink-0">
+                <Users className="w-4 h-4 sm:w-5 sm:h-5 text-white" />
+              </div>
+              <div className="min-w-0">
+                <h2 className="text-sm sm:text-lg font-semibold text-gray-900 dark:text-slate-50 truncate tracking-tight">
+                  <span className="hidden sm:inline">Assessment - Invite Status Tracking</span>
+                  <span className="sm:hidden">Invite Status</span>
+                </h2>
+                <p className="flex items-center gap-2 text-2xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 min-w-0">
+                  {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
+                  <span className="truncate">{jdTitle}</span>
+                  {jobVersion != null && jobVersion > 0 && (
+                    <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 flex-shrink-0" title="Job version">V{jobVersion}</span>
+                  )}
+                </p>
+              </div>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 sm:p-1.5 text-gray-400 dark:text-slate-500 hover:text-brand-blue hover:bg-brand-blue/5 rounded-lg transition-colors flex-shrink-0 ml-2"
-           aria-label="Close">
+          <Button variant="secondary" size="sm" onClick={onClose} className="px-2" aria-label="Close">
             <X className="w-4 h-4 sm:w-5 sm:h-5" />
-          </button>
+          </Button>
         </div>
 
         {/* Stat row doubles as the status filter — identical buckets, wording and
@@ -331,27 +387,13 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
             setPage(1);
           }}
           cards={[
-            { key: 'all', label: 'Total Invited', Icon: Users, value: stats.total, ...INVITE_CARD_TONES.blue },
-            { key: 'expired', label: 'Invite Expired', Icon: Clock, value: stats.expired, ...INVITE_CARD_TONES.orange },
-            { key: 'failed', label: 'Invite Failed', Icon: X, value: stats.failed, ...INVITE_CARD_TONES.red },
-            { key: 'started', label: 'In Progress', Icon: Play, value: stats.started, ...INVITE_CARD_TONES.cyan },
-            { key: 'completed', label: 'Completed', Icon: CheckCircle, value: stats.completed, ...INVITE_CARD_TONES.blue },
-            /* Keyed on 'abandoned' — the raw status getEffectiveStatus reports —
-               even though the count above buckets it as 'terminated'. The filter
-               below compares against the raw value. */
-            { key: 'abandoned', label: 'Terminated', Icon: Ban, value: stats.terminated, ...INVITE_CARD_TONES.red },
-            /* Terminated — candidate walked out mid-assessment; getEffectiveStatus
-               returns 'abandoned' for exactly these rows, so the card and the
-               table it filters to always agree. */
-            { key: 'abandoned', label: 'Terminated', Icon: Ban, value: stats.terminated, ...INVITE_CARD_TONES.red },
-            {
-              key: 'completion-rate',
-              label: 'Completion Rate',
-              Icon: TrendingUp,
-              value: `${stats.total > 0 ? Math.round((stats.completed / stats.total) * 100) : 0}%`,
-              filterable: false,
-              ...INVITE_CARD_TONES.blue,
-            },
+            { key: 'all', label: 'Total', Icon: Users, value: stats.total, ...INVITE_CARD_TONES.slate },
+            { key: 'invited', label: 'Invited', Icon: Mail, value: stats.invited, ...INVITE_CARD_TONES.blue },
+            { key: 'in_progress', label: 'In Progress', Icon: Play, value: stats.started, ...INVITE_CARD_TONES.orange },
+            { key: 'completed', label: 'Completed', Icon: CheckCircle, value: stats.completed, ...INVITE_CARD_TONES.green },
+            { key: 'expired', label: 'Expired', Icon: Clock, value: stats.expired, ...INVITE_CARD_TONES.orange },
+            { key: 'terminated', label: 'Terminated', Icon: Ban, value: stats.terminated, ...INVITE_CARD_TONES.red },
+            { key: 'revoked', label: 'Revoked', Icon: Ban, value: stats.revoked, ...INVITE_CARD_TONES.indigo },
           ]}
         />
 
@@ -364,11 +406,34 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
           }}
           statusOptions={ASSESSMENT_INVITE_STATUS_OPTIONS}
           searchPlaceholder="Search by candidate name, email, or CID..."
+          extraSelects={[
+            {
+              key: 'assessment-version', ariaLabel: 'Assessment Version', anyLabel: 'All Assessment Versions', value: assessmentVersionFilter,
+              options: assessmentVersions.map((v: any) => ({ value: String(v), label: `Assessment V${v}` })),
+              onChange: (value) => { setAssessmentVersionFilter(value); setPage(1); },
+            },
+            {
+              key: 'source', ariaLabel: 'Source', anyLabel: 'All Sources', value: sourceFilter,
+              options: INVITE_SOURCE_FILTER_OPTIONS,
+              onChange: (value) => { setSourceFilter(value); setPage(1); },
+            },
+            {
+              key: 'result', ariaLabel: 'Result', anyLabel: 'All Results', value: resultFilter,
+              options: RESULT_FILTER_OPTIONS,
+              onChange: (value) => { setResultFilter(value); setPage(1); },
+            },
+          ]}
+          onClearExtras={() => { setAssessmentVersionFilter(''); setSourceFilter(''); setResultFilter(''); }}
         />
 
         {!isLoading && invitations.length > 0 && (
-          <div className="px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
+          <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
             <p className="text-2xs sm:text-xs text-gray-500 dark:text-slate-500">{resultsLabel}</p>
+            {/* Completion rate — the AI tracker's badge, in place of the old card. */}
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
+              <TrendingUp className="w-3.5 h-3.5" />
+              {completionRate}% Completion
+            </span>
           </div>
         )}
 
@@ -721,6 +786,12 @@ export default function TrackInvitesModal({ isOpen, onClose, jdId, jdTitle, onVi
                 </button>
               </>
             )}
+            <button
+              onClick={onClose}
+              className="px-3 sm:px-4 py-1.5 sm:py-2 text-xs sm:text-sm bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10"
+            >
+              Close
+            </button>
           </div>
         </div>
       </div>

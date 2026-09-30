@@ -223,6 +223,10 @@ export interface AssessmentInvitationListResponse {
   failed: number;
   /** Candidate-side exit mid-assessment ('abandoned'), shown as "Terminated". */
   terminated: number;
+  /** Delivered and not yet acted on. */
+  invited: number;
+  /** Recruiter pulled the invitation back. */
+  revoked: number;
 }
 
 // Detailed result response (for recruiter view)

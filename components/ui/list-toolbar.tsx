@@ -104,6 +104,13 @@ export interface ListToolbarProps {
   fitToContainer?: boolean;
 
   /**
+   * With `fitToContainer`: the toolbar width at which the row goes single-line.
+   * `5xl` (64rem, the default) as before; `4xl` (56rem) for a toolbar whose
+   * controls fit one row sooner. Literal classes per value so Tailwind sees them.
+   */
+  containerBreakpoint?: '4xl' | '5xl';
+
+  /**
    * Desktop (`lg` and up) only: sit the controls right after the search box,
    * spaced exactly as they are spaced from each other, instead of pushing them
    * to the far end of the row. For a search box with a capped width, where the
@@ -131,9 +138,21 @@ export default function ListToolbar({
   filterPanel,
   searchClassName,
   fitToContainer = false,
+  containerBreakpoint = '5xl',
   controlsFollowSearch = false,
   className,
 }: ListToolbarProps) {
+  const container = containerBreakpoint === '4xl'
+    ? {
+        row: 'flex flex-col @4xl/toolbar:flex-row @4xl/toolbar:items-center gap-3 mb-3',
+        search: 'relative w-full @4xl/toolbar:flex-1 @4xl/toolbar:min-w-[220px]',
+        controls: '@4xl/toolbar:ml-auto',
+      }
+    : {
+        row: 'flex flex-col @5xl/toolbar:flex-row @5xl/toolbar:items-center gap-3 mb-3',
+        search: 'relative w-full @5xl/toolbar:flex-1 @5xl/toolbar:min-w-[220px]',
+        controls: '@5xl/toolbar:ml-auto',
+      };
   /* ---- Debounced search -------------------------------------------------
    * The input is uncontrolled by the parent between keystrokes: typing updates
    * local state, and only the settled value is handed up. Every consumer either
@@ -179,14 +198,14 @@ export default function ListToolbar({
     <div
       className={cn(
         fitToContainer
-          ? 'flex flex-col @5xl/toolbar:flex-row @5xl/toolbar:items-center gap-3 mb-3'
+          ? container.row
           : 'flex flex-col sm:flex-row sm:items-center gap-3 mb-3',
         // The group's own gap, so search → first control matches control → control.
         controlsFollowSearch && 'lg:gap-2',
         filterPanel ? undefined : className
       )}
     >
-      <div className={cn(fitToContainer ? 'relative w-full @5xl/toolbar:flex-1 @5xl/toolbar:min-w-[220px]' : 'flex-1 relative', searchClassName)}>
+      <div className={cn(fitToContainer ? container.search : 'flex-1 relative', searchClassName)}>
         <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-brand-blue/60" />
         <input
           type="text"
@@ -202,7 +221,7 @@ export default function ListToolbar({
       <div
         className={cn(
           'flex flex-wrap items-center gap-2',
-          fitToContainer ? '@5xl/toolbar:ml-auto' : 'sm:ml-auto',
+          fitToContainer ? container.controls : 'sm:ml-auto',
           // Controls follow the search box on desktop — see `controlsFollowSearch`.
           controlsFollowSearch && 'lg:ml-0',
         )}

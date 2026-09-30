@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Eye, Download, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { downloadSessionReport, downloadSessionReports, hasEvaluationReport } from './evaluation-dashboard/downloadSessionReport';
+import { downloadSessionReport, downloadSessionReports, canTryReport, NoReportError } from './evaluation-dashboard/downloadSessionReport';
 
 /** Below Tailwind's `sm` (640px) — where the results lists default to cards. */
 export const isPhoneWidth = (): boolean =>
@@ -81,13 +81,17 @@ export function DownloadPdfsButton({
  */
 export default function ResultRowActions({ session, onView }: { session: any; onView: () => void }) {
   const [downloading, setDownloading] = useState(false);
-  const canDownload = hasEvaluationReport(session);
+  const canDownload = canTryReport(session);
 
   const handleDownload = async () => {
     setDownloading(true);
     try {
       await downloadSessionReport(session.id);
     } catch (err) {
+      if (err instanceof NoReportError) {
+        toast.warning('No report yet — it is available once the interview is evaluated.');
+        return;
+      }
       console.error('[ResultRowActions] report download failed:', err);
       toast.error('Could not download the report. Please try again.');
     } finally {
