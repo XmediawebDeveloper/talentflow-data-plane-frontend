@@ -3706,7 +3706,12 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // be 5 IN A ROW. The pre-speech ring buffer still captures the first words, so
   // the slightly longer confirmation window loses no audio.
   const speechFrameCountRef = useRef(0);
-  const MIN_SPEECH_FRAMES = 5;
+  // TEST (was MIN_SPEECH_FRAMES = 5, ~460ms): onset now needs ~3s of voice,
+  // matching SUSTAINED_ACTIVE_MS. The 10s pre-speech ring buffer still holds
+  // the first words spoken during the window.
+  const SPEECH_ONSET_CONFIRM_MS = 3000;
+  const onsetStreakStartRef = useRef<number | null>(null);
+  const onsetLastVoiceAtRef = useRef<number | null>(null);
 
   // ── Adaptive mic gain (headset / low-gain mic normalization) ──────────────
   // autoGainControl is OFF (it distorts levels for ASR), so quiet mics —
@@ -7731,10 +7736,28 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
         }
 
         const speechConfirmThreshold = Math.max(silenceThresholdRef.current, possibleSpeechThreshold);
+        if (suppressNewSpeechDetection && !speechDetectedRef.current) {
+          // Bina's echo must not pre-charge the 3s onset window.
+          speechFrameCountRef.current = 0;
+        }
         if (!speechDetectedRef.current && avgLevel > speechConfirmThreshold && voiceLike) {
+          // Onset window: SPEECH_ONSET_CONFIRM_MS of voice, measured in time,
+          // tolerating inter-word dips up to STREAK_DIP_GRACE_MS — the same
+          // rule the in-turn silence-clock reset uses (SUSTAINED_ACTIVE_MS).
+          // speechFrameCountRef === 0 marks a fresh window, so every existing
+          // reset site (turn start, Bina speaking, etc.) also resets this one.
+          const _onsetGap = onsetLastVoiceAtRef.current == null
+            ? Infinity
+            : (nowMs - onsetLastVoiceAtRef.current);
+          if (speechFrameCountRef.current === 0 || onsetStreakStartRef.current == null || _onsetGap > STREAK_DIP_GRACE_MS) {
+            onsetStreakStartRef.current = nowMs;
+            speechFrameCountRef.current = 0;
+          }
+          onsetLastVoiceAtRef.current = nowMs;
           speechFrameCountRef.current++;
           silenceStartRef.current = null;
-          if (speechFrameCountRef.current >= MIN_SPEECH_FRAMES && !suppressNewSpeechDetection) {
+          const _onsetMs = nowMs - onsetStreakStartRef.current;
+          if (_onsetMs >= SPEECH_ONSET_CONFIRM_MS && !suppressNewSpeechDetection) {
             console.log('[INTERVIEW-DEBUG] Speech DETECTED (VAD)', {
               questionTimerSeconds: questionTimerSecondsRef.current,
               questionNumber: questionNumberRef.current,
@@ -7764,7 +7787,14 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
           }
         } else {
           if (!speechDetectedRef.current) {
-            speechFrameCountRef.current = 0;
+            // Short inter-word dip keeps the onset window alive; a real gap
+            // (> STREAK_DIP_GRACE_MS since the last voice frame) restarts it.
+            if (
+              onsetLastVoiceAtRef.current == null ||
+              (nowMs - onsetLastVoiceAtRef.current) > STREAK_DIP_GRACE_MS
+            ) {
+              speechFrameCountRef.current = 0;
+            }
           } else {
             const transcriptRecentlyAdvanced =
               lastLiveTranscriptUpdateAtRef.current != null &&
