@@ -1,6 +1,6 @@
 'use client';
 
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 interface ListPaginationProps {
@@ -27,8 +27,8 @@ interface ListPaginationProps {
   /**
    * The page-size ladder. Defaults to this control's long-standing
    * [5, 10, 20, 40, 100], so every existing list is untouched; pass your own
-   * where a screen specifies a different one (the All Assessments table asks
-   * for 10/20/50/100). A prop rather than a second copy of this component.
+   * where a screen specifies a different one. A prop rather than a second copy
+   * of this component.
    */
   pageSizeOptions?: number[];
   /**
@@ -39,6 +39,20 @@ interface ListPaginationProps {
    * existing list keeps hiding it on short lists.
    */
   alwaysShow?: boolean;
+  /**
+   * Add First page / Last page buttons around Previous / Next, in the same
+   * style and disabled on the same edges. Off by default, so every existing
+   * list keeps the controls it has; the Assessments page turns it on for all
+   * of its tables so they share one pagination bar.
+   */
+  showFirstLast?: boolean;
+  /**
+   * Scroll back to the top on a page change (the window, or
+   * `scrollContainerRef`). On by default. Off for a list nested inside
+   * another one — a version table inside a job card — where jumping the whole
+   * page to the top would lose the card the reader is in.
+   */
+  scrollOnPageChange?: boolean;
 }
 
 const DEFAULT_PAGE_SIZE_OPTIONS = [5, 10, 20, 40, 100];
@@ -54,6 +68,8 @@ export default function ListPagination({
   compact = false,
   pageSizeOptions = DEFAULT_PAGE_SIZE_OPTIONS,
   alwaysShow = false,
+  showFirstLast = false,
+  scrollOnPageChange = true,
 }: ListPaginationProps) {
   const totalPages = Math.max(1, Math.ceil(totalItems / itemsPerPage));
   const safePage = Math.min(currentPage, totalPages);
@@ -83,6 +99,7 @@ export default function ListPagination({
   const handlePageClick = (page: number) => {
     if (page < 1 || page > totalPages || page === safePage) return;
     onPageChange(page);
+    if (!scrollOnPageChange) return;
     const container = scrollContainerRef?.current;
     if (container) {
       container.scrollTo({ top: 0, behavior: 'smooth' });
@@ -130,7 +147,7 @@ export default function ListPagination({
           </span>
         </div>
 
-        <div className={`flex items-center justify-center sm:justify-end ${compact ? 'gap-1.5' : 'gap-2'}`}>
+        <div className={`flex flex-wrap items-center justify-center sm:justify-end ${compact ? 'gap-1.5' : 'gap-2'}`}>
           <div className={`flex items-center ${compact ? 'gap-1' : 'gap-1.5'}`}>
             <span className={`${labelClass} text-gray-600 whitespace-nowrap`}>Go to</span>
             <input
@@ -151,35 +168,71 @@ export default function ListPagination({
             />
           </div>
 
-          <button
-            onClick={() => handlePageClick(safePage - 1)}
-            disabled={safePage === 1}
-            className={`inline-flex items-center justify-center ${stepButtonClass} rounded-md border border-gray-200 transition-colors ${
-              safePage === 1
-                ? 'text-gray-400 opacity-40 cursor-not-allowed'
-                : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
-            }`}
-            aria-label="Previous page" title="Previous page"
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </button>
+          {/* The step controls stay one group, so a narrow bar wraps "Go to"
+              onto its own line rather than splitting the buttons. */}
+          <div className={`flex items-center ${compact ? 'gap-1.5' : 'gap-2'}`}>
+            {showFirstLast && (
+              <button
+                type="button"
+                onClick={() => handlePageClick(1)}
+                disabled={safePage === 1}
+                className={`inline-flex items-center justify-center ${stepButtonClass} rounded-md border border-gray-200 transition-colors ${
+                  safePage === 1
+                    ? 'text-gray-400 opacity-40 cursor-not-allowed'
+                    : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
+                }`}
+                aria-label="First page" title="First page"
+              >
+                <ChevronsLeft className="w-4 h-4" />
+              </button>
+            )}
 
-          <span className={`${labelClass} font-medium text-gray-700 whitespace-nowrap px-1`}>
-            <span className="text-brand-blue font-semibold">{safePage}</span> / {totalPages}
-          </span>
+            <button
+              onClick={() => handlePageClick(safePage - 1)}
+              disabled={safePage === 1}
+              className={`inline-flex items-center justify-center ${stepButtonClass} rounded-md border border-gray-200 transition-colors ${
+                safePage === 1
+                  ? 'text-gray-400 opacity-40 cursor-not-allowed'
+                  : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
+              }`}
+              aria-label="Previous page" title="Previous page"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
 
-          <button
-            onClick={() => handlePageClick(safePage + 1)}
-            disabled={safePage === totalPages}
-            className={`inline-flex items-center justify-center ${stepButtonClass} rounded-md border border-gray-200 transition-colors ${
-              safePage === totalPages
-                ? 'text-gray-400 opacity-40 cursor-not-allowed'
-                : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
-            }`}
-            aria-label="Next page" title="Next page"
-          >
-            <ChevronRight className="w-4 h-4" />
-          </button>
+            <span className={`${labelClass} font-medium text-gray-700 whitespace-nowrap px-1`}>
+              <span className="text-brand-blue font-semibold">{safePage}</span> / {totalPages}
+            </span>
+
+            <button
+              onClick={() => handlePageClick(safePage + 1)}
+              disabled={safePage === totalPages}
+              className={`inline-flex items-center justify-center ${stepButtonClass} rounded-md border border-gray-200 transition-colors ${
+                safePage === totalPages
+                  ? 'text-gray-400 opacity-40 cursor-not-allowed'
+                  : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
+              }`}
+              aria-label="Next page" title="Next page"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+
+            {showFirstLast && (
+              <button
+                type="button"
+                onClick={() => handlePageClick(totalPages)}
+                disabled={safePage === totalPages}
+                className={`inline-flex items-center justify-center ${stepButtonClass} rounded-md border border-gray-200 transition-colors ${
+                  safePage === totalPages
+                    ? 'text-gray-400 opacity-40 cursor-not-allowed'
+                    : 'text-gray-700 hover:bg-brand-blue/5 hover:text-brand-blue hover:border-brand-blue/30'
+                }`}
+                aria-label="Last page" title="Last page"
+              >
+                <ChevronsRight className="w-4 h-4" />
+              </button>
+            )}
+          </div>
         </div>
       </div>
     </div>

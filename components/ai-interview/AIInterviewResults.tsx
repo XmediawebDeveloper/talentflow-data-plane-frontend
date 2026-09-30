@@ -16,7 +16,7 @@ import {
   ChevronLeft, ChevronRight, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
   Ban, SlidersHorizontal, FileDown, FileText, FileSpreadsheet, Info, Download, X,
-  Square, CheckSquare,
+  Square, CheckSquare, Play,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -26,7 +26,7 @@ import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from './ColumnFilterFields';
-import { InviteSourceValue, inviteSourceLabel, isRevocableInvite, isExpiredForActions, displayInviteScore, inviteResult, matchesInviteResultFilter, ResultBadge, timelineEvents } from '@/components/AIInterviewInviteTable';
+import { InviteSourceValue, inviteSourceLabel, isRevocableInvite, isExpiredForActions, displayInviteScore, inviteResult, matchesInviteResultFilter, ResultBadge } from '@/components/AIInterviewInviteTable';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 interface AIInterviewResultsProps {
@@ -1294,16 +1294,23 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         )}
                         {col('timeline') && (
                           <td className="px-4 py-3 whitespace-nowrap text-gray-600">
-                            {/* Same trail as Track Invites (Invited / System Check /
-                                Started / Completed …), from the shared builder. */}
+                            {/* Results only care about the interview itself —
+                                Started and Completed, the same two times the
+                                export writes. Invite history stays on Track Invites. */}
                             <div className="flex flex-col gap-0.5 text-xs">
-                              {timelineEvents(session).map(({ label, at, Icon, tone }, i) => (
-                                <span key={`${label}-${i}`} className="flex items-center gap-1.5">
-                                  <Icon className={`w-3 h-3 shrink-0 ${tone}`} />
-                                  <span>{label}: {formatIST(at)}</span>
+                              {session.started_at && (
+                                <span className="flex items-center gap-1.5">
+                                  <Play className="w-3 h-3 shrink-0 text-brand-orange-deep" />
+                                  <span>Started: {formatIST(session.started_at)}</span>
                                 </span>
-                              ))}
-                              {timelineEvents(session).length === 0 && <span>—</span>}
+                              )}
+                              {session.completed_at && (
+                                <span className="flex items-center gap-1.5">
+                                  <CheckCircle className="w-3 h-3 shrink-0 text-success" />
+                                  <span>Completed: {formatIST(session.completed_at)}</span>
+                                </span>
+                              )}
+                              {!session.started_at && !session.completed_at && <span>—</span>}
                               <span><span className="text-gray-400">Duration:</span> {formatDuration(session)}</span>
                             </div>
                           </td>

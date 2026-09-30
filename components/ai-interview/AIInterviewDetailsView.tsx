@@ -157,9 +157,11 @@ interface AIInterviewDetailsViewProps {
    * without leaving the dialog.
    */
   configureOnly?: boolean;
+  /** Tab to open on — e.g. 'results' when reached from "View Results". */
+  initialTab?: 'overview' | 'activity' | 'versions' | 'viewjd' | 'results' | 'invites';
 }
 
-export default function AIInterviewDetailsView({ config, onBack, onRefresh, currentIndex, totalCount, onPrev, onNext, breadcrumbItems, configureOnly = false }: AIInterviewDetailsViewProps) {
+export default function AIInterviewDetailsView({ config, onBack, onRefresh, currentIndex, totalCount, onPrev, onNext, breadcrumbItems, configureOnly = false, initialTab }: AIInterviewDetailsViewProps) {
   const router = useRouter();
   const { user, isTenantAdmin } = useAuth();
   const canCreateAIInterviews = isTenantAdmin || !!user?.permissions?.canCreateAIInterviews;
@@ -170,7 +172,7 @@ export default function AIInterviewDetailsView({ config, onBack, onRefresh, curr
   // send a candidate their interview link) — checked via the Invite
   // permission so both entry points across the app agree on one gate.
   const canShareAIInterviews = isTenantAdmin || !!user?.permissions?.canInviteAIInterviews;
-  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'versions' | 'viewjd' | 'results' | 'invites'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'activity' | 'versions' | 'viewjd' | 'results' | 'invites'>(initialTab ?? 'overview');
   /* Interview Details' own sub-tabs — Configure Details (what the tab used to
      show outright) and Interview Info (the former standalone "AI Interview
      Info" sidebar item, folded in here since it's the same JD-derived

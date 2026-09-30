@@ -1,4 +1,4 @@
-import { ArrowLeft, User, Clock, Award, CheckCircle, XCircle, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye } from 'lucide-react';
+import { ArrowLeft, User, Clock, Award, XCircle, ChevronUp, FileText, TrendingUp, Calendar, Briefcase, AlertCircle, Info, Filter, Layers, ArrowUpDown, ChevronLeft, ChevronRight, Loader2, Mail, Phone, BarChart3, SlidersHorizontal, Columns3, Trash2, Users, Download, X, Play, CheckSquare, Eye } from 'lucide-react';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { assessmentService, jdService } from '@/lib/services';
@@ -27,6 +27,7 @@ import ListFilterPanel from '@/components/ui/list-filter-panel';
 import { InviteSourceValue } from '@/components/AIInterviewInviteTable';
 import { timelineEvents } from '@/components/AssessmentInviteActions';
 import { toOneDecimalScore } from '@/lib/utils/score';
+import { stripVersionFromTitle } from '@/lib/utils/assessmentUtils';
 
 interface AssessmentResultsProps {
   /**
@@ -271,7 +272,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const [isLoading, setIsLoading] = useState(true);
   const [isFetching, setIsFetching] = useState(false);
   const initialLoadDone = useRef(false);
-  const [apiStats, setApiStats] = useState<{ completed_count: number; in_progress_count: number; pending_count: number; average_score: number | null }>({ completed_count: 0, in_progress_count: 0, pending_count: 0, average_score: null });
+  const [, setApiStats] = useState<{ completed_count: number; in_progress_count: number; pending_count: number; average_score: number | null }>({ completed_count: 0, in_progress_count: 0, pending_count: 0, average_score: null });
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
 
@@ -481,7 +482,19 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
    * against, this is which version of the ASSESSMENT the candidate sat.
    */
   const [assessmentVersionByAssessmentId, setAssessmentVersionByAssessmentId] = useState<Map<string, number>>(new Map());
+  /**
+   * Each scoped assessment's title, version suffix stripped — what the
+   * Assessment selector lists. Read off the same per-version `list({ jd_id })`
+   * replies as the two maps above, so it costs no request of its own.
+   */
+  const [assessmentTitleByAssessmentId, setAssessmentTitleByAssessmentId] = useState<Map<string, string>>(new Map());
   const [selectedJobVersion, setSelectedJobVersion] = useState<'all' | number>('all');
+  /**
+   * The Assessment scope: one assessment of the selected job version, by id.
+   * Narrows within the job-version scope, before the assessment version does —
+   * job → job version → assessment → assessment version.
+   */
+  const [selectedAssessmentId, setSelectedAssessmentId] = useState<'all' | string>('all');
   /**
    * The Assessment Version scope, beside the Job Version one.
    *
@@ -560,11 +573,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
       assessmentVersion != null
         ? new Map<string, number>([[assessmentId, assessmentVersion]])
         : new Map<string, number>();
+    /* And its own title, which the page was opened with. */
+    const ownAssessmentTitles = () =>
+      assessmentTitle
+        ? new Map<string, string>([[assessmentId, assessmentTitle]])
+        : new Map<string, string>();
     const loadJobVersions = async () => {
       if (!jdId) {
         if (!cancelled) {
           setJobVersionScopes(ownScope);
           setAssessmentVersionByAssessmentId(ownAssessmentVersions());
+          setAssessmentTitleByAssessmentId(ownAssessmentTitles());
           applyJobVersionScope(new Map());
           setJobVersionsLoaded(true);
         }
@@ -609,6 +628,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
            `assessmentVersionByAssessmentId`. Only set where the record carries
            one: a missing version is reported as a dash rather than as v1. */
         const assessmentVersionById = new Map<string, number>();
+        /* And their titles, for the Assessment selector. */
+        const assessmentTitleById = new Map<string, string>();
         responses.forEach((response, index) => {
           for (const row of (response.items || [])) {
             if (!row?.id) continue;
@@ -620,6 +641,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 ?? 1,
             );
             if (typeof row.version === 'number') assessmentVersionById.set(row.id, row.version);
+            if (row.title) assessmentTitleById.set(row.id, stripVersionFromTitle(row.title));
           }
         });
         // The assessment the page was opened on is always in scope.
@@ -634,6 +656,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           assessmentVersionById.set(assessmentId, assessmentVersion);
         }
         setAssessmentVersionByAssessmentId(assessmentVersionById);
+        if (!assessmentTitleById.has(assessmentId) && assessmentTitle) {
+          assessmentTitleById.set(assessmentId, assessmentTitle);
+        }
+        setAssessmentTitleByAssessmentId(assessmentTitleById);
 
         /* Every version the JD actually has, plus any version an assessment
            names that the lineage did not return. A version with no assessments
@@ -659,6 +685,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         if (!cancelled) {
           setJobVersionScopes(ownScope);
           setAssessmentVersionByAssessmentId(ownAssessmentVersions());
+          setAssessmentTitleByAssessmentId(ownAssessmentTitles());
           applyJobVersionScope(new Map());
         }
       } finally {
@@ -668,7 +695,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
     loadJobVersions();
     return () => { cancelled = true; };
-  }, [assessmentId, jdId, jdVersion, assessmentVersion, jobVersionScope]);
+  }, [assessmentId, assessmentTitle, jdId, jdVersion, assessmentVersion, jobVersionScope]);
 
   /** Which job version each scoped assessment was authored against — what
    *  stamps a merged row with the version it belongs to. */
@@ -731,8 +758,49 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   }, [jobVersionScopes, effectiveJobVersion]);
 
   /**
+   * The assessments the Assessment selector offers: those of the job-version
+   * selection, ordered by title then version, each named by its title and its
+   * own version — two revisions of one assessment share a title.
+   */
+  const assessmentOptions = useMemo(() => (
+    jobScopedAssessmentIds
+      .map(id => ({
+        id,
+        title: assessmentTitleByAssessmentId.get(id) || 'Untitled assessment',
+        version: assessmentVersionByAssessmentId.get(id) ?? null,
+      }))
+      .sort((a, b) => a.title.localeCompare(b.title) || (a.version ?? 0) - (b.version ?? 0))
+  ), [jobScopedAssessmentIds, assessmentTitleByAssessmentId, assessmentVersionByAssessmentId]);
+
+  /* Same rule as `effectiveJobVersion`: an assessment the job-version scope
+     does not hold — left from before the job version changed, or restored from
+     a previous visit — reads as All Assessments rather than an empty table. */
+  const effectiveAssessmentId: 'all' | string =
+    selectedAssessmentId !== 'all'
+    && jobVersionsLoaded
+    && !jobScopedAssessmentIds.includes(selectedAssessmentId)
+      ? 'all'
+      : selectedAssessmentId;
+  const selectedAssessmentOption =
+    effectiveAssessmentId === 'all' ? null : assessmentOptions.find(option => option.id === effectiveAssessmentId) ?? null;
+
+  /** Offered wherever the job holds more than one assessment across all its
+   *  versions — read from the whole job, not the job-version selection, so the
+   *  control does not vanish when a version with one assessment is picked. */
+  const showsAssessmentSelect =
+    new Set(jobVersionScopes.flatMap(scope => scope.assessmentIds)).size > 1;
+
+  /** The assessments the job version AND assessment selections cover, before
+   *  the assessment version narrows them. */
+  const assessmentScopedIds = useMemo(() => (
+    effectiveAssessmentId === 'all'
+      ? jobScopedAssessmentIds
+      : jobScopedAssessmentIds.filter(id => id === effectiveAssessmentId)
+  ), [jobScopedAssessmentIds, effectiveAssessmentId]);
+
+  /**
    * The assessment versions the Assessment Version selector offers: the
-   * versions present in the job-version scope above, ascending.
+   * versions present in the job-version / assessment scope above, ascending.
    *
    * Read off the assessments themselves, so picking Job Version V2 leaves only
    * the revisions V2's assessments actually have. Nothing is listed that the
@@ -740,12 +808,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
    */
   const assessmentVersionOptions = useMemo(() => {
     const versions = new Set<number>();
-    for (const id of jobScopedAssessmentIds) {
+    for (const id of assessmentScopedIds) {
       const version = assessmentVersionByAssessmentId.get(id);
       if (version != null) versions.add(version);
     }
     return [...versions].sort((a, b) => a - b);
-  }, [jobScopedAssessmentIds, assessmentVersionByAssessmentId]);
+  }, [assessmentScopedIds, assessmentVersionByAssessmentId]);
 
   /* Same rule as `effectiveJobVersion`: a selection the current scope cannot
      honour — one left from before the job version changed, restored from a
@@ -770,17 +838,24 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
      picking "All" leaves the key behind as `undefined`. */
   const activeFilterCount =
     (showsJobVersionSelect && effectiveJobVersion !== 'all' ? 1 : 0) +
+    (showsAssessmentSelect && effectiveAssessmentId !== 'all' ? 1 : 0) +
     (showsAssessmentVersionSelect && effectiveAssessmentVersion !== 'all' ? 1 : 0) +
-    (statusFilter !== 'all' ? 1 : 0) +
+    /* Status is not counted: it sits on the toolbar row, not in the panel. */
     (passFailFilter !== 'all' ? 1 : 0) +
     Object.values(roundFilters).filter(Boolean).length +
     (dateFrom || dateTo ? 1 : 0);
   /* What the panel's Clear All resets — the same set, and the same handler,
-     the filter row's Clear button always had (search included). */
+     the filter row's Clear button always had (search included), plus the three
+     scopes, back to All Versions / All Assessments. */
   const hasAnyFilterOrSearch =
     Object.keys(roundFilters).length > 0 || !!searchQuery || statusFilter !== 'all' ||
-    passFailFilter !== 'all' || !!dateFrom || !!dateTo;
+    passFailFilter !== 'all' || !!dateFrom || !!dateTo ||
+    effectiveJobVersion !== 'all' || effectiveAssessmentId !== 'all' || effectiveAssessmentVersion !== 'all';
   const clearAllFilters = () => {
+    setSelectedJobVersion('all');
+    setSelectedAssessmentId('all');
+    setSelectedAssessmentVersion('all');
+    setSelectedRows([]);
     setRoundFilters({});
     setSearchQuery('');
     setStatusFilter('all');
@@ -792,15 +867,15 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
 
   /** The assessments whose results the current selection covers. */
   const scopedAssessmentIds = useMemo(() => {
-    if (effectiveAssessmentVersion === 'all') return jobScopedAssessmentIds;
+    if (effectiveAssessmentVersion === 'all') return assessmentScopedIds;
     /* Narrowed by the assessments' own versions rather than by filtering rows
        after the fact: the scope IS the set of assessments fetched, so the stat
        cards, the tally, the export and the table all answer for the same
        selection — exactly as they do for the job version. */
-    return jobScopedAssessmentIds.filter(
+    return assessmentScopedIds.filter(
       id => assessmentVersionByAssessmentId.get(id) === effectiveAssessmentVersion,
     );
-  }, [jobScopedAssessmentIds, assessmentVersionByAssessmentId, effectiveAssessmentVersion]);
+  }, [assessmentScopedIds, assessmentVersionByAssessmentId, effectiveAssessmentVersion]);
 
   /* A stable dependency for the results fetch: the effect must re-run when the
      scope's CONTENTS change, not every time the memo mints a new array. */
@@ -824,11 +899,10 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const rootRef = useScrollRestoration<HTMLDivElement>(persistKey, !isLoading, [pageView]);
   useListStatePersistence(
     persistKey,
-    { pageView, statusFilter, searchQuery, sortField, sortDirection, currentPage, passFailFilter, dateFrom, dateTo, roundFilters, selectedJobVersion, selectedAssessmentVersion },
+    { pageView, statusFilter, searchQuery, sortField, sortDirection, currentPage, passFailFilter, dateFrom, dateTo, roundFilters, selectedJobVersion, selectedAssessmentId, selectedAssessmentVersion },
     (s) => {
       /* Arriving on Total Candidates (`openOnTotalCandidates`) keeps that view,
          every status and page 1 over the snapshot — see the prop. */
-      if (!openOnTotalCandidates && (s.pageView === 'cards' || s.pageView === 'list')) setPageView(s.pageView);
       /* Everything else restores as before. The job version does not when the
          link named one: the snapshot is for "I opened a candidate and came
          back", while a Results button that named its scope has just asked for
@@ -843,6 +917,11 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
          answer a different question. */
       if (!namesAssessmentVersionScope && (s.selectedAssessmentVersion === 'all' || typeof s.selectedAssessmentVersion === 'number')) {
         setSelectedAssessmentVersion(s.selectedAssessmentVersion);
+      }
+      /* The assessment follows the job version's rule: a link that named a job
+         version scope asked for that whole version, not last visit's pick. */
+      if (!namesJobVersionScope && !namesAssessmentVersionScope && typeof s.selectedAssessmentId === 'string') {
+        setSelectedAssessmentId(s.selectedAssessmentId);
       }
       if (!openOnTotalCandidates && typeof s.statusFilter === 'string') setStatusFilter(s.statusFilter as typeof statusFilter);
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
@@ -1478,7 +1557,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   // Reset to page 1 when filters change (MUST be before any early returns)
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, statusFilter, passFailFilter, roundFilters, dateFrom, dateTo, selectedJobVersion, selectedAssessmentVersion]);
+  }, [searchQuery, statusFilter, passFailFilter, roundFilters, dateFrom, dateTo, selectedJobVersion, selectedAssessmentId, selectedAssessmentVersion]);
 
   // Use API results only (no mock data)
   const displayResults = candidateResults;
@@ -1626,20 +1705,12 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const startIndex = pageStartIndex;
   const endIndex = Math.min(startIndex + pageSize, totalItems);
 
-  /* The summary cards' numbers, over the WHOLE scoped set — `candidateResults`,
-     never `filteredCandidates`.
-     These describe the context the page is reporting on (the job, or the one job
-     version / assessment it is pinned to), so selecting a status must not move
-     them: that is the bug this page had, where clicking In Progress recounted
-     every card against the narrowed list and Total Candidates dropped to 0.
-     `apiStats` is the same tally taken as the rows were merged (and kept in step
-     when one is deleted); the fallback counts the rows directly, for the render
-     before it lands. Both now read the unfiltered set, so the two branches agree
-     whichever one answers. */
-  const completedCount = candidateResults.length > 0 ? apiStats.completed_count : candidateResults.filter(c => c.status === 'Completed').length;
-  const inProgressCount = candidateResults.length > 0 ? apiStats.in_progress_count : candidateResults.filter(c => c.status === 'In Progress').length;
-  const pendingCount = candidateResults.length > 0 ? apiStats.pending_count : candidateResults.filter(c => c.status === 'Pending').length;
   const stickyHeaderClass = 'bg-slate-50';
+  /* Previous / Next open another results page. While Total Candidates is the
+     list on screen, the link carries `view=total` so that page opens on Total
+     Candidates too, rather than falling back to the bare cards. Any other
+     card's list pages exactly as before. */
+  const pagerViewQuery = pageView === 'list' && statusFilter === 'all' ? '?view=total' : '';
 
   return (
     /* The page frame — the app's standard padded white card on the results
@@ -1670,14 +1741,15 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               <RecordPager
                 currentIndex={currentIndex}
                 totalCount={totalCount}
-                onPrev={prevId ? () => router.push(`/recruitment/assessments/${prevId}/results`) : undefined}
-                onNext={nextId ? () => router.push(`/recruitment/assessments/${nextId}/results`) : undefined}
+                onPrev={prevId ? () => router.push(`/recruitment/assessments/${prevId}/results${pagerViewQuery}`) : undefined}
+                onNext={nextId ? () => router.push(`/recruitment/assessments/${nextId}/results${pagerViewQuery}`) : undefined}
               />
             }
           />
           )}
-      {/* Header */}
-      <div className="mb-4 sm:mb-6">
+      {/* Header — empty in the Results tab (embedded, always the list), so it
+          is not drawn there; its margin would only push the toolbar down. */}
+      <div className={embedded && pageView === 'list' ? 'hidden' : 'mb-4 sm:mb-6'}>
         <div>
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
             <div className="min-w-0">
@@ -1701,13 +1773,36 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                 </h1>
               </div>
               )}
-              {/* Which job version the page is reading — the Job Version
-                  selector's own effective value, so it changes the moment that
-                  selector does: All Versions → "Showing all versions", a
-                  version → "Showing Version N". */}
+              {/* Which scope the page is reading — the More Filters selectors'
+                  own effective values, so it changes the moment they do:
+                  All Versions → "Showing all JD versions", a version →
+                  "Showing JD-Version VN"; beside it the assessment (or the
+                  assessment version) in the same way. Wraps under itself on a
+                  phone; the divider only shows while they share a line. */}
               {!embedded && (
-                <p className="mt-1 text-xs sm:text-sm text-gray-600">
-                  {effectiveJobVersion === 'all' ? 'Showing all versions' : `Showing Version ${effectiveJobVersion}`}
+                <p className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs sm:text-sm text-gray-600">
+                  <span className="shrink-0">
+                    {effectiveJobVersion === 'all' ? 'Showing all JD versions' : `Showing JD-Version V${effectiveJobVersion}`}
+                  </span>
+                  {(showsAssessmentSelect || showsAssessmentVersionSelect) && (
+                    <>
+                      <span aria-hidden="true" className="hidden sm:inline h-3.5 w-px bg-gray-300" />
+                      <span
+                        className="min-w-0 max-w-full truncate"
+                        title={selectedAssessmentOption?.title}
+                      >
+                        {selectedAssessmentOption
+                          ? `Showing Assessment: ${selectedAssessmentOption.title}${
+                              effectiveAssessmentVersion === 'all' && selectedAssessmentOption.version != null
+                                ? ` (V${selectedAssessmentOption.version})`
+                                : ''
+                            }${effectiveAssessmentVersion !== 'all' ? ` · Assessment V${effectiveAssessmentVersion}` : ''}`
+                          : effectiveAssessmentVersion !== 'all'
+                            ? `Showing Assessment V${effectiveAssessmentVersion}`
+                            : 'Showing all assessments'}
+                      </span>
+                    </>
+                  )}
                 </p>
               )}
             </div>
@@ -1748,81 +1843,9 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
         </div>
       </div>
 
-      {/* Statistics Cards */}
+      {/* The candidate list. The four stat cards that used to open it are
+          gone; their status switch is the Status dropdown on the toolbar. */}
       <div>
-
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
-          <button
-            type="button"
-            onClick={() => openCandidateList('all')}
-            className="text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 hover:border-brand-blue/30 hover:shadow-md hover:shadow-brand-blue/10 transition-all"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-gray-600 text-xs sm:text-sm mb-1">Total Candidates</div>
-                {/* The scoped set, not the filtered one: `displayResults` is
-                    every candidate of this job / job version / assessment. The
-                    card's own click clears the status filter, so it is both the
-                    total and the way back to all of them. */}
-                <div className="text-xl sm:text-2xl text-gray-900 tracking-tight">{displayResults.length}</div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-blue/10 ring-1 ring-brand-blue/15 flex shrink-0 items-center justify-center">
-                <Users className="w-5 h-5 sm:w-6 sm:h-6 text-brand-blue" />
-              </div>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => openCandidateList('In Progress')}
-            className="text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 hover:border-brand-cyan/40 hover:shadow-md hover:shadow-brand-cyan/10 transition-all"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-gray-600 text-xs sm:text-sm mb-1">In Progress</div>
-                <div className="text-xl sm:text-2xl text-brand-cyan tracking-tight">{inProgressCount}</div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-brand-cyan/10 ring-1 ring-brand-cyan/20 flex shrink-0 items-center justify-center">
-                <Loader2 className="w-5 h-5 sm:w-6 sm:h-6 text-brand-cyan" />
-              </div>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => openCandidateList('Completed')}
-            className="text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 hover:border-green-300 hover:shadow-md hover:shadow-green-500/10 transition-all"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-gray-600 text-xs sm:text-sm mb-1">Completed</div>
-                <div className="text-xl sm:text-2xl text-green-600 tracking-tight">{completedCount}</div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-green-200 flex shrink-0 items-center justify-center">
-                <CheckCircle className="w-5 h-5 sm:w-6 sm:h-6 text-green-600" />
-              </div>
-            </div>
-          </button>
-
-          <button
-            type="button"
-            /* The STORED status stays 'Pending' — it is what the status filter,
-               the row gates and the API's own `status_filter` all match on. Only
-               the label the recruiter reads changes. */
-            onClick={() => openCandidateList('Pending')}
-            className="text-left bg-white rounded-xl border border-gray-100 ring-1 ring-black/[0.02] shadow-sm shadow-brand-blue/5 p-3 sm:p-4 hover:border-brand-orange/40 hover:shadow-md hover:shadow-brand-orange/10 transition-all"
-          >
-            <div className="flex items-center justify-between gap-2">
-              <div className="min-w-0">
-                <div className="text-gray-600 text-xs sm:text-sm mb-1">{PENDING_STATUS_LABEL}</div>
-                <div className="text-xl sm:text-2xl text-brand-orange-deep tracking-tight">{pendingCount}</div>
-              </div>
-              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl bg-gradient-to-br from-brand-orange/10 to-brand-orange/5 ring-1 ring-brand-orange/20 flex shrink-0 items-center justify-center">
-                <Clock className="w-5 h-5 sm:w-6 sm:h-6 text-brand-orange-deep" />
-              </div>
-            </div>
-          </button>
-        </div>
 
         {pageView === 'list' && (
         <>
@@ -1850,12 +1873,40 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               setCurrentPage(1);
             }}
             searchPlaceholder="Search by name, email, phone, or JD title..."
-            /* Tablet: a fixed 256px, controls at the far end, as before.
-               Desktop: the box grows toward 576px from a 320px floor and the
-               controls follow straight after it, evenly spaced, so the row
-               reads as one group with no hole after the search. */
-            searchClassName="sm:flex-none sm:w-64 lg:flex-1 lg:w-auto lg:min-w-[20rem] lg:max-w-xl"
-            controlsFollowSearch
+            /* Laid out by the TOOLBAR's width, not the viewport's: inside the
+               assessment page's Results tab the vertical tab menu takes part of
+               the screen, and viewport breakpoints put search + four controls on
+               one row before they fit, so buttons wrapped mid-row. Now: one row
+               (search fills, controls at the end) once the toolbar is 56rem
+               wide; below that the search takes its own row and the controls
+               wrap as a group under it. */
+            fitToContainer
+            containerBreakpoint="4xl"
+            /* Status — what the four stat cards used to switch between, now a
+               dropdown at the head of the controls, beside More Filters. Same
+               state, same values the API's status filter matches on; only the
+               'Pending' label reads "Not Started". Default All Candidates. */
+            leadingActions={
+              <select
+                id="assessment-results-status-filter"
+                aria-label="Filter candidates by status"
+                value={statusFilter}
+                onChange={(e) => {
+                  setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Pending');
+                  setCurrentPage(1);
+                }}
+                className={`h-[38px] w-auto max-w-full px-3 text-sm font-medium rounded-lg border cursor-pointer focus:outline-none focus:ring-2 focus:ring-brand-blue/40 transition-all ${
+                  statusFilter !== 'all'
+                    ? 'bg-brand-blue/10 text-brand-blue border-brand-blue/20'
+                    : 'bg-brand-blue/5 text-gray-700 border-brand-blue/10 hover:bg-brand-blue/10 hover:text-brand-blue'
+                }`}
+              >
+                <option value="all">All Candidates</option>
+                <option value="In Progress">In Progress</option>
+                <option value="Completed">Completed</option>
+                <option value="Pending">{PENDING_STATUS_LABEL}</option>
+              </select>
+            }
             onToggleFilters={() => setShowMoreFilters((open) => !open)}
             filtersOpen={showMoreFilters}
             activeFilterCount={activeFilterCount}
@@ -1994,6 +2045,30 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                     {jobVersionScopes.map(scope => (
                       <option key={scope.versionNumber} value={scope.versionNumber}>
                         Job Version V{scope.versionNumber}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {showsAssessmentSelect && (
+                <div>
+                  <label htmlFor="assessment-results-assessment" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Assessment</label>
+                  <select
+                    id="assessment-results-assessment"
+                    value={effectiveAssessmentId}
+                    onChange={(e) => {
+                      setSelectedAssessmentId(e.target.value);
+                      setCurrentPage(1);
+                      /* Same reason as the job version's above. */
+                      setSelectedRows([]);
+                    }}
+                    disabled={!jobVersionsLoaded}
+                    className="w-full min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed truncate"
+                  >
+                    <option value="all">All Assessments</option>
+                    {assessmentOptions.map(option => (
+                      <option key={option.id} value={option.id}>
+                        {option.version != null ? `${option.title} (V${option.version})` : option.title}
                       </option>
                     ))}
                   </select>
