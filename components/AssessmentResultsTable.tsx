@@ -44,7 +44,7 @@ interface AssessmentResult {
   invitedDate: string;
   invitedBy: string;
   inviteSource?: string;
-  status?: string; // completed, in_progress, pending
+  status?: string; // completed, in_progress, terminated, pending
   /**
    * AI scoring state, distinct from `status` (the candidate's submission
    * state). A candidate can be 'completed' while scoring is still running, so
@@ -98,7 +98,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
   const [selectedResults, setSelectedResults] = useState<string[]>([]);
 
   // Filters (inline dropdowns matching AssessmentResults.tsx)
-  const [statusFilter, setStatusFilter] = useState<'all' | 'Completed' | 'In Progress' | 'Pending'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Completed' | 'In Progress' | 'Terminated' | 'Pending'>('all');
   const [filterPassFail, setFilterPassFail] = useState<'all' | 'Pass' | 'Fail'>('all');
   const [roundFilters, setRoundFilters] = useState<{
     technical?: 'all' | '50-70' | '70-90' | '90+';
@@ -194,6 +194,9 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
     // still running. (The Tech/Coding score cells gate on scoring_status
     // separately and show '—' until scoring is done.)
     if (result.status === 'completed' || result.completed_at) return 'Completed';
+    // Terminal — checked before started_at, which a terminated attempt also
+    // carries and which used to make it read "In Progress" forever.
+    if (result.status === 'Terminated' || result.status === 'terminated') return 'Terminated';
     if (result.status === 'in_progress' || result.started_at) return 'In Progress';
     if (result.status === 'pending') return 'Pending';
     if (result.completedDate && result.completedDate !== 'In Progress' && result.completedDate !== 'Not started') return 'Completed';
@@ -213,6 +216,7 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
       case 'In Progress': return 'info';
       case 'Pending': return 'warning';
       case 'Failed':
+      case 'Terminated':
       case 'Abandoned': return 'destructive';
       default: return 'muted';
     }
@@ -696,12 +700,13 @@ export default function AssessmentResultsTable({ results, jobTitle, jobId = 'jd-
             <label className="text-sm text-gray-600 whitespace-nowrap">Status:</label>
             <select
               value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Pending')}
+              onChange={(e) => setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Terminated' | 'Pending')}
               className="px-2 sm:px-3 py-1.5 sm:py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue text-xs sm:text-sm text-black"
             >
               <option value="all">All</option>
               <option value="Completed">Completed</option>
               <option value="In Progress">In Progress</option>
+              <option value="Terminated">Terminated</option>
               <option value="Pending">Pending</option>
             </select>
           </div>

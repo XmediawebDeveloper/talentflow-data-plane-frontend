@@ -212,6 +212,8 @@ export interface AssessmentInfo {
   attempt_status: string | null;
   attempt_started_at: string | null;  // When attempt started - for timer resume on page refresh
   system_check_passed?: boolean;
+  /** True once proctoring terminated this attempt — no resume, in any browser. */
+  proctoring_terminated?: boolean;
   /** True once feedback has been stored for this attempt — the form is once-only. */
   feedback_submitted?: boolean;
   can_start: boolean;

@@ -610,17 +610,23 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   // the recording window. 2026-09-24: recordings now run past Submit until the
   // feedback popup appears, so 'completing' / 'completed' must NOT stop the
   // camera stream or the screen share (the recorders own them until then —
-  // see the recorder stop effect). Terminal states release everything.
+  // see the recorder stop effect). Same for 'terminated'. 'results' / 'error'
+  // release everything at once.
   useEffect(() => {
     if (step === 'assessment') {
       startProctoring();
       return;
     }
-    if (step === 'completing' || step === 'completed') {
+    if (step === 'completing' || step === 'completed' || step === 'terminated') {
+      // 'terminated' belongs here too (2026-09-30): stopProctoring() stops the
+      // camera tracks, which also carry the recording mic, so releasing them
+      // the instant the attempt was terminated cut both recordings BEFORE the
+      // "Assessment terminated" screen they are meant to prove. The recorder
+      // stop effect releases the media a few seconds later.
       stopHeartbeatWorker();
       return;
     }
-    if (step === 'results' || step === 'terminated' || step === 'error') {
+    if (step === 'results' || step === 'error') {
       stopProctoring();
       console.log('[PROCTORING] Stopped - assessment ended');
     }
@@ -811,7 +817,17 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         return;
       }
 
-      // A persisted proctoring termination wins over every other status.
+      // A proctoring termination wins over every other status. The SERVER
+      // flag is authoritative — localStorage only knows about this browser,
+      // so a terminated link reopened elsewhere used to resume.
+      if (info.proctoring_terminated) {
+        try {
+          const persisted = localStorage.getItem(assessmentTerminatedStorageKey(token));
+          if (persisted) setTerminatedReason(JSON.parse(persisted));
+        } catch { /* storage unavailable or not JSON */ }
+        setStepSafe('terminated');
+        return;
+      }
       try {
         const persisted = localStorage.getItem(assessmentTerminatedStorageKey(token));
         if (persisted) {
@@ -1606,7 +1622,9 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   // Recording window ends when the feedback popup appears on the completed
   // screen (candidate request: keep both recordings running through Submit).
   // If no popup is due (feedback already given), stop shortly after completion.
-  // Terminal states (terminated / error / results) stop immediately.
+  // 'terminated' gets the same treatment: both recordings must capture the
+  // "Assessment terminated" screen the candidate is left on, which is the
+  // proof of what ended the attempt. 'error' / 'results' stop immediately.
   const FEEDBACK_GRACE_MS = 4000;
   // Once the popup's state flips it still takes a moment to paint and for the
   // screen-capture pipeline to pick the new frame up. Stopping immediately cut
@@ -1620,10 +1638,17 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stopRecorders, stopScreenShare]);
 
+  // The terminated screen needs the same paint + screen-capture settle time
+  // the feedback popup does before the recorders may close.
+  const TERMINATED_VISIBLE_GRACE_MS = 5000;
+
   useEffect(() => {
-    if (step === 'results' || step === 'error' || step === 'terminated') { finishRecordings(); return; }
-    if (step !== 'completed') return;
-    const t = setTimeout(finishRecordings, showFeedback ? FEEDBACK_VISIBLE_GRACE_MS : FEEDBACK_GRACE_MS);
+    if (step === 'results' || step === 'error') { finishRecordings(); return; }
+    if (step !== 'completed' && step !== 'terminated') return;
+    const graceMs = step === 'terminated'
+      ? TERMINATED_VISIBLE_GRACE_MS
+      : (showFeedback ? FEEDBACK_VISIBLE_GRACE_MS : FEEDBACK_GRACE_MS);
+    const t = setTimeout(finishRecordings, graceMs);
     return () => clearTimeout(t);
   }, [step, showFeedback, finishRecordings]);
 
