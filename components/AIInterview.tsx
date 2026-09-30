@@ -2073,44 +2073,68 @@ export default function AIInterview() {
   }
   if (loading) {
     return (
-      <div className="flex-1 overflow-x-clip bg-slate-50">
-        <div className="mx-auto w-full max-w-[1400px] p-4 md:p-8">
-          <div className="mb-6 flex items-center justify-between gap-3">
-            <div className="flex items-start gap-3">
-              <Skeleton className="hidden sm:block h-10 w-10 rounded-lg shrink-0" />
-              <div className="space-y-2">
-                <Skeleton className="h-6 w-56" />
-                <Skeleton className="h-4 w-80 max-w-full" />
-              </div>
-            </div>
-            <Skeleton className="h-10 w-44 rounded-lg" />
-          </div>
-          <div className="space-y-3">
-            {Array.from({ length: 6 }).map((_, i) => (
-              <div key={i} className="rounded-xl border border-gray-100 bg-white p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 items-center gap-3">
-                    <Skeleton className="h-10 w-10 rounded-lg shrink-0" />
-                    <div className="space-y-2">
-                      <Skeleton className="h-4 w-48" />
-                      <Skeleton className="h-6 w-16 rounded-full" />
-                    </div>
-                  </div>
-                  <div className="hidden items-center gap-8 md:flex">
-                    {Array.from({ length: 3 }).map((_, j) => (
-                      <div key={j} className="space-y-1.5">
-                        <Skeleton className="h-3 w-16" />
-                        <Skeleton className="h-4 w-10" />
-                      </div>
-                    ))}
-                  </div>
-                  <Skeleton className="h-8 w-8 rounded-lg" />
+      <main className="flex-1 overflow-x-clip bg-slate-50 dark:bg-slate-950">
+        <div className="mx-auto w-full max-w-[1400px]">
+          <div className="p-4 md:p-8 w-full bg-white dark:bg-slate-900 rounded-2xl my-4 md:my-5 shadow-2xl dark:shadow-black/40 dark:border dark:border-slate-700/60">
+            <Skeleton className="h-4 w-48 mb-4 md:mb-6" />
+            {/* Header */}
+            <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-3 lg:gap-4 mb-5">
+              <div className="flex items-start gap-3 min-w-0">
+                <Skeleton className="hidden sm:block h-9 w-9 rounded-lg shrink-0" />
+                <div className="space-y-2">
+                  <Skeleton className="h-6 w-56" />
+                  <Skeleton className="h-4 w-80 max-w-full" />
                 </div>
               </div>
-            ))}
+              <div className="flex items-stretch gap-2 sm:gap-3 flex-wrap lg:flex-nowrap">
+                <Skeleton className="h-9 w-36 rounded-lg" />
+                <Skeleton className="h-9 w-32 rounded-lg" />
+                <Skeleton className="h-9 w-40 rounded-lg" />
+                <Skeleton className="h-9 w-44 rounded-lg" />
+              </div>
+            </div>
+            {/* Stats cards */}
+            <div className="grid gap-2.5 sm:gap-3 mb-5 sm:mb-8 grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-5">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <div key={i} className="rounded-xl border border-brand-blue/15 dark:border-brand-blue/25 bg-white dark:bg-slate-900 px-3.5 py-3.5 sm:px-4 sm:py-4">
+                  <div className="flex items-start gap-2.5">
+                    <Skeleton className="h-9 w-9 rounded-xl shrink-0" />
+                    <div className="min-w-0 space-y-1.5 flex-1">
+                      <Skeleton className="h-3.5 w-20" />
+                      <Skeleton className="h-6 w-10" />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {/* Config rows — one per job, matching the loaded list's row shape */}
+            <div className="space-y-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="p-3 sm:p-4 bg-white dark:bg-slate-900 rounded-xl border border-gray-300 dark:border-slate-700 shadow-sm shadow-brand-blue/5">
+                  <div className="flex flex-col gap-3 @4xl/ai-row:flex-row @4xl/ai-row:items-center @4xl/ai-row:gap-4">
+                    <div className="flex items-center gap-2.5 min-w-0 @4xl/ai-row:w-[360px] @4xl/ai-row:flex-shrink-0">
+                      <Skeleton className="h-9 w-9 rounded-lg shrink-0" />
+                      <Skeleton className="h-4 w-16 rounded-md shrink-0" />
+                      <Skeleton className="h-4 w-40" />
+                    </div>
+                    <div className="flex-shrink-0 @4xl/ai-row:w-[104px]">
+                      <Skeleton className="h-5 w-20 rounded-full" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-3 sm:grid-cols-4 sm:gap-x-0 sm:gap-y-0 @4xl/ai-row:flex-1 @4xl/ai-row:min-w-0">
+                      {Array.from({ length: 4 }).map((_, j) => (
+                        <div key={j} className="space-y-1.5">
+                          <Skeleton className="h-3 w-16" />
+                          <Skeleton className="h-4 w-10" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      </main>
     );
   }
 
