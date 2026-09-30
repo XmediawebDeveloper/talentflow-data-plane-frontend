@@ -12,6 +12,8 @@ import {
   Clock,
   DollarSign,
   Target,
+  ClipboardCheck,
+  Video,
 } from 'lucide-react';
 import type { Job } from '@/lib/types/types';
 import { formatISTDate } from '@/lib/utils/dateUtils';
@@ -81,6 +83,19 @@ function JobOpeningMetaItems({ job }: { job: Job }) {
         <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800 rounded-lg">
           <Users className="w-4 h-4 text-gray-400 dark:text-slate-500" />
           {job.applicants} {job.applicants === 1 ? 'applicant' : 'applicants'}
+        </span>
+      )}
+      {/* Only the Job Openings list sets these; other hosts render as before. */}
+      {job.assessed != null && (
+        <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800 rounded-lg">
+          <ClipboardCheck className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          {job.assessed} assessed
+        </span>
+      )}
+      {job.interviewed != null && (
+        <span className="flex items-center gap-1.5 px-2 py-0.5 bg-gray-50 dark:bg-slate-800 rounded-lg">
+          <Video className="w-4 h-4 text-gray-400 dark:text-slate-500" />
+          {job.interviewed} interviewed
         </span>
       )}
     </>

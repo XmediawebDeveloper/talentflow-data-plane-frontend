@@ -1845,7 +1845,7 @@ export default function AIInterview() {
                 <span className={MENU_ITEM_SCALE_CLASS}>Track{hasBeenShared ? ` (${invitations})` : ''}</span>
               </button>
               <button
-                onClick={() => { if (!hasBeenShared) return; router.push(`/recruitment/ai-interviews/${config.id}/results?scope=version`); setOpenMenuId(null); }}
+                onClick={() => { if (!hasBeenShared) return; router.push(`/recruitment/ai-interviews/${config.id}?tab=results`); setOpenMenuId(null); }}
                 disabled={!hasBeenShared}
                 title={
                   hasBeenShared
