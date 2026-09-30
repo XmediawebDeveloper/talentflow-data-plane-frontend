@@ -294,7 +294,7 @@ export default function ScoringJobProgressModal({
                 size="sm"
                 onClick={onClose}
                 className="w-8 px-0"
-                aria-label="Close" title="Close"
+                aria-label="Close"
               >
                 <X className="w-4 h-4" />
               </Button>

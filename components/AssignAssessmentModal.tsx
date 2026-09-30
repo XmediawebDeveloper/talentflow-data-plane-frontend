@@ -209,13 +209,6 @@ export default function AssignAssessmentModal({
         {/* Footer */}
         <div className="flex-shrink-0 px-4 sm:px-6 py-3 border-t border-gray-100 dark:border-slate-700/60 bg-slate-50 dark:bg-slate-950 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-3">
           <Button
-            variant="secondary"
-            onClick={onClose}
-            className="order-2 sm:order-1"
-          >
-            Cancel
-          </Button>
-          <Button
             variant="primary"
             onClick={handleAssign}
             disabled={!selectedAssessment || isAssigning}

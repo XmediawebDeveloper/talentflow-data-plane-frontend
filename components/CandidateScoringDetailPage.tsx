@@ -1281,7 +1281,7 @@ Best regards`);
                 {showInviteMenu && canInvite && (
                   <div
                     role="menu"
-                    className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-30"
+                    className="absolute right-0 top-full mt-2 w-64 max-w-[calc(100vw-1.5rem)] bg-white rounded-xl border border-gray-200 shadow-lg shadow-gray-900/10 py-1.5 z-30"
                   >
                     {/* Each entry stays visible for anyone permitted to use
                         it and goes disabled when this JD has nothing to
@@ -2931,12 +2931,6 @@ Best regards`);
 
                   <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
                     <Button
-                      variant="secondary"
-                      onClick={closeShareModal}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
                       variant="primary"
                       onClick={handleSendShareEmail}
                       disabled={isSendingEmail || !shareEmail.trim()}
@@ -3331,16 +3325,6 @@ Best regards`);
                         </div>
                       </div>
                     )}
-                  </div>
-
-                  {/* Footer */}
-                  <div className="flex items-center justify-end px-4 sm:px-6 py-3 border-t border-gray-100 bg-slate-50 flex-shrink-0">
-                    <Button
-                      variant="primary"
-                      onClick={closeCompare}
-                    >
-                      Close
-                    </Button>
                   </div>
                 </div>
               </div>

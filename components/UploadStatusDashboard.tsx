@@ -868,9 +868,6 @@ export default function UploadStatusDashboard({ statuses, fileName, uploadDate, 
             <p className="text-xs sm:text-sm text-gray-600 text-center sm:text-left">
               Showing detailed status for <span className="text-gray-900">{totalProcessed}</span> file{totalProcessed !== 1 ? 's' : ''}
             </p>
-            <Button variant="primary" onClick={onClose}>
-              Close
-            </Button>
           </div>
         </div>
       </div>

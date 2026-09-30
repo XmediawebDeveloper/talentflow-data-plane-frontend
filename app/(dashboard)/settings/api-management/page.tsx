@@ -434,9 +434,6 @@ export default function ApiManagementPage() {
                   </select>
                 </div>
                 <div className="flex gap-3">
-                  <Button variant="secondary" onClick={closeCreateModal} className="flex-1">
-                    Cancel
-                  </Button>
                   <Button
                     variant="primary"
                     onClick={handleCreateKey}

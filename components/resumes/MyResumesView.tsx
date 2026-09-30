@@ -615,7 +615,7 @@ function DroppableFolderCard({
           {!hideActions && showActions && (
             <div
               role="menu"
-              className={`absolute right-0 w-52 rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-1 shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] z-50 ${
+              className={`absolute right-0 w-52 max-w-[calc(100vw-1.5rem)] max-h-[70dvh] overflow-y-auto rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 py-1 shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] z-50 ${
                 actionsDropUp ? 'bottom-full mb-1' : 'top-full mt-1'
               }`}
               onClick={(e) => e.stopPropagation()}
@@ -754,7 +754,7 @@ function DroppableFolderCard({
           over, closing the flyout before it arrived. */}
       {hasSubfolders && showSubfolders && peekChild && (
         <div
-          className={`absolute z-50 rounded-xl border border-gray-200 bg-white shadow-xl shadow-brand-blue/10 overflow-y-auto overscroll-contain ${
+          className={`absolute z-50 max-w-[calc(100vw-1.5rem)] rounded-xl border border-gray-200 bg-white shadow-xl shadow-brand-blue/10 overflow-y-auto overscroll-contain ${
             dropUp ? 'bottom-full mb-1' : 'top-full mt-1'
           } ${peekOnLeft ? 'right-full' : 'left-full'}`}
           style={{ width: `${SUBFOLDER_PEEK_PANEL_WIDTH}px`, maxHeight: `${SUBFOLDER_PEEK_MAX_HEIGHT}px` }}
@@ -814,7 +814,7 @@ function CardFolderNameInput({
 }) {
   if (inline) {
     return (
-      <div className="absolute right-0 top-full z-40 mt-2 w-full max-w-xl">
+      <div className="absolute right-0 top-full z-40 mt-2 w-full max-w-[min(36rem,calc(100vw-1.5rem))]">
       <div className="flex flex-col gap-2 rounded-lg border border-brand-blue/20 bg-white p-2 shadow-xl shadow-brand-blue/10 ring-1 ring-black/[0.02] sm:flex-row sm:items-center">
         <input
           type="text"
@@ -5081,13 +5081,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
               {/* Footer */}
               <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-2xl border-t border-gray-200">
                 <button
-                  onClick={() => setIsZipDownloadModalOpen(false)}
-                  disabled={isDownloadingZip}
-                  className="px-5 py-2.5 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Cancel
-                </button>
-                <button
                   onClick={handleZipDownload}
                   disabled={isDownloadingZip}
                   className="flex items-center gap-2 px-5 py-2.5 text-white bg-brand-blue hover:bg-brand-blue-2 rounded-lg transition-all shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 font-medium disabled:opacity-50 disabled:cursor-not-allowed"
@@ -5170,13 +5163,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
 
               {/* Footer */}
               <div className="flex items-center justify-end gap-3 px-6 py-4 bg-gray-50 rounded-b-2xl border-t border-gray-200">
-                <button
-                  onClick={() => setIsArchiveModalOpen(false)}
-                  disabled={isArchivingResumes}
-                  className="px-5 py-2.5 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Cancel
-                </button>
                 <button
                   onClick={handleConfirmBulkArchive}
                   disabled={isArchivingResumes}
@@ -5263,7 +5249,7 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                     <button
                       onClick={handleCloseUploadHistory}
                       className="w-8 h-8 flex items-center justify-center text-gray-500 hover:text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
-                      aria-label="Close" title="Close"
+                      aria-label="Close"
                     >
                       <X className="w-5 h-5" />
                     </button>
@@ -6158,17 +6144,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                 </div>
               )}
 
-              {/* Footer. Close is secondary: dismissing a report is not the
-                  thing to push, and a second full-width blue button would
-                  outshout the Upload Resumes CTA in the empty state. */}
-              <div className="border-t border-gray-200 px-4 sm:px-6 py-3 sm:py-4 bg-white rounded-b-2xl flex justify-center">
-                <button
-                  onClick={handleCloseUploadHistory}
-                  className="w-full sm:w-auto sm:min-w-[240px] px-4 py-2 sm:py-2.5 bg-white hover:bg-gray-50 text-gray-700 border border-gray-200 hover:border-gray-300 rounded-lg transition-all font-medium text-sm sm:text-base cursor-pointer"
-                >
-                  Close
-                </button>
-              </div>
             </div>
           </div>
         </>
@@ -6299,15 +6274,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
                   );
                 })()}
                 <div className="flex gap-2 sm:gap-3 w-full sm:w-auto">
-                  <button
-                    onClick={() => {
-                      setIsAssessmentModalOpen(false);
-                      setSelectedAssessments([]);
-                    }}
-                    className="flex-1 sm:flex-none px-4 py-2 text-sm bg-white dark:bg-slate-900 border border-gray-200 dark:border-slate-700 text-gray-700 dark:text-slate-300 hover:bg-brand-blue/5 hover:border-brand-blue/30 hover:text-brand-blue rounded-lg transition-colors"
-                  >
-                    Cancel
-                  </button>
                   <button
                     onClick={() => {
                       if (selectedAssessments.length === 0) {
@@ -6602,7 +6568,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="border-t border-gray-100 pt-4">
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteResumes}
               className="gap-2 bg-red-600 text-white hover:bg-red-700"
@@ -6808,7 +6773,6 @@ export default function MyResumesView({ header }: { header?: ReactNode }) {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction
               onClick={confirmDeleteFolder}
               disabled={deleteFolderConfirm.loading || (deleteFolderConfirm.totalResumeCount > 0 && !deleteFolderConfirm.contentAction)}

@@ -1349,12 +1349,6 @@ export default function UploadModal({ folders, tenant, uploadSection, onClose, o
 
         <div className="flex-shrink-0 flex flex-col-reverse sm:flex-row items-stretch sm:items-center justify-end gap-2 sm:gap-3 p-4 sm:p-5 border-t border-gray-100 dark:border-slate-800 bg-white dark:bg-slate-900">
           <button
-            onClick={onClose}
-            className="px-5 py-2.5 text-sm font-medium border border-gray-200 dark:border-slate-700 rounded-xl hover:bg-gray-50 dark:hover:bg-slate-800 transition-colors text-gray-700 dark:text-slate-200"
-          >
-            Cancel
-          </button>
-          <button
             onClick={handleValidateAndUpload}
             disabled={isUploading || isCheckingQuota || (quotaInfo?.status === 'EXCEEDED') || selectedFiles.length === 0}
             className={`px-5 py-2.5 rounded-xl transition-all flex items-center justify-center gap-2 text-sm font-medium ${

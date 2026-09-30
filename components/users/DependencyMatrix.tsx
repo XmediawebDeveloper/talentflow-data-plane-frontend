@@ -463,12 +463,6 @@ export default function DependencyMatrix({ isOpen, onClose }: DependencyMatrixPr
               {Object.keys(matrix?.dependencies || {}).length} with dependencies
             </span>
           </div>
-          <button
-            onClick={onClose}
-            className="w-full sm:w-auto px-4 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg text-xs sm:text-sm font-medium shadow-md shadow-brand-blue/25 ring-1 ring-white/10 transition-all"
-          >
-            Close
-          </button>
         </div>
       </div>
     </div>

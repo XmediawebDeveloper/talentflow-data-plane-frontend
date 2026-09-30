@@ -906,7 +906,19 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
         role="dialog"
         aria-modal="true"
       >
-        <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-md w-full p-6 sm:p-8 max-h-[90dvh] flex flex-col overflow-hidden tf-round-edges">
+        <div className="relative bg-white dark:bg-slate-900 rounded-xl shadow-2xl border border-gray-200 dark:border-slate-700 max-w-[95vw] sm:max-w-md w-full p-6 sm:p-8 max-h-[90dvh] flex flex-col overflow-hidden tf-round-edges">
+          <button
+            onClick={() => {
+              setShowDuplicateError(false);
+              setDuplicateEmail('');
+              setDuplicateReason('');
+              onClose();
+            }}
+            className="absolute top-3 right-3 p-1.5 text-gray-400 hover:text-gray-600 dark:hover:text-slate-300 rounded-lg hover:bg-gray-100 dark:hover:bg-slate-800 transition-colors"
+            aria-label="Close"
+          >
+            <X className="w-5 h-5" />
+          </button>
           <div className="flex-shrink-0 text-center mb-6">
             <div className="w-16 h-16 bg-warning-subtle rounded-full flex items-center justify-center mx-auto mb-4">
               <AlertTriangle className="w-10 h-10 text-warning" />
@@ -949,18 +961,6 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
           </div>
 
           <div className="flex-shrink-0 flex flex-col-reverse sm:flex-row gap-2 sm:gap-3">
-            <Button
-              variant="secondary"
-              onClick={() => {
-                setShowDuplicateError(false);
-                setDuplicateEmail('');
-                setDuplicateReason('');
-                onClose();
-              }}
-              className="flex-1"
-            >
-              Close
-            </Button>
             <Button
               variant="primary"
               onClick={() => {
@@ -1706,12 +1706,6 @@ export default function ShareAIInterviewModal({ isOpen, onClose, config, onInvit
             })()}
           </div>
           <div className="flex items-center gap-3">
-            <Button
-              variant="secondary"
-              onClick={onClose}
-            >
-              Cancel
-            </Button>
             <Button
               variant="primary"
               onClick={handleSend}

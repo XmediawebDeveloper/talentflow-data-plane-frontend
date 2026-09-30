@@ -791,7 +791,7 @@ export default function TeamChatPage() {
                     {showPinnedPanel && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setShowPinnedPanel(false)} />
-                        <div className="absolute right-0 top-full z-50 mt-2 max-h-96 w-80 overflow-y-auto rounded-2xl border border-gray-100 bg-white p-2 shadow-xl ring-1 ring-black/[0.04]">
+                        <div className="absolute right-0 top-full z-50 mt-2 max-h-96 w-80 max-w-[calc(100vw-1.5rem)] overflow-y-auto rounded-2xl border border-gray-100 bg-white p-2 shadow-xl ring-1 ring-black/[0.04]">
                           <div className="flex items-center gap-1.5 px-2 py-1.5 text-2xs font-semibold uppercase tracking-wider text-gray-400">
                             <Pin className="h-3.5 w-3.5" /> Pinned messages
                           </div>
@@ -844,7 +844,7 @@ export default function TeamChatPage() {
                     {showHeaderMenu && (
                       <>
                         <div className="fixed inset-0 z-40" onClick={() => setShowHeaderMenu(false)} />
-                        <div className="absolute right-0 top-full z-50 mt-2 w-52 overflow-hidden rounded-2xl border border-gray-100 bg-white p-1.5 shadow-xl ring-1 ring-black/[0.04]">
+                        <div className="absolute right-0 top-full z-50 mt-2 w-52 max-w-[calc(100vw-1.5rem)] overflow-hidden rounded-2xl border border-gray-100 bg-white p-1.5 shadow-xl ring-1 ring-black/[0.04]">
                           {selectedChannel.type === 'channel' && (
                             <button
                               onClick={() => { setShowMembersSidebar(true); setShowHeaderMenu(false); }}
@@ -1041,21 +1041,24 @@ export default function TeamChatPage() {
                                     <Smile className="h-3.5 w-3.5" />
                                   </button>
                                   {showEmojiPicker === message.id && (
-                                    <div
-                                      className={`absolute bottom-full z-10 mb-1 flex gap-1 rounded-xl border border-gray-100 bg-white p-2 shadow-lg ring-1 ring-black/[0.04] ${
-                                        isSender ? 'right-0' : 'left-0'
-                                      }`}
-                                    >
-                                      {quickEmojis.map((emoji) => (
-                                        <button
-                                          key={emoji}
-                                          onClick={() => handleAddReaction(message.id, emoji)}
-                                          className="rounded-md p-1.5 text-lg transition-colors hover:bg-brand-blue/[0.06]"
-                                        >
-                                          {emoji}
-                                        </button>
-                                      ))}
-                                    </div>
+                                    <>
+                                      <div className="fixed inset-0 z-[9]" onClick={() => setShowEmojiPicker(null)} />
+                                      <div
+                                        className={`absolute bottom-full z-10 mb-1 flex max-w-[calc(100vw-1.5rem)] gap-1 rounded-xl border border-gray-100 bg-white p-2 shadow-lg ring-1 ring-black/[0.04] ${
+                                          isSender ? 'right-0' : 'left-0'
+                                        }`}
+                                      >
+                                        {quickEmojis.map((emoji) => (
+                                          <button
+                                            key={emoji}
+                                            onClick={() => handleAddReaction(message.id, emoji)}
+                                            className="rounded-md p-1.5 text-lg transition-colors hover:bg-brand-blue/[0.06]"
+                                          >
+                                            {emoji}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    </>
                                   )}
                                 </div>
                               </div>
@@ -1340,12 +1343,6 @@ export default function TeamChatPage() {
 
               <div className="flex flex-col gap-2 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end">
                 <button
-                  onClick={() => setShowCreateModal(false)}
-                  className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
                   onClick={handleCreateChannel}
                   disabled={isCreating || !newChannelName.trim()}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-70"
@@ -1443,15 +1440,6 @@ export default function TeamChatPage() {
 
               <div className="flex flex-col gap-2 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end">
                 <button
-                  onClick={() => {
-                    setShowAddMembersModal(false);
-                    setSelectedMemberIds([]);
-                  }}
-                  className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
-                <button
                   onClick={handleAddMembers}
                   disabled={selectedMemberIds.length === 0}
                   className="inline-flex items-center justify-center gap-2 rounded-xl bg-brand-blue px-4 py-2.5 text-sm font-medium text-white shadow-md shadow-brand-blue/25 transition-all hover:-translate-y-0.5 hover:shadow-lg disabled:translate-y-0 disabled:opacity-70"
@@ -1538,14 +1526,6 @@ export default function TeamChatPage() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2 border-t border-gray-100 px-5 py-4 sm:flex-row sm:justify-end">
-                <button
-                  onClick={() => setShowNewDMModal(false)}
-                  className="inline-flex items-center justify-center rounded-xl border border-gray-200 bg-white px-4 py-2.5 text-sm font-medium text-gray-700 transition-all hover:border-gray-300 hover:bg-gray-50"
-                >
-                  Close
-                </button>
-              </div>
             </div>
           </div>
         )}

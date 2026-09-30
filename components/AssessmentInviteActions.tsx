@@ -711,9 +711,6 @@ export function EditInvitationModal({ target, onClose, getAssessmentId, onSaved 
           </div>
         </div>
         <div className="px-5 sm:px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-end gap-2">
-          <Button variant="secondary" size="md" onClick={onClose} disabled={saving}>
-            Cancel
-          </Button>
           <Button
             variant="primary"
             size="md"

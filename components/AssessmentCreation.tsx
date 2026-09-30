@@ -1431,13 +1431,6 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
 
           <div className="flex-shrink-0 flex justify-end gap-2 sm:gap-3 border-t border-gray-100 bg-slate-50 px-4 sm:px-6 py-3">
             <Button
-              variant="secondary"
-              type="button"
-              onClick={closeAddHRQuizModal}
-            >
-              Cancel
-            </Button>
-            <Button
               variant="primary"
               type="button"
               onClick={handleSaveHRQuestion}
@@ -4096,7 +4089,7 @@ const AssessmentCreation = forwardRef<AssessmentCreationHandle, AssessmentCreati
                 <button
                   onClick={() => setShowJDCreation(false)}
                   className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-                  aria-label="Close" title="Close"
+                  aria-label="Close"
                 >
                   <X className="w-5 h-5 text-white" />
                 </button>

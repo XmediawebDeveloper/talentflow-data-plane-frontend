@@ -3762,7 +3762,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
   // running through it. `activeStreakStartRef` = when the current unbroken run
   // of active frames began (null when the last frame was inactive).
   const activeStreakStartRef = useRef<number | null>(null);
-  const SUSTAINED_ACTIVE_MS = 400; // ~4-5 frames of continuous voice before reset
+  const SUSTAINED_ACTIVE_MS = 3000; // TEST (was 400): ~3s of continuous voice before reset
   // Dip tolerance ("hangover") for the active streak. Natural speech is not a
   // solid block of above-threshold frames — there are ~50-150ms gaps between
   // words, unstressed syllables, and after plosives that dip BELOW the

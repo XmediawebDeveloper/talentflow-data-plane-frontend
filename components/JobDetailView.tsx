@@ -2690,7 +2690,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                       <div
                         role="menu"
                         aria-label="Available job versions"
-                        className="absolute left-0 top-full mt-2 w-56 max-h-72 overflow-y-auto bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-1 z-50"
+                        className="absolute left-0 top-full mt-2 w-56 max-w-[calc(100vw-1.5rem)] max-h-72 overflow-y-auto bg-white dark:bg-slate-900 rounded-lg shadow-lg border border-gray-200 dark:border-slate-700 py-1 z-50"
                       >
                         {versionMenuLoading ? (
                           <div className="flex items-center gap-2 px-3 py-3 text-xs text-gray-500 dark:text-slate-400">
@@ -4342,14 +4342,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 — same rule as the AI interview prompt below. Cancel is the
                 close button's twin, kept where a decision is actually made. */}
             <div className="flex-shrink-0 border-t border-gray-200 dark:border-slate-700 px-5 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
-              <Button
-                variant="secondary"
-                onClick={() => setDraftAssessment(null)}
-                disabled={publishingDraft}
-                className="px-5 sm:px-8"
-              >
-                Cancel
-              </Button>
               {readyToPublish ? (
                 <Button
                   variant="primary"
@@ -4493,14 +4485,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
 
             {/* Actions */}
             <div className="flex-shrink-0 border-t border-gray-200 dark:border-slate-700 px-5 sm:px-7 py-3 sm:py-4 flex flex-col-reverse sm:flex-row sm:justify-end gap-2 sm:gap-3">
-              <Button
-                variant="secondary"
-                onClick={() => setDraftAIInterview(null)}
-                disabled={publishingAIDraft}
-                className="px-5 sm:px-8"
-              >
-                Cancel
-              </Button>
               {readyToPublish ? (
                 <Button
                   variant="primary"
@@ -4594,12 +4578,6 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                 {pickerSelectedIds.length} of {pickerAssessments.length} selected
               </span>
               <div className="flex gap-2">
-                <Button
-                  variant="secondary"
-                  onClick={() => setShowAssessmentPicker(false)}
-                >
-                  Cancel
-                </Button>
                 <Button
                   variant="primary"
                   onClick={handleConfirmAssessmentPick}

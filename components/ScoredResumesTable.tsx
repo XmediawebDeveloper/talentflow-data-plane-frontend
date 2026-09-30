@@ -3029,9 +3029,6 @@ Best regards`);
               </div>
 
               <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
-                <Button variant="secondary" size="md" onClick={closeShareModal}>
-                  Cancel
-                </Button>
                 <Button
                   variant="primary"
                   size="md"
@@ -3245,9 +3242,6 @@ Best regards`);
             </div>
 
             <div className="flex items-center justify-end gap-3 p-5 border-t border-gray-200 shrink-0">
-              <Button variant="secondary" size="md" onClick={() => setShowExportModal(false)}>
-                Cancel
-              </Button>
               <Button
                 variant="primary"
                 size="md"
@@ -3478,12 +3472,6 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="px-6 py-4 border-t border-gray-200 flex justify-center shrink-0">
-            <Button variant="secondary" size="md" onClick={onClose}>
-              Close
-            </Button>
-          </div>
         </div>
       </div>
     );
@@ -3734,9 +3722,6 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
             )}
           </div>
           <div className="flex items-center gap-3">
-            <Button variant="secondary" size="md" onClick={onClose}>
-              Cancel
-            </Button>
             <Button
               variant="primary"
               size="md"

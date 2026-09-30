@@ -308,12 +308,6 @@ export default function ResumeVersionSelector({ resume, onSelect, onClose }: Res
               </button>
             )}
             <button
-              onClick={onClose}
-              className="flex-1 sm:flex-none px-4 py-2 text-sm font-medium text-gray-700 dark:text-slate-300 border border-gray-200 dark:border-slate-700 rounded-lg hover:bg-white dark:hover:bg-slate-800 hover:border-brand-blue/30 hover:text-brand-blue transition-colors"
-            >
-              Cancel
-            </button>
-            <button
               onClick={handleConfirm}
               disabled={!selectedVersionId}
               className="flex-1 sm:flex-none px-5 py-2 text-sm font-medium text-white bg-brand-blue rounded-lg shadow-sm shadow-brand-blue/25 ring-1 ring-white/10 hover:bg-brand-blue-2 hover:shadow-md hover:shadow-brand-blue/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"

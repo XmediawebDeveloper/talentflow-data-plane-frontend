@@ -184,12 +184,6 @@ Best regards`;
 
             <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-gray-100">
               <button
-                onClick={onClose}
-                className="px-4 py-2 text-gray-700 hover:bg-slate-100 rounded-lg transition-colors"
-              >
-                Cancel
-              </button>
-              <button
                 onClick={handleSend}
                 disabled={isSendingEmail || !shareEmail.trim()}
                 className="flex items-center gap-2 px-6 py-2 bg-brand-blue hover:bg-brand-blue-2 text-white rounded-lg transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-brand-blue/25 ring-1 ring-white/10"

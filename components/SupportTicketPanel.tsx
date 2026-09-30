@@ -463,12 +463,6 @@ export default function SupportTicketPanel({ isOpen, onClose }: SupportTicketPan
 
                 <div className="flex gap-3 pt-4">
                   <button
-                    onClick={() => setView('main')}
-                    className="flex-1 px-4 py-2.5 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
                     onClick={handleSubmitTicket}
                     className="flex-1 px-4 py-2.5 bg-gray-800 text-white rounded-lg hover:bg-gray-900 transition-colors flex items-center justify-center gap-2"
                   >

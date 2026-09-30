@@ -283,7 +283,7 @@ export default function SearchFilterBarCompact({
 
           {/* Filter Panel - Matching Screenshot Layout */}
           {showAdvancedFilters && (
-            <div className="fixed inset-x-2 sm:inset-x-auto bottom-2 sm:bottom-auto sm:absolute sm:right-0 sm:top-12 sm:w-[500px] md:w-[700px] bg-white rounded-xl sm:rounded-lg shadow-2xl border border-gray-200 z-50 overflow-hidden max-h-[80dvh] sm:max-h-[600px] flex flex-col">
+            <div className="fixed inset-x-2 sm:inset-x-auto bottom-2 sm:bottom-auto sm:absolute sm:right-0 sm:top-12 sm:w-[500px] md:w-[700px] sm:max-w-[calc(100vw-2rem)] bg-white rounded-xl sm:rounded-lg shadow-2xl border border-gray-200 z-50 overflow-hidden max-h-[80dvh] sm:max-h-[600px] flex flex-col">
               <div className="flex-1 overflow-y-auto">
                 {/* Experience Row */}
                 <div className="p-3 sm:p-5 border-b border-gray-100">
@@ -543,7 +543,7 @@ export default function SearchFilterBarCompact({
           {showSort && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setShowSort(false)}></div>
-              <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-20">
+              <div className="absolute right-0 mt-2 w-56 max-w-[calc(100vw-1.5rem)] max-h-[70dvh] overflow-y-auto bg-white rounded-lg shadow-xl shadow-brand-blue/10 border border-gray-100 ring-1 ring-black/[0.02] py-2 z-20">
                 {[
                   { value: 'latest', label: 'Latest Upload' },
                   { value: 'lastUpdated', label: 'Recently Updated' },
