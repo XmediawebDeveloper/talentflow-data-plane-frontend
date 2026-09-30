@@ -8235,7 +8235,7 @@ export function InterviewUI({ token, interviewInfo, onInterviewComplete, onInter
       if (!isRecordingRef.current || isAiSpeakingRef.current || isProcessingRef.current) {
         setMidSilenceConfirm_(false);
         speechAccumMsRef.current = 0;
-          return;
+        return;
       }
       const nowTs = Date.now();
       const start = silenceStartRef.current;
