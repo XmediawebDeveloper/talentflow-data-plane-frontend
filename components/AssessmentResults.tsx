@@ -192,7 +192,7 @@ interface CandidateResult {
   tech_score?: number;  // Technical round score percentage
   coding_score?: number; // Coding round score percentage
   hr_score?: number; // HR round score percentage
-  status: 'Completed' | 'In Progress' | 'Pending';
+  status: 'Completed' | 'In Progress' | 'Terminated' | 'Pending';
   scoring_status?: string;  // "pending", "processing", "completed", "error"
   completedDate: string;
   duration: string;
@@ -288,12 +288,17 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
   const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('desc');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize] = useState(10);
-  const [statusFilter, setStatusFilter] = useState<'all' | 'Completed' | 'In Progress' | 'Pending'>('all');
-  /* The stat cards are gone — the Status dropdown on the toolbar row does
-     what they did — so the page is always the list; there is no cards view to
-     go to. Kept as state (not a constant) because the saved list snapshot and
-     the scroll restore are keyed on it. */
-  const [pageView] = useState<'cards' | 'list'>('list');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Completed' | 'In Progress' | 'Terminated' | 'Pending'>('all');
+  // Two-step view: 'cards' shows only the 4 stat tiles; 'list' shows search,
+  // filters, and the candidate table. Mirrors the Job Openings page pattern
+  // — a fresh visit lands on cards; clicking a stat card drills into the list
+  // with the matching status filter applied.
+  const [pageView, setPageView] = useState<'cards' | 'list'>(openOnTotalCandidates ? 'list' : 'cards');
+  const openCandidateList = (filter: 'all' | 'Completed' | 'In Progress' | 'Terminated' | 'Pending') => {
+    setStatusFilter(filter);
+    setCurrentPage(1);
+    setPageView('list');
+  };
 
   // Assessment details (which rounds are enabled)
   const [assessmentDetails, setAssessmentDetails] = useState<AssessmentDetails | null>(null);
@@ -1009,9 +1014,13 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
           const mapped: CandidateResult[] = responses.flatMap(({ id: sourceAssessmentId, response }) => (response?.items ?? []).map((item: any) => {
             // Determine status: attempt status + scoring status
             const scoringStatus: string = item.scoring_status || 'pending';
-            let status: 'Completed' | 'In Progress' | 'Pending' = 'Completed';
+            let status: 'Completed' | 'In Progress' | 'Terminated' | 'Pending' = 'Completed';
             if (item.status === 'pending') {
               status = 'Pending';
+            } else if (item.status === 'terminated') {
+              // Proctoring termination / walk-out: a terminal state, never
+              // scored. Showing "In Progress" made it look still live.
+              status = 'Terminated';
             } else if (item.status === 'in_progress') {
               status = 'In Progress';
             } else if (item.status === 'completed') {
@@ -1044,6 +1053,8 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
               duration = '-';
             } else if (status === 'In Progress') {
               duration = 'In Progress';
+            } else if (status === 'Terminated') {
+              duration = '-';
             }
 
             return {
@@ -1166,6 +1177,7 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
     switch (status) {
       case 'Completed': return 'success';
       case 'In Progress': return 'info';
+      case 'Terminated': return 'destructive';
       case 'Pending': return 'warning';
       case 'Failed':
       case 'Abandoned': return 'destructive';
@@ -2086,6 +2098,26 @@ export default function AssessmentResults({ onBack, assessmentId, assessmentTitl
                   </select>
                 </div>
               )}
+
+              {/* Status Filter */}
+              <div>
+                <label htmlFor="assessment-results-status-filter" className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1.5">Status</label>
+                <select
+                  id="assessment-results-status-filter"
+                  value={statusFilter}
+                  onChange={(e) => {
+                    setStatusFilter(e.target.value as 'all' | 'Completed' | 'In Progress' | 'Terminated' | 'Pending');
+                    setCurrentPage(1);
+                  }}
+                  className="w-full min-w-0 h-9 px-3 text-sm rounded-lg border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-gray-900 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+                >
+                  <option value="all">All</option>
+                  <option value="Completed">Completed</option>
+                  <option value="In Progress">In Progress</option>
+                  <option value="Terminated">Terminated</option>
+                  <option value="Pending">{PENDING_STATUS_LABEL}</option>
+                </select>
+              </div>
 
               {/* Pass/Fail Filter */}
               <div>

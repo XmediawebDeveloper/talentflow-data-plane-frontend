@@ -16,7 +16,7 @@ import {
   ChevronLeft, ChevronRight, Eye, Loader2,
   Users, CheckCircle, Clock, Mail, XCircle, AlertTriangle, CalendarDays,
   Ban, SlidersHorizontal, FileDown, FileText, FileSpreadsheet, Info, Download, X,
-  Square, CheckSquare,
+  Square, CheckSquare, Play,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
@@ -26,7 +26,7 @@ import PageBreadcrumb, { BreadcrumbCrumb } from '@/components/PageBreadcrumb';
 import ColumnCustomizationModal from '@/components/ColumnCustomizationModal';
 import JobIdBadge from '@/components/jobs/JobIdBadge';
 import { INVITE_SOURCE_FILTER_OPTIONS, RESULT_FILTER_OPTIONS } from './ColumnFilterFields';
-import { InviteSourceValue, inviteSourceLabel, isRevocableInvite, isExpiredForActions, displayInviteScore, inviteResult, matchesInviteResultFilter, ResultBadge, timelineEvents } from '@/components/AIInterviewInviteTable';
+import { InviteSourceValue, inviteSourceLabel, isRevocableInvite, isExpiredForActions, displayInviteScore, inviteResult, matchesInviteResultFilter, ResultBadge } from '@/components/AIInterviewInviteTable';
 import { ConfirmationDialog } from '@/components/ui/confirmation-dialog';
 
 interface AIInterviewResultsProps {
@@ -204,6 +204,20 @@ export function formatDuration(session: AIInterviewResponse): string {
   return `${mins}m ${secs}s`;
 }
 
+/** The Status dropdown: the states a result can be in, All Statuses by default.
+ *  "All Statuses" is those three together — never Invited / Expired /
+ *  Revoked, which have no result to show. */
+const RESULT_STATUS_OPTIONS = [
+  { value: 'all', label: 'All Statuses' },
+  { value: 'in_progress', label: 'In Progress' },
+  { value: 'completed', label: 'Completed' },
+  { value: 'terminated', label: 'Terminated' },
+];
+const DEFAULT_RESULT_STATUS = 'all';
+/** What "All Statuses" combines (the server filters one status at a time). */
+const RESULT_STATUSES = new Set(['in_progress', 'completed', 'terminated']);
+const isResultStatus = (v: unknown) => RESULT_STATUS_OPTIONS.some((o) => o.value === v);
+
 export default function AIInterviewResults({ configId, configTitle, jdTitle, jdShortId, embedded = false, showStats, hideVersionDetails = false, onViewCandidate, breadcrumbItems, toolbarActions, emptyStateAction, jobVersion: jobVersionProp, interviewVersion: interviewVersionProp }: AIInterviewResultsProps) {
   const router = useRouter();
   const [sessions, setSessions] = useState<AIInterviewResponse[]>([]);
@@ -215,6 +229,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
        applied here — so the Total card never drops to 0 because a Pass or
        Fail pick matched nothing. */
     total: 0,
+    /** Every invite for the interview, any status. */
+    all: 0,
     invited: 0,
     completed: 0,
     inProgress: 0,
@@ -311,7 +327,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   // so `appliedQuery` matters twice over: it keeps one request per pause rather
   // than per keystroke, and it is what the request is built from.
   const search = useListSearch({
-    initialFilters: { status: 'all', scoreMin: '', scoreMax: '', dateFrom: '', dateTo: '', jobVersion: '', interviewVersion: '', inviteSource: '', result: '' },
+    initialFilters: { status: DEFAULT_RESULT_STATUS, scoreMin: '', scoreMax: '', dateFrom: '', dateTo: '', jobVersion: '', interviewVersion: '', inviteSource: '', result: '' },
     onChange: () => setCurrentPage(1),
     // Score min/max is one logical range filter, and so is the date range.
     countFilters: (f) =>
@@ -333,7 +349,11 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
     { currentPage, query: search.query, filters: search.filters, displayMode },
     (s) => {
       if (typeof s.query === 'string' && s.query) search.setQuery(s.query);
-      if (s.filters && typeof s.filters === 'object') search.setFilters({ ...search.filters, ...s.filters });
+      if (s.filters && typeof s.filters === 'object') {
+        const restored = { ...search.filters, ...s.filters };
+        if (!isResultStatus(restored.status)) restored.status = DEFAULT_RESULT_STATUS;
+        search.setFilters(restored);
+      }
       if ((s.displayMode === 'list' || s.displayMode === 'grid') && !isPhoneWidth()) setDisplayMode(s.displayMode);
       if (typeof s.currentPage === 'number' && s.currentPage >= 1) setCurrentPage(s.currentPage);
     },
@@ -355,15 +375,16 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
      same figures every other AI Interview list shows. The server's
      score_min/max filters the legacy blended score instead, so Score Range
      is applied here, like Source and Result, which have no server filter. */
-  const needsClientFilter = !!(sourceFilter || resultFilter || scoreMin !== '' || scoreMax !== '');
+  const needsClientFilter = !!(sourceFilter || resultFilter || scoreMin !== '' || scoreMax !== '' || statusFilter === 'all');
   const matchesClientFilters = useCallback((s: AIInterviewResponse) => {
+    if (statusFilter === 'all' && !RESULT_STATUSES.has(String(s.status))) return false;
     if (sourceFilter && (s as any).invite_source !== sourceFilter) return false;
     const score = displayInviteScore(s);
     if (!matchesInviteResultFilter(s, score, resultFilter)) return false;
     if (scoreMin !== '' && (score == null || score < parseFloat(scoreMin))) return false;
     if (scoreMax !== '' && (score == null || score > parseFloat(scoreMax))) return false;
     return true;
-  }, [sourceFilter, resultFilter, scoreMin, scoreMax]);
+  }, [sourceFilter, resultFilter, scoreMin, scoreMax, statusFilter]);
 
   const requestParams = useMemo(() => ({
     search: search.appliedQuery || undefined,
@@ -400,11 +421,13 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       // has, filled the same way: a dedicated page_size-1 probe per status,
       // scoped by the same search/date params so the cards stay in step with
       // an active search rather than always reading the whole config.
-      const [result, expiredProbe, revokedProbe, invitedProbe]: [AIInterviewInvitationListResponse, AIInterviewInvitationListResponse, AIInterviewInvitationListResponse, AIInterviewInvitationListResponse] = await Promise.all([
+      const [result, expiredProbe, revokedProbe, invitedProbe, allProbe]: [AIInterviewInvitationListResponse, AIInterviewInvitationListResponse, AIInterviewInvitationListResponse, AIInterviewInvitationListResponse, AIInterviewInvitationListResponse] = await Promise.all([
         aiInterviewService.getConfigInvitations(configId, requestParams),
         aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'expired', page: 1, page_size: 1 }),
         aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'revoked', page: 1, page_size: 1 }),
         aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'invited', page: 1, page_size: 1 }),
+        // Every invite, whatever its status — decides "nobody invited yet".
+        aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: undefined, page: 1, page_size: 1 }),
       ]);
       const shown = pageBySource(result);
       // A restored page past the end (rows removed since) — step back to the
@@ -418,6 +441,7 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
       setTotalPages(shown.pages);
       setSummary({
         total: result.total || 0,
+        all: allProbe.total || 0,
         invited: invitedProbe.total || 0,
         completed: result.completed || 0,
         inProgress: result.in_progress || 0,
@@ -446,14 +470,17 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
         aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'expired', page: 1, page_size: 1 }),
         aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'revoked', page: 1, page_size: 1 }),
         aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: 'invited', page: 1, page_size: 1 }),
+        // Every invite, whatever its status — decides "nobody invited yet".
+        aiInterviewService.getConfigInvitations(configId, { ...requestParams, status: undefined, page: 1, page_size: 1 }),
       ])
-        .then(([r, expiredProbe, revokedProbe, invitedProbe]) => {
+        .then(([r, expiredProbe, revokedProbe, invitedProbe, allProbe]) => {
           const shown = pageBySource(r);
           setSessions(shown.items);
           setTotalSessions(shown.total);
           setTotalPages(shown.pages);
           setSummary({
             total: r.total || 0,
+            all: allProbe.total || 0,
             invited: invitedProbe.total || 0,
             completed: r.completed || 0,
             inProgress: r.in_progress || 0,
@@ -483,8 +510,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
   // the status cards and the toolbar Result dropdown aren't in its count,
   // so they're checked here too — otherwise a Pass / Fail pick (or a status
   // card) with no matches hid the whole bar and left no way back.
-  const isUnstarted = !isLoading && sessions.length === 0 && !search.isNarrowed
-    && statusFilter === 'all' && !resultFilter;
+  const isUnstarted = !isLoading && sessions.length === 0 && !search.isNarrowed && !resultFilter
+    && !search.appliedQuery && summary.all === 0;
 
   // Without the version columns in the list at all, the table, the Customize
   // Columns modal and the export all drop them together.
@@ -688,6 +715,15 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   </span>
                 )}
               </h1>
+              {/* Which versions the list covers — follows the Job Version and
+                  Interview Version filters in More Filters. */}
+              {!hideVersionDetails && (
+                <p className="mt-1.5 flex flex-wrap items-center gap-2 text-sm text-gray-500 dark:text-slate-400">
+                  <span>{jobVersionFilter ? `Showing JD V${jobVersionFilter}` : 'Showing all JD versions'}</span>
+                  <span className="text-gray-300 dark:text-slate-600" aria-hidden>|</span>
+                  <span>{interviewVersionFilter ? `Showing Interview V${interviewVersionFilter}` : 'Showing all Interview versions'}</span>
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -697,79 +733,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           Result" tab, the summary cards are dropped: that page already carries
           its own counts and Quick Actions, and the tab leads with the candidate
           table instead. */}
-      {/* Embedded, the cards sit in a column beside the page's own nav, a
-          few hundred pixels narrower than the standalone page — seven in a
-          row there left each ~130px, and the icon-beside-label layout cut
-          labels like "IN PROGRESS" short. So embedded cards wrap to two
-          rows of four until xl, and stack icon + count over a full-width
-          label instead of squeezing all three onto one line. */}
-      {(showStats ?? !embedded) && (
-        <div className={embedded
-          /* px-0.5: the selected card's ring-2 draws 2px outside it, and the
-             details page's content column (overflow-x-auto) clips anything
-             past its edge — this keeps the first and last rings whole. */
-          ? 'grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3 mb-5 px-0.5 pt-0.5'
-          : 'grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-4 mb-6'}>
-          {([
-            { key: 'all', label: 'Total', value: summary.total, Icon: Users,
-              iconBg: 'bg-brand-blue/10 ring-1 ring-brand-blue/15', iconColor: 'text-brand-blue', activeRing: 'ring-brand-blue/50 border-brand-blue/40' },
-            { key: 'invited', label: 'Invited', value: summary.invited, Icon: Mail,
-              iconBg: 'bg-brand-cyan/10 ring-1 ring-brand-cyan/20', iconColor: 'text-brand-blue', activeRing: 'ring-brand-cyan/50 border-brand-cyan/40' },
-            { key: 'completed', label: 'Completed', value: summary.completed, Icon: CheckCircle,
-              iconBg: 'bg-gradient-to-br from-green-100 to-green-50 ring-1 ring-success-line', iconColor: 'text-success', activeRing: 'ring-success/50 border-success-line' },
-            { key: 'in_progress', label: 'In Progress', value: summary.inProgress, Icon: Clock,
-              iconBg: 'bg-brand-orange/10 ring-1 ring-brand-orange/20', iconColor: 'text-brand-orange-deep', activeRing: 'ring-brand-orange-deep/50 border-brand-orange/40' },
-            { key: 'expired', label: 'Expired', value: summary.expired, Icon: XCircle,
-              iconBg: 'bg-brand-orange/10 ring-1 ring-brand-orange/20', iconColor: 'text-brand-orange-deep', activeRing: 'ring-brand-orange-deep/50 border-brand-orange/40' },
-            { key: 'terminated', label: 'Terminated', value: summary.terminated, Icon: Ban,
-              iconBg: 'bg-destructive-subtle ring-1 ring-destructive-line', iconColor: 'text-destructive', activeRing: 'ring-destructive/50 border-destructive-line' },
-            { key: 'revoked', label: 'Revoked', value: summary.revoked, Icon: Ban,
-              iconBg: 'bg-indigo-50 ring-1 ring-indigo-200', iconColor: 'text-indigo-700', activeRing: 'ring-indigo-500/50 border-indigo-200' },
-          ] as const).map(({ key, label, value, Icon, iconBg, iconColor, activeRing }) => {
-            const isActive = statusFilter === key;
-            return (
-              <button
-                key={key}
-                type="button"
-                aria-pressed={isActive}
-                title={
-                  key === 'all'
-                    ? 'Show all candidates'
-                    : isActive
-                      ? `Stop filtering by ${label.toLowerCase()}`
-                      : `Show only ${label.toLowerCase()} candidates`
-                }
-                onClick={() => search.setFilter('status', key === 'all' ? 'all' : isActive ? 'all' : key)}
-                className={`text-left bg-white rounded-xl border ${embedded ? 'p-3' : 'p-4'} shadow-sm min-w-0 shadow-brand-blue/5 transition-all hover:shadow-md hover:-translate-y-0.5 focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue/40 ${
-                  isActive ? `ring-2 ${activeRing}` : 'border-gray-100 ring-1 ring-black/[0.02] hover:border-brand-blue/20'
-                }`}
-              >
-                {embedded ? (
-                  <>
-                    <div className="flex items-center justify-between gap-2 mb-2">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${iconBg}`}>
-                        <Icon className={`w-4 h-4 ${iconColor}`} />
-                      </div>
-                      <div className="text-xl font-bold text-gray-900 tracking-tight tabular-nums">{value}</div>
-                    </div>
-                    <span className="block text-2xs text-gray-500 font-medium uppercase tracking-wide whitespace-nowrap">{label}</span>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex items-center gap-2.5 mb-2">
-                      <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${iconBg}`}>
-                        <Icon className={`w-4 h-4 ${iconColor}`} />
-                      </div>
-                      <span className="text-xs text-gray-500 font-medium uppercase tracking-wide truncate">{label}</span>
-                    </div>
-                    <div className="text-2xl font-bold text-gray-900 tracking-tight">{value}</div>
-                  </>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
 
       {/* Search + Filter bar */}
       {!isUnstarted && (
@@ -792,8 +755,17 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           leadingActions={
             <>
               {toolbarActions}
-              {/* Result (Pass / Fail) first, ahead of More Filters; status is
-                  still picked from the cards above. */}
+              {/* Status first (All Statuses by default), then Result, then More Filters. */}
+              <select
+                value={statusFilter}
+                onChange={(e) => search.setFilter('status', e.target.value)}
+                aria-label="Status"
+                className="w-36 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"
+              >
+                {RESULT_STATUS_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
               <select
                 value={resultFilter}
                 onChange={(e) => search.setFilter('result', e.target.value)}
@@ -888,7 +860,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
           variant="info"
         />
 
-        {/* Expanded filters */}
+        {/* Expanded filters — each field filters the list the moment it
+            changes (no Done step); Reset in the toolbar clears them all. */}
         {showFilters && (
           <div className="mt-4 sm:mt-5 pt-4 sm:pt-5 border-t border-brand-blue/10">
           <div className="flex flex-wrap gap-x-6 gap-y-4">
@@ -900,8 +873,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   placeholder="Min"
                   min={0}
                   max={100}
-                  value={search.draftFilters.scoreMin}
-                  onChange={(e) => search.setDraftFilter('scoreMin', e.target.value)}
+                  value={search.filters.scoreMin}
+                  onChange={(e) => search.setFilter('scoreMin', e.target.value)}
                   className="w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
                 <span className="text-gray-400 text-sm">to</span>
@@ -910,8 +883,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                   placeholder="Max"
                   min={0}
                   max={100}
-                  value={search.draftFilters.scoreMax}
-                  onChange={(e) => search.setDraftFilter('scoreMax', e.target.value)}
+                  value={search.filters.scoreMax}
+                  onChange={(e) => search.setFilter('scoreMax', e.target.value)}
                   className="w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
               </div>
@@ -921,15 +894,15 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
               <div className="flex items-center gap-2">
                 <input
                   type="date"
-                  value={search.draftFilters.dateFrom}
-                  onChange={(e) => search.setDraftFilter('dateFrom', e.target.value)}
+                  value={search.filters.dateFrom}
+                  onChange={(e) => search.setFilter('dateFrom', e.target.value)}
                   className="w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
                 <span className="text-gray-400 text-sm">to</span>
                 <input
                   type="date"
-                  value={search.draftFilters.dateTo}
-                  onChange={(e) => search.setDraftFilter('dateTo', e.target.value)}
+                  value={search.filters.dateTo}
+                  onChange={(e) => search.setFilter('dateTo', e.target.value)}
                   className="w-full min-w-0 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue"
                 />
               </div>
@@ -939,8 +912,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             <div className="flex-1 min-w-0 basis-[180px]">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Job Version</label>
               <select
-                value={search.draftFilters.jobVersion}
-                onChange={(e) => search.setDraftFilter('jobVersion', e.target.value)}
+                value={search.filters.jobVersion}
+                onChange={(e) => search.setFilter('jobVersion', e.target.value)}
                 aria-label="Job Version"
                 className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"
               >
@@ -951,8 +924,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             <div className="flex-1 min-w-0 basis-[180px]">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Interview Version</label>
               <select
-                value={search.draftFilters.interviewVersion}
-                onChange={(e) => search.setDraftFilter('interviewVersion', e.target.value)}
+                value={search.filters.interviewVersion}
+                onChange={(e) => search.setFilter('interviewVersion', e.target.value)}
                 aria-label="Interview Version"
                 className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"
               >
@@ -965,8 +938,8 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             <div className="flex-1 min-w-0 basis-[180px]">
               <label className="block text-xs font-medium text-gray-600 mb-1.5">Source</label>
               <select
-                value={search.draftFilters.inviteSource}
-                onChange={(e) => search.setDraftFilter('inviteSource', e.target.value)}
+                value={search.filters.inviteSource}
+                onChange={(e) => search.setFilter('inviteSource', e.target.value)}
                 aria-label="Source"
                 className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/40 focus:border-brand-blue bg-white text-black"
               >
@@ -978,13 +951,6 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
             </div>
           </div>
 
-          {/* Panel footer: "Done" applies the selection and reveals the
-              toolbar Clear - same flow as job-openings. */}
-          <div className="mt-4 pt-3 border-t border-brand-blue/10 flex items-center justify-end gap-2">
-            <Button variant="secondary" size="sm" onClick={() => { search.applyFilters(); setShowFilters(false); }}>
-              Done
-            </Button>
-          </div>
           </div>
         )}
       </div>
@@ -1328,16 +1294,23 @@ export default function AIInterviewResults({ configId, configTitle, jdTitle, jdS
                         )}
                         {col('timeline') && (
                           <td className="px-4 py-3 whitespace-nowrap text-gray-600">
-                            {/* Same trail as Track Invites (Invited / System Check /
-                                Started / Completed …), from the shared builder. */}
+                            {/* Results only care about the interview itself —
+                                Started and Completed, the same two times the
+                                export writes. Invite history stays on Track Invites. */}
                             <div className="flex flex-col gap-0.5 text-xs">
-                              {timelineEvents(session).map(({ label, at, Icon, tone }, i) => (
-                                <span key={`${label}-${i}`} className="flex items-center gap-1.5">
-                                  <Icon className={`w-3 h-3 shrink-0 ${tone}`} />
-                                  <span>{label}: {formatIST(at)}</span>
+                              {session.started_at && (
+                                <span className="flex items-center gap-1.5">
+                                  <Play className="w-3 h-3 shrink-0 text-brand-orange-deep" />
+                                  <span>Started: {formatIST(session.started_at)}</span>
                                 </span>
-                              ))}
-                              {timelineEvents(session).length === 0 && <span>—</span>}
+                              )}
+                              {session.completed_at && (
+                                <span className="flex items-center gap-1.5">
+                                  <CheckCircle className="w-3 h-3 shrink-0 text-success" />
+                                  <span>Completed: {formatIST(session.completed_at)}</span>
+                                </span>
+                              )}
+                              {!session.started_at && !session.completed_at && <span>—</span>}
                               <span><span className="text-gray-400">Duration:</span> {formatDuration(session)}</span>
                             </div>
                           </td>
