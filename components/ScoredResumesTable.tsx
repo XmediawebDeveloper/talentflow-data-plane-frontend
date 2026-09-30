@@ -3361,6 +3361,13 @@ function BulkInviteModal({ selectedResumes, jobId, jobTitle, onClose, onSuccess 
         candidate_name: resume.candidateName,
         candidate_email: resume.email,
         resume_id: resume.resumeId,
+        // This is the table's own Bulk Invite button, gated on scoring:invite
+        // (canCreateAssessments above) — unlike the per-row Invite dropdown,
+        // this call goes straight to the API rather than through
+        // InviteShareModal/ShareAssessmentModal, so invite_source was never
+        // set here. Without it, the backend has no way to tell this apart
+        // from any other assessment invite and can't enforce scoring:invite.
+        invite_source: 'Resume Scoring',
       }));
 
       await assessmentService.bulkInvite(selectedAssessment, {

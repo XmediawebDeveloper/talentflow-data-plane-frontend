@@ -56,8 +56,18 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     // 'assessments:share'. 'Share' is a separate, real permission that only
     // controls generating a shareable assessment link from the Assessments
     // list page).
+    //
+    // Rule: Edit and Delete both require View (app/services/
+    // permission_dependencies.py: jd:update -> jd:read, jd:delete ->
+    // jd:read). Enabling Edit/Delete already auto-enables View via this
+    // category's own view-code mechanism, but nothing previously stopped the
+    // reverse: unchecking "View Job Description" on its own row while Edit
+    // or Delete stayed checked, leaving a combination the backend would
+    // reject the next time either ran.
     dependencies: {
       'jd:invite': ['assessments:invite'],
+      'jd:update': ['jd:read'],
+      'jd:delete': ['jd:read'],
     },
   },
   {
@@ -106,6 +116,15 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'ai_match:score', label: 'Score Resumes' },
       { code: 'ai_match:export', label: 'Export' },
     ],
+    // Rule: Run AI Match requires both Job Description and Shared Database
+    // access (app/services/permission_dependencies.py: ai_match:run ->
+    // internal_db:read, jd:read) — matching a candidate against a JD needs
+    // both sides of the match. Previously undeclared here, so disabling Job
+    // Description or Shared Database gave no warning that it breaks AI
+    // Talent Match too.
+    dependencies: {
+      'ai_match:run': ['internal_db:read', 'jd:read'],
+    },
   },
   {
     id: 'my_resumes',
@@ -144,8 +163,14 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
     ],
     // Rule: Assessment invite from Internal DB requires Assessment Invite
     // (see jd:invite above for why this points at 'assessments:invite')
+    //
+    // Rule: Delete requires View (app/services/permission_dependencies.py:
+    // internal_db:delete -> internal_db:read). No 'Create'/'Edit' checkbox
+    // exists in this category to mirror internal_db:create/update — those
+    // backend codes have no corresponding frontend action at all.
     dependencies: {
       'internal_db:assessment': ['assessments:invite'],
+      'internal_db:delete': ['internal_db:read'],
     },
   },
   {
@@ -171,13 +196,17 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'assessments:edit_question', label: 'Edit Question' },
       { code: 'assessments:delete_question', label: 'Delete Question' },
     ],
-    // Rule: Create requires Job Description access — every assessment is
-    // tied to a JD (app/services/permission_dependencies.py already enforces
-    // assessments:create -> jd:read server-side). Declared here so disabling
-    // a role's Job Description access warns about breaking Assessment
-    // creation too, not just Resume Scoring.
+    // Rule: Create and Edit both require Job Description access — every
+    // assessment is tied to a JD (app/services/permission_dependencies.py
+    // enforces assessments:create -> jd:read and assessments:update ->
+    // assessments:read, jd:read server-side; assessments:read is this
+    // category's own view code, already auto-enabled whenever any of its
+    // actions are). Declared here so disabling a role's Job Description
+    // access warns about breaking Assessment creation and editing, not just
+    // Resume Scoring.
     dependencies: {
       'assessments:create': ['jd:read'],
+      'assessments:update': ['jd:read'],
     },
   },
   {
@@ -193,14 +222,42 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'ai_interview:archive', label: 'Archive' },
       { code: 'ai_interview:delete', label: 'Delete' },
     ],
-    // Rule: Create requires Job Description access — every AI interview is
-    // tied to a JD (app/services/permission_dependencies.py now enforces
-    // ai_interview:create -> jd:read server-side, matching the same JD-scoping
-    // Assessments already declares via assessments:create -> jd:read).
-    // Declared here so disabling a role's Job Description access warns about
-    // breaking AI Interview creation too, not just Resume Scoring.
+    // Rule: viewing or creating an AI interview requires Job Description
+    // access — every AI interview is tied to a JD
+    // (app/services/permission_dependencies.py: ai_interview:read and
+    // ai_interview:create -> resumes:read, jd:read), matching the same
+    // JD-scoping Assessments already declares. 'jd:read' is declared on both
+    // the view code and Create individually, since a role can hold View
+    // without Create.
+    //
+    // Rule: every AI interview action requires Resume access
+    // (ai_interview:read/create/update/invite/publish/archive/delete all ->
+    // resumes:read server-side). 'my_resumes:read' is the real, UI-tracked
+    // permission that satisfies the legacy 'resumes:read' alias (see
+    // app/services/permission_dependencies.py's _RESUME_READ_SATISFIED_BY;
+    // 'internal_db:read' would satisfy it too, but a single canonical choice
+    // is used here since this dependency system has no OR-group support —
+    // a role granted only Shared Database access will see this warning name
+    // My Resumes even though the backend would also accept it via Shared
+    // Database).
+    //
+    // 'ai_interview:share' has no checkbox here and is never actually
+    // enforced by any endpoint (confirmed: no require_rbac_permission call
+    // references it) — it's vestigial in the backend's dependency dict, so
+    // there is nothing to declare a dependency against.
+    //
+    // Previously only ai_interview:create -> jd:read was declared; the rest
+    // of this module's real dependencies were undeclared, so disabling Job
+    // Description or My Resumes gave no warning that it breaks AI Interview
+    // viewing, editing, inviting, publishing, archiving, or deleting.
     dependencies: {
-      'ai_interview:create': ['jd:read'],
+      'ai_interview:read': ['jd:read', 'my_resumes:read'],
+      'ai_interview:create': ['jd:read', 'my_resumes:read'],
+      'ai_interview:update': ['my_resumes:read'],
+      'ai_interview:invite': ['my_resumes:read'],
+      'ai_interview:publish': ['my_resumes:read'],
+      'ai_interview:archive': ['my_resumes:read'],
+      'ai_interview:delete': ['my_resumes:read'],
     },
   },
   {
@@ -213,6 +270,19 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'hr_question_bank:update', label: 'Edit' },
       { code: 'hr_question_bank:delete', label: 'Delete' },
     ],
+    // Rule: HR Question Bank requires Assessment view access
+    // (app/services/permission_dependencies.py: hr_question_bank:read ->
+    // assessments:read) — the bank's questions are reused when building
+    // assessments, so viewing it without Assessment access makes no sense.
+    // Keyed on this category's own view code (dependency lookups work the
+    // same for a view code as for any action code), since the requirement
+    // applies the moment the module is viewed at all, not just on a
+    // particular action within it. Previously undeclared, so disabling
+    // Assessment view access gave no warning that it breaks HR Question
+    // Bank too.
+    dependencies: {
+      'hr_question_bank:read': ['assessments:read'],
+    },
   },
   {
     id: 'analytics',
@@ -343,6 +413,21 @@ export const CUSTOM_PERMISSION_CATEGORIES: CustomPermissionCategory[] = [
       { code: 'users:reset_password', label: 'Reset Password', description: 'Email the user a temporary password and force a reset on next login' },
       { code: 'users:force_password_change', label: 'Force Password Change', description: 'Require the user to change their password on next login' },
     ],
+    // Rule: every sensitive user-management action requires View
+    // (app/services/permission_dependencies.py: users:create/update/delete/
+    // disable/reset_password/force_password_change/assign_role all ->
+    // users:read). Enabling any of these already auto-enables View via this
+    // category's own view-code mechanism; this closes the reverse gap —
+    // unchecking "View" on its own while one of these stayed checked.
+    dependencies: {
+      'users:create': ['users:read'],
+      'users:update': ['users:read'],
+      'users:delete': ['users:read'],
+      'users:disable': ['users:read'],
+      'users:assign_role': ['users:read'],
+      'users:reset_password': ['users:read'],
+      'users:force_password_change': ['users:read'],
+    },
   },
   {
     id: 'teams',

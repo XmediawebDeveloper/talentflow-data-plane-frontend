@@ -3064,7 +3064,12 @@ Best regards`);
                 jd_title: jobTitle,
                 jd_version: a.jd_version,
               }))}
-              inviteSource="JD"
+              // This page is the Resume Scoring candidate detail view (opened
+              // from a scored resume), not the JD page — "JD" here was a
+              // copy-paste artifact that mistagged every invite sent from
+              // this page, which meant a backend check keyed on invite_source
+              // would never see these invites as Resume-Scoring-originated.
+              inviteSource="Resume Scoring"
             />
           )}
 
