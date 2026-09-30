@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { X, Users, Mail, Play, Square, CheckSquare, CheckCircle, Clock, Ban, TrendingUp, Loader2 } from 'lucide-react';
+import { X, Users, Mail, Play, Square, CheckSquare, CheckCircle, Clock, Ban, TrendingUp, Loader2, RefreshCw, Info, Send } from 'lucide-react';
 import { toast } from 'sonner';
 import { aiInterviewService } from '@/lib/services/aiInterviewService';
 import { interviewVersionOrdinal } from '@/lib/utils/aiInterviewVersion';
@@ -18,8 +18,13 @@ import InviteFilterBar, {
 import InviteStatCards, { INVITE_CARD_TONES } from '@/components/InviteStatCards';
 import { TRACKER_DIALOG_PANEL_CLASS } from '@/lib/constants/trackerDialog';
 import TabEmptyState from '@/components/ui/tab-empty-state';
+import { useDialogHeightLock } from '@/lib/hooks/useDialogHeightLock';
+import { isValidEmailFormat, EMAIL_FORMAT_ERROR } from '@/lib/utils/email';
+import { formatIST } from '@/lib/utils/dateUtils';
+import { VersionPill } from '@/components/ai-interview/AllInterviewsTable';
 import AIInterviewInviteTable, {
   isExpiredForActions,
+  isRevocableInvite,
   displayInviteScore,
   matchesInviteResultFilter,
 } from '@/components/AIInterviewInviteTable';
@@ -65,6 +70,9 @@ interface AIInterviewTrackInvitesModalProps {
    *  (there is nothing to close back to); everything else — stats, filters,
    *  bulk resend, the table, pagination — is unchanged. */
   embedded?: boolean;
+  /** Footer "Invite More" — the host closes this tracker and opens its own
+   *  invite flow. Left out, the button is not shown. */
+  onInviteMore?: () => void;
 }
 
 const PAGE_SIZE = 10;
@@ -72,13 +80,11 @@ const PAGE_SIZE = 10;
 /**
  * Invite tracking for a job's AI interview, opened from the Job Details page.
  *
- * Follows the same per-status action rules as the assessment Track Invite
- * popup: Invited → Copy Link only (no manual resend once sent), Expired →
- * Resend, System Check / In Progress → no action, Completed → View Result
- * only. Edit and Revoke stay on the AI Interviews page — those callbacks are
- * deliberately not passed to <AIInterviewInviteTable> (the same list the AI
- * Interviews page renders), so omitting them simply drops those menu items
- * here.
+ * Mirrors the AI Interviews page's own tracker element for element: Refresh,
+ * the results note with the completion badge, the stat cards, filters, bulk
+ * Revoke (Invited card) / Resend (Expired card), per-row Resend / Edit /
+ * Revoke, the refresh veil and Invite More. The list is the same
+ * <AIInterviewInviteTable>, so the per-status action rules are the table's.
  */
 export default function AIInterviewTrackInvitesModal({
   isOpen,
@@ -92,6 +98,7 @@ export default function AIInterviewTrackInvitesModal({
   hideJobVersionFilter = false,
   onViewResult,
   embedded = false,
+  onInviteMore,
 }: AIInterviewTrackInvitesModalProps) {
   const [isLoading, setIsLoading] = useState(true);
 
@@ -100,7 +107,7 @@ export default function AIInterviewTrackInvitesModal({
      interview version is this config's place among its job version's
      configs, which only the full list can say. */
   const [lookedUpVersions, setLookedUpVersions] = useState<{ job: number; interview: number } | null>(null);
-  const needsVersionLookup = !hideVersionDetails && (jobVersionProp == null || interviewVersionProp == null);
+  const needsVersionLookup = (!hideVersionDetails || hideJobVersionFilter) && (jobVersionProp == null || interviewVersionProp == null);
   useEffect(() => {
     if (!isOpen || !needsVersionLookup) return;
     let cancelled = false;
@@ -118,6 +125,9 @@ export default function AIInterviewTrackInvitesModal({
   }, [isOpen, needsVersionLookup, configId]);
   const jobVersion = hideVersionDetails ? undefined : (jobVersionProp ?? lookedUpVersions?.job);
   const interviewVersion = hideVersionDetails ? undefined : (interviewVersionProp ?? lookedUpVersions?.interview);
+  // The header names the version when the table has no version columns to.
+  const headerJobVersion = jobVersionProp ?? lookedUpVersions?.job;
+  const headerInterviewVersion = interviewVersionProp ?? lookedUpVersions?.interview;
   const [invitations, setInvitations] = useState<any[]>([]);
   const [page, setPage] = useState(1);
   // "Go to page" input for the footer — buffered locally so a partial edit
@@ -166,6 +176,17 @@ export default function AIInterviewTrackInvitesModal({
   // Resend flow — confirm first (the old link stops working), then send.
   const [resendTarget, setResendTarget] = useState<any | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  // Revoke (single + bulk) and Edit — the same flows the AI Interviews page's
+  // tracker runs, against the same endpoints.
+  const [revokeTarget, setRevokeTarget] = useState<any | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [showBulkRevokeConfirm, setShowBulkRevokeConfirm] = useState(false);
+  const [isBulkRevoking, setIsBulkRevoking] = useState(false);
+  const [editTarget, setEditTarget] = useState<any | null>(null);
+  const [editForm, setEditForm] = useState({ candidate_name: '', candidate_email: '' });
+  const [savingEdit, setSavingEdit] = useState(false);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const heightLock = useDialogHeightLock<HTMLDivElement>();
 
   /* Bulk selection — same control and semantics as the assessment tracker's
      Select All bar: only bulk-resendable rows (Expired) are selectable,
@@ -173,11 +194,15 @@ export default function AIInterviewTrackInvitesModal({
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [showBulkResendConfirm, setShowBulkResendConfirm] = useState(false);
   const [isBulkResending, setIsBulkResending] = useState(false);
-  /* Selection follows the selected card: only the Expired card has a bulk
-     action here (Resend), so only it shows the checkboxes and Select All.
-     Revoke is not offered in this tracker at all — see the component note. */
-  const bulkResendMode = filters.status === 'expired';
-  const selectableIds = bulkResendMode ? invitations.filter(isBulkResendable).map((inv: any) => inv.id) : [];
+  /* Selection follows the selected card, as on the AI Interviews page: the
+     Invited card ticks revocable rows and offers Revoke; the Expired card
+     ticks resendable rows and offers Resend. Other cards have no bulk action. */
+  const bulkMode: 'revoke' | 'resend' | null =
+    filters.status === 'invited' ? 'revoke' : filters.status === 'expired' ? 'resend' : null;
+  const bulkResendMode = bulkMode === 'resend';
+  const rowSelectable = bulkMode === 'revoke' ? isRevocableInvite : isBulkResendable;
+  const selectableIds = bulkMode ? invitations.filter(rowSelectable).map((inv: any) => inv.id) : [];
+  const selectedRows = invitations.filter((inv: any) => selectedIds.has(inv.id) && rowSelectable(inv));
   const allSelected =
     selectableIds.length > 0 && selectableIds.every((id: string) => selectedIds.has(id));
   const toggleSelectAll = () =>
@@ -196,11 +221,12 @@ export default function AIInterviewTrackInvitesModal({
   useEffect(() => {
     setSelectedIds((prev) => {
       if (prev.size === 0) return prev;
-      const valid = new Set(invitations.filter(isBulkResendable).map((inv: any) => inv.id));
+      const valid = new Set(invitations.filter(rowSelectable).map((inv: any) => inv.id));
       const next = new Set([...prev].filter((id) => valid.has(id)));
       return next.size === prev.size ? prev : next;
     });
-  }, [invitations]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [invitations, bulkMode]);
 
   // Bulk resend — same endpoint as the single-row Resend, called per
   // invitation. Sequential on purpose: a burst of parallel resends is exactly
@@ -302,6 +328,36 @@ export default function AIInterviewTrackInvitesModal({
     }
   }, [configId, page, filters, sourceFilter, resultFilter, fetchAllForClientFilters]);
 
+  /* Header Refresh — re-reads in place: the rows stay put under a veil and the
+     dialog's height is pinned until the new data lands, so nothing jumps. */
+  const handleRefresh = async () => {
+    if (isRefreshing) return;
+    setIsRefreshing(true);
+    try {
+      await heightLock.run(() => loadInvitations(true));
+    } finally {
+      setIsRefreshing(false);
+    }
+  };
+
+  const handleBulkRevoke = async () => {
+    const targets = selectedRows;
+    if (targets.length === 0) { setShowBulkRevokeConfirm(false); return; }
+    setIsBulkRevoking(true);
+    try {
+      const results = await Promise.allSettled(targets.map((inv: any) => aiInterviewService.revokeInvitation(inv.id)));
+      const succeeded = results.filter((r) => r.status === 'fulfilled').length;
+      const failed = results.length - succeeded;
+      if (succeeded > 0) toast.success(`Revoked ${succeeded} invitation${succeeded === 1 ? '' : 's'}.`);
+      if (failed > 0) toast.error(`Failed to revoke ${failed} invitation${failed === 1 ? '' : 's'}.`);
+      setSelectedIds(new Set());
+      await loadInvitations(true);
+    } finally {
+      setIsBulkRevoking(false);
+      setShowBulkRevokeConfirm(false);
+    }
+  };
+
   // Same 15s silent refresh the assessment tracker uses — candidates move through
   // an interview while the recruiter watches this list.
   useEffect(() => {
@@ -314,6 +370,11 @@ export default function AIInterviewTrackInvitesModal({
   }, [isOpen, configId, loadInvitations]);
 
   if (!isOpen) return null;
+
+  /* No rows yet → the spinner is the body. Rows on screen and a re-read in
+     flight → keep them and veil them, as the AI Interviews tracker does. */
+  const initialLoading = isLoading && invitations.length === 0;
+  const refreshVeil = (isLoading || isRefreshing) && invitations.length > 0;
 
   const filtersActive = hasActiveInviteFilters(filters);
   const completionRate = overview.total > 0 ? Math.round((overview.completed / overview.total) * 100) : 0;
@@ -334,9 +395,11 @@ export default function AIInterviewTrackInvitesModal({
   const isUnstarted = !isLoading && overview.total === 0;
 
   const panel = (
-      <div className={embedded
-        ? 'bg-white dark:bg-slate-900 w-full flex flex-col'
-        : TRACKER_DIALOG_PANEL_CLASS}>
+      <div
+        {...(embedded ? {} : heightLock.dialogProps)}
+        className={embedded
+          ? 'bg-white dark:bg-slate-900 w-full flex flex-col'
+          : TRACKER_DIALOG_PANEL_CLASS}>
         {/* Header */}
         <div className="px-3 sm:px-6 py-2.5 sm:py-4 border-b border-gray-100 dark:border-slate-700/60 bg-gray-50 dark:bg-slate-800/50 flex items-center justify-between flex-shrink-0">
           <div className="min-w-0 flex-1">
@@ -361,24 +424,53 @@ export default function AIInterviewTrackInvitesModal({
                 <p className="flex items-center gap-2 text-2xs sm:text-sm text-gray-500 dark:text-slate-500 mt-0.5 min-w-0">
                   {jdShortId && <JobIdBadge className="flex-shrink-0">{jdShortId}</JobIdBadge>}
                   <span className="truncate">{jdTitle}</span>
-                  {hideJobVersionFilter && jobVersion != null && jobVersion > 0 && (
-                    <span className="text-xs font-semibold px-1.5 py-0.5 rounded-md bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20 flex-shrink-0" title="Job version">V{jobVersion}</span>
+                  {/* "Job title - V1   Interview Version - V1", as the AI
+                      Interviews tracker heads a single version. */}
+                  {hideJobVersionFilter && headerJobVersion != null && headerJobVersion > 0 && (
+                    <span className="-ml-0.5 flex items-center gap-3 flex-shrink-0 whitespace-nowrap">
+                      <span className="inline-flex items-center gap-1.5">
+                        -
+                        <VersionPill kind="job" version={headerJobVersion} />
+                      </span>
+                      {headerInterviewVersion != null && (
+                        <span className="inline-flex items-center gap-1.5">
+                          Interview Version -
+                          <VersionPill kind="interview" version={headerInterviewVersion} />
+                        </span>
+                      )}
+                    </span>
                   )}
                 </p>
               </div>
             </div>
           </div>
-          {!embedded && (
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
             <Button
               variant="secondary"
               size="sm"
-              onClick={onClose}
-              className="px-2"
-              aria-label="Close"
+              onClick={handleRefresh}
+              disabled={isRefreshing || isLoading}
+              title="Fetch the latest invite statuses"
+              aria-label="Refresh"
+              icon={<RefreshCw className={`w-3.5 h-3.5 sm:w-4 sm:h-4 ${isRefreshing ? 'animate-spin' : ''}`} />}
             >
-              <X className="w-4 h-4 sm:w-5 sm:h-5" />
+              {/* Reserves the wider word so the header never shifts. */}
+              <span className="hidden sm:inline-block min-w-[5.5rem] text-left">
+                {isRefreshing ? 'Refreshing...' : 'Refresh'}
+              </span>
             </Button>
-          )}
+            {!embedded && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={onClose}
+                className="px-2"
+                aria-label="Close"
+              >
+                <X className="w-4 h-4 sm:w-5 sm:h-5" />
+              </Button>
+            )}
+          </div>
         </div>
 
         {isUnstarted ? (
@@ -410,6 +502,21 @@ export default function AIInterviewTrackInvitesModal({
             { key: 'revoked', label: 'Revoked', Icon: Ban, value: overview.revoked, ...INVITE_CARD_TONES.indigo },
           ]}
         />
+
+        {/* Results note + completion rate — same banner as the AI Interviews
+            tracker, so the recruiter knows why only some rows open a result. */}
+        <div className="px-2.5 sm:px-6 pt-2 sm:pt-3 flex-shrink-0">
+          <div className="flex items-center gap-2.5 rounded-xl bg-brand-blue/[0.08] border border-brand-blue/20 px-3 py-2.5">
+            <Info className="w-4 h-4 text-brand-blue flex-shrink-0" />
+            <p className="flex-1 min-w-0 text-xs sm:text-sm text-gray-700 dark:text-slate-300">
+              <span className="font-semibold">Note:</span> Results are available only for candidates with Complete status. Other candidates&rsquo; results are not available.
+            </p>
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs sm:text-sm font-bold whitespace-nowrap flex-shrink-0 bg-brand-blue text-white shadow-sm shadow-brand-blue/25">
+              <TrendingUp className="w-4 h-4" strokeWidth={2.5} />
+              {completionRate}% Completion
+            </span>
+          </div>
+        </div>
 
         <InviteFilterBar
           filters={filters}
@@ -449,7 +556,7 @@ export default function AIInterviewTrackInvitesModal({
             tracker's bulk-select bar. Only Expired rows count. The
             completion-rate badge (previously its own card in the stat row
             above) sits on this same row, straight across from Select All. */}
-        {!isLoading && (
+        {!initialLoading && (
           <div className="flex items-center justify-between gap-2 px-2.5 sm:px-6 pt-2.5 sm:pt-3 flex-shrink-0">
             {selectableIds.length > 0 ? (
               <button
@@ -471,7 +578,20 @@ export default function AIInterviewTrackInvitesModal({
             )}
 
             <div className="flex items-center gap-2">
-              {/* Bulk Resend — appears once something is ticked. */}
+              {/* The selected card's bulk action — never both. */}
+              {bulkMode === 'revoke' && selectedRows.length > 0 && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  type="button"
+                  onClick={() => setShowBulkRevokeConfirm(true)}
+                  disabled={isBulkRevoking}
+                  title="Revoke the selected candidates' interview links"
+                  icon={isBulkRevoking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Ban className="w-3.5 h-3.5" />}
+                >
+                  {isBulkRevoking ? 'Revoking…' : `Revoke (${selectedRows.length})`}
+                </Button>
+              )}
               {bulkResendMode && selectedIds.size > 0 && (
                 <Button
                   variant="primary"
@@ -487,38 +607,45 @@ export default function AIInterviewTrackInvitesModal({
                   {isBulkResending ? 'Sending…' : `Resend (${selectedIds.size})`}
                 </Button>
               )}
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold bg-brand-blue/10 text-brand-blue ring-1 ring-brand-blue/20">
-                <TrendingUp className="w-3.5 h-3.5" />
-                {completionRate}% Completion
-              </span>
             </div>
           </div>
         )}
 
         {/* Candidate list. overflow-hidden, not overflow-auto: the table shell (or
             the mobile card stack) inside is the single vertical scroller. */}
-        <div className="px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
-          {/* Same action rules as the assessment tracker: the table offers
-              Resend on Expired only, View Details on Completed, and nothing
-              once the candidate is in the interview flow (System Check / In
-              Progress) or once sent (Invited gets Copy Link only). Edit and
-              Revoke are not passed, so they never appear here. */}
+        <div className="relative px-2.5 sm:px-6 py-2.5 sm:py-4 overflow-hidden flex-1 min-h-0 flex flex-col">
+          {/* Same list and action rules as the AI Interviews tracker. */}
           <AIInterviewInviteTable
             invitations={invitations}
-            isLoading={isLoading}
+            isLoading={initialLoading}
             hasActiveFilters={filtersActive}
             emptyHint="Use Send Invite to invite candidates to this job's AI interview."
             jobVersion={jobVersion}
             interviewVersion={interviewVersion}
             onResend={(inv) => setResendTarget(inv)}
             resendingId={resendingId}
+            onEdit={(inv) => {
+              setEditForm({ candidate_name: inv.candidate_name || '', candidate_email: inv.candidate_email || '' });
+              setEditTarget(inv);
+            }}
+            onRevoke={(inv) => setRevokeTarget(inv)}
+            revokingId={revokingId}
             onViewDetails={onViewResult}
-            selectedIds={bulkResendMode ? selectedIds : undefined}
-            onToggleSelect={bulkResendMode ? toggleSelectOne : undefined}
-            // Bulk-resend gating (Expired only), not the AI Interviews
-            // page's revocable-only default.
-            isSelectable={isBulkResendable}
+            selectedIds={bulkMode ? selectedIds : undefined}
+            onToggleSelect={bulkMode ? toggleSelectOne : undefined}
+            isSelectable={rowSelectable}
           />
+          {refreshVeil && (
+            <div
+              className="absolute inset-0 z-10 flex items-start justify-center pt-10 sm:pt-14 bg-white/60 dark:bg-slate-900/60 rounded-lg"
+              aria-live="polite"
+            >
+              <span className="inline-flex items-center gap-2 rounded-full bg-white dark:bg-slate-900 px-3 py-1.5 text-xs sm:text-sm text-gray-600 dark:text-slate-300 shadow-sm ring-1 ring-black/[0.06] dark:ring-white/10">
+                <Loader2 className="w-3.5 h-3.5 text-brand-blue animate-spin" />
+                Refreshing invite statuses...
+              </span>
+            </div>
+          )}
         </div>
         </>
         )}
@@ -559,6 +686,50 @@ export default function AIInterviewTrackInvitesModal({
           confirmText={resendingId && resendingId === resendTarget?.id ? 'Sending…' : 'Yes, send new link'}
           cancelText="Cancel"
           variant="info"
+        >
+          {resendTarget && <NewLinkExpiry inv={resendTarget} />}
+        </ConfirmationDialog>
+
+        {/* Revoke — the old link stops working immediately. */}
+        <ConfirmationDialog
+          isOpen={!!revokeTarget}
+          onClose={() => { if (!revokingId) setRevokeTarget(null); }}
+          onConfirm={async () => {
+            const inv = revokeTarget;
+            if (!inv) return;
+            setRevokingId(inv.id);
+            try {
+              await aiInterviewService.revokeInvitation(inv.id);
+              toast.success(`Invitation for ${inv.candidate_email} has been revoked`);
+              await loadInvitations(true);
+            } catch (err: any) {
+              toast.error(err?.message || 'Failed to revoke invitation');
+            } finally {
+              setRevokingId(null);
+              setRevokeTarget(null);
+            }
+          }}
+          title="Revoke Interview Link?"
+          description={
+            revokeTarget
+              ? `This will immediately expire the interview link sent to ${revokeTarget.candidate_email}. The candidate will no longer be able to access the interview using this link. You'll be able to edit the candidate's details and send a new invitation afterwards.`
+              : ''
+          }
+          confirmText={revokingId && revokingId === revokeTarget?.id ? 'Revoking…' : 'Confirm'}
+          cancelText="Cancel"
+          variant="danger"
+        />
+
+        {/* Bulk revoke — selected Invited candidates only. */}
+        <ConfirmationDialog
+          isOpen={showBulkRevokeConfirm}
+          onClose={() => { if (!isBulkRevoking) setShowBulkRevokeConfirm(false); }}
+          onConfirm={handleBulkRevoke}
+          title="Revoke invitations for selected candidates?"
+          description={`The interview link for ${selectedRows.length} selected candidate${selectedRows.length === 1 ? '' : 's'} will stop working immediately.`}
+          confirmText={isBulkRevoking ? 'Revoking…' : `Yes, revoke ${selectedRows.length}`}
+          cancelText="Cancel"
+          variant="danger"
         />
 
         {/* Bulk resend confirmation — selected Expired candidates only. */}
@@ -613,12 +784,18 @@ export default function AIInterviewTrackInvitesModal({
                 </button>
               </>
             )}
-            {!embedded && (
+            {onInviteMore && !embedded && (
               <Button
                 variant="primary"
                 size="sm"
-                onClick={onClose}
+                onClick={onInviteMore}
+                icon={<Send className="w-3.5 h-3.5" />}
               >
+                Invite More
+              </Button>
+            )}
+            {!embedded && (
+              <Button variant="secondary" size="sm" onClick={onClose}>
                 Close
               </Button>
             )}
@@ -628,7 +805,100 @@ export default function AIInterviewTrackInvitesModal({
       </div>
   );
 
-  if (embedded) return panel;
+  const editEmailTrimmed = editForm.candidate_email.trim();
+  const editEmailError =
+    editEmailTrimmed.length > 0 && !isValidEmailFormat(editEmailTrimmed) ? EMAIL_FORMAT_ERROR : null;
+  const handleSaveEdit = async () => {
+    const inv = editTarget;
+    if (!inv) return;
+    const name = editForm.candidate_name.trim();
+    const email = editForm.candidate_email.trim();
+    if (!name || !email) { toast.error('Candidate name and email are required'); return; }
+    if (!isValidEmailFormat(email)) { toast.error(EMAIL_FORMAT_ERROR); return; }
+    setSavingEdit(true);
+    try {
+      await aiInterviewService.updateInvitation(inv.id, { candidate_name: name, candidate_email: email });
+      // Saving is the only way to reactivate a revoked invite, so it resends.
+      try {
+        await aiInterviewService.sendSessionEmail(inv.id, { base_url: window.location.origin });
+        toast.success(`Invitation updated and sent to ${email}`);
+      } catch (sendErr: any) {
+        const detail = sendErr?.response?.data?.detail;
+        toast.error(
+          (typeof detail === 'object' && detail?.message) ||
+          (typeof detail === 'string' && detail) ||
+          sendErr?.message ||
+          'Details saved, but the invitation could not be sent — try Edit again.',
+        );
+      }
+      await loadInvitations(true);
+      setEditTarget(null);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update invitation');
+    } finally {
+      setSavingEdit(false);
+    }
+  };
+
+  /* Edit invitation — only offered on REVOKED rows by the table. Same modal
+     as the AI Interviews page's tracker. */
+  const editModal = editTarget && (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-gray-900/50 backdrop-blur-sm p-4 sm:p-6">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl shadow-brand-blue/10 border border-gray-100 dark:border-slate-700/60 ring-1 ring-black/[0.02] dark:ring-white/[0.02] w-full max-w-[95vw] sm:max-w-md">
+        <div className="px-5 sm:px-6 pt-5 sm:pt-6 pb-3 border-b border-gray-100 dark:border-slate-700/60 flex items-center justify-between">
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-slate-50 tracking-tight">Edit Invitation</h3>
+          <Button variant="secondary" size="sm" onClick={() => { if (!savingEdit) setEditTarget(null); }} aria-label="Close" className="px-2">
+            <X className="w-5 h-5" />
+          </Button>
+        </div>
+        <div className="px-5 sm:px-6 py-4 space-y-4">
+          <p className="text-sm text-gray-500 dark:text-slate-500">
+            Update the candidate&apos;s details below. Saving will send them a fresh invitation link automatically.
+          </p>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate name</label>
+            <input
+              type="text"
+              value={editForm.candidate_name}
+              onChange={(e) => setEditForm((f) => ({ ...f, candidate_name: e.target.value }))}
+              className="w-full px-3 py-2 text-sm border border-gray-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-brand-blue/30 focus:border-brand-blue"
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-700 dark:text-slate-300 mb-1">Candidate email</label>
+            <input
+              type="email"
+              value={editForm.candidate_email}
+              onChange={(e) => setEditForm((f) => ({ ...f, candidate_email: e.target.value }))}
+              aria-invalid={editEmailError ? 'true' : undefined}
+              className={`w-full px-3 py-2 text-sm border bg-white dark:bg-slate-800 text-gray-900 dark:text-slate-100 rounded-lg focus:outline-none focus:ring-2 ${
+                editEmailError
+                  ? 'border-destructive focus:ring-destructive/30 focus:border-destructive'
+                  : 'border-gray-200 dark:border-slate-700 focus:ring-brand-blue/30 focus:border-brand-blue'
+              }`}
+            />
+            {editEmailError && <p className="mt-1 text-xs text-destructive">{editEmailError}</p>}
+          </div>
+        </div>
+        <div className="px-5 sm:px-6 py-4 border-t border-gray-100 dark:border-slate-700/60 flex items-center justify-end gap-2">
+          <Button variant="secondary" size="md" onClick={() => setEditTarget(null)} disabled={savingEdit}>
+            Cancel
+          </Button>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={handleSaveEdit}
+            disabled={savingEdit || !!editEmailError}
+            icon={savingEdit ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
+          >
+            Save & Send
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+
+  if (embedded) return <>{panel}{editModal}</>;
 
   return (
     <div className="fixed inset-0 bg-gray-900/50 dark:bg-black/70 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 sm:p-4 md:p-6">
@@ -638,6 +908,44 @@ export default function AIInterviewTrackInvitesModal({
           once the cap engages, so a long list still scrolls inside the dialog on
           a 320px phone. */}
       {panel}
+      {editModal}
     </div>
   );
 }
+
+/** Resend's "New link expiry" preview — same duration as the original
+ *  invitation, anchored on the last send, as the AI Interviews tracker shows. */
+function NewLinkExpiry({ inv }: { inv: any }) {
+  const sentAnchor = inv.invitation_sent_at || inv.created_at;
+  const createdMs = sentAnchor ? new Date(sentAnchor).getTime() : NaN;
+  const expiresMs = inv.expires_at ? new Date(inv.expires_at).getTime() : NaN;
+  let durationMs = 24 * 60 * 60 * 1000;
+  if (Number.isFinite(createdMs) && Number.isFinite(expiresMs) && expiresMs > createdMs) {
+    durationMs = expiresMs - createdMs;
+  }
+  const newExpiry = new Date(Date.now() + durationMs);
+  const totalMinutes = Math.max(1, Math.round(durationMs / 60000));
+  let durationLabel: string;
+  if (totalMinutes >= 60 * 24) {
+    const days = Math.round(totalMinutes / (60 * 24));
+    durationLabel = days === 1 ? '1 day' : `${days} days`;
+  } else if (totalMinutes >= 60) {
+    const hours = Math.round(totalMinutes / 60);
+    durationLabel = hours === 1 ? '1 hour' : `${hours} hours`;
+  } else {
+    durationLabel = `${totalMinutes} minute${totalMinutes === 1 ? '' : 's'}`;
+  }
+  return (
+    <div className="bg-brand-orange/10 border border-brand-orange/20 ring-1 ring-brand-orange/10 rounded-xl p-3 text-sm">
+      <p className="text-brand-orange-deep font-medium mb-1">New link expiry</p>
+      <p className="text-brand-orange-deep">
+        Valid for <strong>{durationLabel}</strong> from now — expires on{' '}
+        <strong>{formatIST(newExpiry.toISOString())}</strong>.
+      </p>
+      <p className="text-brand-orange-deep/80 text-xs mt-2">
+        Same duration as the original invitation.
+      </p>
+    </div>
+  );
+}
+

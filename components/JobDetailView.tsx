@@ -924,6 +924,10 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
   // isn't worth doing on every Job Details load for a tab most visits skip.
   const [aiInterviewConfig, setAiInterviewConfig] = useState<AIInterviewResponse | null>(null);
   const [aiInterviewCount, setAiInterviewCount] = useState(0);
+  // The tab badge: sessions the Result tab actually lists (In Progress,
+  // Completed, Terminated). aiInterviewCount above counts every invitation —
+  // it gates the tab — and an invited-only candidate isn't a result yet.
+  const [aiInterviewResultCount, setAiInterviewResultCount] = useState(0);
   const [loadingAIInterviewConfig, setLoadingAIInterviewConfig] = useState(false);
   const [aiInterviewConfigError, setAiInterviewConfigError] = useState<string | null>(null);
   const aiInterviewConfigFetchedRef = useRef(false);
@@ -1039,8 +1043,12 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           .getConfigInvitations(liveConfig.id, { page_size: 1, compact: true })
           .catch(() => null);
         setAiInterviewCount(invitations?.total ?? 0);
+        setAiInterviewResultCount(
+          (invitations?.completed ?? 0) + (invitations?.in_progress ?? 0) + (invitations?.terminated ?? 0),
+        );
       } else {
         setAiInterviewCount(0);
+        setAiInterviewResultCount(0);
       }
     } catch {
       // Allow a retry — clear the guard so re-opening the tab tries again.
@@ -3085,7 +3093,7 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
                   ? 'bg-blue-600 text-white'
                   : 'bg-gray-200 dark:bg-slate-800 text-gray-600 dark:text-slate-400'
               }`}>
-                {aiInterviewCount}
+                {aiInterviewResultCount}
               </span>
               {activeTab === 'ai-interview-results' && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
@@ -4756,12 +4764,20 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           jdShortId={job.job_id}
           jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : undefined}
           hideJobVersionFilter
+          // One job, one interview: every row shares both versions, so the
+          // columns (and their filters) go — the header names them instead.
+          hideVersionDetails
           // Completed rows offer View Result — swap the popup for the same
           // inline candidate result view the AI Interview Result tab opens.
           onViewResult={(inv) => {
             setTrackAIInterviewConfig(null);
             handleAIInterviewCandidateClick(inv.id);
           }}
+          // Footer Invite More — this page's own Invite to AI Interview dialog.
+          onInviteMore={canInviteToAIInterview ? () => {
+            setTrackAIInterviewConfig(null);
+            handleInviteAIInterview();
+          } : undefined}
         />
       )}
 
