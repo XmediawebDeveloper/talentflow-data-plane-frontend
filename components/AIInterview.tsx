@@ -139,6 +139,10 @@ const INVITATION_STATUS_TAB_OPTIONS: InviteStatusOption[] = [
 const AI_INTERVIEWS_LIST_VIEW_REDIRECT_KEY = 'ai_interviews_open_list_view';
 const CONFIG_FETCH_PAGE_SIZE = 20;
 
+/** One string for the list filters the page-reset effect watches. */
+const listFilterKey = (v: Record<string, unknown>) =>
+  JSON.stringify([v.activeTab, v.invitedOnly, v.modeFilter, v.searchQuery, v.sortBy, v.creatorFilter, v.dateFilter, v.customDateFrom, v.customDateTo]);
+
 export default function AIInterview() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -300,6 +304,8 @@ export default function AIInterview() {
   const [configListItemsPerPage, setConfigListItemsPerPage] = useState(10);
   const [processingPage, setProcessingPage] = useState(1);
   const [processingItemsPerPage, setProcessingItemsPerPage] = useState(10);
+  /** Filter values a list-state restore applied — see the page-reset effect. */
+  const restoredListKeyRef = useRef<string | null>(null);
   const [invitationPage, setInvitationPage] = useState(1);
   // "Go to page" input for the Invite Status Tracking footer — buffered locally
   // so a partial edit doesn't get clobbered by invitationPage until Enter/blur commits it.
@@ -360,6 +366,10 @@ export default function AIInterview() {
      answer by `jd_id` here makes it a property of the state too, so a pick under
      one job never bleeds into another. Keyed by the config's own JD row id, the
      same id the version rows are joined on. */
+  /* Which job versions have their Interview Versions table open (View
+     Interview), per job — held here, not in the panel, so it survives a trip
+     to an interview's page and back (same as the Assessments Job List). */
+  const [expandedJobVersionsByJob, setExpandedJobVersionsByJob] = useState<Record<string, number[]>>({});
   const [selectedInterviewVersionByJob, setSelectedInterviewVersionByJob] =
     useState<Record<string, string>>({});
   /* The job lineage behind that panel — the shared hook the Assessments list,
@@ -885,7 +895,7 @@ export default function AIInterview() {
     { activeTab, invitedOnly, modeFilter, searchQuery, sortBy,
       creatorFilter, dateFilter, customDateFrom, customDateTo,
       configListPage, configListItemsPerPage, processingPage, processingItemsPerPage,
-      openVersionsFor, configListViewMode,
+      openVersionsFor, configListViewMode, expandedJobVersionsByJob,
       // Invitation Status tab — its page, page size and filters, so coming
       // back from a candidate or job lands on the same page, not page 1.
       inviteStatusPage, inviteStatusItemsPerPage, inviteStatusFilters, inviteStatusColumnFilters,
@@ -894,11 +904,36 @@ export default function AIInterview() {
       // interview page showed only the stat tiles — the list looked gone.
       pageView },
     (s) => {
+      /* The values this restore is about to apply to the page-reset effect's
+         dependencies — that effect skips the one change they cause, so the
+         restored page survives (it used to be reset to 1 straight away). */
+      const restoredKey = listFilterKey({
+        activeTab: typeof s.activeTab === 'string' && s.activeTab !== 'consent' ? s.activeTab : activeTab,
+        invitedOnly: typeof s.invitedOnly === 'boolean' ? s.invitedOnly : invitedOnly,
+        modeFilter: typeof s.modeFilter === 'string' ? s.modeFilter : modeFilter,
+        searchQuery: typeof s.searchQuery === 'string' ? s.searchQuery : searchQuery,
+        sortBy: typeof s.sortBy === 'string' ? s.sortBy : sortBy,
+        creatorFilter: typeof s.creatorFilter === 'string' ? s.creatorFilter : creatorFilter,
+        dateFilter: typeof s.dateFilter === 'string' ? s.dateFilter : dateFilter,
+        customDateFrom: typeof s.customDateFrom === 'string' ? s.customDateFrom : customDateFrom,
+        customDateTo: typeof s.customDateTo === 'string' ? s.customDateTo : customDateTo,
+      });
+      // Only when the restore changes one of them — otherwise no render
+      // follows to consume the skip, and it would swallow a real change.
+      const currentKey = listFilterKey({ activeTab, invitedOnly, modeFilter, searchQuery, sortBy, creatorFilter, dateFilter, customDateFrom, customDateTo });
+      restoredListKeyRef.current = restoredKey !== currentKey ? restoredKey : null;
       if (s.pageView === 'cards' || s.pageView === 'list') setPageView(s.pageView);
       // 'consent' tab was removed — never restore onto it.
       if (typeof s.activeTab === 'string' && s.activeTab !== 'consent') setActiveTab(s.activeTab as TabKey);
       if (typeof s.invitedOnly === 'boolean') setInvitedOnly(s.invitedOnly);
       if (typeof s.openVersionsFor === 'string') setOpenVersionsFor(s.openVersionsFor);
+      if (s.expandedJobVersionsByJob && typeof s.expandedJobVersionsByJob === 'object') {
+        const restored: Record<string, number[]> = {};
+        for (const [jdId, versions] of Object.entries(s.expandedJobVersionsByJob as Record<string, unknown>)) {
+          if (Array.isArray(versions)) restored[jdId] = versions.filter((v): v is number => typeof v === 'number');
+        }
+        setExpandedJobVersionsByJob(restored);
+      }
       if (typeof s.modeFilter === 'string') setModeFilter(s.modeFilter as typeof modeFilter);
       if (typeof s.searchQuery === 'string') setSearchQuery(s.searchQuery);
       if (typeof s.sortBy === 'string') setSortBy(s.sortBy as typeof sortBy);
@@ -1339,10 +1374,13 @@ export default function AIInterview() {
   // list instead of whatever tab/view was last persisted, so the
   // `?highlight=<id>` AllInterviewsTable reads next actually has a table
   // visible to scroll within.
+  // `?tab=candidate-results` likewise — the candidate result page's crumb and
+  // Back return there when the result was opened from that tab.
   useEffect(() => {
-    if (searchParams.get('tab') !== 'all-interviews') return;
+    const tab = searchParams.get('tab');
+    if (tab !== 'all-interviews' && tab !== 'candidate-results') return;
     setPageView('list');
-    setActiveTab('all-interviews');
+    setActiveTab(tab);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchParams]);
 
@@ -1976,13 +2014,28 @@ export default function AIInterview() {
    *  every version's status as before. */
   const versionStatusFilterForTab = isStatusTab ? (activeTab as 'published' | 'draft' | 'archived') : undefined;
 
+  /* Back to page 1 when the user changes the tab, search, sort or a filter —
+     but NOT for the change a list-state restore makes on return from a
+     detail page (restoredListKeyRef), which would throw the restored page
+     away. Until that restored render arrives nothing is reset. */
+  const pageResetMountedRef = useRef(false);
   useEffect(() => {
+    // Mount: nothing to reset (page 1 already, or about to be restored).
+    if (!pageResetMountedRef.current) { pageResetMountedRef.current = true; return; }
+    // The render the restore caused (a ?tab= deep link may ride along in it):
+    // keep the restored page, and stop skipping.
+    if (restoredListKeyRef.current !== null) { restoredListKeyRef.current = null; return; }
     setConfigListPage(1);
   }, [activeTab, invitedOnly, modeFilter, searchQuery, sortBy, creatorFilter, dateFilter, customDateFrom, customDateTo]);
 
+  /* The Processing list: keep the (restored) page as the rows load, and only
+     pull it back if the list got shorter than it — it used to snap to 1 on
+     every load. */
   useEffect(() => {
-    setProcessingPage(1);
-  }, [processingSessions.length]);
+    if (processingSessions.length === 0) return;
+    const lastPage = Math.max(1, Math.ceil(processingSessions.length / processingItemsPerPage));
+    setProcessingPage((p) => Math.min(p, lastPage));
+  }, [processingSessions.length, processingItemsPerPage]);
 
   // Candidate detail view from Track Invites modal
   if (candidateDetailFromModal) {
@@ -2846,6 +2899,17 @@ export default function AIInterview() {
                               loading={jdLineage.isLoading(config.jd_id)}
                               currentAssessmentId={config.id}
                               vocabulary={INTERVIEW_VOCABULARY}
+                              expandedJobVersions={expandedJobVersionsByJob[config.jd_id] ?? []}
+                              onToggleJobVersion={(jobVersion) =>
+                                setExpandedJobVersionsByJob((current) => {
+                                  const open = current[config.jd_id] ?? [];
+                                  return {
+                                    ...current,
+                                    [config.jd_id]: open.includes(jobVersion)
+                                      ? open.filter((v) => v !== jobVersion)
+                                      : [...open, jobVersion],
+                                  };
+                                })}
                               /* The radio column, same as the Assessments Job
                                  List: passing `onSelectAssessment` is what makes
                                  the panel render the Select column at all, and a
