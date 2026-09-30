@@ -4,6 +4,7 @@ import { truncateJobTitle } from '@/lib/utils/jobOpeningDisplay';
 import { useState, useEffect, useMemo, Fragment } from 'react';
 import { toast } from 'sonner';
 import ColumnCustomizationModal from './ColumnCustomizationModal';
+import JobIdBadge from '@/components/jobs/JobIdBadge';
 import ListToolbar from '@/components/ui/list-toolbar';
 import ListCountBadge from '@/components/ui/list-count-badge';
 import ListEmptyState from '@/components/ui/list-empty-state';
@@ -81,18 +82,25 @@ const FILTER_CONTROL_CLASS =
 
 const DEFAULT_COLUMNS = [
   { id: 'candidateName', label: 'Candidate Name', enabled: true },
-  { id: 'jobVersion', label: 'Job Version', enabled: true },
-  { id: 'jobTitle', label: 'Job Title', enabled: true }, // Always show job title
   { id: 'email', label: 'Email', enabled: true },
-  { id: 'phone', label: 'Phone', enabled: true },
-  { id: 'matchStatus', label: 'Match Status', enabled: true },
   { id: 'scorePercentage', label: 'Score out of 10', enabled: true },
+  { id: 'matchStatus', label: 'Match Status', enabled: true },
+  // The Invite menu — a column like the rest so it sits in this order rather
+  // than trailing after every customizable one. Never exported (EXPORT_EXCLUDED).
+  { id: 'invitation', label: 'Invitation', enabled: true },
+  { id: 'jdId', label: 'JD ID', enabled: true },
+  { id: 'jobTitle', label: 'Job Title', enabled: true }, // Always show job title
+  { id: 'jobVersion', label: 'Job Version', enabled: true },
+  { id: 'phone', label: 'Phone', enabled: true },
   { id: 'experience', label: 'Experience', enabled: true },  // Enable by default
   { id: 'education', label: 'Education', enabled: false },
   { id: 'certifications', label: 'Certifications', enabled: false },
   { id: 'scoredDate', label: 'Scored By / Date', enabled: true },
   { id: 'version', label: 'Resume Version', enabled: true },
 ];
+
+/* Columns that are controls, not data — shown in the table, left out of CSV/XLS. */
+const EXPORT_EXCLUDED_COLUMNS = new Set(['invitation']);
 
 export interface ScoredResume {
   id: string;
@@ -563,6 +571,7 @@ Best regards`);
          QA Test Engineer we scored" versus "everything scored against v2" —
          and a recruiter comparing versions of one job needs both at once.
          'all' is the off position for each, matching every other select here. */
+      jdId: 'all',
       jobTitle: 'all',
       jobVersion: 'all',
     },
@@ -576,6 +585,7 @@ Best regards`);
         Boolean(f.dateFrom),
         Boolean(f.dateTo),
         f.recruiter !== 'all',
+        f.jdId !== 'all',
         f.jobTitle !== 'all',
         f.jobVersion !== 'all',
       ].filter(Boolean).length,
@@ -588,6 +598,7 @@ Best regards`);
     dateFrom: filterDateFrom,
     dateTo: filterDateTo,
     recruiter: filterRecruiter,
+    jdId: filterJdId,
     jobTitle: filterJobTitle,
     jobVersion: filterJobVersion,
   } = search.filters;
@@ -656,6 +667,12 @@ Best regards`);
   }, [availableColumns, columnsLoaded]);
 
   const enabledColumns = availableColumns.filter(col => col.enabled);
+  const exportColumns = enabledColumns.filter(col => !EXPORT_EXCLUDED_COLUMNS.has(col.id));
+
+  // The JD ID column's value: the row's own code in cross-job lists, the host
+  // job's in a single-job table. One helper so cell, export, search and the
+  // JD ID filter can never disagree.
+  const rowJobCode = (resume: ScoredResume): string => resume.jobCode || jobCode || '';
 
   // Filtering logic
   const filteredResumes = resumes.filter(resume => {
@@ -663,7 +680,8 @@ Best regards`);
     const matchesSearch =
       resume.candidateName.toLowerCase().includes(searchTerm.toLowerCase()) ||
       resume.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      resume.phone.includes(searchTerm);
+      resume.phone.includes(searchTerm) ||
+      rowJobCode(resume).toLowerCase().includes(searchTerm.toLowerCase());
 
     /* Match status filter. Inert when the host has hidden it — the rows are
        already one verdict, and a value left over from an unscoped view must not
@@ -698,6 +716,7 @@ Best regards`);
        offered that then matches nothing. A row missing the field is excluded
        once its filter is on — it cannot be shown to belong to the job asked
        for, and those rows are never offered as an option either. */
+    const matchesJdId = filterJdId === 'all' || rowJobCode(resume) === filterJdId;
     const matchesJobTitle =
       filterJobTitle === 'all' || (resume.jobTitle || '').trim() === filterJobTitle;
     const matchesJobVersion =
@@ -705,7 +724,7 @@ Best regards`);
       (resume.jobVersion !== undefined && resume.jobVersion !== null && String(resume.jobVersion) === filterJobVersion);
 
     return matchesSearch && matchesStatus && matchesScore && matchesDate && matchesRecruiter
-      && matchesJobTitle && matchesJobVersion;
+      && matchesJdId && matchesJobTitle && matchesJobVersion;
   });
 
   // "View by Candidate" — a cross-job list spans every job, so the same
@@ -778,7 +797,7 @@ Best regards`);
   useEffect(() => {
     setCurrentPage(1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchTerm, filterMatchStatus, filterScoreMin, filterScoreMax, filterDateFrom, filterDateTo, filterRecruiter, filterJobTitle, filterJobVersion, jobId, isGrouped]);
+  }, [searchTerm, filterMatchStatus, filterScoreMin, filterScoreMax, filterDateFrom, filterDateTo, filterRecruiter, filterJdId, filterJobTitle, filterJobVersion, jobId, isGrouped]);
 
   // Grouped mode paginates candidate CLUSTERS (one page = N people, however
   // many scoring rows each carries); ungrouped mode paginates rows directly.
@@ -811,6 +830,13 @@ Best regards`);
      here. Built from `resumes` rather than `filteredResumes`, or choosing one
      value would collapse the dropdown you chose it from to that single entry.
      Blank/absent values are dropped: they cannot be matched on. */
+  // Numeric order on the trailing number, so "JD-9" comes before "JD-140".
+  const uniqueJdIds = Array.from(new Set(resumes.map(rowJobCode).filter(Boolean))).sort((a, b) => {
+    const na = parseInt(a.match(/(\d+)\s*$/)?.[1] ?? '', 10);
+    const nb = parseInt(b.match(/(\d+)\s*$/)?.[1] ?? '', 10);
+    return !isNaN(na) && !isNaN(nb) ? na - nb : a.localeCompare(b);
+  });
+
   const uniqueJobTitles = Array.from(
     new Set(resumes.map(r => (r.jobTitle || '').trim()).filter(Boolean)),
   ).sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
@@ -901,6 +927,8 @@ Best regards`);
     switch (columnId) {
       case 'candidateName':
         return resume.candidateName || '';
+      case 'jdId':
+        return rowJobCode(resume);
       case 'jobTitle':
         return resume.jobTitle || '';
       case 'jobVersion':
@@ -940,9 +968,9 @@ Best regards`);
     const dataToExport = selectedResumes.length > 0 ? selectedData : filteredResumes;
 
     // Build CSV content with only enabled columns
-    const headers = enabledColumns.map(col => `"${col.label}"`).join(',');
+    const headers = exportColumns.map(col => `"${col.label}"`).join(',');
     const rows = dataToExport.map(resume =>
-      enabledColumns.map(col => {
+      exportColumns.map(col => {
         const value = getCellValue(resume, col.id);
         // Escape quotes and wrap in quotes
         return `"${value.replace(/"/g, '""')}"`;
@@ -1003,13 +1031,13 @@ Best regards`);
           <table>
             <thead>
               <tr>
-                ${enabledColumns.map(col => `<th>${col.label}</th>`).join('')}
+                ${exportColumns.map(col => `<th>${col.label}</th>`).join('')}
               </tr>
             </thead>
             <tbody>
               ${dataToExport.map(resume => `
                 <tr>
-                  ${enabledColumns.map(col => `<td>${getCellValue(resume, col.id)}</td>`).join('')}
+                  ${exportColumns.map(col => `<td>${getCellValue(resume, col.id)}</td>`).join('')}
                 </tr>
               `).join('')}
             </tbody>
@@ -1252,6 +1280,18 @@ Best regards`);
           <div className="text-sm text-gray-700 font-medium" title={resume.jobTitle || undefined}>
             {truncateJobTitle(resume.jobTitle)}
           </div>
+        </td>
+      );
+    }
+    if (col.id === 'invitation') {
+      return <Fragment key={col.id}>{renderInviteCell(resume)}</Fragment>;
+    }
+    if (col.id === 'jdId') {
+      // The row's own code in cross-job lists; the host job's in a single-job table.
+      const code = rowJobCode(resume);
+      return (
+        <td key={col.id} className="py-3 px-4 align-middle whitespace-nowrap">
+          {code ? <JobIdBadge>{code}</JobIdBadge> : <span className="text-sm text-gray-700">-</span>}
         </td>
       );
     }
@@ -1618,7 +1658,7 @@ Best regards`);
           onSearchChange={search.setQuery}
           // The hook debounces into `appliedQuery`, so keystrokes pass through.
           searchDebounceMs={0}
-          searchPlaceholder="Search by name, email, or phone..."
+          searchPlaceholder="Search by name, email, phone, or JD ID..."
           onToggleFilters={() => setShowFilters(!showFilters)}
           filtersOpen={showFilters}
           activeFilterCount={search.activeFilterCount}
@@ -1778,19 +1818,16 @@ Best regards`);
                 </div>
               </div>
 
-              {/* Forced wrap, so the job filters start a new line — but ONLY in
-                  the seven-field panel, where one row would be too crowded to
-                  read. The verdict sections drop Match Status and are six
-                  fields, which fit a single row at any normal panel width, so
-                  breaking them would push two lonely fields onto a second line
-                  for no reason.
+              {/* Forced wrap, so the three job filters always start a new line.
+                  Even the verdict sections (no Match Status) have seven fields
+                  now that JD ID is here — too crowded for one row.
 
                   A full-basis spacer is the only way to break a flex row; flex
                   items have no `break-before`. Height zero, so it costs one
                   row-gap and nothing else. */}
-              {!hideMatchStatusFilter && <div aria-hidden className="basis-full h-0" />}
+              <div aria-hidden className="basis-full h-0" />
 
-              {/* 6-7. Job Title / Job Version.
+              {/* 6-8. JD ID / Job Title / Job Version.
 
                   Both render unconditionally, like every other field in this
                   panel. They were gated on having more than one value to pick
@@ -1800,6 +1837,19 @@ Best regards`);
                   cannot learn, and it left a hole in the row beside a Job Title
                   that did render. `Scored By` has always shown even with a
                   single recruiter; these now match it. */}
+              <div className={FILTER_FIELD_CLASS}>
+                <label className={FILTER_LABEL_CLASS}>JD ID</label>
+                <SearchableSelect
+                  value={filterJdId === 'all' ? '' : filterJdId}
+                  onChange={(v) => search.setFilter('jdId', v || 'all')}
+                  options={uniqueJdIds.map((code) => ({ value: code, label: code }))}
+                  allLabel="All JD IDs"
+                  placeholder="All JD IDs"
+                  searchPlaceholder="Search JD ID..."
+                  ariaLabel="Filter by JD ID"
+                />
+              </div>
+
               <div className={FILTER_FIELD_CLASS}>
                 <label className={FILTER_LABEL_CLASS}>Job Title</label>
                 {/* SearchableSelect, not native <select>: job titles are long and
@@ -2234,7 +2284,6 @@ Best regards`);
                                         {col.label}
                                       </th>
                                     ))}
-                                    <th className="text-left py-2 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">Invitation</th>
                                     <th className="text-left py-2 px-4 text-xs font-semibold text-gray-600 uppercase tracking-wide">Actions</th>
                                   </tr>
                                 </thead>
@@ -2242,7 +2291,6 @@ Best regards`);
                                   {rows.map((row) => (
                                     <tr key={row.id} className="bg-white">
                                       {enabledColumns.map((col) => renderResumeCell(col, row))}
-                                      {renderInviteCell(row)}
                                       <td className="py-2.5 px-4 align-middle" onClick={(e) => e.stopPropagation()}>
                                         <DropdownMenu>
                                           <DropdownMenuTrigger asChild>
@@ -2464,7 +2512,6 @@ Best regards`);
                   {col.label}
                 </th>
               ))}
-              <th className="text-left py-3 px-4 text-sm text-gray-600 whitespace-nowrap align-middle">Invitation</th>
               <th className="text-left py-3 px-4 text-sm text-gray-600 whitespace-nowrap align-middle tf-sticky-col">Actions</th>
             </tr>
           </thead>
@@ -2492,9 +2539,6 @@ Best regards`);
                 </td>
 
                 {enabledColumns.map((col) => renderResumeCell(col, resume))}
-
-                {renderInviteCell(resume)}
-
 
                 {/* Actions Column */}
                 <td className="py-3 px-4 align-middle whitespace-nowrap tf-sticky-col" onClick={(e) => e.stopPropagation()}>
@@ -3119,7 +3163,7 @@ Best regards`);
                       : `${filteredResumes.length} records`
                     }
                     <span className="w-1 h-1 rounded-full bg-blue-500" />
-                    {enabledColumns.length} columns
+                    {exportColumns.length} columns
                   </p>
                 </div>
               </div>
@@ -3186,7 +3230,7 @@ Best regards`);
                 <Info className="w-4 h-4 text-blue-600 flex-shrink-0 mt-0.5" />
                 <p className="text-sm text-gray-600">
                   <span className="block font-bold text-blue-700 mb-0.5">Columns included</span>
-                  {enabledColumns.map(c => c.label).join(', ')}
+                  {exportColumns.map(c => c.label).join(', ')}
                 </p>
               </div>
             </div>

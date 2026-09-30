@@ -4730,6 +4730,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           onClose={() => setShowTrackInvitesModal(false)}
           jdId={job.id}
           jdTitle={job.title}
+          jdShortId={job.job_id}
+          jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : null}
           // Keep the whole flow on this page: swap the popup for the same
           // inline detail view the Assessment Result tab opens, rather than
           // routing out to /assessments/{id}/results/details.
@@ -4754,6 +4756,8 @@ export default function JobDetailView({ job, onBack, onEdit, editDisabled = fals
           configId={trackAIInterviewConfig.id}
           jdTitle={job.title}
           jdShortId={job.job_id}
+          jobVersion={job.versionNumber && job.versionNumber > 0 ? job.versionNumber : undefined}
+          hideJobVersionFilter
           // Completed rows offer View Result — swap the popup for the same
           // inline candidate result view the AI Interview Result tab opens.
           onViewResult={(inv) => {

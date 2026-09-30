@@ -2365,9 +2365,16 @@ button, a, [role="button"], [data-slot="select-trigger"], [data-slot="tabs-trigg
      The cap keeps a floor of its own for the same "never fight" reason: below
      a 320px-tall viewport `100dvh - 20rem` goes negative, and a negative cap
      collapses the shell to nothing. 14rem is roughly a header plus three rows
-     — small, but a table rather than a sliver. */
-  min-height: min(400px, calc(100dvh - 20rem));
-  max-height: max(14rem, calc(100dvh - 20rem));
+     — small, but a table rather than a sliver.
+
+     Ten rows, then scroll: `components/TableRowCap.tsx` measures each shell's
+     header + first ten rows and publishes that as `--tf-rows-cap` (and
+     `--tf-rows-floor: 0`, so a short table has no empty space under it). The
+     viewport values above are only the fallback — first paint, a table with
+     no rows, and shells inside dialogs, which the script leaves alone. The
+     `--compact` / `--fill` variants below still override both. */
+  min-height: var(--tf-rows-floor, min(400px, calc(100dvh - 20rem)));
+  max-height: var(--tf-rows-cap, max(14rem, calc(100dvh - 20rem)));
   overflow: auto;
 }
 .tf-table-shell thead {

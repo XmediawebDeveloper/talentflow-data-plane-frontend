@@ -11,6 +11,7 @@ import SessionExpiredModal from "@/components/SessionExpiredModal";
 import AccessRestrictedModal from "@/components/AccessRestrictedModal";
 import { GlobalDialogProvider } from "@/components/providers/GlobalDialogProvider";
 import TableScrollbars from "@/components/TableScrollbars";
+import TableRowCap from "@/components/TableRowCap";
 
 // import localFont from "next/font/local";
 
@@ -159,6 +160,9 @@ export default function RootLayout({
                   {/* Draws every data table's vertical scrollbar below its sticky
                       header. Renders nothing itself; finds tables by class. */}
                   <TableScrollbars />
+                  {/* Sizes every data table to header + 10 rows, then scroll.
+                      Renders nothing itself; finds tables by class. */}
+                  <TableRowCap />
                 </ScoringProgressProvider>
               </GlobalDialogProvider>
             </ModalProvider>

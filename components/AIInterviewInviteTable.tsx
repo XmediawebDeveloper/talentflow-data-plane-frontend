@@ -140,6 +140,9 @@ export const displayInviteScore = (inv: any): number | null => {
   return Number.isFinite(value) ? Math.round(value) : null;
 };
 
+/** Rows with a result to open: Completed, and Terminated (partial evaluation). */
+const hasResultToOpen = (inv: any): boolean => inv.status === 'completed' || inv.status === 'terminated';
+
 /** Pass/Fail for the Score column. The backend's `final_result` wins; older
  *  sessions without it fall back to the same 60% MHS pass mark the evaluation
  *  report uses. null (no badge) until there is a score to judge. */
@@ -622,10 +625,10 @@ export default function AIInterviewInviteTable({
     if (isInterviewLinkLive(inv)) {
       actions.push({ key: 'copy', label: 'Copy Link', Icon: Copy, run: () => copyInterviewLink(inv), iconClassName: 'text-menu-icon-download' });
     }
-    /* View Details is completed-only — same rule as the assessment tracker:
-       only Completed / Auto Completed invites have a result to open, so
-       In Progress and Terminated rows no longer offer the action. */
-    if (onViewDetails && inv.status === 'completed') {
+    /* View Details on Completed and Terminated rows — a terminated interview
+       still has its (partial) evaluation to open; the result page shows it as
+       a Partial Evaluation. In Progress / Invited have nothing to show yet. */
+    if (onViewDetails && hasResultToOpen(inv)) {
       actions.push({ key: 'view', label: 'View Details', Icon: Eye, run: () => onViewDetails(inv), iconClassName: 'text-menu-icon-view' });
     }
     if (onResend && canResendInvite(inv)) {
@@ -671,7 +674,7 @@ export default function AIInterviewInviteTable({
      Details" menu action above — same callback, same guard on the host having
      supplied one — so the read-only Job Details tracker (which passes no
      onViewDetails) keeps its rows non-clickable. */
-  const canOpenDetails = (inv: any): boolean => !!onViewDetails && inv.status === 'completed';
+  const canOpenDetails = (inv: any): boolean => !!onViewDetails && hasResultToOpen(inv);
 
   // Enter/Space on a focused row does what a click does — the row is exposed as
   // a button to assistive tech, so it has to answer to the button keys.

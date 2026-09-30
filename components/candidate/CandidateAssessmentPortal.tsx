@@ -346,6 +346,13 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
 
   // Fullscreen enforcement — tracks whether assessment is running in fullscreen
   const [isFullscreenActive, setIsFullscreenActive] = useState(false);
+  // Has the fullscreen state been SAMPLED yet? `isFullscreenActive` starts
+  // false, which is indistinguishable from "we looked and we are not in
+  // fullscreen" - and the blocking overlay below keys off it. Until the sample
+  // happens (an effect, i.e. after paint, and later still when the main thread
+  // is busy starting the recorders and proctoring) the overlay would cover the
+  // page and eat whatever the candidate clicked first (2026-09-30).
+  const [fullscreenStateSampled, setFullscreenStateSampled] = useState(false);
   const [useAdaptiveAssessmentMode, setUseAdaptiveAssessmentMode] = useState(false);
   const fullscreenReentryAttemptRef = useRef(false);
 
@@ -610,17 +617,23 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   // the recording window. 2026-09-24: recordings now run past Submit until the
   // feedback popup appears, so 'completing' / 'completed' must NOT stop the
   // camera stream or the screen share (the recorders own them until then —
-  // see the recorder stop effect). Terminal states release everything.
+  // see the recorder stop effect). Same for 'terminated'. 'results' / 'error'
+  // release everything at once.
   useEffect(() => {
     if (step === 'assessment') {
       startProctoring();
       return;
     }
-    if (step === 'completing' || step === 'completed') {
+    if (step === 'completing' || step === 'completed' || step === 'terminated') {
+      // 'terminated' belongs here too (2026-09-30): stopProctoring() stops the
+      // camera tracks, which also carry the recording mic, so releasing them
+      // the instant the attempt was terminated cut both recordings BEFORE the
+      // "Assessment terminated" screen they are meant to prove. The recorder
+      // stop effect releases the media a few seconds later.
       stopHeartbeatWorker();
       return;
     }
-    if (step === 'results' || step === 'terminated' || step === 'error') {
+    if (step === 'results' || step === 'error') {
       stopProctoring();
       console.log('[PROCTORING] Stopped - assessment ended');
     }
@@ -636,6 +649,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     setUseAdaptiveAssessmentMode(adaptiveMode);
 
     if (adaptiveMode) {
+      setFullscreenStateSampled(true);
       setIsFullscreenActive(true);
       unlockKeyboardShortcuts();
       return;
@@ -644,6 +658,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     const eventName = getFullscreenChangeEvent();
     const handleFullscreenChange = () => {
       const currentlyFullscreen = isFullscreen();
+      setFullscreenStateSampled(true);
       setIsFullscreenActive(currentlyFullscreen);
       if (currentlyFullscreen) {
         void lockKeyboardShortcuts(['F11']);
@@ -655,6 +670,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     // When assessment starts, sync the current state immediately
     if (step === 'assessment') {
       const currentlyFullscreen = isFullscreen();
+      setFullscreenStateSampled(true);
       setIsFullscreenActive(currentlyFullscreen);
       if (currentlyFullscreen) {
         void lockKeyboardShortcuts(['F11']);
@@ -811,7 +827,17 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         return;
       }
 
-      // A persisted proctoring termination wins over every other status.
+      // A proctoring termination wins over every other status. The SERVER
+      // flag is authoritative — localStorage only knows about this browser,
+      // so a terminated link reopened elsewhere used to resume.
+      if (info.proctoring_terminated) {
+        try {
+          const persisted = localStorage.getItem(assessmentTerminatedStorageKey(token));
+          if (persisted) setTerminatedReason(JSON.parse(persisted));
+        } catch { /* storage unavailable or not JSON */ }
+        setStepSafe('terminated');
+        return;
+      }
       try {
         const persisted = localStorage.getItem(assessmentTerminatedStorageKey(token));
         if (persisted) {
@@ -1389,7 +1415,37 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     }
   }, [screenRecordingRequired, requestEntireScreenShare]);
 
+  // ── Browser full-screen banner ────────────────────────────────────────
+  // Chrome/Edge print "<site> - To exit full screen, press Esc" across the top
+  // centre of the SCREEN (not the page) for ~4s after every fullscreen entry.
+  // It is browser chrome we cannot hide or query, it lands in the whole-monitor
+  // capture, and the vision gate then blocks the candidate for it ("browser
+  // notification"). The Continue handler itself calls requestFullscreen(), so
+  // for anyone not already fullscreen the click SUMMONS the banner immediately
+  // before the screenshot. Track when it can still be up and simply wait it out
+  // before capturing. 5s > the ~4s the browsers show it for.
+  const FULLSCREEN_BANNER_MS = 5000;
+  const bannerVisibleUntilRef = useRef(0);
+  const markFullscreenBanner = useCallback(() => {
+    bannerVisibleUntilRef.current = Date.now() + FULLSCREEN_BANNER_MS;
+  }, []);
+  useEffect(() => {
+    const evt = getFullscreenChangeEvent();
+    const onChange = () => { if (isFullscreen()) markFullscreenBanner(); };
+    document.addEventListener(evt, onChange);
+    return () => document.removeEventListener(evt, onChange);
+  }, [markFullscreenBanner]);
+  /** Resolves once the banner can no longer be on screen. */
+  const waitOutFullscreenBanner = useCallback(async () => {
+    const remaining = bannerVisibleUntilRef.current - Date.now();
+    if (remaining > 0) {
+      console.log(`[ShareBar] waiting ${remaining}ms for the browser full-screen banner to clear`);
+      await new Promise((r) => setTimeout(r, remaining));
+    }
+  }, []);
+
   const captureScreenFrame = useCallback(async (): Promise<Blob | null> => {
+    await waitOutFullscreenBanner();
     const stream = screenStreamRef.current;
     const track = stream?.getVideoTracks?.()[0];
     if (!stream || !track || track.readyState !== 'live') return null;
@@ -1427,21 +1483,50 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
         ctx.drawImage(video, 0, 0, cw, ch);
         return canvas;
       };
+      // Is the top of the frame actually the blanked-white page? The band runs
+      // from 2 % to 18 % of the height (2026-09-30: it used to stop at 6 %,
+      // ABOVE the browser's own "<site> - To exit full screen, press Esc"
+      // banner at ~6-13 %, so the capture went ahead while that banner was
+      // still on screen and the vision gate blocked the candidate for their
+      // own browser's chrome). A collapsed sharing pill is far too small to
+      // move this band's mean, so it still reads blank.
       const looksBlank = (canvas: HTMLCanvasElement) => {
         const ctx = canvas.getContext('2d');
         if (!ctx) return true;
-        const sy = Math.round(ch * 0.03), sh = Math.max(1, Math.round(ch * 0.03));
-        const sx = Math.round(cw * 0.1), sw = Math.round(cw * 0.8);
+        const sy = Math.round(ch * 0.02), sh = Math.max(1, Math.round(ch * 0.16));
+        const sx = Math.round(cw * 0.05), sw = Math.round(cw * 0.9);
         let data: Uint8ClampedArray;
         try { data = ctx.getImageData(sx, sy, sw, sh).data; } catch { return true; }
+        // Two conditions, because the brightness MEAN alone is not enough: on a
+        // 2560-wide monitor the full-screen banner covers ~8 % of this band and
+        // only pulls the mean to ~237, i.e. it would still read as "blank". So
+        // also look for a WIDE DARK ROW - the banner is a solid dark bar 20-35 %
+        // of the screen wide, while the collapsed sharing pill is ~5 % and a
+        // blanked page is none. This test does not depend on screen size.
         let sum = 0;
-        for (let i = 0; i < data.length; i += 4) sum += (data[i] + data[i + 1] + data[i + 2]) / 3;
-        return data.length > 0 && sum / (data.length / 4) > 235;
+        let widestDarkRow = 0;
+        for (let y = 0; y < sh; y += 1) {
+          let darkInRow = 0;
+          const row = y * sw * 4;
+          for (let x = 0; x < sw; x += 1) {
+            const i = row + x * 4;
+            const luma = (data[i] + data[i + 1] + data[i + 2]) / 3;
+            sum += luma;
+            if (luma < 170) darkInRow += 1;
+          }
+          if (darkInRow > widestDarkRow) widestDarkRow = darkInRow;
+        }
+        const pixels = sw * sh;
+        if (pixels <= 0) return true;
+        return sum / pixels > 235 && widestDarkRow / sw < 0.12;
       };
-      // Wait (bounded) for the white background to actually land in the capture.
+      // Wait (bounded) for the white background to actually land in the
+      // capture - and, with the widened band above, for the browser's
+      // full-screen banner to auto-hide. It lasts ~4 s, so the ceiling is
+      // ~5.6 s; a screen that never clears is captured anyway and judged.
       let canvas: HTMLCanvasElement | null = null;
-      for (let i = 0; i < 6; i += 1) {
-        await new Promise((r) => setTimeout(r, i === 0 ? 400 : 300));
+      for (let i = 0; i < 14; i += 1) {
+        await new Promise((r) => setTimeout(r, 400));
         canvas = grab();
         if (canvas && looksBlank(canvas)) break;
       }
@@ -1454,7 +1539,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       if (card) card.style.visibility = prevVis || '';
       if (page) page.style.background = prevBg || '';
     }
-  }, []);
+  }, [waitOutFullscreenBanner]);
 
   /** Hide-share-bar gate Continue: capture → vision verdict → proceed only when clean. */
   const handleShareBarContinue = useCallback(async () => {
@@ -1469,7 +1554,12 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       setShareBarError('We detected a Picture-in-Picture window floating over this page. Please close it, then press Continue again.');
       return;
     }
-    if (!isFullscreen()) { try { await requestFullscreen(); } catch { /* verified later */ } }
+    if (!isFullscreen()) {
+      try { await requestFullscreen(); } catch { /* verified later */ }
+      // Entering fullscreen HERE is what puts the banner on screen; don't wait
+      // for the event round-trip to notice.
+      markFullscreenBanner();
+    }
     const dpr = window.devicePixelRatio || 1;
     if (dpr < 0.6) {
       setShareBarError('Your browser is zoomed out too far. Please set the zoom to at least 75% (Ctrl+0 resets to 100%), then click Continue again.');
@@ -1512,7 +1602,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
       setShareBarChecking(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shareBarChecking, token, captureScreenFrame, setStepSafe]);
+  }, [shareBarChecking, token, captureScreenFrame, setStepSafe, markFullscreenBanner]);
 
   /** "Re-share Entire Screen" after the candidate stopped sharing mid-assessment. */
   const handleReshareScreen = useCallback(async () => {
@@ -1521,7 +1611,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     try {
       await requestEntireScreenShare();
       setScreenShareStopped(false);
-      if (stepRef.current === 'assessment') startScreenRecorder();
+      if (stepRef.current === 'assessment' || stepRef.current === 'hide_share_bar') startScreenRecorder();
       if (!isFullscreen()) { try { await requestFullscreen(); } catch { /* ignore */ } }
     } catch (e: any) {
       console.warn('[AS-ScreenRecording] re-share failed:', e?.name || e);
@@ -1542,9 +1632,15 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     if (cameraRelayVideoRef.current) { cameraRelayVideoRef.current.srcObject = null; cameraRelayVideoRef.current = null; }
   }, []);
 
-  // ── Recorders: start with the assessment screen, final-flush when it ends ──
+  // ── Recorders: start at the hide-share-bar gate, final-flush at the end ──
+  // 2026-09-30: recording used to begin only once the assessment itself
+  // opened, so everything the candidate did on the gate screen — including
+  // every failed vision check and any re-share — was outside both files. The
+  // gate is the first moment BOTH sources exist (the entire-screen share was
+  // just granted, and the camera has been live since the system check), so it
+  // is where the record now starts.
   useEffect(() => {
-    if (step !== 'assessment') return;
+    if (step !== 'hide_share_bar' && step !== 'assessment') return;
     const attemptId = assessmentInfo?.attempt_id || assessmentData?.attempt_id || '';
     try {
       const markerKey = `tf_as_rec_attempt_${token}`;
@@ -1560,7 +1656,15 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     // the SAME microphone. Previously the screen recorder started on the first
     // run (before the camera was ready): it got no mic track (silent Screen
     // View) and began ~4 s earlier (1:02 vs 0:58 durations).
-    if (cameraRecordingEnabled && !cameraStream) return;
+    if (cameraRecordingEnabled && !cameraStream) {
+      console.log(`[AS-Recording] step=${step}: holding recorders until the camera stream is ready`);
+      return;
+    }
+    console.log(`[AS-Recording] step=${step}: starting recorders`, {
+      camera: cameraRecordingEnabled && !cameraRecorderRef.current,
+      screen: screenRecordingRequired && !screenRecorderRef.current,
+      hasScreenStream: !!screenStreamRef.current,
+    });
 
     if (cameraRecordingEnabled && cameraStream && !cameraRecorderRef.current) {
       try {
@@ -1606,12 +1710,16 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
   // Recording window ends when the feedback popup appears on the completed
   // screen (candidate request: keep both recordings running through Submit).
   // If no popup is due (feedback already given), stop shortly after completion.
-  // Terminal states (terminated / error / results) stop immediately.
+  // 'terminated' gets the same treatment: both recordings must capture the
+  // "Assessment terminated" screen the candidate is left on, which is the
+  // proof of what ended the attempt. 'error' / 'results' stop immediately.
   const FEEDBACK_GRACE_MS = 4000;
   // Once the popup's state flips it still takes a moment to paint and for the
   // screen-capture pipeline to pick the new frame up. Stopping immediately cut
-  // the recording just BEFORE the popup was visible; keep going a little.
-  const FEEDBACK_VISIBLE_GRACE_MS = 5000;
+  // the recording just BEFORE the popup was visible; keep going a little — but
+  // only long enough to SHOW the popup. At 5 s (2026-09-28) the candidate was
+  // already typing their feedback into the recording, which nobody needs.
+  const FEEDBACK_VISIBLE_GRACE_MS = 1800;
   const finishRecordings = useCallback(() => {
     void stopRecorders().finally(() => {
       stopScreenShare();
@@ -1620,10 +1728,17 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [stopRecorders, stopScreenShare]);
 
+  // The terminated screen needs the same paint + screen-capture settle time
+  // the feedback popup does before the recorders may close.
+  const TERMINATED_VISIBLE_GRACE_MS = 5000;
+
   useEffect(() => {
-    if (step === 'results' || step === 'error' || step === 'terminated') { finishRecordings(); return; }
-    if (step !== 'completed') return;
-    const t = setTimeout(finishRecordings, showFeedback ? FEEDBACK_VISIBLE_GRACE_MS : FEEDBACK_GRACE_MS);
+    if (step === 'results' || step === 'error') { finishRecordings(); return; }
+    if (step !== 'completed' && step !== 'terminated') return;
+    const graceMs = step === 'terminated'
+      ? TERMINATED_VISIBLE_GRACE_MS
+      : (showFeedback ? FEEDBACK_VISIBLE_GRACE_MS : FEEDBACK_GRACE_MS);
+    const t = setTimeout(finishRecordings, graceMs);
     return () => clearTimeout(t);
   }, [step, showFeedback, finishRecordings]);
 
@@ -2616,7 +2731,7 @@ export function CandidateAssessmentPortal({ token, candidateName, role }: Candid
     <>
       {renderContent()}
       {/* Fullscreen exit overlay — mirrors AI Interview enforcement */}
-      {step === 'assessment' && !useAdaptiveAssessmentMode && !isFullscreenActive && (
+      {step === 'assessment' && !useAdaptiveAssessmentMode && fullscreenStateSampled && !isFullscreenActive && (
         <div className="fixed inset-0 z-[99] bg-black/90 flex items-center justify-center backdrop-blur-sm">
           <div className="bg-white border-2 border-warning rounded-2xl p-5 sm:p-8 max-w-[95vw] sm:max-w-md w-full mx-4 text-center shadow-2xl">
             <Maximize2 className="w-12 h-12 text-warning mx-auto mb-4" />
