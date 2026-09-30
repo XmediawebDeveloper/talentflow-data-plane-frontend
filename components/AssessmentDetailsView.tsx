@@ -768,6 +768,7 @@ export default function AssessmentDetailsView({
      other cards to zero, which is what makes them navigable. */
   const [inviteStats, setInviteStats] = useState({
     total: 0, expired: 0, started: 0, completed: 0, failed: 0, terminated: 0,
+    invited: 0, revoked: 0,
   });
   const [inviteSelectedIds, setInviteSelectedIds] = useState<Set<string>>(new Set());
   const [editingEmailId, setEditingEmailId] = useState<string | null>(null);
@@ -849,6 +850,8 @@ export default function AssessmentDetailsView({
         completed: response.completed || 0,
         failed: response.failed || 0,
         terminated: response.terminated || 0,
+        invited: response.invited || 0,
+        revoked: response.revoked || 0,
       });
     } catch (error) {
       console.error('Failed to load invitation summary:', error);
@@ -2565,7 +2568,7 @@ export default function AssessmentDetailsView({
                 summary, so selecting a bucket narrows the table without
                 collapsing the other cards. */}
             <InviteStatCards
-              gridClassName="grid grid-cols-3 md:grid-cols-5 lg:grid-cols-5 gap-1 sm:gap-2 lg:gap-4"
+              gridClassName="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-4 lg:grid-cols-8 gap-1 sm:gap-2 lg:gap-3"
               activeStatus={inviteFilters.status}
               onSelect={(status) => {
                 setInviteFilters({ ...inviteFilters, status });
@@ -2573,9 +2576,12 @@ export default function AssessmentDetailsView({
               }}
               cards={[
                 { key: 'all', label: 'Total Invited', Icon: Users, value: inviteStats.total, ...INVITE_CARD_TONES.blue },
+                { key: 'sent', label: 'Invited', Icon: Mail, value: inviteStats.invited, ...INVITE_CARD_TONES.slate },
                 { key: 'started', label: 'In Progress', Icon: Play, value: inviteStats.started, ...INVITE_CARD_TONES.cyan },
                 { key: 'completed', label: 'Completed', Icon: CheckCircle, value: inviteStats.completed, ...INVITE_CARD_TONES.green },
                 { key: 'expired', label: 'Expired', Icon: Clock, value: inviteStats.expired, ...INVITE_CARD_TONES.orange },
+                { key: 'terminated', label: 'Terminated', Icon: Ban, value: inviteStats.terminated, ...INVITE_CARD_TONES.red },
+                { key: 'revoked', label: 'Revoked', Icon: Ban, value: inviteStats.revoked, ...INVITE_CARD_TONES.indigo },
                 {
                   key: 'completion-rate',
                   label: 'Completion Rate',
