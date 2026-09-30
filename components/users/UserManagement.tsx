@@ -2345,17 +2345,26 @@ export default function UserManagement() {
       <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-gray-200 dark:border-slate-700 tf-round-edges">
         {isLoading ? (
           /* Neutral skeleton matching the users table columns: User ID, User,
-             Role, Permissions, Status, Created At, Last Login, Actions. */
+             Role, Permissions, Status, Created At, Last Login, Actions.
+             Column count per breakpoint mirrors the real <thead> below: User ID
+             hides below sm, Permissions below md, Created At/Last Login below lg —
+             otherwise the skeleton shows 8 cramped columns on a phone while the
+             real table only ever shows 4. */
           <div className="tf-table-shell">
-            <div className="grid grid-cols-8 gap-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-6 py-4">
-              {['w-16', 'w-12', 'w-12', 'w-24', 'w-14', 'w-20', 'w-20', 'w-16'].map((w, i) => (
-                <Skeleton key={i} className={`h-3 ${w}`} />
-              ))}
+            <div className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 gap-4 border-b border-gray-200 dark:border-slate-700 bg-gray-50 dark:bg-slate-800 px-6 py-4">
+              <div className="hidden sm:block"><Skeleton className="h-3 w-16" /></div>
+              <Skeleton className="h-3 w-24" />
+              <Skeleton className="h-3 w-12" />
+              <div className="hidden md:block"><Skeleton className="h-3 w-24" /></div>
+              <Skeleton className="h-3 w-14" />
+              <div className="hidden lg:block"><Skeleton className="h-3 w-20" /></div>
+              <div className="hidden lg:block"><Skeleton className="h-3 w-20" /></div>
+              <Skeleton className="h-3 w-16" />
             </div>
             <div className="divide-y divide-gray-100 dark:divide-slate-700/60">
               {Array.from({ length: 8 }).map((_, r) => (
-                <div key={r} className="grid grid-cols-8 items-center gap-4 px-6 py-4">
-                  <Skeleton className="h-5 w-16 rounded" />
+                <div key={r} className="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 lg:grid-cols-8 items-center gap-4 px-6 py-4">
+                  <div className="hidden sm:block"><Skeleton className="h-5 w-16 rounded" /></div>
                   <div className="flex items-center gap-2">
                     <Skeleton className="h-8 w-8 rounded-full shrink-0" />
                     <div className="space-y-1.5">
@@ -2364,10 +2373,15 @@ export default function UserManagement() {
                     </div>
                   </div>
                   <Skeleton className="h-5 w-16 rounded-full" />
-                  <Skeleton className="h-4 w-20" />
+                  <div className="hidden md:block">
+                    <div className="flex flex-wrap gap-1">
+                      <Skeleton className="h-5 w-14 rounded" />
+                      <Skeleton className="h-5 w-10 rounded" />
+                    </div>
+                  </div>
                   <Skeleton className="h-5 w-14 rounded-full" />
-                  <Skeleton className="h-4 w-20" />
-                  <Skeleton className="h-4 w-20" />
+                  <div className="hidden lg:block"><Skeleton className="h-4 w-20" /></div>
+                  <div className="hidden lg:block"><Skeleton className="h-4 w-20" /></div>
                   <div className="flex items-center justify-center gap-1">
                     <Skeleton className="h-8 w-8 rounded-lg" />
                     <Skeleton className="h-8 w-8 rounded-lg" />
