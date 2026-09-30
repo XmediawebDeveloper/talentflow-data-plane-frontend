@@ -3,7 +3,7 @@
 import { Fragment, useState } from 'react';
 import { ChevronDown, Eye, Plus, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import ListPagination from '@/components/ListPagination';
+import Pagination from '@/components/Pagination';
 import type { ReactNode } from 'react';
 import type { JDLineageVersion, JDResponse } from '@/lib/services/jdService';
 import { formatISTDate, formatISTTime } from '@/lib/utils/dateUtils';
@@ -87,9 +87,8 @@ export interface AssessmentVersionRow {
 interface AssessmentVersionHistoryPanelProps {
   /**
    * Page both tables — the Job Versions rows and each job version's
-   * Assessment Versions rows — with the shared pagination bar (Per Page,
-   * Showing X to Y of Z, First / Previous / Next / Last), each on its own
-   * page state. Off by default, so every other host keeps the full lists it
+   * Assessment Versions rows — with the pagination bar (components/Pagination),
+   * each on its own page state. Off by default, so every other host keeps the full lists it
    * has; the Assessments page turns it on to match its other tables.
    */
   paginated?: boolean;
@@ -1610,19 +1609,17 @@ export default function AssessmentVersionHistoryPanel({
                                         </tbody>
                                       </table>
                                     </div>
-                                    {paginated && (
-                                      <div className="px-3 pb-3">
-                                        <ListPagination
-                                          currentPage={childPagingOf(group.jobVersion).page}
-                                          itemsPerPage={childPagingOf(group.jobVersion).size}
+                                    {paginated && count > 0 && (
+                                      <div>
+                                        <Pagination
+                                          currentPage={Math.min(Math.max(1, childPagingOf(group.jobVersion).page), Math.max(1, Math.ceil((count) / (childPagingOf(group.jobVersion).size))))}
+                                          totalPages={Math.max(1, Math.ceil((count) / (childPagingOf(group.jobVersion).size)))}
                                           totalItems={count}
+                                          itemsPerPage={childPagingOf(group.jobVersion).size}
                                           onPageChange={(page) =>
                                             setChildPagingOf(group.jobVersion, { ...childPagingOf(group.jobVersion), page })
                                           }
                                           onItemsPerPageChange={(size) => setChildPagingOf(group.jobVersion, { page: 1, size })}
-                                          itemLabel="versions"
-                                          showFirstLast
-                                          scrollOnPageChange={false}
                                         />
                                       </div>
                                     )}
@@ -1639,17 +1636,15 @@ export default function AssessmentVersionHistoryPanel({
               </tbody>
             </table>
           </div>
-          {paginated && (
-            <div className="px-3 sm:px-4 pb-3">
-              <ListPagination
-                currentPage={jobVersionsPage}
-                itemsPerPage={jobVersionsPageSize}
+          {paginated && groups.length > 0 && (
+            <div>
+              <Pagination
+                currentPage={Math.min(Math.max(1, jobVersionsPage), Math.max(1, Math.ceil((groups.length) / (jobVersionsPageSize))))}
+                totalPages={Math.max(1, Math.ceil((groups.length) / (jobVersionsPageSize)))}
                 totalItems={groups.length}
+                itemsPerPage={jobVersionsPageSize}
                 onPageChange={setJobVersionsPage}
                 onItemsPerPageChange={(size) => { setJobVersionsPageSize(size); setJobVersionsPage(1); }}
-                itemLabel="job versions"
-                showFirstLast
-                scrollOnPageChange={false}
               />
             </div>
           )}
